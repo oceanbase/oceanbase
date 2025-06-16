@@ -4308,7 +4308,8 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
   CK (OB_NOT_NULL(ctx_.exec_ctx_));
   OZ (ObPLContext::valid_execute_context(*ctx_.exec_ctx_));
   OX (expr_alloc = udf_from_sql ? &(ctx_.exec_ctx_->get_allocator()) : ctx_.get_top_expr_allocator());
-  if (!udf_from_sql) {
+  if (OB_FAIL(ret)) {
+  } else if (!udf_from_sql) {
     void *phy_plan_ctx_ptr = expr_alloc->alloc(sizeof(sql::ObPhysicalPlanCtx));
     if (nullptr == phy_plan_ctx_ptr) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -4317,7 +4318,6 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
     CK (OB_NOT_NULL(phy_plan_ctx_ = reinterpret_cast<sql::ObPhysicalPlanCtx *>(phy_plan_ctx_ptr)));
     OX (new (phy_plan_ctx_)sql::ObPhysicalPlanCtx(*expr_alloc));
     OZ (ctx_.exec_ctx_->get_my_session()->get_query_timeout(query_timeout));
-    OX (exec_ctx_bak_.backup(*ctx_.exec_ctx_));
     OX (total_time =
       (ctx_.exec_ctx_->get_physical_plan_ctx() != NULL
        && ctx_.exec_ctx_->get_physical_plan_ctx()->get_timeout_timestamp() > 0) ?
@@ -4325,6 +4325,7 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
         : ctx_.exec_ctx_->get_my_session()->get_query_start_time() + query_timeout);
     OX (phy_plan_ctx_->set_timeout_timestamp(total_time));
     OX (phy_plan_ctx_->set_cur_time(ObTimeUtility::current_time(), *ctx_.exec_ctx_->get_my_session()));
+    OX (exec_ctx_bak_.backup(*ctx_.exec_ctx_));
     OX (ctx_.exec_ctx_->set_physical_plan_ctx(phy_plan_ctx_));
     OX (ctx_.params_ = &(phy_plan_ctx_->get_param_store_for_update()));
   } else {
