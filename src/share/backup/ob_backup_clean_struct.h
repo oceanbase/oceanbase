@@ -147,7 +147,7 @@ public:
   int64_t task_count_;
   int64_t success_task_count_;
 };
-  // TODO(xingzhi) 4.4 Split the structure of set and piece
+  // TODO(lyh444845) 4.4.1 Split the structure of set and piece
 
 struct ObBackupCleanTaskAttr final
 {
