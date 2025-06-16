@@ -510,7 +510,7 @@ int ObOptimizer::check_direct_load_enabled(const ObDMLStmt &stmt, const ObSQLSes
   int ret = OB_SUCCESS;
   if (stmt::T_INSERT == stmt.get_stmt_type()) {
     const ObInsertStmt &insert_stmt = static_cast<const ObInsertStmt &>(stmt);
-    if (insert_stmt.value_from_select() && !insert_stmt.is_external_table_overwrite() && !insert_stmt.is_ignore()) {
+    if (insert_stmt.value_from_select() && !insert_stmt.is_external_table_overwrite() && !insert_stmt.is_ignore() && !insert_stmt.is_insert_up()) {
       ObDirectLoadOptimizerCtx &direct_load_optimize_ctx = ctx_.get_direct_load_optimizer_ctx();
       if (OB_FAIL(direct_load_optimize_ctx.init_direct_load_ctx(insert_stmt, ctx_))) {
         LOG_WARN("fail to init direct load ctx", K(ret));
