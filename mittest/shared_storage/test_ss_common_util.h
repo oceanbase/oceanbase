@@ -181,9 +181,10 @@ int TestSSCommonUtil::get_micro_block(const MicroBlockInfo &micro_info, char *re
     ObSSMicroBlockCacheKey micro_key = gen_phy_micro_key(micro_info.macro_id_, micro_info.offset_, micro_info.size_);
     ObSSMicroBlockId phy_micro_id(micro_info.macro_id_, micro_info.offset_, micro_info.size_);
     ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+    bool hit_cache = false;
     if (OB_FAIL(micro_cache->get_micro_block_cache(micro_key, phy_micro_id,
         ObSSMicroCacheGetType::FORCE_GET_DATA, io_info, object_handle,
-        ObSSMicroCacheAccessType::COMMON_IO_TYPE))) {
+        ObSSMicroCacheAccessType::COMMON_IO_TYPE, hit_cache))) {
       LOG_WARN("fail to get micro block cache", KR(ret), K(micro_info));
     } else if (OB_FAIL(object_handle.wait())) {
       LOG_WARN("fail to wait until get micro block data", KR(ret), K(micro_info));

@@ -144,9 +144,11 @@ TEST_F(TestSSMicroCacheStat, test_micro_cache_stat)
       ObSSMicroCacheGetType get_type = ObSSMicroCacheGetType::FORCE_GET_DATA;
       ObIOInfo io_info;
       ObStorageObjectHandle obj_handle;
+      bool is_hit = false;
       ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::init_io_info(io_info, micro_key, micro_size, read_buf));
       ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(micro_key, phy_micro_id, get_type,
-                            io_info, obj_handle, ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+                            io_info, obj_handle, ObSSMicroCacheAccessType::COMMON_IO_TYPE, is_hit));
+      ASSERT_EQ(true, is_hit);
       ASSERT_EQ(true, io_info.phy_block_handle_.is_valid());
     }
     ASSERT_EQ(micro_cnt, cache_stat.io_stat().common_io_param_.get_cnt_);
@@ -160,9 +162,11 @@ TEST_F(TestSSMicroCacheStat, test_micro_cache_stat)
       ObSSMicroCacheGetType get_type = ObSSMicroCacheGetType::FORCE_GET_DATA;
       ObIOInfo io_info;
       ObStorageObjectHandle obj_handle;
+      bool is_hit = false;
       ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::init_io_info(io_info, micro_key, micro_size, read_buf));
       ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(micro_key, phy_micro_id, get_type,
-                            io_info, obj_handle, ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE));
+                            io_info, obj_handle, ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, is_hit));
+      ASSERT_EQ(true, is_hit);
       ASSERT_EQ(false, io_info.phy_block_handle_.is_valid());
     }
     ASSERT_EQ(1, cache_stat.io_stat().prewarm_io_param_.get_cnt_);
@@ -186,9 +190,11 @@ TEST_F(TestSSMicroCacheStat, test_micro_cache_stat)
       ObSSMicroCacheGetType get_type = ObSSMicroCacheGetType::FORCE_GET_DATA;
       ObIOInfo io_info;
       ObStorageObjectHandle obj_handle;
+      bool is_hit = false;
       ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::init_io_info(io_info, micro_key, micro_size, read_buf));
       ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(micro_key, phy_micro_id, get_type,
-                            io_info, obj_handle, ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+                            io_info, obj_handle, ObSSMicroCacheAccessType::COMMON_IO_TYPE, is_hit));
+      ASSERT_EQ(true, is_hit);
       ASSERT_EQ(true, io_info.phy_block_handle_.is_valid());
     }
     {
@@ -199,9 +205,11 @@ TEST_F(TestSSMicroCacheStat, test_micro_cache_stat)
       ObSSMicroCacheGetType get_type = ObSSMicroCacheGetType::FORCE_GET_DATA;
       ObIOInfo io_info;
       ObStorageObjectHandle obj_handle;
+      bool is_hit = false;
       ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::init_io_info(io_info, micro_key, micro_size, read_buf));
       ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(micro_key, phy_micro_id, get_type,
-                            io_info, obj_handle, ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE));
+                            io_info, obj_handle, ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, is_hit));
+      ASSERT_EQ(true, is_hit);
       ASSERT_EQ(false, io_info.phy_block_handle_.is_valid());
     }
     ASSERT_EQ(micro_cnt * 2, cache_stat.hit_stat().cache_hit_cnt_);

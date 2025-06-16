@@ -696,6 +696,7 @@ TEST_F(TestSSMicroMetaManager, test_persist_micro_meta_task)
 
   ASSERT_EQ(OB_SUCCESS, persist_meta_task->persist_meta_op_.gen_micro_meta_checkpoint());
   ASSERT_EQ(0, micro_meta_mgr->micro_meta_map_.count());
+  persist_meta_task->persist_meta_op_.is_closed_ = true;
 
   clear_thread.join();
 }

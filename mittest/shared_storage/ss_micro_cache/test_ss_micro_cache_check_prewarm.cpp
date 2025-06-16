@@ -249,10 +249,12 @@ TEST_F(TestSSMicroCacheCheckPrewarm, test_check_prewarm)
     ObSSMicroCacheGetType get_type = ObSSMicroCacheGetType::GET_CACHE_MISS_DATA;
     ObIOInfo io_info;
     ObStorageObjectHandle obj_handle;
+    bool hit_cache = false;
     ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::init_io_info(io_info, tmp_micro_key, micro_size, read_buf));
     ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(tmp_micro_key, phy_micro_id, get_type,
-                          io_info, obj_handle, ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE));
+                          io_info, obj_handle, ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, hit_cache));
     ASSERT_EQ(true, io_info.phy_block_handle_.is_valid());
+    ASSERT_EQ(true, hit_cache);
     CHECK_IN_T1(tmp_micro_meta);
     ASSERT_EQ(true, tmp_micro_meta->is_valid());
     ASSERT_EQ(ori_t1_cnt, arc_info.seg_info_arr_[SS_ARC_T1].cnt_);
@@ -295,9 +297,10 @@ TEST_F(TestSSMicroCacheCheckPrewarm, test_check_prewarm)
     tmp_micro_meta = tmp_micro_meta_handle.get_ptr();
     CHECK_IN_T1(tmp_micro_meta);
     get_type = ObSSMicroCacheGetType::FORCE_GET_DATA;
+    hit_cache = false;
     ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::init_io_info(io_info, tmp_micro_key, micro_size, read_buf));
     ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(tmp_micro_key, phy_micro_id1, get_type,
-                          io_info, obj_handle, ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+                          io_info, obj_handle, ObSSMicroCacheAccessType::COMMON_IO_TYPE, hit_cache));
     CHECK_IN_T2(tmp_micro_meta);
     ASSERT_EQ(ori_t1_cnt - 2, arc_info.seg_info_arr_[SS_ARC_T1].cnt_);
     ASSERT_EQ(ori_t2_cnt + 1, arc_info.seg_info_arr_[SS_ARC_T2].cnt_);

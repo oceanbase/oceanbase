@@ -358,9 +358,10 @@ TEST_F(TestSSMicroCache, test_get_micro_block_cache)
   io_info.size_ = cur_info.size_;
   io_info.effective_tablet_id_ = cur_info.macro_id_.second_id();
   ObSSMicroBlockId cur_ss_micro_id = ObSSMicroBlockId(cur_info.macro_id_, cur_info.offset_, cur_info.size_);
+  bool is_hit = false;
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(cur_micro_key, cur_ss_micro_id,
                                      ObSSMicroCacheGetType::GET_CACHE_MISS_DATA, io_info, obj_handle,
-                                     ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE));
+                                     ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, is_hit));
   ASSERT_EQ(OB_SUCCESS, obj_handle.wait());
   ASSERT_EQ(cur_info.size_, obj_handle.get_data_size());
   obj_handle.reset();
@@ -388,9 +389,10 @@ TEST_F(TestSSMicroCache, test_get_micro_block_cache)
   ObSSMicroCacheHitType hit_type;
   ASSERT_EQ(OB_SUCCESS, micro_cache->check_micro_block_exist(cur_micro_key, micro_meta_info, hit_type));
   EXPECT_EQ(ObSSMicroCacheHitType::SS_CACHE_HIT_MEM, hit_type);
+  is_hit = false;
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(cur_micro_key, cur_ss_micro_id,
                                      ObSSMicroCacheGetType::GET_CACHE_MISS_DATA, io_info, obj_handle,
-                                     ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE));
+                                     ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, is_hit));
   ASSERT_EQ(OB_SUCCESS, obj_handle.wait());
   ASSERT_EQ(0, obj_handle.get_data_size());
   obj_handle.reset();
@@ -406,9 +408,10 @@ TEST_F(TestSSMicroCache, test_get_micro_block_cache)
                                                                               io_info.offset_,
                                                                               io_info.size_);
   ObSSMicroBlockId tmp_ss_micro_id1 = ObSSMicroBlockId(cur_info.macro_id_, io_info.offset_, io_info.size_);
+  is_hit = false;
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(tmp_micro_key1, tmp_ss_micro_id1,
                                      ObSSMicroCacheGetType::GET_CACHE_MISS_DATA, io_info, obj_handle,
-                                     ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE));
+                                     ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, is_hit));
   ASSERT_EQ(OB_SUCCESS, obj_handle.wait());
   ASSERT_EQ(io_info.size_, obj_handle.get_data_size());
   obj_handle.reset();
@@ -423,9 +426,10 @@ TEST_F(TestSSMicroCache, test_get_micro_block_cache)
                                                                               io_info.offset_,
                                                                               io_info.size_);
   ObSSMicroBlockId tmp_ss_micro_id2 = ObSSMicroBlockId(cur_info.macro_id_, io_info.offset_, io_info.size_);
+  is_hit = false;
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(tmp_micro_key2, tmp_ss_micro_id2,
                                      ObSSMicroCacheGetType::GET_CACHE_MISS_DATA, io_info, obj_handle,
-                                     ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE));
+                                     ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, is_hit));
   ASSERT_EQ(OB_SUCCESS, obj_handle.wait());
   ASSERT_EQ(io_info.size_, obj_handle.get_data_size());
   obj_handle.reset();
@@ -440,9 +444,10 @@ TEST_F(TestSSMicroCache, test_get_micro_block_cache)
   io_info.effective_tablet_id_ = cur_info.macro_id_.second_id();
   ASSERT_EQ(OB_SUCCESS, micro_cache->check_micro_block_exist(cur_micro_key, micro_meta_info, hit_type));
   EXPECT_EQ(ObSSMicroCacheHitType::SS_CACHE_HIT_DISK, hit_type);
+  is_hit = false;
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(cur_micro_key, cur_ss_micro_id,
                                      ObSSMicroCacheGetType::GET_CACHE_MISS_DATA, io_info, obj_handle,
-                                     ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE));
+                                     ObSSMicroCacheAccessType::MAJOR_COMPACTION_PREWARM_TYPE, is_hit));
   ASSERT_EQ(OB_SUCCESS, obj_handle.wait());
   ASSERT_EQ(0, obj_handle.get_data_size());
   obj_handle.reset();
@@ -1021,8 +1026,9 @@ TEST_F(TestSSMicroCache, test_disable_micro_cache)
 
   // fail to get micro_block if disable cache
   micro_cache->disable_cache();
+  bool is_hit = false;
   ASSERT_EQ(OB_SS_MICRO_CACHE_DISABLED, micro_cache->get_micro_block_cache(micro_key, micro_key.micro_id_,
-          ObSSMicroCacheGetType::FORCE_GET_DATA, io_info, obj_handle, ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+          ObSSMicroCacheGetType::FORCE_GET_DATA, io_info, obj_handle, ObSSMicroCacheAccessType::COMMON_IO_TYPE, is_hit));
   ASSERT_EQ(OB_SUCCESS, obj_handle.wait());
   ASSERT_EQ(0, obj_handle.get_data_size());
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, micro_meta_mgr.get_micro_block_meta(micro_key, micro_handle, ObTabletID::INVALID_TABLET_ID, false));
@@ -1036,8 +1042,9 @@ TEST_F(TestSSMicroCache, test_disable_micro_cache)
   io_info.user_data_buf_ = read_buf;
   io_info.size_ = micro_info.size_;
   io_info.effective_tablet_id_ = micro_info.macro_id_.second_id();
+  is_hit = false;
   ASSERT_EQ(OB_SUCCESS, micro_cache->get_micro_block_cache(micro_key, micro_key.micro_id_,
-          ObSSMicroCacheGetType::FORCE_GET_DATA, io_info, obj_handle, ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+          ObSSMicroCacheGetType::FORCE_GET_DATA, io_info, obj_handle, ObSSMicroCacheAccessType::COMMON_IO_TYPE, is_hit));
   ASSERT_EQ(OB_SUCCESS, obj_handle.wait());
   ASSERT_EQ(io_info.size_, obj_handle.get_data_size());
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_block_meta(micro_key, micro_handle, ObTabletID::INVALID_TABLET_ID, false));

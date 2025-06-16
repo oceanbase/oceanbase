@@ -129,10 +129,11 @@ int TestSSMicroCacheRandomSize::parallel_add_and_get_micro_block(
           ObIOInfo io_info;
           ObStorageObjectHandle obj_handle;
           MEMSET(buf, '\0', micro_size);
+          bool is_hit = false;
           if (OB_FAIL(build_io_info(io_info, MTL_ID(), micro_key, micro_size, buf))) {
             LOG_WARN("fail to build io_info", KR(ret), KP(buf));
-          } else if (OB_FAIL(micro_cache->get_micro_block_cache(micro_key, ss_micro_block_id,
-                     ObSSMicroCacheGetType::FORCE_GET_DATA, io_info, obj_handle, ObSSMicroCacheAccessType::COMMON_IO_TYPE))) {
+          } else if (OB_FAIL(micro_cache->get_micro_block_cache(micro_key, ss_micro_block_id, ObSSMicroCacheGetType::FORCE_GET_DATA,
+                     io_info, obj_handle, ObSSMicroCacheAccessType::COMMON_IO_TYPE, is_hit))) {
             LOG_WARN("fail to get_micro_block_cache", KR(ret), K(ss_micro_block_id));
           } else {
             for (int64_t j = 0; OB_SUCC(ret) && j < micro_size; ++j) {
