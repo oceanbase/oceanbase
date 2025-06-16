@@ -240,7 +240,7 @@ public:
 private:
   int build_inc_index(ObPluginVectorIndexAdaptor &adaptor);
   int optimize_vector_index( ObPluginVectorIndexAdaptor &adaptor);
-  int refresh_snapshot_index_data(ObPluginVectorIndexAdaptor &adaptor);
+  int refresh_snapshot_index_data(ObPluginVectorIndexAdaptor &adaptor, transaction::ObTxDesc *tx_desc, transaction::ObTxReadSnapshot &snapshot);
   int get_old_snapshot_data(
       ObPluginVectorIndexAdaptor &adaptor,
       transaction::ObTxDesc *tx_desc,

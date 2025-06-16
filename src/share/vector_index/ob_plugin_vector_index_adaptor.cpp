@@ -1476,6 +1476,7 @@ int ObPluginVectorIndexAdaptor::check_if_need_optimize(ObVectorQueryAdaptorResul
   int64_t snap_count = follower_sync_statistics_.snap_count_;
   int64_t incr_count = follower_sync_statistics_.incr_count_;
   int64_t bitmap_count = follower_sync_statistics_.vbitmap_count_;
+  bitmap_count = MAX(incr_count, bitmap_count);
   if (!need_be_optimized_) {
     int64_t delete_count = 0;
     int64_t insert_count = 0;

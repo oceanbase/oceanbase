@@ -1173,6 +1173,11 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
   ObAccessService *tsc_service = MTL(ObAccessService *);
   const uint32_t VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD = 10000;
   uint32_t current_count = 0;
+  transaction::ObTxDesc *tx_desc = nullptr;
+  oceanbase::transaction::ObTxReadSnapshot snapshot;
+  bool trans_start = false;
+  oceanbase::transaction::ObTransService *txs = MTL(transaction::ObTransService *);
+  const uint64_t timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
   SMART_VARS_2((storage::ObTableScanParam, vid_id_scan_param),
                (storage::ObTableScanParam, data_scan_param)) {
     if (OB_FAIL(adaptor.get_dim(dim))) {
@@ -1183,6 +1188,15 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
     } else if (OB_ISNULL(vids = static_cast<int64_t *>(allocator_.alloc(sizeof(int64_t) * VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc new mem.", K(ret));
+    } else if (FALSE_IT(trans_start = true)) {
+    } else if (OB_FAIL(ObInsertLobColumnHelper::start_trans(ls_id_, false/*is_for_read*/, timeout_us, tx_desc))) {
+      LOG_WARN("fail to get tx_desc", K(ret));
+    } else if (OB_ISNULL(tx_desc) || OB_ISNULL(txs)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get tx desc or ob access service, get nullptr", K(ret));
+    } else if (OB_FAIL(txs->get_ls_read_snapshot(*tx_desc, transaction::ObTxIsolationLevel::RC, ls_id_, timeout_us, snapshot))) {
+      LOG_WARN("fail to get snapshot", K(ret));
+    } else if (FALSE_IT(ctx_->task_status_.target_scn_ = snapshot.version())) {
     } else if (OB_FAIL(ObPluginVectorIndexUtils::read_local_tablet(ls_id_,
                                   &adaptor,
                                   ctx_->task_status_.target_scn_,
@@ -1332,14 +1346,24 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
   }
 
   // refresh snapshot table data.
-  if (OB_SUCC(ret) && OB_FAIL(refresh_snapshot_index_data(adaptor))) {
+  if (OB_SUCC(ret) && OB_FAIL(refresh_snapshot_index_data(adaptor, tx_desc, snapshot))) {
     LOG_WARN("failed to refresh snapshot index data", K(ret));
+  }
+  RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
+  int tmp_ret = OB_SUCCESS;
+  if (trans_start && OB_SUCCESS != (tmp_ret = ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, timeout_us))) {
+    ret = tmp_ret;
+    LOG_WARN("fail to end trans", K(ret), KPC(tx_desc));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(vec_idx_mgr_->replace_old_adapter(&adaptor))) {
+    LOG_WARN("failed to replace old adapter", K(ret));
   }
 
   return ret;
 }
 
-int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor &adaptor)
+int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor &adaptor, transaction::ObTxDesc *tx_desc, transaction::ObTxReadSnapshot &snapshot)
 {
   int ret = OB_SUCCESS;
   ObVecIdxSnapshotDataWriteCtx ctx;
@@ -1372,10 +1396,7 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
   const ObTableSchema *data_table_schema;
   const ObTableSchema *snapshot_table_schema;
   int64_t lob_inrow_threshold;
-  transaction::ObTxDesc *tx_desc = nullptr;
   ObAccessService *oas = MTL(ObAccessService *);
-  oceanbase::transaction::ObTransService *txs = MTL(transaction::ObTransService *);
-  oceanbase::transaction::ObTxReadSnapshot snapshot;
   share::schema::ObTableDMLParam table_dml_param(allocator_);
   share::schema::ObTableDMLParam table_delete_dml_param(allocator_);
   ObDMLBaseParam dml_param;
@@ -1398,7 +1419,6 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
   common::ObCollationType cs_type = CS_TYPE_INVALID;
   const uint64_t timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
   int64_t timeout = ObTimeUtility::fast_current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
-  bool trans_start = false;
   if OB_FAIL(ret) {
   } else {
     HEAP_VARS_2((storage::ObTableScanParam, snap_scan_param), (schema::ObTableParam, snap_table_param, allocator_)) {
@@ -1492,14 +1512,9 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
       // insert data to snapshot index table.
       ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(snap_data_iter);
       if (OB_FAIL(ret)) {
-      } else if (FALSE_IT(trans_start = true)) {
-      } else if (OB_FAIL(ObInsertLobColumnHelper::start_trans(ls_id_, false/*is_for_read*/, timeout_us, tx_desc))) {
-        LOG_WARN("fail to get tx_desc", K(ret));
       } else if (OB_ISNULL(tx_desc) || OB_ISNULL(oas)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get tx desc or ob access service, get nullptr", K(ret));
-      } else if (OB_FAIL(txs->get_ls_read_snapshot(*tx_desc, transaction::ObTxIsolationLevel::RC, ls_id_, timeout, snapshot))) {
-        LOG_WARN("fail to get snapshot", K(ret));
       } else if (OB_FAIL(get_old_snapshot_data(adaptor, tx_desc, snapshot_column_count, cs_type, vector_key_col_idx,
           vector_data_col_idx, vector_vid_col_idx, vector_col_idx, extra_column_idxs, table_scan_iter, delete_row_iter))) {
         LOG_WARN("failed to get old snapshot data", K(ret));
@@ -1641,18 +1656,6 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(delete_incr_table_data(adaptor, dml_param, tx_desc))) {
     LOG_WARN("failed to delete rows from snapshot table", K(ret), K(ctx_->task_status_.tablet_id_));
-  }
-
-  store_ctx_guard.reset();
-  RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
-  int tmp_ret = OB_SUCCESS;
-  if (trans_start && OB_SUCCESS != (tmp_ret = ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, timeout_us))) {
-    ret = tmp_ret;
-    LOG_WARN("fail to end trans", K(ret), KPC(tx_desc));
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(vec_idx_mgr_->replace_old_adapter(&adaptor))) {
-    LOG_WARN("failed to replace old adapter", K(ret));
   }
   return ret;
 }
