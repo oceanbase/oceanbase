@@ -239,6 +239,7 @@ ob_set_subtarget(ob_storage fts
   fts/ob_fts_parser_property.cpp
   fts/ob_fts_plugin_helper.cpp
   fts/ob_fts_stop_word.cpp
+  fts/ob_fts_struct.cpp
   fts/ob_ngram_ft_parser.cpp
   fts/ob_whitespace_ft_parser.cpp
   fts/dict/ob_dic_loader.cpp

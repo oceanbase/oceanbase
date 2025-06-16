@@ -209,7 +209,7 @@ private:
   static int segment_and_calc_word_count(
       common::ObIAllocator &allocator,
       storage::ObFTParseHelper *helper,
-      const common::ObCollationType &type,
+      const common::ObObjMeta &meta,
       const ObString &fulltext,
       int64_t &doc_length,
       ObFTWordMap &words_count);
