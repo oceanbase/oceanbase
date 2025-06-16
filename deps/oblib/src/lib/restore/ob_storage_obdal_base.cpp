@@ -154,6 +154,19 @@ void obdal_log_handler(const char *level, const char *message) {
   }
 }
 
+static int64_t get_obdal_thread_cnt()
+{
+  int64_t thread_cnt = 4;
+  const int64_t cpu_num = get_cpu_num();
+  if (cpu_num <= 16) {
+    thread_cnt = max(thread_cnt, cpu_num);
+  } else {
+    thread_cnt = 16 + (cpu_num - 16) / 3;
+    thread_cnt = min(thread_cnt, 256);
+  }
+  return thread_cnt;
+}
+
 int ObDalEnvIniter::global_init()
 {
   int ret = OB_SUCCESS;
@@ -165,12 +178,12 @@ int ObDalEnvIniter::global_init()
   } else if (OB_FAIL(ObDalMemoryManager::get_instance().init())) {
     OB_LOG(WARN, "failed init global obdal memory manager", K(ret));
   } else if (OB_FAIL(ObDalAccessor::init_env(reinterpret_cast<void *>(obdal_malloc),
-                                         reinterpret_cast<void *>(obdal_free),
-                                         reinterpret_cast<void *>(obdal_log_handler),
-                                         OB_LOGGER.get_level(),
-                                         get_cpu_num(),
-                                         POOL_MAX_IDLE_PER_HOST,
-                                         POOL_MAX_IDLE_TIME_S))) {
+                                             reinterpret_cast<void *>(obdal_free),
+                                             reinterpret_cast<void *>(obdal_log_handler),
+                                             OB_LOGGER.get_level(),
+                                             get_obdal_thread_cnt(),
+                                             POOL_MAX_IDLE_PER_HOST,
+                                             POOL_MAX_IDLE_TIME_S))) {
     OB_LOG(WARN, "failed init obdal env", K(ret));
   } else {
     signal(SIGPIPE, SIG_IGN);
