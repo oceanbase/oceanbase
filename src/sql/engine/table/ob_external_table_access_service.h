@@ -218,6 +218,12 @@ public:
   ObExternalTableRowIterator() :
     scan_param_(nullptr), line_number_expr_(NULL), file_id_expr_(NULL), file_name_expr_(NULL) {}
   virtual int init(const storage::ObTableScanParam *scan_param);
+  ~ObExternalTableRowIterator()
+  {
+    if (nullptr != scan_param_ && nullptr != scan_param_->pd_storage_filters_) {
+      scan_param_->pd_storage_filters_->clear();
+    }
+  }
 protected:
   int init_exprs(const storage::ObTableScanParam *scan_param);
   int gen_ip_port(common::ObIAllocator &allocator);
