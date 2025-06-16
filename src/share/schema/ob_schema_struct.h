@@ -9041,6 +9041,9 @@ private:
   common::ObIAllocator *alloc_;
   ObFixedArray<ObSessionSysVar *, common::ObIAllocator> local_session_vars_;
 };
+bool check_can_drop_column_instant(const uint64_t tenant_id,
+                                   const bool is_oracle_mode,
+                                   const uint64_t tenant_data_version);
 
 }//namespace schema
 }//namespace share

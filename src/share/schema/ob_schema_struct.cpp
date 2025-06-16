@@ -14475,6 +14475,26 @@ int ObIndexNameInfo::init(
   return ret;
 }
 
+bool check_can_drop_column_instant(const uint64_t tenant_id,
+                                   const bool is_oracle_mode,
+                                   const uint64_t tenant_data_version)
+{
+  int ret = OB_SUCCESS;
+  bool can_drop_column_instant = false;
+  if (is_oracle_mode &&
+      tenant_data_version >= DATA_VERSION_4_2_5_0) {
+    can_drop_column_instant = true;
+  } else if (!is_oracle_mode &&
+              tenant_data_version >= DATA_VERSION_4_2_5_5) {
+    can_drop_column_instant = true;
+  }
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (can_drop_column_instant && tenant_config.is_valid()) {
+    can_drop_column_instant = tenant_config->_enable_drop_column_instant;
+  }
+  return can_drop_column_instant;
+}
+
 //
 //
 template<class T>

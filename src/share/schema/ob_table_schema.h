@@ -1066,6 +1066,7 @@ public:
     CHECK_MODE_OFFLINE = 1,
   };
 
+  static const int64_t MIN_COLUMN_COUNT = 1;
   static const int64_t MIN_COLUMN_COUNT_WITH_PK_TABLE = 1;
   static const int64_t MIN_COLUMN_COUNT_WITH_HEAP_TABLE = 2;
   bool cmp_table_id(const ObTableSchema *a, const ObTableSchema *b)
@@ -1658,11 +1659,13 @@ public:
   void set_aux_lob_piece_tid(const uint64_t& table_id) { aux_lob_piece_tid_ = table_id; }
   uint64_t get_aux_lob_meta_tid() const { return aux_lob_meta_tid_; }
   uint64_t get_aux_lob_piece_tid() const { return aux_lob_piece_tid_; }
-  bool has_lob_column() const;
+  bool has_lob_column(const bool ignore_unused_column) const;
   bool has_lob_aux_table() const { return (aux_lob_meta_tid_ != OB_INVALID_ID && aux_lob_piece_tid_ != OB_INVALID_ID); }
   int get_unused_column_ids(common::ObIArray<uint64_t> &column_ids) const;
   // ObColumnIterByPrevNextID's column id is not in order, it means table has add column instant and return true
   int has_add_column_instant(bool &add_column_instant) const;
+  int get_user_visible_column_ids(common::ObIArray<uint64_t> &column_ids) const;
+  int has_unused_column(bool &has_unused_column) const;
   inline void add_table_flag(uint64_t flag) { table_flags_ |= flag; }
   inline void del_table_flag(uint64_t flag) { table_flags_ &= ~flag; }
   inline void add_or_del_table_flag(uint64_t flag, bool is_add)

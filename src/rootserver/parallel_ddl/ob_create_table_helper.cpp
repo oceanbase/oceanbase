@@ -942,7 +942,7 @@ int ObCreateTableHelper::generate_aux_table_schemas_()
     bool has_lob_table = false;
     uint64_t object_id = OB_INVALID_ID;
     if (!data_table->is_external_table()) {
-      has_lob_table = data_table->has_lob_column();
+      has_lob_table = data_table->has_lob_column(true/*ignore_unused_column*/);
       if (has_lob_table) {
         object_cnt += 2;
       }

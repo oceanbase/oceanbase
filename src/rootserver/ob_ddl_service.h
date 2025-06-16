@@ -1669,6 +1669,14 @@ private:
                                     const bool is_oracle_mode,
                                     ObSchemaGetterGuard &schema_guard,
                                     ObDDLType &ddl_type);
+  int check_can_drop_column_instant_(const ObTableSchema &orig_table_schema,
+                                     const AlterTableSchema &alter_table_schema,
+                                     const uint64_t tenant_data_version,
+                                     const bool is_oracle_mode,
+                                     obrpc::ObAlterTableArg &alter_table_arg);
+  int check_can_add_column_use_instant_(const bool is_oracle_mode,
+                                        const uint64_t tenant_data_version,
+                                        bool &add_column_instant);
   int check_is_modify_partition_key(const ObTableSchema &orig_table_schema,
                                     const AlterTableSchema &alter_table_schema,
                                     bool &is_modify_partition_key);
@@ -1680,6 +1688,26 @@ private:
                                  bool &is_exist);
   int check_alter_unused_column(const share::schema::ObSchemaOperationType &operation_type,
                                 const share::schema::ObColumnSchemaV2 *orig_column_schema);
+  int check_long_run_ddl_table_type_(const ObTableSchema &orig_table_schema);
+  int check_long_run_ddl_has_index_(const ObTableSchema *orig_table_schema,
+                                    obrpc::ObAlterTableArg &alter_table_arg,
+                                    ObSchemaGetterGuard &schema_guard);
+  int check_mysql_drop_column_with_index_(obrpc::ObAlterTableArg &alter_table_arg,
+                                          share::schema::ObSchemaGetterGuard &schema_guard,
+                                          const share::schema::ObTableSchema &orig_table_schema,
+                                          const uint64_t tenant_data_version,
+                                          const bool is_oracle_mode,
+                                          ObDDLType &ddl_type);
+  int check_need_table_redifinition_for_ddl_(const bool is_oracle_mode,
+                                             const uint64_t tenant_data_version,
+                                             const ObTableSchema &orig_table_schema,
+                                             const AlterTableSchema &alter_table_schema,
+                                             const ObDDLType &ddl_type,
+                                             bool &need_table_redefinition);
+  int handle_drop_all_lob_columns_(const ObTableSchema &orig_table_schema,
+                                   const uint64_t drop_lob_cols_cnt,
+                                   const ObDDLType ddl_type,
+                                   obrpc::ObAlterTableArg &alter_table_arg);
   int check_alter_table_column(obrpc::ObAlterTableArg &alter_table_arg,
                                const share::schema::ObTableSchema &orig_table_schema,
                                share::schema::ObSchemaGetterGuard &schema_guard,
@@ -2053,7 +2081,12 @@ private:
       share::schema::AlterColumnSchema &alter_column_schema,
       ObDDLOperator *ddl_operator,
       common::ObMySQLTransaction *trans);
-
+  // update prev id in inner table and add column to new table schema
+  int update_prev_id_and_add_column_(const share::schema::ObTableSchema &origin_table_schema,
+                                     share::schema::ObTableSchema &new_table_schema,
+                                     share::schema::AlterColumnSchema &alter_column_schema,
+                                     ObDDLOperator *ddl_operator,
+                                     common::ObMySQLTransaction *trans);
   bool is_zone_exist(const common::ObArray<common::ObZone> &zones, const common::ObZone &zone);
   int try_drop_sys_ls_(const uint64_t meta_tenant_id,
                        common::ObMySQLTransaction &trans);
@@ -2083,13 +2116,13 @@ private:
   // private funcs for drop column
   int get_all_dropped_udt_hidden_column_ids(const ObTableSchema &orig_table_schema,
                                             const ObColumnSchemaV2 &orig_column_schema,
-                                            common::ObIArray<uint64_t> &drop_cols_id_arr,
-                                            int64_t &columns_cnt_in_new_table);
+                                            common::ObIArray<uint64_t> &drop_cols_id_arr);
   int get_all_dropped_column_ids(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const ObTableSchema &orig_table_schema,
       common::ObIArray<uint64_t> &drop_cols_id_arr,
-      int64_t *new_table_cols_cnt = nullptr);
+      int64_t *new_table_cols_cnt = nullptr,
+      int64_t *last_column_id = nullptr);
   int drop_udt_hidden_columns(const ObColumnSchemaV2 &new_origin_col,
                               ObTableSchema &new_table_schema);
   int check_can_drop_column(
@@ -2098,6 +2131,7 @@ private:
       const ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &new_table_schema,
       const int64_t new_table_cols_cnt,
+      const int64_t last_drop_column_id,
       ObSchemaGetterGuard &schema_guard);
   int check_is_drop_partition_key(
       const share::schema::ObTableSchema &data_table_schema,
@@ -2871,7 +2905,8 @@ private:
       ObSchemaGetterGuard &schema_guard,
       const ObTableSchema &origin_table_schema,
       const ObString &origin_column_name,
-      const int64_t new_tbl_cols_cnt,
+      const int64_t new_tbl_visible_cols_cnt_after_alter,
+      const int64_t last_drop_column_id,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       ObTableSchema &new_table_schema,
@@ -2879,7 +2914,7 @@ private:
   int drop_column_offline(const ObTableSchema &origin_table_schema,
                           ObTableSchema &new_table_schema,
                           ObSchemaGetterGuard &schema_guard, const ObString &orig_column_name,
-                          const int64_t new_tbl_cols_cnt);
+                          const int64_t new_tbl_visible_cols_cnt_after_alter, const int64_t last_drop_column_id);
   int prepare_change_modify_column_online(AlterColumnSchema &alter_col,
                            const ObTableSchema &origin_table_schema,
                            const AlterTableSchema &alter_table_schema,

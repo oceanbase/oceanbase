@@ -1111,21 +1111,23 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     if (OB_SUCC(ret)) {
       uint64_t tenant_data_version = 0;
       ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+      const bool is_oracle_mode = lib::is_oracle_mode();
       if (OB_ISNULL(alter_table_stmt) || OB_ISNULL(table_schema_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("stmt or table_schema_ should not be null", KR(ret));
       } else if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema_->get_tenant_id(), tenant_data_version))) {
         LOG_WARN("get data version failed", KR(ret), KPC(table_schema_));
       // to keep the corrent of alter algorithm
-      // mysql mode only support add column instant in 425
-      } else if (lib::is_mysql_mode()
-                 && has_drop_column
-                 && tenant_data_version >= DATA_VERSION_4_2_5_0) {
+      // mysql mode after 425, add column instant
+      // mysql mode after 4255, can drop column instant
+      } else if (!is_oracle_mode
+                 && has_add_column
+                 && has_drop_column) {
         alter_table_stmt->get_alter_table_arg().alter_algorithm_ = obrpc::ObAlterTableArg::AlterAlgorithm::INPLACE;
-      // orale mode only support drop column instant in 425
-      } else if (lib::is_oracle_mode()
-                  && has_add_column
-                  && tenant_data_version >= DATA_VERSION_4_2_5_0) {
+      // oracle mode only support drop column instant in 425
+      } else if (is_oracle_mode
+                 && has_add_column
+                 && check_can_drop_column_instant(table_schema_->get_tenant_id(), is_oracle_mode, tenant_data_version)) {
         alter_table_stmt->get_alter_table_arg().alter_algorithm_ = obrpc::ObAlterTableArg::AlterAlgorithm::INPLACE;
       }
     }
@@ -1196,8 +1198,8 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
             break;
           }
         case T_COLUMN_DROP: {
-          has_drop_column = true;
-          if (lib::is_mysql_mode()) {
+            has_drop_column = true;
+            if (lib::is_mysql_mode()) {
               is_mysql_drop_column = true;
             } else if (OB_FAIL(resolve_drop_column(*column_node, reduced_visible_col_set, drop_column_names_set))) {
               SQL_RESV_LOG(WARN, "Resolve drop column error!", K(ret));
@@ -1214,9 +1216,18 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
             break;
           }
         case T_ALTER_TABLE_FORCE: { // alter table force.
-          if (OB_UNLIKELY(1 != node.num_child_ || lib::is_mysql_mode())) {
+          uint64_t tenant_data_version = 0;
+          if (OB_UNLIKELY(1 != node.num_child_)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected error", KR(ret), K(node.num_child_), K(lib::is_mysql_mode()));
+            LOG_WARN("unexpected error", KR(ret), K(node.num_child_));
+          } else if (OB_ISNULL(session_info_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("session_info_ should not be null", KR(ret));
+          } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+            LOG_WARN("get tenant data version failed", KR(ret));
+          } else if (tenant_data_version < DATA_VERSION_4_2_5_5 && lib::is_mysql_mode()) {
+            LOG_WARN("alter table force less than 4_2_5_5 in mysql mode is not supported", KR(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table force less than 4_2_5_5 in mysql mode");
           } else if (OB_FAIL(resolve_alter_table_force(*column_node))) {
             LOG_WARN("resolver alter table force failed", KR(ret));
           }
@@ -1272,6 +1283,7 @@ int ObAlterTableResolver::resolve_drop_unused_columns(const ParseNode& node)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_data_version = 0;
+  const bool is_oracle_mode = lib::is_oracle_mode();
   ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
   if (OB_ISNULL(alter_table_stmt)
       || OB_ISNULL(session_info_)) {
@@ -1279,15 +1291,10 @@ int ObAlterTableResolver::resolve_drop_unused_columns(const ParseNode& node)
     LOG_WARN("unexpected null value", KR(ret), KP(alter_table_stmt), KP(session_info_));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
     LOG_WARN("get tenant data version failed", KR(ret));
-  } else if (tenant_data_version < MOCK_DATA_VERSION_4_2_1_4
-              || (tenant_data_version >= DATA_VERSION_4_2_2_0 && tenant_data_version < DATA_VERSION_4_2_5_0)) {
+  } else if (!check_can_drop_column_instant(session_info_->get_effective_tenant_id(), is_oracle_mode, tenant_data_version)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not supported to alter table force under this tenant_data_version", KR(ret), K(tenant_data_version));
+    LOG_WARN("not supported to alter table force under this tenant_data_version", KR(ret), K(tenant_data_version), K(lib::is_oracle_mode()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is illegal, alter table force");
-  } else if (lib::is_mysql_mode()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not supported to alter table force under Mysql mode", KR(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "To alter table force under mysql mode is");
   }
 
   if (OB_SUCC(ret)) {
@@ -5960,11 +5967,14 @@ int ObAlterTableResolver::resolve_drop_column(
       } else if (OB_FAIL(alter_column_schema.set_column_name(alter_column_schema.get_origin_column_name()))) {
       } else {
         alter_column_schema.alter_type_ = OB_DDL_DROP_COLUMN;
-        alter_table_stmt->get_alter_table_arg().alter_algorithm_ =
-                          lib::is_oracle_mode()
-                          && ((tenant_data_version >= MOCK_DATA_VERSION_4_2_1_4 && tenant_data_version < DATA_VERSION_4_2_2_0)
-                             || tenant_data_version >= DATA_VERSION_4_2_5_0)
-                          ? obrpc::ObAlterTableArg::AlterAlgorithm::INSTANT : obrpc::ObAlterTableArg::AlterAlgorithm::INPLACE;
+        const bool is_oracle_mode = lib::is_oracle_mode();
+        ObAlterTableArg::AlterAlgorithm algorithm = ObAlterTableArg::AlterAlgorithm::INPLACE;
+        if (check_can_drop_column_instant(table_schema_->get_tenant_id(), is_oracle_mode, tenant_data_version)) {
+          algorithm = ObAlterTableArg::AlterAlgorithm::INSTANT;
+        } else {
+          algorithm = ObAlterTableArg::AlterAlgorithm::INPLACE;
+        }
+        alter_table_stmt->get_alter_table_arg().alter_algorithm_ = algorithm;
       }
       if (OB_SUCC(ret)) {
         ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();

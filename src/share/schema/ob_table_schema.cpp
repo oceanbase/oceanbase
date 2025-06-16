@@ -5633,6 +5633,25 @@ int ObTableSchema::has_lob_column(bool &has_lob, const bool check_large /*= fals
   return ret;
 }
 
+int ObTableSchema::get_user_visible_column_ids(common::ObIArray<uint64_t> &column_ids) const
+{
+  int ret = OB_SUCCESS;
+  column_ids.reset();
+  const ObColumnSchemaV2 *column_schema = nullptr;
+  for (ObTableSchema::const_column_iterator iter = column_begin();
+      OB_SUCC(ret) && iter != column_end(); iter++) {
+    if (OB_ISNULL(column_schema = *iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Column schema is NULL", KR(ret));
+    } else if (!column_schema->is_user_visible_column()) {
+      // ignore
+    } else if (OB_FAIL(column_ids.push_back(column_schema->get_column_id()))) {
+      LOG_WARN("push back failed", KR(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTableSchema::get_unused_column_ids(common::ObIArray<uint64_t> &column_ids) const
 {
   int ret = OB_SUCCESS;
@@ -6688,12 +6707,12 @@ int ObTableSchema::deserialize_columns(const char *buf, const int64_t data_len, 
   return ret;
 }
 
-bool ObTableSchema::has_lob_column() const
+bool ObTableSchema::has_lob_column(const bool ignore_unused_column) const
 {
   bool bool_ret = false;
   for (int64_t i = 0; !bool_ret && i < column_cnt_; ++i) {
     ObColumnSchemaV2& col = *column_array_[i];
-    if (col.is_unused()) {
+    if (ignore_unused_column && col.is_unused()) {
       // already been deleted logically, ignore it.
     } else if (is_lob_storage(col.get_data_type())) {
       bool_ret = true;

@@ -260,7 +260,7 @@ int ObCreateTableLikeHelper::generate_aux_table_schemas_()
       LOG_WARN("get simple_index_infos failed", KR(ret));
     } else {
       obj_cnt= simple_index_infos.count();
-      if (new_table_schema->has_lob_column()) {
+      if (new_table_schema->has_lob_column(true/*ignore_unused_column*/)) {
         obj_cnt += 2;
       }
       new_table_id = new_table_schema->get_table_id();
@@ -312,7 +312,7 @@ int ObCreateTableLikeHelper::generate_aux_table_schemas_()
     } else if (OB_ISNULL(new_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("new table schema is null", KR(ret), K(new_table_schema));
-    } else if (new_table_schema->has_lob_column()) {
+    } else if (new_table_schema->has_lob_column(true/*ignore_unused_column*/)) {
       HEAP_VARS_2((ObTableSchema, lob_meta_schema), (ObTableSchema, lob_piece_schema)) {
       ObLobMetaBuilder lob_meta_builder(*ddl_service_);
       ObLobPieceBuilder lob_piece_builder(*ddl_service_);

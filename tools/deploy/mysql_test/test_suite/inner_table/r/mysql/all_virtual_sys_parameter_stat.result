@@ -334,6 +334,7 @@ _enable_diagnostic_info_cache
 _enable_distributed_das_scan
 _enable_di_experimental_feature_flags
 _enable_drop_and_add_index
+_enable_drop_column_instant
 _enable_easy_keepalive
 _enable_enhanced_cursor_validation
 _enable_enum_set_subschema

@@ -21601,7 +21601,7 @@ FROM
      JOIN OCEANBASE.__ALL_VIRTUAL_CORE_COLUMN_TABLE C
        ON C.TENANT_ID = T.TENANT_ID
       AND C.TABLE_ID = T.TABLE_ID
-      AND C.IS_HIDDEN = 0
+      AND (C.IS_HIDDEN = 0 OR (C.COLUMN_FLAGS & 2097152) > 0)
      UNION ALL
      SELECT T.TENANT_ID,
             T.TABLE_ID,
@@ -21624,7 +21624,7 @@ FROM
       AND C.TABLE_ID = T.TABLE_ID
      WHERE TABLE_MODE >> 12 & 15 in (0,1)
        AND INDEX_ATTRIBUTES_SET & 16 = 0
-       AND C.IS_HIDDEN = 0) TC
+       AND (C.IS_HIDDEN = 0 OR (C.COLUMN_FLAGS & 2097152) > 0)) TC
   JOIN
     OCEANBASE.__ALL_VIRTUAL_DATABASE DB
   ON
@@ -21699,6 +21699,7 @@ SELECT
   COLLATION,
   COLLATED_COLUMN_ID
 FROM OCEANBASE.CDB_TAB_COLS_V$
+WHERE USER_GENERATED = 'YES'
 """.replace("\n", " ")
 )
 
@@ -28134,6 +28135,7 @@ def_table_schema(
       join oceanbase.__all_database db on (db.database_id = tbl.database_id and db.tenant_id = tbl.tenant_id)
       and db.database_name != '__recyclebin'
   where col.data_type  = 48
+  and ((col.column_flags & 2097152) = 0)
   and tbl.table_mode >> 12 & 15 in (0,1);
   and tbl.index_attributes_set & 16 = 0
 """.replace("\n", " ")
