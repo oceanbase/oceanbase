@@ -368,7 +368,7 @@ int ObCSVTableRowIterator::handle_bad_file_line(ObCSVTableRowIterator *csv_iter,
       LOG_WARN("failed to append line data", K(ret), K(param.line_data_));
     } else if (OB_FAIL(line_data_with_term.append(line_term_str))) {
       LOG_WARN("failed to append line term str", K(ret), K(line_term_str));
-    } else if (OB_FAIL(ob_write_string(csv_iter->malloc_alloc_,
+    } else if (OB_FAIL(ob_write_string(csv_iter->arena_alloc_,
                                       line_data_with_term.string(), tmp_str))) {
       LOG_WARN("failed to write string", K(ret), K(line_data_with_term));
     } else {
