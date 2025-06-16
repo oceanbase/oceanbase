@@ -63,14 +63,16 @@ int ObCreateRoutineResolver::set_routine_info(const ObRoutineType &type,
                                               bool is_udt_udf)
 {
   int ret = OB_SUCCESS;
+  uint64_t user_id;
   CK(OB_NOT_NULL(session_info_));
+  OZ (schema_checker_->get_user_id(session_info_->get_effective_tenant_id(), session_info_->get_user_name(),  session_info_->get_host_name(), user_id));
   if (OB_SUCC(ret)) {
     if (is_udt_udf) {
       routine_info.set_is_udt_udf();
     }
     routine_info.set_routine_type(type);
     routine_info.set_tenant_id(session_info_->get_effective_tenant_id());
-    routine_info.set_owner_id(session_info_->get_user_id());
+    routine_info.set_owner_id(user_id);
     routine_info.set_overload(ROUTINE_STANDALONE_OVERLOAD);
     routine_info.set_subprogram_id(ROUTINE_STANDALONE_SUBPROGRAM_ID);
     routine_info.set_tg_timing_event(static_cast<TgTimingEvent>(params_.tg_timing_event_));
