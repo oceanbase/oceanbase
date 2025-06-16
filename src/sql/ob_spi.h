@@ -24,7 +24,6 @@
 #include "pl/dblink/ob_pl_dblink_info.h"
 #endif
 #include "pl/ob_pl_allocator.h"
-#include "pl/diagnosis/ob_pl_sql_audit_guard.h"
 
 namespace oceanbase
 {
@@ -40,6 +39,7 @@ namespace pl
 {
 class ObDbmsCursorInfo;
 class ObPLSqlCodeInfo;
+class ObPLSqlAuditRecord;
 }
 
 namespace sql

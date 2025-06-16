@@ -25,6 +25,7 @@
 #include "sql/engine/expr/ob_expr_obj_access.h"
 #include "pl/ob_pl_exception_handling.h"
 #include "sql/dblink/ob_tm_service.h"
+#include "pl/diagnosis/ob_pl_sql_audit_guard.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/dblink/ob_pl_dblink_util.h"
 #include "pl/ob_pl_profiler.h"
