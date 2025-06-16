@@ -2755,7 +2755,7 @@ int ObSplitDownloadSSTableTask::collect_split_sstables(
       } else if (OB_FAIL(static_cast<ObSSTable *>(iter_sstable)->get_meta(meta_handle))) {
         LOG_WARN("get meta failed", K(ret), KPC(static_cast<ObSSTable *>(iter_sstable)));
       } else if (iter_sstable->is_minor_sstable() || iter_sstable->is_mds_sstable()) {
-        if (iter_sstable->get_start_scn() <= split_start_scn) {
+        if (iter_sstable->get_start_scn() < split_start_scn || iter_sstable->get_end_scn() == split_start_scn) {
           if (OB_FAIL(table_handle_v2.set_sstable(iter_sstable, &allocator))) {
             LOG_WARN("set sstable failed", K(ret));
           } else if (OB_FAIL(batch_sstables_handle.add_table(table_handle_v2))) {
