@@ -48,6 +48,8 @@ namespace oceanbase
 namespace compaction
 {
 
+ERRSIM_POINT_DEF(EN_COMPACTION_MINOR_ALL);
+
 ObPartitionMergePolicy::GetMergeTables ObPartitionMergePolicy::get_merge_tables[MERGE_TYPE_MAX]
   = { ObPartitionMergePolicy::get_minor_merge_tables,
       ObPartitionMergePolicy::get_hist_minor_merge_tables,
@@ -446,6 +448,14 @@ int ObPartitionMergePolicy::get_boundary_snapshot_version(
     LOG_DEBUG("get boundary snapshot", K(ret), "tablet_id", tablet.get_tablet_meta().tablet_id_, K(table_store_wrapper),
               K(min_snapshot), K(max_snapshot), K(max_medium_scn), KPC(last_major_table), K(freeze_info));
   }
+#ifdef ERRSIM
+  if (OB_FAIL(ret)) {
+  } else if (EN_COMPACTION_MINOR_ALL) {
+    FLOG_INFO("ERRSIM EN_COMPACTION_MINOR_ALL", KR(ret));
+    min_snapshot = 0;
+    max_snapshot = INT64_MAX;
+  }
+#endif
   return ret;
 }
 
