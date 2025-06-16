@@ -4872,7 +4872,7 @@ int ObTablet::update_row(
                                  store_ctx.update_full_column_ ? nullptr : &update_idx,
                                  &old_row,
                                  1,     /*row_count*/
-                                 store_ctx.standalone_write_, /*check_exist*/
+                                 false, /*check_exist*/
                                  encrypt_meta);
 
       if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
@@ -7404,7 +7404,7 @@ int ObTablet::prepare_param(
   param.read_info_ = rowkey_read_info_;
   param.set_tablet_handle(relative_table.get_tablet_handle());
   param.is_non_unique_local_index_ = relative_table.is_storage_index_table() &&
-            relative_table.is_index_local_storage() && !relative_table.is_unique_index();
+            relative_table.is_index_local_storage() && !relative_table.is_unique_index() && !relative_table.is_vector_index();
   return ret;
 }
 
