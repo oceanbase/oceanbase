@@ -50,6 +50,7 @@ private:
                      const ObIArray<ObIArray<ObObj> *> &args,
                      JNIEnv &env,
                      jclass object_clazz,
+                     jobjectArray &java_types,
                      jobjectArray &java_args);
 
    static int get_ob_type_to_java_map(const ObObjMeta &obj_meta, JNIEnv &env, ObIAllocator &alloc, ObToJavaTypeMapperBase *&functor);

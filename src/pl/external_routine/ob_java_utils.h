@@ -57,6 +57,8 @@ public:
     }
   }
 
+  inline jclass &get_java_type_class() { return type_class_; }
+
 protected:
   int init(const char* clazz_name)
   {
@@ -239,6 +241,8 @@ public:
       type_class_ = nullptr;
     }
   }
+
+  inline jclass &get_java_type_class() { return type_class_; }
 
 protected:
   int init(const char* clazz_name)

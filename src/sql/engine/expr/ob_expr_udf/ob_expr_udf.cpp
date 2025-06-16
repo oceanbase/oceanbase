@@ -502,11 +502,13 @@ int ObExprUDF::eval_external_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
     if (OB_FAIL(SMART_CALL(expr.eval_param_value(ctx)))) {
       LOG_WARN("failed to eval_param_value", K(ret), K(expr));
     } else {
+      CK (udf_info.params_type_.count() == expr.arg_cnt_);
+
       for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
         if (OB_ISNULL(expr.args_[i])) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected NULL expr", K(ret), K(i), K(expr));
-        } else if (OB_FAIL(arg_types.push_back(expr.args_[i]->obj_meta_))) {
+        } else if (OB_FAIL(arg_types.push_back(udf_info.params_type_.at(i)))) {
           LOG_WARN("failed to push_back arg datum meta", K(ret), K(i), K(expr));
         } else {
           const ObDatum &datum = expr.args_[i]->locate_expr_datum(ctx);

@@ -71,6 +71,7 @@ private:
   const char *HADOOP_LIB_PATH_PREFIX = "hadoop";
   const char *HADOOP_COMMON_LIB_PREFIX = "common";
   const char *HADOOP_HDFS_LIB_PREFIX = "hdfs";
+  const char *JAVA_UDF_PREFIX = "java-udf";
 
   // Libs path in connector path, current only support ODPS libs
   const char *LIB_PATH_PREFIX = "lib";

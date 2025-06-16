@@ -131,8 +131,10 @@ int ObJavaUDFExecutor::execute(int64_t batch_size,
       jstring clazz_name = nullptr;
       jstring method_name = nullptr;
       jclass object_clazz =nullptr;
+      jobjectArray java_types = nullptr;
       jobjectArray java_args = nullptr;
       jobjectArray results = nullptr;
+      int64_t timeout_ts = exec_ctx_.get_my_session()->get_query_timeout_ts();
 
       if (OB_ISNULL(executor_clazz = env->FindClass("com/oceanbase/internal/ObJavaUDFExecutor"))) {
         ret = OB_ERR_UNEXPECTED;
@@ -142,7 +144,18 @@ int ObJavaUDFExecutor::execute(int64_t batch_size,
               execute_method = env->GetStaticMethodID(
                   executor_clazz,
                   "execute",
-                  "(Ljava/lang/ClassLoader;Ljava/lang/String;Ljava/lang/String;J[[Ljava/lang/Object;[Ljava/lang/Object;)V"))) {
+                  "("
+                    "Ljava/lang/ClassLoader;"  // classLoader, java ClassLoader type
+                    "Ljava/lang/String;"       // clazzName, java String type
+                    "Ljava/lang/String;"       // methodName, java String type
+                    "J"                        // timeoutTs, java long type
+                    "J"                        // batchSize, java long type
+                    "[Ljava/lang/Object;"      // argTypes, java Object[] type
+                    "[[Ljava/lang/Object;"     // argValues, java Object[][] type
+                    "Ljava/lang/Object;"       // resultType, java Object type
+                    "[Ljava/lang/Object;"      // result, java Object type
+                  ")"
+                  "V"))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to find execute method in ObJavaUDFExecutor class", K(ret));
       } else if (OB_ISNULL(clazz_name = env->NewStringUTF(udf_info_.external_routine_entry_.ptr()))) {
@@ -154,7 +167,7 @@ int ObJavaUDFExecutor::execute(int64_t batch_size,
       } else if (OB_ISNULL(object_clazz = env->FindClass("java/lang/Object"))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to find java/lang/Object class", K(ret));
-      } else if (OB_FAIL(build_udf_args(arg_types, args, *env, object_clazz, java_args))) {
+      } else if (OB_FAIL(build_udf_args(arg_types, args, *env, object_clazz, java_types, java_args))) {
         LOG_WARN("failed to build udf args", K(ret));
       } else if (OB_ISNULL(results = env->NewObjectArray(batch_size, object_clazz, nullptr))) {
         ret = OB_ERR_UNEXPECTED;
@@ -162,15 +175,32 @@ int ObJavaUDFExecutor::execute(int64_t batch_size,
       } else {
         ObFromJavaTypeMapperBase *result_mapper = nullptr;
 
-        env->CallStaticVoidMethod(executor_clazz, execute_method, loader, clazz_name, method_name, batch_size, java_args, results);
-
-        if (OB_FAIL(ObJavaUtils::exception_check(env))) {
-          LOG_WARN("failed to execute Java UDF", K(ret), K(udf_info_), K(args));
-        } else if (OB_FAIL(get_java_type_to_ob_map(udf_info_.result_type_, *env, result_allocator, result_mapper))) {
+        if (OB_FAIL(get_java_type_to_ob_map(udf_info_.result_type_, *env, result_allocator, result_mapper))) {
           LOG_WARN("failed to get_result_mapper", K(ret));
         } else if (OB_ISNULL(result_mapper)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected NULL result_mapper", K(ret));
+        } else if (OB_ISNULL(result_mapper->get_java_type_class())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected NULL result_mapper java type class", K(ret));
+        } else {
+          env->CallStaticVoidMethod(executor_clazz,
+                                    execute_method,
+                                    loader,
+                                    clazz_name,
+                                    method_name,
+                                    timeout_ts,
+                                    batch_size,
+                                    java_types,
+                                    java_args,
+                                    result_mapper->get_java_type_class(),
+                                    results);
+        }
+
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (OB_FAIL(ObJavaUtils::exception_check(env))) {
+          LOG_WARN("failed to execute Java UDF", K(ret), K(udf_info_), K(args));
         }
 
         if (OB_SUCC(ret)) {
@@ -212,6 +242,7 @@ int ObJavaUDFExecutor::execute(int64_t batch_size,
       ObJavaUtils::delete_local_ref(clazz_name, env);
       ObJavaUtils::delete_local_ref(method_name, env);
       ObJavaUtils::delete_local_ref(object_clazz, env);
+      ObJavaUtils::delete_local_ref(java_types, env);
       ObJavaUtils::delete_local_ref(java_args, env);
       ObJavaUtils::delete_local_ref(results, env);
     }
@@ -224,13 +255,17 @@ int ObJavaUDFExecutor::build_udf_args(const ObIArray<ObObjMeta> &arg_types,
                                       const ObIArray<ObIArray<ObObj>*> &args,
                                       JNIEnv &env,
                                       jclass object_clazz,
+                                      jobjectArray &java_types,
                                       jobjectArray &java_args)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(java_args = env.NewObjectArray(args.count(), object_clazz, nullptr))) {
+  if (OB_ISNULL(java_types = env.NewObjectArray(args.count(), object_clazz, nullptr))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get udf args", K(ret));
+    LOG_WARN("failed to get udf arg types", K(ret));
+  } else if (OB_ISNULL(java_args = env.NewObjectArray(args.count(), object_clazz, nullptr))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get udf arg values", K(ret));
   } else {
     ObArenaAllocator alloc;
     for (jsize i = 0; OB_SUCC(ret) && i < args.count(); ++i) {
@@ -243,6 +278,11 @@ int ObJavaUDFExecutor::build_udf_args(const ObIArray<ObObjMeta> &arg_types,
       } else if (OB_ISNULL(map_fun)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected invalid map fun", K(ret), K(map_fun));
+      } else if (OB_ISNULL(map_fun->get_java_type_class())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL java type class", K(ret), K(map_fun), K(i), K(arg_types));
+      } else if (FALSE_IT(env.SetObjectArrayElement(java_types, i, map_fun->get_java_type_class()))) {
+        // unreachable
       } else if (OB_ISNULL(curr_column = env.NewObjectArray(args.at(i)->count(), object_clazz, nullptr))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get udf args row", K(ret));
@@ -255,7 +295,7 @@ int ObJavaUDFExecutor::build_udf_args(const ObIArray<ObObjMeta> &arg_types,
 
           if (ob_value.is_null()) {
             java_value = nullptr;
-          } else if (arg_types.at(i) != ob_value.get_meta()) {
+          } else if (arg_types.at(i).get_type() != ob_value.get_meta().get_type()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected unmatch ObObjMeta", K(ret), K(i), K(arg_types.at(i)), K(ob_value));
           } else if (OB_FAIL((*map_fun)(ob_value, java_value))) {

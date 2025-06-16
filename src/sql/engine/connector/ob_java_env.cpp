@@ -216,9 +216,9 @@ int ObJavaEnv::setup_useful_path()
       const char *fmt = nullptr;
       // Append original classpath
       if (len > 0 && connector_path_[len - 1] == '/') {
-        fmt = "%s:%s*:%s%s/%s/*:%s%s/%s/%s/*:%s%s/%s/*:%s%s/%s/%s/*:%s";
+        fmt = "%s:%s*:%s%s/%s/*:%s%s/%s/%s/*:%s%s/%s/*:%s%s/%s/%s/*:%s%s/*:%s";
       } else {
-        fmt = "%s/:%s/*:%s/%s/%s/*:%s/%s/%s/%s/*:%s/%s/%s/*:%s/%s/%s/%s/*:%s";
+        fmt = "%s/:%s/*:%s/%s/%s/*:%s/%s/%s/%s/*:%s/%s/%s/*:%s/%s/%s/%s/*:%s/%s/*:%s";
       }
 
       const char *original_cp =
@@ -236,6 +236,7 @@ int ObJavaEnv::setup_useful_path()
               HADOOP_HDFS_LIB_PREFIX, // ${CONNECTOR_PATH}/hadoop/hdfs/*
               connector_path_, HADOOP_LIB_PATH_PREFIX, HADOOP_HDFS_LIB_PREFIX,
               LIB_PATH_PREFIX, // ${CONNECTOR_PATH}/hadoop/hdfs/lib/*,
+              connector_path_, JAVA_UDF_PREFIX, // ${CONNECTOR_PATH}/java-udf/*
               original_cp // Original classpath from env
               ))) {
         LOG_WARN("failed to init class path", K(ret));
