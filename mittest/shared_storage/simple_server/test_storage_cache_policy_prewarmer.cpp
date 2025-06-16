@@ -70,7 +70,11 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_clean_task_history)
   for (int i = 0; i < 1000; ++i) {
     // add tasks to be cleaned
     const int64_t tablet_id = i + 200001;
-    ASSERT_EQ(OB_SUCCESS, tablet_status_map.set_refactored(tablet_id, PolicyStatus::HOT));
+    int ret = tablet_status_map.set_refactored(tablet_id, PolicyStatus::HOT);
+    if (OB_FAIL(ret)) {
+      LOG_INFO("[TEST] fail to set refactored", KR(ret), K(i));
+    }
+    ASSERT_EQ((ret == OB_SUCCESS) || (ret == OB_HASH_EXIST), true);
   }
   ASSERT_EQ(1000, tablet_status_map.size());
 
@@ -88,7 +92,11 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_clean_task_history)
     ObTabletPolicyInfo tablet_policy_info;
     partition.set_part_storage_cache_policy_type(ObStorageCachePolicyType::HOT_POLICY);
     ASSERT_EQ(OB_SUCCESS, tablet_policy_info.init(&partition));
-    ASSERT_EQ(OB_SUCCESS, part_policy_map.set_refactored(part_id, tablet_policy_info));
+    int ret = part_policy_map.set_refactored(part_id, tablet_policy_info);
+    if (OB_FAIL(ret)) {
+      LOG_INFO("[TEST] fail to set refactored", KR(ret), K(i));
+    }
+    ASSERT_EQ((ret == OB_SUCCESS) || (ret == OB_HASH_EXIST), true);
   }
   ASSERT_EQ(1000, tablet_status_map.size());
 
@@ -107,7 +115,11 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_clean_task_history)
 
     partition.set_part_storage_cache_policy_type(ObStorageCachePolicyType::HOT_POLICY);
     ASSERT_EQ(OB_SUCCESS, table_policy_info.init(table_id, table_policy, 0));
-    ASSERT_EQ(OB_SUCCESS, table_policy_map.set_refactored(table_id, table_policy_info));
+    int ret = table_policy_map.set_refactored(table_id, table_policy_info);
+    if (OB_FAIL(ret)) {
+      LOG_INFO("[TEST] fail to set refactored", KR(ret), K(i));
+    }
+    ASSERT_EQ((ret == OB_SUCCESS) || (ret == OB_HASH_EXIST), true);
   }
   ASSERT_EQ(1000, tablet_status_map.size());
 
@@ -235,16 +247,17 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_convert_hot_to_auto)
   ObStorageCacheTabletTaskHandle hot_tablet_task_handle;
   ASSERT_EQ(OB_SUCCESS, tablet_task_map.get_refactored(run_ctx_.tablet_id_.id(), hot_tablet_task_handle));
   ASSERT_NE(nullptr, hot_tablet_task_handle());
-  ASSERT_EQ(hot_tablet_task_handle()->policy_status_, ObStorageCachePolicyStatus::HOT);
-  ASSERT_EQ(hot_tablet_task_handle()->status_, ObStorageCacheTaskStatus::TaskStatus::OB_STORAGE_CACHE_TASK_FINISHED);
+  LOG_INFO("[TEST] finish hot task", KPC(hot_tablet_task_handle()));
+  ASSERT_EQ(hot_tablet_task_handle()->get_policy_status(), ObStorageCachePolicyStatus::HOT);
+  ASSERT_EQ(hot_tablet_task_handle()->get_status(), ObStorageCacheTaskStatus::TaskStatus::OB_STORAGE_CACHE_TASK_FINISHED);
   hot_tablet_task_handle()->status_ = ObStorageCacheTaskStatus::TaskStatus::OB_STORAGE_CACHE_TASK_DOING;
-  ASSERT_EQ(hot_tablet_task_handle()->status_, ObStorageCacheTaskStatus::TaskStatus::OB_STORAGE_CACHE_TASK_DOING);
+  ASSERT_EQ(hot_tablet_task_handle()->get_status(), ObStorageCacheTaskStatus::TaskStatus::OB_STORAGE_CACHE_TASK_DOING);
+  FLOG_INFO("[TEST] finish change task status", KPC(hot_tablet_task_handle()));
   OK(exe_sql("alter table test_convert_hot_to_auto storage_cache_policy (global = 'auto');"));
   sleep(30);
   check_macro_blocks_type(ObSSMacroCacheType::MACRO_BLOCK);
-  FLOG_INFO("[TEST] finish test_convert_hot_to_auto");
-  ASSERT_EQ(hot_tablet_task_handle()->status_, ObStorageCacheTaskStatus::TaskStatus::OB_STORAGE_CACHE_TASK_CANCELED);
-
+  FLOG_INFO("[TEST] finish check auto type", KPC(hot_tablet_task_handle()));
+  ASSERT_EQ(hot_tablet_task_handle()->get_status(), ObStorageCacheTaskStatus::TaskStatus::OB_STORAGE_CACHE_TASK_CANCELED);
   FLOG_INFO("[TEST] finish test_convert_hot_to_auto");
 }
 

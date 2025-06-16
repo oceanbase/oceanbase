@@ -344,7 +344,7 @@ void ObStorageCachePolicyPrewarmerTest::set_ls_and_tablet_id_for_run_ctx(const c
   run_ctx_.ls_id_ = ls->get_ls_id();
   run_ctx_.ls_epoch_ = ls->get_ls_epoch();
   run_ctx_.tenant_epoch_ = MTL_EPOCH_ID();
-  LOG_INFO("[TEST] finish set run ctx", K(run_ctx_));
+  LOG_INFO("[TEST] finish set run ctx", K(run_ctx_), K(table_name));
 }
 
 void ObStorageCachePolicyPrewarmerTest::add_task(SCPTabletTaskMap &tablet_tasks, ObStorageCacheTaskStatusType status, int64_t end_time, const int64_t tablet_id)
