@@ -254,7 +254,7 @@ int ObRebuildIndexTask::rebuild_index_impl()
     LOG_WARN("get null schema", KR(ret), KP(table_schema));
   } else if (table_schema->is_in_recyclebin()) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
-    LOG_WARN("can not create index of table in recyclebin.", KR(ret), K(table_schema));
+    LOG_WARN("can not create index of table in recyclebin.", KR(ret), KPC(table_schema));
   } else if (OB_FAIL(schema_guard.check_database_in_recyclebin(tenant_id_,
                                                                table_schema->get_database_id(),
                                                                is_db_in_recyclebin))) {
