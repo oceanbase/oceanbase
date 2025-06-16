@@ -163,6 +163,7 @@ public:
       uint64_t in_rewrite_ : 1;
       uint64_t in_duplicate_conflict_resolve_ : 1;
       uint64_t in_foreign_key_cascading_ : 1;
+      uint64_t in_extract_query_range_ : 1;
     };
   };
 

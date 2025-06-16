@@ -294,6 +294,7 @@ DEF_ASH_FLAGS_SETTER_GUARD(in_check_tx_status)
 DEF_ASH_FLAGS_SETTER_GUARD(in_resolve)
 DEF_ASH_FLAGS_SETTER_GUARD(in_rewrite)
 DEF_ASH_FLAGS_SETTER_GUARD(in_foreign_key_cascading)
+DEF_ASH_FLAGS_SETTER_GUARD(in_extract_query_range)
 
 #undef DEF_ASH_FLAGS_SETTER_GUARD
 
