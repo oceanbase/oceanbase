@@ -199,7 +199,7 @@ int ObDDLReplicaBuildExecutor::build(const ObDDLReplicaBuildExecutorParam &param
 #ifdef OB_BUILD_SHARED_STORAGE
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
     LOG_WARN("get_min_data_version failed", KR(ret), K_(tenant_id));
-  } else if (ObTabletSplitUtil::mock_greater_than_4_4_0_0(data_version) && is_tablet_split(ddl_type_) && GCTX.is_shared_storage_mode()) {
+  } else if (data_version >= DATA_VERSION_4_4_0_0 && is_tablet_split(ddl_type_) && GCTX.is_shared_storage_mode()) {
     if (OB_FAIL(schedule_tablet_split_to_leader(param))) {
       LOG_WARN("failed to schedule tablet split to leader", K(ret));
     }

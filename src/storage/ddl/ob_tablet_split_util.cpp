@@ -958,7 +958,7 @@ int ObTabletSplitUtil::get_storage_schema_from_mds(
   } else if (FALSE_IT(storage_schema = new (buf) ObStorageSchema())) {
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get min data version", K(ret), K(tenant_id));
-  } else if (ObTabletSplitUtil::mock_greater_than_4_4_0_0(data_version)) {
+  } else if (data_version >= DATA_VERSION_4_4_0_0) {
     ObTabletSplitInfoMdsUserData split_info_data;
     if (OB_FAIL(tablet_handle.get_obj()->get_split_info_data(share::SCN::max_scn(), split_info_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S))) {
       LOG_WARN("failed to get split data", K(ret));

@@ -165,11 +165,6 @@ public:
       const ObTabletHandle &tablet_handle,
       ObStorageSchema *&storage_schema,
       ObIAllocator &allocator);
-  static bool mock_greater_than_4_4_0_0(const uint64_t data_version)
-  {
-    //tmp function remove me later ly435438
-    return data_version >= DATA_VERSION_4_3_5_2;
-  }
   static int register_split_info_mds(
       const obrpc::ObTabletSplitRegisterMdsArg &arg,
       rootserver::ObDDLService &ddl_service,

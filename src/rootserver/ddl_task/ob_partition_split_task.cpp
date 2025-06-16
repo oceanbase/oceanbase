@@ -500,9 +500,9 @@ int ObPartitionSplitTask::process()
       break;
     }
     case ObDDLTaskStatus::PREPARE_TABLET_SPLIT_RANGES: {
-      if (!ObTabletSplitUtil::mock_greater_than_4_4_0_0(data_format_version_) && OB_FAIL((prepare_tablet_split_ranges(WAIT_FROZE_END)))) {
+      if (data_format_version_ <  DATA_VERSION_4_4_0_0 && OB_FAIL((prepare_tablet_split_ranges(WAIT_FROZE_END)))) {
         LOG_WARN("failed to prepare tablet split ranges", K(ret));
-      } else if (ObTabletSplitUtil::mock_greater_than_4_4_0_0(data_format_version_) && OB_FAIL((prepare_tablet_split_ranges(REGISTER_SPLIT_INFO_MDS)))) {
+      } else if (data_format_version_ >=  DATA_VERSION_4_4_0_0 && OB_FAIL((prepare_tablet_split_ranges(REGISTER_SPLIT_INFO_MDS)))) {
         LOG_WARN("failed to prepare tablet split ranges", K(ret));
       }
       break;

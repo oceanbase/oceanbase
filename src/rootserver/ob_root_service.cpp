@@ -5281,7 +5281,7 @@ int ObRootService::register_split_info_mds(const obrpc::ObTabletSplitRegisterMds
     LOG_WARN("not init", KR(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.tenant_id_, data_version))) {
     LOG_WARN("failed to get min data version", KR(ret));
-  } else if (!ObTabletSplitUtil::mock_greater_than_4_4_0_0(data_version)) {
+  } else if (data_version < DATA_VERSION_4_4_0_0) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("current data version doesn't support to register split info mds", K(ret), K(data_version));
   } else if (!arg.is_valid()) {

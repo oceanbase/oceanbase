@@ -87,7 +87,7 @@ int ObTabletSplitMdsUserData::init_range_part_split_src(
     LOG_WARN("failed to assign partkey projector", K(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get min data version", K(ret), K(tenant_id));
-  } else if (ObTabletSplitUtil::mock_greater_than_4_4_0_0(data_version) && OB_FAIL(storage_schema_.init(allocator_, table_schema, compat_mode, false/*skip_column_info*/))) {
+  } else if (data_version >= DATA_VERSION_4_4_0_0 && OB_FAIL(storage_schema_.init(allocator_, table_schema, compat_mode, false/*skip_column_info*/))) {
     LOG_WARN("failed to assign partkey projector", K(ret));
   }
   return ret;
