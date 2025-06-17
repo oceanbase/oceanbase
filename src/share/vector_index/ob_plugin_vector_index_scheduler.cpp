@@ -904,6 +904,8 @@ int ObPluginVectorIndexLoadScheduler::log_tablets_need_memdata_sync(ObPluginVect
           LOG_WARN("get null adapter", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
         } else if (iter->first != adapter->get_inc_tablet_id()) {
           // do nothing
+        } else if (OB_INVALID_ID == adapter->get_inc_table_id()) {
+          // do nothing
         } else if (tablet_id_array_.count() >= ObVectorIndexSyncLogCb::VECTOR_INDEX_MAX_SYNC_COUNT) {
           // do nothing, wait for next schedule
         } else if (!need_refresh_ && OB_FAIL(adapter->check_need_sync_to_follower_or_do_opt_task(need_sync))) {
@@ -1639,7 +1641,9 @@ int ObVectorIndexMemSyncInfo::add_task_to_waiting_map(VectorIndexAdaptorMap &ada
     // only use complete adapter, tablet id of no.3 aux index table
     ObPluginVectorIndexAdaptor *adapter = iter->second;
     ObTabletID tablet_id = iter->first;
-    if (tablet_id == adapter->get_inc_tablet_id()) {
+    if (OB_INVALID_ID == adapter->get_inc_table_id()) {
+      // do nothing
+    } else if (tablet_id == adapter->get_inc_tablet_id()) {
       char *task_ctx_buf =
         static_cast<char *>(get_processing_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
       ObPluginVectorIndexTaskCtx* task_ctx = nullptr;
