@@ -624,7 +624,9 @@ int ObExprUDFCtx::get_result_from_result_cache(ObObj &result, bool &found)
   pl::ObPLUDFResultCacheCtx rc_ctx;
   pl::ObPLUDFResultCacheObject *udf_result = nullptr;
   found = false;
-  if (OB_FAIL(construct_cache_ctx_for_get(rc_ctx))) {
+  if (OB_ISNULL(current_function_)) {
+    // first execute, do not try to get cache for permission check
+  } else if (OB_FAIL(construct_cache_ctx_for_get(rc_ctx))) {
     LOG_WARN("failed to construct cache ctx for get", K(ret));
   } else if (OB_FAIL(pl::ObPLUDFResultCacheMgr::get_udf_result_cache(
                         get_session_info()->get_plan_cache(), cacheobj_guard, rc_ctx))) {
@@ -658,13 +660,15 @@ int ObExprUDFCtx::get_result_from_result_cache(ObObj &result, bool &found)
 int ObExprUDFCtx::construct_cache_ctx_for_get(pl::ObPLUDFResultCacheCtx &rc_ctx)
 {
   int ret = OB_SUCCESS;
-  uint64_t database_id = OB_INVALID_ID;
-  get_session_info()->get_database_id(database_id);
   rc_ctx.session_info_ = get_session_info();
   rc_ctx.schema_guard_ = exec_ctx_->get_sql_ctx()->schema_guard_;
 
   rc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_UDF_RESULT_CACHE;
-  rc_ctx.key_.db_id_ = database_id;
+  if (OB_ISNULL(current_function_) || current_function_->is_invoker_right()) {
+    rc_ctx.key_.db_id_ = get_session_info()->get_database_id();
+  } else {
+    rc_ctx.key_.db_id_ = current_function_->get_database_id();
+  }
   rc_ctx.key_.package_id_ = get_info()->udf_package_id_;
   rc_ctx.key_.routine_id_ = get_info()->udf_id_;
   rc_ctx.key_.sys_vars_str_ = sys_var_str_;
@@ -687,6 +691,7 @@ int ObExprUDFCtx::construct_cache_ctx_for_add(pl::ObPLUDFResultCacheCtx &rc_ctx)
     rc_ctx.sys_schema_version_ = current_compile_unit_->get_sys_schema_version();
     rc_ctx.tenant_schema_version_ = current_compile_unit_->get_tenant_schema_version();
     rc_ctx.name_ = current_function_->get_function_name();
+    rc_ctx.key_.db_id_ = current_function_->get_database_id();
   }
   return ret;
 }
