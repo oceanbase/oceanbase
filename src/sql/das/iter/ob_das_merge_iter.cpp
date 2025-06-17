@@ -14,7 +14,8 @@
 #include "sql/das/iter/ob_das_merge_iter.h"
 #include "sql/das/ob_data_access_service.h"
 #include "sql/engine/ob_exec_context.h"
-
+#include "sql/das/iter/ob_das_scan_iter.h"
+#include "sql/engine/table/ob_external_table_access_service.h"
 namespace oceanbase
 {
 using namespace common;
@@ -340,12 +341,6 @@ int ObDASMergeIter::inner_init(ObDASIterParam &param)
         part_level_ = table_schema_->get_part_level();
       }
     }
-
-    if (OB_SUCC(ret)) {
-      if (OB_NOT_NULL(exec_ctx_->get_my_session())) {
-        is_diagnosis_enabled_ = exec_ctx_->get_my_session()->is_diagnosis_enabled();
-      }
-    }
   }
 
   return ret;
@@ -534,6 +529,49 @@ bool ObDASMergeIter::has_pseudo_part_id_columnref()
   return pseudo_partition_id_expr_ != NULL || pseudo_sub_partition_id_expr_ != NULL ||
          pseudo_partition_name_expr_ != NULL || pseudo_sub_partition_name_expr_ != NULL ||
          pseudo_partition_index_expr_ != NULL || pseudo_sub_partition_index_expr_ != NULL;
+}
+
+int ObDASMergeIter::get_cur_diagnosis_info(ObDiagnosisManager* diagnosis_manager) {
+  int ret = OB_SUCCESS;
+
+  if (seq_task_idx_ >= das_tasks_arr_.count()) {
+    // do nothing
+  } else if (seq_task_idx_ >= 0) {
+    ObDASScanOp *scan_op = DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
+    if (OB_ISNULL(scan_op)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("scan op is null", K(ret));
+    } else {
+      ObNewRowIterator *base_iter = scan_op->get_output_result_iter();
+      if (OB_ISNULL(base_iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected result iter is null", K(ret));
+      } else {
+        ObDASIter *das_iter = static_cast<ObDASIter*>(base_iter);
+        if (das_iter->get_type() != ObDASIterType::DAS_ITER_SCAN) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected result iter type", K(ret), K(das_iter->get_type()));
+        } else {
+          ObDASScanIter *das_scan_iter = static_cast<ObDASScanIter *>(das_iter);
+          ObExternalTableRowIterator *ext_iter = static_cast<ObExternalTableRowIterator *>(
+                                                            das_scan_iter->get_output_result_iter());
+          if (OB_ISNULL(ext_iter)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected result iter type", K(ret));
+          } else {
+            if (!ext_iter->is_diagnosis_supported()) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("diagnosis is not supported in external table scan", K(ret));
+            } else {
+              diagnosis_manager->set_cur_file_url(ext_iter->get_cur_file_url());
+              diagnosis_manager->set_cur_line_number(ext_iter->get_cur_line_num());
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 int ObDASMergeIter::update_pseudo_columns(ObIDASTaskOp *output_das_task)
@@ -825,15 +863,6 @@ int ObDASMergeIter::get_next_seq_row()
         scan_op->get_scan_param().need_update_tablet_param_ = false;
 
         if (OB_SUCC(ret)) {
-          if (is_diagnosis_enabled_) {
-            if (OB_FAIL(scan_op->get_output_result_iter()->get_diagnosis_info(&diagnosis_mgr_))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("fail to get diagnosis info", K(ret));
-            }
-          }
-        }
-
-        if (OB_SUCC(ret)) {
           got_row = true;
           if (has_pseudo_part_id_columnref()) {
             if (OB_FAIL(update_pseudo_columns(scan_op))) {
@@ -892,15 +921,6 @@ int ObDASMergeIter::get_next_seq_rows(int64_t &count, int64_t capacity)
           }
           ret = scan_op->get_output_result_iter()->get_next_rows(count, capacity);
           scan_op->get_scan_param().need_update_tablet_param_ = false;
-
-          if (OB_SUCC(ret)) {
-            if (is_diagnosis_enabled_) {
-              if (OB_FAIL(scan_op->get_output_result_iter()->get_diagnosis_info(&diagnosis_mgr_))) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("fail to get diagnosis info", K(ret));
-              }
-            }
-          }
 
           if (OB_ITER_END == ret && count > 0) {
             ret = OB_SUCCESS;

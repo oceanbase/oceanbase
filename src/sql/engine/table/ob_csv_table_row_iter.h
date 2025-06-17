@@ -99,14 +99,9 @@ public:
   }
 
   virtual void reset() override;
-
-  virtual int get_diagnosis_info(ObDiagnosisManager* diagnosis_manager) override
-  {
-    int ret = OB_SUCCESS;
-    diagnosis_manager->set_cur_file_url(state_.cur_file_name_);
-    diagnosis_manager->set_cur_line_number(state_.batch_first_row_line_num_);
-    return ret;
-  }
+  virtual bool is_diagnosis_supported() const override { return true; }
+  virtual int64_t get_cur_line_num() const override { return state_.batch_first_row_line_num_; }
+  virtual ObString get_cur_file_url() const override { return state_.cur_file_name_; }
 
 private:
   int expand_buf();

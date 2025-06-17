@@ -118,7 +118,6 @@ public:
   // for compatibility with ObNewRowIterator
 
   int get_domain_id_merge_iter(ObDASDomainIdMergeIter *&domain_id_merge_iter);
-  virtual int get_diagnosis_info(ObDiagnosisManager* diagnosis_manager) override { return OB_SUCCESS; };
 protected:
   virtual int inner_init(ObDASIterParam &param) = 0;
   virtual int inner_reuse() = 0;

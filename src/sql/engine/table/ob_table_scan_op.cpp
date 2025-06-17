@@ -3520,13 +3520,19 @@ int ObTableScanOp::do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip)
   if (OB_ISNULL(session = ctx_.get_my_session()) || OB_ISNULL(output_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session or output is null", K(ret), K(session), K(output_));
-  } else if (OB_FAIL(output_->get_diagnosis_info(&diagnosis_manager))) {
+  } else if (output_->get_type() != DAS_ITER_MERGE) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get diagnosis info", K(ret));
-  } else if (OB_FAIL(diagnosis_manager.do_diagnosis(skip, session->get_diagnosis_info(),
+    LOG_WARN("unexpected iter type", K(ret), K(output_->get_type()));
+  } else {
+    ObDASMergeIter *das_merge_iter = static_cast<ObDASMergeIter *>(output_);
+    if (OB_FAIL(das_merge_iter->get_cur_diagnosis_info(&diagnosis_manager))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get diagnosis info", K(ret));
+    } else if (OB_FAIL(diagnosis_manager.do_diagnosis(skip, session->get_diagnosis_info(),
                                                     ctx_.get_px_sqc_id(), ctx_.get_px_task_id(),
                                                     ctx_.get_allocator()))){
-    LOG_WARN("fail to do diagnosis", K(ret));
+      LOG_WARN("fail to do diagnosis", K(ret));
+    }
   }
   return ret;
 }

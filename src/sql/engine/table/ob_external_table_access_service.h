@@ -213,7 +213,15 @@ struct ObExternalTableAccessOptions
   ObFilePreBuffer::CacheOptions cache_options_;
 };
 
-class ObExternalTableRowIterator : public common::ObNewRowIterator {
+class ObDiagnosisInfoProvider {
+public:
+  virtual ~ObDiagnosisInfoProvider() {}
+  virtual bool is_diagnosis_supported() const { return false; }
+  virtual int64_t get_cur_line_num() const { return 0; }
+  virtual ObString get_cur_file_url() const { return ObString(); }
+};
+
+class ObExternalTableRowIterator : public common::ObNewRowIterator, public ObDiagnosisInfoProvider {
 public:
   ObExternalTableRowIterator() :
     scan_param_(nullptr), line_number_expr_(NULL), file_id_expr_(NULL), file_name_expr_(NULL) {}

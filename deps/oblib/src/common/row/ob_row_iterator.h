@@ -41,7 +41,6 @@ public:
   ObNewRowIterator() : type_(Other) {}
   explicit ObNewRowIterator(const IterType type) : type_(type) {}
   virtual ~ObNewRowIterator() {}
-  virtual int get_diagnosis_info(sql::ObDiagnosisManager* diagnosis_manager) { return OB_SUCCESS; };
   /**
    * get the next row and move the cursor
    *
