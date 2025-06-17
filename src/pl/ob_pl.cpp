@@ -5596,8 +5596,8 @@ int ObPLConcurrentGuard::set_concurrent_num(ObPLFunction &routine, ObExecContext
   }
   if (NULL != inner_obj_ && inner_obj_->is_limited_concurrent_num()) {
     OZ (inner_obj_->inc_concurrent_num());
+    save_ret_ = ret;
   }
-  save_ret_ = ret;
   return ret;
 }
 

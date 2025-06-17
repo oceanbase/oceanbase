@@ -1331,7 +1331,7 @@ private:
 class ObPLConcurrentGuard
 {
 public:
-  ObPLConcurrentGuard(): inner_obj_(NULL), save_ret_(OB_SUCCESS) {}
+  ObPLConcurrentGuard(): inner_obj_(NULL), save_ret_(OB_ERROR) {}
   ~ObPLConcurrentGuard();
   int set_concurrent_num(ObPLFunction &routine, ObExecContext &ctx, ObPLPackageGuard &package_guard);
 
