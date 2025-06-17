@@ -2789,6 +2789,10 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
   char buf[4096];
   STATIC_ASSERT(sizeof(ObPlanCacheCtx) < sizeof(buf), "ObPlanCacheCtx is too large");
   if (OB_FAIL(init_result_set(context, result))) {
+    if (ret == OB_ALLOCATE_MEMORY_FAILED) {
+      // 环境内存不足时，可能会报4013
+      result.get_exec_context().set_need_disconnect(false);
+    }
     LOG_WARN("failed to init result set", K(ret));
   } else if (trimed_stmt.empty()) {
     ret = OB_ERR_EMPTY_QUERY;
