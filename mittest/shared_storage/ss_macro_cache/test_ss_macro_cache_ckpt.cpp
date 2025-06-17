@@ -92,10 +92,10 @@ public:
   static void TearDownTestCase()
   {
     int ret = OB_SUCCESS;
+    MockTenantModuleEnv::get_instance().destroy();
     if (OB_FAIL(ResidualDataCleanerHelper::clean_in_mock_env())) {
       LOG_WARN("failed to clean residual data", KR(ret));
     }
-    MockTenantModuleEnv::get_instance().destroy();
   }
 
 public:
@@ -868,6 +868,116 @@ TEST_F(TestSSMacroCacheCkpt, test_replay)
       print_meta_map(macro_cache_mgr->meta_map_);
       ASSERT_EQ(MACRO_CACHE_META_NUM, macro_cache_mgr->meta_map_.size());
     }
+  }
+}
+
+TEST_F(TestSSMacroCacheCkpt, test_exists_in_both_fifo_and_lru)
+{
+  int ret = OB_SUCCESS;
+  if (enable_test_) {
+    ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+    ASSERT_NE(nullptr, macro_cache_mgr);
+    const int64_t HEADER_FIXED_SERIALIZE_SIZE =
+        ObSSMacroCacheCkptBLKHeader::get_fixed_serialize_size();
+    const int64_t DEFAULT_BLK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
+
+    // Assume the average size of ObSSMacroCacheMeta after serialization is 50B
+    const int64_t MACRO_CACHE_META_NUM = 100LL * 1000LL;
+
+    ObArenaAllocator allocator;
+    ObSSMacroCache macro_cache;
+    const int64_t fifo_num = MACRO_CACHE_META_NUM;
+    const int64_t lru_num = MACRO_CACHE_META_NUM;
+    int64_t fifo_serialize_size = 0;
+    int64_t lru_serialize_size = 0;
+    ObSSMacroCacheLRUList &lru_list =
+        macro_cache_mgr->macro_caches_[static_cast<uint8_t>(ObSSMacroCacheType::MACRO_BLOCK)]->lru_list_;
+    lru_list.fifo_list_.clear();
+    lru_list.lru_list_.clear();
+
+    OK(generate_random_macro_cache_meta(
+        allocator, lru_list.fifo_list_,
+        true/*is_in_fifo_list*/, fifo_num, fifo_serialize_size));
+    OK(generate_random_macro_cache_meta(
+        allocator, lru_list.lru_list_,
+        false/*is_in_fifo_list*/, lru_num, lru_serialize_size));
+    ASSERT_EQ(fifo_num, lru_list.fifo_list_.get_size());
+    ASSERT_EQ(lru_num, lru_list.lru_list_.get_size());
+    ASSERT_TRUE(fifo_serialize_size > DEFAULT_BLK_SIZE);
+    ASSERT_TRUE(lru_serialize_size > DEFAULT_BLK_SIZE);
+
+    // copy fifo list entry to lru list
+    ObSSMacroCacheMeta *fifo_node = lru_list.fifo_list_.get_last();
+    ASSERT_NE(nullptr, fifo_node);
+    ObSSMacroCacheMeta *lru_node = static_cast<ObSSMacroCacheMeta *>(allocator.alloc(sizeof(ObSSMacroCacheMeta)));
+    ASSERT_NE(nullptr, lru_node);
+    lru_node = new (lru_node) ObSSMacroCacheMeta();
+
+    lru_node->set_macro_id(fifo_node->get_macro_id());
+    lru_node->set_effective_tablet_id(fifo_node->get_effective_tablet_id());
+    lru_node->set_size(fifo_node->get_size());
+    lru_node->set_last_access_time_us(fifo_node->get_last_access_time_us());
+    lru_node->set_cache_type(fifo_node->get_cache_type());
+    lru_node->set_is_write_cache(fifo_node->get_is_write_cache());
+    lru_node->set_is_in_fifo_list(false);
+    ASSERT_TRUE(lru_node->is_valid());
+    ASSERT_TRUE(lru_list.lru_list_.add_first(lru_node));
+
+    macro_cache_mgr->ckpt_task_.runTimerTask();
+    uint64_t next_ckpt_version = UINT64_MAX;
+    OK(macro_cache_mgr->replay_ckpt_(next_ckpt_version));
+    ASSERT_EQ(MACRO_CACHE_META_NUM, macro_cache_mgr->meta_map_.size());
+    lru_list.fifo_list_.clear();
+    lru_list.lru_list_.clear();
+  }
+}
+
+TEST_F(TestSSMacroCacheCkpt, test_exists_in_lru)
+{
+  if (enable_test_) {
+    ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+    ASSERT_NE(nullptr, macro_cache_mgr);
+    const int64_t HEADER_FIXED_SERIALIZE_SIZE =
+        ObSSMacroCacheCkptBLKHeader::get_fixed_serialize_size();
+    const int64_t DEFAULT_BLK_SIZE = OB_STORAGE_OBJECT_MGR.get_macro_block_size();
+
+    ObArenaAllocator allocator;
+    ObSSMacroCache macro_cache;
+    const int64_t fifo_num = 1;
+    int64_t fifo_serialize_size = 0;
+    ObSSMacroCacheLRUList &lru_list =
+        macro_cache_mgr->macro_caches_[static_cast<uint8_t>(ObSSMacroCacheType::MACRO_BLOCK)]->lru_list_;
+    lru_list.fifo_list_.clear();
+    lru_list.lru_list_.clear();
+
+    OK(generate_random_macro_cache_meta(
+        allocator, lru_list.fifo_list_,
+        true/*is_in_fifo_list*/, fifo_num, fifo_serialize_size));
+    ASSERT_EQ(fifo_num, lru_list.fifo_list_.get_size());
+    ASSERT_EQ(0, lru_list.lru_list_.get_size());
+
+    // copy fifo list entry to lru list
+    ObSSMacroCacheMeta *fifo_node = lru_list.fifo_list_.get_last();
+    ASSERT_NE(nullptr, fifo_node);
+    ObSSMacroCacheMeta *copy_fifo_node = static_cast<ObSSMacroCacheMeta *>(macro_cache_mgr->macro_meta_allocator_.alloc());
+    ASSERT_NE(nullptr, copy_fifo_node);
+    copy_fifo_node = new (copy_fifo_node) ObSSMacroCacheMeta();
+
+    copy_fifo_node->set_macro_id(fifo_node->get_macro_id());
+    copy_fifo_node->set_effective_tablet_id(fifo_node->get_effective_tablet_id());
+    copy_fifo_node->set_size(fifo_node->get_size());
+    copy_fifo_node->set_last_access_time_us(fifo_node->get_last_access_time_us());
+    copy_fifo_node->set_cache_type(fifo_node->get_cache_type());
+    copy_fifo_node->set_is_write_cache(fifo_node->get_is_write_cache());
+    copy_fifo_node->set_is_in_fifo_list(fifo_node->get_is_in_fifo_list());
+    ASSERT_TRUE(copy_fifo_node->is_valid());
+    ASSERT_TRUE(lru_list.fifo_list_.add_first(copy_fifo_node));
+
+    macro_cache_mgr->ckpt_task_.runTimerTask();
+    uint64_t next_ckpt_version = UINT64_MAX;
+    ASSERT_EQ(OB_ERR_UNEXPECTED, macro_cache_mgr->replay_ckpt_(next_ckpt_version));
+    lru_list.fifo_list_.clear();
+    lru_list.lru_list_.clear();
   }
 }
 

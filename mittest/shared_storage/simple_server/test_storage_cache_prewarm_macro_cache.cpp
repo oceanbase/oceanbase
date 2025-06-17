@@ -199,6 +199,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
       run_ctx_.tablet_id_.id(),
       PolicyStatus::HOT));
   task2->inc_ref_count();
+  OK(task2->set_status(ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_DOING));
 
   micro_cache->clear_micro_cache();
   OK(prewarmer2.prewarm_hot_tablet(task2));
@@ -313,6 +314,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_micro_cache_full)
       run_ctx_.tablet_id_.id(),
       PolicyStatus::HOT));
   micro_cache_task->inc_ref_count();
+  OK(micro_cache_task->set_status(ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_DOING));
   FLOG_INFO("[TEST] start to prewarm micro_cache_task", KPC(micro_cache_task));
 
   OK(micro_cache_prewarmer.prewarm_hot_tablet(micro_cache_task));
