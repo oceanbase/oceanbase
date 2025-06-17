@@ -1077,13 +1077,13 @@ int ObVecIndexAsyncTask::do_work()
   } else if (OB_ISNULL(adpt_guard.get_adatper())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get vector index adapter", KR(ret), KPC(ctx_));
+  } else if (FALSE_IT(task_started = true)) {
   } else if (adpt_guard.get_adatper()->has_doing_vector_index_task()) {
     ret = OB_EAGAIN;
     LOG_INFO("there is other vector index task running", K(ret), KP(adpt_guard.get_adatper()));
   } else if (!check_task_satisfied_memory_limited(*adpt_guard.get_adatper())) {
     ret = OB_EAGAIN; // will retry
     LOG_INFO("skip to do async task due to tenant memory limit", KR(ret), KPC(ctx_));
-  } else if (FALSE_IT(task_started = true)) {
   } else {
     adpt_buff = vector_index_service->get_allocator().alloc(sizeof(ObPluginVectorIndexAdaptor));
     if (OB_ISNULL(adpt_buff)) {

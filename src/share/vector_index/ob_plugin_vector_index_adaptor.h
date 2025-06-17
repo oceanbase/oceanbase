@@ -586,7 +586,8 @@ public:
   // Query Processor third
   int check_snapshot_table_wait_status(ObVectorQueryAdaptorResultContext *ctx);
 
-  int query_result(ObVectorQueryAdaptorResultContext *ctx,
+  int query_result(ObLSID &ls_id,
+                   ObVectorQueryAdaptorResultContext *ctx,
                    ObVectorQueryConditions *query_cond,
                    ObVectorQueryVidIterator *&vids_iter);
   int query_next_result(ObVectorQueryAdaptorResultContext *ctx,
@@ -682,7 +683,13 @@ public:
   }
 
   ObString get_snapshot_key_prefix() { return snapshot_key_prefix_; }
-  int set_snapshot_key_prefix(ObString &key_prefix) { return ob_write_string(*allocator_, key_prefix, snapshot_key_prefix_); }
+  int set_snapshot_key_prefix(ObString &key_prefix) {
+    if(!snapshot_key_prefix_.empty()) {
+      allocator_->free(snapshot_key_prefix_.ptr());
+      snapshot_key_prefix_.reset();
+    }
+    return ob_write_string(*allocator_, key_prefix, snapshot_key_prefix_);
+  }
   int set_snapshot_key_prefix(uint64_t tablet_id, uint64_t scn, uint64_t max_length);
   int copy_meta_info(ObPluginVectorIndexAdaptor &other);
 
