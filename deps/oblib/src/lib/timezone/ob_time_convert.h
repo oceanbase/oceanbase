@@ -272,10 +272,11 @@ public:
   int32_t parts_[PART_CNT];
 };
 
-class ObTime
+template<typename Part>
+class ObTimeBase
 {
 public:
-  ObTime()
+  ObTimeBase()
       : mode_(0),
       time_zone_id_(common::OB_INVALID_INDEX),
       transition_type_id_(common::OB_INVALID_INDEX),
@@ -285,7 +286,7 @@ public:
     MEMSET(tz_name_, 0, common::OB_MAX_TZ_NAME_LEN);
     MEMSET(tzd_abbr_, 0, common::OB_MAX_TZ_ABBR_LEN);
   }
-  explicit ObTime(ObDTMode mode)
+  explicit ObTimeBase(ObDTMode mode)
       : mode_(mode),
       time_zone_id_(common::OB_INVALID_INDEX),
       transition_type_id_(common::OB_INVALID_INDEX),
@@ -295,7 +296,7 @@ public:
     MEMSET(tz_name_, 0, common::OB_MAX_TZ_NAME_LEN);
     MEMSET(tzd_abbr_, 0, common::OB_MAX_TZ_ABBR_LEN);
   }
-  ~ObTime() {}
+  ~ObTimeBase() {}
   ObString get_tz_name_str() const
   {
     return ObString(strlen(tz_name_), tz_name_);
@@ -308,7 +309,7 @@ public:
   int set_tzd_abbr(const ObString &tz_abbr);
   DECLARE_TO_STRING;
   ObDTMode  mode_;
-  int32_t   parts_[TOTAL_PART_CNT];
+  Part      parts_[TOTAL_PART_CNT];
   // year:    [1000, 9999].
   // month:   [1, 12].
   // day:     [1, 31].
@@ -329,7 +330,41 @@ public:
   bool is_tz_name_valid_;
 };
 
-typedef ObTime ObInterval;
+typedef ObTimeBase<int32_t> ObTime;
+typedef ObTimeBase<int64_t> ObInterval;
+
+
+// class ObInterval 
+// {
+// public:
+//   ObInterval()
+//       : mode_(0) 
+//   {
+//     MEMSET(parts_, 0, sizeof(parts_));
+//   }
+
+//   explicit ObInterval(ObDTMode mode)
+//       : mode_(mode)
+//   {
+//     MEMSET(parts_, 0, sizeof(parts_));
+//   }
+  
+//   ObDTMode  mode_;
+//   int64_t   parts_[TOTAL_PART_CNT];
+//   DECLARE_TO_STRING;
+//   // year:    [1000, 9999].
+//   // month:   [1, 12].
+//   // day:     [1, 31].
+//   // hour:    [0, 23] or [0, 838] if it is a time.
+//   // minute:  [0, 59].
+//   // second:  [0, 59].
+//   // usecond: [0, 1000000], 1000000 can only valid after str_to_ob_time, for round.
+//     // nanosecond: [0, 1000000000], when HAS_TYPE_ORACLE(mode_)
+//   // date: date value, day count since 1970-1-1.
+//   // year day: [1, 366].
+//   // week day: [1, 7], 1 means monday, 7 means sunday.
+//   // offset minute:  [-12*60, 14*60].
+// };
 
 struct ObTimeConstStr {
   ObTimeConstStr() = delete;
@@ -801,7 +836,7 @@ public:
     VIRTUAL_TO_STRING_KV("ptr_", common::ObLenString(ptr_, len_), K(len_), K(value_));
     const char *ptr_;
     int32_t len_;
-    int32_t value_;
+    int64_t value_;
   };
   struct ObTimeDelims {
     ObTimeDelims()

@@ -198,7 +198,7 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         LOG_WARN("ob time to datetime failed", K(ret));
       }
     }
-
+    LOG_INFO("myinfo res_type", K(res_type));
     if (OB_SUCC(ret) && !has_set_value) {
       ObDateSqlMode date_sql_mode;
       date_sql_mode.init(sql_mode);
@@ -218,6 +218,7 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         if (OB_FAIL(ObTimeConverter::datetime_to_date(res_dt_val, NULL, d_val))) {
           LOG_WARN("failed to cast datetime  to date ", K(res_dt_val), K(ret));
         } else {
+          LOG_INFO("myinfo", KR(ret), K(res_dt_val), K(d_val));
           expr_datum.set_date(d_val);
         }
       } else if (ObTimeType == res_type) {
@@ -274,6 +275,7 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         }
 
         if (OB_SUCC(ret) && !has_set_value) {
+          LOG_INFO("myinfo value has not set");
           if (ObDateType == res_date && (DATE_UNIT_YEAR == unit_val
               || DATE_UNIT_MONTH == unit_val
               || DATE_UNIT_DAY == unit_val || DATE_UNIT_YEAR_MONTH == unit_val
@@ -297,6 +299,7 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
               } else {
                 expr_datum.ptr_ = buf;
                 expr_datum.pack_ = static_cast<uint32_t>(pos);
+                LOG_INFO("myinfo ", K(pos), K(d_val));
               }
             }
           } else {
@@ -314,6 +317,7 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
             } else {
               expr_datum.ptr_ = buf;
               expr_datum.pack_ = static_cast<uint32_t>(pos);
+              LOG_INFO("myinfo ", K(pos));
             }
           }
         }

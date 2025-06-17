@@ -43,6 +43,7 @@ int ObExprAdd::calc_result_type2(ObExprResType &type,
                                  ObExprResType &type2,
                                  ObExprTypeCtx &type_ctx) const
 {
+  LOG_DEBUG("mydebug ObExprAdd::calc_result_type2", K(type1), K(type2), K(lbt()));
   int ret = OB_SUCCESS;
   static const int64_t CARRY_OFFSET = 1;
   ObScale scale = SCALE_UNKNOWN_YET;
@@ -104,6 +105,8 @@ int ObExprAdd::calc_result_type2(ObExprResType &type,
         precision = MIN(static_cast<ObPrecision>(MAX(inter_part_length1, inter_part_length2)
                                                  + CARRY_OFFSET + scale),
                         OB_MAX_DECIMAL_POSSIBLE_PRECISION);
+        LOG_WARN("mydebug precision calc", K(precision), K(type1), K(type2),
+                  K(inter_part_length1), K(inter_part_length2), K(scale));
       }
     }
 
@@ -113,6 +116,7 @@ int ObExprAdd::calc_result_type2(ObExprResType &type,
         OB_UNLIKELY(PRECISION_UNKNOWN_YET == type2.get_precision())) {
       type.set_precision(PRECISION_UNKNOWN_YET);
     } else {
+      LOG_DEBUG("mydebug precision set", K(precision));
       type.set_precision(precision);
     }
     if (is_all_decint_args || type.is_decimal_int()) {
@@ -135,7 +139,7 @@ int ObExprAdd::calc_result_type2(ObExprResType &type,
         type1.set_calc_accuracy(type.get_accuracy());
         type2.set_calc_accuracy(type.get_accuracy());
       }
-      LOG_DEBUG("calc_result_type2", K(type.get_accuracy()), K(type1.get_accuracy()),
+      LOG_WARN("calc_result_type2", K(type.get_accuracy()), K(type1.get_accuracy()),
                                      K(type2.get_accuracy()));
     }
     // reset PS to unknown for oracle number type

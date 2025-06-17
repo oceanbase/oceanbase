@@ -20,7 +20,9 @@
 namespace oceanbase
 {
 namespace common {
-struct ObTime;
+template<typename>
+class ObTimeBase;
+typedef ObTimeBase<int32_t> ObTime;
 }
 namespace sql
 {

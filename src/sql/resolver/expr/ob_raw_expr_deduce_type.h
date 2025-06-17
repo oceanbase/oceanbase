@@ -417,6 +417,7 @@ int ObRawExprDeduceType::deduce_type_idempotency_check(RawExprType &expr)
       }
     }
   }
+  ret = OB_SUCCESS;
   return ret;
 }
 

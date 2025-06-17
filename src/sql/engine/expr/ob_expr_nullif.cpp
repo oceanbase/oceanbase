@@ -102,9 +102,9 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
             type1.set_calc_collation_level(cmp_type.get_calc_collation_level());
           }
         }
-        // if (type1.is_decimal_int()) {
-        //   type1.set_calc_type(calc_type);
-        // }
+        if (type1.is_decimal_int()) {
+          type1.set_calc_type(calc_type);
+        }
         // set calc type for type2 in need. 
         // If type1 is uint type, it could be compare with Enum innervalue directly.
         if (!ob_is_uint_tc(type1.get_type())) {

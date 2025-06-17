@@ -220,7 +220,7 @@ int ObExprExtract::calc(
       T_RES &result)
 {
   int ret = OB_SUCCESS;
-  class ObTime ob_time;
+  ObTime ob_time;
   memset(&ob_time, 0, sizeof(ob_time));
   if (date.is_null()) {
     result.set_null();

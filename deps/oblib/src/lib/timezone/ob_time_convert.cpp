@@ -264,7 +264,8 @@ const ObOracleTimeLimiter ObIntervalLimit::MINUTE             = {0, 59,         
 const ObOracleTimeLimiter ObIntervalLimit::SECOND             = {0, 59,                 OB_ERR_INTERVAL_INVALID};
 const ObOracleTimeLimiter ObIntervalLimit::FRACTIONAL_SECOND  = {0, static_cast<int32_t>(power_of_10[9] - 1), OB_ERR_INTERVAL_INVALID};
 
-int ObTime::set_tz_name(const ObString &tz_name)
+template<typename Part>
+int ObTimeBase<Part>::set_tz_name(const ObString &tz_name)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tz_name.empty()) || OB_UNLIKELY(tz_name.length() >= OB_MAX_TZ_NAME_LEN)) {
@@ -283,7 +284,8 @@ int ObTime::set_tz_name(const ObString &tz_name)
   return ret;
 }
 
-int ObTime::set_tzd_abbr(const ObString &tzd_abbr)
+template<typename Part>
+int ObTimeBase<Part>::set_tzd_abbr(const ObString &tzd_abbr)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tzd_abbr.empty()) || OB_UNLIKELY(tzd_abbr.length() >= OB_MAX_TZ_ABBR_LEN)) {
@@ -1587,6 +1589,15 @@ int ObTimeConverter::datetime_to_date(int64_t dt_value, const ObTimeZoneInfo *tz
     if ((dt_value % USECS_PER_DAY) < 0) {
       --d_value;
     }
+    // int64_t d_value64 = dt_value / USECS_PER_DAY;
+    // if (INT32_MIN <= d_value64 && d_value64 <= INT32_MAX) {
+    //   d_value = static_cast<int32_t>(d_value64);
+    //   if ((dt_value % USECS_PER_DAY) < 0) {
+    //     --d_value;
+    //   }
+    // } else {
+    //   ret = OB_INVALID_DATE_VALUE;
+    // }
   }
   return ret;
 }
@@ -1602,6 +1613,7 @@ int ObTimeConverter::datetime_to_mdate(int64_t dt_value, const ObTimeZoneInfo *t
   } else {
     md_value = ob_time_to_mdate(obtime);
   }
+  LOG_INFO("myinfo", K(dt_value), K(md_value));
   return ret;
 }
 
@@ -2113,6 +2125,7 @@ int ObTimeConverter::date_adjust(const int64_t base_value, const ObString &inter
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unit type is invalid", K(ret), K(unit_type));
   } else if (INTERVAL_INDEX[unit_type].calc_with_usecond_) {
+    LOG_INFO("myinfo calc with usec");
     if (OB_FAIL(merge_date_interval(base_value, interval_str, unit_type, value, is_add))) {
       LOG_WARN("failed to merge date and interval", K(ret));
     }
@@ -2163,11 +2176,19 @@ int ObTimeConverter::merge_date_interval(int64_t base_value, const ObString &int
   if (OB_FAIL(str_to_interval(interval_str, unit_type, interval_value))) {
     LOG_WARN("failed to convert string to interval", K(ret));
   } else {
-    value = base_value + (is_add ? interval_value : -interval_value);
-    if (ZERO_DATETIME != value
-        && (value > DATETIME_MAX_VAL || value < DATETIME_MIN_VAL)) {
+    interval_value = (is_add ? interval_value : -interval_value);
+    if (OB_LIKELY((interval_value <= 0 && INT64_MIN - interval_value <= base_value) ||
+                  (interval_value > 0 && INT64_MAX - interval_value >= base_value))) {
+      value = base_value + interval_value;
+      LOG_INFO("myinfo merge_date_interval", K(base_value), K(interval_value), K(is_add), K(value));
+      if (ZERO_DATETIME != value
+          && (value > DATETIME_MAX_VAL || value < DATETIME_MIN_VAL)) {
+        ret = OB_INVALID_DATE_VALUE;
+        LOG_WARN("invalid date", K(ret), K(value));
+      }
+    } else {
+      LOG_INFO("myinfo merge_date_interval int64 overflow");
       ret = OB_INVALID_DATE_VALUE;
-      LOG_WARN("invalid date", K(ret), K(value));
     }
   }
   return ret;
@@ -3086,6 +3107,8 @@ int ObTimeConverter::str_to_ob_interval(const ObString &str, ObDateUnitType unit
         ret = OB_TOO_MANY_DATETIME_PARTS;
         LOG_WARN("interval has too many datetime parts", K(ret));
       } else {
+        LOG_INFO("myinfo", K(str), K(unit_type), K(i));
+        LOG_INFO("myinfo", K(digits[0]), K(digits[1]), K(digits[2]), K(digits[3]));
         if (DATE_UNIT_WEEK == unit_type) {
           digits[0].value_ *= DAYS_PER_WEEK;
         } else if (DATE_UNIT_QUARTER == unit_type) {
@@ -3098,16 +3121,48 @@ int ObTimeConverter::str_to_ob_interval(const ObString &str, ObDateUnitType unit
                            ? INTERVAL_INDEX[unit_type].begin_ + expect_cnt - actual_cnt
                            : INTERVAL_INDEX[unit_type].begin_;
         int32_t assign_cnt = actual_cnt < expect_cnt ? actual_cnt : expect_cnt;
-        for (i = 0; OB_SUCC(ret) && i < assign_cnt; ++i) {
+        LOG_INFO("myinfo", K(actual_cnt), K(idx_diff), K(assign_cnt));
+        int64_t remainder = 0;
+        for (i = assign_cnt - 1; OB_SUCC(ret) && i >= 0; --i) {
           // date_add('2012-1-1', interval '1' microsecond) => 2012-01-01 00:00:00.000001 .
           // date_add('2012-1-1', interval '1.234' second_microsecond) => 2012-01-01 00:00:01.234000 .
           // date_add('2012-1-1', interval '1.2345678' second_microsecond) => 2012-01-01 00:00:03.345678 .
           // do not trunc or round.
           if (DT_USEC == i + idx_diff && expect_cnt > 1) {
+            LOG_INFO("myinfo", K(digits[i]));
             ret = normalize_usecond_trunc(digits[i], false);
           }
+          // if (INTERVAL_INDEX[unit_type].calc_with_usecond_) {
+          //   if (digits[i].value_ + remainder > INT32_MAX) {
+          //     const int64_t value_sum = digits[i].value_ + remainder;
+          //     const int64_t part_base = DT_PART_BASE[i + idx_diff];
+          //     remainder = value_sum / part_base;
+          //     digits[i].value_ = value_sum % part_base;
+          //   } else {
+          //     digits[i].value_ += remainder;
+          //     remainder = 0; 
+          //   }
+          // } else if (digits[i].value_ > INT32_MAX) {
+          //   ret = OB_OPERATE_OVERFLOW;
+          // }
           ob_interval.parts_[i + idx_diff] = digits[i].value_;
         }
+        // if (OB_UNLIKELY(remainder > 0)) {
+        //   for (int32_t j = i + idx_diff; OB_SUCC(ret) && j >= DT_MDAY &&remainder > 0; --j) {
+        //     if (DT_USEC == j && expect_cnt > 1) {
+        //       ret = normalize_usecond_trunc(digits[i], false);
+        //     }
+        //     if (remainder < INT32_MAX) {
+        //       ob_interval.parts_[j] = remainder;
+        //       remainder = 0;
+        //     } else if (j == DT_MDAY && remainder != 0) {
+        //       ret = OB_OPERATE_OVERFLOW;
+        //     } else {
+        //       ob_interval.parts_[j] = remainder % DT_PART_BASE[j];
+        //       remainder /= DT_PART_BASE[j];
+        //     }
+        //   }
+        // }
         // date_add('2012-1-1', interval '1.2.3' second) => 2012-01-01 00:00:01.200000 .
         // date_add('2012-1-1', interval '1:2.3' second) => 2012-01-01 00:00:01 .
         // date_add('2012-1-1', interval '1 .2' second) => 2012-01-01 00:00:01 .
@@ -3122,6 +3177,7 @@ int ObTimeConverter::str_to_ob_interval(const ObString &str, ObDateUnitType unit
       }
     }
   }
+  LOG_INFO("myinfo", K(ob_interval));
   return ret;
 }
 
@@ -3139,6 +3195,7 @@ int ObTimeConverter::usec_to_ob_time(int64_t usec, ObTime &ob_time)
   } else if (OB_FAIL(time_to_ob_time(usec, ob_time))) {
     LOG_WARN("failed to convert time part to obtime", K(ret), K(usec));
   }
+  LOG_INFO("myinfo", K(usec), K(ob_time));
   return ret;
 }
 
@@ -5724,11 +5781,15 @@ int ObTimeConverter::ob_interval_to_interval(const ObInterval &ob_interval, int6
     ret = OB_INTERVAL_WITH_MONTH;
     LOG_WARN("Interval with year or month can't be converted to useconds", K(ret));
   } else {
-    const int32_t *parts = ob_interval.parts_;
+    const int64_t *parts = ob_interval.parts_;
     value = 0;
-    for (int32_t i = DT_MDAY; i <= DT_USEC; ++i) {
-      value *= DT_PART_BASE[i];
-      value += parts[i];
+    for (int32_t i = DT_MDAY; OB_SUCC(ret) && i <= DT_USEC; ++i) {
+      if (abs(value) <= abs((INT64_MAX - parts[i]) / DT_PART_BASE[i])) {
+        value *= DT_PART_BASE[i];
+        value += parts[i];
+      } else {
+        ret = OB_INVALID_DATE_VALUE;
+      }
     }
     if (DT_MODE_NEG & ob_interval.mode_) {
       value = -value;
@@ -6167,15 +6228,19 @@ int ObTimeConverter::get_datetime_digits(const char *&str, const char *end, int3
   } else {
     const char *pos = str;
     const char *digit_end = str + max_len < end ? str + max_len : end;
-    int32_t value = 0;
+    int64_t value = 0;
     for (; OB_SUCC(ret) && pos < digit_end && isdigit(*pos); ++pos) {
-      if (value * 10LL > INT32_MAX - (*pos - '0')) {
+      int64_t num = (*pos - '0');
+      if (value * 10 > (INT64_MAX - num)) {
         ret = OB_OPERATE_OVERFLOW;
         LOG_WARN("datetime part value is out of range", K(ret));
       } else {
         value = value * 10 + *pos - '0';
       }
     }
+    // if (value > INT32_MAX) {
+    //   ret = OB_OPERATE_OVERFLOW;
+    // }
     digits.ptr_ = str;
     digits.len_ = static_cast<int32_t>(pos - str);
     digits.value_ = value;
@@ -7663,12 +7728,13 @@ int ObTimeConverter::iso_interval_str_parse(const ObString &str, ObIntervalParts
   return ret;
 }
 
-DEF_TO_STRING(ObTime)
+template<typename Part>
+DEF_TO_STRING(ObTimeBase<Part>)
 {
   int64_t pos = 0;
   J_OBJ_START();
   J_KV(K(mode_),
-       "parts", ObArrayWrap<int32_t>(parts_, TOTAL_PART_CNT),
+       "parts", ObArrayWrap<Part>(parts_, TOTAL_PART_CNT),
        "tz_name", ObString(OB_MAX_TZ_NAME_LEN, tz_name_),
        "tzd_abbr", ObString(OB_MAX_TZ_ABBR_LEN, tzd_abbr_),
        K_(time_zone_id),
