@@ -2428,6 +2428,8 @@ int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageIn
   } else if (FALSE_IT(storage_info_ = storage_info)) {
   } else if (OB_STORAGE_FILE == type) {
     writer_ = &file_writer_;
+  } else if (OB_STORAGE_HDFS == type) {
+    writer_ = &hdfs_writer_;
   } else if (is_use_obdal()) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
@@ -2439,10 +2441,6 @@ int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageIn
     writer_ = &oss_writer_;
   } else if (OB_STORAGE_S3 == type) {
     writer_ = &s3_writer_;
-  } else if (OB_STORAGE_FILE == type) {
-    writer_ = &file_writer_;
-  } else if (OB_STORAGE_HDFS == type) {
-    writer_ = &hdfs_writer_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -2584,6 +2582,8 @@ int ObStorageAppender::open(
   } else if (FALSE_IT(storage_info_ = storage_info)) {
   } else if (OB_STORAGE_FILE == type_) {
     appender_ = &file_appender_;
+  } else if (OB_STORAGE_HDFS == type_) {
+    appender_ = &hdfs_appender_;
   } else if (is_use_obdal()) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
@@ -2598,10 +2598,6 @@ int ObStorageAppender::open(
     } else if (OB_STORAGE_S3 == type_) {
       appender_ = &s3_appender_;
     }
-  } else if (OB_STORAGE_HDFS == type_) {
-    appender_ = &hdfs_appender_;
-  } else if (OB_STORAGE_FILE == type_) {
-    appender_ = &file_appender_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
