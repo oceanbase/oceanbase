@@ -5304,6 +5304,7 @@ int ObGrantArg::assign(const ObGrantArg &other)
   grantor_ = other.grantor_;
   grantor_host_ = other.grantor_host_;
   catalog_ = other.catalog_;
+  sensitive_rule_ = other.sensitive_rule_;
 
   if (OB_FAIL(ObDDLArg::assign(other))) {
     SHARE_LOG(WARN, "fail to assign ddl arg", K(ret));
@@ -5361,7 +5362,8 @@ OB_DEF_SERIALIZE(ObGrantArg)
               column_names_priv_,
               grantor_,
               grantor_host_,
-              catalog_);
+              catalog_,
+              sensitive_rule_);
 return ret;
 }
 
@@ -5395,7 +5397,8 @@ OB_DEF_DESERIALIZE(ObGrantArg)
               column_names_priv_,
               grantor_,
               grantor_host_,
-              catalog_);
+              catalog_,
+              sensitive_rule_);
 
   //compatibility for old version
   if (OB_SUCC(ret) && users_passwd_.count() > 0 && hosts_.empty()) {
@@ -5439,7 +5442,8 @@ OB_DEF_SERIALIZE_SIZE(ObGrantArg)
               column_names_priv_,
               grantor_,
               grantor_host_,
-              catalog_);
+              catalog_,
+              sensitive_rule_);
   return len;
 }
 

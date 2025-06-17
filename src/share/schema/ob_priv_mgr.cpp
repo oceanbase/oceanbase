@@ -79,6 +79,8 @@ const char *ObPrivMgr::priv_names_[] = {
     "CREATE CATALOG",             // index 50
     "USE CATALOG",                // index 51
     "CREATE LOCATION",            // index 52
+    "CREATE SENSITIVE RULE",      // index 53
+    "PLAINACCESS",                // index 54
 };
 
 ObPrivMgr::ObPrivMgr()

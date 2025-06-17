@@ -6136,7 +6136,7 @@ public:
                  upd_col_ids_(), ref_col_ids_(),
                  grantor_id_(common::OB_INVALID_ID), remain_roles_(), is_inner_(false),
 		             sel_col_ids_(), column_names_priv_(), grantor_(), grantor_host_(),
-                 catalog_()
+                 catalog_(), sensitive_rule_()
   { }
   virtual ~ObGrantArg() {}
   bool is_valid() const;
@@ -6148,7 +6148,7 @@ public:
                K_(users_passwd), K_(hosts), K_(need_create_user), K_(has_create_user_priv),
                K_(option), K_(object_type), K_(object_id), K_(grantor_id), K_(ins_col_ids),
                K_(upd_col_ids), K_(ref_col_ids), K_(grantor_id), K_(column_names_priv),
-               K_(grantor), K_(grantor_host), K_(catalog));
+               K_(grantor), K_(grantor_host), K_(catalog), K_(sensitive_rule));
 
   uint64_t tenant_id_;
   share::schema::ObPrivLevel priv_level_;
@@ -6178,6 +6178,7 @@ public:
   common::ObString grantor_;
   common::ObString grantor_host_;
   common::ObString catalog_;
+  common::ObString sensitive_rule_;
 };
 
 struct ObStandbyGrantArg : public ObDDLArg
