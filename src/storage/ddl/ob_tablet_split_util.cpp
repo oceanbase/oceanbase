@@ -1409,23 +1409,15 @@ int ObSSDataSplitHelper::get_major_macro_seq_by_stage(
   if (OB_UNLIKELY(majors_cnt < 1 || parallel_cnt < 1)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(majors_cnt), K(parallel_cnt));
-  } else if (OB_UNLIKELY(ObGetMacroSeqStage::BUILD_TABLET_META != stage
-      && ObGetMacroSeqStage::GET_NEW_ROOT_MACRO_SEQ != stage)) {
+  } else if (OB_UNLIKELY(ObGetMacroSeqStage::GET_NEW_ROOT_MACRO_SEQ != stage)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(stage));
-  } else if (ObGetMacroSeqStage::BUILD_TABLET_META == stage) {
-    if (OB_UNLIKELY(parallel_cnt < 1 || majors_cnt < 1)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid arg", K(ret), K(parallel_cnt), K(majors_cnt));
-    } else {
-      macro_start_seq = (parallel_cnt + 1) * majors_cnt * MACRO_STEP_SIZE;
-    }
   } else if (ObGetMacroSeqStage::GET_NEW_ROOT_MACRO_SEQ == stage) {
     if (OB_UNLIKELY(parallel_cnt < 1 || majors_cnt < 1)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arg", K(ret), K(parallel_cnt), K(majors_cnt));
     } else {
-      macro_start_seq = ((parallel_cnt + 1) * majors_cnt + 1) * MACRO_STEP_SIZE;
+      macro_start_seq = ((parallel_cnt + 1) * majors_cnt) * MACRO_STEP_SIZE;
     }
   }
   return ret;
@@ -1616,8 +1608,7 @@ int ObSSDataSplitHelper::persist_majors_gc_rely_info(
   if (OB_SUCC(ret)) {
     const int64_t gc_rely_parallel =
         parallel_cnt_of_each_sstable * majors_cnt /*total steps of the parallel child tasks*/
-      + ObGetMacroSeqStage::GET_NEW_ROOT_MACRO_SEQ * majors_cnt /*total steps of IndexTree and SSTableMeta*/
-      - ObGetMacroSeqStage::GET_NEW_ROOT_MACRO_SEQ;
+      + ObGetMacroSeqStage::GET_NEW_ROOT_MACRO_SEQ * majors_cnt; /*total steps of IndexTree and SSTableMeta*/
     for (int64_t i = 0; OB_SUCC(ret) && i < dst_tablets_id.count(); i++) {
       const ObTabletID &tablet_id = dst_tablets_id.at(i);
       if (OB_FAIL(share::SSCompactHelper::start_major_task(ls_handle.get_ls()->get_ls_id(),
