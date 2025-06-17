@@ -6570,14 +6570,6 @@ int ObDDLOperator::init_freeze_info(const uint64_t tenant_id,
   ObFreezeInfoProxy freeze_info_proxy(tenant_id);
   ObFreezeInfo frozen_status;
   frozen_status.set_initial_value(DATA_CURRENT_VERSION);
-#ifdef ERRSIM
-  int64_t error_code = OB_E(EventTable::EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM) OB_SUCCESS;
-  int64_t errsim_data_version = static_cast<int>(DATA_VERSION_4_3_4_0);
-  if (-errsim_data_version == error_code) {
-    frozen_status.set_initial_value(DATA_VERSION_4_3_4_0);
-    LOG_INFO("ERRSIM EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM init freeze info", K(error_code), K(frozen_status));
-  }
-#endif
   // init freeze_info in __all_freeze_info
   if (OB_FAIL(freeze_info_proxy.set_freeze_info(trans, frozen_status))) {
     LOG_WARN("fail to set freeze info", KR(ret), K(frozen_status), K(tenant_id));

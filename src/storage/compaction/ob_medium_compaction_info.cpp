@@ -428,14 +428,6 @@ int ObMediumCompactionInfo::init_data_version(const uint64_t compat_version)
     LOG_WARN("invalid data version to schedule medium compaction", K(ret), K(compat_version));
   } else {
     data_version_ = compat_version;
-#ifdef ERRSIM
-    int64_t error_code = OB_E(EventTable::EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM) OB_SUCCESS;
-    int64_t errsim_data_version = static_cast<int>(DATA_VERSION_4_3_4_0);
-    if (-errsim_data_version == error_code) {
-      data_version_ = DATA_VERSION_4_3_4_0;
-      LOG_INFO("ERRSIM EN_COMPACTION_WITH_ZERO_DEFAULT_COLUMN_CHECKSUM set medium info", K(error_code), K_(data_version));
-    }
-#endif
     if (compat_version < DATA_VERSION_4_2_0_0) {
       medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION;
     } else if (compat_version < DATA_VERSION_4_2_1_0) {
