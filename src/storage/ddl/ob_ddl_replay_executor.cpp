@@ -1005,8 +1005,6 @@ int ObSplitStartReplayExecutor::do_replay_(ObTabletHandle &handle)
         LOG_WARN("failed ot push back into task array", K(tmp_ret), K(tablet_split_task));
       } else if (OB_TMP_FAIL(tablet_split_scheduler.push_task(task_array))) {
         LOG_WARN("failed to push back into task array", K(tmp_ret), K(task_array));
-      } else if (OB_TMP_FAIL(tablet_split_scheduler.try_schedule_available_tasks())) {
-        LOG_WARN("failed to try schedule tasks", K(ret));
       }
     }
 #endif

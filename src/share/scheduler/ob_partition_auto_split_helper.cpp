@@ -1328,16 +1328,15 @@ int ObLSTabletSplitScheduler::schedule_data_split_dag(ObIArray<ObTabletSplitTask
   const int64_t rpc_timeout = ObDDLUtil::get_default_ddl_rpc_timeout();
   ObLSService *ls_service = nullptr;
   ObLSHandle ls_handle;
-  ObTabletHandle tablet_handle;
   ObTabletSplitInfoMdsUserData split_info_data;
   for (int64_t i = 0; OB_SUCC(ret) && i < split_data_tasks.count(); ++i) {
     ObTabletSplitTask &task = split_data_tasks.at(i);
     split_replica_addrs.reuse();
     ls_handle.reset();
-    tablet_handle.reset();
     split_info_data.reset();
     ls_id.reset();
     MTL_SWITCH (task.tenant_id_) {
+      ObTabletHandle tablet_handle;
       if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls service should not be NULL", K(ret), K(task.tenant_id_), K(ls_id));
