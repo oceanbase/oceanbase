@@ -137,6 +137,9 @@ public:
       const share::ObLSID &ls_id,
       const bool with_leader,
       bool &is_valid_member);
+  static int inc_member_list_config_version(
+      const share::ObLSID &ls_id,
+      const bool with_leader);
 #ifdef OB_BUILD_SHARED_STORAGE
   static int check_self_is_valid_member_with_log_service(
       const share::ObLSID &ls_id,

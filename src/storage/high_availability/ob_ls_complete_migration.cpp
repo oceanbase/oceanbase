@@ -1899,9 +1899,12 @@ int ObWaitDataReadyTask::change_member_list_with_retry_()
 
 ERRSIM_POINT_DEF(EN_SPECIFIED_LS_CHANGE_MEMBER_LIST_FAIL);
 ERRSIM_POINT_DEF(EN_SPECIFIED_LS_CHANGE_MEMBER_LIST_RETURN_FAIL);
+ERRSIM_POINT_DEF(EN_INJECT_INC_MEMBER_LIST_CONFIG_VERSION);
 int ObWaitDataReadyTask::change_member_list_()
 {
   int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  const ObMigrationOpType::TYPE op_type = ctx_->arg_.type_;
 
   DEBUG_SYNC(MEMBERLIST_CHANGE_MEMBER);
 
@@ -1922,9 +1925,26 @@ int ObWaitDataReadyTask::change_member_list_()
   }
 #endif
 
+#ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    const ObMigrationOpType::TYPE op_type = ctx_->arg_.type_;
-    const int64_t start_ts = ObTimeUtility::current_time();
+    if (ctx_->tenant_id_ == GCONF.errsim_tenant_id && ctx_->arg_.ls_id_.id() == GCONF.errsim_migration_ls_id) {
+      if (OB_UNLIKELY(EN_INJECT_INC_MEMBER_LIST_CONFIG_VERSION)) {
+        if (OB_FAIL(ObStorageHADagUtils::inc_member_list_config_version(ctx_->arg_.ls_id_, false /* with_leader */))) {
+          LOG_WARN("failed to inc member list config version", K(ret), KPC_(ctx));
+        }
+
+        SERVER_EVENT_SYNC_ADD("storage_ha", "inject_inc_member_list_config_version",
+                              "tenant_id", ctx_->tenant_id_,
+                              "ls_id", ctx_->arg_.ls_id_.id(),
+                              "task_id", ctx_->task_id_,
+                              "ret", ret,
+                              "op_type", ObMigrationOpType::get_str(ctx_->arg_.type_));
+      }
+    }
+  }
+#endif
+
+  if (OB_SUCC(ret)) {
     switch(op_type) {
     case ObMigrationOpType::MIGRATE_LS_OP: {
       if (OB_FAIL(change_member_list_with_leader_())) {
@@ -1951,14 +1971,11 @@ int ObWaitDataReadyTask::change_member_list_()
       break;
     }
     }
-
-    if (OB_SUCC(ret)) {
-      const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
-      LOG_INFO("succeed change member list", "cost", cost_ts, "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_, K(op_type));
-    }
   }
 
-  DEBUG_SYNC(AFTER_MEMBERLIST_CHANGED);
+  const int64_t cost = ObTimeUtility::current_time() - start_ts;
+  LOG_INFO("change member list", K(ret), "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_, K(op_type), K(cost));
+
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
@@ -1972,6 +1989,25 @@ int ObWaitDataReadyTask::change_member_list_()
   }
 
 #endif
+
+
+#ifdef ERRSIM
+  #define SERVER_EVENT_RECORD SERVER_EVENT_SYNC_ADD
+#else
+  #define SERVER_EVENT_RECORD SERVER_EVENT_ADD
+#endif
+
+  SERVER_EVENT_RECORD("storage_ha", "change_member_list",
+                      "tenant_id", ctx_->tenant_id_,
+                      "ls_id", ctx_->arg_.ls_id_.id(),
+                      "src", ctx_->arg_.src_.get_server(),
+                      "cost", cost,
+                      "task_id", ctx_->task_id_,
+                      "ret", ret,
+                      ObMigrationOpType::get_str(ctx_->arg_.type_));
+  #undef SERVER_EVENT_RECORD
+
+  DEBUG_SYNC(AFTER_MEMBERLIST_CHANGED);
 
   return ret;
 }

@@ -203,7 +203,7 @@ public:
 #ifdef ERRSIM
         int64_t dynamic_leak_size = - EVENT_CODE(EventTable::EN_SQL_MEMORY_DYNAMIC_LEAK_SIZE);
         if (dynamic_leak_size > 0 && max_used_ >= dynamic_leak_size) {
-          abort();
+          ob_abort();
         }
 #endif //end of ERRSIM
       }

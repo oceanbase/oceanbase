@@ -532,6 +532,34 @@ int ObStorageHADagUtils::check_self_is_valid_member_after_inc_config_version(
   return ret;
 }
 
+int ObStorageHADagUtils::inc_member_list_config_version(
+    const share::ObLSID &ls_id,
+    const bool with_leader)
+{
+  int ret = OB_SUCCESS;
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("inc member list config version get invalid argument", K(ret), K(ls_id));
+  } else if (!GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support for sn", K(ret));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (with_leader) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support with leader", K(ret));
+  } else {
+    // inc config version with log service
+    if (OB_FAIL(inc_config_version_with_log_service(ls_id))) {
+      LOG_WARN("failed inc config version with log service", K(ret));
+    } else {
+      LOG_INFO("succeed inc config version with log service", K(ls_id));
+    }
+#endif
+  }
+
+  return ret;
+}
+
 #ifdef OB_BUILD_SHARED_STORAGE
 int ObStorageHADagUtils::check_self_is_valid_member_with_log_service(
     const share::ObLSID &ls_id,
