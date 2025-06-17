@@ -68,9 +68,7 @@ public:
       pre_sorter_(nullptr),
       px_writer_cnt_(0),
       px_column_descs_(),
-      px_column_project_idxs_(),
-      px_null_vectors_(),
-      px_null_vector_project_idxs_()
+      px_column_project_idxs_()
   {
   }
   TO_STRING_KV(K_(table_data_desc),
@@ -83,9 +81,7 @@ public:
                KP_(pre_sorter),
                K_(px_writer_cnt),
                K_(px_column_descs),
-               K_(px_column_project_idxs),
-               K_(px_null_vectors),
-               K_(px_null_vector_project_idxs));
+               K_(px_column_project_idxs));
 public:
   storage::ObDirectLoadTableDataDesc table_data_desc_;
   storage::ObDirectLoadTransParam trans_param_;
@@ -100,10 +96,6 @@ public:
   ObArray<share::schema::ObColDesc> px_column_descs_;
   // px写入的列到写入旁路导入列的映射(写入旁路的列不包含隐藏主键列)
   ObArray<int64_t> px_column_project_idxs_;
-  // px不写的列, 需要补null列, 目前只有xmltype列
-  ObArray<ObIVector *> px_null_vectors_;
-  // px不写的列到写入旁路导入列的映射
-  ObArray<int64_t> px_null_vector_project_idxs_;
 };
 
 class ObTableLoadStoreCtx

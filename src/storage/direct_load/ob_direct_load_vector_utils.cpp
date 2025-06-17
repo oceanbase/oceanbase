@@ -641,32 +641,6 @@ int ObDirectLoadVectorUtils::expand_const_datum(const ObDatum &const_datum,
   return ret;
 }
 
-int ObDirectLoadVectorUtils::set_vector_all_null(ObIVector *vector, const int64_t batch_size)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == vector || batch_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(vector), K(batch_size));
-  } else {
-    const VectorFormat format = vector->get_format();
-    switch (format) {
-      case VEC_FIXED:
-      case VEC_CONTINUOUS:
-      case VEC_DISCRETE: {
-        ObBitmapNullVectorBase *base = static_cast<ObBitmapNullVectorBase *>(vector);
-        base->set_has_null();
-        base->get_nulls()->set_all(batch_size);
-        break;
-      }
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected vector format", KR(ret), K(format));
-        break;
-    }
-  }
-  return ret;
-}
-
 int ObDirectLoadVectorUtils::get_payload(ObIVector *vector, const int64_t idx, bool &is_null,
                                          const char *&payload, ObLength &len)
 {

@@ -351,13 +351,6 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
       if (!batch_ctx_->need_project_) {
       } else if (OB_FAIL(batch_ctx_->project_vectors_.prepare_allocate(store_column_count_))) {
         LOG_WARN("fail to prepare allocate", KR(ret), K(store_column_count_));
-      } else {
-        // project null vector to project_vectors_
-        for (int64_t i = 0; i < store_ctx_->write_ctx_.px_null_vectors_.count(); ++i) {
-          ObIVector *null_vector = store_ctx_->write_ctx_.px_null_vectors_.at(i);
-          const int64_t column_idx = store_ctx_->write_ctx_.px_null_vector_project_idxs_.at(i);
-          batch_ctx_->project_vectors_.at(column_idx) = null_vector;
-        }
       }
     }
   }

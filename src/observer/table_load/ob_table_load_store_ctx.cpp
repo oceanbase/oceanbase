@@ -616,36 +616,12 @@ int ObTableLoadStoreCtx::init_write_ctx()
         const ObColumnSchemaV2 *col_schema = nullptr;
         write_ctx_.px_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
         write_ctx_.px_column_project_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
-        write_ctx_.px_null_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
-        write_ctx_.px_null_vector_project_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
         int64_t project_idx = 0;
         for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
           const ObColDesc &col_desc = col_descs.at(i);
           if (OB_ISNULL(col_schema = table_schema->get_column_schema(col_desc.col_id_))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected col schema is null", KR(ret), K(col_desc));
-          }
-          // SQL执行计划不包含xmltype列, 存储层要写这一列, 需要补null
-          else if (col_schema->is_xmltype()) {
-            ObIVector *vector = nullptr;
-            if (OB_UNLIKELY(!col_schema->is_unused())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected xmltype column is not unused", KR(ret));
-            } else if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(col_desc, allocator_, vector))) {
-              LOG_WARN("fail to new vector", KR(ret), K(col_desc));
-            } else if (OB_FAIL(ObDirectLoadVectorUtils::prepare_vector(
-                         vector, ctx_->param_.batch_size_, allocator_))) {
-              LOG_WARN("fail to prepare vector", KR(ret), KPC(vector));
-            } else if (OB_FAIL(ObDirectLoadVectorUtils::set_vector_all_null(
-                         vector, ctx_->param_.batch_size_))) {
-              LOG_WARN("fail to set vector all null", KR(ret), KPC(vector));
-            } else if (OB_FAIL(write_ctx_.px_null_vectors_.push_back(vector))) {
-              LOG_WARN("fail to push back", KR(ret));
-            } else if (OB_FAIL(write_ctx_.px_null_vector_project_idxs_.push_back(project_idx++))) {
-              LOG_WARN("fail to push back", KR(ret));
-            } else {
-              write_ctx_.px_need_project_ = true;
-            }
           }
           // SQL执行计划包含隐藏主键列、虚拟生成列以及其他普通列
           else if (OB_FAIL(write_ctx_.px_column_descs_.push_back(col_desc))) {
