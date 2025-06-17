@@ -29,7 +29,8 @@ DEF_STR(redundancy_level, OB_CLUSTER_PARAMETER, "NORMAL",
         "EXTERNAL: use extrernal redundancy"
         "NORMAL: tolerate one disk failure"
         "HIGH: tolerate two disk failure if disk count is enough",
-        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "EXTERNAL, NORMAL, HIGH");
 // background information about disk space configuration
 // ObServerUtils::get_data_disk_info_in_config()
 DEF_CAP(datafile_size, OB_CLUSTER_PARAMETER, "0M", "[0M,)", "size of the data file. Range: [0, +∞)",
@@ -152,29 +153,34 @@ DEF_STR_WITH_CHECKER(_publish_schema_mode, OB_TENANT_PARAMETER, "BEST_EFFORT",
                      common::ObConfigPublishSchemaModeChecker,
                      "specify the inspection of schema synchronous status after ddl transaction commits"
                      "values: BEST_EFFORT, ASYNC",
-                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "BEST_EFFORT, ASYNC");
 
 DEF_STR_WITH_CHECKER(default_compress_func, OB_CLUSTER_PARAMETER, "zstd_1.3.8",
                      common::ObConfigCompressFuncChecker,
                      "default compress function name for create new table, "
                      "values: none, lz4_1.0, snappy_1.0, zstd_1.0, zstd_1.3.8",
-                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "none, lz4_1.0, snappy_1.0, zstd_1.0, zstd_1.3.8");
 
 DEF_STR_WITH_CHECKER(default_row_format, OB_CLUSTER_PARAMETER, "dynamic",
                      common::ObConfigRowFormatChecker,
                      "default row format in mysql mode",
-                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "REDUNDANT, COMPACT, DYNAMIC, COMPRESSED, CONDENSED");
 
 DEF_STR_WITH_CHECKER(default_compress, OB_CLUSTER_PARAMETER, "archive",
                      common::ObConfigCompressOptionChecker,
                      "default compress strategy for create new table within oracle mode",
-                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "NOCOMPRESS, BASIC, OLTP, QUERY, ARCHIVE, QUERY LOW, ARCHIVE HIGH");
 
 DEF_STR_WITH_CHECKER(default_table_store_format, OB_TENANT_PARAMETER, "row",
                      common::ObConfigTableStoreFormatChecker,
                      "Specify the default storage format of creating table: row, column, compound format of row and column"
                      "values: row, column, compound",
-                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "row, column, compound");
 DEF_BOOL(_no_logging, OB_TENANT_PARAMETER, "False",
          "set true to skip writing ddl clog when all server using the same oss in shared storage mode",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -205,11 +211,13 @@ DEF_INT(cluster_id, OB_CLUSTER_PARAMETER, "0", "[1,4294901759]", "ID of the clus
 DEF_STR(obconfig_url, OB_CLUSTER_PARAMETER, "", "URL for OBConfig service",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_LOG_LEVEL(syslog_level, OB_CLUSTER_PARAMETER, "WDIAG", "specifies the current level of logging. There are DEBUG, TRACE, WDIAG, EDIAG, INFO, WARN, ERROR, seven different log levels.",
-              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+             "DEBUG, TRACE, WDIAG, EDIAG, INFO, WARN, ERROR");
 DEF_STR_WITH_CHECKER(alert_log_level, OB_CLUSTER_PARAMETER, "INFO",
                      common::ObConfigAlertLogLevelChecker,
                      "specifies the current level of alert log. There are INFO, WARN, ERROR, three different log levels.",
-                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "INFO, WARN, ERROR");
 DEF_CAP(syslog_io_bandwidth_limit, OB_CLUSTER_PARAMETER, "30MB",
         "Syslog IO bandwidth limitation, exceeding syslog would be truncated. Use 0 to disable ERROR log.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -241,7 +249,8 @@ DEF_STR_WITH_CHECKER(syslog_compress_func, OB_CLUSTER_PARAMETER, "none",
                      common::ObConfigSyslogCompressFuncChecker,
                      "compress function name for syslog files, "
                      "values: none, zstd_1.0, zstd_1.3.8",
-                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "none, zstd_1.0, zstd_1.3.8");
 DEF_INT_WITH_CHECKER(syslog_file_uncompressed_count, OB_CLUSTER_PARAMETER, "0",
                      common::ObConfigSyslogFileUncompressedCountChecker,
                      "specifies the minimum number of the syslog files that will not be compressed. "
@@ -269,7 +278,8 @@ DEF_CAP(_chunk_row_store_mem_limit, OB_CLUSTER_PARAMETER, "0M", "[0M,]",
 DEF_STR_WITH_CHECKER(kv_transport_compress_func, OB_TENANT_PARAMETER, "none",
                      common::ObConfigCompressFuncChecker,
                      "compressor used for tableAPI query result. Values: none, lz4_1.0, snappy_1.0, zlib_1.0, zstd_1.0 zstd 1.3.8",
-                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "none, lz4_1.0, snappy_1.0, zlib_1.0, zstd_1.0, zstd_1.3.8");
 DEF_CAP(kv_transport_compress_threshold, OB_TENANT_PARAMETER, "10K","[0B,]",
         "Together with the configuration item kv_transport_compress_func, it is used to specify the minimum threshold size of the OBKV query result set that needs to be compressed. Range: [0, +∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -337,7 +347,8 @@ DEF_STR_WITH_CHECKER(spill_compression_codec, OB_TENANT_PARAMETER, "NONE",
         "during the sql execution phase. "\
         "The supported compression codecs are: ZSTD, LZ4, SNAPPY, ZLIB. NONE means no compression."\
         "The default value is NONE.",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "zstd, lz4, snappy, zlib");
 
 //// tenant config
 DEF_TIME_WITH_CHECKER(max_stale_time_for_weak_consistency, OB_TENANT_PARAMETER, "5s",
@@ -462,7 +473,8 @@ DEF_STR_WITH_CHECKER(_use_hash_rollup, OB_TENANT_PARAMETER, "AUTO",
         "AUTO: hash rollup plan is up to optimizer;"\
         "FORCED: hash rollup plan is used by default;"\
         "DISABLED: hash rollup plan is disabled;",
-         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+         "auto, forced, disabled");
 
 //
 DEF_BOOL(_enable_constant_type_demotion, OB_TENANT_PARAMETER, "True",
@@ -476,7 +488,8 @@ DEF_STR_WITH_CHECKER(_non_standard_comparison_level, OB_TENANT_PARAMETER, "NONE"
         "NONE: all comparison types use standard comparison. "
         "EQUAL: non-standard comparisons rules will applied in equal conditions. "
         "RANGE: non-standard comparisons rules will applied in range conditions. ",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "none, equal, range");
 
 // tenant memtable consumption related
 DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100)",
@@ -697,7 +710,8 @@ DEF_BOOL(log_transport_compress_all, OB_TENANT_PARAMETER, "False",
 DEF_STR_WITH_CHECKER(log_transport_compress_func, OB_TENANT_PARAMETER, "lz4_1.0",
                      common::ObConfigCompressFuncChecker,
                      "compressor used for log transport. Values: none, lz4_1.0, zstd_1.0, zstd_1.3.8",
-                     ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "none, lz4_1.0, zstd_1.0, zstd_1.3.8");
 
 DEF_BOOL(log_storage_compress_all, OB_TENANT_PARAMETER, "False",
          "specifies whether to compress logs before storing. The default is false(no compression)",
@@ -706,7 +720,8 @@ DEF_BOOL(log_storage_compress_all, OB_TENANT_PARAMETER, "False",
 DEF_STR_WITH_CHECKER(log_storage_compress_func, OB_TENANT_PARAMETER, "lz4_1.0",
                      common::ObConfigPerfCompressFuncChecker,
                      "specifies the algorithms used for log storage compression. Values: lz4_1.0, zstd_1.0, zstd_1.3.8",
-                     ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "lz4_1.0, zstd_1.0, zstd_1.3.8");
 
 //DEF_BOOL(enable_log_archive, OB_CLUSTER_PARAMETER, "False",
 //         "control if enable log archive",
@@ -812,7 +827,8 @@ DEF_STR_WITH_CHECKER(arbitration_degradation_policy, OB_CLUSTER_PARAMETER, "LS_P
         "LS_POLICY: default policy. "
         "CLUSTER_POLICY: check network connectivity with RS before arbitration degrades. Do not degrade when not connected. "
         "Then, switch log stream leaders to the replicas which are connected with RS.",
-        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "LS_POLICY, CLUSTER_POLICY");
 // ========================= LogService Config End   =====================
 DEF_INT(resource_hard_limit, OB_CLUSTER_PARAMETER, "100", "[100, 10000]",
         "system utilization should not be large than resource_hard_limit",
@@ -900,7 +916,8 @@ DEF_STR_WITH_CHECKER(replica_parallel_migration_mode, OB_TENANT_PARAMETER, "auto
         "and prohibit the parallel migration of LS replica of primary tenant. "
         "'on' means to allow parallel migration of LS replica of primary tenant and standby tenant. "
         "'off' means to prohibit parallel migration of LS replica of primary tenant and standby tenant",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "auto, on, off");
 
 //// daily merge  config
 // set to disable if don't want major freeze launch auto
@@ -933,7 +950,8 @@ DEF_STR_WITH_CHECKER(_rpc_checksum, OB_CLUSTER_PARAMETER, "Force",
                      "Force: always verify; " \
                      "Optional: verify when rpc_checksum non-zero; " \
                      "Disable: ignore verify",
-                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "Force, Optional, Disable");
 
 DEF_TIME(_ob_trans_rpc_timeout, OB_CLUSTER_PARAMETER, "3s", "[0s, 3600s]",
          "transaction rpc timeout(s). Range: [0s, 3600s]",
@@ -1401,7 +1419,8 @@ DEF_BOOL(audit_sys_operations, OB_TENANT_PARAMETER, "False",
 DEF_STR_WITH_CHECKER(audit_trail, OB_TENANT_PARAMETER, "None",
          common::ObConfigAuditTrailChecker,
          "enables or disables database auditing, support NONE;OS;DB;DB,EXTENDED;DB_EXTENDED",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+         "none, os, db, db_extended");
 
 DEF_BOOL(audit_log_enable, OB_TENANT_PARAMETER, "False",
          "whether enable audit log",
@@ -1413,7 +1432,8 @@ DEF_CAP(audit_log_buffer_size, OB_TENANT_PARAMETER, "16M", "[16M,)"
 DEF_STR_WITH_CHECKER(audit_log_compression, OB_TENANT_PARAMETER, "NONE",
          common::ObConfigAuditLogCompressionChecker,
          "the type of compression for the audit log file, values: NONE, ZSTD",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+         "NONE, ZSTD");
 DEF_STR_WITH_CHECKER(audit_log_path, OB_TENANT_PARAMETER, "",
          common::ObConfigAuditLogPathChecker,
          "the directory of the audit log",
@@ -1421,7 +1441,8 @@ DEF_STR_WITH_CHECKER(audit_log_path, OB_TENANT_PARAMETER, "",
 DEF_STR_WITH_CHECKER(audit_log_format, OB_TENANT_PARAMETER, "CSV",
          common::ObConfigAuditLogFormatChecker,
          "the audit log file format, values: CSV",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+         "CSV");
 DEF_CAP(audit_log_max_size, OB_TENANT_PARAMETER, "0M", "[0M,)",
          "the maximum combined size of the audit log files",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1434,7 +1455,8 @@ DEF_STR_WITH_CHECKER(audit_log_query_sql, OB_TENANT_PARAMETER, "ALL",
          "ALL: record the original query sql. "
          "DESENSITIVE: record the desensitive query sql. "
          "NONE: not to record query sql.",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+         "ALL, DESENSITIVE, NONE");
 DEF_CAP(audit_log_rotate_on_size, OB_TENANT_PARAMETER, "256M", "[0,)"
          "whenever a write to the audit log file causes its size to exceed the config value, "
          "it will be renamed and a new audit log file using is opened, range: [0,)",
@@ -1445,7 +1467,8 @@ DEF_STR_WITH_CHECKER(audit_log_strategy, OB_TENANT_PARAMETER, "ASYNCHRONOUS",
          "ASYNCHRONOUS: Log asynchronously. Wait for space in the output buffer. "
          "PERFORMANCE: Log asynchronously. Drop requests when there is insufficient buffer. "
          "SYNCHRONOUS: Log synchronously.",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+         "ASYNCHRONOUS, PERFORMANCE, SYNCHRONOUS");
 
 //ddl 超时时间
 DEF_TIME(_ob_ddl_timeout, OB_CLUSTER_PARAMETER, "1000s", "[1s,)",
@@ -1495,13 +1518,15 @@ DEF_STR_WITH_CHECKER(_upgrade_stage, OB_CLUSTER_PARAMETER, "NONE",
         "PREUPGRADE: in pre upgrade stage, "
         "DBUPGRADE: in db uprade stage, "
         "POSTUPGRADE: in post upgrade stage. ",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY),
+        "NONE, PREUPGRADE, DBUPGRADE, POSTUPGRADE");
 DEF_STR_WITH_CHECKER(_ob_plan_cache_gc_strategy, OB_CLUSTER_PARAMETER, "REPORT",
          common::ObConfigPlanCacheGCChecker,
          "OFF: disabled, "
          "REPORT: check leaked cache object infos only, "
          "AUTO: check and release leaked cache obj.",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+         "OFF, REPORT, AUTO");
 
 DEF_BOOL(_enable_plan_cache_mem_diagnosis, OB_CLUSTER_PARAMETER, "False",
          "wether turn plan cache ref count diagnosis on",
@@ -1516,7 +1541,8 @@ DEF_STR(tde_method, OB_TENANT_PARAMETER, "none",
         "none : transparent encryption is none, none means cannot use tde, "
         "internal : transparent encryption is in the form of internal tables, "
         "bkmi : transparent encryption is in the form of external bkmi",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "none, bkmi, bkmi_sm, ceair, aliyun, aliyun_aes256, internal");
 
 DEF_TIME(schema_history_recycle_interval, OB_CLUSTER_PARAMETER, "10m", "[0s,]",
          "the time interval between the schedules of schema history recyle task. "
@@ -1546,7 +1572,8 @@ DEF_STR_WITH_CHECKER(default_storage_cache_policy, OB_TENANT_PARAMETER, "AUTO",
     common::ObConfigStorageCachePolicyChecker,
     "default storage cache policy for tenant, "
     "values: HOT/AUTO",
-    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+    "auto, hot");
 
 DEF_BOOL_WITH_CHECKER(enable_manual_storage_cache_policy, OB_TENANT_PARAMETER, "True",
     common::ObConfigEnableManualSCPChecker,
@@ -1566,7 +1593,8 @@ DEF_STR_WITH_CHECKER(use_large_pages, OB_CLUSTER_PARAMETER, "false",
                      common::ObConfigUseLargePagesChecker,
                      "used to manage the database's use of large pages, "
                      "values: false, true, only",
-                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE),
+                     "true, false, only");
 
 DEF_STR(ob_ssl_invited_common_names, OB_TENANT_PARAMETER, "NONE",
         "when server use ssl, use it to control client identity with ssl subject common name. default NONE",
@@ -1586,7 +1614,8 @@ DEF_STR_WITH_CHECKER(_audit_mode, OB_TENANT_PARAMETER, "NONE",
         "NONE: close audit,"
         "MYSQL: use mysql audit"
         "ORACLE: use oracle audit",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "NONE, MYSQL, ORACLE");
 DEF_INT(_max_schema_slot_num, OB_TENANT_PARAMETER, "128", "[2,256]",
         "the max schema slot number for multi-version schema memory management, "
         "Range: [2, 256] in integer",
@@ -1741,7 +1770,8 @@ DEF_TIME(_follower_snapshot_read_retry_duration, OB_TENANT_PARAMETER, "0ms", "[0
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR_WITH_CHECKER(default_auto_increment_mode, OB_TENANT_PARAMETER, "order",
         common::ObAutoIncrementModeChecker, "specifies default auto-increment mode, default is 'order'",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "order, noorder");
 DEF_STR(_trace_control_info, OB_TENANT_PARAMETER, "{\"type_t\":{\"level\":1,\"sample_pct\":\"0.10\",\"record_policy\":\"SAMPLE_AND_SLOW_QUERY\"}}",
         "persistent control information for full-link trace",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1999,7 +2029,8 @@ DEF_STR_WITH_CHECKER(rpc_client_authentication_method, OB_CLUSTER_PARAMETER, "NO
         "NONE: without authentication. "
         "SSL_NO_ENCRYPT: authentication by SSL handshake but not encrypt the communication channel. "
         "SSL_IO: authentication by SSL handshake and encrypt the communication channel",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "NONE, SSL_NO_ENCRYPT, SSL_IO");
 DEF_STR_WITH_CHECKER(rpc_server_authentication_method, OB_CLUSTER_PARAMETER, "ALL",
         common::ObRpcServerAuthMethodChecker,
         "specifies rpc server authentication method. "
@@ -2007,7 +2038,8 @@ DEF_STR_WITH_CHECKER(rpc_server_authentication_method, OB_CLUSTER_PARAMETER, "AL
         "NONE: without authentication. "
         "SSL_NO_ENCRYPT: authentication by SSL handshake but not encrypt the communication channel. "
         "SSL_IO: authentication by SSL handshake and encrypt the communication channel",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "ALL, NONE, SSL_NO_ENCRYPT, SSL_IO");
 DEF_BOOL(_enable_backtrace_function, OB_CLUSTER_PARAMETER, "True",
          "Decide whether to let the backtrace function take effect",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2096,7 +2128,8 @@ DEF_STR_WITH_CHECKER(_ob_ddl_temp_file_compress_func, OB_TENANT_PARAMETER, "AUTO
         "ZSTD: use ZSTD compression algorithm;"\
         "LZ4: use LZ4 compression algorithm;"\
         "NONE: do not use compression.",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "AUTO, ZSTD, LZ4, NONE");
 DEF_BOOL(_enable_prefetch_limiting, OB_TENANT_PARAMETER, "False",
          "enable limiting memory in prefetch for single query",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2150,7 +2183,8 @@ DEF_STR_WITH_CHECKER(global_index_auto_split_policy, OB_TENANT_PARAMETER, "DISTR
          "DISTRIBUTED: enable auto-partition for creating global index if tenant has multiple nodes, e.g., multiple primary zones or multiple units;"\
          "ALL: enable auto-partition for creating all global index;"\
          "OFF: disable auto-partition for creating all global index.",
-         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+         "DISTRIBUTED, ALL, OFF");
 DEF_INT(_inlist_rewrite_threshold, OB_TENANT_PARAMETER, "1000", "[1, 2147483647]"
         "specifies transform how much const params in IN list to values table",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2201,7 +2235,8 @@ DEF_STR_WITH_CHECKER(sql_protocol_min_tls_version, OB_CLUSTER_PARAMETER, "none",
                      common::ObConfigSQLTlsVersionChecker,
                      "SQL SSL control options, used to specify the minimum SSL/TLS version number. "
                      "values: none, TLSv1, TLSv1.1, TLSv1.2, TLSv1.3",
-                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "none, TLSv1, TLSv1.1, TLSv1.2, TLSv1.3");
 
 DEF_TIME(shared_log_retention, OB_TENANT_PARAMETER, "1d", "[0s,7d]",
         "Retention time of log files on shared storage",
@@ -2260,7 +2295,8 @@ DEF_INT(_iut_max_entries, OB_TENANT_PARAMETER, "30000", "[0,]",
 DEF_STR_WITH_CHECKER(_iut_stat_collection_type, OB_TENANT_PARAMETER, "SAMPLED",
     common::ObConfigIndexStatsModeChecker,
     "specify index table usage stat collection type, values: SAMPLED, ALL",
-    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+    "SAMPLED, ALL");
 
 DEF_INT(optimizer_index_cost_adj, OB_TENANT_PARAMETER, "0", "[0,100]",
         "adjust costing of index scan",
@@ -2306,7 +2342,8 @@ DEF_STR_WITH_CHECKER(choose_migration_source_policy, OB_TENANT_PARAMETER, "regio
         common::ObConfigMigrationChooseSourceChecker,
         "the policy of choose source in migration and add replica. 'idc' means firstly choose follower replica of the same idc as source, "
         "'region' means firstly choose follower replica of the same region as source",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "idc, region");
 DEF_INT(_query_record_size_limit, OB_TENANT_PARAMETER, "65536", "[0, 67108864] in integer",
         "set sql_audit and plan stat query sql size. Range: [0,67108864] in integer in integer.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2410,7 +2447,8 @@ DEF_STR_WITH_CHECKER(sql_plan_management_mode, OB_TENANT_PARAMETER, "Disable",
                      "Specifies how spm work."
                      "\"Disable\" represent disable spm (default value)."
                      "\"OnlineEvolve\" represent evolve plan online.",
-                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "Disable, OnlineEvolve, BaselineFirst");
 DEF_BOOL(enable_lock_priority, OB_TENANT_PARAMETER, "False",
          "specifies whether to enable lock priority, which, when activated, gives certain DDL operations the highest table lock precedence.",
          ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2421,7 +2459,8 @@ DEF_STR_WITH_CHECKER(default_load_mode, OB_TENANT_PARAMETER, "DISABLED",
                      "\"FULL_DIRECT_WRITE\" represent load data in full direct load path with insert semantics."
                      "\"INC_DIRECT_WRITE\" represent load data in inc direct load path with insert semantics."
                      "\"INC_REPLACE_DIRECT_WRITE\" represent load data in inc direct load path with replace semantics.",
-                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "DISABLED, FULL_DIRECT_WRITE, INC_DIRECT_WRITE, INC_REPLACE_DIRECT_WRITE");
 DEF_BOOL(direct_load_allow_fallback, OB_TENANT_PARAMETER, "True",
         "Control whether an error is reported when direct load of the derivative operation scenario is not supported.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2433,7 +2472,8 @@ ERRSIM_DEF_TIME(errsim_delay_gc_interval, OB_CLUSTER_PARAMETER, "30m", "[0,)",
 DEF_STR_WITH_CHECKER(_regex_engine, OB_TENANT_PARAMETER, "ICU",
                      common::ObConfigRegexpEngineChecker,
                      "specifies the regexp engine. Values: ICU(International Components for Unicode), Hyperscan",
-                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "ICU, Hyperscan");
 
 DEF_BOOL(_preset_runtime_bloom_filter_size, OB_CLUSTER_PARAMETER, "False",
          "Whether build runtime bloom filter with row count estimated by optimizor."
@@ -2467,7 +2507,8 @@ DEF_STR_WITH_CHECKER(kv_group_commit_rw_mode, OB_TENANT_PARAMETER, "ALL",
         common::ObConfigKvGroupCommitRWModeChecker,
         "Used to specify the read/write operation types when group commit is enable. "
         "Values: 'ALL' means enable all operations, 'READ' mean only enable read operation in group commit, 'WRITE'  means only write operations in group commit.",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "all, read, write");
 
 DEF_INT(_enable_kv_group_commit_ops, OB_TENANT_PARAMETER, "10000", "[0,)",
     "Used to control the minimum OPS threshold that triggers the group commit execution when this feature is enabled in OBKV;. Range: [0, +∞) in integer. Especially, 10000 means default value",
@@ -2487,7 +2528,8 @@ DEF_STR_WITH_CHECKER(ob_storage_s3_url_encode_type, OB_CLUSTER_PARAMETER, "defau
                      "Determines the URL encoding method for S3 requests."
                      "\"default\": Uses the S3 standard URL encoding method."
                      "\"compliantRfc3986Encoding\": Uses URL encoding that adheres to the RFC 3986 standard.",
-                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "default, compliantRfc3986Encoding");
 DEF_BOOL(_enable_drop_and_add_index, OB_TENANT_PARAMETER, "False",
          "it specifies that whether we can drop and add index in single statement",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2586,7 +2628,8 @@ DEF_STR_WITH_CHECKER(px_node_policy, OB_TENANT_PARAMETER, "DATA",
                      "\"DATA\": All data nodes involved in the current SQL."
                      "\"ZONE\": All nodes within the zones involved in the current SQL that belong to the tenant."
                      "\"CLUSTER\": All nodes involved by the current tenant.",
-                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "data, zone, cluster");
 DEF_INT(_max_px_workers_per_cpu, OB_TENANT_PARAMETER, "1", "[1,30]",
         "The upper limit of PX workers that each CPU can carry. Range: [1,30]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2606,7 +2649,8 @@ DEF_STR(default_table_organization, OB_TENANT_PARAMETER, "INDEX",
         "The default_organization configuration option allows you to set the default"
         " table organization mode to either HEAP (unordered data storage) or INDEX (the data"
         " rows are held in an index defined on the primary key for the table) when creating new tables.",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "INDEX, HEAP");
 
 ERRSIM_DEF_INT(errsim_restore_ls_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "the ls id that restore want to insert error"

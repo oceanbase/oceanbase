@@ -16,6 +16,7 @@
 #include <pthread.h>
 #include "lib/compress/ob_compressor_pool.h"
 #include "lib/container/ob_array_serialization.h"
+#include "lib/json_type/ob_json_tree.h"
 #include "share/config/ob_config_helper.h"
 #include "share/ob_encryption_util.h"
 #include "share/parameter/ob_parameter_attr.h"
@@ -246,6 +247,8 @@ public:
   virtual ObConfigItemType get_config_item_type() const {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_UNKNOWN;
   }
+  int to_json_obj(ObIAllocator &allocator, ObJsonObject &j_obj) const;
+  virtual const char *optional_configuration_values() const { return nullptr; }
 protected:
   //use current value to do input operation
   virtual bool set(const char *str) = 0;
@@ -932,7 +935,8 @@ public:
                      const char *name,
                      const char *def,
                      const char *info,
-                     const ObParameterAttr attr = ObParameterAttr());
+                     const ObParameterAttr attr = ObParameterAttr(),
+                     const char *optional_values = nullptr);
   virtual ~ObConfigStringItem() {}
 
   //need reboot value need set it once startup, otherwise it will output current value
@@ -968,6 +972,7 @@ public:
     }
     return *this;
   }
+  virtual const char *optional_configuration_values() const { return optional_values_; }
 protected:
   //use current value to do input operation
   bool set(const char *str) { UNUSED(str); return true; }
@@ -993,6 +998,7 @@ protected:
   char value_reboot_str_[VALUE_BUF_SIZE];
 
 private:
+  const char *optional_values_;
   DISALLOW_COPY_AND_ASSIGN(ObConfigStringItem);
 };
 
