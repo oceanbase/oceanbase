@@ -81,7 +81,8 @@ ObTableAccessContext::ObTableAccessContext()
     trans_state_mgr_(nullptr),
     mview_scan_info_(nullptr),
     truncate_part_filter_(nullptr),
-    mds_collector_(nullptr)
+    mds_collector_(nullptr),
+    row_scan_cnt_(nullptr)
 {
   merge_scn_.set_max();
 }
@@ -217,6 +218,7 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
     range_array_pos_ = &scan_param.range_array_pos_;
     use_fuse_row_cache_ = false;
     mds_collector_ = scan_param.mds_collector_;
+    row_scan_cnt_ = scan_param.row_scan_cnt_;
     if(OB_FAIL(build_lob_locator_helper(scan_param, ctx, trans_version_range))) {
       STORAGE_LOG(WARN, "Failed to build lob locator helper", K(ret));
       // new static engine do not need fill scale
@@ -505,6 +507,7 @@ void ObTableAccessContext::reset()
   if (OB_UNLIKELY(nullptr != sample_filter_)) {
     ObRowSampleFilterFactory::destroy_sample_filter(sample_filter_);
   }
+  row_scan_cnt_ = nullptr;
 }
 
 int ObTableAccessContext::rescan_reuse(ObTableScanParam &scan_param)
@@ -551,6 +554,7 @@ void ObTableAccessContext::reuse()
   if (nullptr != sample_filter_) {
     sample_filter_->reuse();
   }
+  row_scan_cnt_ = nullptr;
 }
 
 int ObTableAccessContext::alloc_iter_pool(const bool use_column_store)

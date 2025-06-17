@@ -1048,11 +1048,8 @@ int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,
     LOG_WARN("Fail to fill virtual columns, ", K(ret));
   }
   if (OB_FAIL(ret)) {
-  } else if (0 == (++scan_cnt_ % 10000) && !access_ctx_->query_flag_.is_daily_merge()) {
-    // check if timeout or if transaction status every 10000 rows, which should be within 10ms
-    if (OB_FAIL(THIS_WORKER.check_status())) {
-      STORAGE_LOG(WARN, "query interrupt, ", K(ret));
-    }
+  } else {
+    INC_AND_CHECK_INTERRUPT_IN_SCAN(access_ctx_, scan_cnt_);
   }
   if (OB_SUCC(ret) && !need_skip) {
     if (in_row.fast_filter_skipped_) {

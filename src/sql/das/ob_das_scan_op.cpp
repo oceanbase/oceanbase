@@ -103,7 +103,8 @@ OB_DEF_SERIALIZE(ObDASScanRtDef)
     scan_op_id_,
     scan_rows_size_,
     row_width_,
-    das_tasks_key_);
+    das_tasks_key_,
+    row_scan_cnt_);
   return ret;
 }
 
@@ -131,7 +132,8 @@ OB_DEF_DESERIALIZE(ObDASScanRtDef)
     scan_op_id_,
     scan_rows_size_,
     row_width_,
-    das_tasks_key_);
+    das_tasks_key_,
+    row_scan_cnt_);
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
   }
@@ -162,7 +164,8 @@ OB_DEF_SERIALIZE_SIZE(ObDASScanRtDef)
     scan_op_id_,
     scan_rows_size_,
     row_width_,
-    das_tasks_key_);
+    das_tasks_key_,
+    row_scan_cnt_);
   return len;
 }
 
@@ -323,6 +326,7 @@ int ObDASScanOp::init_scan_param()
   scan_param_.main_table_scan_stat_.tsc_monitor_info_ = scan_rtdef_->tsc_monitor_info_;
   scan_param_.in_row_cache_threshold_ = scan_rtdef_->in_row_cache_threshold_;
   scan_param_.external_object_ctx_ = &scan_ctdef_->external_object_ctx_;
+  scan_param_.row_scan_cnt_ = &scan_rtdef_->row_scan_cnt_;
   if (scan_rtdef_->is_for_foreign_check_) {
     scan_param_.trans_desc_ = trans_desc_;
   }

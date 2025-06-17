@@ -56,6 +56,18 @@ class ObTruncatePartitionFilter;
 #define IF_NEED_CHECK_BASE_VERSION_FILTER(CTX) \
   CTX->truncate_part_filter_ != nullptr && CTX->truncate_part_filter_->is_valid_filter()
 
+#define INC_AND_CHECK_INTERRUPT_IN_SCAN(CTX, LOCAL_CNT)               \
+do {                                                                  \
+  CTX->incr_row_scan_cnt(LOCAL_CNT);                                  \
+  if (OB_UNLIKELY(0 == (CTX->get_row_scan_cnt(LOCAL_CNT) % 10000))) { \
+    if (!access_ctx_->query_flag_.is_daily_merge()) {                 \
+      if (OB_FAIL(THIS_WORKER.check_status())) {                      \
+        STORAGE_LOG(WARN, "query interrupt, ", K(ret));               \
+      }                                                               \
+    }                                                                 \
+  }                                                                   \
+} while (0)
+
 struct ObTableScanStoreStat
 {
   ObTableScanStoreStat() { reset(); }
@@ -248,6 +260,17 @@ struct ObTableAccessContext
       *table_scan_stat_->tsc_monitor_info_->memstore_read_row_cnt_ += count;
     }
   }
+  OB_INLINE void incr_row_scan_cnt(int64_t &local_cnt)
+  {
+    local_cnt++;
+    if (nullptr != row_scan_cnt_) {
+      *row_scan_cnt_ += 1;
+    }
+  }
+  OB_INLINE uint64_t get_row_scan_cnt(const int64_t local_cnt)
+  {
+    return nullptr != row_scan_cnt_ ? *row_scan_cnt_ : local_cnt;
+  }
   TO_STRING_KV(
     K_(is_inited),
     K_(use_fuse_row_cache),
@@ -279,7 +302,8 @@ struct ObTableAccessContext
     KPC_(mview_scan_info),
     K_(table_store_stat),
     KP_(truncate_part_filter),
-    KP_(mds_collector));
+    KP_(mds_collector),
+    KP_(row_scan_cnt));
 private:
   static const int64_t DEFAULT_COLUMN_SCALE_INFO_SIZE = 8;
   static const int64_t USE_BLOCK_CACHE_LIMIT = 128L << 10;  // 128K
@@ -346,6 +370,7 @@ public:
   ObMviewScanInfo *mview_scan_info_;
   ObTruncatePartitionFilter *truncate_part_filter_;
   ObMdsReadInfoCollector *mds_collector_; // used for collect mds info when query mds sstable
+  uint64_t *row_scan_cnt_;
 };
 
 } // namespace storage
