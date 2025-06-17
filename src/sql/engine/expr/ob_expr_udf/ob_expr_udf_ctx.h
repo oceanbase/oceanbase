@@ -97,6 +97,7 @@ public:
     cacheobj_guard_(PL_ROUTINE_HANDLE),
     phy_plan_ctx_(nullptr),
     allocator_("UDFRowAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    ctx_allocator_("UDFCtxAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     arg_count_(0) {}
 
   ~ObExprUDFCtx();
@@ -185,7 +186,8 @@ private:
   ObCacheObjGuard cacheobj_guard_;
   sql::ObPhysicalPlanCtx *phy_plan_ctx_;
   pl::ExecCtxBak exec_ctx_bak_;
-  ObArenaAllocator allocator_;
+  ObArenaAllocator allocator_; // row level allocator
+  ObArenaAllocator ctx_allocator_; // ctx level allocator
   int64_t arg_count_;
 };
 

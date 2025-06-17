@@ -660,14 +660,15 @@ struct ObPLExecCtx : public ObPLINS
               bool in_function = false,
               const common::ObIArray<int64_t> *nocopy_params = NULL,
               ObPLPackageGuard *guard = NULL) :
-    allocator_(allocator), exec_ctx_(exec_ctx), params_(params),
-    result_(result), status_(status), func_(func),
-    in_function_(in_function), pl_ctx_(NULL), nocopy_params_(nocopy_params), guard_(guard),
-    expr_alloc_("PlBlockExpr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()) {
-      if (NULL != exec_ctx && NULL != exec_ctx_->get_my_session()) {
-        pl_ctx_ = exec_ctx_->get_my_session()->get_pl_context();
-      }
+      allocator_(allocator), exec_ctx_(exec_ctx), params_(params),
+      result_(result), status_(status), func_(func),
+      in_function_(in_function), pl_ctx_(NULL), nocopy_params_(nocopy_params), guard_(guard),
+      local_expr_alloc_("PLBlockExpr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+  {
+    if (NULL != exec_ctx && NULL != exec_ctx_->get_my_session()) {
+      pl_ctx_ = exec_ctx_->get_my_session()->get_pl_context();
     }
+  }
 
   static uint32_t allocator_offset_bits() { return offsetof(ObPLExecCtx, allocator_) * 8; }
   static uint32_t exec_ctx_offset_bits() { return offsetof(ObPLExecCtx, exec_ctx_) * 8; }
@@ -677,14 +678,14 @@ struct ObPLExecCtx : public ObPLINS
 
   bool valid();
 
-  ObArenaAllocator *get_top_expr_allocator();
+  ObIAllocator *get_top_expr_allocator() { return &local_expr_alloc_; }
 
   virtual int get_user_type(uint64_t type_id,
-                                const ObUserDefinedType *&user_type,
-                                ObIAllocator *allocator = NULL) const;
+                            const ObUserDefinedType *&user_type,
+                            ObIAllocator *allocator = NULL) const;
   virtual int calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &result);
 
-  common::ObIAllocator *allocator_;
+  common::ObIAllocator *allocator_; // Symbol Allocator
   sql::ObExecContext *exec_ctx_;
   ParamStore *params_; // param stroe, 对应PL Function的符号表
   common::ObObj *result_;
@@ -694,13 +695,13 @@ struct ObPLExecCtx : public ObPLINS
   ObPLContext *pl_ctx_; // for error stack
   const common::ObIArray<int64_t> *nocopy_params_; //用于描述nocopy参数
   ObPLPackageGuard *guard_; //对应该次执行的package_guard
-  ObArenaAllocator expr_alloc_;
+  ObArenaAllocator local_expr_alloc_;
 };
 
 // backup and restore ObExecContext attributes
 struct ExecCtxBak
 {
-#define PL_EXEC_CTX_BAK_ATTRS phy_plan_ctx_,expr_op_ctx_store_,expr_op_size_,has_non_trivial_expr_op_ctx_,frames_,frame_cnt_
+#define PL_EXEC_CTX_BAK_ATTRS phy_plan_ctx_,expr_op_ctx_store_,expr_op_size_,has_non_trivial_expr_op_ctx_,frames_,frame_cnt_,pl_expr_allocator_
 
 #define DEF_BACKUP_ATTR(x) typeof(sql::ObExecContext::x) x = 0
   LST_DO_CODE(DEF_BACKUP_ATTR, EXPAND(PL_EXEC_CTX_BAK_ATTRS));
@@ -843,7 +844,6 @@ public:
                K_(pure_sql_exec_time),
                K_(pure_plsql_exec_time),
                K_(pure_sub_plsql_exec_time));
-private:
 private:
   ObPLFunction &func_;
   sql::ObPhysicalPlanCtx *phy_plan_ctx_; //运行态的param值放在这里面，跟ObPLFunction里的variables_一一对应，初始化的时候需要设置default值

@@ -1971,7 +1971,7 @@ int ObSPIService::spi_check_autonomous_trans(pl::ObPLExecCtx *ctx)
 int ObSPIService::spi_get_current_expr_allocator(pl::ObPLExecCtx *ctx, int64_t *addr)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator *alloc = nullptr;
+  ObIAllocator *alloc = nullptr;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(addr));
   OX (*addr = 0);
@@ -2057,7 +2057,7 @@ int ObSPIService::spi_query(ObPLExecCtx *ctx,
                             bool for_update)
 {
   int ret = OB_SUCCESS;
-  OZ (SMART_CALL(spi_inner_execute(ctx, ctx->expr_alloc_, sql, "", type, NULL, 0,
+  OZ (SMART_CALL(spi_inner_execute(ctx, *ctx->get_top_expr_allocator(), sql, "", type, NULL, 0,
                         into_exprs, into_count,
                         column_types, type_count,
                         exprs_not_null_flag,
@@ -2115,7 +2115,7 @@ int ObSPIService::spi_execute(ObPLExecCtx *ctx,
                               bool for_update)
 {
   int ret = OB_SUCCESS;
-  OZ (SMART_CALL(spi_inner_execute(ctx, ctx->expr_alloc_, NULL, ps_sql, type, param_exprs, param_count,
+  OZ (SMART_CALL(spi_inner_execute(ctx, *ctx->get_top_expr_allocator(), NULL, ps_sql, type, param_exprs, param_count,
                         into_exprs, into_count, column_types, type_count,
                         exprs_not_null_flag, pl_integer_ranges, is_bulk,
                         is_forall, is_type_record, for_update)));
@@ -3134,7 +3134,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
     OX (implicit_cursor->set_rowcount(0));
   } else {
     OZ (SMART_CALL(spi_inner_execute(ctx,
-                                     ctx->expr_alloc_,
+                                     *ctx->get_top_expr_allocator(),
                                      sql_str.ptr(),
                                      ps_sql.ptr(),
                                      stmt_type,
@@ -3204,7 +3204,7 @@ int ObSPIService::spi_cursor_init(ObPLExecCtx *ctx, int64_t cursor_index)
       }
     } else {
       if (obj.is_null()) {
-        OZ (spi_cursor_alloc(ctx->expr_alloc_, obj));
+        OZ (spi_cursor_alloc(*ctx->get_top_expr_allocator(), obj));
         //OZ (spi_cursor_alloc(ctx->exec_ctx_->get_allocator(), obj));
       } else {
         CK (obj.is_pl_extend());
@@ -3340,7 +3340,7 @@ int ObSPIService::cursor_open_check(ObPLExecCtx *ctx,
         OX (obj.set_param_meta());
       } else {
         CK (OB_NOT_NULL(ctx->allocator_));
-        OZ (spi_cursor_alloc(ctx->expr_alloc_, obj));
+        OZ (spi_cursor_alloc(*ctx->get_top_expr_allocator(), obj));
         OX (obj.set_extend(obj.get_ext(), PL_REF_CURSOR_TYPE));
         OX (cursor = reinterpret_cast<ObPLCursorInfo*>(obj.get_ext()));
       }
@@ -6338,19 +6338,19 @@ int ObSPIService::spi_interface_impl(pl::ObPLExecCtx *ctx, const char *interface
     ObString name(interface_name);
     PL_C_INTERFACE_t fp = GCTX.pl_engine_->get_interface_service().get_entry(name);
     if (nullptr != fp) {
-      ParamStore exec_params( (ObWrapperAllocator(ctx->expr_alloc_)) );
+      ParamStore exec_params( (ObWrapperAllocator(*ctx->get_top_expr_allocator())) );
       for (int64_t i = 0; OB_SUCC(ret) && i < ctx->params_->count(); ++i) {
         ObObjParam new_param = ctx->params_->at(i);
         if (ctx->params_->at(i).is_pl_extend()) {
           // do nothing
         } else if (ctx->params_->at(i).need_deep_copy()) {
-          OZ (deep_copy_obj(ctx->expr_alloc_, ctx->params_->at(i), new_param));
+          OZ (deep_copy_obj(*ctx->get_top_expr_allocator(), ctx->params_->at(i), new_param));
         }
         OZ (exec_params.push_back(new_param));
       }
       if (OB_SUCC(ret)) {
         ObIAllocator *old = ctx->allocator_;
-        ctx->allocator_ = &ctx->expr_alloc_;
+        ctx->allocator_ = ctx->get_top_expr_allocator();
         ObObj tmp_result(ObMaxType);
         ret = fp(*ctx, exec_params, tmp_result);
         ctx->allocator_ = old;
@@ -8524,7 +8524,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
                     int64_t init_size = OB_INVALID_SIZE;
                     OZ (ctx->get_user_type(into_record_type->get_record_member_type(k)->get_user_type_id(), type));
                     CK (OB_NOT_NULL(type));
-                    OZ (type->newx(ctx->expr_alloc_, ctx, ptr));
+                    OZ (type->newx(*ctx->get_top_expr_allocator(), ctx, ptr));
                     OZ (type->get_size(PL_TYPE_INIT_SIZE, init_size));
                     OX (obj_array.at(idx).set_extend(ptr, type->get_type(), init_size));
                   }

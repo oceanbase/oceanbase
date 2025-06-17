@@ -41,7 +41,7 @@ ObExprUDFCtx::~ObExprUDFCtx()
 int ObExprUDFCtx::init_param_store(ObExecContext &exec_ctx, int param_num)
 {
   int ret = OB_SUCCESS;
-  ObIAllocator &allocator = exec_ctx.get_allocator();
+  ObIAllocator &allocator = ctx_allocator_;
   void *param_store_buf = nullptr;
   void *phy_plan_ctx_buf = nullptr;
   int64_t query_timeout = 0;
@@ -141,7 +141,7 @@ int ObExprUDFCtx::init(const ObExpr &expr, ObExecContext &exec_ctx)
   } else if (is_cache_enabled()) {
     if (OB_FAIL(generate_influence_string())) {
       LOG_WARN("failed to generate influence string", K(ret));
-    } else if (OB_FAIL(init_row_key(exec_ctx.get_allocator(), arg_count_))) {
+    } else if (OB_FAIL(init_row_key(ctx_allocator_, arg_count_))) {
       LOG_WARN("failed to init row key", K(ret), K(arg_count_));
     } else if (get_info()->is_deterministic_) {
       if (OB_FAIL(init_deterministic_cache())) {
@@ -232,7 +232,7 @@ int ObExprUDFCtx::init_deterministic_cache()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected exec context", K(ret));
   } else if (OB_ISNULL(deterministic_cache_ = reinterpret_cast<ObExprUDFDeterministerCache *>
-                          (exec_ctx_->get_allocator().alloc(sizeof(ObExprUDFDeterministerCache))))) {
+                          (ctx_allocator_.alloc(sizeof(ObExprUDFDeterministerCache))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for determistic cache", K(ret));
   } else if (FALSE_IT(new (deterministic_cache_)ObExprUDFDeterministerCache(exec_ctx_->get_deterministic_udf_cache_allocator()))) {
@@ -338,7 +338,8 @@ int ObExprUDFCtx::calc_current_function()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected schema guard", K(ret));
       } else if (!get_info()->is_udt_udf_) { // package routine
-        pl::ObPLResolveCtx resolve_ctx(exec_ctx_->get_allocator(),
+        ObArenaAllocator allocator("UDFTmpAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+        pl::ObPLResolveCtx resolve_ctx(allocator,
                                        *session_info_,
                                        *exec_ctx_->get_sql_ctx()->schema_guard_,
                                        *exec_ctx_->get_package_guard(),
@@ -536,7 +537,7 @@ int ObExprUDFCtx::generate_influence_sys_var_string()
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo &session = *get_session_info();
-  ObIAllocator &allocator = exec_ctx_->get_allocator(); // only call this once for every request.
+  ObIAllocator &allocator = ctx_allocator_; // only call this once for every request.
   ObObj val;
   ObSysVarInPC sys_vars;
   char *buf = nullptr;
@@ -595,7 +596,7 @@ int ObExprUDFCtx::generate_influence_config_string()
   const int64_t MAX_CONFIG_VARS_STR_SIZE = 32;
   char *config_buf = nullptr;
   int64_t pos = 0;
-  ObIAllocator &allocator = exec_ctx_->get_allocator();
+  ObIAllocator &allocator = ctx_allocator_;
   if (!is_cache_enabled()) {
     // do nothing ...
   } else if (OB_ISNULL(config_buf = reinterpret_cast<char *>(allocator.alloc(MAX_CONFIG_VARS_STR_SIZE)))) {
