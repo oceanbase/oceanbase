@@ -230,6 +230,7 @@ int ObExprSubQueryRef::calc_result_type0(ObExprResType &type, ObExprTypeCtx &typ
   UNUSED(type_ctx);
   if (extra_info_.is_cursor_) {
     type.set_ext();
+    type.set_extend_type(pl::PL_REF_CURSOR_TYPE);
   } else if (extra_.is_scalar_) {
     //subquery的结果是一个标量，那么返回类型是标量的实际返回类型
     type = extra_info_.scalar_result_type_;

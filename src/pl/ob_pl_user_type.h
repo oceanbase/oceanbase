@@ -436,6 +436,7 @@ public:
   const ObRecordMember *get_record_member(int64_t index) const;
 
   int is_compatble(const ObRecordType &other, bool &is_comp) const;
+  int check_record_cursor_member() const;
   int record_members_init(common::ObIAllocator *alloc, int64_t size);
   void reset_record_member() { record_members_.reset(); }
 
