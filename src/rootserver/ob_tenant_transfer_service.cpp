@@ -263,16 +263,6 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
     ret = OB_NEED_RETRY;
     TTS_INFO("last task failed, need to process task later",
         KR(ret), K_(tenant_id), K(task), "result_comment", transfer_task_comment_to_str(result_comment));
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode()
-      && OB_FAIL(lock_and_check_tenant_merge_status_(trans, need_wait))) {
-    LOG_WARN("lock and check tenant merge status failed", KR(ret));
-  } else if (need_wait) {
-    result_comment = WAIT_FOR_MAJOR_COMPACTION;
-    ret = OB_NEED_WAIT;
-    TTS_INFO("tenant is merging, need wait",
-        KR(ret), K_(tenant_id), K(task), "result_comment", transfer_task_comment_to_str(result_comment));
-#endif
   } else if (OB_FAIL(check_ls_member_list_and_learner_list_(
       *sql_proxy_,
       task.get_src_ls(),
