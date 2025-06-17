@@ -35,6 +35,41 @@ using namespace oceanbase::share;
 using namespace oceanbase::storage;
 using namespace oceanbase::compaction;
 
+int ObTabletSplitUtil::check_split_mds_can_be_accepted(
+    const bool is_shared_storage_mode,
+    const share::SCN &split_start_scn,
+    const ObSSTableArray &old_store_mds_sstables,
+    const ObIArray<ObITable *> &tables_array,
+    bool &need_put_split_mds)
+{
+  int ret = OB_SUCCESS;
+  need_put_split_mds = true;
+  ObITable *new_mds_table = nullptr;
+  if (OB_UNLIKELY(!split_start_scn.is_valid() || tables_array.count() != 1)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(split_start_scn), K(tables_array));
+  } else if (OB_ISNULL(new_mds_table = tables_array.at(0))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("nullptr table", K(ret));
+  } else if (OB_UNLIKELY(new_mds_table->get_start_scn() != SCN::base_scn()
+        || (is_shared_storage_mode && new_mds_table->get_end_scn() < split_start_scn)
+        || (!is_shared_storage_mode && new_mds_table->get_end_scn() != split_start_scn))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected scn_range", K(ret), K(is_shared_storage_mode), K(split_start_scn), KPC(new_mds_table));
+  } else if (!old_store_mds_sstables.empty() && old_store_mds_sstables[0]->get_start_scn() < split_start_scn) {
+    if (OB_LIKELY(old_store_mds_sstables[0]->get_start_scn() == SCN::base_scn()
+        && old_store_mds_sstables[0]->get_end_scn() >= split_start_scn)) {
+      need_put_split_mds = false; // put split_mds again.
+      FLOG_INFO("ignore to push split-mds sstable repeatedly", K(ret), K(split_start_scn),
+        "first_sstable", PC(old_store_mds_sstables[0]));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected err to push mds", K(ret), K(split_start_scn), "first_sstable", PC(old_store_mds_sstables[0]));
+    }
+  }
+  return ret;
+}
+
 int ObTabletSplitUtil::check_split_minors_can_be_accepted(
     const bool is_shared_storage_mode,
     const share::SCN &split_start_scn,

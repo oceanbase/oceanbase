@@ -52,6 +52,12 @@ static bool is_valid_tablet_split_info_status(const ObSplitTabletInfoStatus &typ
 struct ObTabletSplitUtil final
 {
 public:
+  static int check_split_mds_can_be_accepted(
+      const bool is_shared_storage_mode,
+      const share::SCN &split_start_scn,
+      const ObSSTableArray &old_store_mds_sstables,
+      const ObIArray<ObITable *> &tables_array,
+      bool &need_put_split_mds);
   static int check_split_minors_can_be_accepted(
       const bool is_shared_storage_mode,
       const share::SCN &split_start_scn,

@@ -3536,7 +3536,9 @@ int ObTabletTableStore::build_split_new_table_store_(
   ObITable *last_sstable = nullptr;
   int64_t inc_base_snapshot_version = -1;
   ObSEArray<ObITable *, OB_DEFAULT_SE_ARRAY_COUNT> batch_tables;
+  bool need_put_split_mds = false;
   const ObTabletHAStatus &ha_status = tablet.get_tablet_meta().ha_status_;
+  const bool is_shared_storage_mode = GCTX.is_shared_storage_mode();
   if (OB_FAIL(param.tables_handle_.get_tables(batch_tables))) {
     LOG_WARN("get tables failed", K(ret), K(param));
   } else if (OB_FAIL(inner_build_major_tables_(allocator, old_store, batch_tables,
@@ -3544,7 +3546,7 @@ int ObTabletTableStore::build_split_new_table_store_(
       true/*allow_duplicate_sstable*/,
       inc_base_snapshot_version))) {
     LOG_WARN("failed to inner build major tables", K(ret), K(param), K(batch_tables));
-  } else if (OB_FAIL(build_split_minor_tables_(GCTX.is_shared_storage_mode(),
+  } else if (OB_FAIL(build_split_minor_tables_(is_shared_storage_mode,
       allocator, old_store, batch_tables,
       inc_base_snapshot_version,
       ha_status,
@@ -3558,36 +3560,27 @@ int ObTabletTableStore::build_split_new_table_store_(
     LOG_WARN("failed to pull memtable from memtable_mgr", K(ret));
   } else if (OB_FAIL(pull_ddl_memtables(allocator, tablet))) {
     LOG_WARN("pull_ddl_memtables failed", K(ret));
-  } else if (is_mds_merge(param.tablet_split_param_.merge_type_) && 1 != batch_tables.count()) {
+  } else if (is_mds_merge(param.tablet_split_param_.merge_type_) && batch_tables.count() != 1) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null new mds sstable", K(ret), K(param));
-  } else if (is_mds_merge(param.tablet_split_param_.merge_type_)) {
-    ObSSTable *new_mds_sstable = static_cast<ObSSTable *>(batch_tables.at(0));
-    if (OB_UNLIKELY(new_mds_sstable->get_start_scn() != SCN::base_scn()
-        || new_mds_sstable->get_end_scn() != split_start_scn)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected scn_range", K(ret), K(split_start_scn), KPC(new_mds_sstable));
-    } else if (!old_store.mds_sstables_.empty() && old_store.mds_sstables_[0]->get_start_scn() < split_start_scn) {
-      if (OB_LIKELY(old_store.mds_sstables_[0]->get_start_scn() == SCN::base_scn()
-          && old_store.mds_sstables_[0]->get_end_scn() >= split_start_scn)) {
-        FLOG_INFO("ignore to push split-mds sstable repeatedly", K(ret), K(split_start_scn),
-          "first_sstable", PC(old_store.mds_sstables_[0]));
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected err to push mds", K(ret), K(split_start_scn), "first_sstable", PC(old_store.mds_sstables_[0]),
-          K(ObPrintTableStore(old_store)));
-      }
-    } else if (OB_FAIL(build_minor_tables(allocator,
-                                          new_mds_sstable,
-                                          old_store,
-                                          false/*need_check_sstable*/,
-                                          -1/*inc_base_snapshot_version*/,
-                                          ha_status,
-                                          unused_param,
-                                          true/*is_mds*/,
-                                          GCTX.is_shared_storage_mode()/*allow_adjust_next_start_scn*/))) {
-      LOG_WARN("failed to build mds sstables", K(ret));
-    }
+    LOG_WARN("unexpected new table count", K(ret), K(param));
+  } else if (is_mds_merge(param.tablet_split_param_.merge_type_)
+      && OB_FAIL(ObTabletSplitUtil::check_split_mds_can_be_accepted(
+          is_shared_storage_mode,
+          split_start_scn,
+          old_store.mds_sstables_,
+          batch_tables,
+          need_put_split_mds))) {
+      LOG_WARN("check split mds can be accepted failed", K(ret));
+  } else if (OB_FAIL(build_minor_tables(allocator,
+          need_put_split_mds ? static_cast<ObSSTable *>(batch_tables.at(0)) : nullptr,
+          old_store,
+          false/*need_check_sstable*/,
+          -1/*inc_base_snapshot_version*/,
+          ha_status,
+          unused_param,
+          true/*is_mds*/,
+          is_shared_storage_mode/*allow_adjust_next_start_scn*/))) {
+    LOG_WARN("failed to build mds sstables", K(ret));
   }
 
   if (OB_SUCC(ret)) {
