@@ -1086,7 +1086,8 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
       OZ (ObRawExprUtils::need_wrap_to_string(udf_raw_expr->get_param_expr(i)->get_result_type(),
                                               iparam->get_pl_data_type().get_obj_type(),
                                               true,
-                                              need_wrap));
+                                              need_wrap,
+                                              false));
       if (OB_SUCC(ret) && need_wrap) {
         ObSysFunRawExpr *out_expr = NULL;
         OZ (ObRawExprUtils::create_type_to_str_expr(*(params.expr_factory_),
