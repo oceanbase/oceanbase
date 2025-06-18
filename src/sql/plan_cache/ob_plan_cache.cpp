@@ -984,7 +984,7 @@ int ObPlanCache::check_can_do_insert_opt(common::ObIAllocator &allocator,
     } else if (!can_do_batch || ins_params_count <= 0) {
       can_do_batch = false;
       // Only the insert ... values ​​... statement will print this,after trying to do insert batch optimization failure
-      LOG_INFO("can not do batch insert opt", K(ret), K(can_do_batch), K(upd_params_count),
+      LOG_TRACE("can not do batch insert opt", K(ret), K(can_do_batch), K(upd_params_count),
                 K(ins_params_count), K(batch_count), K(pc_ctx.raw_sql_));
     } else if (batch_count <= 1) {
       can_do_batch = false;
@@ -992,7 +992,7 @@ int ObPlanCache::check_can_do_insert_opt(common::ObIAllocator &allocator,
       // Only the insert ... values ​​... on duplicate key update ... statement will print this log
       // after trying to do insert batch optimization failure
       can_do_batch = false;
-      LOG_INFO("can not do batch insert opt", K(ret), K(can_do_batch), K(ins_params_count), K(batch_count), K(pc_ctx.raw_sql_));
+      LOG_TRACE("can not do batch insert opt", K(ret), K(can_do_batch), K(ins_params_count), K(batch_count), K(pc_ctx.raw_sql_));
     } else {
       pc_ctx.insert_batch_opt_info_.insert_params_count_ = ins_params_count;
       pc_ctx.insert_batch_opt_info_.update_params_count_ = upd_params_count;
