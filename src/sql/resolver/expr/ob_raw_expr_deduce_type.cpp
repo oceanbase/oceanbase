@@ -128,7 +128,11 @@ int ObRawExprDeduceType::visit(ObQueryRefRawExpr &expr)
 {
   int ret = OB_SUCCESS;
   if (expr.is_cursor()) {
-    expr.set_data_type(ObExtendType);
+    sql::ObRawExprResType result_type;
+    result_type.reset();
+    result_type.set_ext();
+    result_type.set_extend_type(pl::PL_REF_CURSOR_TYPE);
+    expr.set_result_type(result_type);
   } else if (expr.is_scalar()) {
     expr.set_result_type(expr.get_column_types().at(0));
   } else {
