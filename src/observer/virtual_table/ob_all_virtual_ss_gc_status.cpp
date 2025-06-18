@@ -12,7 +12,7 @@
 
 #include "observer/virtual_table/ob_all_virtual_ss_gc_status.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/incremental/garbage_collector/ob_ss_garbage_collector_service.h"
+#  include "storage/incremental/garbage_collector/ob_ss_garbage_collector_service.h"
 #endif
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -20,9 +20,7 @@ namespace oceanbase
 {
 namespace observer
 {
-ObAllVirtualSSGCStatus::ObAllVirtualSSGCStatus() :
-  ObVirtualTableScannerIterator(), is_for_sslog_table_(false)
-{}
+ObAllVirtualSSGCStatus::ObAllVirtualSSGCStatus() : ObVirtualTableScannerIterator(), is_for_sslog_table_(false) {}
 
 ObAllVirtualSSGCStatus::~ObAllVirtualSSGCStatus()
 {
@@ -40,10 +38,21 @@ int ObAllVirtualSSGCStatus::prepare_start_to_read()
 {
   int ret = OB_SUCCESS;
   LastSuccSCNs last_succ_scns;
+  ObSSGarbageCollectorService *ss_gc_srv = nullptr;
+  bool is_gc_sswriter = false;
+
   if (OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "allocator_ shouldn't be NULL", K(allocator_), K(ret));
-  } else if (OB_FAIL(MTL(ObSSGarbageCollectorService *)->get_last_succ_scns(is_for_sslog_table_, last_succ_scns))) {
+    SERVER_LOG(WARN, "allocator_ shouldn't be NULL", K(allocator_), KR(ret));
+  } else if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "ObSSGarbageCollectorService is NULL", KR(ret));
+  } else if (OB_FAIL(ss_gc_srv->check_is_gc_sswriter(is_gc_sswriter))) {
+    SERVER_LOG(WARN, "check whether is sswriter failed", KR(ret));
+  } else if (!is_gc_sswriter) {
+    // if this server is not sswriter, do not need to iterate
+    ret = OB_ITER_END;
+  } else if (OB_FAIL(ss_gc_srv->get_last_succ_scns(is_for_sslog_table_, last_succ_scns))) {
     SERVER_LOG(WARN, "get last_succ_scns failed", KR(ret));
   } else if (OB_UNLIKELY(!last_succ_scns.is_valid())) {
     SERVER_LOG(WARN, "last_succ_scns is invalid", KR(ret), K(last_succ_scns));
@@ -167,6 +176,20 @@ int ObAllVirtualSSGCStatus::process_curr_tenant(ObNewRow *&row)
         extra_info_buf_[MAX_VALUE_LENGTH - 1] = '\0';
         cur_row_.cells_[i].set_varchar(extra_info_buf_);
         cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        break;
+      }
+      case SVR_IP: {
+        if (false == (GCTX.self_addr().ip_to_string(ip_buffer_, MAX_IP_ADDR_LENGTH))) {
+          ret = OB_ERR_UNEXPECTED;
+          SSLOG_LOG(WARN, "ip_to_string failed", KR(ret));
+        } else {
+          cur_row_.cells_[i].set_varchar(ObString(ip_buffer_));
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        }
+        break;
+      }
+      case SVR_PORT: {
+        cur_row_.cells_[i].set_int(GCTX.self_addr().get_port());
         break;
       }
       default: {

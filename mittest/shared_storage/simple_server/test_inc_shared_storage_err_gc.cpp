@@ -84,7 +84,7 @@ public:
     ObSSMetaIterGuard<ObSSLSIDIterator> ls_id_iter_guard;
     ObSSLSIDIterator *ls_id_iter = nullptr;
 
-    ObArray<storage::ObSSGarbageCollector::SSGCTask *> gc_task_info_list;
+    ObArray<SSGCTask *> gc_task_info_list;
     ObArray<ObFunction<int(const ObLSID, const ObTabletID, const SCN)>> gc_task_execute_list;
 
     if (OB_FAIL(MTL(ObSSMetaService *)->get_max_committed_meta_scn(snapshot))) {

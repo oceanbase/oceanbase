@@ -16759,7 +16759,11 @@ def_table_schema(
   normal_columns = [
     ('last_succ_scn', 'int'),
     ('extra_info', 'varchar:MAX_VALUE_LENGTH', 'true'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int')
   ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
 )
 
 def_table_schema(

@@ -38,7 +38,9 @@ public:
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
     GC_TYPE,
     LAST_SUCC_SCN,
-    EXTRA_INFO
+    EXTRA_INFO,
+    SVR_IP,
+    SVR_PORT
   };
 
 private:
@@ -52,6 +54,7 @@ private:
 private:
   char gc_type_buf_[OB_SS_GC_TASK_TYPE_LENGTH];
   char extra_info_buf_[MAX_VALUE_LENGTH];
+  char ip_buffer_[MAX_IP_ADDR_LENGTH];
   bool is_for_sslog_table_;
 #ifdef OB_BUILD_SHARED_STORAGE
   SSGCLastSuccSCNIter last_succ_scn_iter_;
