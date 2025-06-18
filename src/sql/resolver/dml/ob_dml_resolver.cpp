@@ -6565,7 +6565,7 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
         LOG_WARN("extract sysvars failed", K(ret));
       } else {
         SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH],val_buf) {
-          for (int64_t i = 0; i < var_array.count(); ++i) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < var_array.count(); ++i) {
             ObString var_name;
             int64_t pos = 0;
             if (OB_ISNULL(var_array.at(i))) {
