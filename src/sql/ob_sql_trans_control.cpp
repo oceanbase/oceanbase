@@ -361,8 +361,15 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
     const ObTransID tx_id = tx_desc->get_tx_id();
     auto tx_free_route_tmp = session->is_txn_free_route_temp();
     MTL_SWITCH(tx_tenant_id) {
+      bool need_abort_tx = false;
       ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
       if (tx_free_route_tmp) {
+        if (!tx_desc->is_xa_trans() && OB_DEAD_LOCK == cause) {
+          // for dead_lock kill tx, must set tx to aborted even in temp node
+          // the aborted state will be returned to following node and finally
+          // propagated to the trans start node
+          need_abort_tx = true;
+        }
         // if XA-txn is on this server, we have acquired its ref, release ref
         // and disassocate with session
         if (tx_desc->is_xa_trans() && tx_desc->get_addr() == GCONF.self_addr_) {
@@ -389,12 +396,15 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
         }
         session->get_tx_desc() = NULL;
       } else {
+        need_abort_tx = true;
+      }
+      if (need_abort_tx) {
         transaction::ObTransService *txs = NULL;
         CK(OB_NOT_NULL(txs = MTL_WITH_CHECK_TENANT(transaction::ObTransService*, tx_tenant_id)));
         OZ(txs->abort_tx(*tx_desc, cause), *session, tx_desc->get_tx_id());
       }
       // NOTE that the tx_desc is set to NULL in xa case, DO NOT print anything in tx_desc
-      LOG_INFO("kill tx done", K(ret), K(cause), K(session_id), K(tx_id), K(tx_free_route_tmp));
+      LOG_INFO("kill tx done", K(ret), K(cause), K(session_id), K(tx_id), K(tx_free_route_tmp), K(need_abort_tx));
     }
   }
   return ret;

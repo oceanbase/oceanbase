@@ -123,7 +123,7 @@ int ObLCLNode::register_timer_task()
     CLICK();
     revert_self_ref_count_();
   } else {
-    DETECT_LOG_(INFO, "register first timer task successfully", K(*this));
+    DETECT_LOG_(TRACE, "register first timer task successfully", K(*this));
   }
 
   return ret;
@@ -262,7 +262,7 @@ int ObLCLNode::block_(const ObDependencyResource &resource)
     if (OB_FAIL(add_resource_to_list_(resource, block_list_))) {
       DETECT_LOG_(WARN, "block_list_ push resource failed", PRINT_WRAPPER);
     } else {
-      DETECT_LOG_(INFO, "block resource success", PRINT_WRAPPER);
+      DETECT_LOG_(TRACE, "block resource success", PRINT_WRAPPER);
     }
   }
 
@@ -288,7 +288,7 @@ int ObLCLNode::block(const BlockCallBack &func)
                        K(func), K(*this));
     block_callback_list_.pop_back();
   } else {
-    DETECT_LOG_(INFO, "block callback success", K(*this));
+    DETECT_LOG_(TRACE, "block callback success", K(*this));
   }
 
   return ret;
@@ -911,7 +911,7 @@ void ObLCLNode::PushStateTask::runTimerTask()
   }
   if (false == ATOMIC_LOAD(&lcl_node_.is_timer_task_canceled_)) {
     if (expected_executed_ts > current_ts) {
-      DETECT_LOG(ERROR, "schedule error", K(current_ts), K(expected_executed_ts));
+      DETECT_LOG(WARN, "schedule error", K(current_ts), K(expected_executed_ts));
     } else if (current_ts - expected_executed_ts > 100 * 1000) {// 100ms
       if (REACH_TIME_INTERVAL(100 * 1000)) {// 100ms
         DETECT_LOG(WARN, "task scheduled out of range", K(current_ts), K(expected_executed_ts));
