@@ -2003,13 +2003,30 @@ int ObInnerSQLConnection::switch_tenant(const uint64_t tenant_id)
   if (OB_INVALID_ID == tenant_id) {
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
   } else if (is_inner_session()) {
-    if (OB_FAIL(get_session().switch_tenant(tenant_id))){
+    share::schema::ObSchemaGetterGuard schema_guard;
+    const ObSimpleTenantSchema *tenant_schema = nullptr;
+    if (OB_ISNULL(GCTX.schema_service_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema service is nullptr", K(ret));
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+      LOG_WARN("failed to get tenant schema", K(tenant_id), K(tenant_schema));
+    } else if (OB_ISNULL(tenant_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant schema is null", K(ret));
+    } else if (OB_FAIL(get_session().switch_tenant_with_name(tenant_id, tenant_schema->get_tenant_name_str()))) {
       LOG_WARN("Init sys tenant in session error", K(ret));
-    } else if (OB_FAIL(get_session().set_user(OB_SYS_USER_NAME, OB_SYS_HOST_NAME, OB_SYS_USER_ID))) {
-      LOG_WARN("Set sys user in session error", K(ret));
-    } else {
-      get_session().set_user_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT);
-      get_session().set_database_id(OB_SYS_DATABASE_ID);
+    }
+    if (OB_SUCC(ret)) {
+      const char *sys_user_name
+        = (ORACLE_MODE == tenant_schema->get_compatibility_mode()) ? OB_ORA_SYS_USER_NAME : OB_SYS_USER_NAME;
+      if (OB_FAIL(get_session().set_user(sys_user_name, OB_SYS_HOST_NAME, OB_SYS_USER_ID))) {
+        LOG_WARN("Set sys user in session error", K(ret));
+      } else {
+        get_session().set_user_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT);
+        get_session().set_database_id(OB_SYS_DATABASE_ID);
+      }
     }
   } else { /*do nothing*/ }
   return ret;
