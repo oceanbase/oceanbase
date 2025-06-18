@@ -419,8 +419,6 @@ public:
                   K(sn_checkpoint_lsn),
                   K(prev_ss_checkpoint_lsn));
       } else {
-        (void)throttle_flush_if_checkpoint_lag_too_large(sn_checkpoint_lsn, prev_ss_checkpoint_lsn, ls);
-
         SCN ss_checkpoint_scn(ObScnRange::MAX_SCN);
         LSN ss_checkpoint_lsn;
         PalfBaseInfo palf_meta;
@@ -459,25 +457,6 @@ public:
     }
     return ret;
   }
-private:
-  void throttle_flush_if_checkpoint_lag_too_large(LSN sn_ckpt_lsn, LSN ss_ckpt_lsn, ObLS *ls) {
-    int64_t max_lsn_gap = INT64_MAX;
-    (void)MTL(ObTenantFreezer*)->get_tenant_memstore_limit(max_lsn_gap);
-    const int64_t config_trigger = ObTenantFreezer::get_freeze_trigger_percentage();
-    const int64_t freeze_trigger = config_trigger > 0 ? config_trigger : 20;
-    max_lsn_gap = max_lsn_gap * freeze_trigger / 100;
-    if (sn_ckpt_lsn - ss_ckpt_lsn > max_lsn_gap) {
-      (void)ls->disable_flush();
-      FLOG_INFO("disabling memtable flush to throttle writes and allow ss checkpoint to catch up with sn checkpoint",
-                "ls_id", ls->get_ls_id(),
-                K(sn_ckpt_lsn),
-                K(ss_ckpt_lsn),
-                K(max_lsn_gap));
-    } else if (ls->flush_is_disabled()) {
-      (void)ls->enable_flush();
-      FLOG_INFO("enable memtable flush", "ls_id", ls->get_ls_id(), K(sn_ckpt_lsn), K(ss_ckpt_lsn));
-    }
-  }
 
 private:
   ObLSID ls_id_;
@@ -491,29 +470,60 @@ public:
   {
     int ret = OB_SUCCESS;
     const ObLSID ls_id = ls.get_ls_id();
-    ObSSMetaService *meta_svr = MTL(ObSSMetaService *);
-    UpdateSSCkptFunctorForMetaSvr func(ObIMetaFunction::MetaFuncType::UPDATE_SS_CKPT_FUNC, ls_id);
+    ObSSLSMeta ss_ls_meta;
+    LSN ss_checkpoint_lsn;
+    LSN sn_checkpoint_lsn = ls.get_clog_base_lsn();
 
-    ObSSWriterKey sswriter_key(ObSSWriterType::META, ls_id);
-    bool is_sswriter = false;
-    int64_t unused_epoch = 0;
-    if (OB_ISNULL(meta_svr)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "mtl MetaService should not be null", K(ret), K(MTL_ID()), KP(meta_svr));
-    } else if (OB_FAIL(MTL(ObSSWriterService *)->check_lease(sswriter_key, is_sswriter, unused_epoch))) {
-      STORAGE_LOG(WARN, "check lease fail", KR(ret), K(sswriter_key));
-    } else if (!is_sswriter) {
-      if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL)) {
-        STORAGE_LOG(INFO, "this replica is not meta sswriter", K(is_sswriter));
-      }
-    } else if (OB_FAIL(meta_svr->update_ls_meta(ls_id, ObMetaUpdateReason::UPDATE_LS_SS_CHECKPOINT_SCN, func))) {
-      STORAGE_LOG_RET(WARN, 0, "update ls meta failed", KR(ret), K(ls));
+    if (OB_FAIL(MTL(ObSSMetaService *)->get_ls_meta(ls_id, ss_ls_meta))) {
+      STORAGE_LOG(WARN, "get ls meta failed", KR(ret), K(ss_ls_meta));
+    } else if (FALSE_IT(ss_checkpoint_lsn = ss_ls_meta.get_ss_base_lsn())) {
+    } else if (sn_checkpoint_lsn < ss_checkpoint_lsn) {
+      FLOG_INFO("local ckpt less than ss ckpt", K(sn_checkpoint_lsn), K(ss_checkpoint_lsn));
     } else {
-      // finish update ls meta
-    }
+      (void)throttle_flush_if_checkpoint_lag_too_large(sn_checkpoint_lsn, ss_checkpoint_lsn, ls);
 
+      ObSSMetaService *meta_svr = MTL(ObSSMetaService *);
+      UpdateSSCkptFunctorForMetaSvr func(ObIMetaFunction::MetaFuncType::UPDATE_SS_CKPT_FUNC, ls_id);
+      ObSSWriterKey sswriter_key(ObSSWriterType::META, ls_id);
+      bool is_sswriter = false;
+      int64_t unused_epoch = 0;
+      if (OB_ISNULL(meta_svr)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "mtl MetaService should not be null", K(ret), K(MTL_ID()), KP(meta_svr));
+      } else if (OB_FAIL(MTL(ObSSWriterService *)->check_lease(sswriter_key, is_sswriter, unused_epoch))) {
+        STORAGE_LOG(WARN, "check lease fail", KR(ret), K(sswriter_key));
+      } else if (!is_sswriter) {
+        if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL)) {
+          STORAGE_LOG(INFO, "this replica is not meta sswriter", K(is_sswriter));
+        }
+      } else if (OB_FAIL(meta_svr->update_ls_meta(ls_id, ObMetaUpdateReason::UPDATE_LS_SS_CHECKPOINT_SCN, func))) {
+        STORAGE_LOG_RET(WARN, 0, "update ls meta failed", KR(ret), K(ls));
+      } else {
+        // finish update ls meta
+      }
+    }
     // returen OB_SUCCESS to iterate all logstreams
     return OB_SUCCESS;
+  }
+
+private:
+  void throttle_flush_if_checkpoint_lag_too_large(LSN sn_ckpt_lsn, LSN ss_ckpt_lsn, ObLS &ls) {
+    int64_t max_lsn_gap = INT64_MAX;
+    (void)MTL(ObTenantFreezer*)->get_tenant_memstore_limit(max_lsn_gap);
+    const int64_t config_trigger = ObTenantFreezer::get_freeze_trigger_percentage();
+    const int64_t freeze_trigger = config_trigger > 0 ? config_trigger : 20;
+    max_lsn_gap = max_lsn_gap * freeze_trigger / 100;
+    if (sn_ckpt_lsn - ss_ckpt_lsn > max_lsn_gap) {
+      (void)ls.disable_flush();
+      FLOG_INFO("disable memtable flush to throttle writes and allow ss checkpoint to catch up with sn checkpoint",
+                "ls_id", ls.get_ls_id(),
+                K(sn_ckpt_lsn),
+                K(ss_ckpt_lsn),
+                K(max_lsn_gap));
+    } else if (ls.flush_is_disabled()) {
+      (void)ls.enable_flush();
+      FLOG_INFO("enable memtable flush", "ls_id", ls.get_ls_id(), K(sn_ckpt_lsn), K(ss_ckpt_lsn));
+    }
   }
 };
 
