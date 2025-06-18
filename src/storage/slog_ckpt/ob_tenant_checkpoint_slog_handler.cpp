@@ -1926,25 +1926,15 @@ int ObTenantCheckpointSlogHandler::update_tenant_preallocated_seqs(
     ret_(OB_NOT_INIT),
     slot_id_(0)
 {
-  if (GCTX.is_shared_storage_mode()) {
-    // do nothing
-    ret_ = OB_SUCCESS;
-  } else { // shared_nothing
-    if (OB_UNLIKELY(OB_SUCCESS != (ret_ = const_cast<TCRWLock&>(ckpt_slog_hdl_.slog_ckpt_lock_).rdlock(INT64_MAX, slot_id_)))) {
-      COMMON_LOG_RET(ERROR, ret_, "fail to read lock, ", K_(ret));
-    }
+  if (OB_UNLIKELY(OB_SUCCESS != (ret_ = const_cast<TCRWLock&>(ckpt_slog_hdl_.slog_ckpt_lock_).rdlock(INT64_MAX, slot_id_)))) {
+    COMMON_LOG_RET(ERROR, ret_, "fail to read lock, ", K_(ret));
   }
 }
 
 ObTenantCheckpointSlogHandler::ObCkptSlogROptLockGuard::~ObCkptSlogROptLockGuard()
 {
-  if (GCTX.is_shared_storage_mode()) {
-    // do nothing
-    ret_ = OB_SUCCESS;
-  } else if (OB_LIKELY(OB_SUCCESS == ret_)) { // shared_nothing
-    if (OB_UNLIKELY(OB_SUCCESS != (ret_ = const_cast<TCRWLock&>(ckpt_slog_hdl_.slog_ckpt_lock_).rdunlock(slot_id_)))) {
-      COMMON_LOG_RET(WARN, ret_, "Fail to unlock, ", K_(ret));
-    }
+  if (OB_UNLIKELY(OB_SUCCESS != (ret_ = const_cast<TCRWLock&>(ckpt_slog_hdl_.slog_ckpt_lock_).rdunlock(slot_id_)))) {
+    COMMON_LOG_RET(WARN, ret_, "Fail to unlock, ", K_(ret));
   }
 }
 
