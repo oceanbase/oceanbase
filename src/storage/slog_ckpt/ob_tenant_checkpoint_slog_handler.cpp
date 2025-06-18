@@ -842,11 +842,11 @@ int ObTenantCheckpointSlogHandler::inner_write_checkpoint(bool is_force)
           super_block.ls_meta_entry_ = ls_meta_entry;
           super_block.wait_gc_tablet_entry_ = wait_gc_tablet_entry;
           super_block.copy_snapshots_from(tenant->get_super_block());
+          super_block.min_file_id_ = fd_dispenser.get_min_file_id();
+          super_block.max_file_id_ = fd_dispenser.get_max_file_id();
           if (OB_FAIL(SERVER_STORAGE_META_SERVICE.update_tenant_super_block(0, super_block))) {
             LOG_WARN("fail to update tenant super block", K(ret), K(super_block));
           } else {
-            super_block.min_file_id_ = fd_dispenser.get_min_file_id();
-            super_block.max_file_id_ = fd_dispenser.get_max_file_id();
             tenant->set_tenant_super_block(super_block);
           }
         }
