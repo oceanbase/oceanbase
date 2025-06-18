@@ -1697,18 +1697,20 @@ int ObSQLSessionInfo::close_dbms_cursor(int64_t cursor_id)
 int ObSQLSessionInfo::make_cursor(pl::ObPLCursorInfo *&cursor)
 {
   int ret = OB_SUCCESS;
+  pl::ObPLCursorInfo* tmp_cursor = NULL;
 #ifndef OB_BUILD_ORACLE_PL
   UNUSED(cursor);
 #else
   const pl::ObRefCursorType pl_type;
   ObObj param;
-  param.set_ext(reinterpret_cast<int64_t>(cursor));
+  param.set_ext(reinterpret_cast<int64_t>(tmp_cursor));
   int64_t param_size = 0;
   ObSchemaGetterGuard dummy_schema_guard;
   OZ (init_cursor_cache());
   OZ (pl_type.init_obj(dummy_schema_guard, get_cursor_allocator(), param, param_size));
-  OX (cursor = reinterpret_cast<ObPLCursorInfo*>(param.get_ext()));
-  OZ (add_cursor(cursor));
+  OX (tmp_cursor = reinterpret_cast<ObPLCursorInfo*>(param.get_ext()));
+  OZ (add_cursor(tmp_cursor));
+  OX (cursor = tmp_cursor);
   LOG_DEBUG("cursor alloc, session cursor", K(cursor));
 #endif
   return ret;

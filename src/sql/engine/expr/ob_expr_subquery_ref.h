@@ -16,6 +16,7 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/expr/ob_i_expr_extra_info.h"
+#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -28,20 +29,31 @@ class ObExprSubQueryRef : public ObExprOperator
   class ObExprSubQueryRefCtx : public ObExprOperatorCtx
   {
   public:
-    ObExprSubQueryRefCtx() : ObExprOperatorCtx(), cursor_info_(NULL), session_info_(NULL) {}
+    ObExprSubQueryRefCtx() : ObExprOperatorCtx(), cursor_infos_(), session_info_(NULL)
+    {
+      cursor_infos_.reset();
+      cursor_infos_.set_tenant_id(MTL_ID());
+    }
     virtual ~ObExprSubQueryRefCtx()
     {
-      if (OB_NOT_NULL(cursor_info_) && OB_NOT_NULL(session_info_)) {
-        cursor_info_->close(*session_info_);
-        cursor_info_->~ObPLCursorInfo();
-        cursor_info_ = NULL;
+      if (OB_NOT_NULL(session_info_)) {
+        for (int64_t i = 0; i < cursor_infos_.count(); ++i) {
+          pl::ObPLCursorInfo* cursor = cursor_infos_.at(i);
+          if (OB_NOT_NULL(cursor)) {
+            cursor->dec_ref_count();
+            if (0 == cursor->get_ref_count()) {
+              (void)session_info_->close_cursor(cursor->get_id());
+            }
+          }
+        }
+        cursor_infos_.reset();
       }
     }
 
     int add_cursor_info(pl::ObPLCursorInfo *cursor_info, sql::ObSQLSessionInfo *session_info);
 
   private:
-    pl::ObPLCursorInfo* cursor_info_;
+    ObArray<pl::ObPLCursorInfo*> cursor_infos_;
     sql::ObSQLSessionInfo *session_info_;
   };
   OB_UNIS_VERSION(1);
@@ -110,7 +122,7 @@ public:
   static int reset_onetime_expr(const ObExpr &expr, ObEvalCtx &ctx);
   static int convert_datum_to_obj(ObEvalCtx &ctx,
                                   ObSubQueryIterator &iter,
-                                  common::ObIAllocator &allocator,
+                                  ObSPICursor* spi_cursor,
                                   common::ObNewRow &row);
   void set_result_is_scalar(bool is_scalar) { extra_.is_scalar_ = is_scalar; }
   void set_scalar_result_type(const ObExprResType &result_type);
