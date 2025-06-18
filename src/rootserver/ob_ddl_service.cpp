@@ -33259,8 +33259,8 @@ int ObDDLService::create_routine(ObRoutineInfo &routine_info,
                                                    user_info))) {
               LOG_WARN("failed to get user info", K(ret));
             } else if (OB_ISNULL(user_info)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("user info is unexpeced null", K(ret));
+              ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+              LOG_WARN("user info is null, may be parallel ddl conflict", K(ret));
             } else if (OB_FAIL(ddl_operator.grant_routine(routine_key,
                                                           priv_set,
                                                           trans,
