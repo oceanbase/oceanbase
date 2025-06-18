@@ -380,7 +380,14 @@ int ObRestoreUtil::fill_restore_scn(
   } else if (with_restore_scn) {
     // restore scn which is specified by user
     restore_scn = src_scn;
-  } else if (!with_restore_scn) {
+  } else if (!timestamp.empty()) {
+    common::ObTimeZoneInfoWrap time_zone_wrap;
+    if (OB_FAIL(get_backup_sys_time_zone_(tenant_path_array, time_zone_wrap))) {
+      LOG_WARN("failed to get backup sys time zone", K(ret));
+    } else if (OB_FAIL(convert_restore_timestamp_to_scn_(timestamp, time_zone_wrap, restore_scn))) {
+      LOG_WARN("failed to convert restore timestamp to scn", K(ret));
+    }
+  } else {
     if (restore_using_compl_log) {
       SCN min_restore_scn = SCN::min_scn();
       ARRAY_FOREACH_X(tenant_path_array, i, cnt, OB_SUCC(ret)) {
@@ -410,13 +417,6 @@ int ObRestoreUtil::fill_restore_scn(
         } else {
           restore_scn = min_restore_scn;
         }
-      }
-    } else if (!timestamp.empty()) {
-      common::ObTimeZoneInfoWrap time_zone_wrap;
-      if (OB_FAIL(get_backup_sys_time_zone_(tenant_path_array, time_zone_wrap))) {
-        LOG_WARN("failed to get backup sys time zone", K(ret));
-      } else if (OB_FAIL(convert_restore_timestamp_to_scn_(timestamp, time_zone_wrap, restore_scn))) {
-        LOG_WARN("failed to convert restore timestamp to scn", K(ret));
       }
     } else {
       int64_t round_id = 0;
