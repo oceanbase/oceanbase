@@ -149,7 +149,6 @@ public:
 private:
   int generate_backfill_tx_task_();
   int generate_table_backfill_tx_task_(
-      const int64_t dest_tranfser_seq,
       share::ObITask *replace_task,
       common::ObIArray<ObTableHandleV2> &table_array,
       share::ObITask *child);
@@ -181,7 +180,6 @@ private:
       ObTableStoreIterator &sstable_iter,
       ObTablesHandleArray &sstable_handles);
   int generate_mds_table_backfill_task_(
-      const int64_t dest_tranfser_seq,
       share::ObITask *finish_task,
       share::ObITask *&child);
   int wait_memtable_frozen_();
@@ -191,14 +189,12 @@ private:
 #ifdef OB_BUILD_SHARED_STORAGE
   int generate_ss_backfill_tx_task_();
   int generate_ss_table_backfill_tx_task_(
-      const int64_t dest_transfer_seq,
       share::ObITask *replace_task,
       common::ObIArray<ObTableHandleV2> &table_array,
       share::ObITask *child);
 #endif
 
   int get_diagnose_support_info_(share::ObLSID &dest_ls_id, share::SCN &backfill_scn) const;
-  int get_dest_transfer_seq_(const common::ObTabletID &tablet_id, int64_t &transfer_seq) const;
   void process_transfer_perf_diagnose_(
       const int64_t timestamp,
       const int64_t start_ts,
@@ -223,7 +219,6 @@ public:
   int init(
       const share::ObLSID &ls_id,
       const ObTabletBackfillInfo &tablet_info,
-      const int64_t dest_transfer_seq,
       ObTabletHandle &tablet_handle,
       ObTableHandleV2 &table_handle,
       share::ObITask *child);
@@ -247,7 +242,6 @@ private:
   ObIHADagNetCtx *ha_dag_net_ctx_;
   share::ObLSID ls_id_;
   ObTabletBackfillInfo tablet_info_;
-  int64_t dest_transfer_seq_;
   ObTabletHandle tablet_handle_;
   ObTableHandleV2 table_handle_;
   ObBackfillTabletsTableMgr *tablets_table_mgr_;
@@ -263,7 +257,6 @@ public:
   int init(
       const share::ObLSID &ls_id,
       const ObTabletBackfillInfo &tablet_info,
-      const int64_t dest_tranfser_seq,
       ObTabletHandle &tablet_handle,
       ObTableHandleV2 &table_handle,
       share::ObITask *child);
@@ -272,7 +265,7 @@ public:
 
   VIRTUAL_TO_STRING_KV(K("ObTabletTableFinishBackfillTXTask"), KP(this), KPC(ha_dag_net_ctx_));
 private:
-  int prepare_merge_ctx_(const int64_t dest_transfer_seq);
+  int prepare_merge_ctx_();
   int update_merge_sstable_();
   int update_merge_sstable_for_ss_();
 
@@ -344,7 +337,6 @@ public:
   int init(
       const share::ObLSID &ls_id,
       const ObTabletBackfillInfo &tablet_info,
-      const int64_t dest_transfer_seq_,
       ObTabletHandle &tablet_handle);
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletMdsTableBackfillTXTask"), KP(this), KPC(ha_dag_net_ctx_));
@@ -383,7 +375,6 @@ private:
   ObIHADagNetCtx *ha_dag_net_ctx_;
   share::ObLSID ls_id_;
   ObTabletBackfillInfo tablet_info_;
-  int64_t dest_transfer_seq_;
   ObTabletHandle tablet_handle_;
   common::ObArenaAllocator allocator_;
   compaction::ObLocalArena merger_arena_;
