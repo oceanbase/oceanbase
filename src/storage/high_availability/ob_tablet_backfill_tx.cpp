@@ -372,7 +372,7 @@ int ObTabletBackfillTXDag::generate_next_dag(share::ObIDag *&dag)
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(tablet_backfill_tx_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(tablet_backfill_tx_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc tablet backfill tx migration dag ", K(ret));
   } else if (OB_FAIL(tablet_backfill_tx_dag->init(dag_net_id_, ls_id_, next_tablet_info, ha_dag_net_ctx_,
       backfill_tx_ctx_, tablets_table_mgr_))) {

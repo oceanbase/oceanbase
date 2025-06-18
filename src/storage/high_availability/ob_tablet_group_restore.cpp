@@ -430,7 +430,7 @@ int ObTabletGroupRestoreDagNet::start_running_for_restore_()
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(initial_restore_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(initial_restore_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc inital restore dag ", K(ret));
   } else if (OB_FAIL(initial_restore_dag->init(this))) {
     LOG_WARN("failed to init initial restore dag", K(ret));
@@ -1054,9 +1054,9 @@ int ObInitialTabletGroupRestoreTask::generate_tablet_restore_dags_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("initial tablets group restore dag should not be NULL", K(ret), KP(initial_tablets_group_restore_dag));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(start_restore_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(start_restore_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc start restore dag ", K(ret));
-    } else if (OB_FAIL(scheduler->alloc_dag(finish_restore_dag))) {
+    } else if (OB_FAIL(scheduler->alloc_dag(finish_restore_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc finish restore dag", K(ret));
     } else if (OB_FAIL(start_restore_dag->init(dag_net_, finish_restore_dag))) {
       LOG_WARN("failed to init start restore dag", K(ret));
@@ -1456,7 +1456,7 @@ int ObStartTabletGroupRestoreTask::generate_tablet_restore_dag_()
       if (!param.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("init tablet restore param not valid", K(ret), K(param), KPC(ctx_));
-      } else if (OB_FAIL(scheduler->alloc_dag(tablet_restore_dag))) {
+      } else if (OB_FAIL(scheduler->alloc_dag(tablet_restore_dag, true/*is_ha_dag*/))) {
         LOG_WARN("failed to alloc tablet restore dag ", K(ret));
       } else if (OB_FAIL(tablet_restore_dag->init(param))) {
         if (OB_TABLET_NOT_EXIST == ret) {
@@ -1741,7 +1741,7 @@ int ObFinishTabletGroupRestoreTask::generate_restore_init_dag_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(initial_restore_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(initial_restore_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc initial restore dag ", K(ret));
     } else if (OB_FAIL(initial_restore_dag->init(dag_net_))) {
       LOG_WARN("failed to init initial restore dag", K(ret));
@@ -2137,7 +2137,7 @@ int ObTabletRestoreDag::generate_next_dag(share::ObIDag *&dag)
         if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-        } else if (OB_FAIL(scheduler->alloc_dag(tablet_restore_dag))) {
+        } else if (OB_FAIL(scheduler->alloc_dag(tablet_restore_dag, true/*is_ha_dag*/))) {
           LOG_WARN("failed to alloc tablet restore dag", K(ret));
         } else if (OB_FAIL(tablet_restore_dag->init(param))) {
           if (OB_TABLET_NOT_EXIST == ret) {

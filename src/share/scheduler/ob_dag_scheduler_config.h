@@ -401,6 +401,12 @@ inline bool is_valid_dag_priority(ObDagPrio::ObDagPrioEnum priority)
          priority >= ObDagPrio::DAG_PRIO_COMPACTION_HIGH;
 }
 
+inline bool is_ha_prio_dag(ObDagPrio::ObDagPrioEnum priority)
+{
+  return ObDagPrio::DAG_PRIO_HA_HIGH == priority ||
+         ObDagPrio::DAG_PRIO_HA_MID == priority ||
+         ObDagPrio::DAG_PRIO_HA_LOW == priority;
+}
 } // namespace share
 } // namespace oceanbase
 #endif

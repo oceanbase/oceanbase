@@ -302,7 +302,7 @@ int ObRebuildTabletDagNet::start_running_for_rebuild_tablet_()
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(initial_rebuild_tablet_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(initial_rebuild_tablet_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc rebuild tablet dag ", K(ret));
   } else if (OB_FAIL(initial_rebuild_tablet_dag->init(this))) {
     LOG_WARN("failed to init rebuild tablet dag", K(ret));
@@ -670,9 +670,9 @@ int ObInitialRebuildTabletTask::generate_rebuild_tablet_dags_()
   } else if (OB_ISNULL(initial_rebuild_tablet_dag = static_cast<ObInitialRebuildTabletDag *>(this->get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("initial rebuild tablet dag is null", K(ret), KP(initial_rebuild_tablet_dag));
-  } else if (OB_FAIL(scheduler->alloc_dag(start_rebuild_tablet_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(start_rebuild_tablet_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc start rebuild tablet dag ", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(finish_rebuild_tablet_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(finish_rebuild_tablet_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc finish rebuild tablet dag", K(ret));
   } else if (OB_FAIL(start_rebuild_tablet_dag->init(dag_net_, finish_rebuild_tablet_dag))) {
     LOG_WARN("failed to init start rebuild tablet dag", K(ret));
@@ -1002,7 +1002,7 @@ int ObStartRebuildTabletTask::generate_rebuild_tablets_dag_()
       } else {
         LOG_WARN("failed to get next tablet id", K(ret), KPC(ctx_));
       }
-    } else if (OB_FAIL(scheduler->alloc_dag(tablet_rebuild_dag))) {
+    } else if (OB_FAIL(scheduler->alloc_dag(tablet_rebuild_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc tablet rebuild dag ", K(ret));
     } else if (OB_FAIL(tablet_rebuild_dag->init(logic_tablet_id.tablet_id_, dag_net, finish_dag_))) {
       LOG_WARN("failed to init tablet rebuild dag", K(ret), K(*ctx_));
@@ -1283,7 +1283,7 @@ int ObTabletRebuildMajorDag::generate_next_dag(share::ObIDag *&dag)
         } else {
           LOG_WARN("failed to get tablet", K(ret), K(logic_tablet_id));
         }
-      } else if (OB_FAIL(scheduler->alloc_dag(tablet_rebuild_dag))) {
+      } else if (OB_FAIL(scheduler->alloc_dag(tablet_rebuild_dag, true/*is_ha_dag*/))) {
         LOG_WARN("failed to alloc tablet rebuild dag", K(ret));
       } else {
         if (OB_FAIL(tablet_rebuild_dag->init(logic_tablet_id.tablet_id_, dag_net, finish_dag_))) {
@@ -1984,7 +1984,7 @@ int ObFinishRebuildTabletTask::generate_rebuild_tablet_init_dag_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("finish rebuild tablet dag should not be NULL", K(ret), KP(finish_rebuild_tablet_dag));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(initial_rebuild_tablet_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(initial_rebuild_tablet_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc initial rebuild tablet dag ", K(ret));
     } else if (OB_FAIL(initial_rebuild_tablet_dag->init(dag_net_))) {
       LOG_WARN("failed to init initial rebuild tablet dag", K(ret));

@@ -1171,14 +1171,15 @@ public:
   template<typename T>
   int create_dag(
       const ObIDagInitParam *param,
-      T *&dag);
+      T *&dag,
+      const bool is_ha_dag = false);
   template<typename T>
   int create_and_add_dag(
       const ObIDagInitParam *param,
       const bool emergency = false,
       const bool check_size_overflow = true);
   template<typename T>
-  int alloc_dag(T *&dag);
+  int alloc_dag(T *&dag, const bool is_ha_dag = false);
   template<typename T>
   int alloc_dag_with_priority(const ObDagPrio::ObDagPrioEnum &prio, T *&dag);
   template<typename T>
@@ -1410,7 +1411,7 @@ int ObIDag::create_task(ObITask *parent, T *&task, Args&&... args)
 }
 
 template <typename T>
-int ObTenantDagScheduler::alloc_dag(T *&dag)
+int ObTenantDagScheduler::alloc_dag(T *&dag, const bool is_ha_dag)
 {
   int ret = common::OB_SUCCESS;
   void *buf = NULL;
@@ -1423,21 +1424,24 @@ int ObTenantDagScheduler::alloc_dag(T *&dag)
     ret = common::OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Dag Object is too large", K(ret), K(sizeof(T)));
   } else {
-    T tmp_dag;
-    ObIAllocator &allocator = get_allocator(tmp_dag.is_ha_dag());
+    ObIAllocator &allocator = get_allocator(is_ha_dag);
     if (NULL == (buf = allocator.alloc(sizeof(T)))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(WARN, "failed to alloc dag", K(ret));
     } else {
       ObIDag *new_dag = new (buf) T();
-      if (OB_FAIL(new_dag->basic_init(allocator))) {
+      if (new_dag->is_ha_dag() != is_ha_dag) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(WARN, "dag type is not matched", K(ret), KPC(new_dag), K(is_ha_dag));
+      } else if (OB_FAIL(new_dag->basic_init(allocator))) {
         COMMON_LOG(WARN, "failed to init dag", K(ret));
-
-        // failed to init, free dag
-        inner_free_dag(*new_dag);
-        new_dag = nullptr;
       } else {
         dag = static_cast<T*>(new_dag);
+      }
+      if (OB_FAIL(ret) && nullptr != new_dag) {
+        // failed, free dag
+        inner_free_dag(*new_dag);
+        new_dag = nullptr;
       }
     }
   }
@@ -1457,7 +1461,7 @@ int ObTenantDagScheduler::alloc_dag_with_priority(
      || prio >= ObDagPrio::DAG_PRIO_MAX) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "get invalid arg", K(ret), K(prio));
-  } else if (OB_FAIL(alloc_dag(dag))) {
+  } else if (OB_FAIL(alloc_dag(dag, is_ha_prio_dag(prio)))) {
     COMMON_LOG(WARN, "failed to alloc dag", K(ret));
   } else if (OB_ISNULL(dag)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1522,13 +1526,14 @@ int ObTenantDagScheduler::create_and_add_dag_net(const ObIDagInitParam *param)
 template<typename T>
 int ObTenantDagScheduler::create_dag(
     const ObIDagInitParam *param,
-    T *&dag)
+    T *&dag,
+    const bool is_ha_dag)
 {
   int ret = common::OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
-  } else if (OB_FAIL(alloc_dag(dag))) {
+  } else if (OB_FAIL(alloc_dag(dag, is_ha_dag))) {
     COMMON_LOG(WARN, "failed to alloc dag", K(ret));
   } else if (OB_FAIL(dag->init_by_param(param))) {
     COMMON_LOG(WARN, "failed to init dag", K(ret), KPC(dag));

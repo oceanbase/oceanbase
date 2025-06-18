@@ -67,6 +67,7 @@ public:
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
+  virtual bool is_ha_dag() const override { return true; }
   ObBackupTabletGroupFuseCtx *get_ctx() const { return ctx_; }
 
 protected:
@@ -131,6 +132,7 @@ public:
   virtual int generate_next_dag(share::ObIDag *&dag);
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
+  virtual bool is_ha_dag() const override { return true; }
 
 protected:
   bool is_inited_;

@@ -28,7 +28,6 @@ bin_PROGRAMS = test_save_storage_info \
 							 test_table_store\
 							 test_table_store_stat_mgr\
 							 test_join_mv_merge\
-							 test_dag_size\
 							 test_split_version_range\
 							 test_handle_cache\
 							 test_sparse_sstable\

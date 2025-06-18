@@ -2231,6 +2231,6 @@ int main(int argc, char **argv)
   OB_LOGGER.set_log_level(log_level);
   OB_LOGGER.set_max_file_size(256*1024*1024);
   system("rm -f test_dag_scheduler.log*");
-  OB_LOGGER.set_file_name("test_dag_scheduler.log");
+  OB_LOGGER.set_file_name("test_dag_scheduler.log", true);
   return RUN_ALL_TESTS();
 }

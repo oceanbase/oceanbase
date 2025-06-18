@@ -724,7 +724,7 @@ int ObTransferBackfillTXDagNet::start_running_for_backfill_()
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(backfill_tx_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(backfill_tx_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc transfer backfill tx dag ", K(ret));
   } else if (OB_FAIL(backfill_tx_dag->init(this))) {
     LOG_WARN("failed to init transfer backfill tx dag", K(ret));
@@ -1136,7 +1136,7 @@ int ObStartTransferBackfillTXTask::generate_transfer_backfill_tx_dags_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(finish_backfill_tx_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag(finish_backfill_tx_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc finish backfill tx transfer dag ", K(ret));
     } else if (OB_FAIL(finish_backfill_tx_dag->init(ctx_->task_id_, ctx_->src_ls_id_,
         ctx_->backfill_scn_, ctx_->tablet_infos_, ctx_, &ctx_->tablets_table_mgr_))) {
@@ -1151,7 +1151,7 @@ int ObStartTransferBackfillTXTask::generate_transfer_backfill_tx_dags_()
     } else {
       if (OB_FAIL(backfill_tx_ctx->get_tablet_info(tablet_info))) {
         LOG_WARN("failed to get tablet id", K(ret), KPC(ctx_));
-      } else if (OB_FAIL(scheduler->alloc_dag(tablet_backfill_tx_dag))) {
+      } else if (OB_FAIL(scheduler->alloc_dag(tablet_backfill_tx_dag, true/*is_ha_dag*/))) {
         LOG_WARN("failed to alloc tablet backfill tx  dag ", K(ret));
       } else if (OB_FAIL(tablet_backfill_tx_dag->init(ctx_->task_id_, ctx_->src_ls_id_,
           tablet_info, ctx_, backfill_tx_ctx, &ctx_->tablets_table_mgr_))) {

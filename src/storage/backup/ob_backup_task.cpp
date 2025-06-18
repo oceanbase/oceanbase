@@ -350,7 +350,7 @@ int ObLSBackupMetaDagNet::start_running()
   } else if (OB_FALSE_IT(init_param.backup_stage_ = start_stage_)) {
   } else if (OB_FAIL(inner_init_before_run_())) {
     LOG_WARN("failed to inner init before run", K(ret));
-  } else if (OB_FAIL(dag_scheduler->alloc_dag(backup_meta_dag))) {
+  } else if (OB_FAIL(dag_scheduler->alloc_dag(backup_meta_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc backup meta dag", K(ret));
   } else if (OB_FAIL(backup_meta_dag->init(param_.start_scn_, init_param, report_ctx_, ls_backup_ctx_))) {
     LOG_WARN("failed to init backup meta dag", K(ret), K_(param));
@@ -358,7 +358,7 @@ int ObLSBackupMetaDagNet::start_running()
     LOG_WARN("failed to create first task for child dag", K(ret), KPC(backup_meta_dag));
   } else if (OB_FAIL(add_dag_into_dag_net(*backup_meta_dag))) {
     LOG_WARN("failed to add dag into dag net", K(ret), KPC(backup_meta_dag));
-  } else if (OB_FAIL(dag_scheduler->alloc_dag(prepare_dag))) {
+  } else if (OB_FAIL(dag_scheduler->alloc_dag(prepare_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc dag", K(ret));
   } else if (OB_FAIL(prepare_dag->init(init_param,
                                        backup_data_type_,
@@ -372,7 +372,7 @@ int ObLSBackupMetaDagNet::start_running()
     LOG_WARN("failed to create first task", K(ret));
   } else if (OB_FAIL(backup_meta_dag->add_child(*prepare_dag))) {
     LOG_WARN("failed to add dag into dag_net", K(ret), KPC(prepare_dag));
-  } else if (OB_FAIL(dag_scheduler->alloc_dag(finish_dag))) {
+  } else if (OB_FAIL(dag_scheduler->alloc_dag(finish_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to create dag", K(ret));
   } else if (OB_FAIL(finish_dag->init(init_param, report_ctx_, ls_backup_ctx_, *index_kv_cache_))) {
     LOG_WARN("failed to init finish dag", K(ret), K(init_param));
@@ -581,7 +581,7 @@ int ObLSBackupDataDagNet::start_running()
   } else if (OB_FAIL(param_.convert_to(init_param))) {
     LOG_WARN("failed to convert to param", K(ret), K_(param));
   } else if (FALSE_IT(init_param.backup_stage_ = start_stage_)) {
-  } else if (OB_FAIL(scheduler->alloc_dag(prepare_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(prepare_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc dag", K(ret));
   } else if (OB_FAIL(prepare_dag->init(init_param,
                  backup_data_type_,
@@ -595,7 +595,7 @@ int ObLSBackupDataDagNet::start_running()
     LOG_WARN("failed to create first task", K(ret));
   } else if (OB_FAIL(add_dag_into_dag_net(*prepare_dag))) {
     LOG_WARN("failed to add dag into dag_net", K(ret), KPC(prepare_dag));
-  } else if (OB_FAIL(scheduler->alloc_dag(finish_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(finish_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to create dag", K(ret));
   } else if (OB_FAIL(finish_dag->init(init_param, report_ctx_, ls_backup_ctx_, *index_kv_cache_))) {
     LOG_WARN("failed to init finish dag", K(ret), K(init_param));
@@ -844,7 +844,7 @@ int ObBackupBuildTenantIndexDagNet::start_running()
   } else if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag scheduler must not be NULL", K(ret));
-  } else if (OB_FAIL(dag_scheduler->alloc_dag(rebuild_dag))) {
+  } else if (OB_FAIL(dag_scheduler->alloc_dag(rebuild_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc rebuild index dag", K(ret));
   } else if (OB_FAIL(rebuild_dag->init(param_,
                  backup_data_type_,
@@ -2189,7 +2189,7 @@ int ObPrefetchBackupInfoTask::generate_next_prefetch_dag_()
   } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), K(*this));
-  } else if (OB_FAIL(scheduler->alloc_dag(child_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(child_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc child dag", K(ret));
   } else if (OB_FAIL(ls_backup_ctx_->get_prefetch_task_id(prefetch_task_id))) {
     LOG_WARN("failed to get prefetch task id", K(ret));
@@ -2240,7 +2240,7 @@ int ObPrefetchBackupInfoTask::generate_backup_dag_(
   } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), K(*this));
-  } else if (OB_FAIL(scheduler->alloc_dag(child_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(child_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc child dag", K(ret));
   } else if (OB_FAIL(child_dag->init(task_id,
                  param_,
@@ -3757,7 +3757,7 @@ int ObLSBackupDataTask::do_generate_next_backup_dag_()
     LOG_WARN("unexpected null MTL scheduler", K(ret), KP(scheduler), KP_(ls_backup_ctx));
   } else if (OB_FAIL(param_.convert_to(stage, dag_param))) {
     LOG_WARN("failed to convert to param", K(ret), K(stage));
-  } else if (OB_FAIL(scheduler->alloc_dag(next_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(next_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc child dag", K(ret));
   } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
@@ -4660,7 +4660,7 @@ int ObLSBackupPrepareTask::process()
     LOG_WARN("may need advance checkpoint failed", K(ret), K_(param));
   } else if (OB_FAIL(prepare_backup_tx_table_filled_tx_scn_())) {
     LOG_WARN("failed to check tx data can explain user data", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(rebuild_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(rebuild_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc child dag", K(ret));
   } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
@@ -4689,7 +4689,7 @@ int ObLSBackupPrepareTask::process()
     if (OB_ISNULL(scheduler) || OB_ISNULL(ls_backup_ctx_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null MTL scheduler", K(ret), KP(scheduler), KP_(ls_backup_ctx));
-    } else if (OB_FAIL(scheduler->alloc_dag(child_dag))) {
+    } else if (OB_FAIL(scheduler->alloc_dag(child_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc child dag", K(ret));
     } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
       ret = OB_ERR_UNEXPECTED;

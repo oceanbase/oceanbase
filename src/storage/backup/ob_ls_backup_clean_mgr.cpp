@@ -179,7 +179,7 @@ int ObLSBackupCleanDagNet::start_running()
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(clean_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(clean_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc backup clean dag ", K(ret));
   } else if (OB_FAIL(clean_dag->init(this))) {
     LOG_WARN("failed to init backup clean dag", K(ret));
