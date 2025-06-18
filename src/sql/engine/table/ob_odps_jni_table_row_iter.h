@@ -124,15 +124,22 @@ public:
   };
 
   struct OdpsFixedTypeDecoder : public OdpsDecoder {
-    OdpsFixedTypeDecoder(ObIAllocator& alloc, bool is_root, const MirrorOdpsJniColumn &odps_column, ObTimeZoneInfoWrap &literal_tz_info)
+    OdpsFixedTypeDecoder(ObIAllocator& alloc, bool is_root, const MirrorOdpsJniColumn &odps_column,
+      ObSQLSessionInfo* session_ptr, ObTime& ob_time, int timezone_ret, int64_t timezone_offset)
     : OdpsDecoder(alloc, is_root, odps_column),
       column_addr_(0),
-      literal_tz_info_(literal_tz_info) {}
+      session_ptr_(session_ptr),
+      ob_time_(ob_time),
+      timezone_ret_(timezone_ret),
+      timezone_offset_(timezone_offset) {}
     virtual int init(JniScanner::JniTableMeta& column_meta, ObEvalCtx &ctx, const ObExpr &expr, ObODPSArrayHelper *array_helper);
     virtual int decode(ObEvalCtx &ctx, const ObExpr &expr, int64_t offset, int64_t size);
 
     long column_addr_;
-    ObTimeZoneInfoWrap &literal_tz_info_;
+    ObSQLSessionInfo* session_ptr_;
+    ObTime& ob_time_;
+    int timezone_ret_;
+    int timezone_offset_;
   };
 
   struct OdpsVarietyTypeDecoder : public OdpsDecoder {
@@ -175,6 +182,11 @@ public:
         read_rounds_(0),
         read_rows_(0),
         real_row_idx_(0),
+        timezone_str_(nullptr),
+        timezone_ret_(OB_SUCCESS),
+        timezone_offset_(0),
+        session_ptr_(nullptr),
+        ob_time_(DT_TYPE_ORACLE_TTZ),
         predicate_buf_(nullptr),
         predicate_buf_len_(0),
         pd_storage_filters_(nullptr),
@@ -393,9 +405,11 @@ private:
   ObSEArray<ExternalPair, 8> obexpr_odps_part_col_idsmap_;
   // obexpr_odps_nonpart_col_idsmap_ only contains the normal column index.
   ObSEArray<ExternalPair, 8> obexpr_odps_nonpart_col_idsmap_;
-  ObString timezone_;
-  ObTZMapWrap tz_map_wrap_;
-  ObTimeZoneInfoWrap literal_tz_info_;
+  ObString timezone_str_;
+  int timezone_ret_;
+  int64_t timezone_offset_;
+  ObSQLSessionInfo* session_ptr_;
+  ObTime ob_time_;
   char *predicate_buf_;
   int64_t predicate_buf_len_;
   sql::ObPushdownFilterExecutor *pd_storage_filters_;

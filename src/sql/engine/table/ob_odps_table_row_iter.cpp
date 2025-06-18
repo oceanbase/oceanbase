@@ -583,6 +583,13 @@ int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeI
       }
       break;
     }
+    case apsara::odps::sdk::ODPS_JSON:
+    {
+      if (ObJsonType == ob_type) {
+        is_match = true;
+      }
+      break;
+    }
     case apsara::odps::sdk::ODPS_TIMESTAMP:
     {
       if (ObTimestampType == ob_type && ob_type_scale >= 6) {

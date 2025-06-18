@@ -18,13 +18,14 @@
 #include <memory>
 
 #include "share/external_table/ob_external_table_utils.h"
+#include "lib/charset/ob_charset.h"
+#include "lib/charset/ob_charset_string_helper.h"
 #include "sql/engine/connector/ob_jni_scanner.h"
 #include "sql/engine/connector/ob_java_env.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
-#include "lib/charset/ob_charset.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "observer/omt/ob_tenant_timezone_mgr.h"
 
 namespace oceanbase {
 namespace sql {
@@ -187,7 +188,7 @@ int ObODPSJNITableRowIterator::init(const storage::ObTableScanParam *scan_param)
     LOG_WARN("failed to call ObExternalTableRowIterator::init", K(ret));
   } else if (OB_FAIL(prepare_bit_vector())) {
     LOG_WARN("failed to init bit vector", K(ret));
-  } else if (OB_ISNULL(scan_param_) || OB_ISNULL(scan_param_->ext_file_column_exprs_)) {
+  } else if (OB_ISNULL(scan_param_) || OB_ISNULL(scan_param_->ext_file_column_exprs_) || OB_ISNULL(scan_param_->op_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("wrong scan param for scan");
   } else {
@@ -204,37 +205,34 @@ int ObODPSJNITableRowIterator::init(const storage::ObTableScanParam *scan_param)
       }
     }
     if (OB_SUCC(ret)) {
-      ObTimeZoneInfoManager *tz_info_mgr = NULL;
-      if (OB_FAIL(odps_jni_schema_scanner_->get_project_timezone_info(arena_alloc_, timezone_))) {
-        LOG_WARN("failed to get project timezone info", K(ret));
-      } else if (OB_FAIL(OTTZ_MGR.get_tenant_tz(MTL_ID(), tz_map_wrap_))) {
-        LOG_WARN("get tenant timezone with lock failed", K(ret));
-      } else if (OB_FAIL(const_cast<ObTZInfoMap *>(tz_map_wrap_.get_tz_map())->get_tz_info_by_name(timezone_, literal_tz_info_.get_tz_info_pos()))) {
-        LOG_WARN("failed to get literal tz info", K(timezone_));
-      }
-
-      if (OB_SUCC(ret)) {
-        literal_tz_info_.set_tz_info_position();
-      } else if (ret == OB_ERR_UNKNOWN_TIME_ZONE) {
-        LOG_WARN("failed to get literal tz info", K(timezone_));
-        int32_t offset = 0;
-        ret = OB_SUCCESS;
-        int ret_more = OB_SUCCESS;
-        if (OB_FAIL(ObTimeConverter::str_to_offset(ObString("+8:00"), offset, ret_more,
-                                                  lib::is_oracle_mode(), false))) {
-          LOG_WARN("fail to convert time zone", K(ret));
-        } else {
-          literal_tz_info_.set_tz_info_offset(offset);
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_ISNULL(literal_tz_info_.get_time_zone_info())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("literal tz info is null", K(ret));
-        }
+      session_ptr_ = eval_ctx.exec_ctx_.get_my_session();
+      if (OB_ISNULL(session_ptr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session is null", K(ret));
+      } else if (OB_FAIL(session_ptr_->get_sys_variable(SYS_VAR_TIME_ZONE, timezone_str_))) {
+        LOG_WARN("failed to get store idx", K(ret));
       }
     }
-
+    if (OB_SUCC(ret)) {
+      int ret_more = OB_SUCCESS;
+      int32_t offset_sec = 0;
+      if (OB_FAIL(ObTimeConverter::str_to_offset(timezone_str_, offset_sec, ret_more,
+                                is_oracle_mode(), true))) {
+        if (ret != OB_ERR_UNKNOWN_TIME_ZONE) {
+          LOG_WARN("fail to convert str_to_offset", K(timezone_str_), K(ret));
+        } else {
+          timezone_ret_ = OB_ERR_UNKNOWN_TIME_ZONE;
+        }
+      } else {
+        timezone_offset_ = offset_sec;
+      }
+    }
+    if (OB_ERR_UNKNOWN_TIME_ZONE == ret) {
+      ret = OB_SUCCESS;
+      MEMCPY(ob_time_.tz_name_, timezone_str_.ptr(), timezone_str_.length());
+      ob_time_.tz_name_[timezone_str_.length()] = '\0';
+      ob_time_.is_tz_name_valid_ = true;
+    }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(odps_params_map_.set_refactored(
                   ObString::make_string("service"), ObString::make_string("reader"), 1))) {
@@ -743,6 +741,10 @@ int ObODPSJNITableRowIterator::check_type_static(MirrorOdpsJniColumn &odps_colum
   } else if (odps_type == OdpsType::STRING || odps_type == OdpsType::BINARY) {
     if (ObVarcharType == ob_type || ObTinyTextType == ob_type || ObTextType == ob_type ||
         ObLongTextType == ob_type || ObMediumTextType == ob_type) {
+      is_match = true;
+    }
+  } else if (odps_type == OdpsType::JSON) {
+    if (ObJsonType == ob_type) {
       is_match = true;
     }
   } else if (odps_type == OdpsType::TIMESTAMP_NTZ) {
@@ -2375,7 +2377,6 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
         LOG_WARN("unexpected expr type", K(ret), K(type), K(column_idx));
       }
     } else if (field->type()->id() == arrow::Type::DECIMAL128) {
-
       std::shared_ptr<arrow::Decimal128Array> d_array = std::static_pointer_cast<arrow::Decimal128Array>(array);
       if (ObDecimalIntType == type) {
         ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
@@ -2468,29 +2469,61 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected expr type", K(ret), K(type), K(column_idx));
       }
-    } else if (field->type()->id() == arrow::Type::STRING || field->type()->id() == arrow::Type::BINARY) {
-      if ((ObCharType == type &&
-                      (column.type_ == OdpsType::CHAR)) ||
-          (ObVarcharType == type &&
-                      (column.type_ == OdpsType::VARCHAR
-                      || column.type_ == OdpsType::STRING
-                      || column.type_ == OdpsType::BINARY))) {
-        std::shared_ptr<arrow::StringArray> s_array = std::static_pointer_cast<arrow::StringArray>(array);
-        ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
-        batch_info_guard.set_batch_idx(0);
+    } else if (field->type()->id() == arrow::Type::STRING ||
+               field->type()->id() == arrow::Type::BINARY) {
+      std::shared_ptr<arrow::StringArray> s_array = std::static_pointer_cast<arrow::StringArray>(array);
+      ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
+      batch_info_guard.set_batch_idx(0);
+      ObObjType in_type = ObVarcharType;
+      ObObjType out_type = type;
+      ObCollationType in_cs_type = field->type()->id() == arrow::Type::STRING ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_BINARY;
+      ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
+      ObCharsetType out_charset = common::ObCharset::charset_type_by_coll(out_cs_type);
+      if ((ObCharType == type && column.type_ == OdpsType::CHAR)
+        || (ObVarcharType == type && column.type_ == OdpsType::VARCHAR)) {
         for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < num_rows; ++row_idx) {
           batch_info_guard.set_batch_idx(row_idx);
-
           if (!s_array->IsNull(row_idx)) {
-            ObObjType in_type = ObVarcharType;
-            ObObjType out_type = type;
-            ObCollationType in_cs_type = CS_TYPE_UTF8MB4_BIN;
-            ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
             int32_t out_length = 0;
             const char *str = reinterpret_cast<const char *>(s_array->GetValue(row_idx, &out_length));
-            if (out_length > expr.max_length_) {
+            ObString temp_str(out_length, str);
+            ObString in_str;
+            if (OB_FAIL(ob_write_string(column_exprs_alloc_, temp_str, in_str))) {
+              LOG_WARN("failed to write str", K(ret), K(temp_str), K(in_str));
+            } else {
+              bool has_set_res = false;
+              if (CHARSET_UTF8MB4 == out_charset || CHARSET_BINARY == out_charset) {
+                datums[row_idx].set_string(in_str);
+              } else {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("TYPE NOT MATCH", K(ret));
+              }
+            }
+          } else {
+            datums[row_idx].set_null();
+          }
+        }
+      } else if ((ObVarcharType == type && (column.type_ == OdpsType::STRING || column.type_ == OdpsType::BINARY)) ||
+                  ((ObTinyTextType == type || ObTextType == type || ObLongTextType == type || ObMediumTextType == type)
+                      && (column.type_ == OdpsType::STRING || column.type_ == OdpsType::BINARY)) ||
+                  (ObJsonType == type && column.type_ == OdpsType::JSON)) {
+        for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < num_rows; ++row_idx) {
+          batch_info_guard.set_batch_idx(row_idx);
+          if (!s_array->IsNull(row_idx)) {
+            // out_length是真实长度
+            int32_t out_length = 0;
+            const char *str = reinterpret_cast<const char *>(s_array->GetValue(row_idx, &out_length));
+            // judge length是语义长度
+            int32_t judge_length = 0;
+            if (CHARSET_UTF8MB4 == out_charset) {
+              judge_length = ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN, str, out_length);
+            } else {
+              judge_length = out_length;
+            }
+            if (!(text_type_length_is_valid_at_runtime(type, judge_length)
+                || varchar_length_is_valid_at_runtime(type, out_charset, judge_length, expr.max_length_))) {
               ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-              LOG_WARN("unexpected data length", K(ret), K(out_length), K(expr.max_length_), K(type));
+              LOG_WARN("unexpected data length", K(ret), K(out_length), K(judge_length), K(expr.max_length_), K(type));
             } else {
               ObString temp_str(out_length, str);
               ObString in_str;
@@ -2498,58 +2531,18 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
                 LOG_WARN("failed to write str", K(ret), K(temp_str), K(in_str));
               } else {
                 bool has_set_res = false;
-                ObCharsetType out_charset = common::ObCharset::charset_type_by_coll(out_cs_type);
                 if (CHARSET_UTF8MB4 == out_charset || CHARSET_BINARY == out_charset) {
-                  datums[row_idx].set_string(in_str);
-                } else if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_string_wrap(expr,
-                               in_type,
-                               in_cs_type,
-                               out_type,
-                               out_cs_type,
-                               in_str,
-                               ctx,
-                               datums[row_idx],
-                               has_set_res))) {
-                  LOG_WARN("cast string to string failed", K(ret), K(row_idx), K(column_idx));
-                }
-              }
-            }
-          } else {
-            datums[row_idx].set_null();
-          }
-        }
-      } else if (ObTinyTextType == type || ObTextType == type || ObLongTextType == type || ObMediumTextType == type) {
-        std::shared_ptr<arrow::StringArray> s_array = std::static_pointer_cast<arrow::StringArray>(array);
-        ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
-        batch_info_guard.set_batch_idx(0);
-        for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < num_rows; ++row_idx) {
-          batch_info_guard.set_batch_idx(row_idx);
-          if (!s_array->IsNull(row_idx)) {
-            ObObjType in_type = ObVarcharType;
-            ObObjType out_type = type;
-            int32_t out_length = 0;
-            const char *str = reinterpret_cast<const char *>(s_array->GetValue(row_idx, &out_length));
-            if (out_length > expr.max_length_) {
-              ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-              LOG_WARN("unexpected data length", K(ret), K(out_length), K(expr.max_length_), K(type));
-            } else {
-              ObString temp_str(out_length, str);
-              ObString in_str;
-              if (OB_FAIL(ob_write_string(column_exprs_alloc_, temp_str, in_str))) {
-                LOG_WARN("failed to write str", K(ret), K(temp_str), K(in_str));
-              } else {
-                ObCollationType in_cs_type = field->type()->id() == arrow::Type::STRING ?
-                 CS_TYPE_UTF8MB4_BIN : CS_TYPE_BINARY;
-                if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_text_wrap(
-                               expr,
-                               in_str,
-                               ctx,
-                               NULL,
-                               datums[row_idx],
-                               in_type,
-                               in_cs_type
-                               ))) {
-                  LOG_WARN("cast string to string failed", K(ret), K(row_idx), K(column_idx));
+                  if (!ob_is_text_tc(type)) {
+                    datums[row_idx].set_string(in_str);
+                  } else {
+                    if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_text_wrap(expr, in_str,
+                                  ctx, NULL, datums[row_idx], in_type, in_cs_type))) {
+                      LOG_WARN("cast string to string failed", K(ret), K(row_idx), K(column_idx));
+                    }
+                  }
+                } else {
+                  ret = OB_INVALID_ARGUMENT;
+                  LOG_WARN("TYPE NOT MATCH", K(ret));
                 }
               }
             }
@@ -2558,9 +2551,6 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
           }
         }
       } else if (ObRawType == type) {
-        std::shared_ptr<arrow::StringArray> s_array = std::static_pointer_cast<arrow::StringArray>(array);
-        ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
-        batch_info_guard.set_batch_idx(0);
         for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < num_rows; ++row_idx) {
           batch_info_guard.set_batch_idx(row_idx);
           if (!s_array->IsNull(row_idx)) {
@@ -2618,10 +2608,6 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
       if (ob_is_datetime_or_mysql_datetime_tc(type) && is_mysql_mode()) {
         ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
         batch_info_guard.set_batch_idx(0);
-        if (OB_ISNULL(literal_tz_info_.get_time_zone_info())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("literal_tz_info_ is null", K(ret));
-        }
         for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < num_rows; ++row_idx) {
           batch_info_guard.set_batch_idx(row_idx);
           if (!date_array->IsNull(row_idx)) {
@@ -2629,15 +2615,27 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
             int64_t datetime = v * 1000;
 
             int32_t offset_sec = 0;
-            int32_t tran_type_id = OB_INVALID_INDEX;
-            int32_t tz_id;
 
-            if (OB_FAIL(literal_tz_info_.get_time_zone_info()->get_timezone_sub_offset(
-                              datetime, ObString::make_empty_string(), offset_sec,
-                              tz_id, tran_type_id))) {
-              LOG_WARN("failed to get timezone sub offset", K(ret));
+            if (OB_ERR_UNKNOWN_TIME_ZONE ==timezone_ret_) {
+              ObTimeConvertCtx cvrt_ctx(TZ_INFO(session_ptr_), true);
+              ObOTimestampData tmp_ot_data;
+              tmp_ot_data.time_ctx_.tz_desc_ = 0;
+              tmp_ot_data.time_ctx_.store_tz_id_ = 0;
+              tmp_ot_data.time_us_ = datetime;
+              if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(ObTimestampLTZType, tmp_ot_data,
+                                                                NULL, ob_time_))) {
+                LOG_WARN("failed to convert otimestamp_to_ob_time", K(ret));
+              } else if (OB_FAIL(ObTimeConverter::str_to_tz_offset(cvrt_ctx, ob_time_))) {
+                LOG_WARN("failed to convert string to tz_offset", K(ret));
+              } else {
+                offset_sec = ob_time_.parts_[DT_OFFSET_MIN] * 60;
+                LOG_DEBUG("finish str_to_tz_offset", K(ob_time_), K(tmp_ot_data));
+              }
             } else {
-              datetime += ((int64_t)offset_sec) * 1000 * 1000;
+              offset_sec = timezone_offset_;
+            }
+            if (OB_SUCC(ret)) {
+              datetime += SEC_TO_USEC(offset_sec);
               if (ob_is_mysql_datetime(type)) {
                 ObMySQLDateTime mdatetime;
                 ret = ObTimeConverter::datetime_to_mdatetime(datetime, mdatetime);
@@ -2690,10 +2688,7 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
       } else if (is_mysql_mode()) {
         ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
         batch_info_guard.set_batch_idx(0);
-        if (OB_ISNULL(literal_tz_info_.get_time_zone_info())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("literal_tz_info_ is null", K(ret));
-        }
+
         for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < num_rows; ++row_idx) {
           batch_info_guard.set_batch_idx(row_idx);
           if (!date_array->IsNull(row_idx)) {
@@ -2711,14 +2706,26 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
             }
 
             int32_t offset_sec = 0;
-            int32_t tran_type_id = OB_INVALID_INDEX;
-            int32_t tz_id;
-            if (OB_FAIL(literal_tz_info_.get_time_zone_info()->get_timezone_sub_offset(
-                               datetime, ObString::make_empty_string(), offset_sec,
-                               tz_id, tran_type_id))) {
-              LOG_WARN("failed to get timezone sub offset", K(ret));
+            if (OB_ERR_UNKNOWN_TIME_ZONE ==timezone_ret_) {
+              ObTimeConvertCtx cvrt_ctx(TZ_INFO(session_ptr_), true);
+              ObOTimestampData tmp_ot_data;
+              tmp_ot_data.time_ctx_.tz_desc_ = 0;
+              tmp_ot_data.time_ctx_.store_tz_id_ = 0;
+              tmp_ot_data.time_us_ = datetime;
+              if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(ObTimestampLTZType, tmp_ot_data,
+                                                                NULL, ob_time_))) {
+                LOG_WARN("failed to convert otimestamp_to_ob_time", K(ret));
+              } else if (OB_FAIL(ObTimeConverter::str_to_tz_offset(cvrt_ctx, ob_time_))) {
+                LOG_WARN("failed to convert string to tz_offset", K(ret));
+              } else {
+                offset_sec = ob_time_.parts_[DT_OFFSET_MIN] * 60;
+                LOG_DEBUG("finish str_to_tz_offset", K(ob_time_), K(tmp_ot_data));
+              }
             } else {
-              datetime += ((int64_t)offset_sec) * 1000 * 1000;
+              offset_sec = timezone_offset_;
+            }
+            if (OB_SUCC(ret)) {
+              datetime += SEC_TO_USEC(offset_sec);
               if (ob_is_mysql_datetime(type)) {
                 ObMySQLDateTime mdatetime;
                 ret = ObTimeConverter::datetime_to_mdatetime(datetime, mdatetime);
@@ -2915,17 +2922,21 @@ int ObODPSJNITableRowIterator::fill_array_arrow(const std::shared_ptr<arrow::Arr
       std::shared_ptr<arrow::StringArray> s_array
           = std::static_pointer_cast<arrow::StringArray>(array);
       ObArrayBinary *child_array = static_cast<ObArrayBinary *>(array_helper->array_);
+      ObCollationType out_cs_type = array_helper->element_collation_;
+      ObCharsetType out_charset = common::ObCharset::charset_type_by_coll(out_cs_type);
       for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < s_array->length(); ++row_idx) {
         if (!s_array->IsNull(row_idx)) {
-          ObObjType in_type = ObVarcharType;
-          ObObjType out_type = ObVarcharType;
-          ObCollationType in_cs_type = CS_TYPE_UTF8MB4_BIN;
-          ObCollationType out_cs_type = array_helper->element_collation_;
           int32_t out_length = 0;
           const char* str = reinterpret_cast<const char *>(s_array->GetValue(row_idx, &out_length));
-          if (out_length > array_helper->element_length_) {
+          int32_t judge_length = 0;
+          if (CHARSET_UTF8MB4 == out_charset) {
+            judge_length = ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN, str, out_length);
+          } else {
+            judge_length = out_length;
+          }
+          if (!(text_type_length_is_valid_at_runtime(array_helper->element_type_, judge_length))) {
             ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-            LOG_WARN("unexpected data length", K(out_length), KPC(array_helper));
+            LOG_WARN("unexpected data length", K(out_length), K(judge_length), K(array_helper->element_length_), KPC(array_helper));
           } else {
             ObString temp_str(out_length, str);
             ObString in_str;
@@ -2933,7 +2944,6 @@ int ObODPSJNITableRowIterator::fill_array_arrow(const std::shared_ptr<arrow::Arr
               LOG_WARN("failed to write str", K(ret), K(temp_str), K(in_str));
             } else {
               bool has_set_res = false;
-              ObCharsetType out_charset = common::ObCharset::charset_type_by_coll(out_cs_type);
               if (CHARSET_UTF8MB4 == out_charset || CHARSET_BINARY == out_charset) {
                 if (OB_FAIL(child_array->push_back(in_str))) {
                   LOG_WARN("failed to push back string");
@@ -3015,7 +3025,8 @@ int ObODPSJNITableRowIterator::create_odps_decoder(ObEvalCtx &ctx,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory for OdpsFixedTypeDecoder failed");
     } else {
-      OdpsFixedTypeDecoder *fixed_decoder = new(ptr) OdpsFixedTypeDecoder(column_exprs_alloc_, is_root, odps_column, literal_tz_info_);
+      OdpsFixedTypeDecoder *fixed_decoder = new(ptr) OdpsFixedTypeDecoder(column_exprs_alloc_,
+        is_root, odps_column,session_ptr_, ob_time_, timezone_ret_, timezone_offset_);
       if (OB_FAIL(fixed_decoder->init(column_meta, ctx, expr, array_helper))) {
         LOG_WARN("failed to init fixed decoder");
       } else {
@@ -3516,10 +3527,6 @@ int ObODPSJNITableRowIterator::OdpsFixedTypeDecoder::decode(ObEvalCtx &ctx, cons
       ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
       batch_info_guard.set_batch_idx(0);
       // NOTE: should not add offset in table scan
-      if (OB_ISNULL(literal_tz_info_.get_time_zone_info())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("literal_tz_info_ is null", K(ret));
-      }
       for (int64_t row_idx = offset; OB_SUCC(ret) && row_idx < offset + size; ++row_idx) {
         batch_info_guard.set_batch_idx(row_idx);
         char *null_value = reinterpret_cast<char *>(null_map_ptr_ + row_idx);
@@ -3532,14 +3539,26 @@ int ObODPSJNITableRowIterator::OdpsFixedTypeDecoder::decode(ObEvalCtx &ctx, cons
           int32_t res_offset = 0;
 
           int32_t offset_sec = 0;
-          int32_t tran_type_id = OB_INVALID_INDEX;
-          int32_t tz_id;
-          if (OB_FAIL(literal_tz_info_.get_time_zone_info()->get_timezone_sub_offset(
-                                datetime, ObString::make_empty_string(), offset_sec,
-                                tz_id, tran_type_id))) {
-            LOG_WARN("failed to get timezone sub offset", K(ret), K(datetime));
+          if (OB_ERR_UNKNOWN_TIME_ZONE == timezone_ret_) {
+            ObTimeConvertCtx cvrt_ctx(TZ_INFO(session_ptr_), true);
+            ObOTimestampData tmp_ot_data;
+            tmp_ot_data.time_ctx_.tz_desc_ = 0;
+            tmp_ot_data.time_ctx_.store_tz_id_ = 0;
+            tmp_ot_data.time_us_ = datetime;
+            if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(ObTimestampLTZType, tmp_ot_data,
+                                                              NULL, ob_time_))) {
+              LOG_WARN("failed to convert otimestamp_to_ob_time", K(ret));
+            } else if (OB_FAIL(ObTimeConverter::str_to_tz_offset(cvrt_ctx, ob_time_))) {
+              LOG_WARN("failed to convert string to tz_offset", K(ret));
+            } else {
+              offset_sec = ob_time_.parts_[DT_OFFSET_MIN] * 60;
+              LOG_DEBUG("finish str_to_tz_offset", K(ob_time_), K(tmp_ot_data));
+            }
           } else {
-            datetime += ((int64_t)offset_sec) * 1000 * 1000;
+            offset_sec = timezone_offset_;
+          }
+          if (OB_SUCC(ret)) {
+            datetime += SEC_TO_USEC(offset_sec);
             if (ob_is_mysql_datetime(type_)) {
               ObMySQLDateTime mdatetime;
               ret = ObTimeConverter::datetime_to_mdatetime(datetime, mdatetime);
@@ -3635,6 +3654,10 @@ int ObODPSJNITableRowIterator::OdpsVarietyTypeDecoder::decode(ObEvalCtx &ctx, co
     LOG_WARN("failed to decode");
   } else if ((odps_type == OdpsType::CHAR && ObCharType == type_) ||
              (odps_type == OdpsType::VARCHAR && ObVarcharType == type_)) {
+    ObObjType in_type = type_;
+    ObObjType out_type = type_;
+    ObCollationType in_cs_type = CS_TYPE_UTF8MB4_BIN; // odps's collation
+    ObCollationType out_cs_type = type_collation_;
     for (int64_t row_idx = offset; OB_SUCC(ret) && row_idx < offset + size; ++row_idx) {
       batch_info_guard.set_batch_idx(row_idx);
       char* null_value = reinterpret_cast<char*>(null_map_ptr_ + row_idx);
@@ -3646,10 +3669,6 @@ int ObODPSJNITableRowIterator::OdpsVarietyTypeDecoder::decode(ObEvalCtx &ctx, co
           LOG_WARN("failed to push null to array");
         }
       } else {
-        ObObjType in_type = type_;
-        ObObjType out_type = type_;
-        ObCollationType in_cs_type = CS_TYPE_UTF8MB4_BIN; // odps's collation
-        ObCollationType out_cs_type = type_collation_;
         ObString temp_str;
         ObString in_str;
         if (row_idx == 0) {
@@ -3674,21 +3693,26 @@ int ObODPSJNITableRowIterator::OdpsVarietyTypeDecoder::decode(ObEvalCtx &ctx, co
                 LOG_WARN("failed to push double to array");
               }
             }
-          } else if (OB_UNLIKELY(!is_root_)) {
+          } else {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("string need cast in array<varchar> not support");
-          // TODO yibo, handle cast
-          } else if (OB_FAIL(oceanbase::sql::ObOdpsDataTypeCastUtil::common_string_string_wrap(
-                                     expr, in_type, in_cs_type, out_type,
-                                     out_cs_type, in_str, ctx,
-                                     datums_[row_idx], has_set_res))) {
-            LOG_WARN("cast string to string failed", K(ret), K(row_idx));
           }
         }
       }
     }
-  } else if (odps_type == OdpsType::STRING || odps_type == OdpsType::BINARY) {
-    if (ObVarcharType == type_) {
+  } else if (odps_type == OdpsType::STRING || odps_type == OdpsType::BINARY || odps_type == OdpsType::JSON) {
+    if (ObVarcharType == type_ ||
+          ((ObTinyTextType == type_ ||
+             ObTextType == type_ ||
+             ObLongTextType == type_ ||
+             ObMediumTextType == type_ ||
+             ObJsonType == type_) &&
+            is_root_)) {
+      ObObjType in_type = ObVarcharType;
+      ObObjType out_type = type_;
+      ObCollationType out_cs_type = type_collation_;
+      ObCharsetType out_charset = common::ObCharset::charset_type_by_coll(out_cs_type);
+      ObCollationType in_cs_type = odps_type == OdpsType::STRING ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_BINARY;
       for (int64_t row_idx = offset; OB_SUCC(ret) && row_idx < offset+ size; ++row_idx) {
         batch_info_guard.set_batch_idx(row_idx);
         char* null_value = reinterpret_cast<char*>(null_map_ptr_ + row_idx);
@@ -3700,84 +3724,49 @@ int ObODPSJNITableRowIterator::OdpsVarietyTypeDecoder::decode(ObEvalCtx &ctx, co
             LOG_WARN("failed to push null to array");
           }
         } else {
-          ObObjType in_type = ObVarcharType;
-          ObObjType out_type = ObVarcharType;
-          ObCollationType in_cs_type = odps_type == OdpsType::STRING ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_BINARY;
-          ObCollationType out_cs_type = type_collation_;
-          ObString temp_str;
-          ObString in_str;
           int length = 0;
           if (row_idx == 0) {
             length = offsets_[row_idx];
           } else {
             length = offsets_[row_idx] - offsets_[row_idx - 1];
           }
-          if (length > type_length_) {
+          int judge_length = 0;
+          if (CHARSET_UTF8MB4 == out_charset) {
+            judge_length = ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN, base_addr_, length);
+          } else {
+            judge_length = length;
+          }
+          if (!(text_type_length_is_valid_at_runtime(type_, judge_length)
+                || varchar_length_is_valid_at_runtime(type_, out_charset, judge_length, type_length_))) {
             ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
             LOG_WARN("unexpected data length", K(ret), K(length), K(type_length_), K(type_));
           } else {
-            temp_str = ObString(length, base_addr_);
+            ObString temp_str = ObString(length, base_addr_);
             base_addr_ += length;
+            ObString in_str;
             if (OB_FAIL(ob_write_string(alloc_, temp_str, in_str))) {
               LOG_WARN("failed to write str", K(ret), K(temp_str), K(in_str));
             } else {
               bool has_set_res = false;
-              ObCharsetType out_charset = common::ObCharset::charset_type_by_coll(out_cs_type);
-              if (CHARSET_UTF8MB4 == out_charset ||
-                  CHARSET_BINARY == out_charset) {
+              if (CHARSET_UTF8MB4 == out_charset || CHARSET_BINARY == out_charset) {
                 if (OB_LIKELY(is_root_)) {
-                  datums_[row_idx].set_string(in_str);
+                  if (!ob_is_text_tc(type_)) {
+                    datums_[row_idx].set_string(in_str);
+                  } else {
+                    if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_text_wrap(
+                          expr, in_str, ctx, NULL, datums_[row_idx], in_type,
+                          in_cs_type))) {
+                      LOG_WARN("cast string to text failed", K(ret), K(row_idx));
+                    }
+                  }
                 } else {
                   if (OB_FAIL(static_cast<ObArrayBinary *>(array_)->push_back(in_str))) {
                     LOG_WARN("failed to push double to array");
                   }
                 }
-              } else if (OB_UNLIKELY(!is_root_)) {
+              } else {
                 ret = OB_NOT_SUPPORTED;
                 LOG_WARN("string need cast in array<varchar> not support");
-              // TODO yibo, handle cast
-              } else if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_string_wrap(
-                                expr, in_type, in_cs_type, out_type,
-                                out_cs_type, in_str, ctx, datums_[row_idx],
-                                has_set_res))) {
-                LOG_WARN("cast string to string failed", K(ret), K(row_idx));
-              }
-            }
-          }
-        }
-      }
-    } else if ((ObTinyTextType == type_ || ObTextType == type_ ||
-               ObLongTextType == type_ || ObMediumTextType == type_) && is_root_) {
-      for (int64_t row_idx = offset; OB_SUCC(ret) && row_idx < offset + size; ++row_idx) {
-        batch_info_guard.set_batch_idx(row_idx);
-        char* null_value = reinterpret_cast<char*>(null_map_ptr_ + row_idx);
-        bool is_null = (*null_value == 1);
-        if (is_null) {
-          datums_[row_idx].set_null();
-        } else {
-          ObObjType in_type = ObVarcharType;
-          ObString temp_str;
-          ObString in_str;
-          int length = 0;
-          if (row_idx == 0) {
-            length = offsets_[row_idx];
-          } else {
-            length = offsets_[row_idx] - offsets_[row_idx - 1];
-          }
-          if (length > type_length_) {
-            ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-            LOG_WARN("unexpected data length", K(ret), K(length), K(type_length_), K(type_));
-          } else {
-            temp_str = ObString(length, base_addr_);
-            base_addr_ += length;
-            if (OB_FAIL(ob_write_string(alloc_, temp_str, in_str))) {
-              LOG_WARN("failed to write str", K(ret), K(temp_str), K(in_str));
-            } else {
-              ObCollationType in_cs_type = odps_type == OdpsType::STRING ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_BINARY;
-              if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_text_wrap(
-                      expr, in_str, ctx, NULL, datums_[row_idx], in_type,
-                      in_cs_type))) {
-                LOG_WARN("cast string to text failed", K(ret), K(row_idx));
               }
             }
           }
@@ -3817,31 +3806,6 @@ int ObODPSJNITableRowIterator::OdpsVarietyTypeDecoder::decode(ObEvalCtx &ctx, co
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected expr type", K(ret), K(type_));
-    }
-  } else if (odps_type == OdpsType::JSON && is_root_) {
-    for (int64_t row_idx = offset; OB_SUCC(ret) && row_idx < offset + size; ++row_idx) {
-      batch_info_guard.set_batch_idx(row_idx);
-      char* null_value = reinterpret_cast<char*>(null_map_ptr_ + row_idx);
-      bool is_null = (*null_value == 1);
-      if (is_null) {
-        datums_[row_idx].set_null();
-      } else {
-        ObString in_str;
-        int length = 0;
-        if (row_idx == 0) {
-          length = offsets_[row_idx];
-        } else {
-          length = offsets_[row_idx] - offsets_[row_idx - 1];
-        }
-        if (length > type_length_) {
-          ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
-          LOG_WARN("unexpected data length", K(ret), K(length), K(type_length_), K(type_));
-        } else {
-          ObString temp_str{length, base_addr_};
-          in_str = temp_str;
-          base_addr_ += length;
-        }
-      }
     }
   } else {
     ret = OB_ERR_UNEXPECTED;

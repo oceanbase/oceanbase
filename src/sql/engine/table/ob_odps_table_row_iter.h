@@ -178,19 +178,6 @@ private:
                         const int32_t ob_type_scale,
                         ObODPSArrayHelper *array_helper);
 
-  inline bool text_type_length_is_valid_at_runtime(ObObjType type, int64_t odps_data_length) {
-    bool is_valid = false;
-    if (ObTinyTextType == type && odps_data_length < OB_MAX_TINYTEXT_LENGTH) {
-      is_valid = true;
-    } else if (ObTextType == type && odps_data_length < OB_MAX_TEXT_LENGTH) {
-      is_valid = true;
-    } else if (ObMediumTextType == type && odps_data_length < OB_MAX_MEDIUMTEXT_LENGTH) {
-      is_valid = true;
-    } else if (ObLongTextType == type && odps_data_length < OB_MAX_LONGTEXT_LENGTH) {
-      is_valid = true;
-    }
-    return is_valid;
-  }
   int fill_partition_list_data(ObExpr &expr, int64_t returned_row_cnt);
   int retry_read_task();
   int calc_exprs_for_rowid(const int64_t read_count);
