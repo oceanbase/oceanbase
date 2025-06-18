@@ -137,7 +137,7 @@ TEST_F(TestSSMacroCacheExpireTask, expire_cache)
   ASSERT_TRUE(is_hit_macro_cache);
   fd_handle.reset();
 
-  // 2.1 trigger expire task, expiration time is 1day in default
+  // 2.1 trigger expire task, expiration time is 2 day in default
   macro_cache_mgr->expire_task_.runTimerTask();
 
   // 2.2 wait expire task
@@ -154,10 +154,9 @@ TEST_F(TestSSMacroCacheExpireTask, expire_cache)
   ASSERT_NE(nullptr, tenant_config);
   tenant_config->_ss_local_cache_expiration_time = 1 * 1000L * 1000L; // 1s
 
+  // 3.2 sleep 2s to simulate expiration
+  sleep(2); // sleep 2s
   macro_cache_mgr->expire_task_.runTimerTask();
-
-  // 3.2 wait expire task
-  sleep(5); // sleep 5s
 
   // 3.3 check macro cache, expect macro cache evicted and macro cache miss
   ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->get(macro_id, ObTabletID(tablet_id)/*effective_tablet_id*/,

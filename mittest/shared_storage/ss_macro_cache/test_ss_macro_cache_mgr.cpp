@@ -424,6 +424,7 @@ TEST_F(TestSSMacroCacheMgr, update_lru_list)
   ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->meta_map_.get_refactored(macro_id, meta_handle));
   ASSERT_TRUE(meta_handle.is_valid());
   ASSERT_TRUE(meta_handle()->get_is_in_fifo_list());
+  const int64_t last_access_time = meta_handle()->get_last_access_time_us(); // record last_access_time for compare below
   meta_handle.reset();
   ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->meta_map_.get_refactored(macro_id_2, meta_handle));
   ASSERT_TRUE(meta_handle.is_valid());
@@ -448,6 +449,7 @@ TEST_F(TestSSMacroCacheMgr, update_lru_list)
   ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->meta_map_.get_refactored(macro_id, meta_handle));
   ASSERT_TRUE(meta_handle.is_valid());
   ASSERT_FALSE(meta_handle()->get_is_in_fifo_list());
+  ASSERT_GT(meta_handle()->get_last_access_time_us(), last_access_time);
   meta_handle.reset();
   ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->meta_map_.get_refactored(macro_id_2, meta_handle));
   ASSERT_TRUE(meta_handle.is_valid());
