@@ -377,7 +377,7 @@ private:
   inline bool is_view_table() const { return share::schema::ObTableType::USER_VIEW == table_type_ || share::schema::ObTableType::SYSTEM_VIEW == table_type_ || share::schema::ObTableType::MATERIALIZED_VIEW == table_type_; }
 
   int generate_str(const share::schema::ObTableSchema &input_schema);
-  int generate_column_array(const share::schema::ObTableSchema &input_schema);
+  int generate_column_array(const share::schema::ObTableSchema &input_schema, const bool need_trim_default_val);
   int generate_column_group_array(const share::schema::ObTableSchema &input_schema, common::ObIAllocator &allocator);
   int generate_cs_replica_cg_array(common::ObIAllocator &allocator, ObIArray<ObStorageColumnGroupSchema> &cg_schemas) const; // also used by ddl
   int generate_cs_replica_cg_array();
