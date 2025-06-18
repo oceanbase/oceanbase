@@ -111,7 +111,7 @@ private:
                      ObTmpFileFlushTask &task,
                      ObTmpFileBlockHandle block_handle);
   int exec_wait_();
-  int reinsert_block_for_flushing_(ObDList<ObTmpFileBlkNode> &empty_block_list);
+  int reinsert_block_for_flushing_(ObIArray<ObTmpFileBlockHandle> &failed_blocks);
   int alloc_flush_task_(ObTmpFileFlushTask *&task);
   int free_flush_task_(ObTmpFileFlushTask *task);
   int add_flush_task_(ObTmpFileFlushTask *task);

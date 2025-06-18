@@ -111,7 +111,11 @@ int ObTmpFileBlockFlushPriorityManager::remove_block_from_flush_priority_list(co
     LOG_DEBUG("block is not in flush_lists", K(block));
   } else {
     ObSpinLockGuard guard(locks_[level]);
-    if (OB_ISNULL(flush_lists_[level].remove(&block.get_flush_blk_node()))) {
+    ObTmpFileBlkNode &flush_node = block.get_flush_blk_node();
+    if (OB_ISNULL(flush_node.get_prev()) || OB_ISNULL(flush_node.get_next())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("block is not in flush_lists", KR(ret), K(block));
+    } else if (OB_ISNULL(flush_lists_[level].remove(&flush_node))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("block is not in flush_lists", KR(ret), K(block));
     } else {
@@ -159,7 +163,11 @@ int ObTmpFileBlockFlushPriorityManager::adjust_block_flush_priority(const int64_
     bool need_insert = true;
     {
       ObSpinLockGuard guard(locks_[old_level]);
-      if (OB_ISNULL(flush_lists_[old_level].remove(&block.get_flush_blk_node()))) {
+      ObTmpFileBlkNode &flush_node = block.get_flush_blk_node();
+      if (OB_ISNULL(flush_node.get_prev()) || OB_ISNULL(flush_node.get_next())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("block is not in flush_lists", KR(ret), K(block));
+      } else if (OB_ISNULL(flush_lists_[old_level].remove(&flush_node))) {
         // do nothing, the block will be reinserted by flush thread
         need_insert = false;
         LOG_DEBUG("the block is not in flush_lists, maybe it is popped by flush thread",
@@ -212,7 +220,10 @@ int ObTmpFileBlockFlushPriorityManager::popN_from_block_list_(const BlockFlushLe
       } else if (OB_FAIL(block->set_flushing_status(set_flushing_succ))) {
         LOG_WARN("fail to set flushing status", KR(ret), KPC(block));
       } else if (set_flushing_succ) {
-        if (OB_ISNULL(flush_lists_[flush_level].remove(node))) {
+        if (OB_ISNULL(node->get_prev()) || OB_ISNULL(node->get_next())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("block is not in flush_lists", KR(ret), K(block));
+        } else if (OB_ISNULL(flush_lists_[flush_level].remove(node))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to remove node", KR(ret), KPC(block), KPC(node));
         } else if (OB_FAIL(block_handles.push_back(block))) {

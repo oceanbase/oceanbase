@@ -294,10 +294,9 @@ int ObTmpFileFlushTask::cancel(int ret_code)
 
   if (FAILEDx(block->reinsert_into_flush_prio_mgr())) {
     LOG_ERROR("fail to exec reinsert_into_flush_prio_mgr", KR(ret), KPC(this));
-  } else {
-    ATOMIC_SET(&ret_code_, ret_code);
-    ATOMIC_SET(&is_finished_, true);
   }
+  ATOMIC_SET(&ret_code_, ret_code);
+  ATOMIC_SET(&is_finished_, true);
   return ret;
 }
 

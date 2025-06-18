@@ -206,9 +206,6 @@ int ObTmpFileBlockAllocatingPriorityManager::insert_block_into_alloc_priority_li
   } else if (OB_UNLIKELY(!block.is_shared_block())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("block is not shared block", KR(ret), K(block));
-  } else if (OB_NOT_NULL(block.get_prealloc_blk_node().get_next())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("block is already in alloc_lists", KR(ret), K(block));
   } else {
     ObSpinLockGuard guard(locks_[level]);
     if (OB_UNLIKELY(!alloc_lists_[level].add_last(&block.get_prealloc_blk_node()))) {
@@ -246,7 +243,11 @@ int ObTmpFileBlockAllocatingPriorityManager::remove_block_from_alloc_priority_li
   } else {
     // currently, never run here
     ObSpinLockGuard guard(locks_[level]);
-    if (OB_ISNULL(alloc_lists_[level].remove(&block.get_prealloc_blk_node()))) {
+    ObTmpFileBlkNode &prealloc_node = block.get_prealloc_blk_node();
+    if (OB_ISNULL(prealloc_node.get_next()) || OB_ISNULL(prealloc_node.get_prev())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("block is not in alloc_lists", KR(ret), K(block));
+    } else if (OB_ISNULL(alloc_lists_[level].remove(&prealloc_node))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("block is not in alloc_lists", KR(ret), K(block));
     } else {
@@ -290,9 +291,13 @@ int ObTmpFileBlockAllocatingPriorityManager::adjust_block_alloc_priority(const i
   } else if (old_level == new_level) {
     // do nothing
   } else {
+    ObTmpFileBlkNode &prealloc_node = block.get_prealloc_blk_node();
     {
       ObSpinLockGuard guard(locks_[old_level]);
-      if (OB_ISNULL(alloc_lists_[old_level].remove(&block.get_prealloc_blk_node()))) {
+      if (OB_ISNULL(prealloc_node.get_next()) || OB_ISNULL(prealloc_node.get_prev())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("block is not in alloc_lists", KR(ret), K(block));
+      } else if (OB_ISNULL(alloc_lists_[old_level].remove(&prealloc_node))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("block is not in alloc_lists", KR(ret), K(block));
       }
@@ -300,9 +305,9 @@ int ObTmpFileBlockAllocatingPriorityManager::adjust_block_alloc_priority(const i
 
     if (OB_SUCC(ret)) {
       ObSpinLockGuard guard(locks_[new_level]);
-      if (OB_UNLIKELY(!alloc_lists_[new_level].add_first(&block.get_prealloc_blk_node()))) {
+      if (OB_UNLIKELY(!alloc_lists_[new_level].add_first(&prealloc_node))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to add block into alloc_lists", KR(ret), K(block));
+        LOG_ERROR("fail to add block into alloc_lists", KR(ret), K(block));
       }
     }
   }
