@@ -284,6 +284,8 @@ public:
   ObIOGroupMode get_group_mode() const;
   int cal_delay_us(int64_t &prepare_delay, int64_t &schedule_delay, int64_t &submit_delay, int64_t &device_delay, int64_t &total_delay);
   uint64_t get_tenant_id() const;
+  int64_t get_align_size() const;
+  int64_t get_align_offset() const;
   void cancel();
   int alloc_io_buf();
   int prepare();
@@ -302,6 +304,7 @@ private:
   friend class ObIORunner;
   const char *get_io_data_buf(); //get data buf for MEMCPY before io_buf recycle
   int alloc_aligned_io_buf();
+  int calc_io_offset_and_size_();
 public:
   bool is_inited_;
   bool is_finished_;
@@ -314,7 +317,7 @@ public:
   void *raw_buf_;//actual allocated buf
   char *io_buf_;//the aligned one of raw_buf_, interact with the operating system
   int64_t io_offset_;
-  int64_t io_size_;
+  int64_t io_size_;// align size;
   int64_t complete_size_;
   ObIOTimeLog time_log_;
   ObIOChannel *channel_;
@@ -344,7 +347,7 @@ public:
   void reset_queue_info();
   void set_stop_accept() { stop_accept_ = true; }
 public:
-  TO_STRING_KV(K_(reservation_ts), K_(group_limitation_ts), K_(tenant_limitation_ts), K_(proportion_ts), K_(stop_accept));
+  TO_STRING_KV(K_(reservation_ts), K_(group_limitation_ts), K_(tenant_limitation_ts), K_(proportion_ts), K_(stop_accept), "tl_us", tenant_limitation_ts_ - ObTimeUtility::fast_current_time(), "gl_us", group_limitation_ts_ - ObTimeUtility::fast_current_time());
   bool is_inited_;
   bool stop_accept_;
   int64_t reservation_ts_;

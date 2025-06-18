@@ -463,7 +463,7 @@ int ObIOFuncUsages::accumulate(ObIORequest &req) {
     } else if (mode == ObIOGroupMode::MODECNT) {
       LOG_ERROR("invalid io usage mode", K(idx), K(mode), K(func_usages_.count()));
     } else {
-      func_usages_.at(idx).at(static_cast<uint8_t>(mode)).inc(req.get_data_size(), prepare_delay, schedule_delay, submit_delay, device_delay, total_delay);
+      func_usages_.at(idx).at(static_cast<uint8_t>(mode)).inc(req.get_align_size(), prepare_delay, schedule_delay, submit_delay, device_delay, total_delay);
     }
   }
   return ret;
@@ -973,20 +973,22 @@ int64_t ObIOTuner::to_string(char *buf, const int64_t len) const
       int64_t group_limitation_ts = 0;
       int64_t tenant_limitation_ts = 0;
       int64_t proportion_ts = 0;
-
+      const int64_t cur_us = ObTimeUtility::fast_current_time();
       tmp_ret = sender->get_sender_info(reservation_ts, group_limitation_ts, tenant_limitation_ts, proportion_ts);
-      if (OB_NOT_INIT != tmp_ret) {
+      if (OB_NOT_INIT == tmp_ret) {
+      } else if (sender->get_queue_count() > 0) {
         databuff_printf(buf,
             len,
             pos,
-            "send_index: %ld, req_count: %ld, reservation_ts: %ld, group_limitation_ts: %ld, tenant_limitation_ts: "
-            "%ld, proportion_ts: %ld; ",
+            "sender_id: %ld, req_cnt: %ld, cur: %ld, diff with cur: r_us: %ld, gl_us: %ld, tl_us: "
+            "%ld, gp_us: %ld;",
             sender->sender_index_,
             sender->get_queue_count(),
-            reservation_ts,
-            group_limitation_ts,
-            tenant_limitation_ts,
-            proportion_ts);
+            cur_us,
+            reservation_ts - cur_us,
+            group_limitation_ts - cur_us,
+            tenant_limitation_ts - cur_us,
+            proportion_ts - cur_us);
       }
     }
   }

@@ -316,7 +316,7 @@ int ObTenantIOClock::calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req
       double iops_scale = 0;
       bool is_io_ability_valid = true;
       if (OB_FAIL(ObIOCalibration::get_instance().get_iops_scale(req.get_mode(),
-                                                                 max(req.io_info_.size_, req.io_size_),
+                                                                 req.get_align_size(),
                                                                  iops_scale,
                                                                  is_io_ability_valid))) {
         LOG_WARN("get iops scale failed", K(ret), K(req));

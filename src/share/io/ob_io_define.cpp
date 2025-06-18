@@ -496,13 +496,11 @@ int ObIORequest::init(const ObIOInfo &info)
     if (nullptr != info.callback_ && OB_FAIL(info.callback_->deep_copy(
             callback_buf_, callback_buf_size_, copied_callback_))) {
       LOG_WARN("deep copy io callback failed", K(ret), K(*info.callback_));
+    } else if (OB_FAIL(calc_io_offset_and_size_())) {
+      LOG_WARN("calc io offset and size failed", K(*this), K(info));
     } else if (io_info_.flag_.is_write() && OB_FAIL(alloc_io_buf())) {
       // alloc buffer for write request when ObIORequest init
       LOG_WARN("alloc io buffer for write failed", K(ret));
-    } else {
-      // read buf allocation is delayed to before_submit
-      // but aligned offset and size need calculate here for calculating deadline_ts
-      align_offset_size(info.offset_, info.size_, io_offset_, io_size_);
     }
   }
 
@@ -512,6 +510,13 @@ int ObIORequest::init(const ObIOInfo &info)
     }
     is_inited_ = true;
   }
+  return ret;
+}
+
+int ObIORequest::calc_io_offset_and_size_()
+{
+  int ret = OB_SUCCESS;
+  align_offset_size(io_info_.offset_, io_info_.size_, io_offset_, io_size_);
   return ret;
 }
 
@@ -660,6 +665,16 @@ uint64_t ObIORequest::get_tenant_id() const
   return io_info_.tenant_id_;
 }
 
+int64_t ObIORequest::get_align_size() const
+{
+  return io_size_;
+}
+int64_t ObIORequest::get_align_offset() const
+{
+  return io_offset_;
+}
+
+
 int ObIORequest::alloc_io_buf()
 {
   int ret = OB_SUCCESS;
@@ -688,8 +703,7 @@ int ObIORequest::alloc_aligned_io_buf()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("write io info not aligned", K(ret), K(io_info_));
   } else {
-    align_offset_size(io_info_.offset_, io_info_.size_, io_offset_, io_size_);
-    const int64_t io_buffer_size = io_size_ + DIO_READ_ALIGN_SIZE;
+    const int64_t io_buffer_size = get_align_size() + DIO_READ_ALIGN_SIZE;
     if (OB_ISNULL(tenant_io_mgr_.get_ptr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tenant io manager is null", K(ret));
@@ -705,11 +719,11 @@ int ObIORequest::alloc_aligned_io_buf()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("buf is null", K(ret));
     } else if (!is_io_aligned((int64_t)io_buf_)
-        || !is_io_aligned(io_size_)
-        || !is_io_aligned(io_offset_)) {
+        || !is_io_aligned(get_align_size())
+        || !is_io_aligned(get_align_offset())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("The io buffer is not aligned", K(ret), K(io_info_), KP(copied_callback_),
-          KP(io_buf_), K(io_offset_), K(io_offset_));
+          KP(io_buf_), K(get_align_size()), K(get_align_offset()));
     } else if (io_info_.flag_.is_write()) {
       MEMCPY(io_buf_, io_info_.buf_, io_info_.size_);
     }
