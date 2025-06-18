@@ -1273,6 +1273,20 @@ int ObTabletTableStore::get_all_sstable(
   return ret;
 }
 
+int ObTabletTableStore::get_major_sstables(
+    ObTableStoreIterator &iter,
+    const bool unpack_co_table) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(iter.add_tables(major_tables_, 0, major_tables_.count(), unpack_co_table))) {
+    LOG_WARN("fail to add all major tables to iterator", K(ret), K_(major_tables));
+  }
+  return ret;
+}
+
 int ObTabletTableStore::get_memtables(
     common::ObIArray<storage::ObITable *> &memtables) const
 {
