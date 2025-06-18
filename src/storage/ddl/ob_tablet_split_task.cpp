@@ -2423,11 +2423,20 @@ int ObSplitDownloadSSTableTask::iterate_micros_update_eff_id(const ObTabletID &d
         }
         break;
       }
+    } else if (OB_ISNULL(micro_index_info.row_header_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr of micro_index_info.row_header_", K(ret));
     } else {
-      micro_cache_key.micro_id_.macro_id_ = micro_index_info.row_header_->get_macro_id();
-      micro_cache_key.micro_id_.offset_ = micro_index_info.row_header_->get_block_offset();
-      micro_cache_key.micro_id_.size_ = micro_index_info.row_header_->get_block_size();
-      micro_cache_key.mode_ = ObSSMicroBlockCacheKeyMode::PHYSICAL_KEY_MODE;
+      if (micro_index_info.row_header_->has_valid_logic_micro_id()) {
+        micro_cache_key.logic_micro_id_ = micro_index_info.row_header_->get_logic_micro_id();
+        micro_cache_key.mode_ = ObSSMicroBlockCacheKeyMode::LOGICAL_KEY_MODE;
+        micro_cache_key.micro_crc_ = micro_index_info.get_data_checksum();
+      } else {
+        micro_cache_key.micro_id_.macro_id_ = micro_index_info.row_header_->get_macro_id();
+        micro_cache_key.micro_id_.offset_ = micro_index_info.row_header_->get_block_offset();
+        micro_cache_key.micro_id_.size_ = micro_index_info.row_header_->get_block_size();
+        micro_cache_key.mode_ = ObSSMicroBlockCacheKeyMode::PHYSICAL_KEY_MODE;
+      }
       if (OB_FAIL(micro_keys.push_back(micro_cache_key))) {
         LOG_WARN("failed to push back into micro keys", K(ret));
       } else if (micro_keys.count() == MICRO_BATCH_SIZE) {
