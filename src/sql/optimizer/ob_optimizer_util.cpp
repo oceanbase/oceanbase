@@ -3184,45 +3184,6 @@ int ObOptimizerUtil::classify_get_scan_ranges(const common::ObIArray<ObNewRange>
   return ret;
 }
 
-int ObOptimizerUtil::is_exprs_unique(const ObIArray<OrderItem> &ordering,
-                                     const ObIArray<ObFdItem *> &fd_item_set,
-                                     const EqualSets &equal_sets,
-                                     const ObIArray<ObRawExpr *> &const_exprs,
-                                     bool &order_unique)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 6> order_exprs;
-  ObSEArray<ObOrderDirection, 6> order_directions;
-  order_unique = false;
-  if (OB_FAIL(split_expr_direction(ordering, order_exprs, order_directions))) {
-    LOG_WARN("failed to split expr and direction", K(ret));
-  } else if (OB_FAIL(is_exprs_unique(order_exprs, fd_item_set, equal_sets,
-                                     const_exprs, order_unique))) {
-    LOG_WARN("failed to check is order unique", K(ret));
-  }
-  return ret;
-}
-
-int ObOptimizerUtil::is_exprs_unique(const ObIArray<OrderItem> &ordering,
-                                     const ObRelIds &all_tables,
-                                     const ObIArray<ObFdItem *> &fd_item_set,
-                                     const EqualSets &equal_sets,
-                                     const ObIArray<ObRawExpr *> &const_exprs,
-                                     bool &order_unique)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 6> order_exprs;
-  ObSEArray<ObOrderDirection, 6> order_directions;
-  order_unique = false;
-  if (OB_FAIL(split_expr_direction(ordering, order_exprs, order_directions))) {
-    LOG_WARN("failed to split expr and direction", K(ret));
-  } else if (OB_FAIL(is_exprs_unique(order_exprs, all_tables, fd_item_set,
-                                     equal_sets, const_exprs, order_unique))) {
-    LOG_WARN("failed to check is order unique", K(ret));
-  }
-  return ret;
-}
-
 int ObOptimizerUtil::is_exprs_unique(const ObIArray<ObRawExpr *> &exprs,
                                      const ObRelIds &all_tables,
                                      const ObIArray<ObFdItem *> &fd_item_set,
@@ -3263,7 +3224,6 @@ int ObOptimizerUtil::is_exprs_unique(const ObIArray<ObRawExpr *> &exprs,
   }
   return ret;
 }
-
 
 int ObOptimizerUtil::is_exprs_unique(ObIArray<ObRawExpr *> &extend_exprs,
                                      ObRelIds &remain_tables,

@@ -618,19 +618,6 @@ public:
                                       common::ObIArray<ObNewRange> &get_ranges,
                                       common::ObIArray<ObNewRange> &scan_ranges);
 
-  static int is_exprs_unique(const ObIArray<OrderItem> &ordering,
-                             const ObIArray<ObFdItem *> &fd_item_set,
-                             const EqualSets &equal_sets,
-                             const ObIArray<ObRawExpr *> &const_exprs,
-                             bool &order_unique);
-
-  static int is_exprs_unique(const ObIArray<OrderItem> &ordering,
-                             const ObRelIds &all_tables,
-                             const ObIArray<ObFdItem *> &fd_item_set,
-                             const EqualSets &equal_sets,
-                             const ObIArray<ObRawExpr *> &const_exprs,
-                             bool &order_unique);
-
   static int is_exprs_unique(const ObIArray<ObRawExpr *> &exprs,
                              const ObRelIds &all_tables,
                              const ObIArray<ObFdItem *> &fd_item_set,
