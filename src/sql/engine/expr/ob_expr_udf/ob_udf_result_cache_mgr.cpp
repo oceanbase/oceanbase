@@ -131,28 +131,14 @@ int ObPLUDFResultCacheMgr::add_udf_result_cache(ObPlanCache *lib_cache, ObILibCa
   ObGlobalReqTimeService::check_req_timeinfo();
   int64_t max_result_size = 0;
   int64_t result_cache_max_size = 0;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  lib::ObLabel label("OB_RESULT_CACHE");
-  int64_t result_cache_hold = lib_cache->get_label_hold(label);
-  if (OB_UNLIKELY(!tenant_config.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid tenant_config", K(ret));
-  } else if (FALSE_IT(max_result_size = tenant_config->result_cache_max_result)) {
-  } else if (FALSE_IT(result_cache_max_size = tenant_config->result_cache_max_size)) {
+  if (FALSE_IT(max_result_size = rc_ctx.result_cache_max_result_)) {
+  } else if (FALSE_IT(result_cache_max_size = rc_ctx.result_cache_max_size_)) {
   } else if (OB_ISNULL(lib_cache)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lib cache is null");
   } else if (OB_ISNULL(result_object)) {
     ret = OB_INVALID_ARGUMENT;
     PL_UDF_RESULT_CACHE_LOG(WARN, "invalid physical plan", K(ret));
-  } else if (lib_cache->get_mem_hold() > lib_cache->get_mem_limit()) {
-    ret = OB_REACH_MEMORY_LIMIT;
-    PL_UDF_RESULT_CACHE_LOG(WARN, "lib cache memory used reach the high water mark",
-              K(lib_cache->get_mem_used()), K(lib_cache->get_mem_limit()), K(ret));
-  } else if (result_cache_hold >= result_cache_max_size) {
-    ret = OB_REACH_MEMORY_LIMIT;
-    PL_UDF_RESULT_CACHE_LOG(WARN, "result cache hold memory over result_cache_max_size allowed",
-                          K(result_cache_hold), K(result_cache_max_size), K(ret));
   } else if (result_object->get_mem_size() >= max_result_size * result_cache_max_size / 100) {
     ret = OB_REACH_MEMORY_LIMIT;
     PL_UDF_RESULT_CACHE_LOG(WARN, "result object hold memory over max result size allowed",

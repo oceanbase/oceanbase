@@ -251,6 +251,19 @@ int ObExprUDFCtx::init_row_key(ObIAllocator &allocator, int64_t arg_cnt)
     if (OB_ISNULL(row_key_.elems_ = static_cast<ObDatum *>(allocator.alloc(arg_cnt * sizeof(ObDatum))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < arg_cnt; ++i) {
+        if (OB_ISNULL(row_key_.elems_[i].ptr_ = reinterpret_cast<char*>(allocator.alloc(OBJ_DATUM_MAX_RES_SIZE)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory", K(ret));
+        } else {
+          if (info_->params_type_.at(i).is_null()) {
+            if (OB_FAIL(row_key_.default_param_bitmap_.add_member(i))) {
+              LOG_WARN("fail to add member", K(ret), K(i));
+            }
+          }
+        }
+      }
     }
   }
   return ret;
@@ -260,19 +273,8 @@ int ObExprUDFCtx::construct_key()
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < get_arg_count(); ++i) {
-    ObDatum datum;
-    if (OB_ISNULL(datum.ptr_ = reinterpret_cast<char*>(get_allocator().alloc(OBJ_DATUM_MAX_RES_SIZE)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc memory", K(ret));
-    } else if (OB_FAIL(datum.from_obj(get_obj_stack()[i]))) {
+    if (OB_FAIL(row_key_.elems_[i].from_obj(get_obj_stack()[i]))) {
       LOG_WARN("failed to construct datum from obj", K(ret), K(i));
-    } else {
-      row_key_.elems_[i] = datum;
-      if (info_->params_type_.at(i).is_null()) {
-        if (OB_FAIL(row_key_.default_param_bitmap_.add_member(i))) {
-          LOG_WARN("fail to add member", K(ret), K(i));
-        }
-      }
     }
   }
   return ret;
@@ -297,6 +299,9 @@ int ObExprUDFCtx::calc_cache_enabled()
     enable_deterministic_cache_ = !enable_result_cache_
                                   && get_info()->is_deterministic_
                                   && deterministic_cache_size > 0;
+    result_cache_max_result_ = tenant_config->result_cache_max_result;
+    result_cache_max_size_ = result_cache_size;
+
   }
   return ret;
 }
@@ -435,7 +440,7 @@ int ObExprUDFDeterministerCache::init()
 {
   int ret = OB_SUCCESS;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  if (OB_FAIL(cache_.create(64,
+  if (OB_FAIL(cache_.create(64 * 1024,
                 ObMemAttr(MTL_ID(), "UdfResult", ObCtxIds::DEFAULT_CTX_ID),
                 ObMemAttr(MTL_ID(), "UdfResultNode", ObCtxIds::DEFAULT_CTX_ID)))) {
     LOG_WARN("failed to create hash map", K(ret), K(MTL_ID()));
@@ -692,6 +697,8 @@ int ObExprUDFCtx::construct_cache_ctx_for_add(pl::ObPLUDFResultCacheCtx &rc_ctx)
     rc_ctx.tenant_schema_version_ = current_compile_unit_->get_tenant_schema_version();
     rc_ctx.name_ = current_function_->get_function_name();
     rc_ctx.key_.db_id_ = current_function_->get_database_id();
+    rc_ctx.result_cache_max_result_ = result_cache_max_result_;
+    rc_ctx.result_cache_max_size_ = result_cache_max_size_;
   }
   return ret;
 }

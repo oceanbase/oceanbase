@@ -96,7 +96,9 @@ struct ObPLUDFResultCacheCtx : public ObILibCacheCtx, public ObPLCacheBasicCtx
       argument_params_(),
       name_(),
       execute_time_(0),
-      cache_obj_hash_value_(0)
+      cache_obj_hash_value_(0),
+      result_cache_max_result_(0),
+      result_cache_max_size_(0)
   {
   }
 
@@ -110,6 +112,8 @@ struct ObPLUDFResultCacheCtx : public ObILibCacheCtx, public ObPLCacheBasicCtx
   ObString name_;
   int64_t execute_time_;
   uint64_t cache_obj_hash_value_;
+  int64_t result_cache_max_result_;
+  int64_t result_cache_max_size_;
 };
 
 struct PLUDFResultCacheObjStat
@@ -203,21 +207,6 @@ protected:
   ObObj result_;
 };
 
-class ObPLUDFResultCacheValue
-{
-public:
-  ObPLUDFResultCacheValue(common::ObIAllocator &alloc)
-    : value_(nullptr)
-  {}
-
-  virtual ~ObPLUDFResultCacheValue() { reset(); }
-
-  void reset();
-  int64_t get_mem_size();
-
-  ObPLUDFResultCacheObject *value_;
-};
-
 class ObPLUDFResultCacheSet : public ObILibCacheNode, public ObPLDependencyCheck
 {
 public:
@@ -246,8 +235,7 @@ public:
   common::ObString &get_sql_id() { return sql_id_; }
   int create_new_cache_key(ObPLUDFResultCacheCtx &rc_ctx,
                             UDFArgRow &cache_key);
-  int create_new_result_object_value(ObPLUDFResultCacheValue *&pl_object_value);
-  void free_result_object_value(ObPLUDFResultCacheValue *pl_object_value);
+
   int64_t get_mem_size();
 
   TO_STRING_KV(K_(is_inited));
@@ -255,7 +243,7 @@ private:
   bool is_inited_;
   ObPLUDFResultCacheKey key_;  //used for manager key memory
   common::ObString sql_id_;
-  common::hash::ObHashMap<UDFArgRow, ObPLUDFResultCacheValue*, common::hash::NoPthreadDefendMode> hashmap_;
+  common::hash::ObHashMap<UDFArgRow, ObPLUDFResultCacheObject*, common::hash::NoPthreadDefendMode> hashmap_;
 };
 
 } // namespace pl end

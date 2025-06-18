@@ -98,7 +98,9 @@ public:
     phy_plan_ctx_(nullptr),
     allocator_("UDFRowAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     ctx_allocator_("UDFCtxAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    arg_count_(0) {}
+    arg_count_(0),
+    result_cache_max_result_(0),
+    result_cache_max_size_(0) {}
 
   ~ObExprUDFCtx();
 
@@ -168,7 +170,6 @@ private:
   ObString config_var_str_;
   bool enable_result_cache_;
   bool enable_deterministic_cache_;
-  common::hash::ObHashMap<pl::UDFArgRow, common::ObObj, common::hash::NoPthreadDefendMode> determinister_result_cache_;
   ObExprUDFDeterministerCache *deterministic_cache_;
   pl::ObPLFunction *current_function_;
   pl::ObPLCompileUnit *current_compile_unit_;
@@ -189,6 +190,8 @@ private:
   ObArenaAllocator allocator_; // row level allocator
   ObArenaAllocator ctx_allocator_; // ctx level allocator
   int64_t arg_count_;
+  int64_t result_cache_max_result_;
+  int64_t result_cache_max_size_;
 };
 
 }

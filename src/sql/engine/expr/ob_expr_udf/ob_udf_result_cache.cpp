@@ -163,22 +163,6 @@ int ObPLUDFResultCacheObject::check_need_add_cache_obj_stat(ObILibCacheCtx &ctx,
   return ret;
 }
 
-int64_t ObPLUDFResultCacheValue::get_mem_size()
-{
-  int64_t value_mem_size = 0;
-  if (OB_ISNULL(value_)) {
-    BACKTRACE_RET(ERROR, OB_ERR_UNEXPECTED, true, "invalid routine obj");
-  } else {
-    value_mem_size = value_->get_mem_size();
-  }
-  return value_mem_size;
-}
-
-void ObPLUDFResultCacheValue::reset()
-{
-  value_ = nullptr;
-}
-
 int ObPLUDFResultCacheSet::init(ObILibCacheCtx &ctx, const ObILibCacheObject *obj)
 {
   int ret = OB_SUCCESS;
@@ -190,7 +174,7 @@ int ObPLUDFResultCacheSet::init(ObILibCacheCtx &ctx, const ObILibCacheObject *ob
   } else if (OB_ISNULL(rc_ctx.dependency_tables_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dependency table is null", K(ret));
-  } else if (OB_FAIL(hashmap_.create(4096,
+  } else if (OB_FAIL(hashmap_.create(64 * 1024,
                                       ObModIds::OB_HASH_BUCKET_PLAN_CACHE,
                                       ObModIds::OB_HASH_NODE_PLAN_CACHE,
                                       MTL_ID()))) {
@@ -233,59 +217,9 @@ int ObPLUDFResultCacheSet::create_new_cache_key(ObPLUDFResultCacheCtx &rc_ctx,
   return ret;
 }
 
-int ObPLUDFResultCacheSet::create_new_result_object_value(ObPLUDFResultCacheValue *&pl_object_value)
-{
-  int ret = OB_SUCCESS;
-  void *buff = nullptr;
-  pl_object_value = nullptr;
-
-  if (nullptr == (buff = allocator_.alloc(sizeof(ObPLUDFResultCacheValue)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory for ObPLObjectValue", K(ret));
-  } else if (nullptr == (pl_object_value = new(buff)ObPLUDFResultCacheValue(allocator_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to construct ObPLObjectValue", K(ret));
-  } else {
-    // do nothing
-  }
-
-  if (OB_SUCC(ret)) {
-    // do nothing
-  } else if (nullptr != pl_object_value) { // cleanup
-    pl_object_value->~ObPLUDFResultCacheValue();
-    allocator_.free(pl_object_value);
-    pl_object_value = nullptr;
-  }
-
-  return ret;
-}
-
-void ObPLUDFResultCacheSet::free_result_object_value(ObPLUDFResultCacheValue *pl_object_value)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(pl_object_value)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument",K(ret));
-  } else {
-    pl_object_value->~ObPLUDFResultCacheValue();
-    allocator_.free(pl_object_value);
-    pl_object_value = nullptr;
-  }
-}
-
 void ObPLUDFResultCacheSet::destroy()
 {
   if (is_inited_) {
-      for (hash::ObHashMap<UDFArgRow, ObPLUDFResultCacheValue*, common::hash::NoPthreadDefendMode>::iterator iter = hashmap_.begin();
-            iter != hashmap_.end();
-            iter++) {
-      if (OB_ISNULL(iter->second)) {
-        //do nothing;
-      } else {
-        free_result_object_value(iter->second);
-        iter->second = nullptr;
-      }
-    }
     if (hashmap_.created()) {
       hashmap_.destroy();
     }
@@ -313,7 +247,7 @@ int ObPLUDFResultCacheSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
   bool need_check_schema = true;
   bool is_old_version = false;
   bool is_same = true;
-  ObPLUDFResultCacheValue *pl_object_value = nullptr;
+  pl::ObPLUDFResultCacheObject *cache_object = nullptr;
   if (OB_FAIL(get_all_dep_schema(rc_ctx,
                                 rc_ctx.session_info_->get_database_id(),
                                 new_tenant_schema_version,
@@ -333,14 +267,17 @@ int ObPLUDFResultCacheSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
   } else if (true == is_old_version) {
     ret = OB_OLD_SCHEMA_VERSION;
     LOG_WARN("failed to get all table schema", K(ret));
-  } else if (OB_FAIL(hashmap_.get_refactored(rc_ctx.argument_params_, pl_object_value))) {
+  } else if (OB_FAIL(hashmap_.get_refactored(rc_ctx.argument_params_, cache_object))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("failed to find in hash map", K(ret));
     } else {
       ret = OB_SUCCESS;
     }
+  } else if (OB_ISNULL(cache_object)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cache obj is null", K(ret));
   } else {
-    cache_obj = pl_object_value->value_;
+    cache_obj = cache_object;
     cache_obj->set_dynamic_ref_handle(rc_ctx.handle_id_);
     if (OB_FAIL(lift_tenant_schema_version(new_tenant_schema_version))) {
       LOG_WARN("failed to lift pcv's tenant schema version", K(ret));
@@ -395,22 +332,13 @@ int ObPLUDFResultCacheSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
      it must report an error.
      so, if ret is 0, need to create new pl object value. */
   if (OB_SUCC(ret)) {
-    ObPLUDFResultCacheValue *pl_object_value = nullptr;
     UDFArgRow cache_key;
     if (OB_FAIL(create_new_cache_key(rc_ctx, cache_key))) {
       LOG_WARN("fail to create cache key", K(ret));
-    } else if (OB_FAIL(create_new_result_object_value(pl_object_value))) {
-      LOG_WARN("fail to create new function value", K(ret));
-    } else if (OB_UNLIKELY(nullptr == pl_object_value)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
     } else {
-      pl_object_value->value_ = cache_object;
-      pl_object_value->value_->set_dynamic_ref_handle(PC_REF_UDF_RESULT_HANDLE);
-      if (OB_FAIL(hashmap_.set_refactored(cache_key, pl_object_value))) {
+      cache_object->set_dynamic_ref_handle(PC_REF_UDF_RESULT_HANDLE);
+      if (OB_FAIL(hashmap_.set_refactored(cache_key, cache_object))) {
         LOG_WARN("fail to add obj", K(ret), K(rc_ctx.key_));
-        free_result_object_value(pl_object_value);
-        pl_object_value = nullptr;
         if (OB_HASH_EXIST == ret) {
           ret = OB_SQL_PC_PLAN_DUPLICATE;
         }
@@ -427,7 +355,7 @@ int64_t ObPLUDFResultCacheSet::get_mem_size()
 {
   int64_t value_mem_size = 0;
 
-  for (hash::ObHashMap<UDFArgRow, ObPLUDFResultCacheValue*, common::hash::NoPthreadDefendMode>::iterator iter = hashmap_.begin();
+  for (hash::ObHashMap<UDFArgRow, ObPLUDFResultCacheObject*, common::hash::NoPthreadDefendMode>::iterator iter = hashmap_.begin();
         iter != hashmap_.end();
         iter++) {
     if (OB_ISNULL(iter->second)) {
