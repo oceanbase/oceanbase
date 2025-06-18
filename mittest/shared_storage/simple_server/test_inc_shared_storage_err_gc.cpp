@@ -1002,6 +1002,137 @@ TEST_F(ObSharedStorageTest, test_tablet_gc)
   wait_shared_tablet_gc_finish();
 }
 
+TEST_F(ObSharedStorageTest, test_gc_major_for_drop_tablet)
+{
+  share::ObTenantSwitchGuard tguard;
+  ASSERT_EQ(OB_SUCCESS, tguard.switch_to(RunCtx.tenant_id_));
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  int64_t tablet_version1 = 0;
+  int64_t tablet_version2 = 0;
+  int64_t tablet_version3 = 0;
+  EXE_SQL("create table test_table (a int)");
+  LOG_INFO("create_table finish");
+
+  set_ls_and_tablet_id_for_run_ctx();
+
+  share::SCN ss_checkpoint_scn;
+
+  ObSSMetaReadParam param;
+  share::SCN transfer_scn;
+  transfer_scn.set_min();
+  param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY, ObSSMetaReadResultType::READ_WHOLE_ROW, sslog::ObSSLogMetaType::SSLOG_MINI_SSTABLE, RunCtx.ls_id_, RunCtx.tablet_id_, transfer_scn);
+
+  EXE_SQL("alter system set _ss_schedule_upload_interval = '1s';");
+  EXE_SQL("alter system set inc_sstable_upload_thread_score = 20;");
+  EXE_SQL("alter system set _ss_garbage_collect_interval = '10s';");
+  EXE_SQL("alter system set _ss_garbage_collect_file_expiration_time = '10s';");
+  EXE_SQL("alter system set _ss_enable_timeout_garbage_collection = true;");
+
+
+  sleep(5);
+  EXE_SQL("insert into test_table values (1)");
+  LOG_INFO("insert data finish");
+
+  EXE_SQL("alter system minor freeze;");
+  RunCtx.ls_->get_end_scn(ss_checkpoint_scn);
+  wait_minor_finish();
+  wait_upload_sstable(ss_checkpoint_scn.get_val_for_tx());
+
+  SYS_EXE_SQL("alter system set ob_compaction_schedule_interval = '3s' tenant tt1;");
+  EXE_SQL("alter system major freeze;");
+
+  wait_major_finish();
+
+  // major sstable block write
+  MacroBlockId major_block_id11;
+  MacroBlockId major_block_id12;
+  MacroBlockId major_block_id13;
+
+  MacroBlockId major_block_id21;
+  MacroBlockId major_block_id22;
+  MacroBlockId major_block_id23;
+
+  MacroBlockId major_block_id31;
+  MacroBlockId major_block_id32;
+  MacroBlockId major_block_id33;
+  ObSSMajorGCInfo major_gc_info;
+
+  major_gc_info.parallel_cnt_ = 3;
+  major_gc_info.snapshot_version_ = 1000;
+  major_gc_info.seq_step_ = 1000;
+  major_gc_info.start_seq_ = 0;
+  major_gc_info.cg_cnt_ = 3;
+
+  gen_block_id(100, ObStorageObjectType::SHARED_MAJOR_DATA_MACRO, 0, major_block_id11, 0);
+  gen_block_id(100, ObStorageObjectType::SHARED_MAJOR_DATA_MACRO, 1000, major_block_id12, 0);
+  gen_block_id(100, ObStorageObjectType::SHARED_MAJOR_DATA_MACRO, 2000, major_block_id13, 0);
+
+  gen_block_id(100, ObStorageObjectType::SHARED_MAJOR_DATA_MACRO, 0, major_block_id21, 1);
+  gen_block_id(100, ObStorageObjectType::SHARED_MAJOR_DATA_MACRO, 1000, major_block_id22, 1);
+  gen_block_id(100, ObStorageObjectType::SHARED_MAJOR_DATA_MACRO, 2000, major_block_id23, 1);
+
+  gen_block_id(100, ObStorageObjectType::SHARED_MAJOR_DATA_MACRO, 0, major_block_id31, 2);
+  gen_block_id(100, ObStorageObjectType::SHARED_MAJOR_DATA_MACRO, 1000, major_block_id32, 2);
+  gen_block_id(100, ObStorageObjectType::SHARED_MAJOR_DATA_MACRO, 2000, major_block_id33, 2);
+
+  write_block(major_block_id11);
+  write_block(major_block_id12);
+  write_block(major_block_id13);
+
+  write_block(major_block_id21);
+  write_block(major_block_id22);
+  write_block(major_block_id23);
+
+  write_block(major_block_id31);
+  write_block(major_block_id32);
+  write_block(major_block_id33);
+
+
+  // major sstable sslog write
+  update_sslog(sslog::ObSSLogMetaType::SSLOG_MAJOR_SSTABLE, 100, ObAtomicMetaInfo::State::INIT, &major_gc_info);
+
+  // tablet_meta sslog write
+  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 100, ObAtomicMetaInfo::State::INIT);
+
+  // tablet_meta sslog write
+  ObSSMetaUpdateMetaInfo update_info_1000;
+  update_info_1000.acquire_scn_.set_min();
+  update_info_1000.update_reason_ = ObMetaUpdateReason::TABLET_COMPACT_ADD_DATA_MAJOR_SSTABLE;
+  // snapshot_version
+  update_info_1000.sstable_op_id_ = 1000;
+  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::INIT, NULL, &update_info_1000);
+  update_sslog<ObSSMinorGCInfo>(sslog::ObSSLogMetaType::SSLOG_TABLET_META, 101, ObAtomicMetaInfo::State::COMMITTED, NULL, &update_info_1000);
+
+  share::SCN snapshot;
+  MTL(ObSSMetaService*)->get_max_committed_meta_scn(snapshot);
+  ObSSGarbageCollector::gc_failed_task_major_block_(snapshot, RunCtx.ls_id_, RunCtx.tablet_id_, SCN::min_scn());
+
+  // check sstable block gc
+
+  bool is_exist = false;
+  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(major_block_id11, 0, is_exist));
+  ASSERT_TRUE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(major_block_id12, 0, is_exist));
+  ASSERT_TRUE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(major_block_id13, 0, is_exist));
+  ASSERT_TRUE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(major_block_id21, 0, is_exist));
+  ASSERT_TRUE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(major_block_id22, 0, is_exist));
+  ASSERT_TRUE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(major_block_id33, 0, is_exist));
+  ASSERT_TRUE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(major_block_id31, 0, is_exist));
+  ASSERT_TRUE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(major_block_id32, 0, is_exist));
+  ASSERT_TRUE(is_exist);
+  ASSERT_EQ(OB_SUCCESS, OB_STORAGE_OBJECT_MGR.ss_is_exist_object(major_block_id33, 0, is_exist));
+  ASSERT_TRUE(is_exist);
+
+  EXE_SQL("drop table test_table;");
+}
+
 void ObSharedStorageTest::wait_major_finish()
 {
   int ret = OB_SUCCESS;

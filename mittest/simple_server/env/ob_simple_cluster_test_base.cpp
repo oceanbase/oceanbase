@@ -282,7 +282,7 @@ int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
     ObSqlString drop_sql1;
     ObSqlString drop_sql2;
     ObSqlString drop_sql3;
-    if (OB_TMP_FAIL(drop_sql1.assign_fmt("drop tenant if exists %s;", tenant_name))) {
+    if (OB_TMP_FAIL(drop_sql1.assign_fmt("drop tenant if exists %s force;", tenant_name))) {
       SERVER_LOG(WARN, "drop tenant fail", K(tmp_ret), K(ret));
     } else {
       int retry_cnt = 0;
