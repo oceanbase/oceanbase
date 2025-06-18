@@ -292,7 +292,7 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
           process_perf_diagnose_info_(ObStorageHACostItemName::UNLOCK_TABLET_FOR_LOCK,
               0/*start_ts*/, tablet_list.count(), round_, false/*is_report*/);
           if (OB_FAIL(
-                      unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, lock_status, CONFIG_CHANGE_TIMEOUT))) {
+                      unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, lock_status, true/*need_check_palf_leader*/, dest_ls_id, CONFIG_CHANGE_TIMEOUT))) {
             diagnose_result_msg_ = share::ObStorageHACostItemName::UNLOCK_LS_MEMBER_LIST;
             LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(dest_ls_id), K(member_list));
           } else {
@@ -367,13 +367,17 @@ int ObTxFinishTransfer::unlock_src_and_dest_ls_member_list_(const uint64_t tenan
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L;
   const int64_t lock_timeout = CONFIG_CHANGE_TIMEOUT;
   bool same_member_list = true;
-  const ObTransferLockStatus status(ObTransferLockStatus::START);
+  const ObTransferLockStatus start_status(ObTransferLockStatus::START);
+  const ObTransferLockStatus doing_status(ObTransferLockStatus::DOING);
   if (!src_ls_id.is_valid() || !dest_ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(src_ls_id), K(dest_ls_id));
-  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, src_ls_id, member_list, status, lock_timeout))) {
+  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, src_ls_id, member_list, start_status, false/*need_check_palf_leader*/, dest_ls_id, lock_timeout))) {
+    // this will unlock the *lock* obtained in start status, so no need to check palf leader
     LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
-  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, status, lock_timeout))) {
+  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, start_status, true/*need_check_palf_leader*/, dest_ls_id, lock_timeout))) {
+    LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
+  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, doing_status, true/*need_check_palf_leader*/, dest_ls_id, lock_timeout))) {
     LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
   } else {
     LOG_INFO(
@@ -823,11 +827,13 @@ int ObTxFinishTransfer::check_same_member_list_(
 }
 
 int ObTxFinishTransfer::unlock_ls_member_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const common::ObMemberList &member_list, const ObTransferLockStatus &status, const int64_t lock_timeout)
+    const common::ObMemberList &member_list, const ObTransferLockStatus &status,
+    const bool need_check_palf_leader, const share::ObLSID &need_check_palf_leader_ls_id, const int64_t lock_timeout)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObMemberListLockUtils::unlock_ls_member_list(
-      tenant_id, ls_id, task_id_.id(), member_list, status, share::OBCG_STORAGE, *sql_proxy_))) {
+      tenant_id, ls_id, task_id_.id(), member_list, status, share::OBCG_STORAGE,
+      need_check_palf_leader, need_check_palf_leader_ls_id, *sql_proxy_))) {
     LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(ls_id), K_(task_id), K(status));
   }
   return ret;
@@ -838,7 +844,7 @@ int ObTxFinishTransfer::lock_ls_member_list_(const uint64_t tenant_id, const sha
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObMemberListLockUtils::lock_ls_member_list(
-      tenant_id, ls_id, task_id_.id(), member_list, status, share::OBCG_STORAGE, *sql_proxy_))) {
+      tenant_id, ls_id, task_id_.id(), member_list, status, share::OBCG_STORAGE, ls_id, *sql_proxy_))) {
     LOG_WARN("failed to unlock ls member list", K(ret), K(ls_id), K(member_list));
   } else {
 #ifdef ERRSIM

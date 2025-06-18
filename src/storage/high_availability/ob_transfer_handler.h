@@ -134,7 +134,9 @@ private:
       const share::ObLSID &src_ls_id,
       const share::ObLSID &dest_ls);
   int unlock_src_and_dest_ls_member_list_(
-      const share::ObTransferTaskInfo &task_info);
+      const share::ObTransferTaskInfo &task_info,
+      const bool need_check_palf_leader,
+      const share::ObLSID &need_check_palf_leader_ls_id);
   int reset_timeout_for_trans_(ObTimeoutCtx &timeout_ctx);
   int inner_lock_ls_member_list_(
       const share::ObTransferTaskInfo &task_info,
@@ -145,7 +147,9 @@ private:
       const share::ObTransferTaskInfo &task_info,
       const share::ObLSID &ls_id,
       const common::ObMemberList &member_list,
-      const ObTransferLockStatus &status);
+      const ObTransferLockStatus &status,
+      const bool need_check_palf_leader,
+      const share::ObLSID &need_check_palf_leader_ls_id);
   int insert_lock_info_(const share::ObTransferTaskInfo &task_info);
   int check_ls_member_list_same_(
       const share::ObLSID &src_ls_id,
