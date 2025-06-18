@@ -465,17 +465,20 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
       }
     } else {
       old_tablet = old_tablet_handle.get_obj();
+      int64_t transfer_seq = 0;
       ObTablet *src_tablet = nullptr;
       const bool need_compat = old_tablet->get_version() < ObTablet::VERSION_V4;
       if (!need_compat) {
         src_tablet = old_tablet;
+        transfer_seq = src_tablet->get_transfer_seq();
       } else if (OB_FAIL(handle_old_version_tablet_for_compat(allocator, tablet_key, *old_tablet, tmp_tablet_handle))) {
         LOG_WARN("fail to handle old version tablet for compat", K(ret), K(tablet_key), KPC(old_tablet));
       } else {
         src_tablet = tmp_tablet_handle.get_obj();
+        transfer_seq = src_tablet->get_transfer_seq();
       }
 
-      const ObTabletPersisterParam param(tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, src_tablet->get_transfer_seq());
+      const ObTabletPersisterParam param(tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, transfer_seq);
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *src_tablet, new_tablet_handle))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
