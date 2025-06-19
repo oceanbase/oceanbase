@@ -99,9 +99,9 @@ public:
   // else if trans_stat == ON_COMMIT, trans_version is explained as commit_version(which is a valid data).
   template <typename T, typename T2 = T, ENABLE_IF_NOT_LIKE_FUNCTION(T2, int(const T &))>
   int get_latest(T &value,
-                 mds::MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
-                 mds::TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
-                 share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 mds::MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                 mds::TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                 share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
                  ObIAllocator *alloc = nullptr,
                  const int64_t read_seq = 0) const {
     MdsDefaultDeepCopyOperation<T> default_get_op(value, alloc);
@@ -124,9 +124,9 @@ public:
   // belows are general get interfaces, which could be customized for complicated data structure
   template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T &))>
   int get_latest(OP &&read_op,
-                 mds::MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
-                 mds::TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
-                 share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                 mds::MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                 mds::TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                 share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
                  const int64_t read_seq = 0) const;
   template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T &))>
   int get_latest_committed(OP &&read_op) const;
@@ -217,9 +217,9 @@ protected:// implemented by ObTablet
   template <typename T, typename OP>
   int cross_ls_get_latest(const ObITabletMdsInterface *another,
                           OP &&read_op,
-                          mds::MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
-                          mds::TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
-                          share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                          mds::MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                          mds::TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                          share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
                           const int64_t read_seq = 0) const;
   template <typename Key, typename Value>
   int replay(const Key &key,

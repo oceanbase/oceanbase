@@ -481,9 +481,9 @@ struct GetLatestHelper {
                   int64_t unit_id,
                   void *key,
                   ObFunction<int(void *)> &op,
-                  MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
-                  TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
-                  share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                  MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                  TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                  share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
                   const int64_t read_seq)
   : mds_table_impl_(mds_table_impl),
   current_idx_(0),
@@ -541,18 +541,18 @@ struct GetLatestHelper {
   const uint8_t unit_id_;
   void *key_;
   ObFunction<int(void *)> &function_;
-  MdsWriter &writer_;// FIXME(xuwang.txw): should not exposed, will be removed later
-  TwoPhaseCommitState &trans_stat_;// FIXME(xuwang.txw): should not exposed, will be removed later
-  share::SCN &trans_version_;// FIXME(xuwang.txw): should not exposed, will be removed later
+  MdsWriter &writer_;// FIXME(zk250686): should not exposed, will be removed later
+  TwoPhaseCommitState &trans_stat_;// FIXME(zk250686): should not exposed, will be removed later
+  share::SCN &trans_version_;// FIXME(zk250686): should not exposed, will be removed later
   const int64_t read_seq_;
 };
 template <typename MdsTableType>
 int MdsTableImpl<MdsTableType>::get_latest(int64_t unit_id,
                                            void *key,
                                            ObFunction<int(void *)> &op,
-                                           MdsWriter &writer,// FIXME(xuwang.txw): should not exposed, will be removed later
-                                           TwoPhaseCommitState &trans_stat,// FIXME(xuwang.txw): should not exposed, will be removed later
-                                           share::SCN &trans_version,// FIXME(xuwang.txw): should not exposed, will be removed later
+                                           MdsWriter &writer,// FIXME(zk250686): should not exposed, will be removed later
+                                           TwoPhaseCommitState &trans_stat,// FIXME(zk250686): should not exposed, will be removed later
+                                           share::SCN &trans_version,// FIXME(zk250686): should not exposed, will be removed later
                                            const int64_t read_seq) const {
   int ret = OB_SUCCESS;
   MDS_TG(5_ms);// point select should be fast
