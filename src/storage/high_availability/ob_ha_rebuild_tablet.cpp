@@ -1655,7 +1655,7 @@ int ObTabletRebuildMajorTask::build_copy_table_key_info_()
   } else if (FALSE_IT(last_major_sstable = static_cast<ObSSTable *>(
       table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/)))) {
   } else if (OB_ISNULL(last_major_sstable)) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_MAJOR_SSTABLE_NOT_EXIST;
     LOG_WARN("rebuild tablet do not has major sstable, unexpected", K(ret), KP(last_major_sstable));
   } else if (FALSE_IT(local_max_major_snapshot = last_major_sstable->get_snapshot_version())) {
   } else if (OB_FAIL(ObStorageHAUtils::get_server_version(server_version))) {
