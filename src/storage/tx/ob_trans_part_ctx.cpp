@@ -3280,6 +3280,17 @@ int ObPartTransCtx::submit_redo_if_parallel_logging_()
 }
 
 // when parallel logging, redo need submitted seperate with other txn's log
+inline
+int ObPartTransCtx::submit_parallel_redo_() {
+  int ret = OB_SUCCESS;
+  ObTxRedoSubmitter submitter(*this, mt_ctx_);
+  if (OB_FAIL(submitter.submit_all(true /*display blocked info*/))) {
+    TRANS_LOG(WARN, "submit redo log fail", K(ret));
+  }
+  return ret;
+}
+
+// when parallel logging, redo need submitted seperate with other txn's log
 int ObPartTransCtx::submit_parallel_redo_before_commit_() {
   int ret = OB_SUCCESS;
   static const int64_t SUBMIT_REDO_TIMEOUT = 30;
@@ -3287,7 +3298,7 @@ int ObPartTransCtx::submit_parallel_redo_before_commit_() {
   do {
     if (get_pending_log_size() > GCONF._private_buffer_size) {
       CtxLockGuard guard(lock_, CtxLockGuard::MODE::CTX);
-      if (OB_FAIL(submit_redo_if_parallel_logging_())) {
+      if (OB_FAIL(submit_parallel_redo_())) {
         if (ret != OB_EAGAIN) {
           TRANS_LOG(WARN, "submit redo fail", KR(ret), K(*this));
         }
