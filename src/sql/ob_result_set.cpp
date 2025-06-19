@@ -955,6 +955,11 @@ int ObResultSet::do_close(int *client_ret)
       ret = OB_NOT_INIT;
       LOG_WARN("result set isn't init", K(ret));
     } else {
+      if (OB_NOT_NULL(get_physical_plan()) && get_physical_plan()->is_returning()) {
+        // In the returning scenario, affected_rows_ can only be determined after returning the data,
+        // so fill in affected_rows when closing.
+        affected_rows_ = plan_ctx->get_affected_rows();
+      }
       store_affected_rows(*plan_ctx);
       store_found_rows(*plan_ctx);
     }
