@@ -248,7 +248,8 @@ public:
       scan_rows_size_(common::OB_INVALID_ID),
       row_width_(common::OB_INVALID_ID),
       das_tasks_key_(),
-      in_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM)
+      in_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
+      row_scan_cnt_(0)
   { }
 
   virtual ~ObDASScanRtDef();
@@ -305,6 +306,10 @@ public:
   int64_t row_width_;   // no use
   ObDASTCBMemProfileKey das_tasks_key_;
   int64_t in_row_cache_threshold_;
+  // row_scan_cnt_ indicates the total rows scanned during a table scan, for multi-partition tables, it sums rows
+  // from all local partitions and retains its value even after rescan.
+  uint64_t row_scan_cnt_;
+
 private:
   union {
     storage::ObRow2ExprsProjector row2exprs_projector_;

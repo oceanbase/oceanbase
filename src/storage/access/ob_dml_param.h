@@ -142,7 +142,8 @@ public:
         read_version_range_(),
         need_update_tablet_param_(false),
         in_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
-        mds_collector_(nullptr)
+        mds_collector_(nullptr),
+        row_scan_cnt_(NULL)
   {}
   virtual ~ObTableScanParam() {}
 public:
@@ -180,6 +181,7 @@ public:
   bool need_update_tablet_param_; // whether need to update tablet-level param, such as split filter param
   int64_t in_row_cache_threshold_;
   ObMdsReadInfoCollector *mds_collector_; // used for collect mds info when query mds sstable
+  uint64_t *row_scan_cnt_;
 
   DECLARE_VIRTUAL_TO_STRING;
 private:
