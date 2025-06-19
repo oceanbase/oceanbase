@@ -215,7 +215,8 @@ public:
   static int schedule_tablet_ss_minor_merge(
       const ObMergeType &merge_type,
       ObLSHandle &ls_handle,
-      ObTabletHandle &tablet_handle);
+      ObTabletHandle &tablet_handle,
+      bool &scheduled);
   static int schedule_task_if_split_src(ObTabletHandle &tablet_handle);
 #endif
   static int schedule_tablet_meta_merge(
