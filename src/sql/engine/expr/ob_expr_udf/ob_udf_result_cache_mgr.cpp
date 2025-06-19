@@ -207,12 +207,12 @@ int ObPLUDFResultCacheMgr::result_cache_evict(ObPlanCache *lib_cache)
       LCKeyValueArray to_evict_list;
 
       std::make_heap(co_list.begin(), co_list.end(), [](const LCKeyValue &left, const LCKeyValue &right) -> bool {
-        return left.node_->get_node_stat()->weight() < right.node_->get_node_stat()->weight();
+        return left.node_->get_node_stat()->weight() > right.node_->get_node_stat()->weight();
       });
       while (OB_SUCC(ret) && mem_to_free > 0 && cache_evict_num < N) {
         LCKeyValue kv;
         std::pop_heap(co_list.begin(), co_list.end(), [](const LCKeyValue &left, const LCKeyValue &right) -> bool {
-          return left.node_->get_node_stat()->weight() < right.node_->get_node_stat()->weight();
+          return left.node_->get_node_stat()->weight() > right.node_->get_node_stat()->weight();
         });
         co_list.pop_back(kv);
         mem_to_free -= kv.node_->get_mem_size();
