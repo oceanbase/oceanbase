@@ -477,10 +477,10 @@ public:
     if (OB_FAIL(MTL(ObSSMetaService *)->get_ls_meta(ls_id, ss_ls_meta))) {
       STORAGE_LOG(WARN, "get ls meta failed", KR(ret), K(ss_ls_meta));
     } else if (FALSE_IT(ss_checkpoint_lsn = ss_ls_meta.get_ss_base_lsn())) {
+    } else if (FALSE_IT(throttle_flush_if_checkpoint_lag_too_large(sn_checkpoint_lsn, ss_checkpoint_lsn, ls))) {
     } else if (sn_checkpoint_lsn < ss_checkpoint_lsn) {
-      FLOG_INFO("local ckpt less than ss ckpt", K(sn_checkpoint_lsn), K(ss_checkpoint_lsn));
+      FLOG_INFO("local ckpt less than ss ckpt", K(ls_id), K(sn_checkpoint_lsn), K(ss_checkpoint_lsn));
     } else {
-      (void)throttle_flush_if_checkpoint_lag_too_large(sn_checkpoint_lsn, ss_checkpoint_lsn, ls);
 
       ObSSMetaService *meta_svr = MTL(ObSSMetaService *);
       UpdateSSCkptFunctorForMetaSvr func(ObIMetaFunction::MetaFuncType::UPDATE_SS_CKPT_FUNC, ls_id);
@@ -513,7 +513,7 @@ private:
     const int64_t config_trigger = ObTenantFreezer::get_freeze_trigger_percentage();
     const int64_t freeze_trigger = config_trigger > 0 ? config_trigger : 20;
     max_lsn_gap = max_lsn_gap * freeze_trigger / 100;
-    if (sn_ckpt_lsn - ss_ckpt_lsn > max_lsn_gap) {
+    if ((sn_ckpt_lsn > ss_ckpt_lsn) && (sn_ckpt_lsn - ss_ckpt_lsn > max_lsn_gap)) {
       (void)ls.disable_flush();
       FLOG_INFO("disable memtable flush to throttle writes and allow ss checkpoint to catch up with sn checkpoint",
                 "ls_id", ls.get_ls_id(),
