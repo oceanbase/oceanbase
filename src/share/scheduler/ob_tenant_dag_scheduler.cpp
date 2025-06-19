@@ -4710,7 +4710,9 @@ int ObTenantDagScheduler::diagnose_dag(
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arugment", KP(dag));
   } else if (OB_FAIL(prio_sche_[dag->get_priority()].diagnose_dag(*dag, progress))) {
-    COMMON_LOG(WARN, "fail to diagnose dag", K(ret), KPC(dag));
+    if (OB_HASH_NOT_EXIST != ret) {
+      COMMON_LOG(WARN, "fail to diagnose dag", K(ret), KPC(dag));
+    }
   }
   return ret;
 }

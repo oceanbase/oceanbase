@@ -27,7 +27,6 @@ using namespace transaction;
 
 namespace storage {
 
-
 int64_t ObTxTable::UPDATE_MIN_START_SCN_INTERVAL = 5 * 1000 * 1000; // 5 seconds
 
 int ObTxTable::init(ObLS *ls)
@@ -949,7 +948,11 @@ int ObTxTable::get_recycle_scn(SCN &sn_recycle_scn)
 
   int64_t current_time_us = ObClockGenerator::getClock();
   // update recycle_scn_cache_ if needed
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+#else
   if (current_time_us - recycle_scn_cache_.update_ts_ > MIN_INTERVAL_OF_TX_DATA_RECYCLE_US) {
+#endif
     int64_t tx_result_retention_s = DEFAULT_TX_RESULT_RETENTION_S;
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {

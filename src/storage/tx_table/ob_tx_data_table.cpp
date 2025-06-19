@@ -26,7 +26,6 @@ using namespace oceanbase::share;
 
 namespace storage
 {
-ERRSIM_POINT_DEF(EN_COMPACTION_TX_DATA_GET_MIN_SCN);
 int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
 {
   int ret = OB_SUCCESS;
@@ -680,9 +679,6 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "tx data table has not been inited", KR(ret));
-  } else if (OB_UNLIKELY(EN_COMPACTION_TX_DATA_GET_MIN_SCN)) {
-    ret = OB_EAGAIN;
-    STORAGE_LOG(INFO, "EN_COMPACTION_TX_DATA_GET_MIN_SCN", KR(ret));
   } else if (OB_FAIL(ls_->get_migration_status(migration_status))) {
     STORAGE_LOG(WARN, "get migration status failed", KR(ret), "ls_id", ls_->get_ls_id());
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {

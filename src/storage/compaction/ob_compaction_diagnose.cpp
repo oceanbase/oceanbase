@@ -1023,7 +1023,9 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
       } else if (OB_TMP_FAIL(ls->get_tablet(tablet_id,
                                             tablet_handle,
                                             ObTabletCommon::DEFAULT_GET_TABLET_NO_WAIT))) {
-        LOG_WARN("failed to get tablet", K(tmp_ret), K(ls_id), K(tablet_id));
+        if (OB_TABLET_NOT_EXIST != tmp_ret) {
+          LOG_WARN("failed to get tablet", K(tmp_ret), K(ls_id), K(tablet_id));
+        }
       } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
         tmp_ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid tablet handle", K(tmp_ret), K(ls_id), K(tablet_handle));
