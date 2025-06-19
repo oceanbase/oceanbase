@@ -627,6 +627,9 @@ public:
                             ObIArray<ObRawExpr*> *const_exprs = NULL,
                             ObIArray<ObColumnRefRawExpr*> *col_exprs = NULL,
                             const bool need_match_col_exprs = false);
+  static int preprocess_index_cols_for_index_match(ObSqlSchemaGuard *schema_guard,
+                                                   const int64_t table_id,
+                                                   ObIArray<uint64_t> &index_cols);
 
   static int classify_scalar_query_ref(ObIArray<ObRawExpr*> &exprs,
                                        ObIArray<ObRawExpr*> &scalar_query_refs,
