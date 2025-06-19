@@ -473,10 +473,14 @@ int ObDependencyInfo::collect_all_dep_objs_inner(uint64_t tenant_id,
   {
     SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql.assign_fmt("SELECT dep_obj_id, dep_obj_type FROM %s WHERE tenant_id = %lu AND ref_obj_id = %lu",
+      if (OB_FAIL(sql.assign_fmt("WITH RECURSIVE cte AS "
+                                "(SELECT /*+index(__all_tenant_dependency idx_dependency_ref_obj)*/ dep_obj_id, dep_obj_type FROM %s WHERE tenant_id = %lu AND ref_obj_id = %lu "
+                                "UNION SELECT /*+use_nl(t2) leading(cte t2) index(t2 idx_dependency_ref_obj)*/ t2.dep_obj_id, t2.dep_obj_type FROM %s t2 "
+                                "INNER JOIN cte ON t2.ref_obj_id = cte.dep_obj_id ) SELECT * FROM cte",
                                         OB_ALL_TENANT_DEPENDENCY_TNAME,
                                         ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-                                        ref_obj_id))) {
+                                        ref_obj_id,
+                                        OB_ALL_TENANT_DEPENDENCY_TNAME))) {
         LOG_WARN("failed to assign sql", K(ret));
       } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
         LOG_WARN("execute sql failed", K(ret), K(sql));
@@ -496,8 +500,6 @@ int ObDependencyInfo::collect_all_dep_objs_inner(uint64_t tenant_id,
             LOG_WARN("get wrong obj type", K(ret));
           } else if (ref_obj_id == tmp_obj_id || root_obj_id == tmp_obj_id) {
             // skip
-          } else if (has_exist_in_array(objs, {static_cast<uint64_t> (tmp_obj_id), static_cast<share::schema::ObObjectType> (tmp_type)})) {
-            // dedpulicate
           } else if (OB_FAIL(objs.push_back({static_cast<uint64_t> (tmp_obj_id), static_cast<share::schema::ObObjectType> (tmp_type)}))) {
             LOG_WARN("failed to push back obj", K(ret));
           }
@@ -511,23 +513,8 @@ int ObDependencyInfo::collect_all_dep_objs_inner(uint64_t tenant_id,
       }
     }
   }
-  bool is_overflow = false;
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(check_stack_overflow(is_overflow))) {
-    LOG_WARN("failed to check stack overflow", K(ret));
-  } else if (is_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recusive", K(ret));
-  } else {
-    for (int64_t i = init_count; OB_SUCC(ret) && i < objs.count(); ++i) {
-      if (OB_FAIL(collect_all_dep_objs_inner(tenant_id, root_obj_id, objs.at(i).first, sql_proxy, objs))) {
-        LOG_WARN("failed to collect all dep objs", K(ret), K(objs.count()), K(init_count), K(i));
-      }
-    }
-  }
   return ret;
 }
-
 int ObDependencyInfo::collect_all_dep_objs(uint64_t tenant_id,
                                            uint64_t ref_obj_id,
                                            ObObjectType ref_obj_type,
