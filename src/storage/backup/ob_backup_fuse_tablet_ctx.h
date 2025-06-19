@@ -77,6 +77,7 @@ public:
   int get_next_tablet_item(ObBackupTabletFuseItem &tablet_item);
   int write_tablet_meta(const ObMigrationTabletParam &param);
   int close_extern_writer();
+  int abort_extern_writer();
 
 public:
   int set_result(const int32_t result, const bool need_retry,

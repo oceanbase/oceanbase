@@ -501,6 +501,24 @@ int ObExternTabletMetaWriter::close()
   return ret;
 }
 
+int ObExternTabletMetaWriter::abort()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_NOT_NULL(dev_handle_) && OB_FAIL(dev_handle_->abort(io_fd_))) {
+    LOG_WARN("fail to abort multipart upload", K(ret), K_(dev_handle), K_(io_fd));
+  }
+  ObBackupIoAdapter util;
+  if (OB_TMP_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
+    ret = COVER_SUCC(tmp_ret);
+    LOG_WARN("fail to close device or fd", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
+  } else {
+    dev_handle_ = NULL;
+    io_fd_.reset();
+  }
+  return ret;
+}
+
 int ObExternTabletMetaWriter::flush_trailer_()
 {
   int ret = OB_SUCCESS;

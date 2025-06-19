@@ -101,6 +101,7 @@ public:
 	   const bool is_final_fuse, common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int write_meta_data(const blocksstable::ObBufferReader &meta_data, const common::ObTabletID &tablet_id);
   int close();
+  int abort();
 private:
   int write_meta_data_(const blocksstable::ObBufferReader &meta_data, const common::ObTabletID &tablet_id);
   int prepare_backup_file_(const int64_t file_id);
