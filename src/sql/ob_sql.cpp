@@ -821,6 +821,13 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         }
         if (context->session_info_->is_varparams_sql_prepare() && !context->is_dbms_sql_) {
           // question mark expr has no valid result type in prepare stage
+          if (!expr->get_result_type().is_ext()
+              && !expr->get_result_type().is_user_defined_sql_type()
+              && !expr->get_result_type().is_collection_sql_type()
+              && OB_FAIL(expr->get_length_for_meta_in_bytes(
+                    field.length_, static_cast<ObCollationType>(field.charsetnr_)))) {
+            LOG_WARN("get length failed", K(ret), KPC(expr));
+          }
         } else if (expr->get_result_type().is_user_defined_sql_type() ||
             expr->get_result_type().is_collection_sql_type() ||
             ((PC_PS_MODE == mode || PC_PL_MODE == mode) && expr->get_result_type().is_geometry() && lib::is_oracle_mode())) {//oracle gis ps protocol
