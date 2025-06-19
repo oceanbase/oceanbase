@@ -819,9 +819,6 @@ void ObLockWaitMgr::on_lock_conflict(ObSArray<ObRowConflictInfo> &cflict_infos, 
 
 int ObLockWaitMgr::handle_local_node_(Node* node, Node*& delete_node, bool &wait_succ)
 {
-  // FIXME(xuwang.txw):create detector in check_timeout process
-  // below code must keep current order to fix concurrency bug
-  // more info see
   int ret = OB_SUCCESS;
   bool unused = false;
   bool deadlock_registered = false;
@@ -918,9 +915,6 @@ int ObLockWaitMgr::handle_remote_exec_side_node_(Node* remote_exec_side_node,
                                                  bool &wait_succ,
                                                  bool &is_placeholder)
 {
-  // FIXME(xuwang.txw):create detector in check_timeout process
-  // below code must keep current order to fix concurrency bug
-  // more info see
   int ret = OB_SUCCESS;
   bool deadlock_registered = false;
   ObTransID self_tx_id(remote_exec_side_node->tx_id_);

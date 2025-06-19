@@ -3020,7 +3020,7 @@ def_table_schema(
 # 321: __all_backup_backup_log_archive_status_v2 # abandoned in 4.0
 
 def_table_schema(
-  owner = 'xuwang.txw',
+  owner = 'wx372254',
   table_name    = '__all_deadlock_event_history',
   table_id      = '322',
   table_type = 'SYSTEM_TABLE',
@@ -4546,7 +4546,7 @@ def_table_schema(**all_global_context_value_def)
 #384: __all_tablet_transfer_info
 
 def_table_schema(
-  owner = 'xuwang.txw',
+  owner = 'liuhanyi.lhy',
   table_name    = '__all_ls_election_reference_info',
   table_id = '385',
   table_type = 'SYSTEM_TABLE',
@@ -13487,7 +13487,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12372: __all_virtual_io_tracer
 
 def_table_schema(
-  owner             = 'xuwang.txw',
+  owner             = 'zk250686',
   table_name        = '__all_virtual_mds_node_stat',
   table_id          = '12373',
   table_type        = 'VIRTUAL_TABLE',
@@ -13520,7 +13520,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner             = 'xuwang.txw',
+  owner             = 'zk250686',
   table_name        = '__all_virtual_mds_event_history',
   table_id          = '12374',
   table_type        = 'VIRTUAL_TABLE',
@@ -14626,7 +14626,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
   keywords = all_def_keywords['__all_scheduler_job_run_detail_v2']))
 
 def_table_schema(
-  owner = 'xuwang.txw',
+  owner = 'wx372254',
   table_name = '__all_virtual_deadlock_detector_stat',
   table_id = '12489',
   table_type = 'VIRTUAL_TABLE',
@@ -27822,7 +27822,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'xuwang.txw',
+  owner           = 'wx372254',
   table_name      = 'DBA_OB_DEADLOCK_EVENT_HISTORY',
   table_id        = '21297',
   table_type      = 'SYSTEM_VIEW',
@@ -27859,7 +27859,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'xuwang.txw',
+  owner           = 'wx372254',
   table_name      = 'CDB_OB_DEADLOCK_EVENT_HISTORY',
   table_id        = '21298',
   table_type      = 'SYSTEM_VIEW',
@@ -63357,7 +63357,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'xuwang.txw',
+  owner           = 'wx372254',
   table_name      = 'DBA_OB_DEADLOCK_EVENT_HISTORY',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
