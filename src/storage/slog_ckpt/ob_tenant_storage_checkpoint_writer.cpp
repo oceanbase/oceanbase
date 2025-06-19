@@ -449,9 +449,16 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
   } else if (has_slog) {
     // tablet has been updated, skip
   } else {
+    bool need_skip_tablet = false;
     if (GCTX.is_shared_storage_mode()) {
       if (OB_FAIL(t3m->get_tablet(WashTabletPriority::WTP_LOW, tablet_key, old_tablet_handle))) {
-        LOG_WARN("fail to get tablet", K(ret), K(tablet_key));
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          // skip write this tablet's checkpoint
+          need_skip_tablet = true;
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get tablet", K(ret), K(tablet_key));
+        }
       } else if (FALSE_IT(old_tablet = old_tablet_handle.get_obj())) {
       } else if (OB_FAIL(old_tablet->get_updating_tablet_pointer_param(update_pointer_param))) {
         LOG_WARN("fail to get updating tablet pointer param", K(ret), KPC(old_tablet));
@@ -459,6 +466,7 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
     } else if (OB_FAIL(t3m->get_tablet_with_allocator(WashTabletPriority::WTP_LOW, tablet_key, allocator, old_tablet_handle))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         // skip write this tablet's checkpoint
+        need_skip_tablet = true;
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("fail to get tablet with allocator", K(ret), K(tablet_key));
@@ -483,6 +491,7 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
       } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *src_tablet, new_tablet_handle))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           LOG_INFO("skip writing checkpoint for this tablet", K(ret), K(tablet_key));
+          need_skip_tablet = true;
           ret = OB_SUCCESS;
         } else {
           LOG_WARN("fail to persist and transform tablet", K(ret), K(tablet_key), K(need_compat), KPC(src_tablet));
@@ -493,7 +502,7 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
       }
     }
     ObUpdateTabletLog slog(tablet_key.ls_id_, tablet_key.tablet_id_, update_pointer_param, ls_epoch);
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || need_skip_tablet) {
     } else if (OB_UNLIKELY(!slog.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid slog entry", K(ret), K(slog), K(tablet_key), K(ls_epoch), K(update_pointer_param));
@@ -502,7 +511,7 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
     } else if (OB_FAIL(tablet_item_writer_.write_item(slog_buf, slog.get_serialize_size()))) {
       LOG_WARN("fail to write update tablet slog into ckpt", K(ret));
     }
-    if (OB_FAIL(ret) || GCTX.is_shared_storage_mode()) {
+    if (OB_FAIL(ret) || GCTX.is_shared_storage_mode() || need_skip_tablet) {
     } else if (OB_FAIL(new_tablet->inc_macro_ref_cnt())) {
       LOG_WARN("fail to increase meta and data macro blocks' ref cnt", K(ret));
     } else {
