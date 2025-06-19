@@ -3016,15 +3016,20 @@ int ObStaticEngineCG::generate_merge_with_das(ObLogMerge &op,
           find = true;
         }
       }
+      spec.need_foreign_key_check_ |= (upd_ctdef.fk_args_.count() > 0);
     }
 
-    if (OB_SUCC(ret) && !find) {
-      if (OB_NOT_NULL(merge_ctdef->del_ctdef_)) {
-        const ObDelCtDef &del_ctdef = *merge_ctdef->del_ctdef_;
-        if (del_ctdef.fk_args_.count() > 0) {
+    if (OB_SUCC(ret) && OB_NOT_NULL(merge_ctdef->del_ctdef_)) {
+      const ObDelCtDef &del_ctdef = *merge_ctdef->del_ctdef_;
+      if (!find && del_ctdef.fk_args_.count() > 0) {
           find = true;
-        }
       }
+      spec.need_foreign_key_check_ |= del_ctdef.fk_args_.count() > 0;
+    }
+
+    if (OB_SUCC(ret) && OB_NOT_NULL(merge_ctdef->ins_ctdef_)) {
+      const ObInsCtDef &ins_ctdef = *merge_ctdef->ins_ctdef_;
+      spec.need_foreign_key_check_ |= ins_ctdef.fk_args_.count() > 0;
     }
 
     if (OB_SUCC(ret)) {
@@ -3138,6 +3143,7 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
     } else {
       ins_ctdef->has_instead_of_trigger_ = op.has_instead_of_trigger();
       spec.ins_ctdefs_.at(0).at(i) = ins_ctdef;
+      spec.need_foreign_key_check_ |= (ins_ctdef->fk_args_.count() > 0);
       for (int64_t i = 0; i < ins_ctdef->fk_args_.count() && spec.check_fk_batch_; ++i) {
         const ObForeignKeyArg &fk_arg = ins_ctdef->fk_args_.at(i);
         if (!fk_arg.use_das_scan_) {
@@ -3248,6 +3254,7 @@ int ObStaticEngineCG::generate_delete_with_das(ObLogDelete &op, ObTableDeleteSpe
         LOG_WARN("del_ctdef is null", K(ret));
       } else {
         del_ctdef->has_instead_of_trigger_ = op.has_instead_of_trigger();
+        spec.need_foreign_key_check_ |= (del_ctdef->fk_args_.count() > 0);
         ctdefs.at(j) = del_ctdef;
       }
     }  // for index_dml_infos end
@@ -3402,6 +3409,7 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableReplaceSpec &spec, c
       const ObInsCtDef *ins_ctdef = replace_ctdef->ins_ctdef_;
       const ObDelCtDef *del_ctdef = replace_ctdef->del_ctdef_;
       if (OB_NOT_NULL(ins_ctdef) && OB_NOT_NULL(del_ctdef)) {
+        spec.need_foreign_key_check_ |= (del_ctdef->fk_args_.count() > 0 || ins_ctdef->fk_args_.count() > 0);
         if (del_ctdef->fk_args_.count() > 0) {
           spec.check_fk_batch_ = false;
         } else {
@@ -3482,6 +3490,7 @@ int ObStaticEngineCG::generate_update_with_das(ObLogUpdate &op, ObTableUpdateSpe
         LOG_WARN("upd_ctdef is null", K(ret));
       } else {
         upd_ctdef->has_instead_of_trigger_ = op.has_instead_of_trigger();
+        spec.need_foreign_key_check_ |= (upd_ctdef->fk_args_.count() > 0);
         ctdefs.at(j) = upd_ctdef;
         for (int64_t j = 0; j < upd_ctdef->fk_args_.count() && !find; ++j) {
           const ObForeignKeyArg &fk_arg = upd_ctdef->fk_args_.at(j);
@@ -3783,6 +3792,7 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
         LOG_WARN("insert or update ctdef is null", K(ret));
       } else {
         spec.check_fk_batch_ = true;
+        spec.need_foreign_key_check_ |= (ins_ctdef->fk_args_.count() > 0 || upd_ctdef->fk_args_.count() > 0);
         for (int64_t i = 0; i < upd_ctdef->fk_args_.count() && spec.check_fk_batch_; ++i) {
           const ObForeignKeyArg &fk_arg = upd_ctdef->fk_args_.at(i);
           if (!fk_arg.use_das_scan_) {
@@ -9260,6 +9270,7 @@ int ObStaticEngineCG::generate_insert_all_with_das(ObLogInsertAll &op, ObTableIn
           LOG_WARN("generate insert ctdef failed", K(ret));
         } else {
           spec.ins_ctdefs_.at(i).at(j) = ins_ctdef;
+          spec.need_foreign_key_check_ |= (ins_ctdef->fk_args_.count() > 0);
         }
       }
       if (OB_SUCC(ret)) {

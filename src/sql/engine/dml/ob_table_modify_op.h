@@ -148,6 +148,7 @@ public:
     };
   };
   int64_t das_dop_; // default is 0
+  bool need_foreign_key_check_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableModifySpec);
 };
@@ -231,8 +232,7 @@ public:
   int check_stack();
   bool is_nested_session() { return ObSQLUtils::is_nested_sql(&ctx_); }
   bool is_fk_nested_session() { return ObSQLUtils::is_fk_nested_sql(&ctx_); }
-  void set_foreign_key_checks() { foreign_key_checks_ = true; }
-  bool need_foreign_key_checks() { return foreign_key_checks_; }
+  bool need_foreign_key_checks() { return need_foreign_key_check_; }
   bool has_before_row_trigger(const ObDMLBaseCtDef &dml_ctdef) { return dml_ctdef.is_primary_index_ && dml_ctdef.trig_ctdef_.all_tm_points_.has_before_row(); }
   bool has_after_row_trigger(const ObDMLBaseCtDef &dml_ctdef) { return dml_ctdef.is_primary_index_ && dml_ctdef.trig_ctdef_.all_tm_points_.has_after_row(); }
   bool need_foreign_key_check(const ObDMLBaseCtDef &dml_ctdef) { return dml_ctdef.is_primary_index_ && dml_ctdef.fk_args_.count() > 0; }
@@ -300,7 +300,7 @@ public:
   observer::ObInnerSQLConnection *inner_conn_;
   uint64_t tenant_id_;
   observer::ObInnerSQLConnection::SavedValue saved_conn_;
-  bool foreign_key_checks_;
+  bool need_foreign_key_check_;
   bool need_close_conn_;
 
   ObObjPrintParams obj_print_params_;
