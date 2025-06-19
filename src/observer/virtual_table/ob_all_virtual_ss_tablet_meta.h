@@ -38,6 +38,7 @@ struct VirtualTabletMetaRow {
   int64_t multi_version_start_;
   int64_t tablet_snapshot_version_;
   int64_t sstable_op_id_;
+  ObString update_reason_str_; // if update_reason_str_ is not empty str, update_reason_ is invalid.
 #ifdef OB_BUILD_SHARED_STORAGE
   ObMetaUpdateReason update_reason_;
 #endif
@@ -46,7 +47,8 @@ struct VirtualTabletMetaRow {
     : reorganization_scn_(), version_(), data_tablet_id_(),
       create_scn_(), start_scn_(), create_schema_version_(0),
       data_checkpoint_scn_(), mds_checkpoint_scn_(), ddl_checkpoint_scn_(),
-      multi_version_start_(0), tablet_snapshot_version_(0), sstable_op_id_(0)
+      multi_version_start_(0), tablet_snapshot_version_(0), sstable_op_id_(0),
+      update_reason_str_()
 #ifdef OB_BUILD_SHARED_STORAGE
       , update_reason_(ObMetaUpdateReason::INVALID_META_UPDATE_REASON)
 #endif
@@ -56,7 +58,7 @@ struct VirtualTabletMetaRow {
                K(create_scn_), K(start_scn_), K(create_schema_version_),
                K(data_checkpoint_scn_), K(mds_checkpoint_scn_),
                K(ddl_checkpoint_scn_), K(multi_version_start_),
-               K(tablet_snapshot_version_), K(sstable_op_id_)
+               K(tablet_snapshot_version_), K(sstable_op_id_), K(update_reason_str_)
 #ifdef OB_BUILD_SHARED_STORAGE
                , K(update_reason_)
 #endif

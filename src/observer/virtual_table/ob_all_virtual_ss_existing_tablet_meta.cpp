@@ -232,7 +232,11 @@ int ObAllVirtualSSExistingTabletMeta::fill_in_rows_(const ObArray<VirtualTabletM
         cells[col_i].set_int(row_data.sstable_op_id_);
         break;
       case UPDATE_REASON:
-      cells[col_i].set_varchar(get_meta_update_reason_name(row_data.update_reason_));
+      if (row_data.update_reason_str_.empty()) {
+        cells[col_i].set_varchar(get_meta_update_reason_name(row_data.update_reason_));
+      } else {
+        cells[col_i].set_varchar(row_data.update_reason_str_);
+      }
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -269,6 +273,8 @@ int ObAllVirtualSSExistingTabletMeta::extract_result_(
   (void)GET_COL_IGNORE_NULL(res.get_int, "ddl_checkpoint_scn", ddl_checkpoint_scn);
   (void)GET_COL_IGNORE_NULL(res.get_int, "multi_version_start", row.multi_version_start_);
   (void)GET_COL_IGNORE_NULL(res.get_int, "tablet_snapshot_version", row.tablet_snapshot_version_);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "sstable_op_id", row.sstable_op_id_);
+  (void)GET_COL_IGNORE_NULL(res.get_varchar, "update_reason", row.update_reason_str_);
   if (OB_FAIL(ret)) {
   } else {
     row.data_tablet_id_ = data_tablet_id;
@@ -362,7 +368,7 @@ int ObAllVirtualSSExistingTabletMeta::generate_virtual_rows_(ObArray<VirtualTabl
       if (OB_FAIL(meta_service->get_max_committed_meta_scn(end_scn))) {
         SERVER_LOG(WARN, "get max committed meta scn failed", K(ret));
       }
-      ObMetaVersionRange range(start_scn, end_scn, true);
+      ObMetaVersionRange range(start_scn, end_scn, false);
       param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                   ObSSMetaReadResultType::READ_WHOLE_ROW,
                                   ObSSLogMetaType::SSLOG_TABLET_META,

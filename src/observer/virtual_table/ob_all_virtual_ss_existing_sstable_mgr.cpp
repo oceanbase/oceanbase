@@ -249,7 +249,7 @@ int ObAllVirtualSSExistingSSTableMgr::get_next_tablet_()
     if (OB_FAIL(meta_service->get_max_committed_meta_scn(end_scn))) {
       SERVER_LOG(WARN, "get max committed meta scn failed", K(ret));
     }
-    ObMetaVersionRange range(start_scn, end_scn, true);
+    ObMetaVersionRange range(start_scn, end_scn, false);
 
     param.set_tablet_level_param(ObSSMetaReadParamType::TABLET_KEY,
                                  ObSSMetaReadResultType::READ_WHOLE_ROW,
