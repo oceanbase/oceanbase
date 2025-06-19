@@ -2284,7 +2284,7 @@ int ObSPIService::spi_build_record_type(common::ObIAllocator &allocator,
         CK (OB_NOT_NULL(user_type));
         OX (pl_type.set_user_type_id(user_type->get_type(), udt_id));
         OX (pl_type.set_type_from(user_type->get_type_from()));
-      } else if (columns->at(i).type_.is_null_oracle()) {
+      } else if (columns->at(i).type_.is_null()) {
         ObDataType data_type;
         ObCollationType collation_type = session.get_nls_collation();
         ObCharsetType charset_type = ObCharset::charset_type_by_coll(collation_type);
