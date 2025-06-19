@@ -335,6 +335,59 @@ int TestSSExecuteCheckpointTask::check_super_block(const ObSSMicroCacheSuperBlk 
   return ret;
 }
 
+TEST_F(TestSSExecuteCheckpointTask, test_micro_ckpt_lack_phy_blk)
+{
+  LOG_INFO("TEST: start test_micro_ckpt_lack_phy_blk");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ASSERT_NE(nullptr, micro_cache);
+  const int64_t block_size = micro_cache->phy_blk_size_;
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  ObSSPhysicalBlockManager &phy_blk_mgr = micro_cache->phy_blk_mgr_;
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+
+  // add block
+  const int64_t WRITE_BLK_CNT = 50;
+  ObSSPhyBlockCommonHeader common_header;
+  ObSSMicroDataBlockHeader data_blk_header;
+  const int64_t payload_offset = common_header.get_serialize_size() + data_blk_header.get_serialize_size();
+  const int32_t micro_index_size = sizeof(ObSSMicroBlockIndex) + SS_SERIALIZE_EXTRA_BUF_LEN;
+  const int32_t micro_cnt = 200;
+  const int32_t micro_size = (block_size - payload_offset) / micro_cnt - micro_index_size;
+  ObArenaAllocator allocator;
+  char *data_buf = static_cast<char *>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, data_buf);
+  MEMSET(data_buf, 'a', micro_size);
+
+  for (int64_t i = 0; i < WRITE_BLK_CNT; ++i) {
+    MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(i + 1);
+    for (int32_t j = 0; j < micro_cnt; ++j) {
+      const int32_t offset = payload_offset + j * micro_size;
+      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size,
+          macro_id.second_id()/*effective_tablet_id*/, ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+    }
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+  }
+  ASSERT_EQ(WRITE_BLK_CNT * micro_cnt, cache_stat.micro_stat_.total_micro_cnt_);
+  ASSERT_LT(0, cache_stat.micro_stat_.valid_micro_cnt_);
+
+  ObSSPersistMicroMetaTask *persist_meta_task = &micro_cache->task_runner_.persist_meta_task_;
+  persist_meta_task->cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(1000 * 1000);
+
+  ObSSPhyBlockCountInfo &blk_cnt_info = phy_blk_mgr.blk_cnt_info_;
+  const int64_t extra_blk_cnt = blk_cnt_info.shared_blk_cnt_ - blk_cnt_info.shared_blk_used_cnt_;
+  blk_cnt_info.shared_blk_used_cnt_ = blk_cnt_info.shared_blk_cnt_;
+  blk_cnt_info.data_blk_.hold_cnt_ += extra_blk_cnt;
+  blk_cnt_info.meta_blk_.used_cnt_ = blk_cnt_info.meta_blk_.hold_cnt_ - 1;
+
+  persist_meta_task->persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task->persist_meta_op_.gen_checkpoint());
+  ASSERT_EQ(1, phy_blk_mgr.super_blk_.micro_ckpt_entry_list_.count());
+  ASSERT_LT(0, cache_stat.task_stat().cur_micro_ckpt_item_cnt_);
+  ASSERT_LT(cache_stat.task_stat().cur_micro_ckpt_item_cnt_, block_size / SS_AVG_MICRO_META_PERSIST_SIZE);
+}
+
 TEST_F(TestSSExecuteCheckpointTask, test_persist_micro_meta_parallel_with_add)
 {
   LOG_INFO("TEST: start test_persist_micro_meta_parallel_with_add");

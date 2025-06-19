@@ -58,6 +58,7 @@ public:
 
 public:
   static MacroBlockId gen_macro_block_id(const int64_t second_id);
+  static MacroBlockId gen_macro_block_id(const int64_t second_id, const int64_t fourth_id);
   static ObMicroBlockId gen_micro_block_id(const MacroBlockId &macro_id, const int64_t offset, const int64_t size);
   static ObSSMicroBlockCacheKey gen_phy_micro_key(const MacroBlockId &macro_id, const int32_t offset, const int32_t size);
   static int gen_random_data(char *buf, const int64_t size);
@@ -81,6 +82,15 @@ MacroBlockId TestSSCommonUtil::gen_macro_block_id(const int64_t second_id)
   MacroBlockId macro_id(0, second_id, 0);
   macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
   macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MAJOR_DATA_MACRO);
+  return macro_id;
+}
+
+MacroBlockId TestSSCommonUtil::gen_macro_block_id(const int64_t second_id, const int64_t fourth_id)
+{
+  MacroBlockId macro_id(0, second_id, 0);
+  macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+  macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MAJOR_DATA_MACRO);
+  macro_id.set_reorganization_scn(fourth_id);
   return macro_id;
 }
 
