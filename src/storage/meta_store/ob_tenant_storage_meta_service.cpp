@@ -1062,6 +1062,7 @@ int ObTenantStorageMetaService::batch_write_remove_tablet_slog(
   ObSEArray<TabletInfo, 16> current_tablet_arr;
   int64_t finish_cnt = 0;
   int64_t cur_cnt = 0;
+  int64_t item_arr_expand_cnt = total_cnt;
   while (OB_SUCC(ret) && finish_cnt < total_cnt) {
     current_tablet_arr.reset();
     cur_cnt = MIN(MAX_ARRAY_SIZE, total_cnt - finish_cnt);
@@ -1080,9 +1081,10 @@ int ObTenantStorageMetaService::batch_write_remove_tablet_slog(
     if (OB_FAIL(ret)){
     } else if (!is_shared_storage_ && OB_FAIL(safe_batch_write_remove_tablet_slog_for_sn(ls_id, current_tablet_arr))) {
       STORAGE_REDO_LOG(WARN, "inner write log fail", K(ret), K(cur_cnt), K(total_cnt), K(finish_cnt));
-    } else if (is_shared_storage_ && OB_FAIL(safe_batch_write_remove_tablet_slog_for_ss(ls_id, ls_epoch, current_tablet_arr))) {
+    } else if (is_shared_storage_ && OB_FAIL(safe_batch_write_remove_tablet_slog_for_ss(ls_id, ls_epoch, current_tablet_arr, item_arr_expand_cnt))) {
       STORAGE_REDO_LOG(WARN, "inner write log fail", K(ret), K(cur_cnt), K(total_cnt), K(finish_cnt));
     } else {
+      item_arr_expand_cnt = 0;
       finish_cnt += cur_cnt;
     }
   }
@@ -1137,12 +1139,14 @@ int ObTenantStorageMetaService::safe_batch_write_remove_tablet_slog_for_sn(
 int ObTenantStorageMetaService::safe_batch_write_remove_tablet_slog_for_ss(
     const ObLSID &ls_id,
     const int64_t ls_epoch,
-    const common::ObIArray<TabletInfo> &tablet_infos)
+    const common::ObIArray<TabletInfo> &tablet_infos,
+    const int64_t item_arr_expand_cnt)
 {
   int ret = OB_SUCCESS;
   const int64_t tablet_count = tablet_infos.count();
   if (tablet_count > 0) {
     WaitGCTabletArray *tablet_array = nullptr;
+    ObLSPendingFreeTabletArray tmp_pending_free_array;
     const int32_t cmd = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
                                                ObRedoLogSubType::OB_REDO_LOG_DELETE_TABLET);
     ObSArray<ObDeleteTabletLog> slog_array;
@@ -1165,13 +1169,21 @@ int ObTenantStorageMetaService::safe_batch_write_remove_tablet_slog_for_ss(
           LOG_WARN("fail to get pending free tablet array info", K(ret), K(key));
         }
       }
+      if (OB_SUCC(ret) && OB_NOT_NULL(tablet_array) && item_arr_expand_cnt > 0) {
+        const uint64_t cnt = tablet_array->wait_gc_tablet_arr_.items_.count() + item_arr_expand_cnt;
+        if (OB_FAIL(tablet_array->wait_gc_tablet_arr_.items_.reserve(cnt))) {
+          LOG_WARN("failed to reserve for pending free tablet array", K(ret), K(cnt), K(item_arr_expand_cnt));
+        }
+      }
     }
-    if (FAILEDx(slog_array.reserve(tablet_count))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(tmp_pending_free_array.items_.reserve(tablet_count))) {
+      LOG_WARN("failed to reserve for pending free tablet array", K(ret), K(tablet_count));
+    } else if (OB_FAIL(slog_array.reserve(tablet_count))) {
       LOG_WARN("failed to reserve for slog array", K(ret), K(tablet_count));
     } else if (OB_FAIL(param_array.reserve(tablet_count))) {
       LOG_WARN("failed to reserve for param array", K(ret), K(tablet_count));
     } else {
-      ObLSPendingFreeTabletArray tmp_pending_free_array;
       lib::ObMutexGuard guard(tablet_array->lock_);
       for (int64_t i = 0; OB_SUCC(ret) && i < tablet_count; ++i) {
         const ObTabletID &tablet_id = tablet_infos.at(i).first;
@@ -1210,8 +1222,13 @@ int ObTenantStorageMetaService::safe_batch_write_remove_tablet_slog_for_ss(
       }
       if (FAILEDx(slogger_.write_log(param_array))) {
         LOG_WARN("fail to write slog for batch deleting tablet", K(ret), K(param_array));
-      } else if (OB_FAIL(tablet_array->wait_gc_tablet_arr_.items_.assign(tmp_pending_free_array.items_))) {
-        LOG_WARN("fail to push back tablet item", K(ret), K(tmp_pending_free_array));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < tablet_count; ++i) {
+          const ObPendingFreeTabletItem &tablet_item = tmp_pending_free_array.items_.at(i);
+          if (OB_FAIL(tablet_array->wait_gc_tablet_arr_.items_.push_back(tablet_item))) {
+            LOG_WARN("fail to push back tablet item", K(ret), K(tablet_item));
+          }
+        }
       }
     }
   }

@@ -234,7 +234,8 @@ private:
   int safe_batch_write_remove_tablet_slog_for_ss(
       const ObLSID &ls_id,
       const int64_t ls_epoch,
-      const common::ObIArray<TabletInfo> &tablet_infos);
+      const common::ObIArray<TabletInfo> &tablet_infos,
+      const int64_t item_arr_expand_cnt);
   int safe_batch_write_gc_tablet_slog(
       const ObLSID &ls_id,
       const int64_t ls_epoch,
