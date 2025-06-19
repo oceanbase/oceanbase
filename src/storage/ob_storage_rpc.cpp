@@ -2762,6 +2762,7 @@ int ObFetchSSTableMacroIdInfoP::fetch_physical_data_id_info_(ObCopyPhysicalMacro
     LOG_WARN("failed to fill header", K(ret), K(header));
   } else {
     MacroBlockId physical_id;
+    int64_t block_count = 0;
     while (OB_SUCC(ret)) {
       physical_id.reset();
       if (OB_FAIL(producer->get_next_data_block_id(physical_id))) {
@@ -2774,6 +2775,15 @@ int ObFetchSSTableMacroIdInfoP::fetch_physical_data_id_info_(ObCopyPhysicalMacro
         }
       } else if (OB_FAIL(fill_data(physical_id))) {
         LOG_WARN("failed to fill macro block physical id", K(ret), K(physical_id));
+      } else {
+        block_count += 1;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (block_count != header.block_count_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("data block count not match", K(ret), K(block_count), K(header));
       }
     }
   }
@@ -2796,6 +2806,7 @@ int ObFetchSSTableMacroIdInfoP::fetch_physical_other_id_info_(ObCopyPhysicalMacr
     LOG_WARN("failed to fill header", K(ret), K(header));
   } else {
     MacroBlockId physical_id;
+    int64_t block_count = 0;
     while (OB_SUCC(ret)) {
       physical_id.reset();
       if (OB_FAIL(producer->get_next_other_block_id(physical_id))) {
@@ -2808,6 +2819,15 @@ int ObFetchSSTableMacroIdInfoP::fetch_physical_other_id_info_(ObCopyPhysicalMacr
         }
       } else if (OB_FAIL(fill_data(physical_id))) {
         LOG_WARN("failed to fill macro block physical id", K(ret), K(physical_id));
+      } else {
+        block_count += 1;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (block_count != header.block_count_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("other block count not match", K(ret), K(block_count), K(header));
       }
     }
   }
