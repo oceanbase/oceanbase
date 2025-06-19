@@ -67,6 +67,119 @@ ObTenantFileManager *TestSSCkptPhyBlock::tnt_file_mgr_ = nullptr;
 const int64_t TestSSCkptPhyBlock::BLOCK_SIZE = 2 * 1024 * 1024;
 const int64_t TestSSCkptPhyBlock::MAX_SEGMENT_SIZE = 32 * 1024;
 
+struct MockSegmentHeader
+{
+public:
+  MockSegmentHeader() { reset(); }
+  ~MockSegmentHeader() { reset(); }
+  void reset();
+  bool is_valid() const { return payload_size_ > 0; }
+  int serialize(char *buf, const int64_t buf_len, int64_t& pos) const;
+  int deserialize(const char *buf, const int64_t data_len, int64_t& pos);
+  int64_t get_serialize_size() const;
+  TO_STRING_KV(K_(header_size), K_(version), K_(payload_size), K_(payload_zsize), K_(payload_checksum),
+    K_(tailer_offset), K_(tailer_length), K_(compressor_type), K_(new_add));
+
+  int32_t header_size_;
+  int32_t version_;
+  int32_t payload_size_;
+  int32_t payload_zsize_;
+  uint32_t payload_checksum_;
+  int32_t tailer_offset_;
+  int32_t tailer_length_;
+  union {
+    uint32_t attr_;
+    struct {
+      uint32_t compressor_type_ : 8;
+      uint32_t reserved_ : 24;
+    };
+  };
+  uint32_t new_add_;
+};
+
+void MockSegmentHeader::reset()
+{
+  header_size_ = get_serialize_size();
+  version_ = 2;
+  payload_size_ = 0;
+  payload_zsize_ = 0;
+  payload_checksum_ = 0;
+  compressor_type_ = static_cast<uint32_t>(ObCompressorType::INVALID_COMPRESSOR);
+  tailer_offset_ = -1;
+  tailer_length_ = 0;
+  reserved_ = 0;
+  new_add_ = 0;
+}
+
+int MockSegmentHeader::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(buf), K(buf_len));
+  } else if (OB_UNLIKELY(pos + get_serialize_size() > buf_len)) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("data buffer is not enough", KR(ret), K(pos), K(buf_len), K(*this));
+  } else if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("mock segment header is invalid", KR(ret), K(*this));
+  } else {
+    MockSegmentHeader *header = reinterpret_cast<MockSegmentHeader *>(buf + pos);
+    header->header_size_ = get_serialize_size();
+    header->version_ = version_;
+    header->payload_size_ = payload_size_;
+    header->payload_zsize_ = payload_zsize_;
+    header->payload_checksum_ = payload_checksum_;
+    header->tailer_offset_ = tailer_offset_;
+    header->tailer_length_ = tailer_length_;
+    header->attr_ = attr_;
+    header->new_add_ = new_add_;
+    pos += get_serialize_size();
+  }
+  return ret;
+}
+
+int MockSegmentHeader::deserialize(const char *buf, const int64_t data_len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0 || pos < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(buf), K(data_len), K(pos));
+  } else {
+    const MockSegmentHeader *header_ptr = reinterpret_cast<const MockSegmentHeader *>(buf + pos);
+    header_size_ = header_ptr->header_size_;
+    version_ = header_ptr->version_;
+    payload_size_ = header_ptr->payload_size_;
+    payload_zsize_ = header_ptr->payload_zsize_;
+    payload_checksum_ = header_ptr->payload_checksum_;
+    tailer_offset_ = header_ptr->tailer_offset_;
+    tailer_length_ = header_ptr->tailer_length_;
+    attr_ = header_ptr->attr_;
+    if (2 == version_) {
+      new_add_ = header_ptr->new_add_;
+    }
+
+    if (OB_UNLIKELY(!is_valid())) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("deserialized mock segment header is invalid", KR(ret), K(*this));
+    } else {
+      pos += get_serialize_size();
+    }
+  }
+  return ret;
+}
+
+int64_t MockSegmentHeader::get_serialize_size() const
+{
+  int64_t size = 0;
+  if (1 == version_) {
+    size = sizeof(ObSSCkptPhyBlockSegmentHeader);
+  } else if (2 == version_) {
+    size = sizeof(MockSegmentHeader);
+  }
+  return size;
+}
+
 struct ItemInfo
 {
   ItemInfo() : allocator_(), buf_(nullptr), buf_len_(0), crc_(0) {}
@@ -411,6 +524,55 @@ TEST_F(TestSSCkptPhyBlock, test_ckpt_segment)
     ASSERT_EQ(i, writer.segs_cnt_);
   }
   ASSERT_EQ(OB_SUCCESS, writer.close());
+}
+
+TEST_F(TestSSCkptPhyBlock, test_segment_header_compat)
+{
+  LOG_INFO("TEST: start test_segment_header_compat");
+  ObSSCkptPhyBlockSegmentHeader seg_header;
+  seg_header.payload_size_ = 318;
+  seg_header.payload_zsize_ = 214;
+  seg_header.payload_checksum_ = 50001;
+  seg_header.tailer_offset_ = 15;
+  seg_header.tailer_length_ = 1;
+  seg_header.compressor_type_ = 3;
+
+  const int64_t buf_size = 512;
+  char seg_header_buf[buf_size];
+  MEMSET(seg_header_buf, '\0', buf_size);
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, seg_header.serialize(seg_header_buf, buf_size, pos));
+  ASSERT_EQ(pos, seg_header.get_serialize_size());
+
+  MockSegmentHeader mock_seg_header;
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, mock_seg_header.deserialize(seg_header_buf, buf_size, pos));
+  ASSERT_EQ(seg_header.payload_size_, mock_seg_header.payload_size_);
+  ASSERT_EQ(seg_header.payload_zsize_, mock_seg_header.payload_zsize_);
+  ASSERT_EQ(seg_header.payload_checksum_, mock_seg_header.payload_checksum_);
+  ASSERT_EQ(seg_header.tailer_offset_, mock_seg_header.tailer_offset_);
+  ASSERT_EQ(seg_header.tailer_length_, mock_seg_header.tailer_length_);
+  ASSERT_EQ(seg_header.compressor_type_, mock_seg_header.compressor_type_);
+  ASSERT_EQ(0, mock_seg_header.new_add_);
+  ASSERT_EQ(pos, seg_header.get_serialize_size());
+
+  MEMSET(seg_header_buf, '\0', buf_size);
+  pos = 0;
+  mock_seg_header.version_ = 2;
+  mock_seg_header.new_add_ = 90003;
+  ASSERT_EQ(OB_SUCCESS, mock_seg_header.serialize(seg_header_buf, buf_size, pos));
+  ASSERT_EQ(pos, mock_seg_header.get_serialize_size());
+  MockSegmentHeader tmp_mock_seg_header;
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, tmp_mock_seg_header.deserialize(seg_header_buf, buf_size, pos));
+  ASSERT_EQ(pos, mock_seg_header.get_serialize_size());
+  ASSERT_EQ(tmp_mock_seg_header.payload_size_, mock_seg_header.payload_size_);
+  ASSERT_EQ(tmp_mock_seg_header.payload_zsize_, mock_seg_header.payload_zsize_);
+  ASSERT_EQ(tmp_mock_seg_header.payload_checksum_, mock_seg_header.payload_checksum_);
+  ASSERT_EQ(tmp_mock_seg_header.tailer_offset_, mock_seg_header.tailer_offset_);
+  ASSERT_EQ(tmp_mock_seg_header.tailer_length_, mock_seg_header.tailer_length_);
+  ASSERT_EQ(tmp_mock_seg_header.compressor_type_, mock_seg_header.compressor_type_);
+  ASSERT_EQ(tmp_mock_seg_header.new_add_, mock_seg_header.new_add_);
 }
 
 }  // namespace storage
