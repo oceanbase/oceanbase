@@ -3714,35 +3714,10 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
     }
 
     if (OB_SUCC(ret)) {
-      const ObDMLStmt *stmt = nullptr;
-      ObSEArray<uint64_t, 2> auto_inc_cids;
-      const ObInsertUpCtDef *insert_up_ctdef = spec.insert_up_ctdefs_.at(0);
-      if (OB_ISNULL(stmt = op.get_stmt())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret));
-      } else if (!stmt->is_insert_stmt()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret));
-      } else if (stmt->get_autoinc_params().empty()) {
-        // do nothing
-      } else if (OB_FAIL(get_all_auto_inc_cids(stmt->get_autoinc_params(), auto_inc_cids))) {
-        LOG_WARN("fail to get all auto_inc column ids", K(ret));
-      } else {
-        bool founded = false;
-        for (int64_t i = 0; !founded && OB_SUCC(ret) && i < ins_pri_dml_info->rowkey_cnt_; i++) {
-          ObColumnRefRawExpr *col_expr = ins_pri_dml_info->column_exprs_.at(i);
-          ObRawExpr *new_auto_inc_expr = ins_pri_dml_info->column_convert_exprs_.at(i);
-          uint64_t base_cid = OB_INVALID_ID;
-          if (OB_FAIL(dml_cg_service_.get_column_ref_base_cid(op, col_expr, base_cid))) {
-            LOG_WARN("fail to get base cid", K(ret));
-          } else if (!has_exist_in_array(auto_inc_cids, base_cid)) {
-            // do nothing
-          } else if (OB_FAIL(generate_rt_expr(*new_auto_inc_expr, spec.ins_auto_inc_expr_))) {
-            LOG_WARN("fail to cg auto_inc_expr", K(ret));
-          } else {
-            founded = true;
-          }
-        }
+      if (OB_FAIL(generate_ins_auto_inc_expr(op, spec, ins_pri_dml_info))) {
+        LOG_WARN("fail to generate insert auto inc expr", K(ret), KPC(ins_pri_dml_info));
+      } else if (OB_FAIL(generate_upd_auto_inc_expr(op, spec, upd_pri_dml_info))) {
+        LOG_WARN("fail to generate update auto inc expr", K(ret), KPC(upd_pri_dml_info));
       }
     }
   }
@@ -3808,6 +3783,94 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
     }
   }
 
+  return ret;
+}
+int ObStaticEngineCG::generate_ins_auto_inc_expr(ObLogInsert &op,
+                                                 ObTableInsertUpSpec &spec,
+                                                 const IndexDMLInfo *ins_pri_dml_info)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = nullptr;
+  ObSEArray<uint64_t, 2> auto_inc_cids;
+  if (OB_ISNULL(stmt = op.get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!stmt->is_insert_stmt()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (stmt->get_autoinc_params().empty()) {
+    // do nothing
+  } else if (OB_FAIL(get_all_auto_inc_cids(stmt->get_autoinc_params(), auto_inc_cids))) {
+    LOG_WARN("fail to get all auto_inc column ids", K(ret));
+  } else {
+    bool founded = false;
+    for (int64_t i = 0; !founded && OB_SUCC(ret) && i < ins_pri_dml_info->rowkey_cnt_; i++) {
+      ObColumnRefRawExpr *col_expr = ins_pri_dml_info->column_exprs_.at(i);
+      ObRawExpr *new_auto_inc_expr = ins_pri_dml_info->column_convert_exprs_.at(i);
+      uint64_t base_cid = OB_INVALID_ID;
+      if (OB_FAIL(dml_cg_service_.get_column_ref_base_cid(op, col_expr, base_cid))) {
+        LOG_WARN("fail to get base cid", K(ret));
+      } else if (!has_exist_in_array(auto_inc_cids, base_cid)) {
+        // do nothing
+      } else if (OB_FAIL(generate_rt_expr(*new_auto_inc_expr, spec.ins_auto_inc_expr_))) {
+        LOG_WARN("fail to cg auto_inc_expr", K(ret));
+      } else {
+        founded = true;
+      }
+    }
+  }
+  return ret;
+}
+int ObStaticEngineCG::generate_upd_auto_inc_expr(ObLogInsert &op,
+                                                 ObTableInsertUpSpec &spec,
+                                                 const IndexDMLInfo *upd_pri_dml_info)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = nullptr;
+  ObSEArray<uint64_t, 2> auto_inc_cids;
+  if (OB_ISNULL(stmt = op.get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!stmt->is_insert_stmt()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (stmt->get_autoinc_params().empty()) {
+    // do nothing
+  } else if (OB_FAIL(get_all_auto_inc_cids(stmt->get_autoinc_params(), auto_inc_cids))) {
+    LOG_WARN("fail to get all auto_inc column ids", K(ret));
+  } else {
+    bool founded = false;
+    const ObAssignments &assigns = upd_pri_dml_info->assignments_;
+    for (int64_t i = 0; !founded && OB_SUCC(ret) && i < assigns.count(); ++i) {
+      uint64_t base_cid = OB_INVALID_INDEX;
+      const ObColumnRefRawExpr *col = assigns.at(i).column_expr_;
+      ObRawExpr *assign_expr = assigns.at(i).expr_;
+      if (OB_FAIL(dml_cg_service_.get_column_ref_base_cid(op, col, base_cid))) {
+        LOG_WARN("fail to get base cid", K(ret));
+      } else if (!has_exist_in_array(auto_inc_cids, base_cid)) {
+        // do nothing
+      } else if (OB_FAIL(generate_rt_expr(*assign_expr, spec.upd_auto_inc_expr_))) {
+        LOG_WARN("fail to cg auto_inc_expr", K(ret));
+      } else {
+        founded = true;
+      }
+    }
+
+    for (int64_t i = 0; !founded && OB_SUCC(ret) && i < upd_pri_dml_info->column_exprs_.count(); ++i) {
+      int64_t assign_idx = OB_INVALID_INDEX;
+      uint64_t base_cid = OB_INVALID_INDEX;
+      const ObColumnRefRawExpr *col = upd_pri_dml_info->column_exprs_.at(i);
+      if (OB_FAIL(dml_cg_service_.get_column_ref_base_cid(op, col, base_cid))) {
+        LOG_WARN("fail to get base cid", K(ret));
+      } else if (!has_exist_in_array(auto_inc_cids, base_cid)) {
+        // do nothing
+      } else if (OB_FAIL(generate_rt_expr(*col, spec.upd_auto_inc_expr_))) {
+        LOG_WARN("fail to cg auto_inc_expr", K(ret));
+      } else {
+        founded = true;
+      }
+    }
+  }
   return ret;
 }
 

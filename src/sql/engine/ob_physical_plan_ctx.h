@@ -321,13 +321,10 @@ public:
   }
   inline uint64_t calc_last_insert_id_to_client()
   {
-    if (0 == last_insert_id_to_client_) {
-      last_insert_id_to_client_ =
-        last_insert_id_cur_stmt_ > 0 ?
-          last_insert_id_cur_stmt_ :
-          (last_insert_id_with_expr_ ?
-            last_insert_id_session_ :
-            autoinc_col_value_);
+    if (last_insert_id_changed_) {
+      last_insert_id_to_client_ = last_insert_id_session_;
+    } else if (last_insert_id_cur_stmt_ != 0) {
+      last_insert_id_to_client_ = last_insert_id_cur_stmt_;
     }
     return last_insert_id_to_client_;
   }
@@ -654,7 +651,7 @@ private:
   share::CacheHandle *autoinc_cache_handle_;
   // last_insert_id return to client
   uint64_t last_insert_id_to_client_;
-  // first auto-increment value in current stmt
+  // first auto-increment value in current stmt, last_insert_id which record in session
   uint64_t last_insert_id_cur_stmt_;
   // auto-increment value
   uint64_t autoinc_id_tmp_;
