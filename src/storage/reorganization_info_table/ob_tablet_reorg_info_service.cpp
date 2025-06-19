@@ -302,7 +302,7 @@ int ObTabletReorgInfoTableService::check_transfer_in_tablet_finish_(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet reorg info table service do not init", K(ret));
-  } else if (OB_FAIL(ls.get_tablet(data.key_.tablet_id_, tablet_handle))) {
+  } else if (OB_FAIL(ls.ha_get_tablet(data.key_.tablet_id_, tablet_handle))) {
     if (OB_TABLET_NOT_EXIST == ret) {
       is_finish = true;
       ret = OB_SUCCESS;
@@ -340,7 +340,7 @@ int ObTabletReorgInfoTableService::check_transfer_out_tablet_finish_(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet reorg info table service do not init", K(ret));
-  } else if (OB_FAIL(ls.get_tablet(data.key_.tablet_id_, tablet_handle))) {
+  } else if (OB_FAIL(ls.ha_get_tablet(data.key_.tablet_id_, tablet_handle))) {
     if (OB_TABLET_NOT_EXIST == ret) {
       is_finish = true;
       ret = OB_SUCCESS;
@@ -356,8 +356,6 @@ int ObTabletReorgInfoTableService::check_transfer_out_tablet_finish_(
       is_finish = true;
     } else if (meta.transfer_info_.transfer_seq_ < data_value.transfer_seq_) {
       is_finish = false;
-    } else if (tablet->is_empty_shell()) {
-      is_finish = true;
     }
   }
   return ret;
