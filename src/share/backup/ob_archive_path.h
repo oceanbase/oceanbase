@@ -122,9 +122,8 @@ public:
       const int64_t round_id, const int64_t piece_id, const share::ObLSID &ls_id,
       const ObArchiveLSMetaType &meta_type, const int64_t file_id, ObBackupPath &path);
 
-private:
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[ls_id]/
-  static int get_piece_ls_dir_path_(const ObBackupDest &dest, const int64_t dest_id,
+  static int get_piece_ls_dir_path(const ObBackupDest &dest, const int64_t dest_id,
       const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObBackupPath &path);
 
 private:
