@@ -20,7 +20,7 @@ int oceanbase::share::check_if_function_exist(const ObString &function_name, boo
 {
   int ret = OB_SUCCESS;
   if (
-#define OB_RESOURCE_FUNCTION_TYPE_DEF(function_type_string) 0 == function_name.compare(#function_type_string) ||
+#define OB_RESOURCE_FUNCTION_TYPE_DEF(function_type_string) 0 == function_name.case_compare(#function_type_string) ||
 #include "ob_resource_plan_info.h"
 #undef OB_RESOURCE_FUNCTION_TYPE_DEF
       0) {
