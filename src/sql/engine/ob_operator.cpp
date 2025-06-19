@@ -1622,6 +1622,10 @@ int ObOperator::convert_vector_format()
     FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
       VectorFormat format = (*e)->is_batch_result() ? VEC_UNIFORM : VEC_UNIFORM_CONST;
       LOG_TRACE("init vector", K(format), K(*e));
+      VectorFormat expr_fmt = (*e)->get_format(eval_ctx_);
+      if (expr_fmt == VEC_UNIFORM || expr_fmt == VEC_UNIFORM_CONST) {
+        continue;
+      }
       if (OB_FAIL((*e)->init_vector(eval_ctx_, format, brs_.size_))) {
         LOG_WARN("expr evaluate failed", K(ret), KPC(*e), K_(eval_ctx));
       }
