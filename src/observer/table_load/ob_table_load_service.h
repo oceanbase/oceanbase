@@ -69,6 +69,10 @@ public:
                                                            const ObTableSchema *table_schema,
                                                            const ObDirectLoadMethod::Type method,
                                                            const uint64_t compat_version);
+  static int check_support_direct_load_for_fts_index(ObSchemaGetterGuard &schema_guard,
+                                                     const ObTableSchema *table_schema,
+                                                     const ObDirectLoadMethod::Type method,
+                                                     const storage::ObDirectLoadMode::Type load_mode);
 
   static int alloc_ctx(ObTableLoadTableCtx *&table_ctx);
   static void free_ctx(ObTableLoadTableCtx *table_ctx);
