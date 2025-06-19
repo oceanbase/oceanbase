@@ -1344,7 +1344,9 @@ int ObLogFormatter::fill_normal_cols_(
           }
           rv->is_changed_[usr_column_idx] = (1 != cv->is_col_nop_); // column is not changed if col_value is nop(may be in minimal mode)
         } else {
-          if (! cv->is_out_row_) {
+          if (stmt_task.is_insert()) {
+            LOG_TRACE("skip old_cols for insert op", K(stmt_task));
+          } else if (! cv->is_out_row_) {
             if (cv->is_col_nop_) {
               rv->is_old_col_nop_[usr_column_idx] = true;
             } else {
