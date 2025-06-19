@@ -6340,6 +6340,7 @@ int ObLSTabletService::estimate_row_count(
         LOG_WARN("failed to get tablet_iter", K(ret), K(snapshot_version), K(param));
       }
     } else {
+      int64_t major_version = -1;
       while(OB_SUCC(ret)) {
         ObITable *table = nullptr;
         if (OB_FAIL(tablet_iter.table_iter()->get_next(table))) {
@@ -6352,11 +6353,20 @@ int ObLSTabletService::estimate_row_count(
         } else if (OB_ISNULL(table)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table shoud not be null", K(ret), K(tablet_iter.table_iter()));
-        } else if (table->is_sstable() && static_cast<ObSSTable*>(table)->is_empty()) {
-          LOG_DEBUG("cur sstable is empty", K(ret), K(*table));
-          continue;
+        } else if (table->is_sstable()) {
+          const ObSSTable *sstable = static_cast<const ObSSTable*>(table);
+          if (sstable->is_major_sstable()) {
+            major_version = sstable->get_data_version();
+          } else if (table->get_upper_trans_version() <= major_version) {
+            LOG_DEBUG("cur sstable is corvered by major", K(ret), K(major_version), K(*table));
+            continue;
+          }
         }
-        if (OB_SUCC(ret) && OB_FAIL(tables.push_back(table))) {
+        if (OB_FAIL(ret)) {
+        } else if (table->no_data_to_read()) {
+          LOG_DEBUG("cur table is empty", K(ret), K(*table));
+          continue;
+        } else if (OB_FAIL(tables.push_back(table))) {
           LOG_WARN("failed to push back table", K(ret), K(tables));
         }
       }
