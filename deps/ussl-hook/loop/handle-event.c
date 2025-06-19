@@ -397,12 +397,12 @@ static int acceptfd_handle_first_readable_event(acceptfd_sk_t *s)
                      errno);
       handle_acceptfd_error(s, &err);
     } else {
+      negotiation_message_t *nego_message = (typeof(nego_message))(h + 1);
+      s->fd_info.client_gid = nego_message->client_gid;
       if (is_local_ip_address(src_addr)) {
-        err = remove_from_epoll_and_dispatch(s, UINT64_MAX);
-        ussl_log_info("local ip address:%s, dispatch after consume", src_addr);
+        err = remove_from_epoll_and_dispatch(s, nego_message->client_gid);
+        ussl_log_info("local ip address:%s, accept connection regardless of the server_auth_methods", src_addr);
       } else {
-        negotiation_message_t *nego_message = (typeof(nego_message))(h + 1);
-        s->fd_info.client_gid = nego_message->client_gid;
         char auth_type[AUTH_TYPE_STRING_MAX_LEN] = {0};
         auth_type_to_str(nego_message->type, auth_type, AUTH_TYPE_STRING_MAX_LEN);
         if (USSL_AUTH_NONE == nego_message->type) {
