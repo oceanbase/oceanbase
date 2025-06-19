@@ -545,7 +545,7 @@ int ObSharedNothingTmpFile::inner_cached_read_from_block_(ObTmpFileIOReadCtx &io
     LOG_WARN("block handle is not inited", KR(ret), K(fd_), K(block_index));
   } else if (OB_UNLIKELY(!block_handle.get()->get_macro_block_id().is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("block handle is not inited", KR(ret), K(fd_), K(block_index));
+    LOG_WARN("macro block id is invalid", KR(ret), K(fd_), K(block_handle));
   } else {
     ObTmpFileIOReadCtx::ObIOReadHandle io_read_handle(read_buf,
                                                       offset_in_block_buf,

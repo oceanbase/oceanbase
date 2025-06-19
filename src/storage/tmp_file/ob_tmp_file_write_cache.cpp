@@ -249,34 +249,35 @@ int ObTmpFileWriteCache::swap_()
   int32_t free_page_cnt = free_page_list_.size();
   LOG_DEBUG("doing swap", K(free_page_cnt), K(swap_queue_size_), K(io_waiting_queue_size_), K(ATOMIC_LOAD(&used_page_cnt_)));
   while (OB_SUCC(ret) && free_page_cnt > 0 && !swap_queue_.is_empty()) {
-    while (OB_SUCC(ret) && free_page_cnt > 0 && !swap_queue_.is_empty()) {
-      ObTmpFileSwapJob *swap_job = nullptr;
-      if (OB_FAIL(pop_swap_job_(swap_job))) {
-      } else {
-        metrics_.record_swap_job(ObTimeUtility::current_time() - swap_job->get_create_ts());
-        int32_t expect_swap_cnt = swap_job->get_expect_swap_cnt();
-        free_page_cnt = max(0, free_page_cnt - expect_swap_cnt);
-        swap_job->signal_swap_complete(OB_SUCCESS);
-      }
+    ObTmpFileSwapJob *swap_job = nullptr;
+    if (OB_FAIL(pop_swap_job_(swap_job))) {
+    } else {
+      metrics_.record_swap_job(ObTimeUtility::current_time() - swap_job->get_create_ts());
+      int32_t expect_swap_cnt = swap_job->get_expect_swap_cnt();
+      free_page_cnt = max(0, free_page_cnt - expect_swap_cnt);
+      swap_job->signal_swap_complete(OB_SUCCESS);
     }
+  }
 
-    // wake up timeout jobs
-    int32_t swap_queue_size = ATOMIC_LOAD(&swap_queue_size_);
-    while (OB_SUCC(ret) && swap_queue_size > 0) {
-      ObTmpFileSwapJob *swap_job = nullptr;
-      if (OB_FAIL(pop_swap_job_(swap_job))) {
-      } else if (swap_job->get_abs_timeout_ts() <= ObTimeUtility::current_time()) {
-        metrics_.record_swap_job(ObTimeUtility::current_time() - swap_job->get_create_ts());
-        if (OB_FAIL(swap_job->signal_swap_complete(OB_TIMEOUT))) {
-        }
-      } else if (OB_FAIL(add_swap_job_(swap_job))) {
-        LOG_WARN("fail to add swap job", KR(ret));
+  // wake up timeout jobs
+  int32_t swap_queue_size = ATOMIC_LOAD(&swap_queue_size_);
+  while (OB_SUCC(ret) && swap_queue_size > 0) {
+    ObTmpFileSwapJob *swap_job = nullptr;
+    if (OB_FAIL(pop_swap_job_(swap_job))) {
+    } else if (swap_job->get_abs_timeout_ts() <= ObTimeUtility::current_time()) {
+      metrics_.record_swap_job(ObTimeUtility::current_time() - swap_job->get_create_ts());
+      if (OB_FAIL(swap_job->signal_swap_complete(OB_TIMEOUT))) {
+        LOG_WARN("fail to signal swap complete", KR(ret), KPC(swap_job));
       }
-      swap_queue_size -= 1;
+    } else if (OB_FAIL(add_swap_job_(swap_job))) {
+      LOG_WARN("fail to add swap job", KR(ret));
     }
+    swap_queue_size -= 1;
+  }
 
-    // wake up all jobs if IO error occurs
-    int ret_code = get_flush_ret_code_();
+  // wake up all jobs if IO error occurs
+  int ret_code = get_flush_ret_code_();
+  if (OB_SERVER_OUTOF_DISK_SPACE == ret_code) {
     while (OB_SUCC(ret) && OB_SUCCESS != ret_code && !swap_queue_.is_empty()) {
       ObTmpFileSwapJob *swap_job = nullptr;
       if (OB_FAIL(pop_swap_job_(swap_job))) {
@@ -927,7 +928,6 @@ int ObTmpFileWriteCache::build_task_(const int64_t expect_flush_cnt, ObTmpFileBl
             break;
           }
           for (int32_t i = 0; OB_SUCC(ret); ++i) {
-            bool need_free = false;
             ObTmpFileFlushTask *task = nullptr;
             if (OB_FAIL(alloc_flush_task_(task))) {
               LOG_WARN("fail to alloc flush task", KR(ret), KPC(task));
@@ -938,16 +938,18 @@ int ObTmpFileWriteCache::build_task_(const int64_t expect_flush_cnt, ObTmpFileBl
               LOG_WARN("fail to init task", KR(ret), KPC(task));
             } else if (OB_FAIL(collect_pages_(page_iterator, *task, block_handle))) {
               LOG_WARN("fail to collect pages", KR(ret), KPC(task));
-            } else if (task->get_page_cnt() <= 0) {
-              LOG_DEBUG("no more pages in range, break", KR(ret), KPC(task));
-              need_free = true;
             }
 
-            if ((OB_FAIL(ret) && OB_NOT_NULL(task)) || need_free) {
-              task->cancel(OB_CANCELED);
-              LOG_DEBUG("cancel flush task, free", KPC(task));
-              free_flush_task_(task);
+            if (OB_FAIL(ret) || (OB_NOT_NULL(task) && task->get_page_cnt() <= 0)) {
+              if (OB_NOT_NULL(task)) {
+                task->cancel(OB_CANCELED);
+                LOG_DEBUG("cancel flush task, free", KPC(task));
+                free_flush_task_(task);
+              }
               break;
+            }
+
+            if (OB_FAIL(ret)) {
             } else if (OB_FAIL(tasks->push_back(task))) {
               LOG_ERROR("fail to push back task", KR(ret), KPC(task));
             } else {
@@ -1114,12 +1116,9 @@ int ObTmpFileWriteCache::evict_(ObTmpFileFlushTask &task)
 {
   int ret = OB_SUCCESS;
   ObIArray<ObTmpFilePageHandle> &page_array = task.get_page_array();
-  ObSEArray<int64_t, 256> holding_locks;
-  while (OB_SUCC(ret) && page_array.count() != 0) {
-    ObTmpFilePageHandle page_handle;
-    if (OB_FAIL(page_array.pop_back(page_handle))) {
-      LOG_WARN("fail to pop back page node", KR(ret));
-    } else if (OB_ISNULL(page_handle.get_page())) {
+  for (int32_t i = 0; OB_SUCC(ret) && i < page_array.count(); ++i) {
+    ObTmpFilePageHandle &page_handle = page_array.at(i);
+    if (OB_ISNULL(page_handle.get_page())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("page is null", KR(ret), K(task));
     } else {
@@ -1134,22 +1133,12 @@ int ObTmpFileWriteCache::evict_(ObTmpFileFlushTask &task)
           LOG_WARN("fail to free page", KR(ret), K(page), K(task));
         }
       }
-
-      if (OB_FAIL(ret)) {
-      } else if (!page.is_full() && OB_FAIL(holding_locks.push_back(fd))) {
-        LOG_ERROR("fail to push back locked fd", KR(ret), K(fd), K(page), K(task));
-      }
     }
   }
-
+  // we will call unlock() in ~ObTmpFileFlushTask() to release locks for incomplete pages
   ObTmpFileBlock *block = task.get_block_handle().get();
   if (FAILEDx(block->flush_pages_succ(task.get_page_idx(), task.get_page_cnt()))) {
     LOG_WARN("fail to flush pages succ", KR(ret), K(task));
-  }
-  for (int32_t i = 0; OB_SUCC(ret) && i < holding_locks.count(); ++i) {
-    if (OB_FAIL(unlock(holding_locks.at(i)))) { // TODO：unlock操作可以统一收拢到task析构
-      LOG_ERROR("fail to unlock", KR(ret), K(holding_locks.at(i)));
-    }
   }
   LOG_DEBUG("evict end", KR(ret), K(task));
   return ret;

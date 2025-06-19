@@ -66,9 +66,9 @@ public:
   {
     return buffer != nullptr && buffer >= buf_ && buffer + length <= buf_ + size_;
   }
-  TO_STRING_KV(KP(this), K(is_send_), K(is_finished_), K(size_),
-               K(page_idx_), K(page_cnt_), K(page_array_.count()),
-               KP(buf_), K(create_ts_),
+  TO_STRING_KV(KP(this), K(is_send_), K(is_finished_), K(ret_code_),
+               K(size_), K(page_idx_), K(page_cnt_),
+               KP(buf_), K(create_ts_), K(page_array_.count()),
                K(io_handle_), K(tmp_file_block_handle_));
 private:
   static const int64_t SCHEDULE_TIME_WARN_MS = 30 * 1000;
@@ -86,7 +86,7 @@ private:
   ObFIFOAllocator *allocator_;
   ObTmpFileBlockHandle tmp_file_block_handle_;
   common::ObIOHandle io_handle_;
-  ObSEArray<ObTmpFilePageHandle, 256> page_array_;
+  ObSEArray<ObTmpFilePageHandle, ObTmpFileGlobal::BLOCK_PAGE_NUMS> page_array_;
   ObTmpFileWriteBlockTimerTask write_block_task_;
 };
 
