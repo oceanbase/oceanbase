@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_macro_block_reader.h"
 #include "ob_macro_block_bare_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 
 namespace oceanbase
 {
