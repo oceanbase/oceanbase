@@ -627,6 +627,8 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
               LOG_WARN("failed to copy meta info", K(ret));
             } else if (OB_FAIL(new_adapter->init(vec_idx_mgr->get_memory_context(), vec_idx_mgr->get_all_vsag_use_mem()))) {
               LOG_WARN("failed to init adpt.", K(ret));
+            } else if (OB_FAIL(new_adapter->set_index_identity(adapter->get_index_identity()))) {
+              LOG_WARN("failed to set index identity", K(ret));
             } else {
               adapter = new_adapter;
             }
