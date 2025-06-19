@@ -2330,7 +2330,9 @@ int ObTransformPredicateMoveAround::check_pushdown_through_groupby_validity(ObSe
   if (OB_SUCC(ret) && !is_valid && query_ctx->check_opt_compat_version(COMPAT_VERSION_4_4_0)) {
     block_by_groupby = false;
     block_by_rollup = false;
-    if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(having_expr, stmt.get_group_exprs(),
+    if (is_oracle_mode() && (having_expr->has_flag(IS_ROWID) || having_expr->has_flag(CNT_ROWID))) {
+      block_by_groupby = true;
+    } else if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(having_expr, stmt.get_group_exprs(),
               true, true, is_valid))) {
       LOG_WARN("failed to check if can pass through group by", K(ret));
     } else if (!is_valid) {
