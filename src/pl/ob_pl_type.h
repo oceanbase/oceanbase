@@ -574,6 +574,17 @@ public:
                   const common::ObCollationType ncs_type, const common::ObTimeZoneInfo *tz_info,
                   const char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
 
+  static int intervalym_element_cell_str(char *buf,
+                                        const int64_t len,
+                                        ObIntervalYMValue val,
+                                        int64_t &pos,
+                                        const ObScale scale);
+  static int intervalds_element_cell_str(char *buf,
+                                        const int64_t len,
+                                        ObIntervalDSValue val,
+                                        int64_t &pos,
+                                        const ObScale scale);
+
   int convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const;
 
   static int get_udt_type_by_name(uint64_t tenant_id,
