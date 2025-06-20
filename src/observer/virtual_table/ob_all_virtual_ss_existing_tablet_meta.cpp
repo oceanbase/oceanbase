@@ -393,7 +393,7 @@ int ObAllVirtualSSExistingTabletMeta::generate_virtual_rows_(ObArray<VirtualTabl
           ObSSMetaUpdateMetaInfo update_meta_info;
           ObAtomicExtraInfo extra_info; // useless for now.
           if (OB_FAIL(tablet_iter->get_next(allocator, tablet_handle, row_scn, update_meta_info, extra_info))) {
-            if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            if (OB_UNLIKELY(OB_ITER_END != ret && OB_INVALID_QUERY_TIMESTAMP != ret)) {
               SERVER_LOG(WARN, "get next tablet from tablet_iter failed", KR(ret));
             } else {
               ret = OB_SUCCESS;

@@ -275,7 +275,7 @@ int ObAllVirtualSSExistingSSTableMgr::get_next_tablet_()
     ObAtomicExtraInfo extra_info; // useless for now.
 
     if (OB_FAIL(tablet_iter_->get_next(tablet_allocator_, tablet_hdl_, cur_row_scn_, update_meta_info, extra_info))) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      if (OB_UNLIKELY(OB_ITER_END != ret && OB_INVALID_QUERY_TIMESTAMP != ret)) {
         SERVER_LOG(WARN, "get next tablet from tablet_iter failed", KR(ret));
       }
     } else if (OB_UNLIKELY(!tablet_hdl_.is_valid())) {
