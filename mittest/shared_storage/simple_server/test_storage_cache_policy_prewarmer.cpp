@@ -28,29 +28,55 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_clean_task_history)
   // test clean history
   share::ObTenantSwitchGuard tguard;
   OK(tguard.switch_to(run_ctx_.tenant_id_));
+  FLOG_INFO("[TEST] test_clean_task_history start");
 
   ObStorageCachePolicyService *policy_service = MTL(ObStorageCachePolicyService *);
   ASSERT_NE(nullptr, policy_service);
 
+  int ret = OB_SUCCESS;
   // Simulate clean tablet_task_map
   SCPTabletTaskMap &tablet_tasks = policy_service->get_tablet_tasks();
   ASSERT_EQ(OB_SUCCESS, tablet_tasks.clear());
   ASSERT_EQ(0, tablet_tasks.size());
-  for (int i = 0; i < 1100; ++i) {
-    // add tasks to be cleaned
+  const int64_t start_time = ObTimeUtility::current_time();
+  // Add 25,000 tasks, ensuring tablet_tasks.size() > 20,000
+  int64_t finished_part1_end_time = 0;
+  for (int i = 0; i < 25000; ++i) {
     const int64_t tablet_id = i + 200001;
-    if (i < 200) {
-      add_task(tablet_tasks, ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_FINISHED, ObTimeUtility::current_time() - 2 * 3600 * 1000LL * 1000LL, tablet_id);
-    } else if (i < 400) {
-      add_task(tablet_tasks, ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_FAILED, ObTimeUtility::current_time() - 12 * 3600 * 1000LL * 1000LL, tablet_id);
-    } else if (i < 600) {
-      add_task(tablet_tasks, ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_CANCELED, ObTimeUtility::current_time() - 12 * 3600 * 1000LL * 1000LL, tablet_id);
-    } else if (i < 800) {
-      add_task(tablet_tasks, ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_SUSPENDED, ObTimeUtility::current_time() - 12 * 3600 * 1000LL * 1000LL, tablet_id);
-    } else {
-      add_task(tablet_tasks, ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_DOING, ObTimeUtility::current_time(), tablet_id);
+    ObStorageCacheTaskStatusType status;
+    int64_t end_time = start_time - (i / 1000) * 3600 * 1000LL * 1000LL;
+
+    // The first 5,000 tasks are completed (can be deleted)
+    if (i < 5000) {
+      status = ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_FINISHED;
+      finished_part1_end_time = end_time;
     }
+    // The next 5000 tasks are completed but older (can be deleted)
+    if (i < 10000) {
+      status = ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_FINISHED;
+    }
+    // The next 5000 tasks are canceled (can be deleted)
+    else if (i < 15000) {
+      status = ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_CANCELED;
+    }
+    // The middle 5000 tasks are failed (can be deleted)
+    else if (i < 20000) {
+      status = ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_FAILED;
+    }
+    // The remaining 2000 tasks are in the suspended state (cannot be deleted)
+    else if (i < 22000) {
+      status = ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_SUSPENDED;
+    }
+    // The last 3000 tasks are in progress (cannot be deleted)
+    else {
+      status = ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_DOING;
+      end_time = ObTimeUtility::current_time();
+    }
+    add_task(tablet_tasks, status, end_time, tablet_id);
   }
+
+  ASSERT_EQ(tablet_tasks.size(), 25000);
+
 
   OK(exe_sql("create table test_clean (col1 int, col2 int)"
               "partition by range(col1)"
@@ -128,10 +154,47 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_clean_task_history)
   TG_SCHEDULE(policy_service->refresh_policy_scheduler_.tg_id_, policy_service->refresh_policy_scheduler_.clean_history_task_,
       2 * 1000 * 1000, true);
   sleep(10);
-  ASSERT_EQ(500, tablet_tasks.size()); // OB_STORAGE_CACHE_TASK_DOING + OB_STORAGE_CACHE_TASK_SUSPENDED
+
+  // Check result after clean task history
+  ASSERT_EQ(10000, tablet_tasks.size());
+  int64_t suspended_task_count = 0;
+  int64_t finished_task_count = 0;
+  int64_t doing_task_count = 0;
+  int64_t other_task_count = 0;
+  for (auto it = tablet_tasks.begin(); it != tablet_tasks.end(); ++it) {
+    ObStorageCacheTabletTaskHandle task_handle = it->second;
+    int64_t tablet_id = it->first;
+    ASSERT_NE(task_handle(), nullptr);
+    switch(task_handle()->get_status()) {
+      case ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_SUSPENDED:
+        suspended_task_count++;
+        break;
+      case ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_FINISHED:
+        finished_task_count++;
+        if (task_handle()->get_end_time() < finished_part1_end_time) {
+          LOG_WARN("[TEST] check clean history task time", K(tablet_id), K(suspended_task_count), K(finished_task_count),
+              K(doing_task_count), K(doing_task_count));
+        }
+        ASSERT_GE(task_handle()->get_end_time(), finished_part1_end_time);
+        break;
+      case ObStorageCacheTaskStatus::OB_STORAGE_CACHE_TASK_DOING:
+        doing_task_count++;
+        break;
+      default:
+        other_task_count++;
+        LOG_WARN("[TEST] unexpected task status", KPC(task_handle()), K(tablet_id), K(suspended_task_count),
+            K(finished_task_count), K(doing_task_count), K(doing_task_count));
+    }
+  }
+  ASSERT_EQ(suspended_task_count, 2000);
+  ASSERT_EQ(doing_task_count, 3000);
+  ASSERT_EQ(finished_task_count, 5000);
+  ASSERT_EQ(0, other_task_count);
+
   ASSERT_EQ(5, tablet_status_map.size());
   ASSERT_EQ(7, part_policy_map.size());
   ASSERT_EQ(1, table_policy_map.size());
+  ASSERT_EQ(OB_SUCCESS, tablet_tasks.clear());
   FLOG_INFO("[TEST] test_clean_task_history end");
 }
 
