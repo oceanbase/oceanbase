@@ -34,7 +34,9 @@ int ObTableBatchExecuteP::deserialize()
   arg_.batch_operation_.set_entity_factory(&default_entity_factory_);
   result_.set_entity_factory(&default_entity_factory_);
   int ret = ParentType::deserialize();
-  if (OB_SUCC(ret) && ObTableEntityType::ET_HKV == arg_.entity_type_) {
+    if (OB_FAIL(ret)){
+    // do nothing and return
+  } else if (ObTableEntityType::ET_HKV == arg_.entity_type_) {
     // for HKV, modify the value of timestamp to be negative
     const int64_t N = arg_.batch_operation_.count();
     for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
@@ -45,6 +47,17 @@ int ObTableBatchExecuteP::deserialize()
       } else if (OB_FAIL(ObTableRpcProcessorUtil::negate_htable_timestamp(*entity))) {
         LOG_WARN("fail to negate timestamp value", K(ret));
       }
+    } // end for
+   } else if (ObTableEntityType::ET_KV == arg_.entity_type_) {
+    // for KV, set entity allocator
+    const int64_t N = arg_.batch_operation_.count();
+    for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
+    {
+      ObITableEntity *entity = nullptr;
+      if (OB_FAIL(const_cast<ObTableOperation&>(arg_.batch_operation_.at(i)).get_entity(entity))) {
+        LOG_WARN("fail to get entity", K(ret), K(i));
+      }
+      entity->set_allocator(&allocator_);
     } // end for
   }
   return ret;

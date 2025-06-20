@@ -66,6 +66,12 @@ int ObTableApiExecuteP::deserialize()
   } else if (ObTableEntityType::ET_HKV == arg_.entity_type_
       && OB_FAIL(ObTableRpcProcessorUtil::negate_htable_timestamp(request_entity_))) {
     LOG_WARN("fail to  modify the timestamp to be negative", K(ret));
+  } else if (ObTableEntityType::ET_KV == arg_.entity_type_) {
+    ObITableEntity *entity = nullptr;
+    if (OB_FAIL(arg_.table_operation_.get_entity(entity))) {
+      LOG_WARN("fail to get entity", K(arg_.entity_type_), K(arg_.table_operation_));
+    }
+    entity->set_allocator(&allocator_);
   }
 
   return ret;

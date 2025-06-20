@@ -16,6 +16,7 @@
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "src/share/table/ob_table_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "ob_table_json_utils.h"
 
 using namespace oceanbase::common;
 
@@ -735,6 +736,15 @@ int ObTableCtx::adjust_properties()
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "The specified value for generated column");
         LOG_WARN("The specified value for generated column is not allowed", K(ret), K(col_info->column_name_));
+      } else if (entity_type_ == ObTableEntityType::ET_KV && ob_is_json(col_info->type_.get_type())) {
+        if (OB_ISNULL(entity->get_allocator())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("allocator of entity is NULL", K(ret), K(entity));
+        } else if (OB_FAIL(ObTableJsonUtils::convert_to_json_bin(*entity->get_allocator(),
+                                                                 *col_info,
+                                                                 prop_obj))) {
+          LOG_WARN("fail to convert json_text to json_bin", K(ret), K(col_info), K(prop_obj));
+        }
       } else if (OB_FAIL(adjust_column_type(*col_info, prop_obj))) {
         LOG_WARN("fail to adjust rowkey column type", K(ret), K(prop_obj), KPC(col_info));
       }

@@ -3052,6 +3052,7 @@ OB_DEF_DESERIALIZE(ObTableSingleOp, )
       for (int64_t i = 0; OB_SUCC(ret) && i < entities_size; ++i) {
         ObTableSingleOpEntity &op_entity = entities_.at(i);
         op_entity.set_dictionary(all_rowkey_names_, all_properties_names_);
+        op_entity.set_allocator(deserialize_alloc_);
         op_entity.set_is_same_properties_names(is_same_properties_names_);
         OB_UNIS_DECODE(op_entity);
       }

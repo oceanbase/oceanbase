@@ -255,6 +255,7 @@ ob_set_subtarget(ob_server table
   table/common/ob_table_query_session_mgr.cpp
   table/common/ob_hbase_common_struct.cpp
   table/ob_table_merge_filter.cpp
+  table/ob_table_json_utils.cpp
 )
 
 ob_set_subtarget(ob_server table_load
