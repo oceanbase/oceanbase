@@ -1620,6 +1620,7 @@ int ObMediumCompactionScheduleFunc::check_tablet_inc_data(
     LOG_TRACE("exist truncate info, should not do skip merge", KR(ret), K(newest_truncate_version), K(truncate_info_count));
   } else if (0 == tablet.get_minor_table_count()) {
     no_inc_data = true;
+    FLOG_INFO("tablet no minor table", K(tablet));
   } else {
     const ObSSTableArray &minor_tables = wrapper.get_member()->get_minor_sstables();
 
@@ -1632,6 +1633,9 @@ int ObMediumCompactionScheduleFunc::check_tablet_inc_data(
       } else if (cur->get_upper_trans_version() > last_major_snapshot) {
         no_inc_data = false;
       }
+    }
+    if (no_inc_data) {
+      FLOG_INFO("all minor covered by last major", K(minor_tables.count()), K(tablet));
     }
   }
   return ret;
@@ -1680,7 +1684,7 @@ int ObMediumCompactionScheduleFunc::try_skip_merge_for_ss(
     medium_info.storage_schema_.reset();
     medium_info.clear_parallel_range();
     medium_info.last_medium_snapshot_ = (0 >= last_major_snapshot) ? -1 : last_major_snapshot;
-    LOG_TRACE("success to prepare skip medium info", K(tablet_id), K(medium_info));
+    FLOG_INFO("success to prepare skip medium info", K(tablet_id), K(medium_info));
     skip = true;
   }
   return ret;
