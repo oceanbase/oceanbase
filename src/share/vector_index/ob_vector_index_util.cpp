@@ -4349,12 +4349,12 @@ int ObVectorIndexUtil::estimate_vector_memory_used(
     } else if (OB_ISNULL(index_handler)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr", K(ret), KP(index_handler));
-    } else if (OB_FALSE_IT(estimate_memory = obvectorutil::estimate_memory(index_handler, row_count))) {
+    } else if (OB_FALSE_IT(estimate_memory = obvectorutil::estimate_memory(index_handler, row_count, param.dim_, ObVectorIndexAlgorithmType::VIAT_HNSW_BQ == build_type))) {
     } else if (OB_FALSE_IT(obvectorutil::delete_index(index_handler))) {
     }
   }
   if (OB_SUCC(ret)) {
-    LOG_INFO("estimate vector index memory used.", K(estimate_memory), K(index_schema.get_table_name_str()));
+    LOG_INFO("estimate vector index memory used.", K(estimate_memory), K(index_schema.get_table_name_str()), K(row_count), K(param));
   }
   return ret;
 }
