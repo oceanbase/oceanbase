@@ -1558,62 +1558,32 @@ int ObSSDataSplitHelper::finish_add_op(
 }
 
 int ObSSDataSplitHelper::persist_majors_gc_rely_info(
-    const bool is_lob_tablet,
-    ObLSHandle &ls_handle,
-    const ObTabletID &src_tablet_id,
-    const ObTableStoreIterator &src_table_store_iterator,
-    const ObIArray<ObTabletID> &dst_tablets_id,
+    const ObLSID &ls_id,
+    const ObIArray<ObTabletID> &dst_tablet_ids,
+    const share::SCN &transfer_scn,
+    const int64_t generated_majors_cnt,
+    const int64_t max_majors_snapshot,
     const int64_t parallel_cnt_of_each_sstable)
 {
   int ret = OB_SUCCESS;
-  int64_t max_majors_snapshot = -1;
-  int64_t majors_cnt = 1;
-  if (OB_UNLIKELY(!src_tablet_id.is_valid()
-      || dst_tablets_id.empty()
+  if (OB_UNLIKELY(!ls_id.is_valid()
+      || dst_tablet_ids.empty()
+      || !transfer_scn.is_valid()
+      || generated_majors_cnt < 1
+      || max_majors_snapshot < 0
       || parallel_cnt_of_each_sstable <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(src_tablet_id), K(dst_tablets_id), K(parallel_cnt_of_each_sstable));
-  } else if (is_lob_tablet) { // lob meta tablet.
-    ObTabletHandle tablet_handle;
-    ObTabletCreateDeleteMdsUserData user_data;
-    if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
-                                          src_tablet_id,
-                                          tablet_handle,
-                                          ObMDSGetTabletMode::READ_ALL_COMMITED))) {
-      LOG_WARN("get tablet handle failed", K(ret), K(src_tablet_id));
-    } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_tablet_status(
-          share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
-      LOG_WARN("failed to get tablet status", K(ret), K(src_tablet_id));
-    } else {
-      majors_cnt = 1;
-      max_majors_snapshot = user_data.start_split_commit_version_;
-    }
-  } else { // data tablet or index tablet.
-    ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> participants;
-    if (OB_FAIL(ObTabletSplitUtil::get_participants(ObSplitSSTableType::SPLIT_MAJOR,
-        src_table_store_iterator,
-        false/*is_table_restore*/,
-        ObArray<ObITable::TableKey>()/*skip_split_majors*/,
-        participants))) {
-      LOG_WARN("get participants failed", K(ret));
-    } else if (OB_UNLIKELY(participants.empty())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null participants", K(ret));
-    } else {
-      majors_cnt = participants.count();
-      max_majors_snapshot = participants.at(participants.count() - 1)->get_snapshot_version();
-    }
-  }
-
-  if (OB_SUCC(ret)) {
+    LOG_WARN("invalid arg", K(ret), K(ls_id), K(dst_tablet_ids), K(transfer_scn),
+        K(generated_majors_cnt), K(max_majors_snapshot), K(parallel_cnt_of_each_sstable));
+  } else {
     const int64_t gc_rely_parallel =
-        parallel_cnt_of_each_sstable * majors_cnt /*total steps of the parallel child tasks*/
-      + ObGetMacroSeqStage::GET_NEW_ROOT_MACRO_SEQ * majors_cnt; /*total steps of IndexTree and SSTableMeta*/
-    for (int64_t i = 0; OB_SUCC(ret) && i < dst_tablets_id.count(); i++) {
-      const ObTabletID &tablet_id = dst_tablets_id.at(i);
-      if (OB_FAIL(share::SSCompactHelper::start_major_task(ls_handle.get_ls()->get_ls_id(),
+        parallel_cnt_of_each_sstable * generated_majors_cnt /*total steps of the parallel child tasks*/
+      + ObGetMacroSeqStage::GET_NEW_ROOT_MACRO_SEQ * generated_majors_cnt; /*total steps of IndexTree*/
+    for (int64_t i = 0; OB_SUCC(ret) && i < dst_tablet_ids.count(); i++) {
+      const ObTabletID &tablet_id = dst_tablet_ids.at(i);
+      if (OB_FAIL(share::SSCompactHelper::start_major_task(ls_id,
                                                            tablet_id,
-                                                           share::SCN::min_scn(), /*transfer_scn*/
+                                                           transfer_scn,
                                                            max_majors_snapshot,
                                                            0, /*start seq*/
                                                            gc_rely_parallel,

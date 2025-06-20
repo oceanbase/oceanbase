@@ -107,7 +107,8 @@ public:
     K_(is_inited), K_(is_split_finish_with_meta_flag), K_(data_split_ranges), K_(complement_data_ret),
     K_(skipped_split_major_keys), K_(split_point_major_macros), K_(split_point_minor_macros),
     K_(parallel_cnt_of_each_sstable), K_(split_scn), K_(row_inserted),
-    K_(physical_row_count), K_(split_scn), K_(reorg_scn), K(ls_rebuild_seq_)
+    K_(physical_row_count), K_(split_scn), K_(reorg_scn),
+    K(ls_rebuild_seq_), K_(split_majors_count), K_(max_major_snapshot)
 #ifdef OB_BUILD_SHARED_STORAGE
     , K_(is_data_split_executor)
 #endif
@@ -147,11 +148,11 @@ public:
   int get_index_in_source_sstables(
       const ObSSTable &src_sstable,
       int64_t &sstable_index/*start from 0*/);
-  int get_split_majors_cnt(
-      int64_t &total_majors_cnt);
   int append_split_point_macros(
       const bool is_major_macros,
       const ObIArray<blocksstable::MacroBlockId> &additional_macros);
+private:
+  int get_split_majors_infos();
 private:
   common::ObArenaAllocator range_allocator_; // for datum range.
   common::ObArenaAllocator allocator_;
@@ -180,6 +181,8 @@ public:
   share::SCN split_scn_;
   share::SCN reorg_scn_; // transfer_scn.
   int64_t ls_rebuild_seq_;
+  int64_t split_majors_count_;
+  int64_t max_major_snapshot_;
 #ifdef OB_BUILD_SHARED_STORAGE
   ObSSDataSplitHelper ss_split_helper_;
   bool is_data_split_executor_;

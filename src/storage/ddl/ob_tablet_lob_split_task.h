@@ -149,14 +149,14 @@ public:
     new_lob_tablet_ids_(OB_MALLOC_NORMAL_BLOCK_SIZE, m_allocator_),
     cmp_ret_(0), comparer_(cmp_ret_), total_map_(nullptr), sub_maps_(),
     skipped_split_major_keys_(), row_inserted_(0), physical_row_count_(0),
-    split_scn_(), reorg_scn_(), ls_rebuild_seq_(-1)
+    split_scn_(), reorg_scn_(), ls_rebuild_seq_(-1),
+    dst_major_snapshot_(-1)
 #ifdef OB_BUILD_SHARED_STORAGE
     , ss_split_helper_(), is_data_split_executor_(false)
 #endif
   {}
   ~ObLobSplitContext() { destroy(); }
   int init(const ObLobSplitParam& param);
-  int get_dst_lob_tablet_ids(const ObLobSplitParam& param);
   int init_maps(const ObLobSplitParam& param);
   inline bool is_valid() const { return is_inited_; }
   void destroy();
@@ -166,12 +166,15 @@ public:
     K_(lob_meta_tablet_handle), K_(new_main_tablet_ids),
     K_(new_lob_tablet_ids), KPC_(total_map), K_(sub_maps), K_(main_table_ranges),
     K_(skipped_split_major_keys), K_(row_inserted), K_(physical_row_count),
-    K_(split_scn), K_(reorg_scn), K_(ls_rebuild_seq)
+    K_(split_scn), K_(reorg_scn), K_(ls_rebuild_seq),
+    K_(dst_major_snapshot)
 #ifdef OB_BUILD_SHARED_STORAGE
     , K_(is_data_split_executor)
 #endif
     );
 
+private:
+  int get_dst_lob_tablet_ids(const ObLobSplitParam& param);
 private:
   common::ObArenaAllocator range_allocator_; // for datum range.
 public:
@@ -201,6 +204,7 @@ public:
   share::SCN split_scn_;
   share::SCN reorg_scn_;
   int64_t ls_rebuild_seq_;
+  int64_t dst_major_snapshot_;
 #ifdef OB_BUILD_SHARED_STORAGE
   ObSSDataSplitHelper ss_split_helper_;
   bool is_data_split_executor_;

@@ -272,7 +272,8 @@ int ObLobSplitContext::init(const ObLobSplitParam& param)
   return ret;
 }
 
-int ObLobSplitContext::get_dst_lob_tablet_ids(const ObLobSplitParam& param)
+int ObLobSplitContext::get_dst_lob_tablet_ids(
+    const ObLobSplitParam& param)
 {
   int ret = OB_SUCCESS;
   // get new lob tablet ids
@@ -306,8 +307,9 @@ int ObLobSplitContext::get_dst_lob_tablet_ids(const ObLobSplitParam& param)
   } else if (user_data.start_split_commit_version_ <= 0) {
     ret = OB_EAGAIN;
     LOG_WARN("failed to fetch the newest mds", K(ret));
+  } else if (OB_FALSE_IT(dst_major_snapshot_ = user_data.start_split_commit_version_)) {
   } else if (OB_FAIL(ObTabletSplitUtil::check_sstables_skip_data_split(ls_handle_, lob_meta_table_store_iterator_,
-      new_lob_tablet_ids_, user_data.start_split_commit_version_/*lob_major_snapshot*/, skipped_split_major_keys_))) {
+      new_lob_tablet_ids_, dst_major_snapshot_/*lob_major_snapshot*/, skipped_split_major_keys_))) {
     LOG_WARN("check sstables skip data split failed", K(ret));
   } else {
     ObArenaAllocator tmp_arena("SplitGetLob", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
@@ -960,11 +962,11 @@ int ObTabletLobMergeMapTask::prepare_split_helper()
           ctx_->new_lob_tablet_ids_))) {
       LOG_WARN("start add minor op failed", K(ret), KPC(param_));
     } else if (OB_FAIL(ss_split_helper.persist_majors_gc_rely_info(
-          true/*is_lob_tablet*/,
-          ctx_->ls_handle_,
-          param_->ori_lob_meta_tablet_id_,
-          ctx_->lob_meta_table_store_iterator_,
+          param_->ls_id_,
           ctx_->new_lob_tablet_ids_,
+          ctx_->reorg_scn_,
+          1/*generated_majors_cnt*/,
+          ctx_->dst_major_snapshot_,
           1/*parallel_cnt_of_each_sstable*/))) {
       LOG_WARN("persist majors gc rely info failed", K(ret));
     }
@@ -1122,7 +1124,6 @@ int ObTabletLobWriteDataTask::process()
   int ret = OB_SUCCESS;
   ObIDag *tmp_dag = get_dag();
   bool is_data_split_finished = false;
-  ObTabletCreateDeleteMdsUserData user_data;
   ObTabletSplitMdsUserData lob_meta_split_data;
   ObStorageSchema *lob_meta_storage_schema = nullptr;
   ObTabletHandle local_lob_meta_tablet_handle;
@@ -1145,9 +1146,6 @@ int ObTabletLobWriteDataTask::process()
     LOG_WARN("check all major exist failed", K(ret));
   } else if (is_data_split_finished) {
     LOG_INFO("split task has alreay finished", KPC(param_));
-  } else if (OB_FAIL(ctx_->lob_meta_tablet_handle_.get_obj()->ObITabletMdsInterface::get_tablet_status(
-          share::SCN::max_scn(), user_data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
-    LOG_WARN("failed to get tablet status", K(ret), KPC(param_));
   } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(ctx_->lob_meta_tablet_handle_, lob_meta_storage_schema, tmp_arena))) {
     LOG_WARN("failed to get storage schema from mds", K(ret));
   } else if (OB_FAIL(ObTabletLobSplitUtil::generate_col_param(lob_meta_storage_schema, rk_cnt_))) {
@@ -1165,7 +1163,7 @@ int ObTabletLobWriteDataTask::process()
       OB_FAIL(local_lob_meta_tablet_handle.get_obj()->get_all_tables(local_lob_meta_table_store_iterator))) {
     LOG_WARN("failed to get all sstables", K(ret));
   } else {
-    const int64_t major_snapshot_version = user_data.start_split_commit_version_;
+    const int64_t major_snapshot_version = ctx_->dst_major_snapshot_;
     ObDatumRange query_range;
     query_range.set_whole_range(); // no parallel, just set whole range
     ObArray<ObIStoreRowIteratorPtr> iters;
@@ -1796,7 +1794,7 @@ int ObTabletLobWriteDataTask::create_sstables(
                 batch_sstables_handle.at(i),
                 merge_type,
                 ctx_->skipped_split_major_keys_,
-                op_id,
+                is_major_merge_type(merge_type) ? ctx_->dst_major_snapshot_ : op_id,
                 ctx_->reorg_scn_))) {
       LOG_WARN("update table store with batch tables failed", K(ret), K(batch_sstables_handle.at(i)), K(split_sstable_type));
     }

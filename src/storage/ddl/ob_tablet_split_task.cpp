@@ -203,7 +203,8 @@ ObTabletSplitCtx::ObTabletSplitCtx() :
     index_builder_map_(), clipped_schemas_map_(),
     skipped_split_major_keys_(), row_inserted_(0), physical_row_count_(0),
     split_point_major_macros_(), split_point_minor_macros_(), parallel_cnt_of_each_sstable_(-1),
-    split_scn_(), reorg_scn_(), ls_rebuild_seq_(-1)
+    split_scn_(), reorg_scn_(), ls_rebuild_seq_(-1),
+    split_majors_count_(-1), max_major_snapshot_(-1)
   #ifdef OB_BUILD_SHARED_STORAGE
     , ss_split_helper_(), is_data_split_executor_(false)
   #endif
@@ -216,6 +217,8 @@ ObTabletSplitCtx::~ObTabletSplitCtx()
   is_inited_ = false;
   is_split_finish_with_meta_flag_ = false;
   ls_rebuild_seq_ = -1;
+  split_majors_count_ = -1;
+  max_major_snapshot_ = -1;
   complement_data_ret_ = OB_SUCCESS;
   ls_handle_.reset();
   tablet_handle_.reset();
@@ -270,6 +273,8 @@ int ObTabletSplitCtx::init(const ObTabletSplitParam &param)
     LOG_WARN("get tablet failed", K(ret), "tablet_id", param.source_tablet_id_, K(GCTX.is_shared_storage_mode()));
   } else if (OB_FAIL(tablet_handle_.get_obj()->get_all_tables(table_store_iterator_))) {
     LOG_WARN("fail to fetch table store", K(ret));
+  } else if (OB_FAIL(get_split_majors_infos())) {
+    LOG_WARN("get split majors infos failed", K(ret));
   } else if (OB_FAIL(ObTabletSplitUtil::check_sstables_skip_data_split(
       ls_handle_, table_store_iterator_, param.dest_tablets_id_, OB_INVALID_VERSION/*lob_major_snapshot*/, skipped_split_major_keys_))) {
     LOG_WARN("check sstables skip data split failed", K(ret));
@@ -409,11 +414,9 @@ int ObTabletSplitCtx::append_split_point_macros(
   return ret;
 }
 
-int ObTabletSplitCtx::get_split_majors_cnt(
-    int64_t &total_majors_cnt)
+int ObTabletSplitCtx::get_split_majors_infos()
 {
   int ret = OB_SUCCESS;
-  total_majors_cnt = 0;
   ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> major_sstables;
   if (OB_FAIL(ObTabletSplitUtil::get_participants(
       ObSplitSSTableType::SPLIT_MAJOR, table_store_iterator_,
@@ -422,11 +425,12 @@ int ObTabletSplitCtx::get_split_majors_cnt(
       major_sstables))) {
     LOG_WARN("get participant sstables failed", K(ret));
   } else {
-    total_majors_cnt = major_sstables.count();
+    split_majors_count_ = major_sstables.count();
+    max_major_snapshot_ = major_sstables.at(major_sstables.count() - 1)->get_snapshot_version();
   }
-  if (OB_SUCC(ret) && total_majors_cnt < 1) {
+  if (OB_SUCC(ret) && (split_majors_count_ <= 0 || max_major_snapshot_ < 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("no major index found", K(ret), K(total_majors_cnt));
+    LOG_WARN("no major index found", K(ret), K(split_majors_count_), K(max_major_snapshot_));
   }
   return ret;
 }
@@ -953,13 +957,13 @@ int ObTabletSplitPrepareTask::prepare_context()
         param_->dest_tablets_id_))) {
       LOG_WARN("start add minor op failed", K(ret), KPC(param_));
     } else if (OB_FAIL(ss_split_helper.persist_majors_gc_rely_info(
-          false/*is_lob_tablet*/,
-          context_->ls_handle_,
-          param_->source_tablet_id_,
-          context_->table_store_iterator_,
-          param_->dest_tablets_id_,
-          context_->parallel_cnt_of_each_sstable_/*parallel_cnt*/))) {
-      LOG_WARN("persist majors gc rely info failed", K(ret), KPC_(param));
+        param_->ls_id_,
+        param_->dest_tablets_id_,
+        context_->reorg_scn_,
+        context_->split_majors_count_,
+        context_->max_major_snapshot_,
+        context_->parallel_cnt_of_each_sstable_/*parallel_cnt*/))) {
+      LOG_WARN("persist majors gc rely info failed", K(ret), KPC_(param), KPC(context_));
     }
 #endif
   }
@@ -1938,7 +1942,7 @@ int ObTabletSplitMergeTask::create_sstable(
                 batch_sstables_handle,
                 merge_type,
                 context_->skipped_split_major_keys_,
-                op_id,
+                is_major_merge_type(merge_type) ? context_->max_major_snapshot_ : op_id,
                 context_->reorg_scn_))) {
             LOG_WARN("update table store with batch tables failed", K(ret), K(batch_sstables_handle), K(split_sstable_type));
           }
@@ -2067,10 +2071,8 @@ int ObTabletSplitMergeTask::close_ss_index_builder(
   } else if (OB_FAIL(context_->get_index_in_source_sstables(src_table, sstable_index))) {
     LOG_WARN("get index in source sstables failed", K(ret));
   } else if (src_table.is_major_sstable()) {
-    int64_t total_majors_cnt = -1;
-    if (OB_FAIL(context_->get_split_majors_cnt(total_majors_cnt))) {
-      LOG_WARN("get split majors cnt failed", K(ret), K(dst_tablet_id), KPC(context_));
-    } else if (OB_FAIL(ss_split_helper.generate_major_macro_seq_info(
+    const int64_t total_majors_cnt = context_->split_majors_count_;
+    if (OB_FAIL(ss_split_helper.generate_major_macro_seq_info(
         sstable_index/*the index in the generated majors*/,
         parallel_cnt/*the parallel cnt in one sstable*/,
         parallel_cnt/*the parallel idx in one sstable*/,

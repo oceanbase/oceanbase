@@ -247,11 +247,11 @@ public:
       const bool need_finish);
 
   int persist_majors_gc_rely_info(
-      const bool is_lob_tablet,
-      ObLSHandle &ls_handle,
-      const ObTabletID &src_tablet_id,
-      const ObTableStoreIterator &src_table_store_iterator,
-      const ObIArray<ObTabletID> &dst_tablet_id,
+      const ObLSID &ls_id,
+      const ObIArray<ObTabletID> &dst_tablet_ids,
+      const share::SCN &transfer_scn,
+      const int64_t generated_majors_cnt,
+      const int64_t max_majors_snapshot,
       const int64_t parallel_cnt_of_each_sstable);
 
   static int set_source_tablet_split_status(
