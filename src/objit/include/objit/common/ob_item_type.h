@@ -1027,6 +1027,8 @@ typedef enum ObItemType
   T_FUN_INNER_PREFIX_MIN = 2073,
   T_FUN_INNER_PREFIX_MAX = 2074,
   T_FUN_SYS_INNER_INFO_COLS_COLUMN_KEY_PRINTER = 2075,
+  T_FUN_ARG_MIN = 2076,
+  T_FUN_ARG_MAX = 2077,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
