@@ -186,7 +186,7 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
             || ObTabletGCHandler::is_set_tablet_persist_trigger(tablet_persist_trigger)
             || ObTabletGCHandler::is_tablet_gc_trigger(tablet_persist_trigger)) {
           const bool only_persist = 0 != times && !ObTabletGCHandler::is_tablet_gc_trigger(tablet_persist_trigger);
-          obsys::ObRLockGuard lock(tablet_gc_handler->wait_lock_);
+          obsys::ObRLockGuard<> lock(tablet_gc_handler->wait_lock_);
           bool need_retry = false;
           // add temporary flag for not support persist uncommited mds data.
           bool no_need_wait_persist = false;

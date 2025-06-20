@@ -47,7 +47,8 @@ class ObTabletGCHandler
   friend class ObTabletGCService;
 public:
   ObTabletGCHandler()
-    : ls_(NULL),
+    : wait_lock_(common::ObLatchIds::TABLET_GC_WAIT_LOCK),
+      ls_(NULL),
       tablet_persist_trigger_(TABLET_PERSIST | TABLET_GC),
       update_enabled_(true),
       is_inited_(false)
@@ -116,7 +117,7 @@ private:
                                   const share::SCN &decided_scn);
   int wait_unpersist_tablet_ids_flushed(const common::ObTabletIDArray &unpersist_tablet_ids,
                                         const share::SCN &decided_scn);
-  bool is_finish() { obsys::ObWLockGuard lock(wait_lock_, false); return lock.acquired(); }
+  bool is_finish() { obsys::ObWLockGuard<> lock(wait_lock_, false); return lock.acquired(); }
   void set_stop() { ATOMIC_STORE(&update_enabled_, false); }
   void set_start() { ATOMIC_STORE(&update_enabled_, true); }
 
@@ -124,7 +125,7 @@ private:
 
 public:
   static const int64_t GC_LOCK_TIMEOUT = 100_ms; // 100ms
-  obsys::ObRWLock wait_lock_;
+  obsys::ObRWLock<> wait_lock_;
 
 private:
   storage::ObLS *ls_;

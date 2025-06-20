@@ -286,7 +286,7 @@ int ObJavaEnv::setup_useful_path()
 
 int ObJavaEnv::setup_java_env() {
   int ret = OB_SUCCESS;
-  obsys::ObWLockGuard wg(setup_env_lock_);
+  obsys::ObWLockGuard<> wg(setup_env_lock_);
   if (!GCONF.ob_enable_java_env) {
     ret = OB_JNI_NOT_ENABLE_JAVA_ENV_ERROR;
     LOG_WARN("observer is not enable java env", K(ret));

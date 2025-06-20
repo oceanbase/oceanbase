@@ -41,11 +41,11 @@ int ObRootQueue::init(const char *label, uint64_t size, uint64_t tenant_id)
   mem_attr.tenant_id_ = tenant_id;
   if (OB_FAIL(ObRaQueue::init(label, size, tenant_id))) {
     LOG_WARN("fail to init ObRaQueue", K(ret));
-  } else if (OB_ISNULL(SlotLock_ = (ObRWLock *)ob_malloc(sizeof(ObRWLock) * size, mem_attr))) {
+  } else if (OB_ISNULL(SlotLock_ = (obsys::ObRWLock<obsys::WRITE_PRIORITY> *)ob_malloc(sizeof(obsys::ObRWLock<obsys::WRITE_PRIORITY>) * size, mem_attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     for (int64_t i = 0; i < size; i++) {
-      new (&SlotLock_[i]) ObRWLock(obsys::WRITE_PRIORITY);
+      new (&SlotLock_[i]) obsys::ObRWLock<obsys::WRITE_PRIORITY>(ObWaitEventIds::DL_ROOT_QUEUE_LOCK);
     }
   }
   return ret;

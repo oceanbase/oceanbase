@@ -25,7 +25,7 @@ namespace compaction
  * -------------------------------------------------------------------ObBasicMergeScheduler-------------------------------------------------------------------
  */
 ObBasicMergeScheduler::ObBasicMergeScheduler()
-  : frozen_version_lock_(),
+  : frozen_version_lock_(common::ObLatchIds::MERGE_FROZEN_LOCK),
     frozen_version_(INIT_COMPACTION_SCN),
     inner_table_merged_scn_(INIT_COMPACTION_SCN),
     merged_version_(INIT_COMPACTION_SCN),
@@ -41,7 +41,7 @@ ObBasicMergeScheduler::~ObBasicMergeScheduler()
 void ObBasicMergeScheduler::reset()
 {
   is_stop_ = true;
-  obsys::ObWLockGuard frozen_version_guard(frozen_version_lock_);
+  obsys::ObWLockGuard<> frozen_version_guard(frozen_version_lock_);
   frozen_version_ = 0;
   inner_table_merged_scn_ = 0;
   merged_version_ = 0;
@@ -84,13 +84,13 @@ void ObBasicMergeScheduler::resume_major_merge()
 
 int64_t ObBasicMergeScheduler::get_frozen_version() const
 {
-  obsys::ObRLockGuard frozen_version_guard(frozen_version_lock_);
+  obsys::ObRLockGuard<> frozen_version_guard(frozen_version_lock_);
   return frozen_version_;
 }
 
 bool ObBasicMergeScheduler::is_compacting() const
 {
-  obsys::ObRLockGuard frozen_version_guard(frozen_version_lock_);
+  obsys::ObRLockGuard<> frozen_version_guard(frozen_version_lock_);
   return frozen_version_ > get_inner_table_merged_scn();
 }
 
@@ -98,7 +98,7 @@ void ObBasicMergeScheduler::update_frozen_version_and_merge_progress(const int64
 {
   if (broadcast_version > get_frozen_version()) {
     {
-      obsys::ObWLockGuard frozen_version_guard(frozen_version_lock_);
+      obsys::ObWLockGuard<> frozen_version_guard(frozen_version_lock_);
       frozen_version_ = broadcast_version;
     }
     int tmp_ret = OB_SUCCESS;

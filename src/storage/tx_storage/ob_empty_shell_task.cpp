@@ -79,7 +79,7 @@ void ObEmptyShellTask::runTimerTask()
         } else if (0 == times || tablet_empty_shell_handler->get_empty_shell_trigger()) {
           STORAGE_LOG(INFO, "[emptytablet] task check ls", "ls_id", ls->get_ls_id(), K(tablet_empty_shell_handler));
           tablet_empty_shell_handler->set_empty_shell_trigger(false);
-          obsys::ObRLockGuard lock(tablet_empty_shell_handler->wait_lock_);
+          obsys::ObRLockGuard<> lock(tablet_empty_shell_handler->wait_lock_);
           bool need_retry = false;
           common::ObTabletIDArray empty_shell_tablet_ids;
           if (OB_FAIL(tablet_empty_shell_handler->get_empty_shell_tablet_ids(empty_shell_tablet_ids, need_retry))) {
@@ -113,7 +113,8 @@ void ObEmptyShellTask::runTimerTask()
 
 
 ObTabletEmptyShellHandler::ObTabletEmptyShellHandler()
-  : ls_(NULL),
+  : wait_lock_(common::ObLatchIds::TABLET_EMPTY_SHELL_HANDLER_LOCK),
+    ls_(NULL),
     is_trigger_(true),
     stopped_(false),
     ddl_empty_shell_checker_(),

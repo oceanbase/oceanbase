@@ -97,7 +97,7 @@ public:
   static int mtl_init(ObTenantDblinkKeeper *&dblink_keeper);
   static void mtl_destroy(ObTenantDblinkKeeper *&dblink_keeper);
 public:
-  ObTenantDblinkKeeper()
+  ObTenantDblinkKeeper():lock_(common::ObLatchIds::DBLINK_KEEPER_LOCK)
   {
     tenant_id_ = common::OB_INVALID_ID;
   }
@@ -114,7 +114,7 @@ private:
   int destroy();
 private:
   uint64_t tenant_id_;
-  obsys::ObRWLock lock_;
+  obsys::ObRWLock<> lock_;
   hash::ObHashMap<uint32_t, int64_t> dblink_conn_map_;
 };
 #endif

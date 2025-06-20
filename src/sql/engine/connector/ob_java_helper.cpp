@@ -497,7 +497,7 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
 int JVMFunctionHelper::load_lib(ObJavaEnvContext &java_env_ctx,
                                 ObHdfsEnvContext &hdfs_env_ctx) {
   int ret = OB_SUCCESS;
-  obsys::ObWLockGuard wg(load_lib_lock_);
+  obsys::ObWLockGuard<> wg(load_lib_lock_);
   if (java_env_ctx.is_valid() && hdfs_env_ctx.is_valid()) {
     // do nothing
     LOG_TRACE("already success to open java and hdfs lib", K(ret));

@@ -699,7 +699,7 @@ const char *ObProhibitScheduleMediumMap::ProhibitFlagStr[] = {
 ObProhibitScheduleMediumMap::ObProhibitScheduleMediumMap()
   : transfer_flag_cnt_(0),
     split_flag_cnt_(0),
-    lock_(),
+    lock_(common::ObLatchIds::TENANT_TABLET_SCHEDUAL_LOCK),
     tablet_id_map_()
 {
   STATIC_ASSERT(static_cast<int64_t>(ProhibitFlag::FLAG_MAX) == ARRAYSIZEOF(ProhibitFlagStr), "flag str len is mismatch");
@@ -708,7 +708,7 @@ ObProhibitScheduleMediumMap::ObProhibitScheduleMediumMap()
 int ObProhibitScheduleMediumMap::init()
 {
   int ret = OB_SUCCESS;
-  obsys::ObWLockGuard lock_guard(lock_);
+  obsys::ObWLockGuard<> lock_guard(lock_);
   if (OB_FAIL(tablet_id_map_.create(TABLET_ID_MAP_BUCKET_NUM, "MediumTabletMap", "MediumTabletMap", MTL_ID()))) {
     LOG_WARN("Fail to create prohibit medium tablet id map", K(ret));
   }
@@ -723,7 +723,7 @@ int ObProhibitScheduleMediumMap::add_flag(const ObTabletID &tablet_id, const Pro
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tablet_id), K(input_flag));
   } else {
-    obsys::ObWLockGuard lock_guard(lock_);
+    obsys::ObWLockGuard<> lock_guard(lock_);
     if (OB_FAIL(tablet_id_map_.get_refactored(tablet_id, tmp_flag))) {
       if (OB_HASH_NOT_EXIST == ret) {
         if (OB_FAIL(tablet_id_map_.set_refactored(tablet_id, input_flag))) {
@@ -752,7 +752,7 @@ int ObProhibitScheduleMediumMap::clear_flag(const ObTabletID &tablet_id, const P
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(input_flag));
   } else {
-    obsys::ObWLockGuard lock_guard(lock_);
+    obsys::ObWLockGuard<> lock_guard(lock_);
     if (OB_FAIL(inner_clear_flag_(tablet_id, input_flag))) {
       LOG_WARN("failed to inner clear flag", K(ret), K(tablet_id), K(input_flag));
     }
@@ -763,7 +763,7 @@ int ObProhibitScheduleMediumMap::clear_flag(const ObTabletID &tablet_id, const P
 int ObProhibitScheduleMediumMap::batch_add_flags(const ObIArray<ObTabletID> &tablet_ids, const ProhibitFlag &input_flag)
 {
   int ret = OB_SUCCESS;
-  obsys::ObWLockGuard lock_guard(lock_);
+  obsys::ObWLockGuard<> lock_guard(lock_);
   if (OB_UNLIKELY(ProhibitFlag::TRANSFER != input_flag && ProhibitFlag::SPLIT != input_flag)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument, batch_add_flags only support TRANSFER or SPLIT now", K(ret), K(input_flag));
@@ -787,7 +787,7 @@ int ObProhibitScheduleMediumMap::batch_clear_flags(const ObIArray<ObTabletID> &t
     LOG_WARN("invalid argument, batch_clear_flags only support TRANSFER or SPLIT now", K(ret), K(input_flag));
   } else {
     const int64_t tablets_cnt = tablet_ids.count();
-    obsys::ObWLockGuard lock_guard(lock_);
+    obsys::ObWLockGuard<> lock_guard(lock_);
     for (int64_t idx = 0; OB_SUCC(ret) && idx < tablets_cnt; idx++) {
       const ObTabletID &tablet_id = tablet_ids.at(idx);
       if (OB_FAIL(inner_clear_flag_(tablet_id, input_flag))) {
@@ -806,7 +806,7 @@ int ObProhibitScheduleMediumMap::batch_clear_flags(const ObIArray<ObTabletID> &t
 
 void ObProhibitScheduleMediumMap::destroy()
 {
-  obsys::ObWLockGuard lock_guard(lock_);
+  obsys::ObWLockGuard<> lock_guard(lock_);
   transfer_flag_cnt_ = 0;
   split_flag_cnt_ = 0;
   if (tablet_id_map_.created()) {
@@ -818,7 +818,7 @@ int64_t ObProhibitScheduleMediumMap::to_string(char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
-  obsys::ObRLockGuard lock_guard(lock_);
+  obsys::ObRLockGuard<> lock_guard(lock_);
   if (OB_ISNULL(buf) || buf_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len));
@@ -913,13 +913,13 @@ int ObProhibitScheduleMediumMap::inner_clear_flag_(const ObTabletID &tablet_id, 
 
 int64_t ObProhibitScheduleMediumMap::get_transfer_flag_cnt() const
 {
-  obsys::ObRLockGuard lock_guard(lock_);
+  obsys::ObRLockGuard<> lock_guard(lock_);
   return transfer_flag_cnt_;
 }
 
 int64_t ObProhibitScheduleMediumMap::get_split_flag_cnt() const
 {
-  obsys::ObRLockGuard lock_guard(lock_);
+  obsys::ObRLockGuard<> lock_guard(lock_);
   return split_flag_cnt_;
 }
 

@@ -101,6 +101,7 @@ public:
        last_set_client_charset_cstr_(NULL),
        last_set_connection_charset_cstr_(NULL),
        last_set_results_charset_cstr_(NULL),
+       dblink_lock_(common::ObLatchIds::ISQL_CONNECTION_DBLINK_LOCK),
        next_conn_(NULL),
        check_priv_(false)
   {}
@@ -285,7 +286,7 @@ protected:
   const char *last_set_results_charset_cstr_;
   const char *last_set_transaction_isolation_cstr_;
   common::ObArenaAllocator allocator_;
-  obsys::ObRWLock dblink_lock_;
+  obsys::ObRWLock<> dblink_lock_;
   ObISQLConnection *next_conn_; // used in dblink_conn_map_
   bool check_priv_;
 };

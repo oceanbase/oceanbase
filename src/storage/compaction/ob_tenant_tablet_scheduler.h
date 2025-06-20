@@ -127,7 +127,7 @@ private:
   int inner_clear_flag_(const ObTabletID &tablet_id, const ProhibitFlag &input_flag); // hold lock outside !!
   int64_t transfer_flag_cnt_;
   int64_t split_flag_cnt_;
-  mutable obsys::ObRWLock lock_;
+  mutable obsys::ObRWLock<> lock_;
   common::hash::ObHashMap<ObTabletID, ProhibitFlag> tablet_id_map_; // tablet is used for transfer of medium compaction
 };
 

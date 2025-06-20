@@ -487,6 +487,7 @@ ObTableLoadClientTask::ObTableLoadClientTask()
     task_scheduler_(nullptr),
     session_count_(0),
     next_batch_id_(0),
+    rw_lock_(common::ObLatchIds::TABLE_LOAD_CLIENT_LOCK),
     client_status_(ObTableLoadClientStatus::MAX_STATUS),
     error_code_(OB_SUCCESS),
     ref_count_(0),
@@ -707,7 +708,7 @@ int ObTableLoadClientTask::commit()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadClientTask not init", KR(ret));
   } else {
-    obsys::ObWLockGuard guard(rw_lock_);
+    obsys::ObWLockGuard<> guard(rw_lock_);
     if (ObTableLoadClientStatus::COMMITTING == client_status_ ||
         ObTableLoadClientStatus::COMMIT == client_status_) {
       LOG_INFO("client task already commit", K(client_status_));
@@ -757,7 +758,7 @@ int ObTableLoadClientTask::advance_status_nolock(const ObTableLoadClientStatus e
 int ObTableLoadClientTask::advance_status(const ObTableLoadClientStatus expected,
                                           const ObTableLoadClientStatus updated)
 {
-  obsys::ObWLockGuard guard(rw_lock_);
+  obsys::ObWLockGuard<> guard(rw_lock_);
 
   return advance_status_nolock(expected, updated);
 }
@@ -789,7 +790,7 @@ int ObTableLoadClientTask::set_status_error(int error_code)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(error_code));
   } else {
-    obsys::ObWLockGuard guard(rw_lock_);
+    obsys::ObWLockGuard<> guard(rw_lock_);
     if (ObTableLoadClientStatus::ERROR == client_status_ ||
         ObTableLoadClientStatus::ABORT == client_status_) {
       // ignore
@@ -803,7 +804,7 @@ int ObTableLoadClientTask::set_status_error(int error_code)
 
 void ObTableLoadClientTask::set_status_abort(int error_code)
 {
-  obsys::ObWLockGuard guard(rw_lock_);
+  obsys::ObWLockGuard<> guard(rw_lock_);
   if (ObTableLoadClientStatus::ABORT == client_status_) {
     // ignore
   } else {
@@ -817,7 +818,7 @@ void ObTableLoadClientTask::set_status_abort(int error_code)
 int ObTableLoadClientTask::check_status(ObTableLoadClientStatus client_status)
 {
   int ret = OB_SUCCESS;
-  obsys::ObRLockGuard guard(rw_lock_);
+  obsys::ObRLockGuard<> guard(rw_lock_);
   if (OB_UNLIKELY(client_status != client_status_)) {
     if (ObTableLoadClientStatus::ERROR == client_status_ ||
         ObTableLoadClientStatus::ABORT == client_status_) {
@@ -831,20 +832,20 @@ int ObTableLoadClientTask::check_status(ObTableLoadClientStatus client_status)
 
 ObTableLoadClientStatus ObTableLoadClientTask::get_status() const
 {
-  obsys::ObRLockGuard guard(rw_lock_);
+  obsys::ObRLockGuard<> guard(rw_lock_);
   return client_status_;
 }
 
 int ObTableLoadClientTask::get_error_code() const
 {
-  obsys::ObRLockGuard guard(rw_lock_);
+  obsys::ObRLockGuard<> guard(rw_lock_);
   return error_code_;
 }
 
 void ObTableLoadClientTask::get_status(ObTableLoadClientStatus &client_status,
                                        int &error_code) const
 {
-  obsys::ObRLockGuard guard(rw_lock_);
+  obsys::ObRLockGuard<> guard(rw_lock_);
   client_status = client_status_;
   error_code = error_code_;
 }

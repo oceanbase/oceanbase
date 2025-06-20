@@ -59,7 +59,7 @@ private:
   int64_t* ref_{nullptr};
 };
 
-using ObRWLock = obsys::ObRWLock;
+using ObRWLock = obsys::ObRWLock<>;
 class ObRootQueue : public ObRaQueue
 {
 public:
@@ -76,7 +76,7 @@ public:
   void destroy() {
     if (nullptr != SlotLock_) {
       for (int64_t i = 0; i < capacity_; i++) {
-        SlotLock_[i].~ObRWLock();
+        SlotLock_[i].~ObRWLock<obsys::WRITE_PRIORITY>();
       }
       ob_free(SlotLock_);
       SlotLock_ = nullptr;
@@ -154,7 +154,7 @@ public:
   }
 
 private:
-  ObRWLock* SlotLock_{nullptr};
+  obsys::ObRWLock<obsys::WRITE_PRIORITY>* SlotLock_{nullptr};
 };
 
 using Leaf_Ref = ObRaQueue::Ref;
