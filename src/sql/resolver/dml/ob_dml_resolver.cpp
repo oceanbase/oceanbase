@@ -3096,6 +3096,15 @@ int ObDMLResolver::try_resolve_sql_symbol(ObQualifiedName &q_name,
       ret = keey_ret ? ret : OB_ERR_BAD_FIELD_ERROR;
     }
   }
+
+  if(OB_SUCC(ret)) {
+    // check *.LEVEL in SQL
+    if (q_name.col_name_ == "LEVEL" && !q_name.tbl_name_.empty()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("LEVEL in sql resolver failed", K(ret), K(q_name));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "*.LEVEL in SQL");
+    }
+  }
   return ret;
 }
 
