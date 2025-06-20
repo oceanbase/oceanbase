@@ -5459,7 +5459,8 @@ int ObPLResolver::build_collection_property_expr(const ObString &property_name,
     access_idx,
     type,
     package_id,
-    var_idx));
+    var_idx,
+    access_idxs));
   if (OB_SUCC(ret)
       && (property_name.case_compare_equal("next") || property_name.case_compare_equal("exists"))) {
     if (user_type->is_associative_array_type()) {
@@ -14035,10 +14036,9 @@ int ObPLResolver::check_variable_accessible(
   int ret = OB_SUCCESS;
   CK (!access_idxs.empty());
   if (OB_FAIL(ret)) {
-  } else if (for_write && OB_FAIL(check_update_column(ns, access_idxs))) {
-    LOG_WARN("check update column failed", K(ret));
   } else if (ObObjAccessIdx::is_local_variable(access_idxs)) {
     if (for_write) {
+      OZ (check_update_column(ns, access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_, access_idxs));
       OZ (check_local_variable_read_only(
         ns, access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_
         /*access_idxs.at(access_idxs.count() - 1).var_index_*/), access_idxs);
@@ -14100,6 +14100,7 @@ int ObPLResolver::check_variable_accessible(
       if (T_OP_GET_SUBPROGRAM_VAR == f_expr->get_expr_type()) {
         uint64_t actual_var_idx = OB_INVALID_INDEX;
         OZ (get_const_expr_value(f_expr->get_param_expr(2), actual_var_idx));
+        OZ (check_update_column(*subprogram_ns, actual_var_idx, access_idxs));
         OZ (check_local_variable_read_only(*subprogram_ns, actual_var_idx));
       } else {
         OZ (check_local_variable_read_only(
@@ -14153,6 +14154,7 @@ int ObPLResolver::check_variable_accessible(ObRawExpr *expr, bool for_write)
         int64_t var_idx =
           access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_;
         CK (var_idx >= 0 && var_idx < obj_access->get_var_indexs().count());
+        OZ (check_update_column(current_block_->get_namespace(), obj_access->get_var_indexs().at(var_idx), access_idxs));
         OZ (check_local_variable_read_only(
           current_block_->get_namespace(), obj_access->get_var_indexs().at(var_idx)));
       }
@@ -14170,6 +14172,7 @@ int ObPLResolver::check_variable_accessible(ObRawExpr *expr, bool for_write)
       if (T_OP_GET_SUBPROGRAM_VAR == f_expr->get_expr_type()) {
         uint64_t actual_var_idx = OB_INVALID_INDEX;
         GET_CONST_EXPR_VALUE(f_expr->get_param_expr(2), actual_var_idx);
+        OZ (check_update_column(*subprogram_ns, actual_var_idx, access_idxs));
         OZ (check_local_variable_read_only(*subprogram_ns, actual_var_idx));
       } else {
         OZ (check_variable_accessible(current_block_->get_namespace(),
@@ -15142,7 +15145,8 @@ int ObPLResolver::resolve_self_element_access(ObObjAccessIdent &access_ident,
                                               elem_access_idx,
                                               self_data_type,
                                               user_type_id,
-                                              self_index));
+                                              self_index,
+                                              access_idxs));
     OZ (access_idxs.push_back(self_access_idx));
     OZ (access_idxs.push_back(elem_access_idx));
 
@@ -15331,7 +15335,8 @@ int ObPLResolver::resolve_composite_access(ObObjAccessIdent &access_ident,
                                  access_idx,
                                  pl_data_type,
                                  parent_id,
-                                 var_index));
+                                 var_index,
+                                 access_idxs));
 
     OZ (build_access_idx_sys_func(parent_id, access_idx));
 
@@ -18913,45 +18918,63 @@ int ObPLResolver::check_var_type(ObString &name1, ObString &name2, uint64_t db_i
   return ret;
 }
 
-int ObPLResolver::check_update_column(const ObPLBlockNS &ns, const ObIArray<ObObjAccessIdx>& access_idxs)
+int ObPLResolver::check_update_column(const ObPLBlockNS &ns, uint64_t var_idx, const ObIArray<ObObjAccessIdx>& access_idxs)
 {
   int ret = OB_SUCCESS;
-  if (resolve_ctx_.session_info_.is_for_trigger_package()
-      && 2 == access_idxs.count()
-      && !access_idxs.at(1).var_name_.case_compare_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME)
-      && access_idxs.at(0).var_name_.prefix_match(":")
-      && lib::is_oracle_mode()) {
-    ObSchemaChecker schema_checker;
-    const ObTriggerInfo *trg_info = NULL;
-    const uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
-    OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_server_sid()));
-    OZ (schema_checker.get_trigger_info(tenant_id,
-                                        ns.get_db_name(),
-                                        ns.get_package_name(),
-                                        trg_info));
-    CK (OB_NOT_NULL(trg_info));
-    if (OB_SUCC(ret)) {
-      ObString var_name = access_idxs.at(0).var_name_;
-      ++var_name;
-      if (trg_info->get_ref_new_name().case_compare_equal(var_name)
-          || trg_info->get_ref_old_name().case_compare_equal(var_name)) {
-        const uint64_t table_id = trg_info->get_base_object_id();
-        const ObString column_name = access_idxs.at(1).var_name_;
-        const ObTableSchema *table_schema = NULL;
-        const ObColumnSchemaV2 *col_schema = NULL;
-        OZ (resolve_ctx_.schema_guard_.get_table_schema(tenant_id, table_id, table_schema));
-        CK (OB_NOT_NULL(table_schema));
-        OX (col_schema = table_schema->get_column_schema(column_name));
-        CK (OB_NOT_NULL(col_schema));
-        if (OB_SUCC(ret)) {
-          if (col_schema->is_generated_column()) {
-            ret = OB_ERR_CANNOT_UPDATE_VIRTUAL_COL_IN_TRG;
-            LOG_WARN("virtual column cannot be updated in trigger body", K(col_schema->get_column_name_str()), K(ret));
+#define COLLECT_ASSIGN_COLUMN \
+  do {  \
+    ObPLVar *var = NULL;  \
+    CK (OB_NOT_NULL(ns.get_symbol_table())); \
+    CK (OB_NOT_NULL(var = const_cast<ObPLVar*>(ns.get_symbol_table()->get_symbol(var_idx)))); \
+    for (int64_t i = 0; OB_SUCC(ret) && i < var->get_trigger_ref_cols().count(); ++i) { \
+      if (access_idxs.at(1).var_name_.case_compare_equal(var->get_trigger_ref_cols().at(i).first)) {  \
+        var->get_trigger_ref_cols().at(i).second = true;  \
+        break;  \
+      } \
+    } \
+  } while (0)
+
+  if (resolve_ctx_.session_info_.is_for_trigger_package() && 2 == access_idxs.count()) {
+    if (lib::is_oracle_mode()
+        && !access_idxs.at(1).var_name_.case_compare_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME)
+        && access_idxs.at(0).var_name_.prefix_match(":")) {
+      ObSchemaChecker schema_checker;
+      const ObTriggerInfo *trg_info = NULL;
+      const uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
+      COLLECT_ASSIGN_COLUMN;
+      OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_server_sid()));
+      OZ (schema_checker.get_trigger_info(tenant_id,
+                                          ns.get_db_name(),
+                                          ns.get_package_name(),
+                                          trg_info));
+      CK (OB_NOT_NULL(trg_info));
+      if (OB_SUCC(ret)) {
+        ObString var_name = access_idxs.at(0).var_name_;
+        ++var_name;
+        if (trg_info->get_ref_new_name().case_compare_equal(var_name)
+            || trg_info->get_ref_old_name().case_compare_equal(var_name)) {
+          const uint64_t table_id = trg_info->get_base_object_id();
+          const ObString column_name = access_idxs.at(1).var_name_;
+          const ObTableSchema *table_schema = NULL;
+          const ObColumnSchemaV2 *col_schema = NULL;
+          OZ (resolve_ctx_.schema_guard_.get_table_schema(tenant_id, table_id, table_schema));
+          CK (OB_NOT_NULL(table_schema));
+          OX (col_schema = table_schema->get_column_schema(column_name));
+          CK (OB_NOT_NULL(col_schema));
+          if (OB_SUCC(ret)) {
+            if (col_schema->is_generated_column()) {
+              ret = OB_ERR_CANNOT_UPDATE_VIRTUAL_COL_IN_TRG;
+              LOG_WARN("virtual column cannot be updated in trigger body", K(col_schema->get_column_name_str()), K(ret));
+            }
           }
         }
       }
+    } else if (lib::is_mysql_mode()
+               && access_idxs.at(0).var_name_.case_compare_equal("NEW")) {
+      COLLECT_ASSIGN_COLUMN;
     }
   }
+#undef COLLECT_ASSIGN_COLUMN
   return ret;
 }
 

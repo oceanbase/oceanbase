@@ -9277,7 +9277,8 @@ int ObTableSchema::has_before_insert_row_trigger(ObSchemaGetterGuard &schema_gua
   for (int i = 0; OB_SUCC(ret) && !trigger_exist && i < trigger_list_.count(); i++) {
     OZ (schema_guard.get_trigger_info(tenant_id, trigger_list_.at(i), trigger_info), trigger_list_.at(i));
     OV (OB_NOT_NULL(trigger_info), OB_ERR_UNEXPECTED, trigger_list_.at(i));
-    OX (trigger_exist = trigger_info->has_insert_event() &&
+    OX (trigger_exist = trigger_info->is_enable() &&
+                        trigger_info->has_insert_event() &&
                         trigger_info->has_before_row_point());
   }
   return ret;
@@ -9293,7 +9294,8 @@ int ObTableSchema::has_before_update_row_trigger(ObSchemaGetterGuard &schema_gua
   for (int i = 0; OB_SUCC(ret) && !trigger_exist && i < trigger_list_.count(); i++) {
     OZ (schema_guard.get_trigger_info(tenant_id, trigger_list_.at(i), trigger_info), trigger_list_.at(i));
     OV (OB_NOT_NULL(trigger_info), OB_ERR_UNEXPECTED, trigger_list_.at(i));
-    OX (trigger_exist = trigger_info->has_update_event() &&
+    OX (trigger_exist = trigger_info->is_enable() &&
+                        trigger_info->has_update_event() &&
                         trigger_info->has_before_row_point());
   }
   return ret;

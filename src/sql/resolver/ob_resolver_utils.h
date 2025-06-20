@@ -929,6 +929,11 @@ public:
   static bool is_external_pseudo_column(const ObRawExpr &expr);
   static int cnt_external_pseudo_column(const ObRawExpr &expr, bool &contain);
   static bool is_pseudo_partition_column_name(const ObString name);
+  static int check_whether_assigned_for_before_update_trigger(ObResolverParams &params,
+                                                              ObSchemaChecker *schema_checker,
+                                                              const ObColumnSchemaV2 &column,
+                                                              uint64_t table_id,
+                                                              bool &need);
 private:
   static int try_convert_to_unsiged(const ObRawExprResType &restype,
                                     ObRawExpr& src_expr,
@@ -964,6 +969,14 @@ private:
 
   static int is_negative_ora_nmb(const common::ObObjParam &obj_param, bool &is_neg, bool &is_zero);
   static const common::ObString stmt_type_string[];
+  static int check_before_update_row_trigger_ref_cols(pl::ObPLPackageGuard &package_guard,
+                                                        common::ObIAllocator &allocator,
+                                                        share::schema::ObSchemaGetterGuard &schema_guard,
+                                                        ObSQLSessionInfo &session_info,
+                                                        common::ObMySQLProxy &sql_proxy,
+                                                        const ObIArray<uint64_t> &trigger_list,
+                                                        const ObString &column_name,
+                                                        bool &need);
 
   // disallow construct
   ObResolverUtils();

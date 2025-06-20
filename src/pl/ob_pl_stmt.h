@@ -155,6 +155,8 @@ public:
   inline bool is_referenced() const { return is_referenced_; }
   inline void set_is_default_expr_has_reroute_factor(bool val) { is_default_expr_access_external_state_ = val; }
   inline bool is_default_expr_access_external_state() const { return is_default_expr_access_external_state_; }
+  inline ObIArray<std::pair<ObString, bool>> &get_trigger_ref_cols() { return trigger_ref_cols_; };
+  inline const ObIArray<std::pair<ObString, bool>> &get_trigger_ref_cols() const { return trigger_ref_cols_; };
 
   TO_STRING_KV(K_(name),
                K_(type),
@@ -176,6 +178,8 @@ private:
   bool is_dup_declare_;
   bool is_referenced_;
   bool is_default_expr_access_external_state_;
+  // 对于 trigger 的入参 rowtype，body 中显示调用的列 <col_name, is_write>>
+  common::ObSEArray<std::pair<ObString, bool>, 4> trigger_ref_cols_;
 };
 
 class ObPLSymbolTable
@@ -1507,7 +1511,8 @@ public:
                             ObObjAccessIdx &access_idx,
                             ObPLDataType &data_type,
                             uint64_t &package_id,
-                            int64_t &var_idx) const;
+                            int64_t &var_idx,
+                            ObIArray<ObObjAccessIdx> &access_idxs) const;
   int find_sub_attr_by_index(const ObUserDefinedType &user_type, int64_t attr_index, const sql::ObRawExpr *func_expr, ObObjAccessIdx &access_idx) const;
   int expand_data_type(const ObUserDefinedType *user_type,
                        ObIArray<ObDataType> &types,

@@ -5123,6 +5123,9 @@ int ObPLFunction::set_variables(const ObPLSymbolTable &symbol_table)
   int ret = OB_SUCCESS;
   variables_.set_capacity(static_cast<uint32_t>(symbol_table.get_count()));
   default_idxs_.set_capacity(static_cast<uint32_t>(symbol_table.get_count()));
+  if (OB_FAIL(trigger_ref_cols_.prepare_allocate(static_cast<uint32_t>(symbol_table.get_count())))) {
+    LOG_WARN("failed to prepare allocate", K(ret), K(symbol_table.get_count()));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < symbol_table.get_count(); ++i) {
     ObPLDataType type;
     if (OB_ISNULL(symbol_table.get_symbol(i))) {
@@ -5138,6 +5141,23 @@ int ObPLFunction::set_variables(const ObPLSymbolTable &symbol_table)
         LOG_WARN("push back error", K(i), K(type), K(symbol_table.get_symbol(i)), K(variables_), K(ret));
       } else if (OB_FAIL(default_idxs_.push_back(symbol_table.get_symbol(i)->get_default()))) {
         LOG_WARN("push back error", K(i), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObString col;
+      trigger_ref_cols_.at(i).set_allocator(&allocator_);
+      const ObIArray<std::pair<ObString, bool>>  &ref_cols = symbol_table.get_symbol(i)->get_trigger_ref_cols();
+      if (OB_FAIL(trigger_ref_cols_.at(i).init(ref_cols.count()))) {
+        LOG_WARN("failed to init trigger ref cols", K(i), K(ret));
+      } else {
+        for (int64_t idx = 0; OB_SUCC(ret) && idx < ref_cols.count(); ++idx) {
+          ObString col;
+          if (OB_FAIL(ob_write_string(allocator_, ref_cols.at(idx).first, col))) {
+            LOG_WARN("failed to copy string", K(ret), K(idx), K(ref_cols.at(idx).first));
+          } else if (OB_FAIL(trigger_ref_cols_.at(i).push_back(std::make_pair(col, ref_cols.at(idx).second)))) {
+            LOG_WARN("failed to push back", K(ret), K(col));
+          }
+        }
       }
     }
   }
