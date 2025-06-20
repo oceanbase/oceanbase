@@ -1844,6 +1844,10 @@ int ObTenantIOManager::alloc_req_and_result(const ObIOInfo &info, ObIOHandle &ha
 
   if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(io_request)) {
+      // fd should be closed by caller
+      if (OB_NOT_NULL(io_result)) {
+        io_result->flag_.set_no_need_close_dev_and_fd();
+      }
       //free io_request manually
       io_request->free();
     }
@@ -1883,6 +1887,10 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
     LOG_WARN("schedule request failed", K(ret), KPC(req));
   }
   if (OB_FAIL(ret)) {
+    // fd should be closed by caller
+    if (OB_NOT_NULL(req) && OB_NOT_NULL(req->io_result_)) {
+      req->io_result_->flag_.set_no_need_close_dev_and_fd();
+    }
     // io callback should be freed by caller
     handle.clear_io_callback();
     handle.reset();
