@@ -2960,6 +2960,7 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
                  !row->storage_datums_[0].get_string().prefix_match(get_snapshot_key_prefix())) {
         ObVectorIndexAlgorithmType index_type;
         ObString key_prefix;
+        ObString target_prefix;
         if (OB_FAIL(ob_write_string(*allocator_, row->storage_datums_[0].get_string(), key_prefix))) {
           LOG_WARN("failed to write string", K(ret), K(row->storage_datums_[0].get_string()));
         } else if (OB_FAIL(ObPluginVectorIndexUtils::iter_table_rescan(*query_cond->scan_param_, table_scan_iter))) {
@@ -2977,15 +2978,10 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
           } else if (OB_FAIL(index_seri.deserialize(snap_data_->index_, param, cb, tenant_id_))) {
             LOG_WARN("serialize index failed.", K(ret));
           } else if (OB_FALSE_IT(index_type = get_snap_index_type())) {
-          } else if (index_type == VIAT_HGRAPH) {
-            key_prefix = key_prefix.split_on("_hgraph_");
-            set_snapshot_key_prefix(key_prefix);
-          } else if (index_type == VIAT_HNSW || index_type == VIAT_HNSW_SQ || index_type == VIAT_HNSW_BQ) {
-            key_prefix = key_prefix.split_on("_hnsw_");
-            set_snapshot_key_prefix(key_prefix);
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid index type", K(ret), K(index_type));
+          } else if (OB_FAIL(ObPluginVectorIndexUtils::get_split_snapshot_prefix(index_type, key_prefix, target_prefix))) {
+            LOG_WARN("fail to get split snapshot prefix", K(ret));
+          } else if (OB_FAIL(set_snapshot_key_prefix(target_prefix))) {
+            LOG_WARN("fail to set snapshot key prefix", K(ret), K(index_type), K(key_prefix), K(target_prefix));
           }
         }
       }
@@ -3159,6 +3155,32 @@ int ObPluginVectorIndexAdaptor::set_index_identity(ObString &index_identity)
   return ret;
 }
 
+int ObPluginVectorIndexAdaptor::set_snapshot_key_prefix(const ObString &snapshot_key_prefix)
+{
+  int ret = OB_SUCCESS;
+  if (!snapshot_key_prefix_.empty() && snapshot_key_prefix_ == snapshot_key_prefix) {
+    // do nothing
+    LOG_INFO("try to change same vector index snapshot_key_prefix", K(snapshot_key_prefix), K(*this));
+  } else if (snapshot_key_prefix.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index snapshot_key_prefix is empty", KR(ret), K(*this));
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null allocator to set vector index snapshot_key_prefix ", KR(ret), K(*this));
+  } else {
+    if (!snapshot_key_prefix_.empty()) {
+      allocator_->free(snapshot_key_prefix_.ptr());
+      snapshot_key_prefix_.reset();
+    }
+    if (OB_FAIL(ob_write_string(*allocator_, snapshot_key_prefix, snapshot_key_prefix_))) {
+      LOG_WARN("fail set vector index snapshot_key_prefix ", KR(ret), K(*this));
+    } else {
+      LOG_INFO("change vector index snapshot_key_prefix success", K(snapshot_key_prefix), K(*this));
+    }
+  }
+  return ret;
+}
+
 void ObPluginVectorIndexAdaptor::set_vid_rowkey_info(ObVectorIndexSharedTableInfo &info)
 {
   rowkey_vid_tablet_id_ = info.rowkey_vid_tablet_id_;
@@ -3302,9 +3324,11 @@ int ObPluginVectorIndexAdaptor::merge_parital_index_adapter(ObPluginVectorIndexA
         LOG_WARN("partial vector index adapter not valid", K(partial_idx_adpt), K(*this), KR(ret));
       } else if (OB_FAIL(merge_mem_data_(VIRT_SNAP, partial_idx_adpt, partial_idx_adpt->snap_data_, snap_data_))){
         LOG_WARN("partial vector index adapter not valid", K(partial_idx_adpt), K(*this), KR(ret));
-      } else {
-        ObString key_prefix = partial_idx_adpt->get_snapshot_key_prefix();
-        set_snapshot_key_prefix(key_prefix);
+      }
+      if (OB_SUCC(ret) && !partial_idx_adpt->get_snapshot_key_prefix().empty()) {
+        if (OB_FAIL(set_snapshot_key_prefix(partial_idx_adpt->get_snapshot_key_prefix()))) {
+          LOG_WARN("failed to set index snapshot key prefix", KR(ret), K(*this), KPC(partial_idx_adpt));
+        }
       }
     }
 
