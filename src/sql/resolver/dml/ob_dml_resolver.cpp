@@ -4719,8 +4719,6 @@ int ObDMLResolver::build_column_schemas_for_odps(const ObIArray<ObODPSTableRowIt
             break;
           }
           case apsara::odps::sdk::ODPS_VARCHAR:
-          case apsara::odps::sdk::ODPS_STRING:
-          case apsara::odps::sdk::ODPS_BINARY:
           {
             int64_t varchar_len = odps_type_length;
             if (odps_type_length <= 0) {
@@ -4730,6 +4728,14 @@ int ObDMLResolver::build_column_schemas_for_odps(const ObIArray<ObODPSTableRowIt
             column_schema.set_data_type(ObVarcharType);
             column_schema.set_data_length(varchar_len);
             column_schema.set_length_semantics(LS_CHAR);
+            break;
+          }
+          case apsara::odps::sdk::ODPS_STRING:
+          case apsara::odps::sdk::ODPS_BINARY:
+          {
+            column_schema.set_data_type(ObMediumTextType);
+            column_schema.set_data_length(OB_MAX_MEDIUMTEXT_LENGTH);
+            column_schema.set_is_string_lob(); // 默认为ob的string类型
             break;
           }
           case apsara::odps::sdk::ODPS_TIMESTAMP:

@@ -2934,7 +2934,7 @@ int ObODPSJNITableRowIterator::fill_array_arrow(const std::shared_ptr<arrow::Arr
           } else {
             judge_length = out_length;
           }
-          if (!(text_type_length_is_valid_at_runtime(array_helper->element_type_, judge_length))) {
+          if (!(varchar_length_is_valid_at_runtime(array_helper->element_type_, out_charset, judge_length, array_helper->element_type_))) {
             ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
             LOG_WARN("unexpected data length", K(out_length), K(judge_length), K(array_helper->element_length_), KPC(array_helper));
           } else {
