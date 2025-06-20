@@ -417,6 +417,13 @@ private:
 
   int generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, const bool in_root_job);
 
+  int generate_ins_auto_inc_expr(ObLogInsert &op,
+                                 ObTableInsertUpSpec &spec,
+                                 const IndexDMLInfo *ins_pri_dml_info);
+  int generate_upd_auto_inc_expr(ObLogInsert &op,
+                                 ObTableInsertUpSpec &spec,
+                                 const IndexDMLInfo *upd_pri_dml_info);
+
   int get_all_auto_inc_cids(const ObIArray<share::AutoincParam> &autoinc_params, ObIArray<uint64_t> &cids);
 
   int generate_spec(ObLogDelete &op, ObTableDeleteSpec &spec, const bool in_root_job);
