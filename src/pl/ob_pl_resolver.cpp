@@ -8600,7 +8600,7 @@ int ObPLResolver::resolve_open(
           if (cursor->is_for_update()) {
             func.set_modifies_sql_data();
           }
-          if (PL_REF_CURSOR_TYPE == cursor->get_cursor_type().get_type()) {
+          if (var->get_pl_data_type().is_ref_cursor_type()) {
             if (cursor->get_package_id() != current_block_->get_namespace().get_package_id()
                 || cursor->get_routine_id() != current_block_->get_namespace().get_routine_id()) {
               func.set_open_external_ref_cursor();

@@ -3258,8 +3258,7 @@ int ObSPIService::cursor_open_check(ObPLExecCtx *ctx,
         OX (obj.set_param_meta());
       } else {
         CK (OB_NOT_NULL(ctx->allocator_));
-        //OZ (spi_cursor_alloc(*ctx->allocator_, obj));
-        OZ (spi_cursor_alloc(exec_ctx->get_allocator(), obj));
+        OZ (spi_cursor_alloc(ctx->expr_alloc_, obj));
         OX (obj.set_extend(obj.get_ext(), PL_REF_CURSOR_TYPE));
         OX (cursor = reinterpret_cast<ObPLCursorInfo*>(obj.get_ext()));
       }
