@@ -3654,7 +3654,8 @@ int ObSql::generate_stmt_with_reconstruct_sql(ObDMLStmt* &stmt,
                                                 sql,
                                                 sql_ctx.schema_guard_,
                                                 print_param,
-                                                &phy_plan_ctx->get_param_store()))) {
+                                                &phy_plan_ctx->get_param_store(),
+                                                session))) {
     LOG_WARN("failed to reconstruct sql", K(ret));
   } else {
     LOG_TRACE("origin sql:", K(sql_ctx.cur_sql_));
