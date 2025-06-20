@@ -134,7 +134,7 @@ int MockSegmentHeader::serialize(char *buf, const int64_t buf_len, int64_t &pos)
     header->tailer_length_ = tailer_length_;
     header->attr_ = attr_;
     header->new_add_ = new_add_;
-    pos += get_serialize_size();
+    pos += header->header_size_;
   }
   return ret;
 }
@@ -163,7 +163,7 @@ int MockSegmentHeader::deserialize(const char *buf, const int64_t data_len, int6
       ret = OB_DESERIALIZE_ERROR;
       LOG_WARN("deserialized mock segment header is invalid", KR(ret), K(*this));
     } else {
-      pos += get_serialize_size();
+      pos += header_size_;
     }
   }
   return ret;
@@ -171,13 +171,7 @@ int MockSegmentHeader::deserialize(const char *buf, const int64_t data_len, int6
 
 int64_t MockSegmentHeader::get_serialize_size() const
 {
-  int64_t size = 0;
-  if (1 == version_) {
-    size = sizeof(ObSSCkptPhyBlockSegmentHeader);
-  } else if (2 == version_) {
-    size = sizeof(MockSegmentHeader);
-  }
-  return size;
+  return sizeof(MockSegmentHeader);
 }
 
 struct ItemInfo
