@@ -2728,11 +2728,15 @@ int ObFastParserMysql::process_values(const char *str)
                     cur_token_begin_pos_ - copy_begin_pos_, param_num_)))) {
           LOG_WARN("failed to push back", K(ret));
         } else {
-          values_token_pos_ = raw_sql_.cur_pos_;
+          if (0 == values_token_pos_) {
+            values_token_pos_ = raw_sql_.cur_pos_;
+          }
           raw_sql_.scan(5);
         }
       } else if (CHECK_EQ_STRNCASECMP("alue", 4)) {
-        values_token_pos_ = raw_sql_.cur_pos_;
+        if (0 == values_token_pos_) {
+          values_token_pos_ = raw_sql_.cur_pos_;
+        }
         raw_sql_.scan(4);
       } else {
         // do nothing

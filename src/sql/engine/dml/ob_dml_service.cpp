@@ -3011,8 +3011,9 @@ int ObDMLService::log_user_error_inner(
         CS_TYPE_UTF8MB4_BIN,
         ctx.get_my_session()->get_local_collation_connection());
     LOG_USER_ERROR(OB_ERR_WARN_DATA_OUT_OF_RANGE, column_name.length(), column_name.ptr(), row_num);
-  } else if ((OB_ERR_DATA_TRUNCATED == ret || OB_ERR_DOUBLE_TRUNCATED == ret)
-      && lib::is_mysql_mode()) {
+  } else if ((OB_ERR_DATA_TRUNCATED == ret ||
+      OB_ERR_DOUBLE_TRUNCATED == ret ||
+      OB_ERR_INCORRECT_STRING_VALUE == ret) && lib::is_mysql_mode()) {
     ret = OB_ERR_DATA_TRUNCATED;
     ob_reset_tsi_warning_buffer();
     ObSQLUtils::copy_and_convert_string_charset(
@@ -3023,7 +3024,7 @@ int ObDMLService::log_user_error_inner(
         ctx.get_my_session()->get_local_collation_connection());
     LOG_USER_ERROR(OB_ERR_DATA_TRUNCATED, column_name.length(), column_name.ptr(), row_num);
   } else {
-    LOG_WARN("fail to operate row", K(ret));
+    LOG_WARN("fail to operate row", K(ret), K(column_name), K(row_num));
   }
   return ret;
 }
