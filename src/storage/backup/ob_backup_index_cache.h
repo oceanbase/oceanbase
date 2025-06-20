@@ -28,6 +28,7 @@ struct ObBackupBlockDesc {
       const int64_t offset, const int64_t length);
   bool is_valid() const;
   bool operator==(const ObBackupBlockDesc &other) const;
+  uint64_t calc_hash(uint64_t seed) const;
   TO_STRING_KV(K_(turn_id), K_(retry_id), K_(file_type), K_(file_id), K_(offset), K_(length));
   int64_t turn_id_;
   int64_t retry_id_;
