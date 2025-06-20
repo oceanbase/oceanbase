@@ -10020,12 +10020,12 @@ int ObSchemaServiceSQLImpl::get_table_id(
             "UNION ALL "
             "(SELECT table_id, table_name, session_id, table_type, table_mode, schema_version FROM %s "
             " WHERE tenant_id = 0 AND table_name = '%s' "
-            " AND (session_id = 0 or session_id = %lu) "
+            " AND (session_id = 0 or session_id = %ld) "
             " AND database_id = %lu "
             ")) "
             "ORDER BY session_id DESC",                 // case 3.1
             OB_ALL_VIRTUAL_CORE_ALL_TABLE_TNAME, tenant_id, database_id,
-            OB_ALL_TABLE_TNAME, tb_name, session_id, database_id))) {
+            OB_ALL_TABLE_TNAME, tb_name, static_cast<int64_t>(session_id), database_id))) {
           LOG_WARN("fail to assign sql", KR(ret), K(session_id), K(database_id),
                    K(table_name), "tb_name", tb_name);
         }
@@ -10033,10 +10033,10 @@ int ObSchemaServiceSQLImpl::get_table_id(
         if (OB_FAIL(sql.assign_fmt(
             "SELECT table_id, table_name, session_id, table_type, table_mode, schema_version FROM %s "
             "WHERE tenant_id = 0 AND table_name = '%s' "
-            "AND (session_id = 0 or session_id = %lu) "
+            "AND (session_id = 0 or session_id = %ld) "
             "AND database_id = %lu "
             "ORDER BY session_id DESC", // case 3.1
-            OB_ALL_TABLE_TNAME, tb_name, session_id, database_id))) {
+            OB_ALL_TABLE_TNAME, tb_name, static_cast<int64_t>(session_id), database_id))) {
           LOG_WARN("fail to assign sql", KR(ret), K(session_id), K(database_id),
                    K(table_name), "tb_name", tb_name);
         }
