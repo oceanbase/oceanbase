@@ -98,6 +98,12 @@ public:
   int get_sstable_info(const ObDirectLoadTableHandleArray &sstable_array,
                        const ObDirectLoadTableDataDesc &table_data_desc);
   int calc_sample_info(const int64_t parallel, bool based_on_origin = false);
+  TO_STRING_KV(K_(origin_sample_num),
+               K_(sstable_sample_num),
+               K_(origin_rows_per_sample),
+               K_(sstable_rows_per_sample),
+               K_(origin_step),
+               K_(sstable_step));
 public:
   int64_t origin_sample_num_;
   int64_t sstable_sample_num_;
