@@ -12909,7 +12909,10 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   }
 
   if (OB_SUCC(ret) && (distributed_methods & DIST_BROADCAST_HASH_LOCAL)) {
-    if (!force_slave_mapping || !is_right_match_repart ||
+    if (NULL == right_path.get_strong_sharding()) {
+      OPT_TRACE("strong sharding of right path is null, not use broadcast hash local");
+      distributed_methods &= ~DIST_BROADCAST_HASH_LOCAL;
+    } else if (!force_slave_mapping || !is_right_match_repart ||
         !right_path.get_sharding()->is_distributed_with_table_location_and_partitioning()) {
       OPT_TRACE("right path not meet repart, prune broadcast hash local method");
       distributed_methods &= ~DIST_BROADCAST_HASH_LOCAL;
@@ -12924,9 +12927,12 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   }
 
   if (OB_SUCC(ret) && (distributed_methods & DIST_HASH_LOCAL_BROADCAST)) {
-    if (!force_slave_mapping || !is_left_match_repart ||
+    if (NULL == left_path.get_strong_sharding()) {
+      OPT_TRACE("strong sharding of left path is null, not use hash local broadcast");
+      distributed_methods &= ~DIST_HASH_LOCAL_BROADCAST;
+    } else if (!force_slave_mapping || !is_left_match_repart ||
         !left_path.get_sharding()->is_distributed_with_table_location_and_partitioning()) {
-      OPT_TRACE("left path not meet repart, prune none broadcast method");
+      OPT_TRACE("left path not meet repart, prune hash local broadcast method");
       distributed_methods &= ~DIST_HASH_LOCAL_BROADCAST;
     } else {
       distributed_methods &= ~DIST_NONE_BROADCAST;
