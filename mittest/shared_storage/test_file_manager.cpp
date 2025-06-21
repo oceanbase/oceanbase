@@ -771,6 +771,7 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   // test 8: test calc_private_macro_disk_space
   int64_t total_disk_size = 0;
   int64_t hot_tablet_total_disk_size = 0;
+  int64_t del_tmp_seq_file_size = 0;
   int64_t expected_disk_size = write_io_size;
   char dir_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
   ObIODFileStat statbuf;
@@ -817,7 +818,8 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   ob_usleep(2000*1000);
   int64_t start_calc_size_time_s = ObTimeUtility::current_time_s();
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_macro_block_disk_space(start_calc_size_time_s, total_disk_size,
-                                                                     hot_tablet_total_disk_size));
+                                                                     hot_tablet_total_disk_size,
+                                                                     del_tmp_seq_file_size));
   ASSERT_EQ(expected_disk_size, total_disk_size);
 
   // step 9: test delete file
@@ -830,7 +832,8 @@ TEST_F(TestFileManager, test_private_macro_file_operator)
   ob_usleep(2000*1000);
   start_calc_size_time_s = ObTimeUtility::current_time_s();
   ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_macro_block_disk_space(start_calc_size_time_s, total_disk_size,
-                                                                     hot_tablet_total_disk_size));
+                                                                     hot_tablet_total_disk_size,
+                                                                     del_tmp_seq_file_size));
   get_macro_block_scatter_dir_size(scatter_dir_size);
   ASSERT_EQ(shared_mini_ls_dir_size + shared_minor_ls_dir_size + scatter_dir_size, total_disk_size);
 
@@ -926,6 +929,7 @@ TEST_F(TestFileManager, test_tmp_file_operator)
 
   // test 9: test calc_tmp_file_disk_space
   int64_t tmp_file_size = 0;
+  int64_t del_tmp_seq_file_size = 0;
   char dir_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
   int64_t expected_disk_size = 2 * write_io_size;
   ObIODFileStat statbuf;
@@ -934,7 +938,9 @@ TEST_F(TestFileManager, test_tmp_file_operator)
   expected_disk_size += statbuf.size_;
   ob_usleep(2000*1000);
   int64_t start_calc_size_time_s = ObTimeUtility::current_time_s();
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_tmp_file_disk_space(start_calc_size_time_s, tmp_file_size));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_tmp_file_disk_space(start_calc_size_time_s,
+                                                                  tmp_file_size,
+                                                                  del_tmp_seq_file_size));
   ASSERT_EQ(expected_disk_size, tmp_file_size);
 
   // step 10: test delete file
@@ -1015,6 +1021,7 @@ TEST_F(TestFileManager, test_meta_file_operator)
 
   // test 8: test calc_meta_file_disk_space
   int64_t total_disk_size = 0;
+  int64_t del_tmp_seq_file_size = 0;
   int64_t expected_disk_size = write_io_size;
   char dir_path[ObBaseFileManager::OB_MAX_FILE_PATH_LENGTH] = {0};
   ObIODFileStat statbuf;
@@ -1035,7 +1042,9 @@ TEST_F(TestFileManager, test_meta_file_operator)
 
   ob_usleep(2000*1000);
   int64_t start_calc_size_time_s = ObTimeUtility::current_time_s();
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_meta_file_disk_space(start_calc_size_time_s, total_disk_size));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_meta_file_disk_space(start_calc_size_time_s,
+                                                                   total_disk_size,
+                                                                   del_tmp_seq_file_size));
   // private_tablet_meta + tablet_id_dir
   ASSERT_EQ(expected_disk_size, total_disk_size);
 
@@ -1050,7 +1059,9 @@ TEST_F(TestFileManager, test_meta_file_operator)
   ob_usleep(2000*1000);
   start_calc_size_time_s = ObTimeUtility::current_time_s();
   get_ls_id_dir_size(ls_id, ls_epoch_id, ls_id_dir_size);
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_meta_file_disk_space(start_calc_size_time_s, total_disk_size));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calc_meta_file_disk_space(start_calc_size_time_s,
+                                                                   total_disk_size,
+                                                                   del_tmp_seq_file_size));
   ASSERT_EQ(ls_id_dir_size, total_disk_size);
 }
 
