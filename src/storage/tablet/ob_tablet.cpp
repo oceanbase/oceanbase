@@ -554,19 +554,31 @@ int ObTablet::init_for_merge(
 int ObTablet::init_for_shared_storge_first_creation(
     common::ObArenaAllocator &allocator,
     const ObTabletMeta &tablet_meta,
-    const ObStorageSchema &storage_schema)
+    const ObStorageSchema &storage_schema,
+    const ObTableHandleV2 &local_empty_major)
 {
   int ret = OB_SUCCESS;
-  ObTableHandleV2 table_handle;
   const common::ObTabletID tablet_id = tablet_meta.tablet_id_;
   const bool need_create_empty_major_sstable = tablet_meta.table_store_flag_.with_major_sstable();
+  const ObSSTable *sstable = nullptr;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(!storage_schema.is_valid() || !tablet_meta.is_valid())) {
+  } else if (OB_UNLIKELY(!storage_schema.is_valid() || !tablet_meta.is_valid()
+      || (need_create_empty_major_sstable && !local_empty_major.is_valid()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(storage_schema), K(tablet_meta));
+    LOG_WARN("invalid args", K(ret), K(storage_schema), K(tablet_meta), K(local_empty_major));
+  } else if (local_empty_major.is_valid()) {
+    if (OB_FAIL(local_empty_major.get_sstable(sstable))) {
+      LOG_WARN("failed to get sstable", K(ret), K(local_empty_major));
+    } else if (!sstable->is_major_sstable() || sstable->is_meta_major_sstable()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sstable type is not major, unexpected", K(ret), KPC(sstable));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(tablet_meta_.init_for_share_storage(tablet_meta))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(tablet_meta));
   } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, storage_schema_addr_.ptr_))) {
@@ -580,12 +592,8 @@ int ObTablet::init_for_shared_storge_first_creation(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (need_create_empty_major_sstable
-      && OB_FAIL(ObTabletCreateDeleteHelper::create_shared_empty_sstable(
-          allocator, *storage_schema_addr_.get_ptr(), tablet_id, tablet_meta_.snapshot_version_, table_handle))) {
-    LOG_WARN("failed to make empty sstable", K(ret), K(tablet_meta_));
   } else {
-    ALLOC_AND_INIT(allocator, table_store_addr_, (*this), static_cast<ObSSTable *>(table_handle.get_table()));
+    ALLOC_AND_INIT(allocator, table_store_addr_, (*this), sstable);
   }
 
   if (OB_FAIL(ret)) {

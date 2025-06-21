@@ -238,7 +238,8 @@ public:
   int init_for_shared_storge_first_creation(
       common::ObArenaAllocator &allocator,
       const ObTabletMeta &tablet_meta,
-      const ObStorageSchema &storage_schema);
+      const ObStorageSchema &storage_schema,
+      const ObTableHandleV2 &local_empty_major);
   int init_for_shared_merge(
       common::ObArenaAllocator &allocator,
       const ObUpdateTableStoreParam &param,
