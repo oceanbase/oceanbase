@@ -1007,6 +1007,54 @@ int ObPLDataType::deserialize(
   return ret;
 }
 
+int ObPLDataType::intervalym_element_cell_str(char *buf,
+                                              const int64_t len,
+                                              ObIntervalYMValue val,
+                                              int64_t &pos,
+                                              const ObScale scale)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input args", K(ret), KP(buf));
+  } else if (OB_UNLIKELY(len - pos <= 1)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("buf is oversize", K(ret), K(len), K(pos));
+  } else {
+    /* skip 1 byte to store length */
+    int64_t pos_begin = pos++;
+    OZ (ObTimeConverter::interval_ym_to_str(val, scale, buf, len, pos, false));
+    // store length as beginning
+    int64_t total_len = pos - pos_begin - 1;
+    OZ (ObMySQLUtil::store_length(buf, len, total_len, pos_begin));
+  }
+  return ret;
+}
+
+int ObPLDataType::intervalds_element_cell_str(char *buf,
+                                              const int64_t len,
+                                              ObIntervalDSValue val,
+                                              int64_t &pos,
+                                              const ObScale scale)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input args", K(ret), KP(buf));
+  } else if (OB_UNLIKELY(len - pos <= 1)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("buf is oversize", K(ret), K(len), K(pos));
+  } else {
+    /* skip 1 byte to store length */
+    int64_t pos_begin = pos++;
+    OZ (ObTimeConverter::interval_ds_to_str(val, scale, buf, len, pos, false));
+    // store length as beginning
+    int64_t total_len = pos - pos_begin - 1;
+    OZ (ObMySQLUtil::store_length(buf, len, total_len, pos_begin));
+  }
+  return ret;
+}
+
 // -------------------- End for Package Session Variable Serialize/DeSerialize ------
 
 int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
@@ -1051,6 +1099,14 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
           LOG_WARN("failed to process lob locator_results", K(ret), K(obj), K(session.is_client_use_lob_locator()), K(session.is_client_support_lob_locatorv2()));
         } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, &field, session, NULL))) {
           LOG_WARN("failed to cell str", K(ret), K(obj), K(dst_len), K(dst_pos));
+        }
+      } else if (MYSQL_PROTOCOL_TYPE::TEXT == type && obj.is_interval_ym()) {
+        if (OB_FAIL(intervalym_element_cell_str(dst, dst_len, obj.get_interval_ym(), dst_pos, field.accuracy_.get_scale()))) {
+          LOG_WARN("failed to cell intervalym element type of collection", K(ret), K(obj), K(dst_len), K(dst_pos));
+        }
+      } else if (MYSQL_PROTOCOL_TYPE::TEXT == type && obj.is_interval_ds()) {
+        if (OB_FAIL(intervalds_element_cell_str(dst, dst_len, obj.get_interval_ds(), dst_pos, field.accuracy_.get_scale()))) {
+          LOG_WARN("failed to cell intervalds element type of collection", K(ret), K(obj), K(dst_len), K(dst_pos));
         }
       } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, &field, session, NULL))) {
         LOG_WARN("failed to cell str", K(ret), K(obj), K(dst_len), K(dst_pos));
