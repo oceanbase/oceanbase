@@ -4657,6 +4657,15 @@ int ObPLCodeGenerator::init_spi_service()
     OZ (helper_.create_function(ObString("spi_adjust_error_trace"), ft, spi_service_.spi_adjust_error_trace_));
   }
 
+  if (OB_SUCC(ret)) {
+    arg_types.reset();
+    OZ (arg_types.push_back(pl_exec_context_pointer_type));
+    OZ (arg_types.push_back(obj_param_pointer_type));
+    OZ (arg_types.push_back(int64_type));
+    OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
+    OZ (helper_.create_function(ObString("spi_convert_anonymous_array"), ft, spi_service_.spi_convert_anonymous_array_));
+  }
+
   return ret;
 }
 
@@ -8616,13 +8625,29 @@ int ObPLCodeGenerator::generate_out_param(
     ObPLDataType pl_type = s.get_variable(param_desc.at(i).out_idx_)->get_type();
     if (pl_type.is_composite_type()) {
       if (param_desc.at(i).is_out()) {
+        uint64_t udt_id = pl_type.get_user_type_id();
         // 对于INOUT参数, execute immediate复杂类型传递的是指针, 什么都不需要做; inner call场景, inout参数会入参会深拷，这里需要重新拷回
         // 对于OUT参数, 复杂类型构造了新的ObjParam, 这里进行COPY;
         if (PL_CALL == s.get_type() &&
             static_cast<const ObPLCallStmt *>(&s)->get_nocopy_params().count() > i &&
             OB_INVALID_INDEX != static_cast<const ObPLCallStmt *>(&s)->get_nocopy_params().at(i) &&
             !param_desc.at(i).is_pure_out()) {
-            // inner call nocopy的inout参数传递是指针, 无需重新拷贝
+          // inner call nocopy inout anonymous array param need convert to original type
+          if (is_mocked_anonymous_array_id(udt_id)) {
+            ObSEArray<ObLLVMValue, 3> args;
+            ObLLVMValue user_type_id;
+            ObLLVMValue ret_err;
+            OZ (get_helper().get_int64(pl_type.get_user_type_id(), user_type_id));
+            OZ (args.push_back(get_vars().at(CTX_IDX)));
+            OZ (args.push_back(p_arg));
+            OZ (args.push_back(user_type_id));
+            OZ (get_helper().create_call(ObString("spi_convert_anonymous_array"),
+                                  get_spi_service().spi_convert_anonymous_array_,
+                                  args,
+                                  ret_err));
+            OZ (check_success(
+              ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()));
+          }
         } else {
           ObLLVMValue into_address;
           ObLLVMValue allocator;
@@ -8674,6 +8699,23 @@ int ObPLCodeGenerator::generate_out_param(
                                     s.get_block()->in_notfound(),
                                     s.get_block()->in_warning(),
                                     OB_INVALID_ID));
+          if (OB_SUCC(ret)
+              && is_mocked_anonymous_array_id(udt_id)
+              && !param_desc.at(i).is_pure_out()) {
+            ObSEArray<ObLLVMValue, 3> args;
+            ObLLVMValue user_type_id;
+            ObLLVMValue ret_err;
+            OZ (get_helper().get_int64(pl_type.get_user_type_id(), user_type_id));
+            OZ (args.push_back(get_vars().at(CTX_IDX)));
+            OZ (args.push_back(into_address));
+            OZ (args.push_back(user_type_id));
+            OZ (get_helper().create_call(ObString("spi_convert_anonymous_array"),
+                                  get_spi_service().spi_convert_anonymous_array_,
+                                  args,
+                                  ret_err));
+            OZ (check_success(
+              ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()));
+          }
           OZ (generate_destruct_obj(s, src_datum));
           OZ (get_helper().create_br(after_copy_block));
           OZ (set_current(after_copy_block));
