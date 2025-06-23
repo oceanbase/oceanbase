@@ -2877,6 +2877,10 @@ typedef enum ObItemType
   T_SHOW_SENSITIVE_RULES        = 4879,
   T_SHOW_SENSITIVE_RULES_OPTION = 4880,
 
+  // HMS catalog
+  T_METASTORE_URI = 4881,
+  T_ACCESS_INFO = 4882,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

@@ -2000,6 +2000,18 @@ constexpr int OB_SENSITIVE_COLUMN_EXIST = -11096;
 constexpr int OB_SENSITIVE_COLUMN_NOT_EXIST = -11097;
 constexpr int OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE = -11098;
 constexpr int OB_WRONG_SENSITIVE_RULE_NAME = -11099;
+constexpr int OB_KERBEROS_ERROR = -11100;
+constexpr int OB_HMS_ERROR = -11101;
+constexpr int OB_INVALID_HMS_HOST = -11102;
+constexpr int OB_INVALID_HMS_PORT = -11103;
+constexpr int OB_INVALID_HMS_TABLE_LOCATION = -11104;
+constexpr int OB_INVALID_HMS_SERVICE = -11105;
+constexpr int OB_INVALID_HMS_SERVICE_FQDN = -11106;
+constexpr int OB_INVALID_HMS_TRANSPORT = -11107;
+constexpr int OB_INVALID_HMS_METASTORE = -11108;
+constexpr int OB_HMS_PARTITION_ERROR = -11109;
+constexpr int OB_HMS_DB_NOT_FOUND = -11110;
+constexpr int OB_HMS_TABLE_NOT_FOUND = -11111;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -4447,6 +4459,18 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SENSITIVE_COLUMN_NOT_EXIST__USER_ERROR_MSG "Sensitive column %.*s(%.*s) does not exist"
 #define OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE__USER_ERROR_MSG "Access sensitive field protected by sensitive rule '%.*s' denied to user '%.*s'@'%.*s'"
 #define OB_WRONG_SENSITIVE_RULE_NAME__USER_ERROR_MSG "Invalid sensitive rule name '%.*s'"
+#define OB_KERBEROS_ERROR__USER_ERROR_MSG "Kereberos execution error"
+#define OB_HMS_ERROR__USER_ERROR_MSG "HMS execution error"
+#define OB_INVALID_HMS_HOST__USER_ERROR_MSG "HMS host: '%.*s' is invalid"
+#define OB_INVALID_HMS_PORT__USER_ERROR_MSG "HMS port: '%.*s' is invalid"
+#define OB_INVALID_HMS_TABLE_LOCATION__USER_ERROR_MSG "HMS table location: '%.*s' is invalid"
+#define OB_INVALID_HMS_SERVICE__USER_ERROR_MSG "HMS service: '%.*s' is invalid"
+#define OB_INVALID_HMS_SERVICE_FQDN__USER_ERROR_MSG "HMS service FQDN: '%.*s' is invalid"
+#define OB_INVALID_HMS_TRANSPORT__USER_ERROR_MSG "HMS transport: '%.*s' is invalid"
+#define OB_INVALID_HMS_METASTORE__USER_ERROR_MSG "HMS metastore: '%.*s' is invalid"
+#define OB_HMS_PARTITION_ERROR__USER_ERROR_MSG "HMS partition error"
+#define OB_HMS_DB_NOT_FOUND__USER_ERROR_MSG "HMS database: '%.*s' not found"
+#define OB_HMS_TABLE_NOT_FOUND__USER_ERROR_MSG "HMS table: '%.*s' not found"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -9330,6 +9354,30 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11098, Access sensitive field protected by sensitive rule '%.*s' denied to user '%.*s'@'%.*s'"
 #define OB_WRONG_SENSITIVE_RULE_NAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11099, Invalid sensitive rule name '%.*s'"
 #define OB_WRONG_SENSITIVE_RULE_NAME__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11099, Invalid sensitive rule name '%.*s'"
+#define OB_KERBEROS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11100, Kereberos execution error"
+#define OB_KERBEROS_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11100, Kereberos execution error"
+#define OB_HMS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11101, HMS execution error"
+#define OB_HMS_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11101, HMS execution error"
+#define OB_INVALID_HMS_HOST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11102, HMS host: '%.*s' is invalid"
+#define OB_INVALID_HMS_HOST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11102, HMS host: '%.*s' is invalid"
+#define OB_INVALID_HMS_PORT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11103, HMS port: '%.*s' is invalid"
+#define OB_INVALID_HMS_PORT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11103, HMS port: '%.*s' is invalid"
+#define OB_INVALID_HMS_TABLE_LOCATION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11104, HMS table location: '%.*s' is invalid"
+#define OB_INVALID_HMS_TABLE_LOCATION__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11104, HMS table location: '%.*s' is invalid"
+#define OB_INVALID_HMS_SERVICE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11105, HMS service: '%.*s' is invalid"
+#define OB_INVALID_HMS_SERVICE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11105, HMS service: '%.*s' is invalid"
+#define OB_INVALID_HMS_SERVICE_FQDN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11106, HMS service FQDN: '%.*s' is invalid"
+#define OB_INVALID_HMS_SERVICE_FQDN__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11106, HMS service FQDN: '%.*s' is invalid"
+#define OB_INVALID_HMS_TRANSPORT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11107, HMS transport: '%.*s' is invalid"
+#define OB_INVALID_HMS_TRANSPORT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11107, HMS transport: '%.*s' is invalid"
+#define OB_INVALID_HMS_METASTORE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11108, HMS metastore: '%.*s' is invalid"
+#define OB_INVALID_HMS_METASTORE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11108, HMS metastore: '%.*s' is invalid"
+#define OB_HMS_PARTITION_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11109, HMS partition error"
+#define OB_HMS_PARTITION_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11109, HMS partition error"
+#define OB_HMS_DB_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11110, HMS database: '%.*s' not found"
+#define OB_HMS_DB_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11110, HMS database: '%.*s' not found"
+#define OB_HMS_TABLE_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11111, HMS table: '%.*s' not found"
+#define OB_HMS_TABLE_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11111, HMS table: '%.*s' not found"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9349,7 +9397,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2443];
+extern int g_all_ob_errnos[2455];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
