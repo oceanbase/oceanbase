@@ -637,8 +637,7 @@ ObTableModifySpec::ObTableModifySpec(common::ObIAllocator &alloc,
     expr_frame_info_(NULL),
     ab_stmt_id_(nullptr),
     flags_(0),
-    das_dop_(0),
-    need_foreign_key_check_(false)
+    das_dop_(0)
 {
 }
 
@@ -716,7 +715,8 @@ int ObTableModifyOp::inner_open()
   } else {
     init_das_dml_ctx();
   }
-  LOG_TRACE("table_modify_op", K(execute_single_row_), K(need_foreign_key_check_), K(MY_SPEC.need_foreign_key_check_));
+  LOG_TRACE("table_modify_op", K(execute_single_row_), K(need_foreign_key_check_),
+                               K(MY_SPEC.need_foreign_key_check_), K(MY_SPEC.need_trigger_fire_));
   return ret;
 }
 
@@ -960,7 +960,7 @@ int ObTableModifyOp::inner_rescan()
 
 int ObTableModifyOp::check_need_exec_single_row() {
   int ret = OB_SUCCESS;
-  if (MY_SPEC.is_returning_ && need_foreign_key_checks()) {
+  if (MY_SPEC.is_returning_ && (need_foreign_key_checks() || MY_SPEC.need_trigger_fire_)) {
     execute_single_row_ = true;
   }
   return ret;
