@@ -4595,6 +4595,11 @@ int ObRootService::set_comment(const obrpc::ObSetCommentArg &arg, obrpc::ObParal
     }
   }
   int64_t cost = ObTimeUtility::current_time() - begin_time;
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "parallel set comment",
+                        K(tenant_id),
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "schema_version", res.schema_version_);
   LOG_TRACE("finish set comment", KR(ret), K(arg), K(cost));
   return ret;
 }
@@ -5721,6 +5726,13 @@ int ObRootService::update_index_status(const obrpc::ObUpdateIndexStatusArg &arg)
   } else if (OB_FAIL(ddl_service_.update_index_status(arg))) {
     LOG_WARN("update index table status failed", K(ret), K(arg));
   }
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "update index status",
+                        "tenant_id", arg.exec_tenant_id_,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", arg.task_id_,
+                        "index_table_id", arg.index_table_id_,
+                        "data_table_id", arg.data_table_id_);
   return ret;
 }
 
@@ -5914,6 +5926,14 @@ int ObRootService::parallel_update_index_status(const obrpc::ObUpdateIndexStatus
   }
   int64_t cost = ObTimeUtility::current_time() - begin_time;
   LOG_TRACE("finish update index status", KR(ret), K(arg), K(cost));
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "parallel update index status",
+                        "tenant_id", arg.exec_tenant_id_,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", arg.task_id_,
+                        "index_table_id", arg.index_table_id_,
+                        "data_table_id", arg.data_table_id_);
+
   return ret;
 }
 
