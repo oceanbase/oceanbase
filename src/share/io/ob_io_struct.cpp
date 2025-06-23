@@ -3168,6 +3168,7 @@ int ObIOCallbackManager::init(const int64_t tenant_id, const int64_t thread_coun
 
 void ObIOCallbackManager::destroy()
 {
+  DRWLock::WRLockGuard guard(lock_);
   if (nullptr != io_allocator_) {
     for (int64_t i = 0; i < runners_.count(); ++i) {
       runners_.at(i)->stop();
@@ -3181,7 +3182,6 @@ void ObIOCallbackManager::destroy()
   }
   config_thread_count_ = 0;
   queue_depth_ = 0;
-  DRWLock::WRLockGuard guard(lock_);
   runners_.reset();
   io_allocator_ = nullptr;
   is_inited_ = false;
