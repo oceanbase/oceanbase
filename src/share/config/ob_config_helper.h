@@ -1198,6 +1198,19 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigGlobalIndexAutoSplitPolicyChecker);
 };
 
+class ObHNSWIterFilterScanNumChecker
+  : public ObConfigChecker
+{
+public:
+  ObHNSWIterFilterScanNumChecker() {}
+  virtual ~ObHNSWIterFilterScanNumChecker() {}
+  bool check(const ObConfigItem &t) const;
+  static constexpr int64_t MAX_HNSW_ITER_SCAN_NUMS = INT64_MAX;
+  static constexpr int64_t MIN_HNSW_ITER_SCAN_NUMS = 0;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObHNSWIterFilterScanNumChecker);
+};
+
 
 } // namespace common
 } // namespace oceanbase

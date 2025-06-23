@@ -2853,3 +2853,8 @@ DEF_CAP(load_data_diagnosis_log_max_size, OB_TENANT_PARAMETER, "256M", "[0,)"
          "whenever a write to the diagnosis log file causes its size to exceed the config value, "
          "it will be renamed and a new diagnosis log file using is opened, range: [0,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT_WITH_CHECKER(_hnsw_max_scan_vectors, OB_TENANT_PARAMETER, "20000",
+                    common::ObHNSWIterFilterScanNumChecker,
+                    "The upper limit of hnsw iter-filter search nums. Range: [0,)",
+                    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
