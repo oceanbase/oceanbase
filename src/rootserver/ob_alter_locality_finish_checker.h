@@ -15,6 +15,7 @@
 
 #include "share/ob_define.h"
 #include "ob_root_utils.h"
+#include "src/share/ob_rpc_struct.h"
 
 namespace oceanbase
 {

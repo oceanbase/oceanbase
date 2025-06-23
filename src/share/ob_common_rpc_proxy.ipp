@@ -30,6 +30,7 @@
   RPC_S(PRD alter_table, obrpc::OB_ALTER_TABLE, (ObAlterTableArg), ObAlterTableRes);
   RPC_S(PRD set_comment, obrpc::OB_PARALLEL_SET_COMMENT, (ObSetCommentArg), ObParallelDDLRes);
   RPC_S(PRD create_hidden_table, obrpc::OB_CREATE_HIDDEN_TABLE, (obrpc::ObCreateHiddenTableArg), ObCreateHiddenTableRes);
+  RPC_S(PRD create_hidden_table_v2, obrpc::OB_CREATE_HIDDEN_TABLE_V2, (obrpc::ObCreateHiddenTableArgV2), ObCreateHiddenTableRes);
   RPC_S(PRD alter_database, obrpc::OB_ALTER_DATABASE, (ObAlterDatabaseArg));
   RPC_S(PRD drop_database, obrpc::OB_DROP_DATABASE, (ObDropDatabaseArg), ObDropDatabaseRes);
   RPC_S(PRD drop_tablegroup, obrpc::OB_DROP_TABLEGROUP, (ObDropTablegroupArg));

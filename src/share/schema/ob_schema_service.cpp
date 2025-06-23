@@ -368,7 +368,6 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
   int ret = OB_SUCCESS;
   if (this != &src_schema) {
     reset();
-    int ret = common::OB_SUCCESS;
     char *buf = NULL;
     int64_t column_cnt = 0;
 

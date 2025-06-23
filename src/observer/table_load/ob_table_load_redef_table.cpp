@@ -27,6 +27,59 @@ using namespace obrpc;
 namespace observer
 {
 
+int ObTableLoadRedefTable::create_hidden_table(const ObTableLoadRedefTableStartArg &arg,
+                                               ObTableLoadRedefTableStartRes &res,
+                                               ObSQLSessionInfo &session_info,
+                                               ObCreateHiddenTableRes &create_table_res,
+                                               int64_t &snapshot_version)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg.tenant_id_;
+  uint64_t compat_version = GET_MIN_CLUSTER_VERSION();
+  const share::ObDDLType ddl_type = arg.is_load_data_ ? share::DDL_DIRECT_LOAD : share::DDL_DIRECT_LOAD_INSERT;
+  snapshot_version = OB_INVALID_VERSION;
+  if (compat_version < CLUSTER_VERSION_4_2_5_5) {
+    ObCreateHiddenTableArg create_table_arg;
+    const bool need_reorder_column_id = false;
+    if (OB_FAIL(create_table_arg.init(tenant_id, tenant_id, tenant_id, arg.table_id_,
+                                    THIS_WORKER.get_group_id(), session_info.get_sessid_for_table(),
+                                    arg.parallelism_, ddl_type, session_info.get_sql_mode(),
+                                    session_info.get_tz_info_wrap().get_tz_info_offset(),
+                                    session_info.get_local_nls_date_format(),
+                                    session_info.get_local_nls_timestamp_format(),
+                                    session_info.get_local_nls_timestamp_tz_format(),
+                                    session_info.get_tz_info_wrap(),
+                                    need_reorder_column_id))) {
+      LOG_WARN("fail to init create hidden table arg", KR(ret));
+    } else if (OB_FAIL(ObDDLServerClient::create_hidden_table(create_table_arg, create_table_res,
+                       snapshot_version, session_info))) {
+      LOG_WARN("failed to create hidden table", KR(ret), K(create_table_arg));
+    } else if (OB_UNLIKELY(snapshot_version <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid snapshot version", KR(ret));
+    }
+  } else {
+    ObCreateHiddenTableArgV2 create_table_argv2;
+    if (OB_FAIL(create_table_argv2.init(tenant_id, tenant_id, tenant_id, arg.table_id_,
+                                    THIS_WORKER.get_group_id(), session_info.get_sessid_for_table(),
+                                    arg.parallelism_, ddl_type, session_info.get_sql_mode(),
+                                    session_info.get_tz_info_wrap().get_tz_info_offset(),
+                                    session_info.get_local_nls_date_format(),
+                                    session_info.get_local_nls_timestamp_format(),
+                                    session_info.get_local_nls_timestamp_tz_format(),
+                                    session_info.get_tz_info_wrap()))) {
+      LOG_WARN("fail to init create hidden table arg", KR(ret));
+    } else if (OB_FAIL(ObDDLServerClient::create_hidden_table(create_table_argv2, create_table_res,
+                snapshot_version, session_info))) {
+      LOG_WARN("failed to create hidden table", KR(ret), K(create_table_argv2));
+    } else if (OB_UNLIKELY(snapshot_version <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid snapshot version", KR(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
                                  ObTableLoadRedefTableStartRes &res, ObSQLSessionInfo &session_info)
 {
@@ -36,30 +89,11 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
     LOG_WARN("invalid args", KR(ret), K(arg));
   } else {
     const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
-    ObCreateHiddenTableArg create_table_arg;
+    DEBUG_SYNC(BEFORE_CREATE_HIDDEN_TABLE_IN_LOAD);
     ObCreateHiddenTableRes create_table_res;
     int64_t snapshot_version = OB_INVALID_VERSION;
-    uint64_t tenant_id = arg.tenant_id_;
-    // 1.load data relies on column_store_column_ids' column order
-    // 2.after add column instant, ObColumnIterByPrevNextID's column order represent new column order to show user rather than column_store_column_ids' column order
-    // so we should not redistribute column ids
-    const bool need_reorder_column_id = false;
-    const share::ObDDLType ddl_type = arg.is_load_data_ ? share::DDL_DIRECT_LOAD : share::DDL_DIRECT_LOAD_INSERT;
-    if (OB_FAIL(create_table_arg.init(tenant_id, tenant_id, tenant_id, arg.table_id_,
-                                      THIS_WORKER.get_group_id(), session_info.get_sessid_for_table(),
-                                      arg.parallelism_, ddl_type, session_info.get_sql_mode(),
-                                      session_info.get_tz_info_wrap().get_tz_info_offset(),
-                                      session_info.get_local_nls_date_format(),
-                                      session_info.get_local_nls_timestamp_format(),
-                                      session_info.get_local_nls_timestamp_tz_format(),
-                                      session_info.get_tz_info_wrap(),
-                                      need_reorder_column_id))) {
-      LOG_WARN("fail to init create hidden table arg", KR(ret));
-    } else if (OB_FAIL(ObDDLServerClient::create_hidden_table(create_table_arg, create_table_res, snapshot_version, session_info))) {
-      LOG_WARN("failed to create hidden table", KR(ret), K(create_table_arg));
-    } else if (OB_UNLIKELY(snapshot_version <= 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid snapshot version", K(ret));
+    if (OB_FAIL(create_hidden_table(arg, res, session_info, create_table_res, snapshot_version))) {
+      LOG_WARN("failed to create hidden table", KR(ret), K(arg));
     } else {
       res.dest_table_id_ = create_table_res.dest_table_id_;
       res.task_id_ = create_table_res.task_id_;

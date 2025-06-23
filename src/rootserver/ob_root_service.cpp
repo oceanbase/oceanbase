@@ -3353,10 +3353,34 @@ int ObRootService::create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg,
 {
   LOG_DEBUG("receive create hidden table arg", K(arg));
   int ret = OB_SUCCESS;
+  ObCreateHiddenTableArgV2 new_arg;
+  uint64_t compat_version = GET_MIN_CLUSTER_VERSION();
+  if (compat_version >= CLUSTER_VERSION_4_2_5_5) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ObCreateHiddenTableArg can not be used after 4255", KR(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(new_arg.assign(arg))) {
+    LOG_WARN("fail to assign arg", KR(ret));
+  } else if (OB_FAIL(create_hidden_table_v2(new_arg, res))) {
+    LOG_WARN("fail to create hidden table", KR(ret));
+  }
+  return ret;
+}
+
+int ObRootService::create_hidden_table_v2(const obrpc::ObCreateHiddenTableArgV2 &arg,
+                                          obrpc::ObCreateHiddenTableRes &res)
+{
+  LOG_DEBUG("receive create hidden table arg", K(arg));
+  int ret = OB_SUCCESS;
   const uint64_t tenant_id = arg.get_tenant_id();
   uint64_t compat_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-    LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else if (compat_version < DATA_VERSION_4_1_0_0) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("version 4.0 does not support this operation", K(ret));
@@ -3365,25 +3389,25 @@ int ObRootService::create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg,
     LOG_WARN("not init", K(ret));
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(arg));
+    LOG_WARN("invalid arg", KR(ret), K(arg));
   } else if (OB_FAIL(DDL_SIM(arg.get_tenant_id(), arg.task_id_, CREATE_HIDDEN_TABLE_RPC_FAILED))) {
-    LOG_WARN("ddl sim failure", K(ret), K(arg));
+    LOG_WARN("ddl sim failure", KR(ret), K(arg));
   } else if (OB_FAIL(DDL_SIM(arg.get_tenant_id(), arg.task_id_, CREATE_HIDDEN_TABLE_RPC_SLOW))) {
-    LOG_WARN("ddl sim failure", K(ret), K(arg));
+    LOG_WARN("ddl sim failure", KR(ret), K(arg));
   } else if (OB_FAIL(ddl_service_.create_hidden_table(arg, res))) {
     LOG_WARN("do create hidden table in trans failed", K(ret), K(arg));
   }
   char tenant_id_buffer[128];
   snprintf(tenant_id_buffer, sizeof(tenant_id_buffer), "orig_tenant_id:%ld, target_tenant_id:%ld",
             arg.get_tenant_id(), arg.get_dest_tenant_id());
-  ROOTSERVICE_EVENT_ADD("ddl scheduler", "create hidden table",
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "create hidden table v2",
                         "tenant_id", tenant_id_buffer,
                         "ret", ret,
                         "trace_id", *ObCurTraceId::get_trace_id(),
                         "task_id", res.task_id_,
                         "table_id", arg.get_table_id(),
                         "schema_version", res.schema_version_);
-  LOG_INFO("finish create hidden table ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
+  LOG_INFO("finish create hidden table v2 ddl", KR(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 

@@ -59,6 +59,7 @@
 #include "rootserver/ob_rs_master_key_manager.h"
 #endif
 #include "rootserver/ob_root_rebuild_tablet.h"
+#include "share/ob_create_hidden_tablev2_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -486,6 +487,7 @@ public:
   int abort_redef_table(const obrpc::ObAbortRedefTableArg &arg);
   int update_ddl_task_active_time(const obrpc::ObUpdateDDLTaskActiveTimeArg &arg);
   int create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res);
+  int create_hidden_table_v2(const obrpc::ObCreateHiddenTableArgV2 &arg, obrpc::ObCreateHiddenTableRes &res);
   /**
    * For recover restore table ddl, data insert into the target table is selected from another tenant.
    * The function is used to create a hidden target table without any change on the source table,

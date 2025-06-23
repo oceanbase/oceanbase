@@ -134,6 +134,11 @@ public:
                    sql::ObSQLSessionInfo &session_info);
   static int finish(const ObTableLoadRedefTableFinishArg &arg, sql::ObSQLSessionInfo &session_info);
   static int abort(const ObTableLoadRedefTableAbortArg &arg, sql::ObSQLSessionInfo &session_info);
+  static int create_hidden_table(const ObTableLoadRedefTableStartArg &arg,
+                                 ObTableLoadRedefTableStartRes &res,
+                                 sql::ObSQLSessionInfo &session_info,
+                                 obrpc::ObCreateHiddenTableRes &create_table_res,
+                                 int64_t &snapshot_version);
 };
 
 class ObTableLoadErrorMessageGuard

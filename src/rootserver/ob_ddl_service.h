@@ -20,7 +20,6 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/container/ob_array.h"
 #include "lib/hash/ob_placement_hashset.h"
-#include "share/ob_rpc_struct.h"
 #include "share/ob_leader_election_waiter.h"
 #include "lib/worker.h"
 #include "share/schema/ob_schema_getter_guard.h"
@@ -40,6 +39,7 @@
 #include "rootserver/parallel_ddl/ob_index_name_checker.h"
 #include "rootserver/parallel_ddl/ob_tablet_balance_allocator.h"
 #include "storage/tablelock/ob_table_lock_common.h"
+#include "share/ob_create_hidden_tablev2_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -216,8 +216,8 @@ public:
                          const share::schema::ObTableType expected_table_type,
                          share::schema::ObSchemaGetterGuard &guard,
                          const share::schema::ObTableSchema **table_schema);
-  int create_hidden_table(const obrpc::ObCreateHiddenTableArg &create_hidden_table_arg,
-                                      obrpc::ObCreateHiddenTableRes &res);
+  int create_hidden_table(const obrpc::ObCreateHiddenTableArgV2 &create_hidden_table_arg,
+                          obrpc::ObCreateHiddenTableRes &res);
   /**
    * For recover restore table ddl task, it is a cross-tenant task, including,
    * 1. Create a hidden table under different tenant but associated with the source table;
