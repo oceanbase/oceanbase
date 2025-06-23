@@ -13240,11 +13240,11 @@ int ObDDLService::check_fk_related_table_ddl(
           ? foreign_key_info.child_table_id_
           : foreign_key_info.parent_table_id_;
       bool has_long_running_ddl = false;
-      const ObTableSchema *related_schema = nullptr;
+      const ObSimpleTableSchemaV2 *related_schema = nullptr;
       if (foreign_key_info.is_parent_table_mock_
         || data_table_schema.get_table_id() == related_table_id) {
         // mock table and self reference foreign key table, no need to check.
-      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, related_table_id, related_schema))) {
+      } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, related_table_id, related_schema))) {
         LOG_WARN("get schema failed", K(ret), K(tenant_id), K(related_table_id));
       } else if (OB_ISNULL(related_schema)) {
         ret = OB_ERR_UNEXPECTED;

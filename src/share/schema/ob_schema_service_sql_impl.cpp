@@ -374,7 +374,7 @@ int ObSchemaServiceSQLImpl::get_batch_table_schema(
 {
   int ret = OB_SUCCESS;
   LOG_DEBUG("fetch batch table schema begin.");
-
+  const int64_t start_ts = ObTimeUtility::current_time();
   if (!check_inner_stat()) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail");
@@ -391,7 +391,8 @@ int ObSchemaServiceSQLImpl::get_batch_table_schema(
     }
   }
 
-  LOG_INFO("get batch table schema finish", K(schema_version), K(ret));
+  LOG_INFO("get batch table schema finish", KR(ret), K(schema_version),
+           "cost", ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
