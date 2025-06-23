@@ -32,6 +32,7 @@ enum BenchmarkTaskType
   BENCHMARK_TASK_READ = 3,
   BENCHMARK_TASK_DEL = 4,
   BENCHMARK_TASK_IS_EXIST = 5,
+  BENCHMARK_TASK_READ_USER_PROVIDED = 6,
   BENCHMARK_TASK_MAX_TYPE
 };
 
@@ -94,7 +95,7 @@ public:
   const Metrics &get_metrics() { return metrics_; }
 
 protected:
-  int prepare_(const int64_t object_id);
+  virtual int prepare_(const int64_t object_id);
   void finish_(const int64_t ob_errcode);
 
 protected:
@@ -205,6 +206,18 @@ public:
 
 private:
   int64_t obj_num_;
+};
+
+class ReadUsedProvidedTaskExecutor : public ReadTaskExecutor
+{
+public:
+  ReadUsedProvidedTaskExecutor();
+  virtual ~ReadUsedProvidedTaskExecutor() {}
+  virtual int init(const char *base_uri,
+      share::ObBackupStorageInfo *storage_info, const TaskConfig &config) override;
+
+protected:
+  virtual int prepare_(const int64_t object_id) override;
 };
 
 } //namespace tools

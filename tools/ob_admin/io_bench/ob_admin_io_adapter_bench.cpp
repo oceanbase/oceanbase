@@ -143,6 +143,8 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
           config_.type_ = BenchmarkTaskType::BENCHMARK_TASK_DEL;
         } else if (0 == STRCMP("is_exist", optarg)) {
           config_.type_ = BenchmarkTaskType::BENCHMARK_TASK_IS_EXIST;
+        } else if (0 == STRCMP("read_user_provided", optarg)) {
+          config_.type_ = BenchmarkTaskType::BENCHMARK_TASK_READ_USER_PROVIDED;
         } else {
           ret = OB_INVALID_ARGUMENT;
           OB_LOG(WARN, "unknown test type", K((char *)optarg), K(ret));
@@ -421,12 +423,19 @@ void ObBackupIoAdapterBenchmarkRunner::run1()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "ObBackupIoAdapterBenchmarkRunner not init", K(ret));
+  } else if (BenchmarkTaskType::BENCHMARK_TASK_READ_USER_PROVIDED == config_.type_) {
+    if (OB_FAIL(databuff_printf(uri, sizeof(uri), "%s", base_uri_))) {
+      OB_LOG(WARN, "fail to copy file uri", K(ret), K_(base_uri), K(thread_idx));
+    }
   } else if (OB_FAIL(databuff_printf(uri, sizeof(uri), "%s/%ld", base_uri_, thread_idx))) {
     OB_LOG(WARN, "fail to construct base task dir for current thread",
         K(ret), K_(base_uri), K(thread_idx));
   } else if (OB_FAIL(util.mkdir(uri, storage_info_))) {
     OB_LOG(WARN, "fail to make base task dir for current thread",
         K(ret), K_(base_uri), K(thread_idx));
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(init_task_executor(uri, storage_info_, config_, executor))) {
     OB_LOG(WARN, "fail to create and init task executor", K(ret), K(uri), K(thread_idx));
   } else {

@@ -337,6 +337,10 @@ int init_task_executor(const char *base_uri,
     if (OB_FAIL(alloc_executor<IsExistTaskExecutor>(executor, attr))) {
       OB_LOG(WARN, "fail to alloc and construct executor", K(ret), K(config));
     }
+  } else if (config.type_ == BenchmarkTaskType::BENCHMARK_TASK_READ_USER_PROVIDED) {
+    if (OB_FAIL(alloc_executor<ReadUsedProvidedTaskExecutor>(executor, attr))) {
+      OB_LOG(WARN, "fail to alloc and construct executor", K(ret), K(config));
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unknown benchmark task type", K(ret), K(config));
@@ -821,7 +825,7 @@ int IsExistTaskExecutor::execute()
   const int64_t start_time_us = ObTimeUtility::current_time();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-    OB_LOG(WARN, "ReadTaskExecutor not init", K(ret), K_(base_uri));
+    OB_LOG(WARN, "IsExistTaskExecutor not init", K(ret), K_(base_uri));
   } else if (OB_FAIL(prepare_(object_id))) {
     OB_LOG(WARN, "fail to prepare", K(ret), K_(base_uri), K(object_id));
   } else {
@@ -838,6 +842,34 @@ int IsExistTaskExecutor::execute()
 
   finish_(ret);
   return ret;
+}
+
+/*--------------------------------Read Used Provided Task Executor--------------------------------*/
+ReadUsedProvidedTaskExecutor::ReadUsedProvidedTaskExecutor()
+    : ReadTaskExecutor()
+{
+}
+
+int ReadUsedProvidedTaskExecutor::init(const char *base_uri,
+    share::ObBackupStorageInfo *storage_info, const TaskConfig &config)
+{
+  int ret = OB_SUCCESS;
+  TaskConfig new_config;
+  if (OB_FAIL(new_config.assign(config))) {
+    OB_LOG(WARN, "fail to construct new config",
+        KR(ret), K(base_uri), KPC(storage_info), K(config));
+  } else if (FALSE_IT(new_config.obj_num_ = 1)) {
+  } else if (OB_FAIL(ReadTaskExecutor::init(base_uri, storage_info, config))) {
+    OB_LOG(WARN, "fail to init base task executor",
+        KR(ret), K(base_uri), KPC(storage_info), K(config));
+  }
+  return ret;
+}
+
+int ReadUsedProvidedTaskExecutor::prepare_(const int64_t object_id)
+{
+  UNUSED(object_id);
+  return OB_SUCCESS;
 }
 
 }   //tools
