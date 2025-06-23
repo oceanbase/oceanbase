@@ -317,12 +317,13 @@ private:
   bool exclude_null_;
 };
 
-class ObRbBuildAggCellVec final : public ObAggCellVec
+class ObRbAggCellVec final : public ObAggCellVec
 {
 public:
-  ObRbBuildAggCellVec(const int64_t agg_idx,
+  ObRbAggCellVec(const int64_t agg_idx,
                   const ObAggCellVecBasicInfo &basic_info,
-                  common::ObIAllocator &allocator);
+                  common::ObIAllocator &allocator,
+                  ObPDAggType agg_type);
 protected:
   OB_INLINE bool can_use_index_info() const override { return false; }
 };
@@ -338,6 +339,18 @@ public:
       const int64_t agg_idx,
       const bool exclude_null);
   void release(common::ObIArray<ObAggCellVec *> &agg_cells);
+  OB_INLINE ObPDAggType to_pd_agg_type(const sql::ObExprOperatorType expr_type)
+  {
+    ObPDAggType pd_type = PD_MAX_TYPE;
+    if (expr_type == T_FUN_SYS_RB_BUILD_AGG) {
+      pd_type = PD_RB_BUILD;
+    } else if (expr_type == T_FUN_SYS_RB_AND_AGG) {
+      pd_type = PD_RB_AND;
+    } else if (expr_type == T_FUN_SYS_RB_OR_AGG) {
+      pd_type = PD_RB_OR;
+    }
+    return pd_type;
+  }
 private:
   common::ObIAllocator &allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObPDAggVecFactory);

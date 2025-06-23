@@ -38,13 +38,13 @@ public:
   OB_INLINE void set_sum_flag(const bool t_sum) { t_sum_ = t_sum; }
   OB_INLINE void set_hll_flag(const bool t_hll) { t_hll_ = t_hll; }
   OB_INLINE void set_sum_op_nsize_flag(const bool t_sum_op_nsize) { t_sum_op_nsize_ = t_sum_op_nsize; }
-  OB_INLINE void set_has_rb_build_agg(const bool t_rb_build_agg) { t_rb_build_agg_ = t_rb_build_agg; }
+  OB_INLINE void set_has_rb_agg(const bool t_rb_agg) { t_rb_build_agg_ = t_rb_agg; }
   OB_INLINE bool has_count() const { return t_count_; }
   OB_INLINE bool has_minmax() const { return t_minmax_; }
   OB_INLINE bool has_sum() const { return t_sum_; }
   OB_INLINE bool has_hll() const { return t_hll_; }
   OB_INLINE bool has_sum_op_nsize() const { return t_sum_op_nsize_; }
-  OB_INLINE bool has_rb_build_agg() const { return t_rb_build_agg_; }
+  OB_INLINE bool has_rb_agg() const { return t_rb_build_agg_; }
   TO_STRING_KV(K_(t_flag));
 
   union {
@@ -92,7 +92,7 @@ public:
       const int64_t row_count)
   {
     bool bret = false;
-    if (agg_type_flag_.has_sum() || agg_type_flag_.has_rb_build_agg()) {
+    if (agg_type_flag_.has_sum() || agg_type_flag_.has_rb_agg()) {
       bret = true;
     } else {
       for (int64_t i = 0; !bret && i < agg_cells_.count(); ++i) {

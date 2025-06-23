@@ -83,7 +83,8 @@ struct ObRbAggCell
   int reuse() { return destroy(); }
   int value_add(const uint64_t val);
   int add_values(const ObArray<uint64_t> &values);
-  int value_or(const ObRbAggCell *other);
+  int value_calc(const ObString rb_bin, ObItemType func_type, bool need_validate = false);
+  int rollup(const ObRbAggCell *other, ObItemType func_type);
   int serialize(ObString &rb_bin);
   int serialize();
 
@@ -93,6 +94,7 @@ struct ObRbAggCell
   common::ObArray<uint64_t> cached_value_;
   ObString rb_bin_;
   bool is_serialized_;
+  bool is_new_;
 
   TO_STRING_KV(KPC_(rb), K_(cached_value), K_(is_serialized), K_(rb_bin));
 };

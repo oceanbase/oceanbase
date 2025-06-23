@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef  OCEANBASE_SHARE_RB_BUILD_AGGREGATE_H_
-#define  OCEANBASE_SHARE_RB_BUILD_AGGREGATE_H_
+#ifndef  OCEANBASE_SHARE_RB_AGGREGATE_H_
+#define  OCEANBASE_SHARE_RB_AGGREGATE_H_
 
 #include "share/aggregate/iaggregate.h"
 #include "lib/roaringbitmap/ob_rb_utils.h"
@@ -23,14 +23,16 @@ namespace share
 namespace aggregate
 {
 
-template<VecValueTypeClass in_tc, VecValueTypeClass out_tc>
-class RbBuildAggregate final: public BatchAggregateWrapper<RbBuildAggregate<in_tc, out_tc>>
+template<ObItemType func_type, VecValueTypeClass in_tc, VecValueTypeClass out_tc>
+class RbAggregate final: public BatchAggregateWrapper<RbAggregate<func_type, in_tc, out_tc>>
 {
+
 public:
   static const constexpr VecValueTypeClass IN_TC = in_tc;
   static const constexpr VecValueTypeClass OUT_TC = out_tc;
+
 public:
-  RbBuildAggregate() {}
+  RbAggregate() {}
 
   inline int get_rb(RuntimeContext &agg_ctx, int32_t agg_col_id, char *agg_cell, bool create_if_not_exsit, ObRbAggCell *&ret_ptr)
   {
@@ -126,13 +128,28 @@ public:
   {
     int ret = OB_SUCCESS;
     ObRbAggCell *rb = nullptr;
-    uint64_t val = 0;
+    ObArenaAllocator tmp_alloc;
     if (OB_FAIL(get_rb(agg_ctx, agg_col_id, agg_cell, true/*create_if_not_exist*/, rb))) {
       SQL_LOG(WARN, "failed to get roaringbitmap", K(ret), K(agg_col_id), KP(agg_cell));
-    } else if (OB_FAIL(get_value(data, data_len, val))) {
-      SQL_LOG(WARN, "get value fail", K(ret), K(data_len), KP(data));
-    } else if (OB_FAIL(rb->value_add(val))) {
-      SQL_LOG(WARN, "failed to add value to roaringbitmap", K(ret), K(val));
+    } else if (func_type == T_FUN_SYS_RB_BUILD_AGG) {
+      uint64_t val = 0;
+      if (OB_FAIL(get_value(data, data_len, val))) {
+        SQL_LOG(WARN, "get value fail", K(ret), K(data_len), KP(data));
+      } else if (OB_FAIL(rb->value_add(val))) {
+        SQL_LOG(WARN, "failed to add value to roaringbitmap", K(ret), K(val));
+      }
+    } else {
+      // T_FUN_SYS_RB_OR_AGG or T_FUN_SYS_RB_AND_AGG
+      ObString value_rb_bin(data_len, data);
+      if (in_tc == VEC_TC_ROARINGBITMAP && OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_alloc,
+                                                                  ObRoaringBitmapType,
+                                                                  CS_TYPE_BINARY,
+                                                                  true,
+                                                                  value_rb_bin))) {
+        SQL_LOG(WARN, "fail to get real data.", K(ret), K(value_rb_bin));
+      } else if (OB_FAIL(rb->value_calc(value_rb_bin, func_type, in_tc != VEC_TC_ROARINGBITMAP))) {
+        SQL_LOG(WARN, "failed to add value to roaringbitmap", K(ret));
+      }
     }
     return ret;
   }
@@ -206,8 +223,8 @@ public:
       SQL_LOG(WARN, "cur rb is null", K(ret), KP(curr_rb), KP(rollup_rb));
     } else if (OB_FAIL(get_rb(agg_ctx, agg_col_idx, const_cast<char *>(rollup_agg_cell), true/*create_if_not_exist*/, rollup_rb))) {
       SQL_LOG(WARN, "rollup rb is null", K(ret), KP(curr_rb), KP(rollup_rb));
-    } else if (OB_FAIL(rollup_rb->value_or(curr_rb))) {
-      SQL_LOG(WARN, "rb value_or fail", K(ret), KP(curr_rb), KP(rollup_rb));
+    } else if (OB_FAIL(rollup_rb->rollup(curr_rb, func_type))) {
+      SQL_LOG(WARN, "rb rollup fail", K(ret), KP(curr_rb), KP(rollup_rb));
     } else {
       agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell).set(agg_col_idx);
     }
@@ -226,7 +243,7 @@ public:
     ObRbAggCell *curr_rb = nullptr;
     if (OB_ISNULL(agg_expr)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("agg expr is null", K(ret), K(agg_col_id), K(cur_group_id));
+      SQL_LOG(WARN, "agg expr is null", K(ret), K(agg_col_id), K(cur_group_id));
     } else if (OB_LIKELY(! agg_ctx.locate_notnulls_bitmap(agg_col_id, agg_cell).at(agg_col_id))) {
       // skip null
     } else if (OB_FAIL(get_rb(agg_ctx, agg_col_id, const_cast<char *>(agg_cell), false/*create_if_not_exist*/, curr_rb))) {
@@ -240,11 +257,74 @@ public:
     return ret;
   }
 
-  TO_STRING_KV("aggregate", "rb_build_agg");
+  TO_STRING_KV("aggregate", "rb_agg");
 
 };
+
+template <ObItemType func_type>
+inline int init_rb_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                             ObIAllocator &allocator, IAggregate *&agg)
+{
+#define INIT_AGGREGATE_CASE(func_type, in_tc)                                                     \
+  case (in_tc): {                                                                                 \
+    ret = helper::init_agg_func<RbAggregate<func_type, in_tc, VEC_TC_ROARINGBITMAP>>(agg_ctx,     \
+      agg_col_id, aggr_info.has_distinct_, allocator, agg);                                       \
+    if (OB_FAIL(ret)) {                                                                           \
+      SQL_LOG(WARN, "init rb aggregate failed", K(ret));                                          \
+    }                                                                                             \
+    break;                                                                                        \
+  }
+
+  int ret = OB_SUCCESS;
+  ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(agg_col_id);
+  ObDatumMeta &in_meta = aggr_info.expr_->args_[0]->datum_meta_;
+  ObDatumMeta &out_meta = aggr_info.expr_->datum_meta_;
+  VecValueTypeClass in_tc = get_vec_value_tc(in_meta.type_, in_meta.scale_, in_meta.precision_);
+  VecValueTypeClass out_tc = get_vec_value_tc(out_meta.type_, out_meta.scale_, out_meta.precision_);
+  if (out_tc != VEC_TC_ROARINGBITMAP) {
+    ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+    SQL_LOG(WARN, "invalid output type", K(in_tc), K(in_meta), K(out_tc));
+  } else if (func_type == T_FUN_SYS_RB_BUILD_AGG) {
+    switch (in_tc) {
+      INIT_AGGREGATE_CASE(T_FUN_SYS_RB_BUILD_AGG, VEC_TC_NULL)
+      INIT_AGGREGATE_CASE(T_FUN_SYS_RB_BUILD_AGG, VEC_TC_INTEGER)
+      INIT_AGGREGATE_CASE(T_FUN_SYS_RB_BUILD_AGG, VEC_TC_UINTEGER)
+      default: {
+        ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+        SQL_LOG(WARN, "invalid input type", K(in_tc), K(in_meta));
+      }
+    }
+  } else if (func_type == T_FUN_SYS_RB_AND_AGG) {
+    switch (in_tc) {
+      INIT_AGGREGATE_CASE(T_FUN_SYS_RB_AND_AGG, VEC_TC_NULL)
+      INIT_AGGREGATE_CASE(T_FUN_SYS_RB_AND_AGG, VEC_TC_STRING)
+      INIT_AGGREGATE_CASE(T_FUN_SYS_RB_AND_AGG, VEC_TC_ROARINGBITMAP)
+      default: {
+        ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+        SQL_LOG(WARN, "invalid input type", K(in_tc), K(in_meta));
+      }
+    }
+  } else if (func_type == T_FUN_SYS_RB_OR_AGG) {
+    switch (in_tc) {
+      INIT_AGGREGATE_CASE(T_FUN_SYS_RB_OR_AGG, VEC_TC_NULL)
+      INIT_AGGREGATE_CASE(T_FUN_SYS_RB_OR_AGG, VEC_TC_STRING)
+      INIT_AGGREGATE_CASE(T_FUN_SYS_RB_OR_AGG, VEC_TC_ROARINGBITMAP)
+      default: {
+        ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
+        SQL_LOG(WARN, "invalid input type", K(in_tc), K(in_meta));
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_LOG(WARN, "invalid func type", K(ret), K(func_type));
+  }
+
+  return ret;
+
+#undef INIT_AGGREGATE_CASE
+}
 
 } // end namespace aggregate
 } // end namespace share
 } // end namespace oceanbase
-#endif // OCEANBASE_SHARE_RB_BUILD_AGGREGATE_H_
+#endif // OCEANBASE_SHARE_RB_AGGREGATE_H_

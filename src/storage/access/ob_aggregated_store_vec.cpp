@@ -201,8 +201,10 @@ OB_INLINE int ObAggGroupVec::set_agg_type_flag(const ObPDAggType agg_type)
       agg_type_flag_.set_sum_op_nsize_flag(true);
       break;
     }
+    case PD_RB_AND:
+    case PD_RB_OR:
     case PD_RB_BUILD: {
-      agg_type_flag_.set_has_rb_build_agg(true);
+      agg_type_flag_.set_has_rb_agg(true);
       break;
     }
     default : {
