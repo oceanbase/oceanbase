@@ -1995,8 +1995,9 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
       || EXECUTE_PS_SEND_LONG_DATA == mode
       || EXECUTE_PS_FETCH == mode
       || EXECUTE_PL_EXECUTE == mode) {
-    audit_record_.tenant_name_ = const_cast<char *>(get_tenant_name().ptr());
-    audit_record_.tenant_name_len_ = min(get_tenant_name().length(),
+    // consistency between tenant_id_ and tenant_name_
+    audit_record_.tenant_name_ = const_cast<char *>(get_effective_tenant_name().ptr());
+    audit_record_.tenant_name_len_ = min(get_effective_tenant_name().length(),
                                          OB_MAX_TENANT_NAME_LENGTH);
     audit_record_.user_name_ = const_cast<char *>(get_user_name().ptr());
     audit_record_.user_name_len_ = min(get_user_name().length(),
