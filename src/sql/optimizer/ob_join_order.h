@@ -1491,26 +1491,6 @@ struct NullAwareAntiJoinInfo {
       ObSEArray<MatchExprInfo, 4> match_expr_infos_;
     };
 
-    struct DeducedExprInfo {
-      DeducedExprInfo() :
-      deduced_expr_(NULL),
-      deduced_from_expr_(NULL),
-      is_precise_(false),
-      const_param_constraints_() {}
-
-      ObRawExpr * deduced_expr_;
-      ObRawExpr * deduced_from_expr_;
-      bool is_precise_;
-      common::ObSEArray<ObPCConstParamInfo, 2, common::ModulePageAllocator, true> const_param_constraints_;
-
-      int assign(const DeducedExprInfo& other);
-      TO_STRING_KV(
-        K_(deduced_expr),
-        K_(deduced_from_expr),
-        K_(is_precise)
-      );
-    };
-
     ObJoinOrder(common::ObIAllocator *allocator,
                 ObLogPlan *plan,
                 PathType type)
