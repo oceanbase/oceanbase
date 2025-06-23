@@ -644,6 +644,7 @@ ObTableLoadTransStoreWriter::SessionContext::SessionContext(int32_t session_id, 
   : session_id_(session_id),
     cast_allocator_("TLD_TS_Caster"),
     cast_params_(cast_params),
+    writer_(nullptr),
     last_receive_sequence_no_(0)
 {
   cast_allocator_.set_tenant_id(MTL_ID());
