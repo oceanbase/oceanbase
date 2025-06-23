@@ -10401,3 +10401,69 @@ int ObOptimizerUtil::get_rescan_path_index_id(const ObLogicalOperator *op,
   }
   return ret;
 }
+
+int ObOptimizerUtil::flatten_multivalue_index_exprs(ObRawExpr* expr, ObIArray<ObRawExpr*> &exprs)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (T_OP_OR == expr->get_expr_type() || T_OP_AND == expr->get_expr_type()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+      if (OB_FAIL(SMART_CALL(flatten_multivalue_index_exprs(expr->get_param_expr(i), exprs)))) {
+        LOG_WARN("failed to flatten children exprs", K(ret), K(i));
+      }
+    }
+  } else if (expr->is_multivalue_expr()) {
+    ObRawExpr *tmp_expr = ObRawExprUtils::skip_inner_added_expr(expr);
+    if (OB_ISNULL(tmp_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param expr is null", K(ret));
+    } else if (tmp_expr->get_json_domain_param_expr()->get_expr_type() == T_REF_COLUMN) {
+      if (OB_FAIL(exprs.push_back(expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObOptimizerUtil::preprocess_multivalue_range_exprs(ObIAllocator &allocator,
+                                                       const ObIArray<ObRawExpr*> &range_exprs,
+                                                       ObIArray<ObRawExpr*> &out_range_exprs)
+{
+  int ret = OB_SUCCESS;
+
+  ObRawExprFactory expr_factory(allocator);
+  ObSEArray<ObRawExpr*, 4> flatten_exprs;
+  ObRawExpr* tmp_expr = nullptr;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < range_exprs.count(); i++) {
+    if (OB_ISNULL(tmp_expr = range_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr is null", K(ret), K(i));
+    } else if (OB_FAIL(flatten_multivalue_index_exprs(tmp_expr, flatten_exprs))) {
+      LOG_WARN("failed to flatten child exprs", K(ret), K(i));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (flatten_exprs.count() == 0) {
+  } else {
+    ObOpRawExpr *or_expr = nullptr;
+    if (OB_FAIL(expr_factory.create_raw_expr(T_OP_OR, or_expr))) {
+      LOG_WARN("failed to create a new expr", K(ret));
+    } else if (OB_ISNULL(or_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("or expr is null", K(ret));
+    } else if (OB_FAIL(or_expr->set_param_exprs(flatten_exprs))) {
+      LOG_WARN("failed to set param exprs", K(ret));
+    } else if (OB_FAIL(out_range_exprs.push_back(or_expr))) {
+      LOG_WARN("failed to push back and exprs");
+    }
+  }
+
+  return ret;
+}
