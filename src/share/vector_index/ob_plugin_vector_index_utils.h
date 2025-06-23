@@ -67,6 +67,10 @@ public:
   static ObAdapterCreateType index_type_to_create_type(schema::ObIndexType type);
 
   static int get_vector_index_prefix(const ObTableSchema &index_schema, ObString &prefix);
+  static int split_snapshot_prefix(const ObString &src, const ObString &item, ObString &dst);
+  static int get_split_snapshot_prefix(const ObVectorIndexAlgorithmType index_type,
+                                       const ObString &src,
+                                       ObString &dst);
   static int set_vsag_logger() {
     return obvectorutil::init_vasg_logger(&ObVsagLoggerSingleton::getInstance());
   }

@@ -682,14 +682,8 @@ public:
     need_be_optimized_ = false;   // single thread modify need_be_optimized_
   }
 
-  ObString get_snapshot_key_prefix() { return snapshot_key_prefix_; }
-  int set_snapshot_key_prefix(ObString &key_prefix) {
-    if(!snapshot_key_prefix_.empty()) {
-      allocator_->free(snapshot_key_prefix_.ptr());
-      snapshot_key_prefix_.reset();
-    }
-    return ob_write_string(*allocator_, key_prefix, snapshot_key_prefix_);
-  }
+  ObString &get_snapshot_key_prefix() { return snapshot_key_prefix_; }
+  int set_snapshot_key_prefix(const ObString &key_prefix);
   int set_snapshot_key_prefix(uint64_t tablet_id, uint64_t scn, uint64_t max_length);
   int copy_meta_info(ObPluginVectorIndexAdaptor &other);
 
