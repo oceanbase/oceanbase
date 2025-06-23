@@ -400,6 +400,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
         }
       }
         break;
+#ifdef OB_BUILD_ORACLE_PL
       case T_SP_FORALL: {
         OX (++current_level_);
         RESOLVE_STMT(PL_FORALL, resolve_forall, ObPLForAllStmt);
@@ -407,6 +408,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
         OX (func.set_modifies_sql_data());
       }
         break;
+#endif
       case T_SP_REPEAT: {
         OX (++current_level_);
         RESOLVE_STMT(PL_REPEAT, resolve_repeat, ObPLRepeatStmt);
@@ -5010,6 +5012,7 @@ int ObPLResolver::resolve_cursor_for_loop(
   return ret;
 }
 
+#ifdef OB_BUILD_ORACLE_PL
 int ObPLResolver::check_use_idx_illegal(ObRawExpr* expr, int64_t idx)
 {
   int ret = OB_SUCCESS;
@@ -5050,11 +5053,11 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
               need_modify = true;
               if (obj_access_expr->get_var_indexs().count() != 2
                   || !obj_access_expr->get_access_idxs().at(collection_index + 1).elem_type_.is_obj_type()) {
-                can_array_binding = false;
+                // do nothing ...
               } else if (2 == obj_access_expr->get_access_idxs().count() - collection_index) {
-                can_array_binding = (0 == collection_index);
+                // do nothing ...
               } else if (obj_access_expr->get_access_idxs().at(collection_index + 2).is_const()) {
-                can_array_binding = false;
+                // do nothing ...
               } else {
                 ret = OB_ERR_BULK_IN_BIND;
                 LOG_WARN("PLS-00674: references to fields of BULK In-BIND table of records or objects must have the form A(I).F",
@@ -5081,7 +5084,6 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
                 const ObObj &const_obj = const_expr->get_value();
                 if (const_obj.is_unknown() && (idx == const_obj.get_unknown())) {
                   need_modify = true;
-                  can_array_binding = false;
                 }
               }
             } else {
@@ -5096,9 +5098,6 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-urowid type");
           }
         }
-      }
-      if (OB_SUCC(ret) && OB_INVALID_INDEX == collection_index) {
-        can_array_binding = false;
       }
     } else if (T_QUESTIONMARK == expr->get_expr_type()) {
       ObConstRawExpr *const_expr = static_cast<ObConstRawExpr*>(expr);
@@ -5130,20 +5129,16 @@ int ObPLResolver::modify_raw_expr_in_forall(ObPLForAllStmt &stmt,
                                             ObIArray<int64_t>& modify_exprs)
 {
   int ret = OB_SUCCESS;
-  // only allow x(idx); y(x(idx)),y(abs(x(idx))),y(x(idx) + 1) is invalid
-  // in check_raw_expr_in_forall y(x(idx)) is valid, so here we check again
+  // only allow x(idx);
+  // y(x(idx)),y(abs(x(idx))),y(x(idx) + 1) is invalid.
+  // in check_raw_expr_in_forall y(x(idx)) is valid, so here we check again.
   for (int64_t i = 0; OB_SUCC(ret) && i < modify_exprs.count(); ++i) {
     ObRawExpr* expr = func.get_expr(sql_stmt.get_params().at(modify_exprs.at(i)));
     ObObjAccessRawExpr *obj_access_expr = NULL;
     CK (OB_NOT_NULL(expr));
     CK (expr->is_obj_access_expr());
     CK (OB_NOT_NULL(obj_access_expr = static_cast<ObObjAccessRawExpr*>(expr)));
-    CK (2 == obj_access_expr->get_access_idxs().count());
-    CK (2 == obj_access_expr->get_var_indexs().count());
-    CK (obj_access_expr->get_access_idxs().at(0).elem_type_.is_collection_type());
-    CK (1 == obj_access_expr->get_access_idxs().at(1).var_index_);
-    OZ (modify_raw_expr_in_forall(stmt, func, sql_stmt, modify_exprs.at(i),
-          obj_access_expr->get_var_indexs().at(0)));
+    OZ (modify_raw_expr_in_forall(stmt, func, sql_stmt, modify_exprs.at(i), obj_access_expr));
   }
   return ret;
 }
@@ -5152,26 +5147,37 @@ int ObPLResolver::modify_raw_expr_in_forall(ObPLForAllStmt &stmt,
                                             ObPLFunctionAST &func,
                                             ObPLSqlStmt &sql_stmt,
                                             int64_t modify_expr_id,
-                                            int64_t table_idx)
+                                            ObObjAccessRawExpr *obj_access_expr)
 {
   int ret = OB_SUCCESS;
   SET_LOG_CHECK_MODE();
   hash::ObHashMap<int64_t, int64_t> &tab_to_subtab = stmt.get_tab_to_subtab_map();
   int64_t sub_table_idx = OB_INVALID_INDEX;
-  if (OB_FAIL(tab_to_subtab.get_refactored(table_idx, sub_table_idx))) {
+  int64_t ori_expr_idx = sql_stmt.get_array_binding_params().at(modify_expr_id);
+  if (OB_FAIL(tab_to_subtab.get_refactored(ori_expr_idx, sub_table_idx))) {
     if (OB_HASH_NOT_EXIST != ret) {
-      LOG_WARN("failed to get refactored in hash map", K(ret), K(table_idx));
+      LOG_WARN("failed to get refactored in hash map", K(ret), K(ori_expr_idx));
     } else {
-      const ObPLVar *table_var = func.get_symbol_table().get_symbol(table_idx);
       ret = OB_SUCCESS;
-      CK (OB_NOT_NULL(table_var));
-      CK (OB_NOT_NULL(stmt.get_body()));
+      // construct an anonymous collection type for generate sub collection.
       ObPLBlockNS &ns = const_cast<ObPLBlockNS&>(stmt.get_body()->get_namespace());
-      OZ (ns.add_symbol(ObString(""), table_var->get_type(), NULL, true));
-      if (OB_SUCC(ret)) {
-        sub_table_idx = func.get_symbol_table().get_count() - 1;
-        OZ (tab_to_subtab.set_refactored(table_idx, sub_table_idx));
+      ObNestedTableType *collection_type = NULL;
+      ObPLDataType elem_type;
+      if (OB_ISNULL(collection_type = reinterpret_cast<ObNestedTableType*>
+                            (resolve_ctx_.allocator_.alloc(sizeof(ObNestedTableType))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("no memory for allocate collection type", K(ret), K(sizeof(ObNestedTableType)));
       }
+      OX (collection_type = new(collection_type) ObNestedTableType());
+      OZ (obj_access_expr->get_final_type(elem_type));
+      OX (collection_type->set_element_type(elem_type));
+      OX (collection_type->set_name(ObString("")));
+      OZ (ns.add_type(collection_type));
+
+      // construct an symbol for generate sub colleciton.
+      OZ (ns.add_symbol(ObString(""), *collection_type, NULL, true));
+      OX (sub_table_idx = func.get_symbol_table().get_count() - 1);
+      OZ (tab_to_subtab.set_refactored(ori_expr_idx, sub_table_idx));
     }
   }
   if (OB_SUCC(ret)) {
@@ -5251,6 +5257,10 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
       if (OB_SUCC(ret)) {
         if (need_modify) {
           OZ (need_modify_exprs.push_back(i));
+          OZ (exec_param->formalize(&resolve_ctx_.session_info_));
+          if (OB_SUCC(ret) && exec_param->get_result_type().is_ext()) {
+            can_array_binding = false; // SQL Engine can not support SqlArray with ext element.
+          }
         }
       }
     }
@@ -5303,6 +5313,10 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
         if (OB_SUCC(ret)) {
           if (need_modify) {
             OZ (need_modify_exprs.push_back(i));
+            OZ (exec_param->formalize(&resolve_ctx_.session_info_));
+            if (OB_SUCC(ret) && exec_param->get_result_type().is_ext()) {
+              is_array_binding = false; // SQL Engine can not support SqlArray with ext element.
+            }
           }
           OZ (sql_stmt->get_array_binding_params().push_back(params.at(i)));
         }
@@ -5363,7 +5377,6 @@ int ObPLResolver::resolve_forall_collection_and_check(const ObStmtNodeTree *coll
       ObObjAccessIdx::get_final_type(access_idxs).get_user_type_id(), user_type));
     CK (OB_NOT_NULL(user_type));
   }
-#ifdef OB_BUILD_ORACLE_PL
   if (OB_SUCC(ret)) {
     const ObCollectionType *coll_type = static_cast<const ObCollectionType*>(user_type);
     CK (OB_NOT_NULL(coll_type));
@@ -5384,7 +5397,6 @@ int ObPLResolver::resolve_forall_collection_and_check(const ObStmtNodeTree *coll
       }
     }
   }
-#endif
   return ret;
 }
 
@@ -5718,6 +5730,7 @@ int ObPLResolver::resolve_forall(const ObStmtNodeTree *parse_tree,
   }
   return ret;
 }
+#endif
 
 int ObPLResolver::resolve_repeat(const ObStmtNodeTree *parse_tree, ObPLRepeatStmt *stmt, ObPLFunctionAST &func)
 {
