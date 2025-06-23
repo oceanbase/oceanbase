@@ -329,7 +329,8 @@ public:
       K_(column_id),
       K_(column_name),
       K_(colulmn_properties),
-      K_(column_flags));
+      K_(column_flags),
+      K_(local_session_vars));
 
 private:
   int deep_copy_default_val_(const ObObj &src_default_val, ObObj &dest_default_val);
