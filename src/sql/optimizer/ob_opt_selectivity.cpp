@@ -92,7 +92,7 @@ int OptSelectivityCtx::init_deduce_infos(AccessPath *path)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else {
-    const ObIArray<ObJoinOrder::DeducedExprInfo> &prefix_deduce_info = path->parent_->get_deduce_info();
+    const ObIArray<DeducedExprInfo> &prefix_deduce_info = path->parent_->get_deduce_info();
     ExprDeduceInfo *deduce_info = NULL;
     /**
      * all range filters => real range filters => precise range filters

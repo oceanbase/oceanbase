@@ -18666,18 +18666,6 @@ int ObJoinOrder::extract_pushdown_quals(const ObIArray<ObRawExpr *> &quals,
   return ret;
 }
 
-int ObJoinOrder::DeducedExprInfo::assign(const DeducedExprInfo &other)
-{
-  int ret = OB_SUCCESS;
-  deduced_expr_ = other.deduced_expr_;
-  deduced_from_expr_ = other.deduced_from_expr_;
-  is_precise_ = other.is_precise_;
-  if (OB_FAIL(const_param_constraints_.assign(other.const_param_constraints_))) {
-    LOG_WARN("failed to assign pc constraint", K(ret));
-  }
-  return ret;
-}
-
 int ObJoinOrder::add_deduced_expr(ObRawExpr *deduced_expr,
                       ObRawExpr *deduce_from,
                       bool is_persistent)
