@@ -642,16 +642,16 @@ bool JVMFunctionHelper::is_valid_loaded_jars_() {
   if (OB_FAIL(ret)) {
     /* do nothing */
   } else if (OB_LIKELY(DATA_VERSION_4_3_5_2 <= data_version)) {
-    if (OB_LIKELY(JAR_VERSION_101 == real_jar_version)) {
+    if (OB_LIKELY(JAR_VERSION_101 <= real_jar_version)) {
       is_valid = true;
     } else {
-      LOG_WARN("current jar version is not 1.0.1", K(ret), K(real_jar_version), K(JAR_VERSION_101));
+      LOG_WARN("current major jar version is not 1.0.1", K(ret), K(real_jar_version), K(JAR_VERSION_101));
     }
   } else if (OB_LIKELY(DATA_VERSION_4_3_5_1 <= data_version)) {
-    if (OB_LIKELY(JAR_VERSION_100 == real_jar_version)) {
+    if (OB_LIKELY(JAR_VERSION_100 <= real_jar_version && real_jar_version < JAR_VERSION_101)) {
       is_valid = true;
     } else {
-      LOG_WARN("current jar version is not 1.0.0", K(ret), K(real_jar_version), K(JAR_VERSION_100));
+      LOG_WARN("current major jar version is not 1.0.0", K(ret), K(real_jar_version), K(JAR_VERSION_100));
     }
   }
   LOG_TRACE("check jar version in detail", K(ret), K(real_jar_version),
