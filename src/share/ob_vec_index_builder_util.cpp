@@ -3683,6 +3683,33 @@ bool ObVecIndexBuilderUtil::is_column_exist(
   return is_exists;
 }
 
+int ObVecIndexBuilderUtil::del_extra_info_columns(const ObTableSchema &data_schema, ObVectorIndexParam &index_param,
+                                                  ObTableSchema &index_schema)
+{
+  int ret = OB_SUCCESS;
+  if (index_param.extra_info_actual_size_ != 0) {
+    ret = OB_ERR_PARAM_INVALID;
+    LOG_WARN("extra info size is not zero", K(ret), K(index_param.extra_info_actual_size_));
+  } else {
+    ObTableSchema::const_column_iterator tmp_begin = data_schema.column_begin();
+    ObTableSchema::const_column_iterator tmp_end = data_schema.column_end();
+    for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
+      ObColumnSchemaV2 *col_schema = (*tmp_begin);
+      if (OB_ISNULL(col_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr", K(ret), KP(col_schema));
+      } else if (!col_schema->is_rowkey_column()) {
+      } else if (col_schema->is_tbl_part_key_column()) { // partition key column is not extra info
+      } else if (!is_column_exist(index_schema, *col_schema)) {
+        LOG_INFO("extra info column is not exist", K(ret), KPC(col_schema));
+      } else if (OB_FAIL(index_schema.delete_column(col_schema->get_column_name()))) {
+        LOG_WARN("fail to del extra info column", K(ret), KPC(col_schema));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObVecIndexBuilderUtil::set_extra_info_columns(const ObTableSchema &data_schema,
                                                   ObRowDesc &row_desc,
                                                   bool need_set_rk,
