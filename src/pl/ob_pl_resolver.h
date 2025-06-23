@@ -506,6 +506,7 @@ public:
                                     ObPLBlockNS *ns,
                                     const ObPLDataType *type,
                                     ObPLDependencyTable &deps,
+                                    sql::ObSQLSessionInfo &session_info,
                                     bool need_check = false);
 
   static

@@ -4132,6 +4132,7 @@ int ObPLResolver::set_question_mark_type(ObSchemaGetterGuard &schema_guard,
                                           ObPLBlockNS *ns,
                                           const ObPLDataType *type,
                                           ObPLDependencyTable &deps,
+                                          sql::ObSQLSessionInfo &session_info,
                                           bool need_check)
 {
   int ret = OB_SUCCESS;
@@ -4182,9 +4183,15 @@ int ObPLResolver::set_question_mark_type(ObSchemaGetterGuard &schema_guard,
     OX ((const_cast<ObPLVar*>(var))->set_name(ANONYMOUS_INOUT_ARG));
   }
   if (OB_SUCC(ret) && need_set) {
+    bool use_original_type = false;
     ObPLDataType dest_type(*type);
-    if (!(OB_NOT_NULL(var->get_type().get_data_type())
-              && var->get_type().get_data_type()->get_obj_type() == ObNullType)) {
+    OZ (session_info.check_feature_enable(
+                        ObCompatFeatureType::OUT_ANONYMOUS_COLLECTION_IS_ALLOW,
+                        use_original_type));
+    if (OB_FAIL(ret)) {
+    } else if (use_original_type
+        && !(OB_NOT_NULL(var->get_type().get_data_type())
+        && var->get_type().get_data_type()->get_obj_type() == ObNullType)) {
       OX (dest_type = var->get_type());
     } else {
       OX ((const_cast<ObPLVar*>(var))->set_type(dest_type));
@@ -4369,13 +4376,23 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
                     const ObUserDefinedType *user_type = NULL;
                     OZ (current_block_->get_namespace().get_pl_data_type_by_id(
                       value_expr->get_result_type().get_udt_id(), user_type));
-                    OZ (set_question_mark_type(resolve_ctx_.schema_guard_, into_expr, &(current_block_->get_namespace()), user_type, func.get_dependency_table()));
+                    OZ (set_question_mark_type(resolve_ctx_.schema_guard_,
+                                                into_expr,
+                                                &(current_block_->get_namespace()),
+                                                user_type,
+                                                func.get_dependency_table(),
+                                                resolve_ctx_.session_info_));
                   } else {
                     ObDataType data_type;
                     ObPLDataType pl_type;
                     OZ (ObRawExprUtils::extract_real_result_type(*value_expr, resolve_ctx_.session_info_, data_type));
                     OX (pl_type.set_data_type(data_type));
-                    OX (set_question_mark_type(resolve_ctx_.schema_guard_, into_expr, &(current_block_->get_namespace()), &pl_type, func.get_dependency_table()));
+                    OX (set_question_mark_type(resolve_ctx_.schema_guard_,
+                                                into_expr,
+                                                &(current_block_->get_namespace()),
+                                                &pl_type,
+                                                func.get_dependency_table(),
+                                                resolve_ctx_.session_info_));
                   }
                 }
               } else {
@@ -7744,7 +7761,13 @@ int ObPLResolver::resolve_cparams(ObIArray<ObRawExpr*> &exprs,
               const ObPLRoutineParam* iparam = static_cast<const ObPLRoutineParam*>(param_info);
               OX (data_type = iparam->get_type());
             }
-            OZ (set_question_mark_type(resolve_ctx_.schema_guard_, params.at(i), &(current_block_->get_namespace()), &data_type, func.get_dependency_table(), true));
+            OZ (set_question_mark_type(resolve_ctx_.schema_guard_,
+                                        params.at(i),
+                                        &(current_block_->get_namespace()),
+                                        &data_type,
+                                        func.get_dependency_table(),
+                                        resolve_ctx_.session_info_,
+                                        true));
           }
         }
         if (OB_SUCC(ret)
@@ -8933,7 +8956,11 @@ int ObPLResolver::resolve_fetch(
                       stmt->get_into().count() > i &&
                       is_question_mark_value(func.get_expr(stmt->get_into(i)), &(current_block_->get_namespace()))) {
                     OZ (set_question_mark_type(resolve_ctx_.schema_guard_,
-                      func.get_expr(stmt->get_into(i)), &(current_block_->get_namespace()), left, func.get_dependency_table()));
+                                              func.get_expr(stmt->get_into(i)),
+                                              &(current_block_->get_namespace()),
+                                              left,
+                                              func.get_dependency_table(),
+                                              resolve_ctx_.session_info_));
                   } else {
                     CK (OB_NOT_NULL(left->get_data_type()));
                     OX (is_compatible = cast_supported(left->get_data_type()->get_obj_type(),

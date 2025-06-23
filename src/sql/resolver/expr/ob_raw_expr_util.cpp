@@ -1232,7 +1232,12 @@ do {                                                                            
               } else {
                 param_type = iparam->get_pl_data_type();
               }
-              OZ (pl::ObPLResolver::set_question_mark_type(*(params.schema_checker_->get_schema_guard()), iexpr, params.secondary_namespace_, &param_type, deps));
+              OZ (pl::ObPLResolver::set_question_mark_type(*(params.schema_checker_->get_schema_guard()),
+                                                            iexpr,
+                                                            params.secondary_namespace_,
+                                                            &param_type,
+                                                            deps,
+                                                            *(params.session_info_)));
             }
           } else if (T_OP_GET_PACKAGE_VAR == iexpr->get_expr_type()) {
             const ObSysFunRawExpr *f_expr = static_cast<const ObSysFunRawExpr *>(iexpr);
