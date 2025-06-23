@@ -2570,6 +2570,12 @@ DEF_STR_WITH_CHECKER(ob_java_connector_path, OB_CLUSTER_PARAMETER, "",
                      common::ObConfigJavaParamsChecker,
                      "specifies the connector path for external table with enabled option: ob_enable_java_env",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(_ob_java_odps_data_transfer_mode, OB_CLUSTER_PARAMETER, "arrowTable",
+                      common::ObConfigJniTransDataParamsChecker,
+                      "[arrowTable, offHeapTable] \n"
+                      "arrow table(provided by apache arrow), off heap table provided by spark",
+                       ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                       "arrowTable, offHeapTable");
 DEF_BOOL(_use_odps_jni_connector, OB_CLUSTER_PARAMETER, "False",
          "Enable or disable jni connector for external odps table",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

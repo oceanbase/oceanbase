@@ -396,6 +396,7 @@ public:
   virtual OB_INLINE int set_op_type(const ObRawExpr &raw_expr);
   OB_INLINE ObWhiteFilterOperatorType get_op_type() const { return op_type_; }
   virtual int get_filter_val_meta(common::ObObjMeta &obj_meta) const;
+  int get_filter_in_val_meta(int64_t arg_idx, common::ObObjMeta &obj_meta) const;
   inline virtual ObObjType get_filter_arg_obj_type(int64_t arg_idx) const
   {
     const ObExpr *expr = WHITE_OP_IN == op_type_ ? expr_->args_[1] : expr_;

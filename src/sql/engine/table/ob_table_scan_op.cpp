@@ -1497,6 +1497,8 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
     } else if (OB_FAIL(ObExternalTableUtils::prepare_single_scan_range(
                                                 ctx_.get_my_session()->get_effective_tenant_id(),
                                                 MY_CTDEF.scan_ctdef_,
+                                                &tsc_rtdef_.scan_rtdef_,
+                                                ctx_,
                                                 partition_ids,
                                                 key_ranges,
                                                 range_allocator,

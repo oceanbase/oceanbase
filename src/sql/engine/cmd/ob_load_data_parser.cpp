@@ -26,6 +26,11 @@ namespace oceanbase
 {
 namespace sql
 {
+
+const ObString ObODPSGeneralFormatParam::TUNNEL_API("tunnel_api");
+const ObString ObODPSGeneralFormatParam::BYTE("byte");
+const ObString ObODPSGeneralFormatParam::ROW("row");
+
 const char INVALID_TERM_CHAR = '\xff';
 
 const char * ObExternalFileFormat::FORMAT_TYPE_STR[] = {
@@ -66,6 +71,8 @@ int ObODPSGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len, int
   OZ(databuff_printf(buf, buf_len, pos, "\"%s\":%s", OPTION_NAMES[idx++], STR_BOOL(collect_statistics_on_create_)));
   OZ(J_COMMA());
   OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++], to_cstring(ObHexStringWrap(region_))));
+  OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s":%d)", OPTION_NAMES[idx++], (int)api_mode_));
   return ret;
 }
 
@@ -238,6 +245,7 @@ int ObODPSGeneralFormat::deep_copy(const ObODPSGeneralFormat &src) {
     LOG_WARN("failed to deep copy region for odps general format", K(ret));
   } else {
     collect_statistics_on_create_ = src.collect_statistics_on_create_;
+    api_mode_ = src.api_mode_;
   }
   return ret;
 }
@@ -361,6 +369,18 @@ int ObODPSGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &al
       region_ = obj.get_string();
     }
     node = node->get_next();
+  }
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++]) &&
+      json::JT_NUMBER == node->value_->get_type()) {
+    api_mode_ = (ObODPSGeneralFormat::ApiMode)node->value_->get_number();
+    if (api_mode_ != ApiMode::TUNNEL_API && api_mode_ != ApiMode::BYTE && api_mode_ != ApiMode::ROW) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid split mode", K(ret), K(api_mode_));
+    }
+    node = node->get_next();
+  } else {
+    // if there is no this option, use tunnel api old version has no this option
+    api_mode_ = ApiMode::TUNNEL_API;
   }
   return ret;
 }

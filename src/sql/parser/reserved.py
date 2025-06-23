@@ -1973,6 +1973,7 @@ class SqlKeywords:
          ZONE
          ZONE_LIST
          LOCATION
+         API_MODE
                   '''
 
     ob_keywords = '''

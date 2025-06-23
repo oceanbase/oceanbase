@@ -228,13 +228,23 @@ int JniWriter::init_jni_method_(JNIEnv *env) {
     }
   }
   if (OB_SUCC(ret)) {
-    jni_commit_session_ = env->GetMethodID(jni_writer_cls_, "commitSession", "()V");
+    jni_commit_session_ = env->GetMethodID(jni_writer_cls_, "commitSession", "(J)V");
     if (OB_FAIL(check_jni_exception_(env))) {
       ret = OB_INVALID_ERROR;
-      LOG_WARN("failed to commit jni session", K(ret));
+      LOG_WARN("failed to get `commitSession`", K(ret));
     } else if (OB_UNLIKELY(nullptr == jni_commit_session_)) {
       ret = OB_INVALID_ERROR;
-      LOG_WARN("failed to commit jni session", K(ret));
+      LOG_WARN("failed to get `commitSession`", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    jni_append_block_id_ = env->GetMethodID(jni_writer_cls_, "appendBlockId", "(J)V");
+    if (OB_FAIL(check_jni_exception_(env))) {
+      ret = OB_INVALID_ERROR;
+      LOG_WARN("failed to `appendBlockId`", K(ret));
+    } else if (OB_UNLIKELY(nullptr == jni_append_block_id_)) {
+      ret = OB_INVALID_ERROR;
+      LOG_WARN("failed to get `commitSession`", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
@@ -503,7 +513,27 @@ int JniWriter::finish_write()
   return ret;
 }
 
-int JniWriter::commit_session()
+int JniWriter::append_block_id(int64_t block_id)
+{
+  int ret = OB_SUCCESS;
+
+  JNIEnv *env = nullptr;
+  if (OB_FAIL(get_jni_env(env))) {
+    LOG_WARN("failed to get jni env", K(ret));
+  } else if (nullptr == env) {
+    ret = OB_JNI_ENV_ERROR;
+    LOG_WARN("unexpected null jni env", K(ret));
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(jni_writer_obj_) && OB_NOT_NULL(jni_append_block_id_)) {
+    env->CallVoidMethod(jni_writer_obj_, jni_append_block_id_, block_id);
+    if (OB_FAIL(check_jni_exception_(env))) {
+      LOG_WARN("failed to open off-heap table writer", K(ret));
+    }
+  }
+  return ret;
+}
+
+int JniWriter::commit_session(int64_t num_block)
 {
   int ret = OB_SUCCESS;
 
@@ -515,12 +545,11 @@ int JniWriter::commit_session()
     LOG_WARN("unexpected null jni env", K(ret));
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(jni_writer_obj_) && OB_NOT_NULL(jni_commit_session_)) {
-    env->CallVoidMethod(jni_writer_obj_, jni_commit_session_);
+    env->CallVoidMethod(jni_writer_obj_, jni_commit_session_, num_block);
     if (OB_FAIL(check_jni_exception_(env))) {
       LOG_WARN("failed to open off-heap table writer", K(ret));
     }
   }
-
   return ret;
 }
 
@@ -563,7 +592,7 @@ int JniWriter::do_close()
 
 JNIWriterPtr create_odps_jni_writer()
 {
-  const char *writer_factory_class = "com/oceanbase/odps/utils/OdpsTunnelConnectorFactory";
+  const char *writer_factory_class = "com/oceanbase/external/odps/utils/OdpsTunnelConnectorFactory";
   return std::make_shared<JniWriter>(writer_factory_class);
 }
 

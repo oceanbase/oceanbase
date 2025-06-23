@@ -1152,6 +1152,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"tenant_sts_credential", TENANT_STS_CREDENTIAL},
   {"tablets", TABLETS},
   {"enable_macro_block_bloom_filter", ENABLE_MACRO_BLOCK_BLOOM_FILTER},
+  {"api_mode", API_MODE},
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

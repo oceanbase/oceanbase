@@ -4710,8 +4710,6 @@ int ObDMLResolver::build_column_schemas_for_odps(const ObIArray<ObODPSTableRowIt
             break;
           }
           case apsara::odps::sdk::ODPS_VARCHAR:
-          case apsara::odps::sdk::ODPS_STRING:
-          case apsara::odps::sdk::ODPS_BINARY:
           {
             int64_t varchar_len = odps_type_length;
             if (odps_type_length <= 0) {
@@ -4721,6 +4719,14 @@ int ObDMLResolver::build_column_schemas_for_odps(const ObIArray<ObODPSTableRowIt
             column_schema.set_data_type(ObVarcharType);
             column_schema.set_data_length(varchar_len);
             column_schema.set_length_semantics(LS_CHAR);
+            break;
+          }
+          case apsara::odps::sdk::ODPS_STRING:
+          case apsara::odps::sdk::ODPS_BINARY:
+          {
+            column_schema.set_data_type(ObMediumTextType);
+            column_schema.set_data_length(OB_MAX_MEDIUMTEXT_LENGTH);
+            column_schema.set_is_string_lob(); // 默认为ob的string类型
             break;
           }
           case apsara::odps::sdk::ODPS_TIMESTAMP:
@@ -4865,7 +4871,11 @@ int ObDMLResolver::set_partition_info_for_odps(ObTableSchema &table_schema,
   oceanbase::sql::ObExprRegexpSessionVariables regexp_vars;
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObExternalTableUtils::collect_external_file_list(
+    if (OB_ISNULL(THIS_WORKER.get_session())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexeception null session");
+    } else if (OB_FAIL(ObExternalTableUtils::collect_external_file_list(
+              THIS_WORKER.get_session(),
               MTL_ID(),
               table_schema.get_table_id(),
               table_schema.get_external_file_location(),
@@ -4955,6 +4965,7 @@ int ObDMLResolver::sample_external_file_name(common::ObIAllocator &allocator,
     } else if (OB_FAIL(session_info_->get_regexp_session_vars(regexp_vars))) {
       LOG_WARN("failed to get regexp session vars", K(ret));
     } else if (OB_FAIL(ObExternalTableUtils::collect_external_file_list(
+              session_info_,
               session_info_->get_effective_tenant_id(),
               table_schema.get_table_id(),
               table_schema.get_external_file_location(),

@@ -767,6 +767,9 @@ public:
                                      ObExternalFileFormat::FormatType &type);
   static int get_external_table_type(const ObString &table_format_or_properties,
                                      ObExternalFileFormat::FormatType &type);
+  static int get_odps_api_mode(const ObString &table_format_or_properties,
+                                    bool &is_odps_external_table,
+                                    ObODPSGeneralFormat::ApiMode& mode);
   static int is_odps_external_table(const uint64_t tenant_id,
                                     const uint64_t table_id,
                                     bool &is_odps_external_table);

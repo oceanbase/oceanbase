@@ -349,6 +349,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
 
 int ObPXServerAddrUtil::assign_external_files_to_sqc(
     ObDfo &dfo,
+    ObExecContext &exec_ctx,
     bool is_file_on_disk,
     ObIArray<ObPxSqcMeta *> &sqcs,
     int64_t parallel)
@@ -379,6 +380,7 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
     }
   } else {
     bool is_odps_external_table = false;
+    ObODPSGeneralFormat::ApiMode odps_api_mode;
     ObSEArray<const ObTableScanSpec *, 2> scan_ops;
     const ObTableScanSpec *scan_op = nullptr;
     const ObOpSpec *root_op = NULL;
@@ -391,11 +393,13 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
     } else if (scan_ops.count() == 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("empty scan_ops", K(ret));
-    } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
-                                                     is_odps_external_table))) {
+    } else if (OB_FAIL(ObSQLUtils::get_odps_api_mode(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
+                                                     is_odps_external_table,
+                                                     odps_api_mode))) {
       LOG_WARN("failed to check is odps external table or not", K(ret));
     } else if (is_odps_external_table) {
-      if (OB_FAIL(ObExternalTableUtils::assign_odps_file_to_sqcs(dfo, sqcs, parallel))) {
+      if (OB_FAIL(ObExternalTableUtils::assign_odps_file_to_sqcs(
+              dfo, exec_ctx, sqcs, parallel, odps_api_mode))) {
         LOG_WARN("failed to assisn odps file to sqcs", K(files), K(ret));
       }
     } else {
@@ -760,7 +764,7 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
     }
     if (OB_SUCC(ret) && !locations.empty()
         && (*locations.begin())->loc_meta_->is_external_table_) {
-      if (OB_FAIL(assign_external_files_to_sqc(dfo,
+      if (OB_FAIL(assign_external_files_to_sqc(dfo, ctx,
                     (*locations.begin())->loc_meta_->is_external_files_on_disk_, sqcs, parallel))) {
         LOG_WARN("fail to assign external files to sqc", K(ret));
       }

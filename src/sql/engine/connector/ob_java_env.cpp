@@ -38,7 +38,8 @@ ObJavaEnv &ObJavaEnv::getInstance()
 bool ObJavaEnv::is_env_inited()
 {
   int ret = OB_SUCCESS;
-  if (!GCONF.ob_enable_java_env) {
+  if (is_inited_) {
+  } else if (!GCONF.ob_enable_java_env) {
     is_inited_ = false;
   } else {
     is_inited_ = true;
@@ -92,7 +93,9 @@ int ObJavaEnv::setup_java_home()
   int ret = OB_SUCCESS;
   ObString temp_java_home;
   bool found = false;
-  if (OB_ISNULL(GCONF.ob_java_home)) {
+  if (OB_UNLIKELY(is_inited_java_home_)) {
+    // java home is inited by other thread
+  } else if (OB_ISNULL(GCONF.ob_java_home)) {
     ret = OB_JNI_PARAMS_ERROR;
     LOG_WARN("ob_java_home was not configured", K(ret));
   } else if (OB_FAIL(ob_write_string(arena_alloc_,
@@ -106,22 +109,17 @@ int ObJavaEnv::setup_java_home()
     LOG_WARN("unable to find out java home path", K(ret), K(temp_java_home));
   } else {
     java_home_ = temp_java_home.ptr();
-  }
-
-  if (OB_SUCC(ret)) {
     if (OB_ISNULL(java_home_)) {
       ret = OB_JNI_PARAMS_ERROR;
       LOG_WARN("failed to setup JAVA_HOME with null vairables", K(ret));
+    } else if (0 != setenv(JAVA_HOME, java_home_, 1)) {
+      ret = OB_JNI_PARAMS_ERROR;
+      LOG_WARN("faieled to setup JAVA_HOME", K(ret), K_(java_home));
+    } else if (STRCMP(java_home_, std::getenv(JAVA_HOME))) {
+      ret = OB_JNI_PARAMS_ERROR;
+      LOG_WARN("failed to set JAVA_HOME from varibables", K(ret), K_(java_home));
     } else {
-      if (0 != setenv(JAVA_HOME, java_home_, 1)) {
-        ret = OB_JNI_PARAMS_ERROR;
-        LOG_WARN("faieled to setup JAVA_HOME", K(ret), K_(java_home));
-      } else if (STRCMP(java_home_, std::getenv(JAVA_HOME))) {
-        ret = OB_JNI_PARAMS_ERROR;
-        LOG_WARN("failed to set JAVA_HOME from varibables", K(ret), K_(java_home));
-      } else {
-        is_inited_java_home_ = true;
-      }
+      is_inited_java_home_ = true;
     }
   }
   return ret;
@@ -141,7 +139,7 @@ int ObJavaEnv::setup_java_opts()
     java_opts_ = temp_java_opts.ptr();
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && OB_LIKELY(!is_inited_java_opts_)) {
     if (OB_ISNULL(java_opts_)) {
       ret = OB_JNI_JAVA_OPTS_NOT_FOUND_ERROR;
       LOG_WARN("failed to setup JAVA_OPTS with null vairables", K(ret));
@@ -159,7 +157,7 @@ int ObJavaEnv::setup_java_opts()
   }
 
   // LIBHDFS_OPTS is same as JAVA_OPTS
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && OB_LIKELY(!is_inited_hdfs_opts_)) {
     if (0 != setenv(LIBHDFS_OPTS, java_opts_, 1)) {
       ret = OB_JNI_PARAMS_ERROR;
       LOG_WARN("faieled to setup LIBHDFS_OPTS", K(ret), K_(java_opts));

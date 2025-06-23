@@ -519,6 +519,7 @@ ob_set_subtarget(ob_share schema
   schema/ob_schema_mgr.cpp
   schema/ob_schema_mgr_cache.cpp
   schema/ob_schema_printer.cpp
+  schema/ob_schema_printer_external_table.cpp
   schema/ob_schema_retrieve_utils.ipp
   schema/ob_schema_service.cpp
   schema/ob_schema_service_rpc_proxy.cpp

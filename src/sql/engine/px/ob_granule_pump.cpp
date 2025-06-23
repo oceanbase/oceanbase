@@ -700,7 +700,7 @@ int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
     }
     if (OB_SUCC(ret)) {
       if (!GCONF._use_odps_jni_connector) {
-#if defined(OB_BUILD_CPP_ODPS)
+#if defined (OB_BUILD_CPP_ODPS)
         if (OB_FAIL(odps_partition_downloader_mgr_.init_downloader(args.external_table_files_.count()))) {
           LOG_WARN("init odps_partition_downloader_mgr_ failed", K(ret), K(args.external_table_files_.count()));
         } else {

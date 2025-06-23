@@ -1656,7 +1656,53 @@ bool ObConfigJavaParamsChecker::check(const ObConfigItem &t) const
   // Only the ob_enable_java_env is true, then can pass to continue
   if (GCONF.ob_enable_java_env) {
     bret = true;
+  } else {
+    int ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "enable java env is false", K(ret));
   }
+  return bret;
+}
+const ObString ObConfigJniTransDataParamsChecker::arrow_table_str_("arrowTable");
+const ObString ObConfigJniTransDataParamsChecker::off_heap_table_str_("offHeapTable");
+bool ObConfigJniTransDataParamsChecker::check(const ObConfigItem &t) const
+{
+  bool bret = false;
+  common::ObString tmp_str(t.str());
+  // Only the ob_enable_java_env is true, then can pass to continue
+  if (GCONF.ob_enable_java_env) {
+    if (0 == tmp_str.case_compare(arrow_table_str_)
+      || 0 == tmp_str.case_compare(off_heap_table_str_)) {
+      bret = true;
+    } else {
+      int ret = OB_INVALID_ARGUMENT;
+      OB_LOG(WARN, "split mode is not arrowTable or offHeapTable", K(ret));
+    }
+  } else {
+    int ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "enable java env is false", K(ret));
+  }
+
+  return bret;
+}
+bool ObConfigStorageAPIParamsChecker::check(const ObConfigItem &t) const
+{
+  bool bret = false;
+  common::ObString tmp_str(t.str());
+  // Only the ob_enable_java_env is true, then can pass to continue
+  if (GCONF.ob_enable_java_env) {
+    if (0 == tmp_str.case_compare("tunnel_api")
+      || 0 == tmp_str.case_compare("byte")
+      || 0 == tmp_str.case_compare("row")) {
+      bret = true;
+    } else {
+      int ret = OB_INVALID_ARGUMENT;
+      OB_LOG(WARN, "split mode is in three values");
+    }
+  } else {
+    int ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "enable java env is false");
+  }
+
   return bret;
 }
 

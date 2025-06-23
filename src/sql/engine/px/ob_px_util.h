@@ -328,6 +328,7 @@ private:
   static int sort_and_collect_local_file_distribution(common::ObIArray<share::ObExternalFileInfo> &files,
                                                       common::ObIArray<common::ObAddr> &dst_addrs);
   static int assign_external_files_to_sqc(ObDfo &dfo,
+                                          ObExecContext &exec_ctx,
                                           bool is_file_on_disk,
                                           common::ObIArray<ObPxSqcMeta *> &sqcs,
                                           int64_t parallel);

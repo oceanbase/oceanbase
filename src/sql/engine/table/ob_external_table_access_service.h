@@ -37,7 +37,9 @@ class ObExternalTablePartInfoArray;
 namespace sql {
 class ObExprRegexpSessionVariables;
 class ObDecompressor;
-
+// help.aliyun.com   maxcompute user-guide time-zone-configuration-operations
+// 后续应该优化为系统配置项
+const int32_t ODPS_JAVA_SDK_NO_OVERSEA_OFFSET = (8 * 60 * 60);
 class ObExternalDataAccessDriver
 {
 public:
@@ -176,6 +178,26 @@ protected:
                                         common::ObNewRow &value);
   int fill_file_partition_expr(ObExpr *expr, common::ObNewRow &value, const int64_t row_count);
   int calc_exprs_for_rowid(const int64_t read_count, ObExternalIteratorState &state);
+  static inline bool text_type_length_is_valid_at_runtime(ObObjType type, int64_t text_data_length) {
+    bool is_valid = false;
+    if (ObTinyTextType == type && text_data_length <= OB_MAX_TINYTEXT_LENGTH) {
+      is_valid = true;
+    } else if (ObTextType == type && text_data_length <= OB_MAX_TEXT_LENGTH) {
+      is_valid = true;
+    } else if (ObMediumTextType == type && text_data_length <= OB_MAX_MEDIUMTEXT_LENGTH) {
+      is_valid = true;
+    } else if (ObLongTextType == type && text_data_length <= OB_MAX_LONGTEXT_LENGTH) {
+      is_valid = true;
+    } else if (ObJsonType == type && text_data_length <= OB_MAX_LONGTEXT_LENGTH) {
+      is_valid = true;
+    }
+    return is_valid;
+  }
+
+  static inline bool varchar_length_is_valid_at_runtime(ObObjType type, ObCharsetType charset, int32_t judge_length, int32_t max_length) {
+    return (type == ObVarcharType) && ((CHARSET_UTF8MB4 == charset && judge_length <= max_length)
+              || (CHARSET_BINARY == charset && judge_length <= max_length));
+  }
 protected:
   const storage::ObTableScanParam *scan_param_;
   //external table column exprs
