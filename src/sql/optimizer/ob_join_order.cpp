@@ -5596,6 +5596,8 @@ int ObJoinOrder::extract_multivalue_preliminary_query_range(const ObIArray<Colum
   int ret = OB_SUCCESS;
   ObOptimizerContext *opt_ctx = NULL;
   const ParamStore *params = NULL;
+  ObSEArray<ObRawExpr*, 4> new_predicates;
+
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
       OB_ISNULL(allocator_) ||
@@ -5603,6 +5605,8 @@ int ObJoinOrder::extract_multivalue_preliminary_query_range(const ObIArray<Colum
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx),
         K(allocator_), K(params), K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::preprocess_multivalue_range_exprs(*allocator_, predicates, new_predicates))) {
+    LOG_WARN("failed to preprocess multivalue range exprs", K(ret));
   } else if (opt_ctx->enable_new_query_range()) {
     void *ptr = allocator_->alloc(sizeof(ObPreRangeGraph));
     ObPreRangeGraph *pre_range_graph = NULL;
@@ -5611,7 +5615,7 @@ int ObJoinOrder::extract_multivalue_preliminary_query_range(const ObIArray<Colum
       LOG_WARN("failed to allocate memory for pre range graph", K(ret));
     } else {
       pre_range_graph = new(ptr)ObPreRangeGraph(*allocator_);
-      if (OB_FAIL(pre_range_graph->preliminary_extract_query_range(range_columns, predicates,
+      if (OB_FAIL(pre_range_graph->preliminary_extract_query_range(range_columns, new_predicates,
                                                                    opt_ctx->get_exec_ctx(),
                                                                    nullptr,
                                                                    params, false, true,
@@ -5642,7 +5646,7 @@ int ObJoinOrder::extract_multivalue_preliminary_query_range(const ObIArray<Colum
                                                                     opt_ctx->get_session_info(),
                                                                     is_in_range_optimization_enabled))) {
         LOG_WARN("failed to check in range optimization enabled", K(ret));
-      } else if (OB_FAIL(tmp_qr->preliminary_extract_query_range(range_columns, predicates,
+      } else if (OB_FAIL(tmp_qr->preliminary_extract_query_range(range_columns, new_predicates,
                                                                  dtc_params, opt_ctx->get_exec_ctx(),
                                                                  opt_ctx->get_query_ctx(),
                                                                  NULL, params, false, true,
