@@ -1820,25 +1820,8 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
   }
   if (OB_SUCC(ret) && table_schema.is_fts_index()
       && !is_no_key_options(sql_mode) && !table_schema.get_parser_name_str().empty()) {
-    storage::ObFTParser parser;
-    storage::ObFTParserJsonProps parser_properties;
-    if (OB_FAIL(parser.parse_from_str(table_schema.get_parser_name_str().ptr(), table_schema.get_parser_name_str().length()))) {
-      LOG_WARN("fail to parse name from cstring", K(ret), K(table_schema.get_parser_name_str()));
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "WITH PARSER %.*s ", parser.get_parser_name().len(),
-            parser.get_parser_name().str()))) {
-      SHARE_SCHEMA_LOG(WARN, "print parser name failed", K(ret), K(parser));
-    } else if (table_schema.get_parser_property_str().empty()) {
-      // do nothing.
-    } else if (OB_FAIL(parser_properties.init())) {
-      LOG_WARN("fail to init parser properties", K(ret));
-    } else if (OB_FAIL(parser_properties.parse_from_valid_str(
-                   table_schema.get_parser_property_str()))) { // TODO: check valid.
-      LOG_WARN("fail to parse properties", K(ret), K(parser), K(table_schema.get_parser_property_str()));
-    } else if (OB_FAIL(ObFTParserJsonProps::show_parser_properties(parser_properties,
-                                                                   buf,
-                                                                   buf_len,
-                                                                   pos))) {
-      LOG_WARN("fail to show parser properties", K(ret), K(parser_properties));
+    if (OB_FAIL(ObFtsIndexSchemaPrinter::print_fts_parser_info(table_schema, strict_compat_, buf, buf_len, pos))) {
+      LOG_WARN("fail to print fts parser info", K(ret), K(table_schema));
     }
   }
   if (OB_SUCC(ret) && table_schema.is_vec_index()) {
@@ -2443,8 +2426,6 @@ int ObSchemaPrinter::print_table_definition_table_options(
     }
   }
   if (OB_SUCC(ret) && (table_schema.is_fts_index_aux() || table_schema.is_fts_doc_word_aux())) {
-    storage::ObFTParser parser;
-    storage::ObFTParserJsonProps parser_properties;
     if (full_text_columns.count() <= 0 || OB_UNLIKELY(virtual_column_id == OB_INVALID_ID)) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "invalid domain index infos", K(full_text_columns), K(virtual_column_id));
@@ -2453,23 +2434,8 @@ int ObSchemaPrinter::print_table_definition_table_options(
       OB_LOG(WARN, "failed to print table definition full text indexes", K(ret));
     } else if (table_schema.get_parser_name_str().empty()) {
       // do nothing
-    } else if (OB_FAIL(parser.parse_from_str(table_schema.get_parser_name_str().ptr(), table_schema.get_parser_name_str().length()))) {
-      LOG_WARN("fail to parse name from cstring", K(ret), K(table_schema.get_parser_name_str()));
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "WITH PARSER %.*s ", parser.get_parser_name().len(),
-            parser.get_parser_name().str()))) {
-      SHARE_SCHEMA_LOG(WARN, "print parser name failed", K(ret), K(parser));
-    } else if (table_schema.get_parser_property_str().empty()) {
-      // do nothing
-    } else if (OB_FAIL(parser_properties.init())) {
-      LOG_WARN("fail to init parser properties", K(ret));
-    } else if (OB_FAIL(parser_properties.parse_from_valid_str(
-                   table_schema.get_parser_property_str()))) {
-      LOG_WARN("fail to parse properties", K(ret), K(parser), K(table_schema.get_parser_property_str()));
-    } else if (OB_FAIL(ObFTParserJsonProps::show_parser_properties(parser_properties,
-                                                                   buf,
-                                                                   buf_len,
-                                                                   pos))) {
-      LOG_WARN("fail to show parser properties", K(ret), K(parser_properties));
+    } else if (OB_FAIL(ObFtsIndexSchemaPrinter::print_fts_parser_info(table_schema, strict_compat_, buf, buf_len, pos))) {
+      LOG_WARN("fail to print fts parser info", K(ret), K(table_schema));
     }
   }
   if (OB_SUCC(ret) && !is_index_tbl) {

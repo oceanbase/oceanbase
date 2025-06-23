@@ -313,6 +313,25 @@ public:
    const share::schema::ObColumnSchemaV2 &budy_column_schema);
 };
 
+class ObFtsIndexSchemaPrinter
+{
+public:
+  static int print_fts_parser_info(
+      const ObTableSchema &table_schema,
+      const bool strict_compat,
+      char *&buf,
+      const int64_t &buf_len,
+      int64_t &pos);
+
+private:
+  OB_INLINE static int is_mysql_compat_parser(const ObString &parser_name, bool &compat)
+  {
+    int ret = OB_SUCCESS;
+    compat = (parser_name.case_compare(ObFTSLiteral::PARSER_NAME_NGRAM) == 0);
+    return ret;
+  }
+};
+
 }//end namespace share
 }//end namespace oceanbase
 
