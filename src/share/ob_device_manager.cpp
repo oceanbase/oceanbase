@@ -176,10 +176,6 @@ int ObDeviceManager::init_devices_env()
           (0 == ObString(GCONF.ob_storage_s3_url_encode_type).case_compare("compliantRfc3986Encoding"));
       Aws::Http::SetCompliantRfc3986Encoding(compliantRfc3986Encoding);
       cluster_enable_obdal_config = &ObClusterEnableObdalConfig::get_instance();
-      // FIXME @fengyun 临时设置 SS 模式默认打开 obdal，后面配置到模板后需删除
-      if (GCTX.is_shared_storage_mode()) {
-        cluster_enable_obdal_config = &ObClusterEnableObdalConfigBase::get_instance();
-      }
     }
   }
 
