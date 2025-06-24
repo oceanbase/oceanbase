@@ -1901,6 +1901,16 @@ int ObVectorIndexUtil::check_vec_index_param(
           LOG_WARN("create ivf index on column with outrow lob data not supported", K(ret), K(vector_dim), K(lob_inrow_threshold));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "create ivf index on column with outrow lob data is");
         }
+        if (OB_SUCC(ret)) {
+          bool is_data_table_column_store = false;
+          if (OB_FAIL(tbl_schema.get_is_column_store(is_data_table_column_store))) {
+            LOG_WARN("fail to get is column store", K(tbl_schema));
+          } else if (is_data_table_column_store) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("create ivf index on table with column store not supported", K(ret), K(tbl_schema));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "create ivf index on table with column store is");
+          }
+        }
       } else if (share::schema::is_vec_spiv_index(vec_index_type)) {
         // do nothing
       }
