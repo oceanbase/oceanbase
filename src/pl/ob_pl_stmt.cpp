@@ -43,6 +43,11 @@ int ObPLVar::deep_copy(const ObPLVar &var, ObIAllocator &allocator)
       is_formal_param_ = var.is_formal_param();
       is_referenced_ = var.is_referenced();
       is_default_expr_access_external_state_ = var.is_default_expr_access_external_state();
+      for (int64_t i = 0; OB_SUCC(ret) && i < var.get_trigger_ref_cols().count(); i++) {
+        ObString col;
+        OZ (ob_write_string(allocator, var.get_trigger_ref_cols().at(i).first, col));
+        OZ (trigger_ref_cols_.push_back(std::make_pair(col, var.get_trigger_ref_cols().at(i).second)));
+      }
     }
   }
   return ret;
@@ -2647,8 +2652,14 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
             } else if (OB_ISNULL(var = ns->get_symbol_table()->get_symbol(parent_access_idx.var_index_))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("failed to get var", K(ret), K(parent_access_idx), K(attr_name));
-            } else if (OB_FAIL((const_cast<ObPLVar*>(var))->get_trigger_ref_cols().push_back(std::make_pair(attr_name, false)))) {
-              LOG_WARN("failed to add attr_name", K(ret), K(attr_name));
+            } else {
+              ObString copy_attr;
+              if (OB_FAIL(ob_write_string(ns->get_symbol_table()->get_allocator(), attr_name, copy_attr))) {
+                LOG_WARN("failed to write string", K(ret), K(attr_name));
+              } else if (OB_FAIL((const_cast<ObPLVar*>(var))->get_trigger_ref_cols().push_back(
+                         std::make_pair(copy_attr, false)))) {
+                LOG_WARN("failed to add attr_name", K(ret), K(copy_attr));
+              }
             }
           }
         }

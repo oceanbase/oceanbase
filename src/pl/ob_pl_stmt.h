@@ -186,7 +186,8 @@ class ObPLSymbolTable
 {
 public:
   ObPLSymbolTable(ObIAllocator &allocator) : variables_(allocator),
-                                             self_param_idx_(OB_INVALID_INDEX) {}
+                                             self_param_idx_(OB_INVALID_INDEX),
+                                             allocator_(allocator) {}
   virtual ~ObPLSymbolTable() {}
 
   inline int64_t get_count() const  { return variables_.count(); }
@@ -216,6 +217,7 @@ public:
     }
     return val;
   }
+  inline common::ObIAllocator &get_allocator() const { return allocator_; }
 
   TO_STRING_KV(K_(variables), K_(self_param_idx));
 
@@ -223,6 +225,7 @@ private:
   //所有输入输出参数，和PL体内使用的所有变量（包括游标，但是不包括condition，也不包括函数返回值和隐藏的ctx参数）,和ObPLFunction里的符号表一一对应
   ObPLSEArray<ObPLVar> variables_;
   int64_t self_param_idx_; // index of self_param
+  common::ObIAllocator &allocator_;
 };
 
 class ObPLStmt;
