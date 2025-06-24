@@ -6173,6 +6173,8 @@ int ObSPIService::spi_convert_anonymous_array(pl::ObPLExecCtx *ctx,
   common::ObMySQLProxy *sql_proxy = NULL;
   ObPLPackageGuard *package_guard = NULL;
   const ObUserDefinedType *pl_user_type = NULL;
+  bool use_original_type = false;
+  uint64_t compat_version = 0;
   ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   CK (OB_NOT_NULL(param));
   CK (OB_NOT_NULL(ctx));
@@ -6180,26 +6182,31 @@ int ObSPIService::spi_convert_anonymous_array(pl::ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(schema_guard = ctx->exec_ctx_->get_sql_ctx()->schema_guard_));
   CK (OB_NOT_NULL(sql_proxy = ctx->exec_ctx_->get_sql_proxy()));
   CK (OB_NOT_NULL(package_guard = ctx->exec_ctx_->get_package_guard()));
+  // here must be dealing with the inout parameter type of the anonymous array
   CK (is_mocked_anonymous_array_id(user_type_id));
-  OZ (ctx->get_user_type(user_type_id, pl_user_type, nullptr));
-  CK (OB_NOT_NULL(pl_user_type));
   CK (param->is_ext());
-
-  if (OB_SUCC(ret)) {
-    ObObj dst;
-    int64_t dst_size = 0;
-    ObObj *dst_ptr = &dst;
-    ObObj *src_ptr = param;
-    ObObj *src_table_data = nullptr;
-    ObPLResolveCtx resolve_ctx(
-      *ctx->allocator_, *session, *schema_guard, *package_guard, *sql_proxy, false);
-    OZ (pl_user_type->init_obj(*(schema_guard), tmp_alloc, dst, dst_size));
-    OZ (pl_user_type->convert(resolve_ctx, src_ptr, dst_ptr));
-    OZ (ObUserDefinedType::destruct_obj(*src_ptr, session, true));
-    OZ (pl_user_type->convert(resolve_ctx, dst_ptr, src_ptr));
-    OX (param->set_udt_id(pl_user_type->get_user_type_id()));
-    int tmp_ret = ObUserDefinedType::destruct_obj(dst, session);
-    ret = OB_SUCCESS == ret ? tmp_ret : ret;
+  OZ (session->check_feature_enable(ObCompatFeatureType::OUT_ANONYMOUS_COLLECTION_IS_ALLOW, use_original_type));
+  // For inout anonymous array parameters, if the original type is not empty,
+  // the result is returned according to the original type.
+  if (use_original_type) {
+    OZ (ctx->get_user_type(user_type_id, pl_user_type, nullptr));
+    CK (OB_NOT_NULL(pl_user_type));
+    if (OB_SUCC(ret)) {
+      ObObj dst;
+      int64_t dst_size = 0;
+      ObObj *dst_ptr = &dst;
+      ObObj *src_ptr = param;
+      ObObj *src_table_data = nullptr;
+      ObPLResolveCtx resolve_ctx(
+        *ctx->allocator_, *session, *schema_guard, *package_guard, *sql_proxy, false);
+      OZ (pl_user_type->init_obj(*(schema_guard), tmp_alloc, dst, dst_size));
+      OZ (pl_user_type->convert(resolve_ctx, src_ptr, dst_ptr));
+      OZ (ObUserDefinedType::destruct_obj(*src_ptr, session, true));
+      OZ (pl_user_type->convert(resolve_ctx, dst_ptr, src_ptr));
+      OX (param->set_udt_id(pl_user_type->get_user_type_id()));
+      int tmp_ret = ObUserDefinedType::destruct_obj(dst, session);
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    }
   }
   return ret;
 }
