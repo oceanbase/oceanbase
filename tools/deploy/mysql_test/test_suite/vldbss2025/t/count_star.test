@@ -1,0 +1,28 @@
+--disable_query_log
+--disable_warnings
+connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection obsys;
+alter system set_tp tp_name = "EN_COMPACTION_DISABLE_ROW_COL_SWITCH", error_code = 4016, frequency = 1;
+
+connection default;
+set ob_query_timeout = 10000000000;
+alter system set _rowsets_enabled=false;
+alter system flush plan cache;
+--enable_warnings
+--enable_query_log
+
+--disable_warnings
+drop table if exists ct1;
+--enable_warnings
+
+create table ct1(c1 int, c2 int, c3 varchar(20)) with column group (each column);
+insert into ct1 select UNIFORM(1, 10000, random(7)),UNIFORM(1, 10000, random(7)),RANDSTR(20, random(7)) from table(generator(1000000));
+alter system major freeze;
+
+--source mysql_test/include/wait_daily_merge.inc
+
+--disable_query_log
+set ob_query_timeout = 100000;
+--enable_query_log
+
+select count(*) from ct1;

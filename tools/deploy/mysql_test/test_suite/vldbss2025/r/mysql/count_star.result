@@ -1,0 +1,7 @@
+drop table if exists ct1;
+create table ct1(c1 int, c2 int, c3 varchar(20)) with column group (each column);
+insert into ct1 select UNIFORM(1, 10000, random(7)),UNIFORM(1, 10000, random(7)),RANDSTR(20, random(7)) from table(generator(1000000));
+alter system major freeze;
+select count(*) from ct1;
+count(*)
+1000000
