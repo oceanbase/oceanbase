@@ -224,7 +224,8 @@ int ObMacroMetaTempStore::get_macro_block_header(
     LOG_WARN("macro common header invalid", K(ret), K(common_header));
   } else if (OB_FAIL(macro_header.deserialize(buf, buf_size, pos))) {
     LOG_WARN("failed to deserialize sstable macro header", K(ret));
-  } else if (OB_UNLIKELY(macro_header.is_valid())) {
+  } else if (OB_UNLIKELY(!macro_header.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid sstable macro header", K(ret), K(macro_header));
   }
   return ret;
