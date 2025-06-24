@@ -174,7 +174,8 @@ public:
         */
         uint32_t rowid_idx_:      8;
         uint32_t is_not_first_col_in_row_: 1;
-        uint32_t reserved_:      19;
+        uint32_t cnt_exec_param_: 1;
+        uint32_t reserved_:      18;
       };
     };
     union {
@@ -211,6 +212,33 @@ public:
 
   TO_STRING_KV(N_COLUMN_TYPE, column_type_);
   ObExprResType column_type_;
+};
+
+class ObFastFinalPos
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFastFinalPos() :
+    index_(-1),
+    offset_(-1),
+    flags_(0) {}
+
+  ObFastFinalPos(const ObFastFinalPos &other) :
+    index_(other.index_),
+    offset_(other.offset_),
+    flags_(other.flags_) {}
+
+  TO_STRING_KV(K_(index), K_(offset), K_(flags));
+public:
+  int64_t index_;
+  int32_t offset_;
+  union {
+    uint32_t flags_;
+    struct {
+      uint32_t is_upper_bound_ :  1;
+      uint32_t reserved_       : 31;
+    };
+  };
 };
 
 struct ObQueryRangeCtx
@@ -310,6 +338,7 @@ public:
     unprecise_range_exprs_(alloc),
     total_range_sizes_(alloc),
     range_expr_max_offsets_(alloc),
+    fast_final_pos_arr_(alloc),
     flags_(0) {}
 
   virtual ~ObPreRangeGraph() { reset(); }
@@ -500,12 +529,14 @@ private:
   common::ObFixedArray<ObRawExpr*, common::ObIAllocator> unprecise_range_exprs_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> total_range_sizes_;
   common::ObFixedArray<int64_t, common::ObIAllocator> range_expr_max_offsets_;
+  common::ObFixedArray<ObFastFinalPos, common::ObIAllocator> fast_final_pos_arr_;
   union {
     uint32_t flags_;
     struct {
       uint32_t contain_geo_filters_  :  1;
       uint32_t fast_nlj_range_       :  1;
-      uint32_t reserved_             : 30;
+      uint32_t general_nlj_range_    :  1;
+      uint32_t reserved_             : 29;
     };
   };
 };

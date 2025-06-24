@@ -331,6 +331,9 @@ OB_DEF_SERIALIZE_SIZE(ObRangeMap)
 //ObRangeColumnMeta
 OB_SERIALIZE_MEMBER(ObRangeColumnMeta, column_type_);
 
+//ObFastFinalPos
+OB_SERIALIZE_MEMBER(ObFastFinalPos, index_, offset_, flags_);
+
 int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
                           const ObIArray<ColumnItem> &range_columns,
                           ExprConstrantArray *expr_constraints,
@@ -1032,6 +1035,13 @@ OB_DEF_SERIALIZE(ObPreRangeGraph)
   OB_UNIS_ENCODE(range_map_);
   OB_UNIS_ENCODE(skip_scan_offset_);
   OB_UNIS_ENCODE(flags_);
+  if (OB_SUCC(ret)) {
+    int64_t count = fast_final_pos_arr_.count();
+    OB_UNIS_ENCODE(count);
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+      OB_UNIS_ENCODE(fast_final_pos_arr_.at(i));
+    }
+  }
   return ret;
 }
 
@@ -1079,6 +1089,20 @@ OB_DEF_DESERIALIZE(ObPreRangeGraph)
   OB_UNIS_DECODE(range_map_);
   OB_UNIS_DECODE(skip_scan_offset_);
   OB_UNIS_DECODE(flags_);
+  if (OB_SUCC(ret)) {
+    fast_final_pos_arr_.reset();
+    int64_t count = 0;
+    OB_UNIS_DECODE(count);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(fast_final_pos_arr_.prepare_allocate(count))) {
+        LOG_WARN("failed to prepare allocate fast final pos arr", K(count));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+      OB_UNIS_DECODE(fast_final_pos_arr_.at(i));
+    }
+  }
+
   return ret;
 }
 
@@ -1103,6 +1127,11 @@ OB_DEF_SERIALIZE_SIZE(ObPreRangeGraph)
   OB_UNIS_ADD_LEN(range_map_);
   OB_UNIS_ADD_LEN(skip_scan_offset_);
   OB_UNIS_ADD_LEN(flags_);
+  count = fast_final_pos_arr_.count();
+  OB_UNIS_ADD_LEN(count);
+  for (int64_t i = 0; i < count; ++i) {
+    OB_UNIS_ADD_LEN(fast_final_pos_arr_.at(i));
+  }
   return len;
 }
 
