@@ -637,9 +637,9 @@ TEST_F(TestSSMicroMetaManager, test_micro_meta_manager_scan)
   ASSERT_EQ(macro_cnt * micro_cnt - macro_cnt * micro_cnt / 10, total_meta_cnt);
 }
 
-TEST_F(TestSSMicroMetaManager, test_persist_micro_meta_task)
+TEST_F(TestSSMicroMetaManager, test_persist_micro_parallel_with_clear)
 {
-  LOG_INFO("TEST: start test_persist_micro_meta_task");
+  LOG_INFO("TEST: start test_persist_micro_parallel_with_clear");
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ASSERT_NE(nullptr, micro_cache);
   const int64_t block_size = micro_cache->phy_blk_size_;
@@ -687,11 +687,11 @@ TEST_F(TestSSMicroMetaManager, test_persist_micro_meta_task)
   // persist micro meta
   ObSSPersistMicroMetaTask* persist_meta_task = &micro_cache->task_runner_.persist_meta_task_;
   persist_meta_task->cur_interval_us_ = 3600 * 1000 * 1000L;
-  ob_usleep(1000 * 1000L);
+  ob_usleep(2 * 1000 * 1000L);
 
-  persist_meta_task->persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
   persist_meta_task->is_inited_ = true;
   ASSERT_EQ(OB_SUCCESS, persist_meta_task->persist_meta_op_.check_state());
+  persist_meta_task->persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr->get_ss_super_block(persist_meta_task->persist_meta_op_.micro_ckpt_ctx_.prev_super_blk_));
 
   ASSERT_EQ(OB_SUCCESS, persist_meta_task->persist_meta_op_.gen_micro_meta_checkpoint());

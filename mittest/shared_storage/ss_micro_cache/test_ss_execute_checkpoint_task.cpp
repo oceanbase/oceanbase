@@ -719,6 +719,8 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
       phy_blk_mgr_->blk_cnt_info_.meta_blk_.hold_cnt_ + phy_blk_mgr_->blk_cnt_info_.data_blk_.hold_cnt_;
 
   // 4.4. normal situation
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task_->persist_meta_op_.check_state());
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr_->get_ss_super_block(persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.prev_super_blk_));
   ASSERT_EQ(OB_SUCCESS, persist_meta_task_->persist_meta_op_.gen_micro_meta_checkpoint());
   ASSERT_EQ((WRITE_BLK_CNT - 1) * micro_cnt + 1, micro_meta_mgr_->micro_meta_map_.count());
   ASSERT_EQ(false, persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.lack_phy_blk_);
@@ -895,7 +897,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   ASSERT_EQ(micro_ckpt_list_cnt, blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.prev_super_blk_.micro_ckpt_entry_list_.count());
 
   // 7. execute persist micro_meta
-  persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.reuse();
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task_->persist_meta_op_.check_state());
   persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(false, persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.prev_super_blk_.is_valid());
   ASSERT_EQ(false, persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.cur_super_blk_.is_valid());
