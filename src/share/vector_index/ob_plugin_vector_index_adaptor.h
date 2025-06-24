@@ -106,6 +106,7 @@ enum PluginVectorQueryResStatus
   PVQ_OK, // ok
   PVQ_COM_DATA,
   PVQ_INVALID_SCN,
+  PVQ_REFRESH,
   PVQ_MAX
 };
 

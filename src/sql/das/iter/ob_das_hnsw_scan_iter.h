@@ -34,6 +34,7 @@ enum ObVidAdaLookupStatus
   STATES_SET_RESULT,
   STATES_ERROR,
   STATES_FINISH,
+  STATES_REFRESH,
 };
 
 enum ObAdaptorIterRowIdx
