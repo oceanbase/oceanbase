@@ -1715,52 +1715,28 @@ int ObLSTabletService::get_pending_upload_tablet_id_arr(
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else {
-    int64_t retry_time = 0;
     const ObLSID &ls_id = ls_->get_ls_id();
-    while (OB_SUCC(ret) && !locked) {
-      common::ObBucketTryRLockAllGuard lock_guard(bucket_lock_);
-      if (OB_FAIL(lock_guard.get_ret()) && OB_EAGAIN != ret) {
-        STORAGE_LOG(WARN, "fail to lock all tablet id set", K(ret));
-      } else if (OB_EAGAIN == ret) {
-        // try again after 1ms sleep.
-        ob_usleep(1000);
-        retry_time++;
-        if (retry_time <= 1000) {
-          if (retry_time % 10 == 0) {
-            LOG_INFO("try get read lock again", K(ret), K(retry_time), K(ls_ss_checkpoint_scn), K(ls_id));
-          }
-          ret = OB_SUCCESS;
-        } else {
-          LOG_INFO("try get read lock failed", K(ret), K(retry_time), K(ls_ss_checkpoint_scn), K(ls_id));
-          break;
+    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+    ObTabletMapKey key;
+    ObSArray<ObTabletID> tablet_ids;
+    GetAllTabletIDOperator op(tablet_ids);
+    if (OB_FAIL(tablet_id_set_.foreach(op))) {
+      STORAGE_LOG(WARN, "fail to get all tablet ids from set", K(ret));
+    } else {
+      key.ls_id_ = ls_id;
+      bool need_upload;
+      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+        key.tablet_id_ = tablet_ids.at(i);
+        need_upload = false;
+        if (OB_FAIL(t3m->check_tablet_has_sstable_need_upload(ls_ss_checkpoint_scn, key, need_upload))) {
+          LOG_WARN("fail to check tablet need upload or not", K(ret), K(ls_ss_checkpoint_scn), K(key));
+        } else if (!need_upload) {
+          // do nothing
+        } else if (OB_FAIL(tablet_id_arr.push_back(key.tablet_id_))) {
+          LOG_WARN("fail to push back", K(ret), K(tablet_id_arr), K(key));
         }
-      } else {
-        // get lock successfully
-        locked = true;
-
-        ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-        ObTabletMapKey key;
-        ObSArray<ObTabletID> tablet_ids;
-        GetAllTabletIDOperator op(tablet_ids);
-        if (OB_FAIL(tablet_id_set_.foreach(op))) {
-          STORAGE_LOG(WARN, "fail to get all tablet ids from set", K(ret));
-        } else {
-          key.ls_id_ = ls_id;
-          bool need_upload;
-          for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-            key.tablet_id_ = tablet_ids.at(i);
-            need_upload = false;
-            if (OB_FAIL(t3m->check_tablet_has_sstable_need_upload(ls_ss_checkpoint_scn, key, need_upload))) {
-              LOG_WARN("fail to check tablet need upload or not", K(ret), K(ls_ss_checkpoint_scn), K(key));
-            } else if (!need_upload) {
-              // do nothing
-            } else if (OB_FAIL(tablet_id_arr.push_back(key.tablet_id_))) {
-              LOG_WARN("fail to push back", K(ret), K(tablet_id_arr), K(key));
-            }
-          } // end for
-        }
-      }
-    } // end while
+      } // end for
+    }
   }
 
   return ret;

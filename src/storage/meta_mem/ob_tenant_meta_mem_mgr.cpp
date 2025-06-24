@@ -1914,6 +1914,7 @@ int ObTenantMetaMemMgr::fill_buffer_infos(
 int ObTenantMetaMemMgr::check_tablet_has_sstable_need_upload(const SCN &ls_ss_checkpoint_scn, const ObTabletMapKey &key, bool &need_upload)
 {
   int ret = OB_SUCCESS;
+  ObBucketHashRLockGuard lock_guard(bucket_lock_, key.hash()); // protect tablet pointer
   ObTabletPointerHandle ptr_handle(tablet_map_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1922,7 +1923,12 @@ int ObTenantMetaMemMgr::check_tablet_has_sstable_need_upload(const SCN &ls_ss_ch
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(key));
   } else if (OB_FAIL(tablet_map_.get(key, ptr_handle))) {
-    LOG_WARN("failed to get ptr handle", K(ret), K(key));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("tablet already been removed", K(ret), K(key));
+    } else {
+      LOG_WARN("failed to get ptr handle", K(ret), K(key));
+    }
   } else {
     const ObTabletPointer *tablet_ptr = ptr_handle.get_tablet_pointer();
     if (OB_ISNULL(tablet_ptr)) {
