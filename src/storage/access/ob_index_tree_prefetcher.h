@@ -832,8 +832,8 @@ protected:
         STORAGE_LOG(WARN, "fail to check if exist", KR(ret), K(macro_id));
       } else if (is_exist) {
         STORAGE_LOG(DEBUG, "already exists in macro cache, no need to prefetch", K(macro_id));
-      } else if (OB_FAIL(tnt_file_manager->get_preread_cache_mgr().push_file_id_to_lru(macro_id, tablet_id))) {
-        STORAGE_LOG(WARN, "fail to push macro id into lru read cache", KR(ret), K(macro_id), K(tablet_id));
+      } else if (OB_FAIL(tnt_file_manager->push_to_preread_queue(macro_id, tablet_id))) {
+        STORAGE_LOG(WARN, "fail to push macro id to preread queue", KR(ret), K(macro_id), K(tablet_id));
       }
       return ret;
     }
