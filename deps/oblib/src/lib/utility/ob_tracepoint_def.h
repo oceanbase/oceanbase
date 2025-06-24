@@ -644,6 +644,7 @@ GLOBAL_ERRSIM_POINT_DEF(2621, EN_CREATE_HTABLE_TG_FINISH_ERR, "create htable tab
 GLOBAL_ERRSIM_POINT_DEF(2622, EN_CREATE_HTABLE_CF_FINISH_ERR, "create htable table finish error");
 GLOBAL_ERRSIM_POINT_DEF(2623, EN_DISABLE_HTABLE_CF_FINISH_ERR, "disable htable table finish error");
 GLOBAL_ERRSIM_POINT_DEF(2624, EN_DELETE_HTABLE_CF_FINISH_ERR, "delete htable table finish error");
+GLOBAL_ERRSIM_POINT_DEF(2625, EN_DELETE_HTABLE_SKIP_CF_ERR, "delete htable table without delete cf");
 // HTable Parallel DDL end
 
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/
