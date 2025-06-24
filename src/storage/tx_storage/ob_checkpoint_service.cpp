@@ -551,10 +551,13 @@ public:
     } else {
       SCN delay_recycle_checkpoint_scn;
       LSN ss_clog_recycle_lsn;
-
       // Delay clog recycling to avoid rebuilding as much as possible
-      const int64_t clog_recycle_delay_time_us =
-          GCONF.server_permanent_offline_time + 30LL * 60LL * 1000LL * 1000LL;  // 30 minutes buffer
+      int64_t clog_recycle_delay_time_us = 24LL * 60LL * 60LL * 1000LL * 1000LL; // default 1 day
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (tenant_config.is_valid()) {
+        clog_recycle_delay_time_us = tenant_config->_ss_clog_retention_period;
+      }
+
       SCN checkpoint_scn_in_meta = ss_ls_meta.get_ss_checkpoint_scn();
       int64_t delay_recycle_ts_us = checkpoint_scn_in_meta.convert_to_ts() - clog_recycle_delay_time_us;
       if (delay_recycle_ts_us < 0) {
@@ -563,7 +566,7 @@ public:
 
       delay_recycle_checkpoint_scn.convert_from_ts(delay_recycle_ts_us);
       if (OB_FAIL(ls.get_log_handler()->locate_by_scn_coarsely(delay_recycle_checkpoint_scn, ss_clog_recycle_lsn))) {
-        STORAGE_LOG(WARN, "locate lsn failed", K(ret), K(ss_clog_recycle_lsn));
+        STORAGE_LOG(WARN, "locate lsn failed", K(ret), KTIME(delay_recycle_ts_us), K(ss_clog_recycle_lsn));
       } else if (OB_FAIL(ls.get_log_handler()->advance_base_lsn(ss_clog_recycle_lsn))) {
         STORAGE_LOG(WARN, "advance base lsn failed", K(ret), K(ss_clog_recycle_lsn));
       } else {
