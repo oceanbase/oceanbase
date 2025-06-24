@@ -2163,7 +2163,11 @@ DEF_CAP_WITH_CHECKER(auto_split_tablet_size, OB_TENANT_PARAMETER, "2GB", common:
         "Note that the modification of this config will not affect the created auto-partitioned table."
         "Range: [128M, +∞)",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+#ifdef OB_BUILD_CLOSE_MODULES
 DEF_STR_WITH_CHECKER(global_index_auto_split_policy, OB_TENANT_PARAMETER, "DISTRIBUTED",
+#else
+DEF_STR_WITH_CHECKER(global_index_auto_split_policy, OB_TENANT_PARAMETER, "ALL",
+#endif
          common::ObConfigGlobalIndexAutoSplitPolicyChecker,
          "if the auto-partition clause is not used"
          "this config judge whether to enable auto-partition for creating global index."\
@@ -2243,6 +2247,9 @@ DEF_INT(kv_hbase_client_scanner_timeout_period, OB_TENANT_PARAMETER, "60000", "(
     "OBKV Hbase client scanner query timeout, which unit is milliseconds. Range: (0, +∞) in integer. Especially, 60000 means default value",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_kv_hbase_admin_ddl, OB_TENANT_PARAMETER, "False",
+    "Whether to allow the execution of the DDL function provided by the OBKV-HBase Admin interface. The default value is false.",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_optimizer_qualify_filter, OB_TENANT_PARAMETER, "True",
         "Enable extracting qualify filters for window function",
@@ -2452,6 +2459,9 @@ DEF_BOOL(_preset_runtime_bloom_filter_size, OB_CLUSTER_PARAMETER, "False",
          "Whether build runtime bloom filter with row count estimated by optimizor."
          "Value:  True:turned on  False: turned off",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_ddl_worker_isolation, OB_TENANT_PARAMETER, "False",
+         "a switch controling ddl thread isolation",
+         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_check_trigger_const_variables_assign, OB_TENANT_PARAMETER, "True",
         "Used to control whether an error is reported when assigning a value to a const variable in a trigger under an Oracle tenant",

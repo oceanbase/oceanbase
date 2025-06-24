@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_OBSERVER_OB_TABLE_GROUP_COMMON_H_
 #define OCEANBASE_OBSERVER_OB_TABLE_GROUP_COMMON_H_
 
-#include "observer/table/ob_table_trans_utils.h"
+#include "observer/table/utils/ob_table_trans_utils.h"
 #include "observer/table/ob_table_schema_cache.h"
 #include "observer/table/object_pool/ob_table_object_pool.h"
 #include "observer/omt/ob_tenant_config_mgr.h"

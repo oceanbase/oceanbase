@@ -74,6 +74,51 @@ TEST_F(TestTTLUtil, test_get_ttl_column)
   ASSERT_EQ(OB_ERR_UNEXPECTED, ObTTLUtil::get_ttl_columns(ttl_def_4, ttl_columns));
 }
 
+TEST_F(TestTTLUtil, test_kv_attribute_to_json)
+{
+int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  ObKVAttr kv_attr;
+  ObString json_str;
+  kv_attr.type_ = ObKVAttr::ObTTLTableType::HBASE;
+
+  // Case 1: Both ttl and max_version are 0
+  kv_attr.ttl_ = 0;
+  kv_attr.max_version_ = 0;
+  kv_attr.is_disable_ = false;
+  ret = ObTTLUtil::format_kv_attributes_to_json_str(allocator, kv_attr, json_str);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_STREQ("{\"Hbase\": {\"State\": \"enable\"}}", json_str.ptr());
+
+  // Case 2: Only ttl
+  kv_attr.ttl_ = 86400;
+  kv_attr.max_version_ = 0;
+  ret = ObTTLUtil::format_kv_attributes_to_json_str(allocator, kv_attr, json_str);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_STREQ("{\"Hbase\": {\"TimeToLive\": 86400, \"State\": \"enable\"}}", json_str.ptr());
+
+  // Case 3: Only max_version
+  kv_attr.ttl_ = 0;
+  kv_attr.max_version_ = 3;
+  ret = ObTTLUtil::format_kv_attributes_to_json_str(allocator, kv_attr, json_str);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_STREQ("{\"Hbase\": {\"MaxVersions\": 3, \"State\": \"enable\"}}", json_str.ptr());
+
+  // Case 4: Both ttl and max_version
+  kv_attr.ttl_ = 86400;
+  kv_attr.max_version_ = 3;
+  ret = ObTTLUtil::format_kv_attributes_to_json_str(allocator, kv_attr, json_str);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_STREQ("{\"Hbase\": {\"TimeToLive\": 86400, \"MaxVersions\": 3, \"State\": \"enable\"}}", json_str.ptr());
+
+  // Case 5: Disabled state
+  kv_attr.is_disable_ = true;
+  ret = ObTTLUtil::format_kv_attributes_to_json_str(allocator, kv_attr, json_str);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_STREQ("{\"Hbase\": {\"TimeToLive\": 86400, \"MaxVersions\": 3, \"State\": \"disable\"}}", json_str.ptr());
+
+}
+
 int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("INFO");

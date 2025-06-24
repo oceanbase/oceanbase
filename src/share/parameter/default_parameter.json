@@ -225,6 +225,11 @@
           "name": "default_table_merge_engine",
           "value": "PARTIAL_UPDATE",
           "comment": "use partial_update merge engine for kv mode"
+        },
+        {
+          "name": "enable_auto_split",
+          "value": true,
+          "comment": "open auto split for kv mode"
         }
       ]
     }

@@ -242,7 +242,7 @@ int ObTableQueryAndMutateP::new_try_process()
   int ret = OB_SUCCESS;
   ObLSID ls_id(ObLSID::INVALID_LS_ID);
 
-  if (OB_FAIL(init_schema_info(arg_.table_name_, table_id_))) {
+  if (OB_FAIL(init_table_schema_info(arg_.table_name_, table_id_))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
   } else if (schema_cache_guard_.get_hbase_mode_type() == OB_HBASE_SERIES_TYPE) {
     ret = OB_NOT_SUPPORTED;
@@ -254,6 +254,7 @@ int ObTableQueryAndMutateP::new_try_process()
     exec_ctx_.set_table_name(arg_.table_name_);
     exec_ctx_.set_table_id(arg_.table_id_);
     exec_ctx_.set_audit_ctx(audit_ctx_);
+    exec_ctx_.set_table_schema(table_schema_);
     ObModelGuard model_guard;
     ObIModel *model = nullptr;
     if (OB_FAIL(ObModelFactory::get_model_guard(allocator_, arg_.entity_type_, model_guard))) {

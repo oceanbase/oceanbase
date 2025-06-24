@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_hbase_multi_cf_iterator.h"
 #include "share/table/ob_table_util.h"
+#include "observer/table/part_calc/ob_table_part_clip.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -37,7 +38,9 @@ int ObHbaseMultiCFIterator::init()
 
   ObQueryFlag::ScanOrder scan_order = query.get_scan_order();
   if (OB_FAIL(init_cf_iters())) {
-    LOG_WARN("fail to init cf iterators", K(ret));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to init cf iterators", K(ret));
+    }
   } else if (OB_ISNULL(merge_iter_ = OB_NEWx(ResultMergeIterator, &allocator_, query))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to create merge_iter_", K(ret));
@@ -169,7 +172,9 @@ int ObHbaseMultiCFIterator::init_cf_queries(ObTableExecCtx &exec_ctx, const ObHb
           LOG_WARN("fail to update query columns", K(ret), K(family_addfamily_flag_pairs), K(real_columns));
         } else if (OB_FAIL(update_tablet_ids_by_part_ids(part_subpart_ids, *table_schema,
                                                          const_cast<ObTableQuery &>(cf_query->get_query())))) {
-          LOG_WARN("fail to update tablet id by part ids", K(ret));
+          if (ret != OB_ITER_END) {
+            LOG_WARN("fail to update tablet id by part ids", K(ret));
+          }
         } else {
           cf_query->set_table_id(table_schema->get_table_id());
           // set correct table name
@@ -194,7 +199,9 @@ int ObHbaseMultiCFIterator::init_cf_iters()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_cf_queries(exec_ctx_, hbase_query_))) {
-    LOG_WARN("fail to init cf queries", K(ret), K(hbase_query_));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to init cf queries", K(ret), K(hbase_query_));
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < cf_queries_.count(); i++) {
     ObHbaseCFIterator *cf_iter = nullptr;
@@ -245,42 +252,60 @@ bool ObHbaseMultiCFIterator::has_more_result() const
   return bret;
 }
 
-  int ObHbaseMultiCFIterator::update_tablet_ids_by_part_ids(ObIArray<std::pair<int64_t, int64_t>> &part_subpart_ids,
-                                                            const ObSimpleTableSchemaV2 &table_schema,
-                                                            ObTableQuery &query)
-  {
-    int ret = OB_SUCCESS;
-    ObIArray<ObTabletID> &tablet_ids = query.get_tablet_ids();
-    tablet_ids.reset();
-    ObTabletID real_tablet_id;
-    ObObjectID tmp_object_id = OB_INVALID_ID;
-    ObObjectID tmp_first_level_part_id = OB_INVALID_ID;
-    for (int64_t i = 0; OB_SUCC(ret) && i < part_subpart_ids.count(); i++) {
-      uint64_t part_idx = part_subpart_ids.at(i).first;
-      uint64_t subpart_idx = part_subpart_ids.at(i).second;
-      if (part_idx == OB_INVALID_INDEX) {
-        if (part_subpart_ids.count() != 1) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("must be one part id for non-partitioned table", K(ret), K(part_subpart_ids));
-        } else {
-          real_tablet_id = table_schema.get_tablet_id();
-        }
+int ObHbaseMultiCFIterator::update_tablet_ids_by_part_ids(ObIArray<std::pair<int64_t, int64_t>> &part_subpart_ids,
+                                                          const ObSimpleTableSchemaV2 &table_schema,
+                                                          ObTableQuery &query)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObTabletID> &tablet_ids = query.get_tablet_ids();
+  tablet_ids.reset();
+  ObTabletID real_tablet_id;
+  ObObjectID tmp_object_id = OB_INVALID_ID;
+  ObObjectID tmp_first_level_part_id = OB_INVALID_ID;
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_subpart_ids.count(); i++) {
+    uint64_t part_idx = part_subpart_ids.at(i).first;
+    uint64_t subpart_idx = part_subpart_ids.at(i).second;
+  if (part_idx == OB_INVALID_INDEX) {
+      if (part_subpart_ids.count() != 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("must be one part id for non-partitioned table", K(ret), K(part_subpart_ids));
       } else {
-        if (OB_FAIL(table_schema.get_part_id_and_tablet_id_by_idx(part_idx,
-                                                                   subpart_idx,
-                                                                   tmp_object_id,
-                                                                   tmp_first_level_part_id,
-                                                                   real_tablet_id))) {
-          LOG_WARN("fail to get_part_id_and_tablet_id_by_idx", K(ret));
+        real_tablet_id = table_schema.get_tablet_id();
+      }
+    } else {
+      if (OB_FAIL(table_schema.get_part_id_and_tablet_id_by_idx(part_idx,
+                                                                subpart_idx,
+                                                                tmp_object_id,
+                                                                tmp_first_level_part_id,
+                                                                real_tablet_id))) {
+        LOG_WARN("fail to get_part_id_and_tablet_id_by_idx", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(tablet_ids.push_back(real_tablet_id))) {
+      LOG_WARN("fail to add real tablet id", K(ret));
+    } else if (query.is_hot_only()) {
+      ObSEArray<ObTabletID, 32> src_tablet_ids;
+      if (OB_FAIL(src_tablet_ids.assign(tablet_ids))) {
+        LOG_WARN("fail to assign tablet_ids", K(ret), K(tablet_ids));
+      } else {
+        tablet_ids.reset();
+        if (OB_FAIL(ObTablePartClipper::clip(table_schema,
+                                             ObTablePartClipType::HOT_ONLY,
+                                             src_tablet_ids,
+                                             tablet_ids))) {
+          LOG_WARN("fail to clip partition", K(ret), K(src_tablet_ids));
+        } else if (tablet_ids.empty()) {
+          ret = OB_ITER_END;
+          LOG_DEBUG("all partitions are clipped", K(query));
         }
       }
 
-      if (OB_SUCC(ret) && OB_FAIL(tablet_ids.push_back(real_tablet_id))) {
-        LOG_WARN("fail to add real tablet id", K(ret));
-      }
     }
-    return ret;
   }
+  return ret;
+}
 
 } // end of namespace table
 } // end of namespace oceanbase

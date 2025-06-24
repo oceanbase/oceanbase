@@ -16,8 +16,8 @@
 #include "src/storage/tx/ob_trans_define_v4.h"
 #include "share/table/ob_table.h"
 #include "sql/ob_sql_trans_control.h"
-#include "ob_htable_lock_mgr.h"
-#include "ob_table_end_trans_cb.h"
+#include "observer/table/ob_htable_lock_mgr.h"
+#include "observer/table/ob_table_end_trans_cb.h"
 
 
 namespace oceanbase

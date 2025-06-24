@@ -496,7 +496,8 @@ int ObHbaseColumnFamilyService::delete_cell(const ObHbaseQuery &query,
   ObTablePartCalculator calculator(exec_ctx.get_allocator(),
                                    exec_ctx.get_sess_guard(),
                                    exec_ctx.get_schema_cache_guard(),
-                                   exec_ctx.get_schema_guard());
+                                   exec_ctx.get_schema_guard(),
+                                   exec_ctx.get_table_schema());
   if (OB_FAIL(ObHTableUtils::construct_entity_from_row(cell, exec_ctx.get_schema_cache_guard(), entity))) {
     LOG_WARN("fail to construct entity from row", K(ret), K(cell));
   } else if (calculator.calc(exec_ctx.get_table_id(), entity, real_tablet_id)) {
@@ -662,7 +663,9 @@ int ObHbaseMultiCFService::query(const ObHbaseQuery &query, ObTableExecCtx &exec
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
   } else if (OB_FAIL(tmp_result_iter->init())) {
-    LOG_WARN("fail to init result iter", K(ret));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to init result iter", K(ret));
+    }
   } else {
     result_iter = tmp_result_iter;
   }

@@ -20,6 +20,7 @@
 #include "lib/xml/ob_xml_parser.h"
 #include "lib/xml/ob_xml_util.h"
 #include "sql/resolver/mv/ob_alter_mview_utils.h"
+#include "share/table/ob_ttl_util.h"
 
 namespace oceanbase
 {
@@ -384,6 +385,16 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
     if (OB_SUCC(ret)){
       if (OB_FAIL(deep_copy_string_in_part_expr(get_alter_table_stmt()))) {
         LOG_WARN("failed to deep copy string in part expr");
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      HEAP_VAR(ObTableSchema, tbl_schema) {
+        if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
+          LOG_WARN("failed to get table schema", KR(ret));
+        } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(tbl_schema, params_.is_htable_))) {
+          LOG_WARN("failed to check htable ddl supported", K(ret));
+        }
       }
     }
   }

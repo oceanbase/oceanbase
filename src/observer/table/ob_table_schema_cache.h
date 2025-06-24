@@ -23,7 +23,7 @@
 #include "lib/hash/ob_hashmap.h"
 #include "src/share/table/ob_ttl_util.h"
 #include "share/schema/ob_schema_utils.h"
-#include "ob_htable_utils.h"
+#include "utils/ob_htable_utils.h"
 
 namespace oceanbase
 {
@@ -297,6 +297,7 @@ public:
   int create_schema_cache_obj(ObSchemaGetterGuard &schema_guard);
   int is_redis_ttl_table(bool &is_redis_ttl_table);
   int get_all_column_name(common::ObIArray<common::ObString> &col_names);
+  int is_secondary_part_table(bool &is_secondary_part_table);
   void reset();
   OB_INLINE bool is_use_cache() { return is_use_cache_; }
   OB_INLINE bool is_inited() { return is_init_; }

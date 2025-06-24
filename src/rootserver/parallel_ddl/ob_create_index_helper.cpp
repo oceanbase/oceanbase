@@ -24,6 +24,7 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_table_sql_service.h"
 #include "sql/resolver/ob_resolver_utils.h"
+#include "share/table/ob_ttl_util.h"
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -254,6 +255,8 @@ int ObCreateIndexHelper::check_table_legitimacy_()
     LOG_WARN("fail to check table udt exist", KR(ret));
   } else if (OB_FAIL(check_fk_related_table_ddl_(*orig_data_table_schema_, ObDDLType::DDL_CREATE_INDEX))) {
     LOG_WARN("check whether the forign key related table is executing ddl failed", KR(ret));
+  } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*orig_data_table_schema_, false/*by_admin*/))) {
+    LOG_WARN("failed to check htable ddl supported", K(ret));
   }
   RS_TRACE(check_schemas);
   return ret;
@@ -483,14 +486,14 @@ int ObCreateIndexHelper::operate_schemas_()
           LOG_WARN("new column schema is null", KR(ret));
         } else if (FALSE_IT(new_column_schema->set_schema_version(new_schema_version))) {
         } else if (OB_FAIL(schema_service_impl->get_table_sql_service().insert_single_column(
-                   trans_, *new_data_table_schema_, *new_column_schema, false/*record_ddl_option*/))) {
+                   get_trans_(), *new_data_table_schema_, *new_column_schema, false/*record_ddl_option*/))) {
           LOG_WARN("insert single column failed", K(ret));
         }
       }
       if (OB_FAIL(ret)) {
       } else if (FALSE_IT(new_data_table_schema_->set_schema_version(new_schema_version))) {
       } else if (OB_FAIL(schema_service_impl->get_table_sql_service().update_table_options(
-                trans_, *orig_data_table_schema_, *new_data_table_schema_, OB_DDL_ALTER_TABLE))) {
+                get_trans_(), *orig_data_table_schema_, *new_data_table_schema_, OB_DDL_ALTER_TABLE))) {
         LOG_WARN("fail to alter table option", KR(ret));
       }
     }
@@ -510,7 +513,7 @@ int ObCreateIndexHelper::operate_schemas_()
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("parser properties isn't supported before version 4.3.5.1", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "parser properties before version 4.3.5.1 is");
-    } else if (OB_FAIL(index_builder_.submit_build_index_task(trans_,
+    } else if (OB_FAIL(index_builder_.submit_build_index_task(get_trans_(),
                                                               *new_arg_,
                                                               new_data_table_schema_,
                                                               nullptr/*inc_data_tablet_ids*/,
@@ -553,17 +556,17 @@ int ObCreateIndexHelper::create_table_()
       LOG_WARN("fail to gen new schema version", KR(ret), K_(tenant_id));
     } else if (FALSE_IT(index_schema.set_schema_version(new_schema_version))) {
     } else if (OB_FAIL(schema_service_impl->get_table_sql_service().create_table(
-              index_schema, trans_,
+              index_schema, get_trans_(),
               nullptr/*ddl_stmt_str*/, true/*need_sync_schema_version*/, false/*is_truncate_table*/))) {
       LOG_WARN("fail to create table", KR(ret));
-    } else if (OB_FAIL(schema_service_impl->get_table_sql_service().insert_temp_table_info(trans_, index_schema))) {
+    } else if (OB_FAIL(schema_service_impl->get_table_sql_service().insert_temp_table_info(get_trans_(), index_schema))) {
       LOG_WARN("insert temp table info", KR(ret), K(index_schema));
     } else if (OB_FAIL(tsi_generator->get_current_version(last_schema_version))) {
       LOG_WARN("fail to get end version", KR(ret), K_(tenant_id), K_(arg));
     } else if (OB_UNLIKELY(last_schema_version <= 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("last schema version is invalid", KR(ret), K_(tenant_id), K(last_schema_version));
-    } else if (OB_FAIL(ddl_operator.insert_ori_schema_version(trans_, tenant_id_, index_schema.get_table_id(), last_schema_version))) {
+    } else if (OB_FAIL(ddl_operator.insert_ori_schema_version(get_trans_(), tenant_id_, index_schema.get_table_id(), last_schema_version))) {
       LOG_WARN("fail to insert ori schema version", KR(ret), K_(tenant_id), K(new_schema_version));
     }
   }
@@ -590,7 +593,7 @@ int ObCreateIndexHelper::create_tablets_()
     LOG_WARN("fail to get tenant schema guard", KR(ret), K_(tenant_id));
   } else {
     ObTableSchema &index_schema = index_schemas_.at(0);
-    ObTableCreator table_creator(tenant_id_, frozen_scn, trans_);
+    ObTableCreator table_creator(tenant_id_, frozen_scn, get_trans_());
     ObNewTableTabletAllocator new_table_tablet_allocator(
                               tenant_id_,
                               schema_guard,
@@ -623,7 +626,7 @@ int ObCreateIndexHelper::create_tablets_()
       if (OB_FAIL(schemas.push_back(&index_schema))
           || OB_FAIL(need_create_empty_majors.push_back(false))) {
         LOG_WARN("fail to push back index schema", KR(ret), K(index_schema));
-      } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans_, index_schema, data_tablegroup_schema))) {
+      } else if (OB_FAIL(new_table_tablet_allocator.prepare(get_trans_(), index_schema, data_tablegroup_schema))) {
         LOG_WARN("fail to prepare ls for index schema tablets", KR(ret));
       } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
         LOG_WARN("fail to get ls id array", KR(ret));
@@ -636,7 +639,7 @@ int ObCreateIndexHelper::create_tablets_()
         LOG_WARN("create table tablet failed", KR(ret), K(index_schema), K(ls_id_array));
       }
     } else {
-      if (OB_FAIL(new_table_tablet_allocator.prepare(trans_, index_schema, data_tablegroup_schema))) {
+      if (OB_FAIL(new_table_tablet_allocator.prepare(get_trans_(), index_schema, data_tablegroup_schema))) {
         LOG_WARN("fail to prepare ls for index schema tablets", KR(ret));
       } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
         LOG_WARN("fail to get ls id array", KR(ret));

@@ -30,10 +30,23 @@ namespace rootserver {
 class ObDropTableHelper : public ObDDLHelper {
 public:
   ObDropTableHelper(share::schema::ObMultiVersionSchemaService *schema_service,
-                    const uint64_t tenant_id, const obrpc::ObDropTableArg &arg,
-                    obrpc::ObDropTableRes &res);
+                    const uint64_t tenant_id,
+                    const obrpc::ObDropTableArg &arg,
+                    obrpc::ObDropTableRes &res,
+                    ObDDLSQLTransaction *external_trans = nullptr);
   virtual ~ObDropTableHelper();
-
+  TO_STRING_KV(K_(arg),
+               K_(res),
+               K_(table_items),
+               K_(existing_table_items),
+               K_(database_ids),
+               K_(table_schemas),
+               K_(drop_table_ids),
+               K_(mock_fk_parent_table_schemas),
+               K_(dep_objs),
+               K_(ddl_stmt_str),
+               K_(err_table_list),
+               K_(tablet_autoinc_cleaner));
 private:
   virtual int init_() override;
   virtual int lock_objects_() override;

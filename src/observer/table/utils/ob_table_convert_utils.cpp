@@ -11,10 +11,10 @@
  */
 
 #define USING_LOG_PREFIX SERVER
-#include "ob_table_json_utils.h"
+#include "ob_table_convert_utils.h"
 #include "lib/json_type/ob_json_base.h"
 #include "lib/oblog/ob_log_module.h"
-#include "ob_table_context.h"
+#include "observer/table/ob_table_context.h"
 #include "object/ob_obj_type.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 
@@ -27,9 +27,9 @@ namespace table
 // 1. check if obj is varchar or json
 // 2. convert obj to json_bin
 // 3. set obj to json_bin
-int ObTableJsonUtils::convert_to_json_bin(ObIAllocator &allocator,
-                                          const ObTableColumnInfo &column_info,
-                                          ObObj &obj)
+int ObTableConvertUtils::convert_to_json_bin(ObIAllocator &allocator,
+                                             const ObTableColumnInfo &column_info,
+                                             ObObj &obj)
 {
   int ret = OB_SUCCESS;
   const ObRawExprResType &column_type = column_info.type_;
@@ -83,7 +83,7 @@ int ObTableJsonUtils::convert_to_json_bin(ObIAllocator &allocator,
 // 1. check if obj is JsonType
 // 2. remove lob header
 // 3. convert json_bin to json_text
-int ObTableJsonUtils::convert_to_json_text(ObIAllocator &allocator, ObObj &json_obj)
+int ObTableConvertUtils::convert_to_json_text(ObIAllocator &allocator, ObObj &json_obj)
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;

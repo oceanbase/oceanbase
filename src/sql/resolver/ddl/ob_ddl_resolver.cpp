@@ -3035,6 +3035,11 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             } else if (OB_FAIL(ob_write_string(*allocator_, tmp_str, kv_attributes_))) {
               SQL_RESV_LOG(WARN, "write string failed", K(ret));
             } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+              if (attr.is_created_by_admin()) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("alter table kv_attributes to created by admin is not supported", K(ret));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table kv attributes to created by admin");
+              }
               HEAP_VAR(ObTableSchema, tmp_table_schema) {
                 if (OB_FAIL(get_table_schema_for_check(tmp_table_schema))) {
                   LOG_WARN("get table schema failed", K(ret));
@@ -9883,6 +9888,30 @@ int ObDDLResolver::resolve_foreign_key_node(const ParseNode *node,
 
   } // end oracle mode
 
+  if (OB_SUCC(ret) && !arg.is_parent_table_mock_ && !is_oracle_mode()) {
+    if (0 == arg.parent_table_.case_compare(table_name_) &&
+        0 == arg.parent_database_.case_compare(database_name_)) {
+        // self-reference, do nothing
+    } else if (OB_ISNULL(schema_checker_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema checker ptr is null", K(ret));
+    } else {
+      const ObTableSchema *tbl_schema = NULL;
+      if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                  arg.parent_database_, arg.parent_table_, false, tbl_schema))) {
+        LOG_WARN("failed to get table schema", K(ret), "tenant_id", session_info_->get_effective_tenant_id(),
+                 K(arg.parent_database_), K(arg.parent_table_));
+      } else if (OB_ISNULL(tbl_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", K(ret), "tenant_id", session_info_->get_effective_tenant_id(),
+                 K(arg.parent_database_), K(arg.parent_table_));
+      } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*tbl_schema, false /*by_admin*/))) {
+        LOG_WARN("failed to check htable ddl supported", K(ret), "tenant_id", session_info_->get_effective_tenant_id(),
+                 K(arg.parent_database_), K(arg.parent_table_));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -10961,7 +10990,8 @@ int ObDDLResolver::resolve_hash_or_key_partition_basic_infos(ParseNode *node,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(node), K(partition_fun_node),
                                     K(schema_checker_), K(session_info_));
-  } else if (!table_schema.get_tablegroup_name().empty() &&
+  } else if (!params_.is_htable_ &&
+             !table_schema.get_tablegroup_name().empty() &&
              OB_FAIL(schema_checker_->get_tablegroup_schema(session_info_->get_effective_tenant_id(),
                                                             table_schema.get_tablegroup_name(),
                                                             tablegroup_schema))) {

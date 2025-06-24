@@ -176,7 +176,7 @@ int ObUpdateIndexStatusHelper::operate_schemas_()
     } else if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id_, new_schema_version))) {
       LOG_WARN("fail to gen new schema version", KR(ret), K_(tenant_id));
     } else if (OB_FAIL(schema_service->get_table_sql_service().update_index_status(
-      *new_data_table_schema_, arg_.index_table_id_, new_status_, new_schema_version, trans_, ddl_stmt_str))) {
+      *new_data_table_schema_, arg_.index_table_id_, new_status_, new_schema_version, get_trans_(), ddl_stmt_str))) {
       LOG_WARN("fail to update index status", KR(ret), K_(arg_.index_table_id), K_(arg_.data_table_id), K_(new_status));
     } else if (arg_.task_id_ != 0) {
       ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
@@ -184,7 +184,7 @@ int ObUpdateIndexStatusHelper::operate_schemas_()
       if (OB_FAIL(tsi_generator->get_end_version(consensus_schema_version))) {
         LOG_WARN("fail to get end version", KR(ret), K_(tenant_id), K_(arg));
       } else if (OB_FAIL(ObDDLTaskRecordOperator::update_consensus_schema_version(
-                         trans_, tenant_id_, arg_.task_id_, consensus_schema_version))) {
+                         get_trans_(), tenant_id_, arg_.task_id_, consensus_schema_version))) {
         LOG_WARN("fail to update consensus_schema_version", KR(ret), K_(tenant_id), K_(arg_.task_id), K(consensus_schema_version));
       } else if (orig_index_table_schema_->get_index_status() != new_status_ && new_status_ == INDEX_STATUS_AVAILABLE) {
         ObTableLockOwnerID owner_id;
@@ -198,7 +198,7 @@ int ObUpdateIndexStatusHelper::operate_schemas_()
                                                                 orig_index_table_schema_->get_table_id(),
                                                                 orig_index_table_schema_->is_global_index_table(),
                                                                 owner_id,
-                                                                trans_))) {
+                                                                get_trans_()))) {
           LOG_WARN("failed to unlock ddl lock", KR(ret));
         }
       }

@@ -16,7 +16,7 @@
 #include "ob_i_adapter.h"
 #include "ob_hbase_normal_adapter.h"
 #include "ob_hbase_series_adapter.h"
-#include "observer/table/ob_htable_utils.h"
+#include "observer/table/utils/ob_htable_utils.h"
 
 namespace oceanbase
 {

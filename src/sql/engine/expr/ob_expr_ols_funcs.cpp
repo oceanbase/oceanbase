@@ -70,7 +70,8 @@ bool ObExprOLSBase::need_retry_ddl(ObExecContext &ctx, int &ret) const
     }
   } else if (OB_EAGAIN == ret
              || OB_SNAPSHOT_DISCARDED == ret
-             || OB_ERR_PARALLEL_DDL_CONFLICT == ret) {
+             || OB_ERR_PARALLEL_DDL_CONFLICT == ret
+             || OB_ERR_DDL_RESOURCE_NOT_ENOUGH == ret) {
     ret = OB_SUCCESS;
     if (OB_FAIL(ObSPIService::force_refresh_schema(
                   ctx.get_my_session()->get_effective_tenant_id()))) {

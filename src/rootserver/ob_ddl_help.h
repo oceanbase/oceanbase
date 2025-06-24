@@ -48,7 +48,8 @@ public:
 
   int check_table_partition_in_tablegroup(const share::schema::ObTableSchema *first_table_schema,
                                           share::schema::ObTableSchema &table_schema,
-                                          share::schema::ObSchemaGetterGuard &schema_guard);
+                                          share::schema::ObSchemaGetterGuard &schema_guard,
+                                          const share::schema::ObTablegroupSchema *tablegroup = nullptr);
 
   int add_tables_to_tablegroup(common::ObMySQLTransaction &trans,
                                share::schema::ObSchemaGetterGuard &schema_guard,

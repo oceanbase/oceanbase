@@ -126,6 +126,7 @@
 #include "sql/engine/prepare/ob_execute_executor.h"
 #include "sql/engine/prepare/ob_deallocate_executor.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "observer/omt/ob_tenant.h"
 #include "sql/engine/cmd/ob_directory_executor.h"
 #include "sql/resolver/dcl/ob_alter_role_stmt.h"
 #include "sql/resolver/ddl/ob_drop_context_resolver.h"
@@ -183,6 +184,8 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
   bool is_ddl_or_dcl_stmt = false;
   int64_t ori_query_timeout;
   int64_t ori_trx_timeout;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  omt::ObTenant *tenant = NULL;
 
   if (ObStmt::is_ddl_stmt(static_cast<stmt::StmtType>(cmd.get_cmd_type()), true)
       || ObStmt::is_dcl_stmt(static_cast<stmt::StmtType>(cmd.get_cmd_type()))) {
@@ -233,7 +236,25 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
     }
   }
-  
+  uint64_t tenant_id = OB_INVALID_ID;
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(my_session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", KR(ret));
+  } else {
+    tenant_id = my_session->get_effective_tenant_id();
+  }
+  ObTenantDDLCountGuard tenant_ddl_guard(tenant_id);
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (OB_SUCC(ret)) {
+    if (tenant_config.is_valid() && tenant_config->_enable_ddl_worker_isolation
+        && ObStmt::is_ddl_stmt(static_cast<stmt::StmtType>(cmd.get_cmd_type()), true)) {
+      if (OB_FAIL(tenant_ddl_guard.try_inc_ddl_count())) {
+        LOG_WARN("fail to inc tenant ddl count", KR(ret), K(tenant_id));
+      }
+    }
+  }
+
   if (OB_SUCC(ret)) {
     switch (cmd.get_cmd_type()) {
       case stmt::T_CREATE_RESOURCE_POOL: {
@@ -1212,6 +1233,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       ret = tmp_ret;
     }
   }
+
 
   return ret;
 }

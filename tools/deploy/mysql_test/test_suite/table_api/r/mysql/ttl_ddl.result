@@ -69,6 +69,124 @@ Q varbinary(256)  NOT NULL,
 T bigint NOT NULL,
 V varbinary(1024) DEFAULT NULL,
 PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Hbase": {"TimeToLive": "10", "MaxVersions": 2}}' partition by key(K) partitions 3;
+ERROR 0A000: TimeToLive value not number not supported
+CREATE TABLE test_kv_attr(
+K varbinary(1024) NOT NULL,
+Q varbinary(256)  NOT NULL,
+T bigint NOT NULL,
+V varbinary(1024) DEFAULT NULL,
+PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Hbase": {"TimeToLive": 10, "MaxVersions": "2"}}' partition by key(K) partitions 3;
+ERROR 0A000: MaxVersions value not number not supported
+CREATE TABLE test_kv_attr(
+K varbinary(1024) NOT NULL,
+Q varbinary(256)  NOT NULL,
+T bigint NOT NULL,
+V varbinary(1024) DEFAULT NULL,
+PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Hbase": {"TimeToLive": 10, "MaxVersions": 2, "MaxVersions": 3}}' partition by key(K) partitions 3;
+ERROR 0A000: repeatedly setting MaxVersions not supported
+CREATE TABLE test_kv_attr(
+K varbinary(1024) NOT NULL,
+Q varbinary(256)  NOT NULL,
+T bigint NOT NULL,
+V varbinary(1024) DEFAULT NULL,
+PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Hbase": {"TimeToLive": 10, "MaxVersions": 2, "TimeToLive": 20}}' partition by key(K) partitions 3;
+ERROR 0A000: repeatedly setting TimeToLive not supported
+CREATE TABLE test_kv_attr(
+K varbinary(1024) NOT NULL,
+Q varbinary(256)  NOT NULL,
+T bigint NOT NULL,
+V varbinary(1024) DEFAULT NULL,
+PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Hbase": {"TTL": 2}}' partition by key(K) partitions 3;
+ERROR 0A000: kv attributes with wrong format not supported
+CREATE TABLE test_kv_attr(
+K varbinary(1024) NOT NULL,
+Q varbinary(256)  NOT NULL,
+T bigint NOT NULL,
+V varbinary(1024) DEFAULT NULL,
+PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Table": {"TTL": 3}}' partition by key(K) partitions 3;
+ERROR 0A000: kv attributes with wrong format not supported
+CREATE TABLE test_kv_attr(
+K varbinary(1024) NOT NULL,
+Q varbinary(256)  NOT NULL,
+T bigint NOT NULL,
+V varbinary(1024) DEFAULT NULL,
+PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Table": }' partition by key(K) partitions 3;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use
+CREATE TABLE test_kv_attr(
+K varbinary(1024) NOT NULL,
+Q varbinary(256)  NOT NULL,
+T bigint NOT NULL,
+V varbinary(1024) DEFAULT NULL,
+PRIMARY KEY (K, Q, T)
+) kv_attributes ='{"Table": {"TTL"}}' partition by key(K) partitions 3;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use
+create table test_kv_attr(
+db bigint not null,
+rkey varbinary(16384) not null,
+expire_ts timestamp(6) default null,
+value varbinary(1048576) not null,
+primary key(db, rkey)) 
+kv_attributes ='{"Redis": {"isTTL": "true", "model": "string"}}'
+partition by key(db, rkey) partitions 389;
+ERROR 0A000: isTTL value not true or false not supported
+create table test_kv_attr(
+db bigint not null,
+rkey varbinary(16384) not null,
+expire_ts timestamp(6) default null,
+value varbinary(1048576) not null,
+primary key(db, rkey)) 
+kv_attributes ='{"Redis": {"isTTL": true, "model": 10}}'
+partition by key(db, rkey) partitions 389;
+ERROR 0A000: Model value not string not supported
+create table test_kv_attr(
+db bigint not null,
+rkey varbinary(16384) not null,
+expire_ts timestamp(6) default null,
+value varbinary(1048576) not null,
+primary key(db, rkey)) 
+kv_attributes ='{"Redis": {"isTTL": true, "model": "string", "isTTL": false}}'
+partition by key(db, rkey) partitions 389;
+ERROR 0A000: repeatedly setting isTTL not supported
+create table test_kv_attr(
+db bigint not null,
+rkey varbinary(16384) not null,
+expire_ts timestamp(6) default null,
+value varbinary(1048576) not null,
+primary key(db, rkey)) 
+kv_attributes ='{"Redis": {"isTTL": true, "model": "string", "model": "hash"}}'
+partition by key(db, rkey) partitions 389;
+ERROR 0A000: repeatedly setting Model not supported
+create table test_kv_attr(
+db bigint not null,
+rkey varbinary(16384) not null,
+expire_ts timestamp(6) default null,
+value varbinary(1048576) not null,
+primary key(db, rkey)) 
+kv_attributes ='{"Redis": {"isTTL": true, "model": "invalid"}}'
+partition by key(db, rkey) partitions 389;
+ERROR 0A000: Model value with wrong format not supported
+create table test_kv_attr(
+db bigint not null,
+rkey varbinary(16384) not null,
+expire_ts timestamp(6) default null,
+value varbinary(1048576) not null,
+primary key(db, rkey)) 
+kv_attributes ='{"Redis": {"TimeToLive": true, "model": "string"}}'
+partition by key(db, rkey) partitions 389;
+ERROR 0A000: kv attributes with wrong format not supported
+CREATE TABLE test_kv_attr(
+K varbinary(1024) NOT NULL,
+Q varbinary(256)  NOT NULL,
+T bigint NOT NULL,
+V varbinary(1024) DEFAULT NULL,
+PRIMARY KEY (K, Q, T)
 ) kv_attributes ='{"Hbase": {"TimeToLive": 10, "MaxVersions": 2}}' partition by key(K) partitions 3;
 show create table test_kv_attr;
 Table	Create Table
@@ -83,19 +201,49 @@ test_kv_attr	CREATE TABLE `test_kv_attr` (
 (partition `p0`,
 partition `p1`,
 partition `p2`)
+alter table test_kv_attr kv_attributes = '{"Table": {"TTL"}}';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use
+alter table test_kv_attr kv_attributes = '{"Table": {"TTL": 3}}';
+ERROR 0A000: kv attributes with wrong format not supported
+alter table test_kv_attr kv_attributes = '{"Redis": {"isTTL": "true", "model": "string"}}';
+ERROR 0A000: isTTL value not true or false not supported
+alter table test_kv_attr kv_attributes = '{"Redis": {"isTTL": true, "model": "invalid"}}';
+ERROR 0A000: Model value with wrong format not supported
+alter table test_kv_attr kv_attributes = '{"Redis": {"TimeToLive": true, "model": "string"}}';
+ERROR 0A000: kv attributes with wrong format not supported
+alter table test_kv_attr kv_attributes = '{"Redis": {"isTTL": true, "model": 10}}';
+ERROR 0A000: Model value not string not supported
+alter table test_kv_attr kv_attributes = '{"Redis": {"isTTL": true, "model": "string", "isTTL": false}}';
+ERROR 0A000: repeatedly setting isTTL not supported
+alter table test_kv_attr kv_attributes = '{"Redis": {"isTTL": true, "model": "string", "model": "hash"}}';
+ERROR 0A000: repeatedly setting Model not supported
 alter table test_kv_attr kv_attributes '{"HColumnDescriptor": {"TimeToLive": 5, "MaxVersions": 2}}';
 ERROR 0A000: kv attributes with wrong format not supported
 alter table test_kv_attr kv_attributes '{}';
 ERROR 0A000: kv attributes with wrong format not supported
-alter table test_kv_attr kv_attributes ='{"Hbase": {"TimeToLive": 5, "MaxVersions": 2, "MinVersions": 1}}';
+alter table test_kv_attr kv_attributes = '{"Hbase": {"TTL": 2}}';
+ERROR 0A000: kv attributes with wrong format not supported
+alter table test_kv_attr kv_attributes = '{"Hbase": {"TimeToLive": 5, "MaxVersions": 2, "MinVersions": 1}}';
 ERROR 0A000: kv attributes with wrong format not supported
 alter table test_kv_attr kv_attributes = '{"Hbase": {"MaxVersion": 2}}';
 ERROR 0A000: kv attributes with wrong format not supported
+alter table test_kv_attr kv_attributes = '{"Hbase": {"MaxVersions": "2"}}';
+ERROR 0A000: MaxVersions value not number not supported
+alter table test_kv_attr kv_attributes = '{"Hbase": {"TimeToLive": "2"}}';
+ERROR 0A000: TimeToLive value not number not supported
+alter table test_kv_attr kv_attributes = '{"Hbase": {"MaxVersions": 2, "maxVerSions": 3}}';
+ERROR 0A000: repeatedly setting MaxVersions not supported
+alter table test_kv_attr kv_attributes = '{"Hbase": {"TimeToLive": 2, "timetoLive": 3}}';
+ERROR 0A000: repeatedly setting TimeToLive not supported
 alter table test_kv_attr kv_attributes = '{"Hbase": {"TimeToLive": 1, "MaxVersions": 0}}';
 ERROR HY000: MaxVersions of hbase table must be greater than 0
-alter table test_kv_attr kv_attributes ='{"Hbase": {"TimeToLive": 0, "MaxVersions": 1}}';
+alter table test_kv_attr kv_attributes = '{"Hbase": {"TimeToLive": 0, "MaxVersions": 1}}';
 ERROR HY000: Time to live of hbase table must be greater than 0
+alter table test_kv_attr kv_attributes ='{"Redis": {"isTTL": true, "model": "string"}}';
+alter table test_kv_attr kv_attributes ='{"Table": {}}';
+alter table test_kv_attr kv_attributes ='{"hbase": {"maxversions": 3}}';
 alter table test_kv_attr kv_attributes ='{"Hbase": {"MaxVersions": 4}}';
+alter table test_kv_attr kv_attributes ='{"Hbase": {"timetolive": 20000000}}';
 alter table test_kv_attr kv_attributes ='{"Hbase": {"TimeToLive": 10000000}}';
 alter table test_kv_attr kv_attributes ='{"Hbase": {"MaxVersions": 4, "TimeToLive": 10000000}}';
 alter table test_kv_attr kv_attributes ='{"Hbase": {}}';

@@ -10,8 +10,8 @@
  * Mulan PubL v2 for more details.
  */
 
-#ifndef _OB_TABLE_JSON_UTILS_H
-#define _OB_TABLE_JSON_UTILS_H 1
+#ifndef _OB_TABLE_CONVERT_UTILS_H
+#define _OB_TABLE_CONVERT_UTILS_H 1
 
 namespace oceanbase
 {
@@ -26,7 +26,7 @@ class ObObj;
 namespace table
 {
 class ObTableColumnInfo;
-class ObTableJsonUtils
+class ObTableConvertUtils
 {
 public:
   /**
@@ -47,4 +47,4 @@ public:
 
 } // end namespace table
 } // end namespace oceanbase
-#endif /* _OB_TABLE_JSON_UTILS_H */
+#endif /* _OB_TABLE_CONVERT_UTILS_H */

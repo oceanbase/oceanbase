@@ -17,7 +17,7 @@
 #include "share/table/ob_table_rpc_struct.h"
 #include "share/table/redis/ob_redis_common.h"
 #include "share/table/redis/ob_redis_util.h"
-#include "observer/table/ob_table_trans_utils.h"
+#include "observer/table/utils/ob_table_trans_utils.h"
 #include "observer/table/group/ob_i_table_struct.h"
 
 namespace oceanbase

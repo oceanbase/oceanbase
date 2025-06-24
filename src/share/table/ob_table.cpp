@@ -14,7 +14,7 @@
 #include "ob_table.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "ob_table_object.h"
-#include "observer/table/ob_htable_utils.h"
+#include "observer/table/utils/ob_htable_utils.h"
 
 using namespace oceanbase::table;
 using namespace oceanbase::common;
@@ -1099,7 +1099,8 @@ OB_SERIALIZE_MEMBER((ObTableOperationResult, ObTableResult),
                     operation_type_, *entity_, affected_rows_);
 
 int ObTableOperationResult::deep_copy(common::ObIAllocator &allocator,
-                                      ObITableEntityFactory &entity_factory, const ObTableOperationResult &other)
+                                      ObITableEntityFactory &entity_factory,
+                                      const ObTableOperationResult &other)
 {
   int ret = OB_SUCCESS;
   const ObITableEntity *src_entity = NULL;
@@ -1189,6 +1190,7 @@ void ObTableQuery::reset()
   max_result_size_ = -1;
   htable_filter_.reset();
   tablet_ids_.reset();
+  flag_ = 0;
 }
 
 bool ObTableQuery::is_valid() const
@@ -1313,6 +1315,7 @@ uint64_t ObTableQuery::get_checksum() const
     const uint64_t htable_filter_checksum = htable_filter_.get_checksum();
     checksum = ob_crc64(checksum, &htable_filter_checksum, sizeof(htable_filter_checksum));
   }
+  checksum = ob_crc64(checksum, &flag_, sizeof(flag_));
   return checksum;
 }
 
@@ -1382,6 +1385,7 @@ int ObTableQuery::deep_copy(ObIAllocator &allocator, ObTableQuery &dst) const
     dst.batch_size_ = batch_size_;
     dst.max_result_size_ = max_result_size_;
     dst.tablet_ids_ = tablet_ids_;
+    dst.flag_ = flag_;
   }
   return ret;
 }
@@ -1525,7 +1529,8 @@ OB_UNIS_DEF_SERIALIZE(ObTableQuery,
                       htable_filter_,
                       scan_range_columns_,
                       aggregations_,
-                      ob_params_);
+                      ob_params_,
+                      flag_);
 
 OB_UNIS_DEF_SERIALIZE_SIZE(ObTableQuery,
                            key_ranges_,
@@ -1540,7 +1545,8 @@ OB_UNIS_DEF_SERIALIZE_SIZE(ObTableQuery,
                            htable_filter_,
                            scan_range_columns_,
                            aggregations_,
-                           ob_params_);
+                           ob_params_,
+                           flag_);
 
 OB_DEF_DESERIALIZE(ObTableQuery,)
 {
@@ -1587,7 +1593,8 @@ OB_DEF_DESERIALIZE(ObTableQuery,)
                 htable_filter_,
                 scan_range_columns_,
                 aggregations_,
-                ob_params_
+                ob_params_,
+                flag_
                 );
   }
   return ret;
@@ -3901,3 +3908,10 @@ int ObRedisResult::convert_to_table_op_result(ObTableOperationResult &result)
 
   return ret;
 }
+
+OB_SERIALIZE_MEMBER(ObTableMetaRequest,
+                     credential_,
+                     meta_type_,
+                     data_);
+
+OB_SERIALIZE_MEMBER((ObTableMetaResponse, ObTableResult), data_);

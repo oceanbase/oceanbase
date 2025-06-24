@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_execute_processor.h"
 #include "ob_table_move_response.h"
+#include "utils/ob_table_sql_utils.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;

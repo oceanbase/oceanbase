@@ -283,12 +283,16 @@ int ObTableQueryP::new_try_process()
   int ret = OB_SUCCESS;
   ObModelGuard model_guard;
   ObIModel *model = nullptr;
-  exec_ctx_.set_table_name(arg_.table_name_);
-  exec_ctx_.set_table_id(arg_.table_id_);
-  exec_ctx_.set_timeout_ts(get_timeout_ts());
-  exec_ctx_.set_audit_ctx(audit_ctx_);
-  if (OB_FAIL(init_schema_info(arg_.table_name_))) {
+  if (OB_FAIL(init_table_schema_info(arg_.table_name_))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));
+  } else {
+    exec_ctx_.set_table_name(arg_.table_name_);
+    exec_ctx_.set_table_id(arg_.table_id_);
+    exec_ctx_.set_timeout_ts(get_timeout_ts());
+    exec_ctx_.set_audit_ctx(audit_ctx_);
+    exec_ctx_.set_table_schema(table_schema_);
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObModelFactory::get_model_guard(allocator_, arg_.entity_type_, model_guard))) {
     LOG_WARN("fail to get model guard", K(ret), K(arg_.entity_type_));
   } else if (FALSE_IT(model = model_guard.get_model())) {
@@ -296,7 +300,9 @@ int ObTableQueryP::new_try_process()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("model is null", K(ret));
   } else if (OB_FAIL(model->prepare(exec_ctx_, arg_, result_))) {
-    LOG_WARN("fail to prepare model", K(ret), K_(exec_ctx), K_(arg));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to prepare model", K(ret), K_(exec_ctx), K_(arg));
+    }
   } else if (OB_FAIL(trans_param_.init(true, /* is_read_only */
                                        arg_.consistency_level_,
                                        exec_ctx_.get_ls_id(),
@@ -306,11 +312,16 @@ int ObTableQueryP::new_try_process()
   } else if (OB_FAIL(ObTableTransUtils::init_read_trans(trans_param_))) {
     LOG_WARN("fail to init read trans", K(ret));
   } else if (OB_FAIL(model->work(exec_ctx_, arg_, result_))) {
-    LOG_WARN("model fail to work", K(ret), K_(exec_ctx), K_(arg));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("model fail to work", K(ret), K_(exec_ctx), K_(arg));
+    }
   }
 
   ObTableTransUtils::release_read_trans(trans_param_.trans_desc_);
 
+  if (ret == OB_ITER_END) {
+    ret = OB_SUCCESS; // cover ret
+  }
   return ret;
 }
 

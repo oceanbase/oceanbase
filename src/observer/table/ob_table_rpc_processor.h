@@ -24,7 +24,7 @@
 #include "ob_htable_lock_mgr.h"
 #include "ob_table_schema_cache.h"
 #include "observer/ob_req_time_service.h"
-#include "ob_table_trans_utils.h"
+#include "utils/ob_table_trans_utils.h"
 #include "ob_table_audit.h"
 #include "observer/table/common/ob_table_common_struct.h"
 
@@ -154,10 +154,14 @@ protected:
   virtual table::ObTableEntityType get_entity_type() = 0;
   virtual bool is_kv_processor() = 0;
   int process_with_retry(const ObString &credential, const int64_t timeout_ts);
-  // init schema guard
+  // init schema_guard and simple_table_schema_
   virtual int init_schema_info(const ObString &arg_table_name, uint64_t arg_table_id);
   virtual int init_schema_info(uint64_t table_id, const ObString &arg_table_name, bool check_match = true);
   virtual int init_schema_info(const ObString &arg_table_name);
+  // init schema_guard and table_schema_
+  virtual int init_table_schema_info(const ObString &arg_table_name, uint64_t arg_table_id);
+  virtual int init_table_schema_info(uint64_t table_id, const ObString &arg_table_name, bool check_match = true);
+  virtual int init_table_schema_info(const ObString &arg_table_name);
   int check_table_has_global_index(bool &exists, table::ObKvSchemaCacheGuard& schema_cache_guard);
   int get_tablet_id(const share::schema::ObSimpleTableSchemaV2 * simple_table_schema,
                     const ObTabletID &arg_tablet_id,
@@ -179,6 +183,7 @@ protected:
   table::ObTableApiSessGuard sess_guard_;
   share::schema::ObSchemaGetterGuard schema_guard_;
   const share::schema::ObSimpleTableSchemaV2 *simple_table_schema_;
+  const share::schema::ObTableSchema *table_schema_;
   observer::ObReqTimeGuard req_timeinfo_guard_; // 引用cache资源必须加ObReqTimeGuard
   table::ObKvSchemaCacheGuard schema_cache_guard_;
   int32_t stat_process_type_;

@@ -1205,3 +1205,94 @@ int ObHTableUtils::init_tablegroup_schema(share::schema::ObSchemaGetterGuard &sc
   }
   return ret;
 }
+
+// Get all table schemas based on the tablegroup name, return ObTableSchema
+int ObHTableUtils::init_tablegroup_schema(share::schema::ObSchemaGetterGuard &schema_guard,
+                                          ObTableApiCredential &credential,
+                                          const ObString &arg_tablegroup_name,
+                                          const ObTableSchema *&table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tablegroup_id = OB_INVALID_ID;
+  ObSEArray<const schema::ObTableSchema*, 8> table_schemas;
+  if (OB_FAIL(schema_guard.get_tablegroup_id(credential.tenant_id_, arg_tablegroup_name, tablegroup_id))) {
+    LOG_WARN("fail to get tablegroup id", K(ret), K(credential.tenant_id_),
+              K(credential.database_id_), K(arg_tablegroup_name));
+  } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(credential.tenant_id_, tablegroup_id, table_schemas))) {
+    LOG_WARN("fail to get table schema from table group", K(ret), K(credential.tenant_id_),
+              K(credential.database_id_), K(arg_tablegroup_name), K(tablegroup_id));
+  } else {
+    if (table_schemas.count() != 1) {
+      table_schema = table_schemas.at(0);
+    } else {
+      table_schema = table_schemas.at(0);
+    }
+  }
+  return ret;
+}
+
+int ObHTableUtils::init_schema_info(const ObString &arg_table_name,
+                                    uint64_t arg_table_id,
+                                    ObTableApiCredential &credential,
+                                    bool is_tablegroup_req,
+                                    share::schema::ObSchemaGetterGuard &schema_guard,
+                                    const ObTableSchema *&table_schmea,
+                                    ObKvSchemaCacheGuard &schema_cache_guard)
+
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(init_schema_info(arg_table_name, credential, is_tablegroup_req, schema_guard,
+                               table_schmea, schema_cache_guard))) {
+    LOG_WARN("fail to init schema info", K(ret), K(arg_table_name), K(credential), K(is_tablegroup_req));
+  }
+
+  return ret;
+}
+
+int ObHTableUtils::init_schema_info(const ObString &arg_table_name,
+                                    ObTableApiCredential &credential,
+                                    bool is_tablegroup_req,
+                                    share::schema::ObSchemaGetterGuard &schema_guard,
+                                    const ObTableSchema *&table_schema,
+                                    ObKvSchemaCacheGuard &schema_cache_guard)
+{
+  int ret = OB_SUCCESS;
+  if (schema_cache_guard.is_inited()) {
+    // skip and do nothing
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema service", K(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(credential.tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(credential.tenant_id_));
+  /*When is_tablegroup_req is true, table_schema is not properly initialized.
+    Defaulting to use the first element (index 0). */
+  } else if (is_tablegroup_req &&
+            OB_FAIL(init_tablegroup_schema(schema_guard, credential, arg_table_name, table_schema))) {
+    LOG_WARN("fail to get table schema from table group name", K(ret), K(credential.tenant_id_),
+              K(credential.database_id_), K(arg_table_name));
+  } else if (!is_tablegroup_req
+              && OB_FAIL(schema_guard.get_table_schema(credential.tenant_id_,
+                                                       credential.database_id_,
+                                                       arg_table_name,
+                                                       false, /* is_index */
+                                                       table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(credential.tenant_id_),
+              K(credential.database_id_), K(arg_table_name));
+  } else if (OB_ISNULL(table_schema) || table_schema->get_table_id() == OB_INVALID_ID) {
+    ret = OB_TABLE_NOT_EXIST;
+    ObString db("");
+    LOG_USER_ERROR(OB_ERR_UNKNOWN_TABLE, arg_table_name.length(), arg_table_name.ptr(), db.length(), db.ptr());
+    LOG_WARN("table not exist", K(ret), K(credential.tenant_id_), K(credential.database_id_), K(arg_table_name));
+  } else if (table_schema->is_in_recyclebin()) {
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
+    LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential.tenant_id_),
+                K(credential.database_id_), K(arg_table_name));
+  } else if (OB_FAIL(schema_cache_guard.init(credential.tenant_id_,
+                                             table_schema->get_table_id(),
+                                             table_schema->get_schema_version(),
+                                             schema_guard))) {
+    LOG_WARN("fail to init schema cache guard", K(ret));
+  }
+  return ret;
+}
