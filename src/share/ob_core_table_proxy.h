@@ -26,6 +26,26 @@ class ObTimeZoneInfo;
 namespace share
 {
 
+struct ObCoreTableCell
+{
+  ObCoreTableCell() : is_hex_value_(false) {}
+  // name_.ptr() and value_.ptr() is terminated with '\0'
+  common::ObString name_;
+  common::ObString value_;
+  bool is_hex_value_;
+
+  bool operator <(const ObCoreTableCell o) const { return name_ < o.name_; }
+
+  bool is_valid() const { return !name_.empty(); }
+  TO_STRING_KV(K_(name), K_(value), K_(is_hex_value));
+};
+
+class ObCoreTableStoreCell
+{
+public:
+  virtual int store_cell(const ObCoreTableCell &src, ObCoreTableCell &dest) = 0;
+};
+
 // Core kv table operate proxy.
 //
 // Example:
@@ -73,22 +93,10 @@ namespace share
 //       ret = core_kv.update_row(cells, affected_rows); // or replace_row()/delete_row()
 //     }
 //
-class ObCoreTableProxy
+class ObCoreTableProxy : public ObCoreTableStoreCell
 {
 public:
-  struct Cell
-  {
-    Cell() : is_hex_value_(false) {}
-    // name_.ptr() and value_.ptr() is terminated with '\0'
-    common::ObString name_;
-    common::ObString value_;
-    bool is_hex_value_;
-
-    bool operator <(const Cell o) const { return name_ < o.name_; }
-
-    bool is_valid() const { return !name_.empty(); }
-    TO_STRING_KV(K_(name), K_(value), K_(is_hex_value));
-  };
+  using Cell = ObCoreTableCell;
 
   struct UpdateCell
   {
@@ -184,7 +192,7 @@ public:
   int64_t row_count() const { return all_row_.count(); }
   const common::ObIArray<Row> &get_all_row() const { return all_row_; }
 
-  int store_cell(const Cell &src, Cell &dest);
+  virtual int store_cell(const Cell &src, Cell &dest) override;
 
   // update logic rows.
   // return logic affected row count (not rows in kv table)

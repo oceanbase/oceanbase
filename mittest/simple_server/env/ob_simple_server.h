@@ -55,8 +55,11 @@ public:
     return addr;
   }
 
-  int init_sql_proxy2(const char *tenant_name = "tt1", const char *db_name="test", const bool oracle_mode = false);
+  int init_sql_proxy2(const char *tenant_name = "tt1", const char *db_name="test",
+      const bool oracle_mode = false,
+      const ObMySQLConnection::Mode connection_mode = ObMySQLConnection::DEBUG_MODE);
   int init_sql_proxy_with_short_wait();
+  void set_extra_optstr(const char *extra_optstr) { extra_optstr_ = extra_optstr; }
 protected:
   int init_sql_proxy();
 
@@ -72,6 +75,7 @@ private:
   std::string data_dir_;
   std::string rs_list_;
   std::string optstr_;
+  std::string extra_optstr_;
   std::string run_dir_;
   common::sqlclient::ObSingleMySQLConnectionPool sql_conn_pool_;
   common::ObMySQLProxy sql_proxy_;

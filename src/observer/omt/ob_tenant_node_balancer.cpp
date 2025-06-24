@@ -123,7 +123,11 @@ void ObTenantNodeBalancer::run1()
 
     {
       common::ObBKGDSessInActiveGuard inactive_guard;
-      USLEEP(refresh_interval_);  // sleep 10s
+      if (GCTX.in_bootstrap_) {
+        USLEEP(1_s);  // sleep 1s
+      } else {
+        USLEEP(refresh_interval_);  // sleep 10s
+      }
     }
   }
 }

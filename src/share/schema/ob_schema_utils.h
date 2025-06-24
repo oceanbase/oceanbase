@@ -143,9 +143,11 @@ public:
              const uint64_t tenant_id,
              share::schema::ObTableSchema &table);
   static int construct_inner_table_schemas(
-             const uint64_t tenant_id,
-             common::ObSArray<share::schema::ObTableSchema> &tables,
-             common::ObIAllocator &allocator);
+      const uint64_t tenant_id,
+      ObSArray<ObTableSchema> &tables,
+      ObIAllocator &allocator,
+      bool construct_all = false);
+  static int generate_hard_code_schema_version(ObIArray<ObTableSchema> &tables);
   static int add_sys_table_lob_aux_table(
              uint64_t tenant_id,
              uint64_t data_table_id,

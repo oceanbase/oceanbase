@@ -28,6 +28,8 @@
 #include "share/object_storage/ob_device_connectivity.h"
 #include "storage/shared_storage/ob_ss_format_util.h"
 #endif
+#include "share/inner_table/ob_load_inner_table_schema.h"
+#include "rootserver/ob_load_inner_table_schema_executor.h"
 
 namespace oceanbase
 {
@@ -119,6 +121,12 @@ int ObBaseBootstrap::check_bootstrap_rs_list(
   if (rs_list.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("rs_list size must larger than 0", K(ret));
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  } else if (rs_list.count() != 1) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("in standalone mode, bootstrap with more than server is not allowed", KR(ret), K(rs_list));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "bootstrap more than one server in standalone mode");
+#endif
   } else if (OB_FAIL(check_multiple_zone_deployment_rslist(rs_list))) {
     LOG_WARN("fail to check multiple zone deployment rslist", K(ret));
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -492,9 +500,13 @@ int ObPreBootstrap::wait_elect_ls(
 
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  } else if (FALSE_IT(master_rs = GCTX.self_addr())) {
+#else
   } else if (OB_FAIL(ls_leader_waiter_.wait(
       tenant_id, SYS_LS, timeout, master_rs))) {
     LOG_WARN("leader_waiter_ wait failed", K(tenant_id), K(SYS_LS), K(timeout), K(ret));
+#endif
   }
   if (OB_SUCC(ret)) {
     ObTaskController::get().allow_next_syslog();
@@ -658,7 +670,11 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
     LOG_WARN("construct all schema fail", K(ret));
   } else if (OB_FAIL(create_all_partitions())) {
     LOG_WARN("create all partitions fail", K(ret));
-  } else if (OB_FAIL(create_all_schema(ddl_service_, table_schemas))) {
+  } else if (GCONF._enable_parallel_tenant_creation &&
+      OB_FAIL(load_all_schema(ddl_service_, table_schemas))) {
+    LOG_WARN("load_all_schema failed",  K(table_schemas), K(ret));
+  } else if (!GCONF._enable_parallel_tenant_creation &&
+      OB_FAIL(create_all_schema(ddl_service_, table_schemas))) {
     LOG_WARN("create_all_schema failed",  K(table_schemas), K(ret));
   }
   BOOTSTRAP_CHECK_SUCCESS_V2("create_all_schema");
@@ -698,6 +714,39 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
   }
   ROOTSERVICE_EVENT_ADD("bootstrap", "bootstrap_succeed");
   BOOTSTRAP_CHECK_SUCCESS();
+  return ret;
+}
+
+int ObBootstrap::load_all_schema(
+    ObDDLService &ddl_service,
+    common::ObIArray<share::schema::ObTableSchema> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  const int64_t begin_time = ObTimeUtility::current_time();
+  LOG_INFO("start load all schemas", "table count", table_schemas.count());
+  LOG_DBA_INFO_V2(OB_BOOTSTRAP_CREATE_ALL_SCHEMA_BEGIN,
+                  DBA_STEP_INC_INFO(bootstrap),
+                  "bootstrap create all schema begin.");
+  ObLoadInnerTableSchemaExecutor executor;
+  if (OB_FAIL(executor.init(table_schemas, OB_SYS_TENANT_ID, get_cpu_count(), &rpc_proxy_))) {
+    LOG_WARN("failed to init executor", KR(ret));
+  } else if (OB_FAIL(executor.execute())) {
+    LOG_WARN("failed to execute load all schema", KR(ret));
+  } else if (OB_FAIL(ObLoadInnerTableSchemaExecutor::load_core_schema_version(
+          OB_SYS_TENANT_ID, ddl_service.get_sql_proxy()))) {
+      LOG_WARN("failed to load core schema version", KR(ret));
+  }
+  LOG_INFO("finish load all schemas", KR(ret), "cost", ObTimeUtility::current_time() - begin_time);
+  if (OB_FAIL(ret)) {
+    LOG_DBA_ERROR_V2(OB_BOOTSTRAP_CREATE_ALL_SCHEMA_FAIL, ret,
+                     DBA_STEP_INC_INFO(bootstrap),
+                     "bootstrap create all schema fail. "
+                     "you may find solutions in previous error logs or seek help from official technicians.");
+  } else {
+    LOG_DBA_INFO_V2(OB_BOOTSTRAP_CREATE_ALL_SCHEMA_SUCCESS,
+                    DBA_STEP_INC_INFO(bootstrap),
+                    "bootstrap create all schema success.");
+  }
   return ret;
 }
 
@@ -1217,7 +1266,7 @@ int ObBootstrap::init_global_stat()
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", KR(ret));
   } else {
-    const int64_t baseline_schema_version = -1;
+    const int64_t baseline_schema_version = OB_INVALID_VERSION; // OB_INVALID_VERSION == -1
     const int64_t rootservice_epoch = 0;
     const SCN snapshot_gc_scn = SCN::min_scn();
     const int64_t snapshot_gc_timestamp = 0;

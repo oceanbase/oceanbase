@@ -143,6 +143,7 @@ public:
   const common::ObIArray<const RpcResult *> &get_results() const { return results_; }
   int receive_response();
 
+  int64_t get_response_count();
   bool check_has_error_result() const;
   int check_return_cnt(const int64_t return_cnt) const;
 private:
@@ -481,6 +482,13 @@ int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func, RpcProxy>::wait(
     }
   }
   return ret;
+}
+
+template<ObRpcPacketCode PC, typename RpcArg, typename RpcResult, typename Func, typename RpcProxy>
+int64_t ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func, RpcProxy>::get_response_count()
+{
+  common::ObThreadCondGuard guard(cond_);
+  return response_count_;
 }
 
 template<ObRpcPacketCode PC, typename RpcArg, typename RpcResult, typename Func, typename RpcProxy>

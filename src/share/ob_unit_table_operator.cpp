@@ -572,6 +572,29 @@ int ObUnitTableOperator::get_unit_configs(common::ObIArray<ObUnitConfig> &config
   return ret;
 }
 
+int ObUnitTableOperator::get_unit_configs_by_tenant(const uint64_t tenant_id,
+      common::ObIArray<ObUnitConfig> &configs)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    ObSqlString sql;
+    ObTimeoutCtx ctx;
+    if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+      LOG_WARN("fail to get timeout ctx", K(ret), K(ctx));
+    } else if (OB_FAIL(sql.append_fmt("select * from %s where unit_config_id in "
+            "(select unit_config_id from %s where tenant_id = %lu)", OB_ALL_UNIT_CONFIG_TNAME,
+            OB_ALL_RESOURCE_POOL_TNAME, tenant_id))) {
+      LOG_WARN("append_fmt failed", K(ret));
+    } else if (OB_FAIL(read_unit_configs(sql, configs))) {
+      LOG_WARN("read_unit_configs failed", K(sql), K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObUnitTableOperator::get_unit_configs(const common::ObIArray<uint64_t> &config_ids,
                                           common::ObIArray<ObUnitConfig> &configs) const
 {

@@ -76,6 +76,8 @@ public:
   virtual int get_tenants(common::ObIArray<uint64_t> &tenants) const;
   virtual int get_unit_config_by_name(const common::ObString &unit_name,
                                       ObUnitConfig &unit_config);
+  virtual int get_unit_configs_by_tenant(const uint64_t tenant_id,
+      common::ObIArray<ObUnitConfig> &configs);
 
   int get_units_by_unit_group_id(const uint64_t unit_group_id,
                                      common::ObIArray<ObUnit> &units);
