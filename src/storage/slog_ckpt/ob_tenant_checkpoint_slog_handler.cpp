@@ -484,6 +484,7 @@ int ObTenantCheckpointSlogHandler::replay_new_checkpoint(const ObTenantSuperBloc
           super_block.wait_gc_tablet_entry_, replay_wait_gc_tablet_op, wait_gc_tablet_block_list))) {
     LOG_WARN("fail to iter replay wait gc tablet array", K(ret));
   } else {
+    omt::ObTenant *tenant = static_cast<omt::ObTenant*>(share::ObTenantEnv::get_tenant());
     const int64_t blk_cnt = ls_block_list.count() + tablet_block_list.count() + wait_gc_tablet_block_list.count();
     int64_t min_file_id = INT64_MAX;
     int64_t max_file_id = INT64_MIN;
@@ -496,7 +497,14 @@ int ObTenantCheckpointSlogHandler::replay_new_checkpoint(const ObTenantSuperBloc
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, min/max file id is invalid", K(ret), K(min_file_id), K(max_file_id));
       } else if (GCTX.is_shared_storage_mode()) {
-        OB_STORAGE_OBJECT_MGR.set_min_max_file_id_in_server_super_block(min_file_id, max_file_id);
+        HEAP_VAR(ObTenantSuperBlock, super_block) {
+          lib::ObMutexGuard guard(super_block_mutex_);
+          super_block = tenant->get_super_block();
+          super_block.min_file_id_ = min_file_id;
+          super_block.max_file_id_ = max_file_id;
+          tenant->set_tenant_super_block(super_block);
+          FLOG_INFO("update min max file id in super block", K(min_file_id), K(max_file_id), K(super_block));
+        }
       }
     }
   }
