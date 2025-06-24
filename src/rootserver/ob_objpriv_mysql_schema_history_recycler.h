@@ -14,6 +14,7 @@
 #define OCEANBASE_ROOTSERVER_OB_OBJPRIV_MYSQL_SCHEMA_HISTORY_RECYCLER_H_
 
 #include "rootserver/ob_schema_history_recycler.h"
+#include "lib/allocator/ob_allocator.h"
 
 namespace oceanbase
 {
@@ -29,6 +30,7 @@ struct ObObjectPrivMysqlSchemaKey
 {
 public:
   ObObjectPrivMysqlSchemaKey();
+  ObObjectPrivMysqlSchemaKey(const ObObjectPrivMysqlSchemaKey &other);
   ~ObObjectPrivMysqlSchemaKey();
   bool operator==(const ObObjectPrivMysqlSchemaKey &other) const;
   bool operator!=(const ObObjectPrivMysqlSchemaKey &other) const;
@@ -42,11 +44,12 @@ public:
   TO_STRING_KV(K_(user_id), K_(obj_name), K_(obj_type), K_(all_priv), K_(grantor), K_(grantor_host));
 public:
   int64_t user_id_;
-  ObString obj_name_;
   int64_t obj_type_;
   int64_t all_priv_;
+  ObString obj_name_;
   ObString grantor_;
   ObString grantor_host_;
+  ObArenaAllocator alloc_;
 };
 
 struct ObObjectPrivMysqlCompressSchemaInfo

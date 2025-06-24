@@ -19,16 +19,27 @@ namespace rootserver
 {
 ObObjectPrivMysqlSchemaKey::ObObjectPrivMysqlSchemaKey()
   : user_id_(OB_INVALID_ID),
-    obj_name_(),
     obj_type_(OB_INVALID_ID),
     all_priv_(0),
+    obj_name_(),
     grantor_(),
     grantor_host_()
 {
 }
 
+ObObjectPrivMysqlSchemaKey::ObObjectPrivMysqlSchemaKey(const ObObjectPrivMysqlSchemaKey &other)
+  : user_id_(other.user_id_),
+    obj_type_(other.obj_type_),
+    all_priv_(other.all_priv_),
+    obj_name_(other.obj_name_),
+    grantor_(other.grantor_),
+    grantor_host_(other.grantor_host_)
+{
+}
+
 ObObjectPrivMysqlSchemaKey::~ObObjectPrivMysqlSchemaKey()
 {
+  alloc_.clear();
 }
 
 bool ObObjectPrivMysqlSchemaKey::operator==(const ObObjectPrivMysqlSchemaKey &other) const
@@ -74,7 +85,14 @@ bool ObObjectPrivMysqlSchemaKey::operator<(const ObObjectPrivMysqlSchemaKey &oth
 
 ObObjectPrivMysqlSchemaKey &ObObjectPrivMysqlSchemaKey::operator=(const ObObjectPrivMysqlSchemaKey &other)
 {
-  assign(other);
+  if (this != &other) {
+    user_id_ = other.user_id_;
+    obj_type_ = other.obj_type_;
+    all_priv_ = other.all_priv_;
+    obj_name_ = other.obj_name_;
+    grantor_ = other.grantor_;
+    grantor_host_ = other.grantor_host_;
+  }
   return *this;
 }
 
@@ -83,11 +101,15 @@ int ObObjectPrivMysqlSchemaKey::assign(const ObObjectPrivMysqlSchemaKey &other)
   int ret = OB_SUCCESS;
   if (this != &other) {
     user_id_ = other.user_id_;
-    obj_name_ = other.obj_name_;
     obj_type_ = other.obj_type_;
     all_priv_ = other.all_priv_;
-    grantor_ = other.grantor_;
-    grantor_host_ = other.grantor_host_;
+    if(OB_FAIL(ob_write_string(alloc_, other.obj_name_, obj_name_))) {
+      LOG_WARN("failed to copy obj_name_", K(ret));
+    } else if (OB_FAIL(ob_write_string(alloc_, other.grantor_, grantor_))) {
+      LOG_WARN("failed to copy grantor_", K(ret));
+    } else if (OB_FAIL(ob_write_string(alloc_, other.grantor_host_, grantor_host_))) {
+      LOG_WARN("failed to copy grantor_host_", K(ret));
+    }
   }
   return ret;
 }
@@ -180,14 +202,26 @@ int ObObjectPrivMysqlRecycleSchemaExecutor::retrieve_schema_history(
   if (OB_FAIL(check_stop())) {
     LOG_WARN("schema history recycler is stopped", KR(ret));
   } else {
+    ObString obj_name;
+    ObString grantor;
+    ObString grantor_host;
     EXTRACT_INT_FIELD_MYSQL(result, "user_id", cur_key.user_id_, int64_t);
-    EXTRACT_VARCHAR_FIELD_MYSQL(result, "obj_name", cur_key.obj_name_);
     EXTRACT_INT_FIELD_MYSQL(result, "obj_type", cur_key.obj_type_, int64_t);
     EXTRACT_INT_FIELD_MYSQL(result, "all_priv", cur_key.all_priv_, int64_t);
-    EXTRACT_VARCHAR_FIELD_MYSQL(result, "grantor", cur_key.grantor_);
-    EXTRACT_VARCHAR_FIELD_MYSQL(result, "grantor_host", cur_key.grantor_host_);
+    EXTRACT_VARCHAR_FIELD_MYSQL(result, "obj_name", obj_name);
+    EXTRACT_VARCHAR_FIELD_MYSQL(result, "grantor", grantor);
+    EXTRACT_VARCHAR_FIELD_MYSQL(result, "grantor_host", grantor_host);
     EXTRACT_INT_FIELD_MYSQL(result, "schema_version", cur_value.max_schema_version_, int64_t);
     EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", cur_value.is_deleted_, bool);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ob_write_string(cur_key.alloc_, obj_name, cur_key.obj_name_))) {
+        LOG_WARN("failed to copy obj name ", K(ret));
+      } else if (OB_FAIL(ob_write_string(cur_key.alloc_, grantor, cur_key.grantor_))) {
+        LOG_WARN("failed to copy grantor ", K(ret));
+      } else if (OB_FAIL(ob_write_string(cur_key.alloc_, grantor_host, cur_key.grantor_host_))) {
+        LOG_WARN("failed to copy grantor host", K(ret));
+      }
+    }
   }
   return ret;
 }
