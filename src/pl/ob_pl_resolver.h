@@ -506,6 +506,7 @@ public:
                                     ObPLBlockNS *ns,
                                     const ObPLDataType *type,
                                     ObPLDependencyTable &deps,
+                                    sql::ObSQLSessionInfo &session_info,
                                     bool need_check = false);
 
   static
@@ -1100,7 +1101,7 @@ private:
                                   int32_t upper,
                                   ObRawExpr *&expr);
   int add_pl_integer_checker_expr(ObRawExprFactory &expr_factory, ObRawExpr *&expr, bool &need_replace);
-
+#ifdef OB_BUILD_ORACLE_PL
   int check_use_idx_illegal(ObRawExpr* expr, int64_t idx);
 
   int check_raw_expr_in_forall(ObRawExpr* expr,
@@ -1115,9 +1116,10 @@ private:
                                 ObPLFunctionAST &func,
                                 ObPLSqlStmt &sql_stmt,
                                 int64_t modify_expr_id,
-                                int64_t table_idx);
+                                ObObjAccessRawExpr *obj_access_expr);
   int check_forall_sql_and_modify_params(ObPLForAllStmt &stmt,
                                 ObPLFunctionAST &func);
+#endif
   int replace_record_member_default_expr(ObRawExpr *&expr);
   int check_param_default_expr_legal(ObRawExpr *expr, bool is_subprogram_expr = true);
   int check_params_legal_in_body_routine(ObPLFunctionAST &routine_ast,

@@ -5039,7 +5039,7 @@ int ObCopyPhysicalMacroBlockIdObProducer::get_data_block_count(int64_t &data_mac
     ret = OB_NOT_INIT;
     LOG_WARN("copy physical macro block id ob producer not init", K(ret));
   } else {
-    data_macro_block_count = meta_handle_.get_sstable_meta().get_data_macro_block_count();
+    data_macro_block_count = meta_handle_.get_sstable_meta().get_macro_info().get_data_block_count();
   }
   return ret;
 }

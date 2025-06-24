@@ -1274,6 +1274,12 @@ int ObPLContext::set_exec_env(ObPLFunction &routine)
     OX (need_reset_exec_env_ = true);
   }
 
+  // always restore sql_mode in mysql mode,
+  // because sql_mode may be change inside PL.
+  if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+    OX (need_reset_exec_env_ = true);
+  }
+
   return ret;
 }
 
@@ -1281,26 +1287,28 @@ void ObPLContext::reset_exec_env(int &ret)
 {
   int tmp_ret = OB_SUCCESS;
 
-  if (OB_ISNULL(session_info_)) {
+  if (need_reset_exec_env_) {
+    if (OB_ISNULL(session_info_)) {
       ret = OB_SUCCESS != ret ? ret : OB_ERR_UNEXPECTED;
       LOG_ERROR("current session is null", K(ret), K(session_info_));
-  } else if (need_reset_exec_env_) {
-    if (OB_SUCCESS != (tmp_ret = exec_env_.store(*session_info_))) {
-      ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
-      LOG_WARN("failed to set exec_env", K(ret), K(tmp_ret), K(exec_env_));
-    }
-  } else if (lib::is_mysql_mode()) {
-    // check whether need to restore sql_mode in mysql mode,
-    // because sql_mode may be change inside PL.
-    ObExecEnv curr_env;
-    if (OB_SUCCESS != (tmp_ret = curr_env.load(*session_info_))) {
-      ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
-      LOG_WARN("failed to load current exec_env", K(ret), K(tmp_ret), K(exec_env_), K(curr_env));
-    } else if (curr_env == exec_env_) {
-      // do nothing
-    } else if (OB_SUCCESS != (tmp_ret = exec_env_.store(*session_info_))) {
-      ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
-      LOG_WARN("failed to set exec_env", K(ret), K(tmp_ret), K(exec_env_), K(curr_env));
+    } else if (lib::is_mysql_mode()) {
+      // check whether need to restore sql_mode in mysql mode,
+      // because sql_mode may be change inside PL.
+      ObExecEnv curr_env;
+      if (OB_SUCCESS != (tmp_ret = curr_env.load(*session_info_))) {
+        ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
+        LOG_WARN("failed to load current exec_env", K(ret), K(tmp_ret), K(exec_env_), K(curr_env));
+      } else if (curr_env == exec_env_) {
+        // do nothing
+      } else if (OB_SUCCESS != (tmp_ret = exec_env_.store(*session_info_))) {
+        ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
+        LOG_WARN("failed to set exec_env", K(ret), K(tmp_ret), K(exec_env_), K(curr_env));
+      }
+    } else {  // oracle mode
+      if (OB_SUCCESS != (tmp_ret = exec_env_.store(*session_info_))) {
+        ret = OB_SUCCESS == ret ? tmp_ret : ret; // 不覆盖错误码
+        LOG_WARN("failed to set exec_env", K(ret), K(tmp_ret), K(exec_env_));
+      }
     }
   }
 }
