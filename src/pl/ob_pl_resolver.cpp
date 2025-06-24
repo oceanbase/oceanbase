@@ -7203,17 +7203,7 @@ int ObPLResolver::resolve_call(const ObStmtNodeTree *parse_tree, ObPLCallStmt *s
       }
       OZ (ObPLDependencyUtil::add_dependency_objects(&func.get_dependency_table(), deps));
       if (OB_SUCC(ret) && OB_NOT_NULL(params_node)) {
-        CK (T_SP_CPARAM_LIST == params_node->type_ || T_EXPR_LIST == params_node->type_);
-        for (int64_t param_idx = 0;
-             OB_SUCC(ret) && param_idx < params_node->num_child_; ++param_idx) {
-          ObRawExpr *expr = NULL;
-          OZ (resolve_expr(params_node->children_[param_idx],
-                           static_cast<ObPLCompileUnitAST&>(func), expr,
-                           combine_line_and_col(params_node->children_[param_idx]->stmt_loc_),
-                           false, NULL));
-          CK (OB_NOT_NULL(expr));
-          OX (expr_params.push_back(expr));
-        }
+        OZ (resolve_cparams_expr(params_node, func, expr_params));
       }
       if (OB_SUCC(ret)) {
         const ObIRoutineInfo *routine_info = NULL;
@@ -7236,7 +7226,7 @@ int ObPLResolver::resolve_call(const ObStmtNodeTree *parse_tree, ObPLCallStmt *s
           stmt->set_proc_id(package_routine_info->get_id());
           stmt->set_package_id(func.get_package_id());
           if (package_routine_info->get_param_count() != 0) {
-            if (OB_FAIL(resolve_call_param_list(params_node, package_routine_info->get_params(), stmt, func))) {
+            if (OB_FAIL(resolve_call_param_list(expr_params, package_routine_info->get_params(), stmt, func))) {
               LOG_WARN("failed to resolve call param list", K(ret));
             }
           }
@@ -7250,7 +7240,7 @@ int ObPLResolver::resolve_call(const ObStmtNodeTree *parse_tree, ObPLCallStmt *s
             stmt->set_proc_id(schema_routine_info->get_subprogram_id());
           }
           if (routine_params.count() != 0) {
-            if (OB_FAIL(resolve_call_param_list(params_node, routine_params, stmt, func))) {
+            if (OB_FAIL(resolve_call_param_list(expr_params, routine_params, stmt, func))) {
               LOG_WARN("failed to resolve call param list", K(ret));
             }
           }
@@ -7851,42 +7841,6 @@ int ObPLResolver::resolve_call_param_list(ObIArray<ObRawExpr*> &params,
     OZ (iparams.push_back(params_list.at(i)));
   }
   OZ (resolve_cparams(params, iparams, stmt, func));
-  return ret;
-}
-
-int ObPLResolver::resolve_call_param_list(const ObStmtNodeTree *parse_tree,
-                                          const common::ObIArray<ObPLRoutineParam *> &params_list,
-                                          ObPLCallStmt *stmt,
-                                          ObPLFunctionAST &func)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 32> exprs;
-  ObSEArray<ObIRoutineParam*, 16> iparams;
-  CK (OB_NOT_NULL(stmt));
-  CK (OB_NOT_NULL(parse_tree));
-  OZ (resolve_cparams_expr(parse_tree, func, exprs));
-  for (int64_t i = 0; OB_SUCC(ret) && i < params_list.count(); ++i) {
-    OZ (iparams.push_back(params_list.at(i)));
-  }
-  OZ (resolve_cparams(exprs, iparams, stmt, func));
-  return ret;
-}
-
-int ObPLResolver::resolve_call_param_list(const ObStmtNodeTree *parse_tree,
-                                          const ObIArray<ObRoutineParam*> &params_list,
-                                          ObPLCallStmt *stmt,
-                                          ObPLFunctionAST &func)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 32> exprs;
-  ObSEArray<ObIRoutineParam*, 16> iparams;
-  CK (OB_NOT_NULL(stmt));
-  CK (OB_NOT_NULL(parse_tree));
-  OZ (resolve_cparams_expr(parse_tree, func, exprs));
-  for (int64_t i = 0; OB_SUCC(ret) && i < params_list.count(); ++i) {
-    OZ (iparams.push_back(params_list.at(i)));
-  }
-  OZ (resolve_cparams(exprs, iparams, stmt, func));
   return ret;
 }
 
