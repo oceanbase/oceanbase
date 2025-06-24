@@ -32314,7 +32314,7 @@ int ObDDLService::recompile_view(const ObTableSchema &view_schema, const bool re
   } else if (nullptr == view_schema_in_guard
             || view_schema_in_guard->get_schema_version() > view_schema.get_schema_version()) {
     // view is deleted or modified before, ignore this recompile task
-    LOG_TRACE("task is ignore", K(view_schema_in_guard->get_schema_version()), K(view_schema.get_schema_version()));
+    LOG_DEBUG("task is ignore", K(view_schema_in_guard->get_schema_version()), K(view_schema.get_schema_version()));
   } else {
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     ObTableSchema new_view_schema;
