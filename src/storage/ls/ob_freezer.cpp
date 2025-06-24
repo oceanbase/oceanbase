@@ -654,13 +654,11 @@ struct AsyncFreezeFunctor {
   const int64_t trace_id_;
   const bool is_ls_freeze_;
   const ObLSID ls_id_;
-  ObFreezer *freezer_;
   // hold ls handle to avoid logstream being destroyed
-  AsyncFreezeFunctor(const int64_t trace_id, const bool is_ls_freeze, ObFreezer *freezer, ObLSHandle &ls_handle)
+  AsyncFreezeFunctor(const int64_t trace_id, const bool is_ls_freeze, const ObLSID ls_id)
       : trace_id_(trace_id),
         is_ls_freeze_(is_ls_freeze),
-        ls_id_(freezer->get_ls_id()),
-        freezer_(freezer) {}
+        ls_id_(ls_id) {}
   int operator()()
   {
     int ret = OB_SUCCESS;
@@ -669,15 +667,15 @@ struct AsyncFreezeFunctor {
     if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
       STORAGE_LOG(WARN, "get ls handle failed. stop async freeze task", KR(ret), K(ls_id_));
     } else {
-      // freezer_ cannot be nullptr because AsyncFreezeFunctor is constructed by ObFreezer::this pointer
+      ObLS *ls = ls_handle.get_ls();
       STORAGE_LOG(
-          INFO, "[Freezer] An Async Freeze Task Start", K(trace_id_), K(ls_id_), K(is_ls_freeze_), KP(freezer_));
+          INFO, "[Freezer] An Async Freeze Task Start", K(trace_id_), K(ls_id_), K(is_ls_freeze_), KP(ls));
       if (is_ls_freeze_) {
         common::ObDIActionGuard(common::ObDIActionGuard::NS_ACTION, "LSFreeze:%ld", ls_id_.id());
-        (void)freezer_->async_ls_freeze_consumer(trace_id_);
+        (void)ls->get_freezer()->async_ls_freeze_consumer(trace_id_);
       } else {
         common::ObDIActionGuard(common::ObDIActionGuard::NS_ACTION, "TabletFreeze:%ld", ls_id_.id());
-        (void)freezer_->async_tablet_freeze_consumer(trace_id_);
+        (void)ls->get_freezer()->async_tablet_freeze_consumer(trace_id_);
       }
     }
     return ret;
@@ -718,7 +716,7 @@ void ObFreezer::submit_an_async_freeze_task(const int64_t trace_id, const bool i
     if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
       STORAGE_LOG(WARN, "get ls handle failed. stop async freeze task", KR(ret), K(ls_id));
     } else if (acquired_exec_async_task_permission_(is_ls_freeze)) {
-      AsyncFreezeFunctor async_freeze_functor(trace_id, is_ls_freeze, this, ls_handle);
+      AsyncFreezeFunctor async_freeze_functor(trace_id, is_ls_freeze, ls_id);
       do {
         ret = tenant_freezer->freeze_thread_pool_.commit_task_ignore_ret(async_freeze_functor);
         if (OB_FAIL(ret) && REACH_TIME_INTERVAL(5LL * 1000LL * 1000LL)) {
