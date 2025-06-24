@@ -25,6 +25,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/incremental/ob_ss_minor_compaction.h"
 #include "storage/incremental/ob_shared_meta_service.h"
+#include "storage/incremental/ob_ss_tablet_merge_helper.h"
 #endif
 #include "storage/compaction/ob_schedule_status_cache.h"
 #include "storage/compaction/ob_schedule_tablet_func.h"
@@ -1858,7 +1859,7 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(
   } else if (!tablet_handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet handle is invalid", K(ret));
-  } else if (OB_FAIL(ObTabletSSMinorMergeHelper::check_can_exec_minor_compact(tablet_handle, can_exec_ss_minor))) {
+  } else if (OB_FAIL(ObSSTabletMergeHelper::check_can_exec_merge(tablet_handle, can_exec_ss_minor))) {
     LOG_WARN("check can exec minor compact failed", K(ret), K(ls_id), K(tablet_id), K(transfer_scn));
   } else if (!can_exec_ss_minor) {
     skip = true;

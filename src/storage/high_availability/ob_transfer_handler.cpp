@@ -1107,6 +1107,12 @@ int ObTransferHandler::do_trans_transfer_start_(
     LOG_WARN("failed to update transfer status", K(ret), K(task_info));
   }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+  else if (OB_FAIL(set_reorg_info_table_(task_info, start_scn, trans))) {
+    LOG_WARN("failed to set reorg info table", K(ret), K(task_info), K(start_scn));
+  }
+#endif
+
   LOG_INFO("[TRANSFER] finish do trans transfer start", K(task_info), "cost_ts", ObTimeUtil::current_time() - start_ts);
   return ret;
 }
