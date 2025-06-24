@@ -880,16 +880,37 @@ int ObPLResolver::init(ObPLPackageAST &package_ast)
   do { \
     if (OB_NOT_NULL(node)) { \
       int save_ret = OB_SUCCESS; \
+      int save_line = -1; \
+      int save_col = -1; \
       for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) { \
         if (NULL != node->children_[i]) { \
           if (OB_FAIL(SMART_CALL(resolve(node->children_[i], compile_unit)))) { \
             save_ret = ret; \
             ret = is_object_not_exist_error(ret) ? OB_SUCCESS : ret; \
+            if(OB_SUCCESS == ret) { \
+              ObWarningBuffer *buf = common::ob_get_tsi_warning_buffer(); \
+              if(OB_LIKELY(NULL != buf) && buf->get_error_line() != 0) { \
+                save_line = buf->get_error_line(); \
+                save_col = buf->get_error_column(); \
+              } \
+            } \
             LOG_WARN("failed to resolve package stmts", K(ret), K(i)); \
+          } \
+          if(OB_SUCCESS == ret && i < node->num_child_ - 1) { \
+            ObWarningBuffer *buf = common::ob_get_tsi_warning_buffer(); \
+            if(OB_LIKELY(NULL != buf)) { \
+              buf->set_error_line_column(0, 0); \
+            } \
           } \
         } \
       } \
       ret = OB_SUCCESS == ret ? save_ret : ret; \
+      if(is_object_not_exist_error(ret)) { \
+        ObWarningBuffer *buf = common::ob_get_tsi_warning_buffer(); \
+        if (OB_LIKELY(NULL != buf) && -1 != save_line && -1 != save_col && buf->get_error_line() == 0) { \
+          buf->set_error_line_column(save_line, save_col); \
+        } \
+      } \
     } \
   } while (0)
 
