@@ -696,7 +696,11 @@ int ObExprUDFCtx::construct_cache_ctx_for_add(pl::ObPLUDFResultCacheCtx &rc_ctx)
     rc_ctx.sys_schema_version_ = current_compile_unit_->get_sys_schema_version();
     rc_ctx.tenant_schema_version_ = current_compile_unit_->get_tenant_schema_version();
     rc_ctx.name_ = current_function_->get_function_name();
-    rc_ctx.key_.db_id_ = current_function_->get_database_id();
+    if (current_function_->is_invoker_right()) {
+      rc_ctx.key_.db_id_ = get_session_info()->get_database_id();
+    } else {
+      rc_ctx.key_.db_id_ = current_function_->get_database_id();
+    }
     rc_ctx.result_cache_max_result_ = result_cache_max_result_;
     rc_ctx.result_cache_max_size_ = result_cache_max_size_;
   }
