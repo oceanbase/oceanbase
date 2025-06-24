@@ -11792,6 +11792,47 @@ public:
   ObTabletID tablet_id_;
 };
 
+struct ObDelSSTabletMacroCacheArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDelSSTabletMacroCacheArg() : tenant_id_(OB_INVALID_TENANT_ID), tablet_id_() {}
+  ~ObDelSSTabletMacroCacheArg() {}
+  bool is_valid() const
+  {
+    return OB_INVALID_TENANT_ID != tenant_id_ && tablet_id_.is_valid();
+  }
+  TO_STRING_KV(K_(tenant_id), K_(tablet_id));
+public:
+  int64_t tenant_id_;
+  common::ObTabletID tablet_id_;
+};
+
+struct ObDelSSMacroCacheRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDelSSMacroCacheRes() : ret_(common::OB_SUCCESS) {}
+  ~ObDelSSMacroCacheRes() {}
+  void set_ret(int ret) { ret_ = ret; }
+  int64_t get_ret() const { return ret_; }
+  TO_STRING_KV(K_(ret));
+private:
+  int ret_;
+};
+
+struct ObDelSSTabletMacroCacheRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDelSSTabletMacroCacheRes() : macro_read_cache_cnt_(0), macro_write_cache_cnt_(0) {}
+  ~ObDelSSTabletMacroCacheRes() {}
+  TO_STRING_KV(K_(macro_read_cache_cnt), K_(macro_write_cache_cnt));
+public:
+  int64_t macro_read_cache_cnt_;
+  int64_t macro_write_cache_cnt_;
+};
+
 struct ObSetSSCkptCompressorArg final
 {
   OB_UNIS_VERSION(1);

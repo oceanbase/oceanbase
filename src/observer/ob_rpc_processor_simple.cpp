@@ -64,6 +64,8 @@
 #include "close_modules/shared_storage/storage/shared_storage/ob_file_manager.h"
 #include "close_modules/shared_storage/storage/shared_storage/storage_cache_policy/ob_storage_cache_service.h"
 #include "close_modules/shared_storage/storage/incremental/garbage_collector/ob_ss_garbage_collector_service.h"
+#include "close_modules/shared_storage/storage/shared_storage/macro_cache/ob_ss_macro_cache.h"
+#include "close_modules/shared_storage/storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
 #endif
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
 #include "close_modules/shared_log_service/logservice/libpalf/libpalf_env_ffi_instance.h"
@@ -4267,6 +4269,50 @@ int ObSetSSCkptCompressorP::process()
 int ObSetSSCacheSizeRatioP::process()
 {
   return OB_NOT_SUPPORTED;
+}
+
+int ObDelSSMacroCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("start del_ss_macro_cache process", K_(arg));
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_) {
+      ObSSMacroCacheMgr *macro_cache_mgr = nullptr;
+      if (OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObSSMacroCacheMgr is null", KR(ret), K_(arg_.tenant_id));
+      } else if (OB_FAIL(macro_cache_mgr->force_evict_by_macro_id(arg_.macro_id_))) {
+        result_.set_ret(ret);
+        LOG_WARN("fail to delete ss macro cache", KR(ret), K_(arg));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDelSSTabletMacroCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("start del_ss_tablet_macro_cache process", K_(arg));
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_) {
+      ObSSMacroCacheMgr *macro_cache_mgr = nullptr;
+      if (OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObSSMacroCacheMgr is null", KR(ret), K_(arg_.tenant_id));
+      } else if (OB_FAIL(macro_cache_mgr->evict_by_tablet_id(
+        arg_.tablet_id_, result_.macro_read_cache_cnt_, result_.macro_write_cache_cnt_))) {
+        LOG_WARN("fail to delete tablet ss macro cache", KR(ret), K_(arg));
+      }
+    }
+  }
+  return ret;
 }
 #endif
 
