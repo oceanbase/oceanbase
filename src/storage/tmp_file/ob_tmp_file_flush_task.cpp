@@ -287,12 +287,15 @@ int ObTmpFileFlushTask::cancel(int ret_code)
   if (OB_ISNULL(block)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tmp file block is null", KR(ret), KPC(this));
-  } else if (page_array_.count() > 0
-         && OB_FAIL(block->insert_pages_into_flushing_list(page_array_))) {
-    LOG_ERROR("fail to insert page into block", KR(ret), KPC(this));
-  }
-
-  if (FAILEDx(block->reinsert_into_flush_prio_mgr())) {
+  } else if (page_array_.count() > 0 &&
+             OB_FAIL(block->insert_pages_into_flushing_list(page_array_))) {
+    if (OB_RESOURCE_RELEASED == ret) {
+      LOG_INFO("block is deleting, no need to insert pages for flushing", KR(ret), KPC(this));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_ERROR("fail to insert page into block", KR(ret), KPC(this));
+    }
+  } else if (OB_FAIL(block->reinsert_into_flush_prio_mgr())) {
     LOG_ERROR("fail to exec reinsert_into_flush_prio_mgr", KR(ret), KPC(this));
   }
   ATOMIC_SET(&ret_code_, ret_code);

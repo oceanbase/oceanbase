@@ -238,15 +238,14 @@ int ObTmpFileBlockAllocatingPriorityManager::remove_block_from_alloc_priority_li
   } else if (OB_UNLIKELY(!block.is_shared_block())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("block is not shared block", KR(ret), K(block));
-  } else if (OB_ISNULL(block.get_prealloc_blk_node().get_next())) {
-    // do nothing
   } else {
-    // currently, never run here
     ObSpinLockGuard guard(locks_[level]);
     ObTmpFileBlkNode &prealloc_node = block.get_prealloc_blk_node();
-    if (OB_ISNULL(prealloc_node.get_next()) || OB_ISNULL(prealloc_node.get_prev())) {
+    if (OB_ISNULL(prealloc_node.get_next()) && OB_ISNULL(prealloc_node.get_prev())) {
+      // do nothing
+    } else if (OB_ISNULL(prealloc_node.get_next()) || OB_ISNULL(prealloc_node.get_prev())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("block is not in alloc_lists", KR(ret), K(block));
+      LOG_ERROR("alloc node contains unexpected ptr", KR(ret), K(block));
     } else if (OB_ISNULL(alloc_lists_[level].remove(&prealloc_node))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("block is not in alloc_lists", KR(ret), K(block));
@@ -285,25 +284,26 @@ int ObTmpFileBlockAllocatingPriorityManager::adjust_block_alloc_priority(const i
   } else if (OB_UNLIKELY(!block.is_shared_block())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("block is not shared block", KR(ret), K(block));
-  } else if (OB_ISNULL(block.get_prealloc_blk_node().get_next())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("block is not in alloc_lists", KR(ret), K(block));
   } else if (old_level == new_level) {
     // do nothing
   } else {
+    bool need_insert = true;
     ObTmpFileBlkNode &prealloc_node = block.get_prealloc_blk_node();
     {
       ObSpinLockGuard guard(locks_[old_level]);
-      if (OB_ISNULL(prealloc_node.get_next()) || OB_ISNULL(prealloc_node.get_prev())) {
+      if (OB_ISNULL(prealloc_node.get_next()) && OB_ISNULL(prealloc_node.get_prev())) {
+        // do nothing
+        need_insert = false;
+      } else if (OB_ISNULL(prealloc_node.get_next()) || OB_ISNULL(prealloc_node.get_prev())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("block is not in alloc_lists", KR(ret), K(block));
+        LOG_ERROR("alloc node contains unexpected ptr", KR(ret), K(block));
       } else if (OB_ISNULL(alloc_lists_[old_level].remove(&prealloc_node))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("block is not in alloc_lists", KR(ret), K(block));
+        LOG_ERROR("block is not in alloc_lists", KR(ret), K(block));
       }
     }
 
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && need_insert) {
       ObSpinLockGuard guard(locks_[new_level]);
       if (OB_UNLIKELY(!alloc_lists_[new_level].add_first(&prealloc_node))) {
         ret = OB_ERR_UNEXPECTED;

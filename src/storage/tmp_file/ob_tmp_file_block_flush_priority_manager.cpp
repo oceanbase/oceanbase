@@ -73,9 +73,6 @@ int ObTmpFileBlockFlushPriorityManager::insert_block_into_flush_priority_list(co
   } else if (OB_UNLIKELY(!block.is_valid_without_lock())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("block is not valid", KR(ret), K(block));
-  } else if (OB_NOT_NULL(block.get_flush_blk_node().get_next())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("block is already in flush_lists", KR(ret), K(block));
   } else {
     ObSpinLockGuard guard(locks_[level]);
     if (OB_UNLIKELY(!flush_lists_[level].add_last(&block.get_flush_blk_node()))) {
@@ -106,15 +103,14 @@ int ObTmpFileBlockFlushPriorityManager::remove_block_from_flush_priority_list(co
   } else if (OB_UNLIKELY(!block.is_valid_without_lock())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("block is not valid", KR(ret), K(block));
-  } else if (OB_ISNULL(block.get_flush_blk_node().get_next())) {
-    // do nothing
-    LOG_DEBUG("block is not in flush_lists", K(block));
   } else {
     ObSpinLockGuard guard(locks_[level]);
     ObTmpFileBlkNode &flush_node = block.get_flush_blk_node();
-    if (OB_ISNULL(flush_node.get_prev()) || OB_ISNULL(flush_node.get_next())) {
+    if (OB_ISNULL(flush_node.get_prev()) && OB_ISNULL(flush_node.get_next())) {
+      // do nothing
+    } else if (OB_ISNULL(flush_node.get_prev()) || OB_ISNULL(flush_node.get_next())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("block is not in flush_lists", KR(ret), K(block));
+      LOG_ERROR("flush node contains unexpected ptr", KR(ret), K(block));
     } else if (OB_ISNULL(flush_lists_[level].remove(&flush_node))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("block is not in flush_lists", KR(ret), K(block));
@@ -152,9 +148,6 @@ int ObTmpFileBlockFlushPriorityManager::adjust_block_flush_priority(const int64_
   } else if (OB_UNLIKELY(!block.is_valid_without_lock())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("block is not valid", KR(ret), K(block));
-  } else if (OB_ISNULL(block.get_flush_blk_node().get_next())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("block is not in flush_lists", KR(ret), K(block));
   } else if (old_level == new_level) {
     // do nothing
     LOG_DEBUG("block flush priority not changed", K(old_level), K(new_level),
@@ -164,14 +157,17 @@ int ObTmpFileBlockFlushPriorityManager::adjust_block_flush_priority(const int64_
     {
       ObSpinLockGuard guard(locks_[old_level]);
       ObTmpFileBlkNode &flush_node = block.get_flush_blk_node();
-      if (OB_ISNULL(flush_node.get_prev()) || OB_ISNULL(flush_node.get_next())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("block is not in flush_lists", KR(ret), K(block));
-      } else if (OB_ISNULL(flush_lists_[old_level].remove(&flush_node))) {
+      if (OB_ISNULL(flush_node.get_prev()) && OB_ISNULL(flush_node.get_next())) {
         // do nothing, the block will be reinserted by flush thread
         need_insert = false;
         LOG_DEBUG("the block is not in flush_lists, maybe it is popped by flush thread",
                   K(old_level), K(new_level), K(block));
+      } else if (OB_ISNULL(flush_node.get_prev()) || OB_ISNULL(flush_node.get_next())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("flush node contains unexpected ptr", KR(ret), K(block));
+      } else if (OB_ISNULL(flush_lists_[old_level].remove(&flush_node))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("fail to remove block from flush_lists", KR(ret), K(block));
       }
     }
     if (OB_SUCC(ret) && need_insert) {
