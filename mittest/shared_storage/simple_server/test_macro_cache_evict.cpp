@@ -69,7 +69,7 @@ class ObMacroCacheEvictTest : public ObSimpleClusterTestBase
 {
 public:
   ObMacroCacheEvictTest()
-      : ObSimpleClusterTestBase("test_macro_cache_evict", "50G", "50G", "50G"),
+      : ObSimpleClusterTestBase("test_macro_cache_evict_dir", "50G", "50G", "50G"),
         tenant_created_(false),
         run_ctx_()
   {}
@@ -329,105 +329,105 @@ public:
   void macro_cache_write(const int64_t i, ObTenantFileManager *tenant_file_mgr, const ObSSMacroCacheType cache_type,
                          const int64_t test_type, const bool if_check = false)
   {
-      MacroBlockId macro_id;
-      ObStorageObjectHandle write_object_handle;
-      // macro id setting
-      switch (cache_type) {
-        case ObSSMacroCacheType::MACRO_BLOCK:
-          macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
-          macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
-          macro_id.set_second_id(200004);
-          macro_id.set_third_id(1);
-          macro_id.set_macro_transfer_seq(0); // transfer_seq
-          macro_id.set_tenant_seq(i); // tenant_seq
-          write_info_.set_effective_tablet_id(200004); // effective_tablet_id
-          break;
-        case ObSSMacroCacheType::META_FILE:
-          macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
-          macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_TABLET_META);
-          macro_id.set_second_id(1001);  // ls_id
-          macro_id.set_third_id(200001); // tablet_id
-          macro_id.set_meta_transfer_seq(0); //transfer_seq
-          macro_id.set_meta_version_id(i); // meta_version_id
-          write_info_.set_ls_epoch_id(1); // ls_epoch_id
-          break;
-        case ObSSMacroCacheType::TMP_FILE:
-          macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
-          macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::TMP_FILE);
-          macro_id.set_second_id(100); // tmp_file_id
-          macro_id.set_third_id(i); // segment_id
-          write_info_.offset_ = 0;
-          write_info_.size_ = WRITE_IO_SIZE;
-          write_info_.set_tmp_file_valid_length(WRITE_IO_SIZE);
-          write_info_.io_desc_.set_unsealed();
-          break;
-        case ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK:
-          macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
-          macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
-          macro_id.set_second_id(200005);
-          macro_id.set_third_id(1);
-          macro_id.set_macro_transfer_seq(0); // transfer_seq
-          macro_id.set_tenant_seq(i); // tenant_seq
-          write_info_.set_effective_tablet_id(200005); // effective_tablet_id
-          break;
-        default:
-          ASSERT_TRUE(false);
-          break;
-      }
-      ASSERT_TRUE(macro_id.is_valid());
-      ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
-      if (static_cast<TestType>(test_type) == TEST_WRITE_CACHE_FLUSH) {
-        write_info_.set_is_write_cache(true); // write cache
-      } else {
-        write_info_.set_is_write_cache(false); // preread macro is read cache
-      }
-      if(cache_type == ObSSMacroCacheType::TMP_FILE){
-        ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_append_file(write_info_, write_object_handle));
-      } else{
-        ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
-      }
-      ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
-      write_object_handle.reset();
-      if (if_check) {
-        check_file_remote(cache_type, tenant_file_mgr, macro_id, test_type);
-      }
+    MacroBlockId macro_id;
+    ObStorageObjectHandle write_object_handle;
+    // macro id setting
+    switch (cache_type) {
+      case ObSSMacroCacheType::MACRO_BLOCK:
+        macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+        macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
+        macro_id.set_second_id(MACRO_BLOCK_TABLET_ID); // tablet_id
+        macro_id.set_third_id(MACRO_BLOCK_SERVER_ID); // server_id
+        macro_id.set_macro_transfer_seq(MACRO_BLOCK_TRANSFER_SEQ); // transfer_seq
+        macro_id.set_tenant_seq(i); // tenant_seq
+        write_info_.set_effective_tablet_id(MACRO_BLOCK_TABLET_ID); // effective_tablet_id
+        break;
+      case ObSSMacroCacheType::META_FILE:
+        macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+        macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_TABLET_META);
+        macro_id.set_second_id(META_FILE_LS_ID);  // ls_id
+        macro_id.set_third_id(META_FILE_TABLET_ID); // tablet_id
+        macro_id.set_meta_transfer_seq(META_FILE_TRANSFER_SEQ); //transfer_seq
+        macro_id.set_meta_version_id(i); // meta_version_id
+        write_info_.set_ls_epoch_id(META_FILE_LS_EPOCH_ID); // ls_epoch_id
+        break;
+      case ObSSMacroCacheType::TMP_FILE:
+        macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+        macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::TMP_FILE);
+        macro_id.set_second_id(TMP_FILE_ID); // tmp_file_id
+        macro_id.set_third_id(i); // segment_id
+        write_info_.offset_ = 0;
+        write_info_.size_ = WRITE_IO_SIZE;
+        write_info_.set_tmp_file_valid_length(WRITE_IO_SIZE);
+        write_info_.io_desc_.set_unsealed();
+        break;
+      case ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK:
+        macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+        macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
+        macro_id.set_second_id(HOT_TABLET_TABLET_ID);
+        macro_id.set_third_id(HOT_TABLET_SERVER_ID);
+        macro_id.set_macro_transfer_seq(HOT_TABLET_TRANSFER_SEQ); // transfer_seq
+        macro_id.set_tenant_seq(i); // tenant_seq
+        write_info_.set_effective_tablet_id(HOT_TABLET_TABLET_ID); // effective_tablet_id
+        break;
+      default:
+        ASSERT_TRUE(false);
+        break;
+    }
+    ASSERT_TRUE(macro_id.is_valid());
+    ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+    if (static_cast<TestType>(test_type) == TEST_WRITE_CACHE_FLUSH) {
+      write_info_.set_is_write_cache(true); // write cache
+    } else {
+      write_info_.set_is_write_cache(false); // preread macro is read cache
+    }
+    if (cache_type == ObSSMacroCacheType::TMP_FILE) {
+      ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_append_file(write_info_, write_object_handle));
+    } else {
+      ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
+    }
+    ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
+    write_object_handle.reset();
+    if (if_check) {
+      check_file_remote(cache_type, tenant_file_mgr, macro_id, test_type);
+    }
   }
 
   void delete_all_wr_file(const int64_t num, ObTenantFileManager *tenant_file_mgr, const ObSSMacroCacheType cache_type)
   {
-    for (int64_t j =0 ; j < num ; j++) {
+    for (int64_t j = 0; j < num; j++) {
       MacroBlockId macro_id;
       int64_t ls_epoch_id = 0;
       switch (cache_type) {
         case ObSSMacroCacheType::MACRO_BLOCK:
           macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
           macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
-          macro_id.set_second_id(200004);
-          macro_id.set_third_id(1);
-          macro_id.set_macro_transfer_seq(0); // transfer_seq
+          macro_id.set_second_id(MACRO_BLOCK_TABLET_ID); // tablet_id
+          macro_id.set_third_id(MACRO_BLOCK_SERVER_ID); // server_id
+          macro_id.set_macro_transfer_seq(MACRO_BLOCK_TRANSFER_SEQ); // transfer_seq
           macro_id.set_tenant_seq(j); // tenant_seq
           break;
         case ObSSMacroCacheType::META_FILE:
           macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
           macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_TABLET_META);
-          macro_id.set_second_id(1001);  // ls_id
-          macro_id.set_third_id(200001); // tablet_id
-          macro_id.set_meta_transfer_seq(0); //transfer_seq
+          macro_id.set_second_id(META_FILE_LS_ID);  // ls_id
+          macro_id.set_third_id(META_FILE_TABLET_ID); // tablet_id
+          macro_id.set_meta_transfer_seq(META_FILE_TRANSFER_SEQ); //transfer_seq
           macro_id.set_meta_version_id(j); // meta_version_id
-          ls_epoch_id = 1;
+          ls_epoch_id = META_FILE_LS_EPOCH_ID;
           break;
         case ObSSMacroCacheType::TMP_FILE:
           macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
           macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::TMP_FILE);
-          macro_id.set_second_id(100); // tmp_file_id
+          macro_id.set_second_id(TMP_FILE_ID); // tmp_file_id
           macro_id.set_third_id(j); // segment_id
           break;
         case ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK:
           macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
           macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
-          macro_id.set_second_id(200005);
-          macro_id.set_third_id(1);
-          macro_id.set_macro_transfer_seq(0); // transfer_seq
+          macro_id.set_second_id(HOT_TABLET_TABLET_ID);
+          macro_id.set_third_id(HOT_TABLET_SERVER_ID);
+          macro_id.set_macro_transfer_seq(HOT_TABLET_TRANSFER_SEQ); // transfer_seq
           macro_id.set_tenant_seq(j); // tenant_seq
           break;
         default:
@@ -441,7 +441,7 @@ public:
 
   void test_macro_cache_max(ObSSMacroCacheMgr *macro_cache_mgr, ObTenantDiskSpaceManager *disk_space_mgr,
                             ObTenantFileManager *tenant_file_mgr, const ObSSMacroCacheType cache_type, const int64_t test_type)
-    {
+  {
     const int64_t hot_tablet_macro_block_min_size = (disk_space_mgr->get_macro_cache_size()) * (disk_space_mgr->macro_cache_stats_[static_cast<uint8_t>(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK)].get_min()) / 100;
     int64_t i = 0;
     int64_t cur_type_free_size = 0;
@@ -495,6 +495,7 @@ public:
         ASSERT_TRUE(false);
         break;
     }
+    // sleep(3600);
     // delete file
     delete_all_wr_file(i, tenant_file_mgr, cache_type);
     info_log(cache_type, -1, disk_space_mgr, macro_cache_mgr, test_type);
@@ -539,6 +540,18 @@ public:
 
   public:
     static const int64_t WRITE_IO_SIZE = 2 * 1024L * 1024L; // 2MB
+    static const uint64_t MACRO_BLOCK_TABLET_ID = 200004; // tablet_id for MACRO_BLOCK
+    static const uint64_t TMP_FILE_ID = 100; // tmp_file_id for TMP_FILE
+    static const uint64_t HOT_TABLET_TABLET_ID = 200005; // tablet_id for HOT_TABLET_MACRO_BLOCK
+    static const uint64_t META_FILE_TABLET_ID = 200001; // tablet_id for META_FILE
+    static const uint64_t META_FILE_LS_ID = 1001; // ls_id for META_FILE
+    static const uint64_t META_FILE_LS_EPOCH_ID = 1; // ls_epoch_id for META_FILE
+    static const uint64_t MACRO_BLOCK_TRANSFER_SEQ = 0; // transfer_seq for MACRO_BLOCK
+    static const uint64_t HOT_TABLET_TRANSFER_SEQ = 0; // transfer_seq for HOT_TABLET_MACRO_BLOCK
+    static const uint64_t META_FILE_TRANSFER_SEQ = 0; // transfer_seq for META_FILE
+    static const uint64_t MACRO_BLOCK_SERVER_ID = 1; // server_id for MACRO_BLOCK
+    static const uint64_t HOT_TABLET_SERVER_ID = 2; // server_id for HOT_TABLET_MACRO_BLOCK
+
     ObStorageObjectWriteInfo write_info_;
     char write_buf_[WRITE_IO_SIZE];
 
@@ -562,7 +575,7 @@ TEST_F(ObMacroCacheEvictTest, test_evict)
   ObTenantFileManager *tenant_file_mgr = MTL(ObTenantFileManager*);
   ASSERT_NE(nullptr, tenant_file_mgr);
 
-  for (int64_t test_type = TEST_MACRO_BLOCK ; test_type < TEST_MAX_NUM ; test_type++) {
+  for (int64_t test_type = TEST_MACRO_BLOCK; test_type < TEST_MAX_NUM; test_type++) {
     switch (static_cast<TestType>(test_type)) {
       case TEST_MACRO_BLOCK:                      /* write to macro cache -- MACRO_BLOCK */
         test_macro_cache_max(macro_cache_mgr, disk_space_mgr, tenant_file_mgr,

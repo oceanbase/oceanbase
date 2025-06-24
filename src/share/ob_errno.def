@@ -2371,6 +2371,7 @@ DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM, -9140, -1, "HY000", "t
 DEFINE_ERROR(OB_RESOURCE_RELEASED, -9141, -1, "HY000", "the resource has been released");
 DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH, -9142, -1, "HY000", "the object can not be overwritten with different content");
 DEFINE_ERROR_DEP(OB_DAG_TASK_IS_SUSPENDED, -9143, -1, "HY000", "dag task is pending, need to wait for resources");
+DEFINE_ERROR(OB_UNEXPECTED_MACRO_CACHE_FILE, -9144, -1, "HY000", "unexpected macro cache file, which is not inner file");
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////

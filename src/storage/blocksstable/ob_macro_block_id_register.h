@@ -48,8 +48,8 @@
     /*local_path_to_macro_id*/ \
     const char *sub_path = nullptr; \
     if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 4))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else { \
       char format[512] = {0}; \
       int num = 0; \
@@ -62,8 +62,8 @@
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &transfer_seq, &server_id, &seq_id))) { \
       } else if (OB_UNLIKELY(4 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO); \
@@ -96,8 +96,8 @@
     /*local_path_to_macro_id*/ \
     const char *sub_path = nullptr; \
     if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 4))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else { \
       char format[512] = {0}; \
       int num = 0; \
@@ -110,8 +110,8 @@
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &transfer_seq, &server_id, &seq_id))) { \
       } else if (OB_UNLIKELY(4 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_META_MACRO); \
@@ -161,20 +161,20 @@
     int64_t macro_seq_id = 0; \
     const char *judge_path = nullptr; \
     if (OB_ISNULL(judge_path = ObString(path).reverse_find('/', 3))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else if (NULL != STRSTR(judge_path, LS_DIR_STR)) { \
       const char *sub_path = nullptr; \
       if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 2))) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
       } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%ld/%%[^_]_%%[^_]_%s%%ld%s%%ld.T%hhu", \
                          OP_KEY_STR, SEQ_KEY_STR, (uint8_t)ObStorageObjectType::SHARED_MINI_DATA_MACRO))) { \
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &ls_id, tablet_name_part1, tablet_name_part2, &op_id, &macro_seq_id))) { \
       } else if (OB_UNLIKELY(5 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else if (OB_FAIL(databuff_printf(tablet_name, sizeof(tablet_name), "%s_%s", tablet_name_part1, tablet_name_part2))) { \
         LOG_WARN("fail to databuff printf", KR(ret), K(tablet_name_part1), K(tablet_name_part2)); \
       } else if (OB_FAIL(get_ls_inner_tablet_id_(tablet_name, tablet_id))) { \
@@ -185,15 +185,15 @@
     } else { \
       const char *sub_path = nullptr; \
       if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 1))) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
       } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s%%ld%s%%ld%s%%ld%s%%ld.T%hhu", \
                  TABLET_KEY_STR, REORG_KEY_STR, OP_KEY_STR, SEQ_KEY_STR, (uint8_t)ObStorageObjectType::SHARED_MINI_DATA_MACRO))) { \
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) { \
       } else if (OB_UNLIKELY(4 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         is_inner_tablet = false; \
       } \
@@ -259,20 +259,20 @@
     int64_t macro_seq_id = 0; \
     const char *judge_path = nullptr; \
     if (OB_ISNULL(judge_path = ObString(path).reverse_find('/', 3))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else if (NULL != STRSTR(judge_path, LS_DIR_STR)) { \
       const char *sub_path = nullptr; \
       if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 2))) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", K(path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
       } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%ld/%%[^_]_%%[^_]_%s%%ld%s%%ld.T%hhu", \
                          OP_KEY_STR, SEQ_KEY_STR, (uint8_t)ObStorageObjectType::SHARED_MINI_META_MACRO))) { \
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &ls_id, tablet_name_part1, tablet_name_part2, &op_id, &macro_seq_id))) { \
       } else if (OB_UNLIKELY(5 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else if (OB_FAIL(databuff_printf(tablet_name, sizeof(tablet_name), "%s_%s", tablet_name_part1, tablet_name_part2))) { \
         LOG_WARN("fail to databuff printf", KR(ret), K(tablet_name_part1), K(tablet_name_part2)); \
       } else if (OB_FAIL(get_ls_inner_tablet_id_(tablet_name, tablet_id))) { \
@@ -283,15 +283,15 @@
     } else { \
       const char *sub_path = nullptr; \
       if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 1))) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", K(path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
       } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s%%ld%s%%ld%s%%ld%s%%ld.T%hhu", \
                          TABLET_KEY_STR, REORG_KEY_STR, OP_KEY_STR, SEQ_KEY_STR, (uint8_t)ObStorageObjectType::SHARED_MINI_META_MACRO))) { \
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) { \
       } else if (OB_UNLIKELY(4 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         is_inner_tablet = false; \
       } \
@@ -357,20 +357,20 @@
     int64_t macro_seq_id = 0; \
     const char *judge_path = nullptr; \
     if (OB_ISNULL(judge_path = ObString(path).reverse_find('/', 3))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else if (NULL != STRSTR(judge_path, LS_DIR_STR)) { \
       const char *sub_path = nullptr; \
       if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 2))) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", K(path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
       } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%ld/%%[^_]_%%[^_]_%s%%ld%s%%ld.T%hhu", \
                          OP_KEY_STR, SEQ_KEY_STR, (uint8_t)ObStorageObjectType::SHARED_MINOR_DATA_MACRO))) { \
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &ls_id, tablet_name_part1, tablet_name_part2, &op_id, &macro_seq_id))) { \
       } else if (OB_UNLIKELY(5 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else if (OB_FAIL(databuff_printf(tablet_name, sizeof(tablet_name), "%s_%s", tablet_name_part1, tablet_name_part2))) { \
         LOG_WARN("fail to databuff printf", KR(ret), K(tablet_name_part1), K(tablet_name_part2)); \
       } else if (OB_FAIL(get_ls_inner_tablet_id_(tablet_name, tablet_id))) { \
@@ -381,15 +381,15 @@
     } else { \
       const char *sub_path = nullptr; \
       if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 1))) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", K(path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
       } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s%%ld%s%%ld%s%%ld%s%%ld.T%hhu", \
                          TABLET_KEY_STR, REORG_KEY_STR, OP_KEY_STR, SEQ_KEY_STR, (uint8_t)ObStorageObjectType::SHARED_MINOR_DATA_MACRO))) { \
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) { \
       } else if (OB_UNLIKELY(4 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         is_inner_tablet = false; \
       } \
@@ -455,20 +455,20 @@
     int64_t macro_seq_id = 0; \
     const char *judge_path = nullptr; \
     if (OB_ISNULL(judge_path = ObString(path).reverse_find('/', 3))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else if (NULL != STRSTR(judge_path, LS_DIR_STR)) { \
       const char *sub_path = nullptr; \
       if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 2))) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", K(path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
       } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%ld/%%[^_]_%%[^_]_%s%%ld%s%%ld.T%hhu", \
                          OP_KEY_STR, SEQ_KEY_STR, (uint8_t)ObStorageObjectType::SHARED_MINOR_META_MACRO))) { \
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &ls_id, tablet_name_part1, tablet_name_part2, &op_id, &macro_seq_id))) { \
       } else if (OB_UNLIKELY(5 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else if (OB_FAIL(databuff_printf(tablet_name, sizeof(tablet_name), "%s_%s", tablet_name_part1, tablet_name_part2))) { \
         LOG_WARN("fail to databuff printf", KR(ret), K(tablet_name_part1), K(tablet_name_part2)); \
       } else if (OB_FAIL(get_ls_inner_tablet_id_(tablet_name, tablet_id))) { \
@@ -479,15 +479,15 @@
     } else { \
       const char *sub_path = nullptr; \
       if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 1))) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", K(path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
       } else if (OB_FAIL(databuff_printf(format, sizeof(format), "/%s%%ld%s%%ld%s%%ld%s%%ld.T%hhu", \
                          TABLET_KEY_STR, REORG_KEY_STR, OP_KEY_STR, SEQ_KEY_STR, (uint8_t)ObStorageObjectType::SHARED_MINOR_META_MACRO))) { \
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) { \
       } else if (OB_UNLIKELY(4 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         is_inner_tablet = false; \
       } \
@@ -538,8 +538,8 @@
     int num = 0; \
     const char *sub_path = nullptr; \
     if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 1))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else { \
       int64_t tablet_id = 0; \
       int64_t reorganization_scn = 0; \
@@ -550,8 +550,8 @@
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &cg_id, &macro_seq_id))) { \
       } else if (OB_UNLIKELY(4 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MAJOR_DATA_MACRO); \
@@ -585,8 +585,8 @@
     int num = 0; \
     const char *sub_path = nullptr; \
     if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 1))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else { \
       int64_t tablet_id = 0; \
       int64_t reorganization_scn = 0; \
@@ -597,8 +597,8 @@
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &cg_id, &macro_seq_id))) { \
       } else if (OB_UNLIKELY(4 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MAJOR_META_MACRO); \
@@ -630,8 +630,8 @@
     int num = 0; \
     const char *sub_path = nullptr; \
     if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 2))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else { \
       int64_t tmp_file_id = 0; \
       int64_t segment_id = 0; \
@@ -639,8 +639,8 @@
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &tmp_file_id, &segment_id))) { \
       } else if (OB_UNLIKELY(2 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::TMP_FILE); \
@@ -685,8 +685,8 @@
     int num = 0; \
     const char *sub_path = nullptr; \
     if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 6))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else { \
       int64_t ls_id = 0; \
       int64_t epoch_id = 0; \
@@ -699,8 +699,8 @@
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &ls_id, &epoch_id, &scatter_id, &tablet_id, &meta_transfer_seq, &meta_version_id))) { \
       } else if (OB_UNLIKELY(6 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_TABLET_META); \
@@ -734,8 +734,8 @@
     int num = 0; \
     const char *sub_path = nullptr; \
     if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 3))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else { \
       int64_t tenant_id = 0; \
       int64_t epoch_id = 0; \
@@ -745,8 +745,8 @@
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &tenant_id, &epoch_id, &object_id))) { \
       } else if (OB_UNLIKELY(3 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_SLOG_FILE); \
@@ -921,8 +921,8 @@
     int num = 0; \
     const char *sub_path = nullptr; \
     if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 1))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else { \
       int64_t tablet_id = 0; \
       int64_t reorganization_scn = 0; \
@@ -933,8 +933,8 @@
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) { \
       } else if (OB_UNLIKELY(4 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MDS_MINI_DATA_MACRO); \
@@ -968,8 +968,8 @@
     int num = 0; \
     const char *sub_path = nullptr; \
     if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 1))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else { \
       int64_t tablet_id = 0; \
       int64_t reorganization_scn = 0; \
@@ -980,8 +980,8 @@
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) { \
       } else if (OB_UNLIKELY(4 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MDS_MINI_META_MACRO); \
@@ -1015,8 +1015,8 @@
     int num = 0; \
     const char *sub_path = nullptr; \
     if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 1))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else { \
       int64_t tablet_id = 0; \
       int64_t reorganization_scn = 0; \
@@ -1027,8 +1027,8 @@
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) { \
       } else if (OB_UNLIKELY(4 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MDS_MINOR_DATA_MACRO); \
@@ -1062,8 +1062,8 @@
     int num = 0; \
     const char *sub_path = nullptr; \
     if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 1))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else { \
       int64_t tablet_id = 0; \
       int64_t reorganization_scn = 0; \
@@ -1074,8 +1074,8 @@
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &reorganization_scn, &op_id, &macro_seq_id))) { \
       } else if (OB_UNLIKELY(4 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO); \
@@ -1151,8 +1151,8 @@
     int num = 0; \
     const char *sub_path = nullptr; \
     if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 1))) { \
-      ret = OB_ERR_UNEXPECTED; \
-      LOG_WARN("unexpected path", K(path)); \
+      ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path)); \
     } else { \
       uint64_t server_seq_id = 0; \
       int64_t offset_idx = 0; \
@@ -1161,8 +1161,8 @@
         LOG_WARN("fail to databuff printf", KR(ret)); \
       } else if (FALSE_IT(num = sscanf(sub_path, format, &server_seq_id, &offset_idx))) { \
       } else if (OB_UNLIKELY(2 != num)) { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("unexpected path", KR(ret), K(sub_path)); \
+        ret = OB_UNEXPECTED_MACRO_CACHE_FILE; \
+        LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path)); \
       } else { \
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE); \
         macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::EXTERNAL_TABLE_FILE); \

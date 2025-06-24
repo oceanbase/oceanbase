@@ -28013,6 +28013,20 @@ static const _error _error_OB_DAG_TASK_IS_SUSPENDED = {
       .ob_str_error          = "OBE-00600: internal error code, arguments: -9143, dag task is pending, need to wait for resources",
       .ob_str_user_error     = "OBE-00600: internal error code, arguments: -9143, dag task is pending, need to wait for resources"
 };
+static const _error _error_OB_UNEXPECTED_MACRO_CACHE_FILE = {
+      .error_name            = "OB_UNEXPECTED_MACRO_CACHE_FILE",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "unexpected macro cache file, which is not inner file",
+      .str_user_error        = "unexpected macro cache file, which is not inner file",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9144, unexpected macro cache file, which is not inner file",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9144, unexpected macro cache file, which is not inner file",
+      .ob_str_error          = "OBE-00600: internal error code, arguments: -9144, unexpected macro cache file, which is not inner file",
+      .ob_str_user_error     = "OBE-00600: internal error code, arguments: -9144, unexpected macro cache file, which is not inner file"
+};
 static const _error _error_OB_ERR_RESIZE_FILE_TO_SMALLER = {
       .error_name            = "OB_ERR_RESIZE_FILE_TO_SMALLER",
       .error_cause           = "Internal Error",
@@ -36431,6 +36445,7 @@ struct ObStrErrorInit
     _errors[-OB_RESOURCE_RELEASED] = &_error_OB_RESOURCE_RELEASED;
     _errors[-OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH] = &_error_OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH;
     _errors[-OB_DAG_TASK_IS_SUSPENDED] = &_error_OB_DAG_TASK_IS_SUSPENDED;
+    _errors[-OB_UNEXPECTED_MACRO_CACHE_FILE] = &_error_OB_UNEXPECTED_MACRO_CACHE_FILE;
     _errors[-OB_ERR_RESIZE_FILE_TO_SMALLER] = &_error_OB_ERR_RESIZE_FILE_TO_SMALLER;
     _errors[-OB_MARK_BLOCK_INFO_TIMEOUT] = &_error_OB_MARK_BLOCK_INFO_TIMEOUT;
     _errors[-OB_NOT_READY_TO_EXTEND_FILE] = &_error_OB_NOT_READY_TO_EXTEND_FILE;
