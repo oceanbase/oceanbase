@@ -1461,7 +1461,10 @@ int ObLogApplyService::stat_for_each(const common::ObFunction<int (const ObApply
     return bret;
   };
   int ret = OB_SUCCESS;
-  if (!func.is_valid()) {
+  if (false == ATOMIC_LOAD(&is_running_)) {
+    ret = OB_STATE_NOT_MATCH;
+    CLOG_LOG(ERROR, "apply service has been stopped", K(ret));
+  } else if (!func.is_valid()) {
     // ObFunction will be invalid when allocating memory failed.
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
