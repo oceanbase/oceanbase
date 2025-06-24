@@ -10049,9 +10049,9 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
         } else if (FALSE_IT(tenant_id = params.session_info_->get_effective_tenant_id())) {
         } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
           LOG_WARN("failed to get data version", K(ret));
-        } else if (data_version < DATA_VERSION_4_4_0_0 || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0) {
+        } else if (data_version < MOCK_DATA_VERSION_4_3_5_3 || GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_3_5_3) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not support odps external table under CLUSTER_VERSION_4_4_0_0 or data version uner DATA_VERSION_4_4_0_0", K(ret));
+          LOG_WARN("not support odps external table storage api under CLUSTER_VERSION_4_3_5_3 or data version uner DATA_VERSION_4_3_5_3", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "odps external table");
         } else {
           ObString temp_split_mode = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
