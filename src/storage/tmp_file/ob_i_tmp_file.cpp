@@ -225,6 +225,7 @@ ObITmpFile::ObITmpFile()
       data_page_flush_level_(-1),
       data_flush_node_(*this),
       meta_lock_(common::ObLatchIds::TMP_FILE_LOCK),
+      stat_lock_(common::ObLatchIds::TMP_FILE_LOCK),
       multi_write_lock_(common::ObLatchIds::TMP_FILE_LOCK),
       last_page_lock_(common::ObLatchIds::TMP_FILE_LOCK),
       wbp_(nullptr),
@@ -1167,7 +1168,7 @@ int ObITmpFile::insert_or_update_data_flush_node_()
 
 void ObITmpFile::set_read_stats_vars(const ObTmpFileIOCtx &ctx, const int64_t read_size)
 {
-  common::TCRWLock::WLockGuard guard(meta_lock_);
+  ObSpinLockGuard guard(stat_lock_);
   inner_set_read_stats_vars_(ctx, read_size);
 }
 
@@ -1191,7 +1192,7 @@ void ObITmpFile::inner_set_read_stats_vars_(const ObTmpFileIOCtx &ctx, const int
 
 void ObITmpFile::set_write_stats_vars(const ObTmpFileIOCtx &ctx)
 {
-  common::TCRWLock::WLockGuard guard(meta_lock_);
+  ObSpinLockGuard guard(stat_lock_);
   inner_set_write_stats_vars_(ctx);
 }
 

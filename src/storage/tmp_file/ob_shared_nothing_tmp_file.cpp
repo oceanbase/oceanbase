@@ -1293,22 +1293,25 @@ int ObSharedNothingTmpFile::copy_info_for_virtual_table(ObTmpFileInfo &tmp_file_
 
   if (OB_FAIL(ret)) {
     LOG_WARN("fail to get lock for reading in virtual table", KR(ret), KPC(this));
-  } else if (OB_FAIL(sn_tmp_file_info.init(trace_id_, tenant_id_, dir_id_, fd_,
-                                           file_size_, truncated_offset_, is_deleting_,
-                                           cached_page_nums_, write_back_data_page_num_,
-                                           flushed_data_page_num_, ref_cnt_,
-                                           birth_ts_, this, label_.ptr(),
-                                           write_req_cnt_, unaligned_write_req_cnt_,
-                                           write_persisted_tail_page_cnt_, lack_page_cnt_, last_modify_ts_,
-                                           read_req_cnt_, unaligned_read_req_cnt_,
-                                           total_truncated_page_read_cnt_, total_kv_cache_page_read_cnt_,
-                                           total_uncached_page_read_cnt_, total_wbp_page_read_cnt_,
-                                           truncated_page_read_hits_, kv_cache_page_read_hits_,
-                                           uncached_page_read_hits_, wbp_page_read_hits_,
-                                           total_read_size_, last_access_ts_))) {
-    LOG_WARN("fail to init tmp_file_info", KR(ret), KPC(this));
-  } else if (OB_FAIL(meta_tree_.copy_info(sn_tmp_file_info))) {
-    LOG_WARN("fail to copy tree info", KR(ret), KPC(this));
+  } else{
+    ObSpinLockGuard guard(stat_lock_);
+    if (OB_FAIL(sn_tmp_file_info.init(trace_id_, tenant_id_, dir_id_, fd_,
+                                      file_size_, truncated_offset_, is_deleting_,
+                                      cached_page_nums_, write_back_data_page_num_,
+                                      flushed_data_page_num_, ref_cnt_,
+                                      birth_ts_, this, label_.ptr(),
+                                      write_req_cnt_, unaligned_write_req_cnt_,
+                                      write_persisted_tail_page_cnt_, lack_page_cnt_, last_modify_ts_,
+                                      read_req_cnt_, unaligned_read_req_cnt_,
+                                      total_truncated_page_read_cnt_, total_kv_cache_page_read_cnt_,
+                                      total_uncached_page_read_cnt_, total_wbp_page_read_cnt_,
+                                      truncated_page_read_hits_, kv_cache_page_read_hits_,
+                                      uncached_page_read_hits_, wbp_page_read_hits_,
+                                      total_read_size_, last_access_ts_))) {
+      LOG_WARN("fail to init tmp_file_info", KR(ret), KPC(this));
+    } else if (OB_FAIL(meta_tree_.copy_info(sn_tmp_file_info))) {
+      LOG_WARN("fail to copy tree info", KR(ret), KPC(this));
+    }
   }
   return ret;
 };

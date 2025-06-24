@@ -357,6 +357,7 @@ protected:
   int64_t data_page_flush_level_;
   ObTmpFileNode data_flush_node_;
   common::TCRWLock meta_lock_; // handle conflicts between writing and reading meta tree and meta data of file
+  ObSpinLock stat_lock_;       // for updating vtable write info/read info
   ObSpinLock multi_write_lock_; // handle conflicts between multiple writes
   ObSpinLock last_page_lock_; // handle conflicts between writing and evicting for last page
   ObTmpWriteBufferPool *wbp_;
