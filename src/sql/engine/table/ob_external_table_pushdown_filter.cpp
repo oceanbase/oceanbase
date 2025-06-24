@@ -101,6 +101,7 @@ int ObExternalTablePushdownFilter::apply_skipping_index_filter(
         const uint64_t ob_col_id = node.filter_->get_col_ids().at(0);
         if (OB_FAIL(node.filter_->init_evaluated_datums(filter_valid))) {
           LOG_WARN("failed to init filter", K(ret));
+        } else if (!filter_valid) {
         } else if (OB_FAIL(skip_filter_executor_.falsifiable_pushdown_filter(
             ob_col_id, node.skip_index_type_, MOCK_ROW_COUNT, filter_param, *node.filter_, allocator_,
             true))) {
