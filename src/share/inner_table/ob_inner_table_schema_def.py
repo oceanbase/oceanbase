@@ -64715,7 +64715,7 @@ def_table_schema(
 )
 
 # 25306: DBA_OB_TENANT_FLASHBACK_LOG_SCN
-# 25307: DBA_OB_CCL_RULE
+# 25307: DBA_OB_CCL_RULES
 
 def_table_schema(
     owner           = 'zg410411',
