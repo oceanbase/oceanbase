@@ -39,7 +39,7 @@ class ObTableJsonObjectBuilder
 {
 public:
   ObTableJsonObjectBuilder(ObIAllocator &allocator);
-
+  int init();
   int add(const char* key, const int64_t key_len, int64_t value);
   int add(const char* key, const int64_t key_len, const char* value, int32_t value_len);
   int add(const char* key, const int64_t key_len, const ObString &value);
@@ -60,6 +60,7 @@ class ObTableJsonArrayBuilder
 {
 public:
   ObTableJsonArrayBuilder(ObIAllocator &allocator);
+  int init();
   int add(int64_t value);
   int add(const char* value, int32_t len);
   int add(const ObString &value);

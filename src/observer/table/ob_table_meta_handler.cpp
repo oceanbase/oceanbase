@@ -16,6 +16,7 @@
 #include "utils/ob_table_sql_utils.h"
 #include "ob_table_query_common.h"
 
+
 using namespace oceanbase::table;
 using namespace oceanbase::common;
 using namespace oceanbase::observer;
@@ -67,6 +68,17 @@ int ObITableMetaHandler::check_hbase_ddl_enable()
 }
 
 // ================================ ObHTableRegionLocatorHandler ================================
+
+ObHTableRegionLocatorHandler::~ObHTableRegionLocatorHandler()
+{
+  for (int i = 0; i < tablet_infos_.count(); ++i) {
+    TabletInfo* info = tablet_infos_.at(i);
+    for (int j = 0; j < info->replicas_.count(); ++j) {
+      OB_DELETEx(TabletLocation, &allocator_, info->replicas_.at(j));
+    }
+    OB_DELETEx(TabletInfo, &allocator_, info);
+  }
+}
 
 int ObHTableRegionLocatorHandler::handle(ObTableExecCtx &ctx, ObTableMetaResponse &response)
 {
@@ -143,7 +155,13 @@ int ObHTableRegionLocatorHandler::try_compress(ObTableMetaResponse &response)
     ]
   }
   */
-  if (OB_FAIL(build_table_and_replica_dicts(tmp_allocator, table_id_dict, table_id_map, replica_dict, replica_map))) {
+  if (OB_FAIL(partitions_builder.init())) {
+    LOG_WARN("failed to init partitions builder", K(ret));
+  } else if (OB_FAIL(table_id_dict_builder.init())) {
+    LOG_WARN("failed to init table id dict builder", K(ret));
+  } else if (OB_FAIL(replica_dict_builder.init())) {
+    LOG_WARN("failed to init replica dict builder", K(ret));
+  } else if (OB_FAIL(build_table_and_replica_dicts(tmp_allocator, table_id_dict, table_id_map, replica_dict, replica_map))) {
     LOG_WARN("failed to build table and replica dicts", K(ret));
   } else if (OB_FAIL(build_partitions_array(tmp_allocator, table_id_map, replica_map, partitions_builder))) {
     LOG_WARN("failed to build partitions array", K(ret));
@@ -234,7 +252,9 @@ int ObHTableRegionLocatorHandler::build_partitions_array(ObIAllocator &allocator
           LOG_WARN("failed to get replica map", K(ret), K(ip_port.string()));
         } else {
           ObTableJsonArrayBuilder row_builder(allocator);
-          if (OB_FAIL(row_builder.add(table_id_idx))) {
+          if (OB_FAIL(row_builder.init())) {
+            LOG_WARN("failed to init row builder", K(ret));
+          } else if (OB_FAIL(row_builder.add(table_id_idx))) {
             LOG_WARN("failed to add table id idx", K(ret));
           } else if (OB_FAIL(row_builder.add(tinfo->tablet_id_))) {
             LOG_WARN("failed to add tablet id", K(ret));
@@ -276,7 +296,9 @@ int ObHTableRegionLocatorHandler::build_replica_dict_array(ObIAllocator &allocat
     ObString &dict_str = replica_dict.at(i);
     int port = std::strtol(dict_str.after(':').ptr(), nullptr, 10);
     ObTableJsonArrayBuilder row_builder(allocator);
-    if (OB_FAIL(row_builder.add(dict_str.split_on(':')))) {
+    if (OB_FAIL(row_builder.init())) {
+      LOG_WARN("failed to init row builder", K(ret));
+    } else if (OB_FAIL(row_builder.add(dict_str.split_on(':')))) {
       LOG_WARN("failed to add ip", K(ret));
     } else if (OB_FAIL(row_builder.add(port))) {
       LOG_WARN("failed to add port", K(ret));
@@ -296,7 +318,9 @@ int ObHTableRegionLocatorHandler::build_root_object(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   root = nullptr;
   ObTableJsonObjectBuilder root_builder(allocator);
-  if (OB_FAIL(root_builder.add("table_id_dict", strlen("table_id_dict"), table_id_dict_builder.build()))) {
+  if (OB_FAIL(root_builder.init())) {
+    LOG_WARN("failed to init root_builder", K(ret));
+  } else if (OB_FAIL(root_builder.add("table_id_dict", strlen("table_id_dict"), table_id_dict_builder.build()))) {
     LOG_WARN("failed to add table id dict", K(ret));
   } else if (OB_FAIL(root_builder.add("replica_dict", strlen("replica_dict"), replica_dict_builder.build()))) {
     LOG_WARN("failed to add replica dict", K(ret));
@@ -308,6 +332,48 @@ int ObHTableRegionLocatorHandler::build_root_object(ObIAllocator &allocator,
   }
   return ret;
 }
+
+int ObHTableRegionLocatorHandler::format_tablet_ids(ObIAllocator &allocator,
+                                                    const ObIArray<ObTabletID>& tablet_ids,
+                                                    int start_idx,
+                                                    int count,
+                                                    char *&result)
+{
+  int ret = OB_SUCCESS;
+
+  result = nullptr;
+  if (start_idx < 0
+      || count <= 0
+      || start_idx >= tablet_ids.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("format_tablet_ids fail, invalid argument", K(tablet_ids), K(start_idx), K(count));
+  } else {
+    size_t total_len = 0;
+    int64_t end_idx = min(start_idx + count, tablet_ids.count());
+    for (size_t i = start_idx; i < end_idx; ++i) {
+      if (i > start_idx) total_len += 1;
+      total_len += snprintf(nullptr, 0, "%ld", tablet_ids.at(i).id());
+    }
+    total_len += 1;
+    char* buffer = (char*)allocator.alloc(total_len);
+    if (OB_ISNULL(buffer)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory", K(ret));
+    } else {
+      int pos = 0;
+      for (size_t i = start_idx; i < end_idx; ++i) {
+        if (i > start_idx) {
+          pos += snprintf(buffer + pos, total_len - pos, ",");
+        }
+        pos += snprintf(buffer + pos, total_len - pos, "%ld", tablet_ids.at(i).id());
+      }
+      buffer[total_len - 1] = '\0';
+      result = buffer;
+    }
+  }
+  return ret;
+}
+
 
 int ObHTableRegionLocatorHandler::get_tablet_boundary(ObTableExecCtx &ctx)
 {
@@ -356,66 +422,87 @@ int ObHTableRegionLocatorHandler::get_tablet_boundary(ObTableExecCtx &ctx)
             LOG_WARN("failed to push back tablet info", K(ret));
           }
         } else {
-          for (int64_t j = 0; OB_SUCC(ret) && j < tablet_ids.count(); ++j) {
-            sql.reuse();
-            sql.assign_fmt(PARTITION_BOUNDARY_SQL, tablet_ids[j].id());
-            SMART_VAR(common::ObISQLClient::ReadResult, res) {
-              ObMySQLResult *result = nullptr;
-              if (OB_FAIL(ObTableSqlUtils::read(OB_SYS_TENANT_ID, sql.ptr(), res))) {
-                LOG_WARN("failed to write sql", K(ret));
-              } else if (OB_ISNULL(result = res.get_result())) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("result is null", K(ret));
-              } else {
-                int64_t table_id = 0;
-                int64_t tablet_id = 0;
-                ObString upperbound;
-                ObString upperbound_trim;
-                TabletInfo *tablet_info = nullptr;
-                while (OB_SUCC(ret) && OB_SUCC(result->next())) {
-                  table_id = 0;
-                  tablet_id = 0;
-                  upperbound.reset();
-                  upperbound_trim.reset();
-                  tablet_info = nullptr;
-                  EXTRACT_INT_FIELD_MYSQL(*result, "table_id", table_id, int64_t);
-                  EXTRACT_INT_FIELD_MYSQL(*result, "tablet_id", tablet_id, int64_t);
-                  if (table_schemas[i]->is_range_part()) {
-                    EXTRACT_VARCHAR_FIELD_MYSQL(*result, "upperbound", upperbound);
-                    if (upperbound.length() >= 2
-                              && upperbound.ptr()[0] == '\''
-                              && upperbound.ptr()[upperbound.length() - 1] == '\'') {
-                      upperbound.assign_ptr(upperbound.ptr() + 1, upperbound.length() - 2);
-                    }
+          const char* sql_template = table_schemas[i]->get_part_level() == PARTITION_LEVEL_ONE ? PARTITION_BOUNDARY_SQL
+                                                                                               : PARTITION_BOUNDARY_SUBPART_SQL;
+          for (int64_t j = 0; OB_SUCC(ret) && j < tablet_ids.count(); j += BATCH_SIZE) {
+            char *tablet_ids_str = nullptr;
+            if (OB_FAIL(format_tablet_ids(allocator_, tablet_ids, j, BATCH_SIZE, tablet_ids_str))) {
+              LOG_WARN("failed to format tablet ids", K(ret), K(tablet_ids), K(j), K(BATCH_SIZE));
+            } else if (OB_ISNULL(tablet_ids_str)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to format tablet ids", K(ret));
+            } else if (OB_FAIL(sql.assign_fmt(sql_template,
+                                              MTL_ID(),
+                                              table_schemas[i]->get_table_id(),
+                                              strlen(tablet_ids_str),
+                                              tablet_ids_str))) {
+              LOG_WARN("failed to assign format", K(table_schemas[i]->get_table_id()), K(tablet_ids_str));
+            } else {
+              SMART_VAR(common::ObISQLClient::ReadResult, res) {
+                ObMySQLResult *result = nullptr;
+                if (OB_FAIL(ObTableSqlUtils::read(OB_SYS_TENANT_ID, sql.ptr(), res))) {
+                  LOG_WARN("failed to execute sql", K(ret), K(sql.string()));
+                } else if (OB_ISNULL(result = res.get_result())) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("result is null", K(ret), K(sql.string()));
+                } else {
+                  int64_t table_id = 0;
+                  int64_t tablet_id = 0;
+                  ObString upperbound;
+                  ObString upperbound_trim;
+                  TabletInfo *tablet_info = nullptr;
+                  while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+                    table_id = 0;
+                    tablet_id = 0;
+                    upperbound.reset();
+                    upperbound_trim.reset();
+                    tablet_info = nullptr;
+                    EXTRACT_INT_FIELD_MYSQL(*result, "table_id", table_id, int64_t);
+                    EXTRACT_INT_FIELD_MYSQL(*result, "tablet_id", tablet_id, int64_t);
                     if (OB_FAIL(ret)) {
+                    } else if (table_id == 0 || tablet_id == 0) {
+                      ret = OB_ERR_UNEXPECTED;
+                      LOG_WARN("invalid result", K(table_id), K(tablet_id));
+                    } else if (table_schemas[i]->is_range_part() && table_schemas[i]->get_part_level() == PARTITION_LEVEL_ONE) {
+                      EXTRACT_VARCHAR_FIELD_MYSQL(*result, "upperbound", upperbound);
+                      if (upperbound.length() >= 2
+                                && upperbound.ptr()[0] == '\''
+                                && upperbound.ptr()[upperbound.length() - 1] == '\'') {
+                        upperbound.assign_ptr(upperbound.ptr() + 1, upperbound.length() - 2);
+                      }
+                      if (OB_FAIL(ret)) {
+                      } else {
+                        if (OB_FAIL(ob_write_string(allocator_, upperbound, upperbound_trim))) {
+                          LOG_WARN("failed to write upperbound", K(ret), K(upperbound));
+                        } else if (OB_ISNULL(tablet_info = OB_NEWx(TabletInfo, &allocator_, table_id, tablet_id, upperbound_trim))) {
+                          ret = OB_ALLOCATE_MEMORY_FAILED;
+                          LOG_WARN("failed to allocate memory", K(ret), K(table_id), K(tablet_id), K(upperbound_trim));
+                        } else if (OB_FAIL(tablet_infos_.push_back(tablet_info))) {
+                          OB_DELETEx(TabletInfo, &allocator_, tablet_info);
+                          LOG_WARN("failed to push back tablet info", K(ret), K(table_id), K(tablet_id), K(upperbound_trim));
+                        }
+                      }
                     } else {
-                      if (OB_FAIL(ob_write_string(allocator_, upperbound, upperbound_trim))) {
-                        LOG_WARN("failed to write upperbound", K(ret), K(upperbound));
+                      // non-range partition, upperbound is empty string
+                      if (OB_FAIL(ob_write_string(allocator_, ObString::make_empty_string(), upperbound_trim))) {
+                        LOG_WARN("failed to write empty upperbound", K(ret));
                       } else if (OB_ISNULL(tablet_info = OB_NEWx(TabletInfo, &allocator_, table_id, tablet_id, upperbound_trim))) {
                         ret = OB_ALLOCATE_MEMORY_FAILED;
-                        LOG_WARN("failed to allocate memory", K(ret));
+                        LOG_WARN("failed to allocate memory", K(ret), K(table_id), K(tablet_id), K(upperbound_trim));
                       } else if (OB_FAIL(tablet_infos_.push_back(tablet_info))) {
                         OB_DELETEx(TabletInfo, &allocator_, tablet_info);
-                        LOG_WARN("failed to push back tablet info", K(ret));
+                        LOG_WARN("failed to push back tablet info", K(ret), K(table_id), K(tablet_id), K(upperbound_trim));
                       }
                     }
-                  } else {
-                    // non-range partition, upperbound is empty string
-                    if (OB_FAIL(ob_write_string(allocator_, ObString::make_empty_string(), upperbound_trim))) {
-                      LOG_WARN("failed to write empty upperbound", K(ret));
-                    } else if (OB_ISNULL(tablet_info = OB_NEWx(TabletInfo, &allocator_, table_id, tablet_id, upperbound_trim))) {
-                      ret = OB_ALLOCATE_MEMORY_FAILED;
-                      LOG_WARN("failed to allocate memory", K(ret));
-                    } else if (OB_FAIL(tablet_infos_.push_back(tablet_info))) {
-                      OB_DELETEx(TabletInfo, &allocator_, tablet_info);
-                      LOG_WARN("failed to push back tablet info", K(ret));
-                    }
+                  }
+                  if (ret == OB_ITER_END) {
+                    ret = OB_SUCCESS;
                   }
                 }
-                if (ret == OB_ITER_END) {
-                  ret = OB_SUCCESS;
-                }
               }
+            }
+            if (OB_NOT_NULL(tablet_ids_str)) {
+              allocator_.free(tablet_ids_str);
             }
           }
         }
@@ -467,51 +554,72 @@ int ObHTableRegionLocatorHandler::get_tablet_location(ObTableExecCtx &ctx)
       if (OB_FAIL(table_schemas[i]->get_tablet_ids(tablet_ids))) {
         LOG_WARN("failed to get tablet ids", K(ret), K(table_schemas[i]->get_table_name()));
       } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < tablet_ids.count(); ++j) {
-          sql.reuse();
-          sql.assign_fmt(TABLET_LOCATION_SQL, tablet_ids[j].id(), tenant_name.ptr(), database_name.ptr(), table_schemas[i]->get_table_name());
-          SMART_VAR(common::ObISQLClient::ReadResult, res) {
-            ObMySQLResult *result = nullptr;
-            if (OB_FAIL(ObTableSqlUtils::read(OB_SYS_TENANT_ID, sql.ptr(), res))) {
-              LOG_WARN("failed to write sql", K(ret), K(sql));
-            } else if (OB_ISNULL(result = res.get_result())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("result is null", K(ret), K(sql));
-            } else {
-              ObString svr_ip;
-              int64_t svr_port = 0;
-              int64_t role = 0;
-              while (OB_SUCC(ret) && OB_SUCC(result->next())) {
-                svr_ip.reset();
-                svr_port = 0;
-                role = 0;
-                EXTRACT_VARCHAR_FIELD_MYSQL(*result, "svr_ip", svr_ip);
-                EXTRACT_INT_FIELD_MYSQL(*result, "svr_port", svr_port, int64_t);
-                EXTRACT_INT_FIELD_MYSQL(*result, "role", role, int64_t);
-                ObString svr_ip_deep_copy;
-                TabletLocation *location = nullptr;
-                if (OB_FAIL(ret)) {
-                } else if (OB_FAIL(ob_write_string(allocator_, svr_ip, svr_ip_deep_copy))) {
-                  LOG_WARN("failed to write svr ip", K(ret));
-                } else {
-                  for (int64_t k = 0; OB_SUCC(ret) && k < tablet_infos_.count(); ++k) {
-                    if (tablet_infos_[k]->tablet_id_ == tablet_ids[j].id()) {
-                      location = nullptr;
-                      if (OB_ISNULL(location = OB_NEWx(TabletLocation, &allocator_, svr_ip_deep_copy, svr_port, role))) {
-                        ret = OB_ALLOCATE_MEMORY_FAILED;
-                        LOG_WARN("failed to allocate memory", K(ret));
-                      } else if (OB_FAIL(tablet_infos_[k]->replicas_.push_back(location))) {
-                        OB_DELETEx(TabletLocation, &allocator_, location);
-                        LOG_WARN("failed to push back tablet location", K(ret));
+        for (int64_t j = 0; OB_SUCC(ret) && j < tablet_ids.count(); j += BATCH_SIZE) {
+          char *tablet_ids_str = nullptr;
+          if (OB_FAIL(format_tablet_ids(allocator_, tablet_ids, j, BATCH_SIZE, tablet_ids_str))) {
+              LOG_WARN("failed to format tablet ids", K(ret), K(tablet_ids), K(j), K(BATCH_SIZE));
+          } else if (OB_ISNULL(tablet_ids_str)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to format tablet ids", K(ret));
+          } else if (OB_FAIL(sql.assign_fmt(TABLET_LOCATION_SQL,
+                            strlen(tablet_ids_str),
+                            tablet_ids_str,
+                            tenant_name.ptr(),
+                            database_name.ptr(),
+                            table_schemas[i]->get_table_name()))) {
+            LOG_WARN("failed to assign format", K(tablet_ids_str), K(tenant_name), K(database_name), K(table_schemas[i]->get_table_name_str()));
+          } else {
+            SMART_VAR(common::ObISQLClient::ReadResult, res) {
+              ObMySQLResult *result = nullptr;
+              if (OB_FAIL(ObTableSqlUtils::read(OB_SYS_TENANT_ID, sql.ptr(), res))) {
+                LOG_WARN("failed to execute sql", K(ret), K(sql.string()));
+              } else if (OB_ISNULL(result = res.get_result())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("result is null", K(ret), K(sql.string()));
+              } else {
+                int64_t tablet_id = 0;
+                ObString svr_ip;
+                int64_t svr_port = 0;
+                int64_t role = 0;
+                while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+                  svr_ip.reset();
+                  svr_port = 0;
+                  role = 0;
+                  EXTRACT_INT_FIELD_MYSQL(*result, "tablet_id", tablet_id, int64_t);
+                  EXTRACT_VARCHAR_FIELD_MYSQL(*result, "svr_ip", svr_ip);
+                  EXTRACT_INT_FIELD_MYSQL(*result, "svr_port", svr_port, int64_t);
+                  EXTRACT_INT_FIELD_MYSQL(*result, "role", role, int64_t);
+                  ObString svr_ip_deep_copy;
+                  TabletLocation *location = nullptr;
+                  if (OB_FAIL(ret)) {
+                  } else if (tablet_id == 0 || svr_ip.empty() || svr_port == 0 || role == 0) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("invalid tablet info", K(ret), K(tablet_id), K(svr_ip), K(svr_port), K(role));
+                  } else if (OB_FAIL(ob_write_string(allocator_, svr_ip, svr_ip_deep_copy))) {
+                    LOG_WARN("failed to write svr ip", K(ret));
+                  } else {
+                    for (int64_t k = 0; OB_SUCC(ret) && k < tablet_infos_.count(); ++k) {
+                      if (tablet_infos_[k]->tablet_id_ == tablet_id) {
+                        location = nullptr;
+                        if (OB_ISNULL(location = OB_NEWx(TabletLocation, &allocator_, svr_ip_deep_copy, svr_port, role))) {
+                          ret = OB_ALLOCATE_MEMORY_FAILED;
+                          LOG_WARN("failed to allocate memory", K(ret));
+                        } else if (OB_FAIL(tablet_infos_[k]->replicas_.push_back(location))) {
+                          OB_DELETEx(TabletLocation, &allocator_, location);
+                          LOG_WARN("failed to push back tablet location", K(ret));
+                        }
                       }
                     }
                   }
                 }
-              }
-              if (ret == OB_ITER_END) {
-                ret = OB_SUCCESS;
+                if (ret == OB_ITER_END) {
+                  ret = OB_SUCCESS;
+                }
               }
             }
+          }
+          if (OB_NOT_NULL(tablet_ids_str)) {
+            allocator_.free(tablet_ids_str);
           }
         }
       }
@@ -1197,6 +1305,16 @@ int ObHTableExistsHandler::parse(const ObTableMetaRequest &request)
 }
 
 // ================================ ObHTableGetDescHandler ================================
+ObHTableGetDescHandler::~ObHTableGetDescHandler()
+{
+  for (int i = 0; i < cf_descs_.count(); ++i) {
+    OB_DELETEx(CfDesc, &allocator_, cf_descs_.at(i));
+  }
+  for (int i = 0; i < table_descs_.count(); ++i) {
+    OB_DELETEx(TableDesc, &allocator_, table_descs_.at(i));
+  }
+}
+
 int ObHTableGetDescHandler::parse(const ObTableMetaRequest &request)
 {
   int ret = OB_SUCCESS;
@@ -1212,7 +1330,13 @@ int ObHTableGetDescHandler::handle(ObTableExecCtx &ctx, ObTableMetaResponse &res
   ObTableJsonObjectBuilder root_builder(allocator_);
   ObTableJsonObjectBuilder cf_descs_builder(allocator_);
   ObTableJsonObjectBuilder table_desc_builder(allocator_);
-  if (OB_FAIL(get_cf_desc(ctx))) {
+  if (OB_FAIL(root_builder.init())) {
+    LOG_WARN("failed to init root builder", K(ret));
+  } else if (OB_FAIL(cf_descs_builder.init())) {
+    LOG_WARN("failed to init cf desc builder", K(ret));
+  } else if (OB_FAIL(table_desc_builder.init())) {
+    LOG_WARN("failed to init table desc builder", K(ret));
+  } else if (OB_FAIL(get_cf_desc(ctx))) {
     LOG_WARN("failed to get cf desc", K(ret));
   } else if (OB_FAIL(get_table_desc(ctx))) {
     LOG_WARN("failed to get table desc", K(ret));
@@ -1238,9 +1362,15 @@ int ObHTableGetDescHandler::handle(ObTableExecCtx &ctx, ObTableMetaResponse &res
     bool is_htable_disable = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < cf_descs_.count(); ++i) {
       ObTableJsonObjectBuilder attr_builder(allocator_);
-      OZ(attr_builder.add("TTL", strlen("TTL"), cf_descs_[i]->ttl_));
-      OZ(attr_builder.add("maxVersions", strlen("maxVersions"), cf_descs_[i]->max_versions_));
-      OZ(cf_descs_builder.add(cf_descs_[i]->cf_name_.ptr(), cf_descs_[i]->cf_name_.length(), attr_builder));
+      if (OB_FAIL(attr_builder.init())) {
+        LOG_WARN("failed to init attr builder", K(ret));
+      } else if (OB_FAIL(attr_builder.add("TTL", strlen("TTL"), cf_descs_[i]->ttl_))) {
+        LOG_WARN("failed to add TTL", K(ret), K_(cf_descs_[i]->ttl));
+      } else if (OB_FAIL(attr_builder.add("maxVersions", strlen("maxVersions"), cf_descs_[i]->max_versions_))) {
+        LOG_WARN("failed to add max version", K(ret), K_(cf_descs_[i]->max_versions));
+      } else if (OB_FAIL(cf_descs_builder.add(cf_descs_[i]->cf_name_.ptr(), cf_descs_[i]->cf_name_.length(), attr_builder))) {
+        LOG_WARN("failed to add cf desc", K(ret), K(cf_descs_[i]));
+      }
       if (i == 0 && OB_SUCC(ret)) {
         is_htable_disable = cf_descs_[i]->is_disable_;
       }
@@ -1291,10 +1421,10 @@ int ObHTableGetDescHandler::get_cf_desc(ObTableExecCtx &ctx)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", K(ret));
       } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(table_schema->get_kv_attributes(), kv_attr))) {
-        LOG_WARN("fail to parse kv attributes", K(ret), K(table_schema->get_kv_attributes()));
+        LOG_WARN("failed to parse kv attributes", K(ret), K(table_schema->get_kv_attributes()));
       } else {
         int64_t ttl = kv_attr.ttl_;
-        int64_t max_versions = kv_attr.max_version_;
+        int64_t max_versions = kv_attr.max_version_ == 0 ? INT32_MAX : kv_attr.max_version_;
         bool is_disable = kv_attr.is_disable_;
         ObString cf_name;
         ObString table_name = table_schema->get_table_name();

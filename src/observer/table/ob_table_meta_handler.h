@@ -47,7 +47,7 @@ public:
   {
     tablet_infos_.set_attr(ObMemAttr(MTL_ID(), "TbTabletInfos"));
   }
-  virtual ~ObHTableRegionLocatorHandler() = default;
+  virtual ~ObHTableRegionLocatorHandler();
   virtual int handle(ObTableExecCtx &ctx, ObTableMetaResponse &response) override;
   int parse(const ObTableMetaRequest &request) override;
   int try_compress(ObTableMetaResponse &response);
@@ -76,6 +76,12 @@ private:
                        ObTableJsonArrayBuilder &replica_dict_builder,
                        ObTableJsonArrayBuilder &partitions_builder,
                        json::Value *&root);
+
+  int format_tablet_ids(ObIAllocator &allocator,
+                        const ObIArray<ObTabletID>& tablet_ids,
+                        int start_idx,
+                        int count,
+                        char *&result);
 
 private:
   struct TabletLocation {
@@ -106,12 +112,16 @@ private:
     ObSEArray<TabletLocation*, 16> replicas_;
   };
 private:
+  const int64_t BATCH_SIZE = 100;
   const char *PARTITION_BOUNDARY_SQL = "SELECT table_id, tablet_id, high_bound_val AS upperbound \
-                                        FROM __all_virtual_part WHERE tablet_id in (%ld) \
+                                        FROM __all_virtual_part WHERE tenant_id = %d and table_id = %d and tablet_id in (%.*s) \
                                         ORDER BY tablet_id;";
-  const char *TABLET_LOCATION_SQL = "SELECT /*+READ_CONSISTENCY(WEAK)*/ A.svr_ip, B.svr_port, A.role \
+  const char *PARTITION_BOUNDARY_SUBPART_SQL = "SELECT table_id, tablet_id, high_bound_val AS upperbound \
+                                        FROM __all_virtual_sub_part WHERE tenant_id = %d and table_id = %d and tablet_id in (%.*s) \
+                                        ORDER BY tablet_id;";
+  const char *TABLET_LOCATION_SQL = "SELECT /*+READ_CONSISTENCY(WEAK)*/ A.tablet_id, A.svr_ip, B.svr_port, A.role \
                                     FROM oceanbase.__all_virtual_proxy_schema A JOIN oceanbase.__all_server B ON A.svr_ip = B.svr_ip AND A.sql_port = B.inner_port \
-                                    WHERE A.tablet_id = %ld AND A.tenant_name = '%s' AND A.database_name = '%s' AND A.table_name = '%s' \
+                                    WHERE A.tablet_id in (%.*s) AND A.tenant_name = '%s' AND A.database_name = '%s' AND A.table_name = '%s' \
                                     ORDER BY A.role DESC, A.svr_ip, B.svr_port;";
 private:
   ObString htable_name_;
@@ -290,7 +300,7 @@ public:
     : allocator_(allocator)
   {
   }
-  virtual ~ObHTableGetDescHandler() = default;
+  virtual ~ObHTableGetDescHandler();
   virtual int handle(ObTableExecCtx &ctx, ObTableMetaResponse &response) override;
   int parse(const ObTableMetaRequest &request) override;
 private:

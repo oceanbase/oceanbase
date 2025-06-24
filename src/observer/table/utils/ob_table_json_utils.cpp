@@ -116,15 +116,28 @@ ObTableJsonObjectBuilder::ObTableJsonObjectBuilder(ObIAllocator &allocator)
     : allocator_(allocator),
       root_(nullptr)
 {
-  root_ = OB_NEWx(json::Value, &allocator_);
-  root_->set_type(json::JT_OBJECT);
+}
+
+int ObTableJsonObjectBuilder::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(root_ = OB_NEWx(json::Value, &allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret));
+  } else {
+    root_->set_type(json::JT_OBJECT);
+  }
+  return ret;
 }
 
 int ObTableJsonObjectBuilder::add(const char* key, const int64_t key_len, int64_t value)
 {
   int ret = OB_SUCCESS;
   json::Pair *pair = nullptr;
-  if (OB_ISNULL(pair = OB_NEWx(json::Pair, &allocator_))) {
+  if (OB_ISNULL(root_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("jsob object builder not init", K(ret), K(key), K(value));
+  } else if (OB_ISNULL(pair = OB_NEWx(json::Pair, &allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
@@ -145,7 +158,10 @@ int ObTableJsonObjectBuilder::add(const char* key, const int64_t key_len, const 
 {
   int ret = OB_SUCCESS;
   json::Pair *pair = nullptr;
-  if (OB_ISNULL(pair = OB_NEWx(json::Pair, &allocator_))) {
+  if (OB_ISNULL(root_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("jsob object builder not init", K(ret), K(key), K(value));
+  } else if (OB_ISNULL(pair = OB_NEWx(json::Pair, &allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
@@ -166,7 +182,10 @@ int ObTableJsonObjectBuilder::add(const char* key, const int64_t key_len, const 
 {
   int ret = OB_SUCCESS;
   json::Pair *pair = nullptr;
-  if (OB_ISNULL(pair = OB_NEWx(json::Pair, &allocator_))) {
+  if (OB_ISNULL(root_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("jsob object builder not init", K(ret), K(key), K(value));
+  } else if (OB_ISNULL(pair = OB_NEWx(json::Pair, &allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
@@ -187,7 +206,10 @@ int ObTableJsonObjectBuilder::add(const char* key, const int64_t key_len, json::
 {
   int ret = OB_SUCCESS;
   json::Pair *pair = nullptr;
-  if (OB_ISNULL(pair = OB_NEWx(json::Pair, &allocator_))) {
+  if (OB_ISNULL(root_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("jsob object builder not init", K(ret), K(key), K(value));
+  } else if (OB_ISNULL(pair = OB_NEWx(json::Pair, &allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
@@ -201,7 +223,10 @@ int ObTableJsonObjectBuilder::add(const char* key, const int64_t key_len, ObTabl
 {
   int ret = OB_SUCCESS;
   json::Pair *pair = nullptr;
-  if (OB_ISNULL(pair = OB_NEWx(json::Pair, &allocator_))) {
+  if (OB_ISNULL(root_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("jsob object builder not init", K(ret), K(key));
+  } else if (OB_ISNULL(pair = OB_NEWx(json::Pair, &allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
@@ -216,7 +241,10 @@ int ObTableJsonObjectBuilder::add(const char* key, const int64_t key_len, ObTabl
 {
   int ret = OB_SUCCESS;
   json::Pair *pair = nullptr;
-  if (OB_ISNULL(pair = OB_NEWx(json::Pair, &allocator_))) {
+  if (OB_ISNULL(root_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("jsob object builder not init", K(ret), K(key));
+  } else if (OB_ISNULL(pair = OB_NEWx(json::Pair, &allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
@@ -237,15 +265,28 @@ ObTableJsonArrayBuilder::ObTableJsonArrayBuilder(ObIAllocator &allocator)
     : allocator_(allocator),
       root_(nullptr)
 {
-  root_ = OB_NEWx(json::Value, &allocator_);
-  root_->set_type(json::JT_ARRAY);
+}
+
+int ObTableJsonArrayBuilder::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(root_ = OB_NEWx(json::Value, &allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret));
+  } else {
+    root_->set_type(json::JT_ARRAY);
+  }
+  return ret;
 }
 
 int ObTableJsonArrayBuilder::add(int64_t value)
 {
   int ret = OB_SUCCESS;
   json::Value *v = nullptr;
-  if (OB_ISNULL(v = OB_NEWx(json::Value, &allocator_))) {
+  if (OB_ISNULL(root_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("json array builder not init", K(ret), K(value));
+  } else if (OB_ISNULL(v = OB_NEWx(json::Value, &allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
@@ -260,7 +301,10 @@ int ObTableJsonArrayBuilder::add(const char* value, int32_t len)
 {
   int ret = OB_SUCCESS;
   json::Value *v = nullptr;
-  if (OB_ISNULL(v = OB_NEWx(json::Value, &allocator_))) {
+  if (OB_ISNULL(root_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("json array builder not init", K(ret), K(value));
+  } else if (OB_ISNULL(v = OB_NEWx(json::Value, &allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
@@ -275,7 +319,10 @@ int ObTableJsonArrayBuilder::add(const ObString &value)
 {
   int ret = OB_SUCCESS;
   json::Value *v = nullptr;
-  if (OB_ISNULL(v = OB_NEWx(json::Value, &allocator_))) {
+  if (OB_ISNULL(root_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("json array builder not init", K(ret), K(value));
+  } else if (OB_ISNULL(v = OB_NEWx(json::Value, &allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
@@ -295,9 +342,12 @@ int ObTableJsonArrayBuilder::add(json::Value *value)
 {
   int ret = OB_SUCCESS;
   json::Value *v = nullptr;
-  if (OB_ISNULL(v = OB_NEWx(json::Value, &allocator_))) {
+  if (OB_ISNULL(root_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("json array builder not init", K(ret), KP(value));
+  } else if (OB_ISNULL(v = OB_NEWx(json::Value, &allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory", K(ret));
+    LOG_WARN("failed to allocate memory", K(ret), KP(value));
   } else {
     v->set_type(json::JT_OBJECT);
     root_->array_add(v);
@@ -308,13 +358,23 @@ int ObTableJsonArrayBuilder::add(json::Value *value)
 int ObTableJsonArrayBuilder::add(ObTableJsonObjectBuilder &obj)
 {
   int ret = OB_SUCCESS;
-  root_->add_after(obj.build());
+  if (OB_ISNULL(root_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("json array builder not init", K(ret));
+  } else {
+    root_->add_after(obj.build());
+  }
   return ret;
 }
 
 int ObTableJsonArrayBuilder::add(ObTableJsonArrayBuilder &arr)
 {
   int ret = OB_SUCCESS;
-  root_->array_add(arr.build());
+  if (OB_ISNULL(root_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("json array builder not init", K(ret));
+  } else {
+    root_->array_add(arr.build());
+  }
   return ret;
 }
