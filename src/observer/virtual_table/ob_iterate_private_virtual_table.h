@@ -49,8 +49,10 @@ private:
   virtual int setup_inital_rowkey_condition(
       common::ObSqlString &cols, common::ObSqlString &vals) override;
   virtual int add_extra_condition(common::ObSqlString &sql) override;
+  bool is_dr_table_();
 
   bool check_tenant_in_range_(const uint64_t tenant_id, const common::ObNewRange &range);
+  bool is_tenant_has_leader_(const uint64_t tenant_id);
   int next_tenant_();
   uint64_t get_exec_tenant_id_(const uint64_t tenant_id);
   virtual int set_convert_func(convert_func_t &func,

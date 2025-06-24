@@ -124,6 +124,7 @@ int ObDRTaskMgr::check_inner_stat_() const
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_META_DISASTER_RECOVERY_POP_AND_EXECUTE_TASK);
 ERRSIM_POINT_DEF(ERRSIM_DISASTER_RECOVERY_POP_AND_EXECUTE_TASK);
 int ObDRTaskMgr::try_pop_and_execute_task(
     const uint64_t table_tenant_id)
@@ -135,6 +136,8 @@ int ObDRTaskMgr::try_pop_and_execute_task(
   if (OB_UNLIKELY(ERRSIM_DISASTER_RECOVERY_POP_AND_EXECUTE_TASK)) {
     // for test, return success, skip pop task
     LOG_INFO("errsim disaster recovery pop and execute task", KR(ret));
+  } else if (is_meta_tenant(table_tenant_id) && OB_UNLIKELY(ERRSIM_META_DISASTER_RECOVERY_POP_AND_EXECUTE_TASK)) {
+    LOG_INFO("errsim meta tenant disaster recovery pop and execute task", KR(ret));
   } else if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("failed to check inner stat", KR(ret));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {

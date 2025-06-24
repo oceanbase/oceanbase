@@ -213,6 +213,11 @@ int ObIteratePrivateVirtualTable::setup_inital_rowkey_condition(
   return ret;
 }
 
+bool ObIteratePrivateVirtualTable::is_dr_table_()
+{
+  return (OB_ALL_LS_REPLICA_TASK_HISTORY_TID == base_table_id_) || (OB_ALL_LS_REPLICA_TASK_TID == base_table_id_);
+}
+
 int ObIteratePrivateVirtualTable::add_extra_condition(common::ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
@@ -234,6 +239,37 @@ int ObIteratePrivateVirtualTable::add_extra_condition(common::ObSqlString &sql)
     }
   }
   return ret;
+}
+
+bool ObIteratePrivateVirtualTable::is_tenant_has_leader_(
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  // ignore ret code
+  bool has_leader = false;
+  ObAddr leader_addr;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("location_service_ nullptr", KR(ret), KP(GCTX.location_service_));
+  } else if (OB_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id,
+                                                        gen_meta_tenant_id(tenant_id), // check corresponding meta tenant
+                                                        SYS_LS,
+                                                        false/*force_renew*/,
+                                                        leader_addr))) {
+    // ret may be OB_LS_LOCATION_LEADER_NOT_EXIST.
+    LOG_WARN("failed to get ls leader", KR(ret), K(tenant_id));
+  } else if (leader_addr.is_valid()) {
+    ObServerInfoInTable server_info;
+    if (OB_FAIL(SVR_TRACER.get_server_info(leader_addr, server_info))) {
+      LOG_WARN("failed to get server info", KR(ret), K(leader_addr));
+    } else if (server_info.is_alive()) {
+      has_leader = true;
+    }
+  }
+  return has_leader;
 }
 
 int ObIteratePrivateVirtualTable::next_tenant_()
@@ -341,7 +377,7 @@ int ObIteratePrivateVirtualTable::try_convert_row(const ObNewRow *input_row, ObN
 uint64_t ObIteratePrivateVirtualTable::get_exec_tenant_id_(const uint64_t tenant_id)
 {
   uint64_t exec_tenant_id = OB_INVALID_TENANT_ID;
-  if (is_sys_tenant(tenant_id)) {
+  if (is_sys_tenant(tenant_id) || (is_dr_table_() && !is_tenant_has_leader_(tenant_id))) {
     exec_tenant_id = OB_SYS_TENANT_ID;
   } else if (is_meta_tenant(tenant_id)) {
     exec_tenant_id = meta_record_in_sys_ ? OB_SYS_TENANT_ID : tenant_id;

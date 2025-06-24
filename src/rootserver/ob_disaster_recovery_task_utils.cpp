@@ -579,6 +579,12 @@ int DisasterRecoveryUtils::record_history_and_clean_task(
     }
   }
   COMMIT_DISASTER_RECOVERY_UTILS_TRANS
+  if (OB_SUCC(ret) && OB_SUCCESS == ret_code) {
+    LOG_INFO("The dr task is executed successfully, wakeup dr service to continue checking the task", K(persistent_tenant));
+    if (OB_FAIL(wakeup_local_service(persistent_tenant))) {
+      LOG_WARN("failed to wakeup dr service", KR(ret), K(ret_code), K(persistent_tenant));
+    }
+  }
   LOG_INFO("[DRTASK_NOTICE] record history and clean task", KR(ret), K(task));
   return ret;
 }
