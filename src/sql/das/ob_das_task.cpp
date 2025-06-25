@@ -147,7 +147,7 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
       //notice: can't unlink exec context and session info here
       typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
       des_exec_ctx->get_my_session()->set_is_remote(true);
-      MyExecCtxSessionRegister ctx_register(*des_exec_ctx->get_my_session(), *des_exec_ctx);
+      MyExecCtxSessionRegister ctx_register(*des_exec_ctx->get_my_session(), des_exec_ctx);
       //   des_exec_ctx->get_my_session()->set_session_type_with_flag();
       // if (OB_FAIL(des_exec_ctx->get_my_session()->set_session_active(
       //     ObString::make_string("REMOTE/DISTRIBUTE DAS PLAN EXECUTING"),

@@ -381,7 +381,7 @@ int ObTableCtx::init_common_without_check(ObTableApiCredential &credential,
     index_tablet_id_ = tablet_id_;
     exec_ctx_.set_my_session(&get_session_info());
     typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
-    MyExecCtxSessionRegister ctx_register(get_session_info(), exec_ctx_);
+    MyExecCtxSessionRegister ctx_register(get_session_info(), &exec_ctx_);
   }
 
   return ret;
@@ -1868,8 +1868,6 @@ int ObTableCtx::init_exec_ctx(bool need_das_ctx/*true*/)
   } else {
     // init exec_ctx_.my_session_
     exec_ctx_.set_my_session(&get_session_info());
-    typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
-    MyExecCtxSessionRegister ctx_register(get_session_info(), exec_ctx_);
   }
   return ret;
 }

@@ -1218,6 +1218,7 @@ ObHTableReversedRowIterator::~ObHTableReversedRowIterator()
       spec_->~ObTableApiSpec();
     }
   }
+  forward_tb_ctx_.set_sess_guard(nullptr);
 }
 
 int ObHTableReversedRowIterator::init()

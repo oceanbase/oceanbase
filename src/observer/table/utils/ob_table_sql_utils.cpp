@@ -263,7 +263,7 @@ int ObTableSqlUtils::create_table(ObIAllocator &allocator,
     exec_ctx.set_my_session(&session);
     exec_ctx.get_task_exec_ctx().schema_service_ = GCTX.schema_service_;
     typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
-    MyExecCtxSessionRegister ctx_register(session, exec_ctx);
+    MyExecCtxSessionRegister ctx_register(session, &exec_ctx);
     session.set_default_database(database);
     ParseResult tablegroup_parse_result;
     ParseResult *table_parse_results = nullptr; // ParseResult doesn't have method to_string(), so ObSEArray cannot be used
@@ -310,6 +310,8 @@ int ObTableSqlUtils::create_table(ObIAllocator &allocator,
         }
       }
     }
+    // exec_ctx expired, reset session cur_exec_ctx
+    MyExecCtxSessionRegister ctx_unregister(session, nullptr);
   }
 
   return ret;
@@ -337,7 +339,7 @@ int ObTableSqlUtils::drop_table(ObIAllocator &allocator,
     exec_ctx.set_my_session(&session);
     exec_ctx.get_task_exec_ctx().schema_service_ = GCTX.schema_service_;
     typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
-    MyExecCtxSessionRegister ctx_register(session, exec_ctx);
+    MyExecCtxSessionRegister ctx_register(session, &exec_ctx);
     session.set_default_database(database);
     ParseResult tablegroup_parse_result;
     ParseResult *table_parse_results = nullptr; // ParseResult doesn't have method to_string(), so ObSEArray cannot be used
@@ -373,6 +375,8 @@ int ObTableSqlUtils::drop_table(ObIAllocator &allocator,
         }
       }
     }
+    // exec_ctx expired, reset session cur_exec_ctx
+    MyExecCtxSessionRegister ctx_unregister(session, nullptr);
   }
 
   return ret;
