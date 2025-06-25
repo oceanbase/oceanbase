@@ -85,6 +85,35 @@ int ObStringBufT<PageAllocatorT, PageArenaT> :: write_string(const ObString &str
 }
 
 template <typename PageAllocatorT, typename PageArenaT>
+int ObStringBufT<PageAllocatorT, PageArenaT> :: write_string_reuse_buf(const ObString &str, ObString *stored_str)
+{
+  int ret = OB_SUCCESS;
+  const ObString::obstr_size_t src_len = str.length();
+  if (OB_ISNULL(stored_str)) {
+    ret = OB_BAD_NULL_ERROR;
+    _OB_LOG(WARN, "stored str is null, ret=%d", ret);
+  } else if (OB_UNLIKELY(0 == str.length() || NULL == str.ptr())) {
+    stored_str->assign(NULL, 0);
+  } else if (src_len <= stored_str->size()) {
+    MEMCPY(stored_str->ptr(), str.ptr(), src_len);
+    stored_str->set_length(src_len);
+  } else {
+    // here arena_ cannot free ptr, dup maybe not revoke too many times
+    // becase we reuse buffer when src_len <= stored_str->size()
+    int64_t str_length = str.length();
+    char *str_clone = arena_.dup(str.ptr(), str_length);
+    if (OB_UNLIKELY(NULL == str_clone)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      _OB_LOG(WARN, "failed to dup string, ret=%d", ret);
+    } else {
+      stored_str->assign(str_clone, static_cast<int32_t>(str_length));
+    }
+  }
+
+  return ret;
+}
+
+template <typename PageAllocatorT, typename PageArenaT>
 int ObStringBufT<PageAllocatorT, PageArenaT> :: write_number(const number::ObNumber &nmb,
                                                              number::ObNumber *stored_nmb)
 {
