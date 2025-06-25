@@ -26,6 +26,7 @@ template <ObExprOperatorType agg_func, VecValueTypeClass in_tc, VecValueTypeClas
 class ApproxCountDistinct final
   : public BatchAggregateWrapper<ApproxCountDistinct<agg_func, in_tc, out_tc>>
 {
+public:
   static const constexpr int8_t LLC_BUCKET_BITS = 10;
   static const constexpr int64_t LLC_NUM_BUCKETS = (1 << LLC_BUCKET_BITS);
 public:
@@ -106,13 +107,18 @@ public:
         (const char *)get_tmp_res(agg_ctx, agg_col_idx, const_cast<char *>(cur_agg_cell));
       rollup_llc_bitmap_buf =
         (char *)get_tmp_res(agg_ctx, agg_col_idx, const_cast<char *>(rollup_agg_cell));
+      if (OB_ISNULL(cur_llc_bitmap_buf) || OB_ISNULL(rollup_llc_bitmap_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_LOG(WARN, "allocate llc bitmap buf failed", K(ret));
+      }
     } else {
       cur_llc_bitmap_buf =
         reinterpret_cast<const char *>(*reinterpret_cast<const int64_t *>(cur_agg_cell));
       rollup_llc_bitmap_buf =
         reinterpret_cast<char *>(*reinterpret_cast<const int64_t *>(rollup_agg_cell));
     }
-    if (OB_LIKELY(curr_not_nulls.at(agg_col_idx))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_LIKELY(curr_not_nulls.at(agg_col_idx))) {
       NotNullBitVector &rollup_not_nulls =
         agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
       if (agg_func == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
@@ -166,10 +172,15 @@ public:
     ColumnFmt *res_vec = static_cast<ColumnFmt *>(agg_expr.get_vector(agg_ctx.eval_ctx_));
     if (agg_func != T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
       llc_bitmap_buf = (const char *)get_tmp_res(agg_ctx, agg_col_id, const_cast<char *>(agg_cell));
+      if (OB_ISNULL(llc_bitmap_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_LOG(WARN, "failed to allocate llc bitmap buf", K(ret));
+      }
     } else {
       llc_bitmap_buf = reinterpret_cast<const char *>(*reinterpret_cast<const int64_t *>(agg_cell));
     }
-    if (agg_func == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
+    if (OB_FAIL(ret)) {
+    } else if (agg_func == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
       if (OB_LIKELY(not_nulls.at(agg_col_id))) {
         char *res_buf = agg_expr.get_str_res_mem(agg_ctx.eval_ctx_, LLC_NUM_BUCKETS);
         if (OB_ISNULL(res_buf)) {
@@ -255,7 +266,8 @@ public:
         if (param_vec.is_null(row_sel.index(i))) { pvt_skip.set(row_sel.index(i)); }
       }
     }
-    if (param_id == agg_ctx.aggr_infos_.at(agg_col_id).param_exprs_.count() - 1) {
+    if (OB_FAIL(ret)) {
+    } else if (param_id == agg_ctx.aggr_infos_.at(agg_col_id).param_exprs_.count() - 1) {
       // last param, calculate hash values if possible
       ObIArray<ObExpr *> &param_exprs = agg_ctx.aggr_infos_.at(agg_col_id).param_exprs_;
       const char *payload = nullptr;
@@ -319,8 +331,8 @@ public:
     void *llc_bitmap_buf = get_tmp_res(agg_ctx, agg_col_idx, agg_cell);
 
     if (agg_func != T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE && OB_ISNULL(llc_bitmap_buf)) {
-      ret = OB_ERR_UNEXPECTED;
-      SQL_LOG(WARN, "invalid null llc bitmap buf", K(ret), K(*this));
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_LOG(WARN, "allocate llc bitmap buf failed", K(ret), K(*this));
     } else if (OB_LIKELY(agg_ctx.aggr_infos_.at(agg_col_idx).param_exprs_.count() == 1)) {
       if (agg_func == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
         if (OB_UNLIKELY(data_len != LLC_NUM_BUCKETS)) {
