@@ -39,6 +39,8 @@ const char * ObExternalFileFormat::FORMAT_TYPE_STR[] = {
   "ODPS",
   "ORC",
   "PLUGIN",
+  "ICEBERG",
+  "HIVE"
 };
 static_assert(array_elements(ObExternalFileFormat::FORMAT_TYPE_STR) == ObExternalFileFormat::MAX_FORMAT, "Not enough initializer for ObExternalFileFormat");
 

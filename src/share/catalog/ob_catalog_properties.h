@@ -30,6 +30,8 @@ public:
   {
     INVALID_TYPE = -1,
     ODPS_TYPE,
+    FILESYSTEM_TYPE,
+    HMS_TYPE,
     MAX_TYPE
   };
   ObCatalogProperties() : type_(CatalogType::INVALID_TYPE) {}
