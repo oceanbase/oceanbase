@@ -129,6 +129,9 @@ int ObDasVecScanUtils::init_limit(const ObDASVecAuxScanCtDef *ir_ctdef,
     ObDASSortRtDef *sort_rtdef = static_cast<ObDASSortRtDef *>(ir_rtdef->get_inv_idx_scan_rtdef());
     if (ObDASOpType::DAS_OP_TABLE_SCAN == sort_rtdef->children_[0]->op_type_) {
       base_rtdef = static_cast<ObDASScanRtDef *>(sort_rtdef->children_[0]);
+    } else if (sort_rtdef->children_[0]->children_cnt_ > 0
+      && ObDASOpType::DAS_OP_TABLE_SCAN == sort_rtdef->children_[0]->children_[0]->op_type_) {
+      base_rtdef = static_cast<ObDASScanRtDef *>(sort_rtdef->children_[0]->children_[0]);
     }
   }
 
