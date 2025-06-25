@@ -64,7 +64,7 @@ int ObTruncateInfoArray::init_with_kv_cache_array(
     src_ = TRUN_SRC_KV_CACHE;
     is_inited_ = true;
     for (int64_t idx = 0; OB_SUCC(ret) && idx < input_array.count(); ++idx) {
-      if (OB_FAIL(append(input_array.at(idx)))) {
+      if (OB_FAIL(append_with_deep_copy(input_array.at(idx)))) {
         LOG_WARN("failed to append", KR(ret), K(idx), K(input_array.at(idx)));
       }
     }
@@ -75,7 +75,7 @@ int ObTruncateInfoArray::init_with_kv_cache_array(
   return ret;
 }
 
-int ObTruncateInfoArray::append(const ObTruncateInfo &truncate_info)
+int ObTruncateInfoArray::append_with_deep_copy(const ObTruncateInfo &truncate_info)
 {
   int ret = OB_SUCCESS;
   ObTruncateInfo *info = nullptr;
@@ -86,14 +86,37 @@ int ObTruncateInfoArray::append(const ObTruncateInfo &truncate_info)
     LOG_WARN("failed to alloc and new", K(ret));
   } else if (OB_FAIL(info->assign(*allocator_, truncate_info))) {
     LOG_WARN("failed to copy truncate info", K(ret), K(truncate_info));
-  } else if (OB_FAIL(truncate_info_array_.push_back(info))) {
-    LOG_WARN("failed to push back to array", K(ret), KPC(info));
+  } else {
+    ret = inner_append_and_sort(*info);
   }
 
   if (OB_FAIL(ret)) {
     ObTabletObjLoadHelper::free(*allocator_, info);
   }
 
+  return ret;
+}
+
+int ObTruncateInfoArray::append_ptr(ObTruncateInfo &truncate_info)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else {
+    ret = inner_append_and_sort(truncate_info);
+  }
+  return ret;
+}
+
+int ObTruncateInfoArray::inner_append_and_sort(ObTruncateInfo &info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(truncate_info_array_.push_back(&info))) {
+    LOG_WARN("failed to push back to array", K(ret));
+  } else {
+    lib::ob_sort(truncate_info_array_.begin(), truncate_info_array_.end(), compare);
+  }
   return ret;
 }
 
@@ -136,7 +159,13 @@ bool ObTruncateInfoArray::compare(
     const ObTruncateInfo *lhs,
     const ObTruncateInfo *rhs)
 {
-  return lhs->key_ < rhs->key_;
+  bool bret = true;
+  if (lhs->commit_version_ == rhs->commit_version_) {
+    bret = lhs->key_ < rhs->key_;
+  } else {
+    bret = lhs->commit_version_ < rhs->commit_version_;
+  }
+  return bret;
 }
 
 void ObTruncateInfoArray::reset_list()
@@ -168,7 +197,7 @@ int ObTruncateInfoArray::assign(ObIAllocator &allocator, const ObTruncateInfoArr
       if (OB_ISNULL(src_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, truncate info is null", K(ret), K(i), KP(src_info));
-      } else if (OB_FAIL(append(*src_info))) {
+      } else if (OB_FAIL(append_with_deep_copy(*src_info))) {
         LOG_WARN("failed to append truncate info", K(ret), K(i), KPC(src_info));
       }
     } // for
@@ -261,6 +290,7 @@ int ObTruncateInfoArray::deserialize(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("truncate info array is invalid", K(ret), KPC(this));
   } else {
+    lib::ob_sort(truncate_info_array_.begin(), truncate_info_array_.end(), compare);
     is_inited_ = true;
     pos = new_pos;
   }

@@ -1441,7 +1441,7 @@ int ObTablet::inner_read_truncate_info_array_from_mds(
           } else {
             LOG_WARN("fail to get next truncate info", K(ret));
           }
-        } else if (OB_FAIL(truncate_info_array.truncate_info_array_.push_back(info))) {
+        } else if (OB_FAIL(truncate_info_array.append_ptr(*info))) {
           LOG_WARN("fail to push back truncate info", K(ret), KPC(info));
         }
         if (OB_FAIL(ret)) {
