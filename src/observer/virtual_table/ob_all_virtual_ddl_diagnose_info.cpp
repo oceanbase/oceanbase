@@ -67,7 +67,7 @@ int ObAllVirtualDDLDiagnoseInfo::process()
     LOG_WARN("empty tenant ids", KR(ret));
   } else {
     ObSqlString scan_sql;
-    if (OB_FAIL(scan_sql.assign_fmt("SELECT task_id, tenant_id, object_id, ddl_type, execution_id, time_to_usec(gmt_create) as GMT_CREATE, time_to_usec(gmt_modified) as GMT_MODIFIED FROM %s "
+    if (OB_FAIL(scan_sql.assign_fmt("SELECT task_id, tenant_id, object_id, ddl_type, execution_id, time_to_usec(gmt_create) as GMT_CREATE, NULL as GMT_MODIFIED FROM %s "
                                     "WHERE ddl_type IN (5, 10, 1001, 1002, 1004, 1005, 1010) ",
                                     OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME))) {
       LOG_WARN("failed to assign sql", K(ret));
@@ -131,7 +131,7 @@ int ObAllVirtualDDLDiagnoseInfoI1::process()
     } else if (index_count <= 0) {
     } else if (OB_FAIL(task_id.append_fmt(") "))) {
       LOG_WARN("failed to assign sql", K(ret));
-    } else if (OB_FAIL(scan_sql.assign_fmt("SELECT task_id, tenant_id, object_id, ddl_type, execution_id, time_to_usec(gmt_create) as GMT_CREATE, time_to_usec(gmt_modified) as GMT_MODIFIED "
+    } else if (OB_FAIL(scan_sql.assign_fmt("SELECT task_id, tenant_id, object_id, ddl_type, execution_id, time_to_usec(gmt_create) as GMT_CREATE, NULL as GMT_MODIFIED "
                                           "FROM %s WHERE task_id in %s "
                                           "UNION "
                                           "SELECT task_id, tenant_id, object_id, ddl_type, NULL AS execution_id, time_to_usec(gmt_create) as GMT_CREATE, time_to_usec(gmt_modified) as GMT_MODIFIED "
@@ -298,7 +298,7 @@ int ObAllVirtualDDLDiagnoseInfo::collect_ddl_info(const ObSqlString &scan_sql)
             EXTRACT_INT_FIELD_MYSQL(*scan_result, "task_id", value_.ddl_task_id_, int64_t);
             EXTRACT_INT_FIELD_MYSQL(*scan_result, "object_id", value_.object_id_, int64_t);
             EXTRACT_INT_FIELD_MYSQL(*scan_result, "GMT_CREATE", value_.start_time_, int64_t);
-            EXTRACT_INT_FIELD_MYSQL(*scan_result, "GMT_MODIFIED", value_.finish_time_, int64_t);
+            EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*scan_result, "GMT_MODIFIED", value_.finish_time_, int64_t, true/*skip_null_error*/, true/*skip_column_error*/, -2/*default_value*/);
             EXTRACT_INT_FIELD_MYSQL(*scan_result, "ddl_type", optype, int32_t);
             value_.ddl_type_ = static_cast<share::ObDDLType>(optype);
             if (OB_FAIL(ret)) {
