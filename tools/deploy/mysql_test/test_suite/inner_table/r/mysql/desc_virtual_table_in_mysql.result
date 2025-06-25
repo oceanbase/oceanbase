@@ -6005,12 +6005,6 @@ apply_ss_change_version	bigint(20)	NO		NULL
 notify_ss_change_version	bigint(20)	NO		NULL	
 applying_ss_change_version	bigint(20)	NO		NULL	
 oldest_ss_change_version	bigint(20)	NO		NULL	
-select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ss_notify_tablets_stat;
-IF(count(*) >= 0, 1, 0)
-1
-"oceanbase.__all_virtual_ss_notify_tablets_stat runs in single server"
-IF(count(*) >= 0, 1, 0)
-1
 desc oceanbase.__tenant_virtual_show_create_location;
 Field	Type	Null	Key	Default	Extra
 location_id	bigint(20)	NO	PRI	NULL	

@@ -287,7 +287,8 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_SS_EXISTING_TABLET_META_TID ||
          table_id == share::OB_ALL_VIRTUAL_SS_EXISTING_TABLET_META_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_TID ||
-         table_id == share::OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_ORA_TID;
+         table_id == share::OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SS_NOTIFY_TABLETS_STAT_TID;
 }
 
 bool ObDbmsStatsUtils::is_virtual_index_table(const int64_t table_id)

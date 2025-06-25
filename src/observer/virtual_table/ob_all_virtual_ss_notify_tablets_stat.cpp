@@ -91,8 +91,9 @@ int ObAllVirtualSSNotifyTabletsStat::inner_get_next_row(common::ObNewRow *&row)
     if (OB_FAIL(get_primary_key_ranges_())) {
       SSLOG_LOG(WARN, "fail to get index scan ranges", KR(ret), K(MTL_ID()), K(*this));
     } else if (tablet_points_.empty()) {
-      ret = OB_ITER_END;
+      ret = OB_NOT_SUPPORTED;
       SSLOG_LOG(WARN, "tenant_id/ls_id/tablet_id must be specified", KR(ret), K(MTL_ID()), K(*this));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant_id/ls_id/tablet_id must be specified. range select is");
     } else {
       char *temp_buffer = nullptr;
       if (OB_ISNULL(temp_buffer = (char *)mtl_malloc(ObAllVirtualSSNotifyTabletsStat::BUFFER_SIZE, "VirSSTabletStat"))) {
