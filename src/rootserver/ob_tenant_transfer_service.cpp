@@ -981,30 +981,34 @@ int ObTenantTransferService::refresh_schema_and_double_check_(
   ObTabletID new_tablet_id;
   int64_t new_part_idx = OB_INVALID_INDEX;
   int64_t new_subpart_idx = OB_INVALID_INDEX;
+  int64_t ori_schema_version = OB_INVALID_VERSION;
+  int64_t new_schema_version = OB_INVALID_VERSION;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (OB_UNLIKELY(!part_info.is_valid() || !tablet_id.is_valid()) || OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(part_info), K(tablet_id), KP(table_schema));
+  } else if (FALSE_IT(ori_schema_version = table_schema->get_schema_version())) {
   } else if (OB_FAIL(get_latest_table_schema_(allocator, part_info.table_id(), new_table_schema))) {
     if (OB_TABLE_NOT_EXIST == ret) {
       // With no table lock on the global index table, we lock primary table for it.
       // So global index table may be deleted after adding table lock and before adding online ddl lock.
       if (table_schema->is_global_index_table()) {
-        LOG_INFO("global index table not exist", KR(ret), K(part_info));
+        LOG_INFO("global index table not exist", KR(ret), K(part_info), K(ori_schema_version));
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table not exists after locking table", KR(ret), K(part_info),
             K(tablet_id), K(part_idx), K(subpart_idx), KPC(table_schema));
       }
     } else {
-      LOG_WARN("get latest table schema failed", KR(ret), K(part_info));
+      LOG_WARN("get latest table schema failed", KR(ret), K(part_info), KPC(table_schema));
     }
   } else if (OB_ISNULL(new_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null new table schema", KR(ret), K(part_info),
         K(part_info), K(tablet_id), KPC(table_schema));
+  } else if (FALSE_IT(new_schema_version = new_table_schema->get_schema_version())) {
   } else if (OB_FAIL(get_tablet_and_partition_idx_by_object_id_(
       *new_table_schema,
       part_info.part_object_id(),
@@ -1012,11 +1016,11 @@ int ObTenantTransferService::refresh_schema_and_double_check_(
       new_part_idx,
       new_subpart_idx))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
-      LOG_INFO("tablet not exist after adding lock", KR(ret),
-          K(part_info), K(tablet_id), K(part_idx), K(subpart_idx));
+      LOG_INFO("tablet not exist after adding lock", KR(ret), K(part_info), K(tablet_id),
+          K(part_idx), K(subpart_idx), K(ori_schema_version), K(new_schema_version));
     } else {
-      LOG_WARN("get tablet and partition idx by object_id failed",
-          KR(ret), K(part_info), K(tablet_id), K(part_idx), K(subpart_idx));
+      LOG_WARN("get tablet and partition idx by object_id failed", KR(ret), K(part_info),
+          K(tablet_id), K(part_idx), K(subpart_idx), K(ori_schema_version), K(new_schema_version));
     }
   } else if (new_tablet_id != tablet_id) {
     // This is a defense to prevent the concurrent partition-exchange changing tablet_ids.
@@ -1026,15 +1030,19 @@ int ObTenantTransferService::refresh_schema_and_double_check_(
     // Treat these scenarios as lock conflicts.
     ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT;
     LOG_INFO("tablet changed during adding lock", KR(ret), K(part_info), K(tablet_id),
-        K(new_tablet_id), K(part_idx), K(new_part_idx), K(subpart_idx), K(new_subpart_idx));
+        K(new_tablet_id), K(part_idx), K(new_part_idx), K(subpart_idx), K(new_subpart_idx),
+        K(ori_schema_version), K(new_schema_version));
   } else if (new_part_idx != part_idx || new_subpart_idx != subpart_idx) {
     // The concurrent DDLs such as add/drop-partition or partition-split will change the idx.
     // As long as the tablet_id remains unchanged, the transfer can be executed normally.
     LOG_INFO("part_idx or subpart_idx has been changed during adding lock",
-        KR(ret), K(part_idx), K(new_part_idx), K(subpart_idx), K(new_subpart_idx));
+        KR(ret), K(part_info), K(part_idx), K(new_part_idx), K(subpart_idx), K(new_subpart_idx),
+        K(ori_schema_version), K(new_schema_version));
     part_idx = new_part_idx;
     subpart_idx = new_subpart_idx;
-  } else {
+  }
+  if (OB_SUCC(ret) && new_schema_version > ori_schema_version) {
+    LOG_INFO("replace with new table schema", K(part_info), K(ori_schema_version), K(new_schema_version));
     table_schema = new_table_schema;
   }
   return ret;
@@ -1223,7 +1231,7 @@ int ObTenantTransferService::get_related_table_schemas_(
     LOG_WARN("fail to fetch_aux_tables", KR(ret), K_(tenant_id),
         K(primary_table_id), K(schema_status), K(related_table_ids), K(schema_version));
   } else {
-    TTS_INFO("get related table infos", K(primary_table_id), K(related_infos));
+    TTS_INFO("get related table infos", K(schema_version), K(primary_table_id), K(related_infos));
   }
   ARRAY_FOREACH(related_infos, idx) {
     const ObAuxTableMetaInfo &info = related_infos.at(idx);
