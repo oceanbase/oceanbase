@@ -6133,10 +6133,10 @@ int ObTableLocation::get_tablet_and_object_id_with_phy_rowid(ObNewRange &range,
         if (tablet_id == all_tablet_ids.at(i)) {
           ObObjectID partition_id = !is_index_table ? all_partition_ids.at(i) : all_index_partition_ids.at(i);
           ObObjectID first_level_part_id = !is_index_table ? all_first_level_part_ids.at(i) : all_index_first_level_part_ids.at(i);
-          if (OB_FAIL(tablet_ids.push_back(!is_index_table ? all_tablet_ids.at(i) : all_index_tablet_ids.at(i)))) {
-            LOG_WARN("failed to add tablet id", K(ret), K(all_tablet_ids.at(i)));
-          } else if (OB_FAIL(partition_ids.push_back(partition_id))) {
-            LOG_WARN("failed to push back", K(ret), K(all_partition_ids.at(i)));
+          if (OB_FAIL(add_var_to_array_no_dup(tablet_ids, !is_index_table ? all_tablet_ids.at(i) : all_index_tablet_ids.at(i)))) {
+            LOG_WARN("failed to add var to array no dup", K(ret));
+          } else if (OB_FAIL(add_var_to_array_no_dup(partition_ids, partition_id))) {
+            LOG_WARN("failed to add var to array no dup", K(ret));
           } else if (PARTITION_LEVEL_TWO == part_level_ &&
                      OB_FAIL(tablet_mapper.set_partition_id_map(first_level_part_id, partition_id))) {
             LOG_WARN("failed to set partition id map", K(first_level_part_id), K(partition_id));
