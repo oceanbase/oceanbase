@@ -611,8 +611,8 @@ public:
 
   static const int16_t MIN_DATA_READ_BATCH_COUNT = 4;
   static const int16_t MAX_INDEX_TREE_HEIGHT = 16;
-  static const int32_t MAX_DATA_PREFETCH_DEPTH = 32;
-  static const int32_t MAX_INDEX_PREFETCH_DEPTH = 3;
+  static const int32_t MAX_DATA_PREFETCH_DEPTH = DATA_PREFETCH_DEPTH;
+  static const int32_t MAX_INDEX_PREFETCH_DEPTH = INDEX_PREFETCH_DEPTH;
 
   INHERIT_TO_STRING_KV("ObIndexTreeMultiPassPrefetcher", ObIndexTreePrefetcher,
                        K_(is_prefetch_end), K_(cur_range_fetch_idx), K_(cur_range_prefetch_idx), K_(max_range_prefetching_cnt),

@@ -1035,6 +1035,7 @@ int ObTableReplaceOp::check_values(bool &is_equal,
           LOG_WARN("compare failed", K(ret));
         } else if (0 != cmp_ret) {
           is_equal = false;
+          break;
         }
       }
     }
