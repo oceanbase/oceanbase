@@ -875,7 +875,9 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
     if (OB_FAIL(ret) && audit_record.trans_id_ == 0) {
       // normally trans_id is set in the `start-stmt` phase,
       // if `start-stmt` hasn't run, set trans_id from session if an active txn exist
-      audit_record.trans_id_ = session.get_tx_id();
+      if (session.is_in_transaction()) {
+        audit_record.trans_id_ = session.get_tx_id();
+      }
     }
     // for begin/commit/rollback, the following values are 0
     audit_record.affected_rows_ = 0;
@@ -1277,7 +1279,9 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       if (OB_FAIL(ret) && audit_record.trans_id_ == 0) {
         // normally trans_id is set in the `start-stmt` phase,
         // if `start-stmt` hasn't run, set trans_id from session if an active txn exist
-        audit_record.trans_id_ = session.get_tx_id();
+        if (session.is_in_transaction()) {
+          audit_record.trans_id_ = session.get_tx_id();
+        }
       }
       audit_record.affected_rows_ = result.get_affected_rows();
       audit_record.return_rows_ = result.get_return_rows();
