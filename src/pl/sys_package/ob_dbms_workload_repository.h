@@ -35,7 +35,7 @@ class ObDbmsWorkloadRepository
 public:
   struct AshReportParams
   {
-    AshReportParams(const common::ObTimeZoneInfo *tz_info)
+    AshReportParams(const common::ObTimeZoneInfo *tz_info, const common::ObTimeZoneInfoWrap &tz_wrap)
         : ash_begin_time(0),
           ash_end_time(0),
           sql_id(),
@@ -55,7 +55,10 @@ public:
           cur_tenant_id(0),
           section_name_(nullptr),
           table_cnt_(0),
-          top_sql_ids_()
+          top_sql_ids_(),
+          tz_info_wrap(),
+          session_param(),
+          session_tz_wrap(tz_wrap)
     { }
     int64_t get_elapsed_time() const
     {
@@ -81,6 +84,13 @@ public:
     mutable const char *section_name_;
     mutable int64_t table_cnt_; //table count in each section
     mutable common::ObArray<SqlIdArray> top_sql_ids_;
+    ObTimeZoneInfoWrap tz_info_wrap;
+    ObSessionParam session_param;
+    const common::ObTimeZoneInfoWrap &session_tz_wrap;
+    TO_STRING_KV(K(ash_begin_time), K(ash_end_time), K(sql_id), K(trace_id), K(wait_class),
+        K(svr_ip), K(port), K(tenant_id), KPC(tz_info), K(is_html), K(user_input_ash_begin_time),
+        K(user_input_ash_end_time), K(wr_begin_time), K(wr_end_time), K(ash_num_samples),
+        K(wr_num_samples), K(cur_tenant_id), K(tz_info_wrap), K(session_tz_wrap), K_(table_cnt));
   };
 
   struct AshColumnItem
