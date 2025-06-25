@@ -531,6 +531,10 @@ int ObVirtualASHI1::init_next_query_range()
       if (cur_range.end_key_.is_max_row()) {
         right = INT64_MAX;  // maximum sample time is INT64_MAX
       }
+      if (lib::is_oracle_mode() && cur_range.end_key_.get_obj_ptr()->is_null()) {
+        // oracle null last
+        right = INT64_MAX;  // sample time cannot be null.
+      }
       if (OB_UNLIKELY(cur_range.end_key_.is_min_row() || cur_range.start_key_.is_max_row())) {
         left = INT64_MAX;
         right = 0;
