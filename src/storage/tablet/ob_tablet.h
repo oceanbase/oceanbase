@@ -248,6 +248,7 @@ public:
   int init_with_ss_tablet(
       common::ObArenaAllocator &allocator,
       const ObTablet &sstablet,
+      const share::SCN sstablet_version,
       const bool is_update);
   bool get_gc_occupy_flag() { return gc_occupy_flag_; }
   void set_gc_occupy_flag_true() { gc_occupy_flag_ = true; }  // only allow from false to true

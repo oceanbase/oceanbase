@@ -728,6 +728,7 @@ int ObTablet::init_for_shared_merge(
 int ObTablet::init_with_ss_tablet(
     common::ObArenaAllocator &allocator,
     const ObTablet &sstablet,
+    const share::SCN sstablet_version,
     const bool is_update)
 {
   int ret = OB_SUCCESS;
@@ -749,10 +750,12 @@ int ObTablet::init_with_ss_tablet(
   } else if (OB_UNLIKELY(!sstablet.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(sstablet));
-  } else if (OB_UNLIKELY(!pointer_hdl_.is_valid())
-      || OB_ISNULL(log_handler_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(log_handler));
+  } else if (OB_UNLIKELY(!sstablet.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(sstablet));
+  } else if (OB_UNLIKELY(!sstablet_version.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sstablet_version is invalid", K(ret), K(sstablet_version));
   } else if (!is_update && OB_FAIL(init_shared_params(ls_id, tablet_id, ss_tablet_meta.compat_mode_))) {
     LOG_WARN("failed to init shared params", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(tablet_meta_.init(ss_tablet_meta, SCN::min_scn()))) {
@@ -794,6 +797,7 @@ int ObTablet::init_with_ss_tablet(
     * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
     * it will lead to a macro block refcnt leak. */
   } else {
+    tablet_meta_.set_min_ss_tablet_version_(sstablet_version);
     is_inited_ = true;
     LOG_INFO("succeeded to init tablet with ss tablet", K(ret), K(sstablet), KPC(this));
   }
