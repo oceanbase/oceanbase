@@ -1923,6 +1923,31 @@ int ObPLPackageManager::get_cached_package_body_for_trigger(uint64_t tenant_id,
     } else {
       package_body = tmp_package_body;
     }
+    if (OB_FAIL(ret)) {
+      int tmp_ret = ret;
+      const ObDatabaseSchema *database_schema = NULL;
+      ret = OB_SUCCESS;
+      ObSqlString &err_msg = session_info.get_pl_exact_err_msg();
+      if (OB_FAIL(err_msg.append_fmt("\nerror during execution of trigger "))) {
+        LOG_WARN("failed to append error msg", K(ret));
+      } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id,
+                                                          trigger_info->get_database_id(),
+                                                          database_schema))) {
+        LOG_WARN("get database schema failed", K(ret), K(tenant_id), K(trigger_info->get_database_id()));
+      } else if (OB_ISNULL(database_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("database schema is null", K(ret));
+      } else if (OB_FAIL(err_msg.append_fmt("%.*s.", database_schema->get_database_name_str().length(),
+                                            database_schema->get_database_name_str().ptr()))) {
+        LOG_WARN("failed to append error msg", K(ret));
+      } else if (OB_FAIL(err_msg.append_fmt("%.*s", trigger_info->get_trigger_name().length(),
+                                                    trigger_info->get_trigger_name().ptr()))) {
+        LOG_WARN("failed to append error msg", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        ret = tmp_ret;
+      }
+    }
   }
   return ret;
 }
