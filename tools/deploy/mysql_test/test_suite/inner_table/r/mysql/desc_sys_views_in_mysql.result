@@ -8144,6 +8144,36 @@ BIGINT_PRECISION	varchar(1024)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_DYNAMIC_PARTITION_TABLES limit 1);
 cnt
 1
+desc oceanbase.GV$OB_VECTOR_MEMORY;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+RAW_MALLOC_SIZE	bigint(20)	NO		NULL	
+INDEX_METADATA_SIZE	bigint(20)	NO		NULL	
+VECTOR_MEM_HOLD	bigint(20)	NO		NULL	
+VECTOR_MEM_USED	bigint(20)	NO		NULL	
+VECTOR_MEM_LIMIT	bigint(20)	NO		NULL	
+TX_SHARE_LIMIT	bigint(20)	NO		NULL	
+VECTOR_MEM_DETAIL_INFO	varchar(65535)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_VECTOR_MEMORY limit 1);
+cnt
+1
+desc oceanbase.V$OB_VECTOR_MEMORY;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+RAW_MALLOC_SIZE	bigint(20)	NO			
+INDEX_METADATA_SIZE	bigint(20)	NO			
+VECTOR_MEM_HOLD	bigint(20)	NO			
+VECTOR_MEM_USED	bigint(20)	NO			
+VECTOR_MEM_LIMIT	bigint(20)	NO			
+TX_SHARE_LIMIT	bigint(20)	NO			
+VECTOR_MEM_DETAIL_INFO	varchar(65535)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_VECTOR_MEMORY limit 1);
+cnt
+1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from
 (SELECT t.table_name,
 group_concat(c.column_name) as column_name_list

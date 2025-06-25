@@ -620,6 +620,9 @@ public:
     }
     return total;
   }
+
+  // used by __all_virtual_tenant_vector_mem_info
+  int print_tree_mem_hold_info(char *buf, int64_t buf_len, int64_t &pos);
 public:
   int64_t magic_code_;
   int64_t seq_id_;

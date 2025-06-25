@@ -271,7 +271,7 @@ public:
     ls_service_(NULL),
     sql_proxy_(NULL),
     memory_context_(NULL),
-    all_vsag_use_mem_(0),
+    all_vsag_use_mem_(NULL),
     tenant_vec_async_task_sched_(nullptr),
     is_vec_async_task_started_(false)
 
@@ -366,7 +366,7 @@ public:
       const ObTabletID tablet_id,
       ObIAllocator &allocator,
       ObIArray<float*> &aux_info);
-  uint64_t get_all_vsag_use_mem() { return all_vsag_use_mem_; }
+  uint64_t *get_all_vsag_use_mem() { return all_vsag_use_mem_; }
 
   TO_STRING_KV(K_(is_inited), K_(has_start), K_(tenant_id),
                K_(is_ls_or_tablet_changed), KP_(schema_service), KP_(ls_service));
@@ -392,8 +392,10 @@ private:
   common::ObMySQLProxy *sql_proxy_;
   ObFIFOAllocator allocator_;
   common::ObArenaAllocator alloc_;
+  // do not use this memory context directly
+  // use wrapped memory context in ob_tenant_vector_allocator.h and init by this memory context
   lib::MemoryContext memory_context_;
-  uint64_t all_vsag_use_mem_;
+  uint64_t *all_vsag_use_mem_;
   ObTenantVecAsyncTaskScheduler *tenant_vec_async_task_sched_;
   bool is_vec_async_task_started_;
   ObVecIndexAsyncTaskHandler vec_async_task_handle_;

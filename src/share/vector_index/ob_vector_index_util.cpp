@@ -1871,15 +1871,6 @@ int ObVectorIndexUtil::check_vec_index_param(
         LOG_WARN("write string failed", K(ret), K(tmp_str), K(index_params));
       } else if (OB_FAIL(check_index_param(option_node, allocator, vector_dim, is_sparse_vec_col, index_params, vec_index_type, tbl_schema, session_info))) {
         LOG_WARN("fail to check vector index definition", K(ret));
-      } else if (share::schema::is_vec_hnsw_index(vec_index_type)) {
-        bool is_vector_memory_valid = false;
-        if (OB_FAIL(ObPluginVectorIndexHelper::is_ob_vector_memory_valid(tenant_id, is_vector_memory_valid))) {
-          LOG_WARN("fail to check is_ob_vector_memory_valid", K(ret));
-        } else if (!is_vector_memory_valid) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not support vector index when ob_vector_memory_limit_percentage is 0", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "when ob_vector_memory_limit_percentage = 0 or memstore_limit >= 85, vector index is");
-        }
       } else if (share::schema::is_vec_ivf_index(vec_index_type)) {
         int64_t lob_inrow_threshold = tbl_schema.get_lob_inrow_threshold();
         int64_t max_vec_len = 4 * vector_dim;
@@ -4213,6 +4204,81 @@ int ObVectorIndexUtil::eval_ivf_centers_common(ObIAllocator &allocator,
   return ret;
 }
 
+int ObVectorIndexUtil::estimate_hnsw_memory(uint64_t num_vectors,
+                                            const ObVectorIndexParam &param,
+                                            uint64_t &est_mem)
+{
+  int ret = OB_SUCCESS;
+  est_mem = 0;
+  obvectorlib::VectorIndexPtr index_handler = nullptr;
+  const char* const DATATYPE_FLOAT32 = "float32";
+  ObVectorIndexAlgorithmType build_type = param.type_;
+  int64_t build_metric = param.m_;
+  build_metric = build_type == VIAT_HNSW_SQ ? get_hnswsq_type_metric(param.m_) : param.m_;
+  if (param.type_ != VIAT_HNSW &&
+      param.type_ != VIAT_HNSW_SQ &&
+      param.type_ != VIAT_HNSW_BQ &&
+      param.type_ != VIAT_HGRAPH) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid hnsw algorithm type", K(ret), K(param));
+  } else if (VIAT_HNSW == build_type && OB_FALSE_IT(build_type = VIAT_HGRAPH)) { // vsag not support hnsw estimate now, use hgraph
+  } else if (OB_FAIL(obvectorutil::create_index(index_handler,
+                                                build_type,
+                                                DATATYPE_FLOAT32,
+                                                VEC_INDEX_ALGTH[param.dist_algorithm_],
+                                                param.dim_,
+                                                build_metric,
+                                                param.ef_construction_,
+                                                param.ef_search_,
+                                                nullptr, /* memory ctx, use default */
+                                                param.extra_info_actual_size_))) {
+    ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
+    LOG_WARN("failed to create vsag index.", K(ret), K(param));
+  } else if (OB_ISNULL(index_handler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), KP(index_handler));
+  } else if (OB_FALSE_IT(est_mem = obvectorutil::estimate_memory(index_handler, num_vectors, param.dim_, false))) {
+  } else if (OB_FALSE_IT(est_mem = ceil(est_mem * VEC_ESTIMATE_MEMORY_FACTOR))) { // multiple 2.0
+  } else if (OB_FALSE_IT(obvectorutil::delete_index(index_handler))) {
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::estimate_ivf_memory(uint64_t num_vectors,
+                                           const ObVectorIndexParam &param,
+                                           uint64_t &est_mem)
+{
+  int ret = OB_SUCCESS;
+  int64_t nlist = num_vectors < param.nlist_ ? num_vectors : param.nlist_;
+  if (param.type_ == VIAT_IVF_SQ8 || param.type_ == VIAT_IVF_FLAT) {
+    est_mem = sizeof(float) * nlist * param.dim_;
+  } else if (param.type_ == VIAT_IVF_PQ) {
+    est_mem = sizeof(float) * nlist * param.dim_ * 2;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ivf algorithm type", K(ret), K(param));
+  }
+
+  return ret;
+}
+
+int ObVectorIndexUtil::estimate_ivf_peak_memory(uint64_t num_vectors,
+                                                const ObVectorIndexParam &param,
+                                                uint64_t &est_mem)
+{
+  int ret = OB_SUCCESS;
+  int64_t nlist = num_vectors < param.nlist_ ? num_vectors : param.nlist_;
+  if (param.type_ != VIAT_IVF_SQ8 &&
+      param.type_ != VIAT_IVF_FLAT &&
+      param.type_ != VIAT_IVF_PQ) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ivf algorithm type", K(ret), K(param));
+  } else {
+    est_mem = sizeof(float) * nlist * param.sample_per_nlist_ * param.dim_;
+  }
+  return ret;
+}
+
 ObExprVecIvfCenterIdCache* ObVectorIndexUtil::get_ivf_center_id_cache_ctx(const uint64_t& id, sql::ObExecContext *exec_ctx)
 {
   INIT_SUCC(ret);
@@ -4369,7 +4435,7 @@ bool ObVectorIndexUtil::check_vector_index_memory(
     int64_t bitmap_mem_used = 0;
     int64_t mem_limited_size = 0;
     int64_t estimate_memory = 0;
-    int64_t all_vsag_mem_used = service->get_all_vsag_use_mem();
+    int64_t all_vsag_mem_used = *(service->get_all_vsag_use_mem());
     if (OB_ISNULL(mem_mgr = MTL(ObRbMemMgr *))) {
     } else {
       bitmap_mem_used = mem_mgr->get_vec_idx_used();

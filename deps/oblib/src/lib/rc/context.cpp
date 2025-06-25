@@ -61,5 +61,55 @@ int64_t MemoryContext::tree_mem_hold()
   return total;
 }
 
+int __MemoryContext__::print_tree_mem_hold_info(char *buf, int64_t buf_len, int64_t &pos)
+  {
+    int ret = OB_SUCCESS;
+    if (tree_node_.with_lock_) {
+      while (ATOMIC_TAS(&tree_node_.lock_, 1)) {
+        PAUSE();
+      }
+    }
+
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos,"\""))) {
+      OB_LOG(WARN, "failed to fill mem info", K(ret));
+    } else {
+      int64_t str_len = attr_.label_.to_string(buf + pos, buf_len - pos);
+      pos += str_len;
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos,"\":{"))) {
+        OB_LOG(WARN, "failed to fill mem info", K(ret));
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,"\"hold\":%lu ", hold()))) {
+        OB_LOG(WARN, "failed to fill mem info", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && tree_node_.child_ != nullptr) {
+      TreeNode *child_node = tree_node_.child_;
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos,", \"child\":{"))) {
+        OB_LOG(WARN, "failed to fill mem info", K(ret));
+      }
+      while (child_node != nullptr && OB_SUCC(ret)) {
+        __MemoryContext__ *child = node2context(child_node);
+        if (OB_FAIL(child->print_tree_mem_hold_info(buf, buf_len, pos))) {
+          OB_LOG(WARN, "failed to fill child mem info", K(ret));
+        } else if (child_node->next_ != nullptr && OB_FAIL(databuff_printf(buf, buf_len, pos,", "))) {
+          OB_LOG(WARN, "failed to fill mem info", K(ret));
+        }
+        child_node = child_node->next_;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,"}"))) {
+        OB_LOG(WARN, "failed to fill mem info", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && OB_FAIL(databuff_printf(buf, buf_len, pos,"}"))) {
+      OB_LOG(WARN, "failed to fill mem info", K(ret));
+    }
+
+    if (tree_node_.with_lock_) {
+      ATOMIC_STORE(&tree_node_.lock_, 0);
+    }
+    return ret;
+  }
+
 } // end of namespace lib
 } // end of namespace oceanbase

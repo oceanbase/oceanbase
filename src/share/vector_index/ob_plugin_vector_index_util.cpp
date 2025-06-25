@@ -570,65 +570,18 @@ int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult
   return ret;
 }
 
-int ObPluginVectorIndexHelper::get_vector_memory_value_and_limit(const uint64_t tenant_id,int64_t& value, int64_t& upper_limit)
-{
-  int ret = OB_SUCCESS;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  int64_t extra_mem_percent = 15;
-  int64_t cur_memstore_limit_percent = 0;
-  MTL_SWITCH(tenant_id) {
-    cur_memstore_limit_percent = MTL(ObTenantFreezer*)->get_memstore_limit_percentage();
-  }
-  if (tenant_config.is_valid() && OB_SUCC(ret)) {
-    upper_limit = (100 - extra_mem_percent - cur_memstore_limit_percent);
-    if (upper_limit < 0) {
-      upper_limit = 0;
-    }
-    value = tenant_config->ob_vector_memory_limit_percentage;
-    LOG_TRACE("check is_ob_vector_memory_valid", K(value), K(extra_mem_percent), K(cur_memstore_limit_percent), K(upper_limit));
-  } else {
-    upper_limit = 0;
-    value = 0;
-    ret = OB_INVALID_CONFIG;
-    LOG_ERROR("tenant config is invalid",K(ret), K(tenant_id));
-  }
-  return ret;
-}
-
-int ObPluginVectorIndexHelper::is_ob_vector_memory_valid(const uint64_t tenant_id, bool& is_valid)
-{
-  int ret = OB_SUCCESS;
-  is_valid = false;
-  int64_t value = 0;
-  int64_t upper_limit = 0;
-  if (OB_FAIL(get_vector_memory_value_and_limit(tenant_id, value, upper_limit))) {
-    LOG_WARN("fail to get vector memory value and limit", K(ret));
-  } else if (0 < value && value < upper_limit) {
-    is_valid = true;
-  }
-  return ret;
-}
-
 int ObPluginVectorIndexHelper::get_vector_memory_limit_size(const uint64_t tenant_id, int64_t& memory_limit)
 {
   bool ret = OB_SUCCESS;
-  ObUnitInfoGetter::ObTenantConfig unit;
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(GCTX.omt_->get_tenant_unit(tenant_id, unit))) {
-    LOG_WARN("get tenant unit failed", K(tmp_ret), K(tenant_id));
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (!tenant_config.is_valid()) {
+    memory_limit = 0;
+    LOG_WARN("get invalid tenant config", K(tenant_id));
   } else {
-    const int64_t memory_size = unit.config_.memory_size();
-    int64_t ob_vector_memory_limit_percentage = 0;
-    int64_t upper_limit = 0;
-    if (OB_FAIL(get_vector_memory_value_and_limit(tenant_id, ob_vector_memory_limit_percentage, upper_limit))) {
-      LOG_WARN("fail to get vector memory value and limit", K(ret));
-    } else if (0 < ob_vector_memory_limit_percentage && ob_vector_memory_limit_percentage < upper_limit) {
-      memory_limit = memory_size * ob_vector_memory_limit_percentage / 100;
-      LOG_TRACE("vector index memory limit debug", K(memory_size), K(ob_vector_memory_limit_percentage),K(memory_limit));
-    } else {
-      memory_limit = 0;
-      LOG_TRACE("vector index memory is not enough,check memstore config", K(memory_size), K(ob_vector_memory_limit_percentage),K(memory_limit));
-    }
+    int64_t total_memory = lib::get_tenant_memory_limit(tenant_id);
+    int64_t vector_limit = ObTenantVectorAllocator::get_vector_mem_limit_percentage(tenant_config);
+    memory_limit = total_memory * vector_limit / 100;
+    LOG_TRACE("vector index memory limit debug", K(tenant_id), K(total_memory), K(vector_limit), K(memory_limit));
   }
   return ret;
 }

@@ -234,6 +234,7 @@
 #include "observer/virtual_table/ob_all_virtual_storage_cache_task.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_local_cache.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_mview_running_job.h"
+#include "observer/virtual_table/ob_all_virtual_tenant_vector_mem_info.h"
 
 namespace oceanbase
 {
@@ -3019,6 +3020,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               LOG_WARN("fail to init all virtual dynamic partition table", KR(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_dynamic_partition_table);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TENANT_VECTOR_MEM_INFO_TID:
+          {
+            ObAllVirtualTenantVectorMemInfo *gv_tenant_vector_mem_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualTenantVectorMemInfo, gv_tenant_vector_mem_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualTenantVectorMemInfo construct failed", K(ret));
+            } else {
+              gv_tenant_vector_mem_info->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(gv_tenant_vector_mem_info);
             }
             break;
           }

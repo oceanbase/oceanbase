@@ -1241,6 +1241,7 @@
 # 12530: __all_virtual_tablet_local_cache
 # 12535: __all_virtual_mview_running_job
 # 12536: __all_virtual_dynamic_partition_table
+# 12550: __all_virtual_tenant_vector_mem_info
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -2476,6 +2477,8 @@
 # 21655: DBA_OB_DYNAMIC_PARTITION_TABLES
 # 21656: CDB_OB_DYNAMIC_PARTITION_TABLES
 # 21657: V$OB_DYNAMIC_PARTITION_TABLES
+# 21661: GV$OB_VECTOR_MEMORY
+# 21662: V$OB_VECTOR_MEMORY
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS

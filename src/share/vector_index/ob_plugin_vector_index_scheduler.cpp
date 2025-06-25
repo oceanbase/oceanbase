@@ -1527,9 +1527,6 @@ int ObVectorIndexTask::process_one()
     LOG_WARN("memdata sync fail to get task read snapshot", KR(ret), K(ls_id_), KPC(task_ctx_));
   } else if (OB_FAIL(vec_idx_mgr_->get_adapter_inst_guard(task_ctx_->index_tablet_id_, adpt_guard))) {
     LOG_WARN("memdata sync fail to get adapter instance", KR(ret), K(ls_id_), KPC(task_ctx_));
-  } else if (OB_NOT_NULL(adpt_guard.get_adatper()) &&
-             OB_FAIL(adpt_guard.get_adatper()->check_vsag_mem_used())) {
-    LOG_WARN("fail to check vsag mem used", KR(ret), KPC(task_ctx_));
   } else if (OB_FAIL(ObPluginVectorIndexUtils::refresh_memdata(ls_id_,
                                                                adpt_guard.get_adatper(),
                                                                read_snapshot_,

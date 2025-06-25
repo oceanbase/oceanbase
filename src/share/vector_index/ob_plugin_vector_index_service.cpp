@@ -14,6 +14,7 @@
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "share/ob_vec_index_builder_util.h"
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 
 namespace oceanbase
 {
@@ -821,7 +822,7 @@ int ObPluginVectorIndexService::acquire_vector_index_mgr(ObLSID ls_id, ObPluginV
         LOG_WARN("failed to allocate memeory for new vector index mgr", KR(ret));
       } else {
         ObPluginVectorIndexMgr *new_ls_index_mgr = new(mgr_buff)ObPluginVectorIndexMgr(memory_context_, tenant_id_);
-        if (OB_FAIL(new_ls_index_mgr->init(tenant_id_, ls_id, memory_context_, &all_vsag_use_mem_))) {
+        if (OB_FAIL(new_ls_index_mgr->init(tenant_id_, ls_id, memory_context_, all_vsag_use_mem_))) {
           LOG_WARN("failed to init ls vector index mgr", KR(ret), K(ls_id));
         } else if (OB_FAIL(get_ls_index_mgr_map().set_refactored(ls_id, new_ls_index_mgr))) {
           if (ret != OB_HASH_EXIST) {
@@ -998,22 +999,15 @@ int ObPluginVectorIndexService::init(const uint64_t tenant_id,
   } else if (OB_FAIL(allocator_.init(&alloc_, OB_MALLOC_MIDDLE_BLOCK_SIZE, mem_attr))) {
     LOG_WARN("ObTenantSrs allocator init failed.", K(ret));
   } else {
-    lib::ContextParam param;
-    param.set_mem_attr(tenant_id)
-      .set_properties(lib::ADD_CHILD_THREAD_SAFE | lib::ALLOC_THREAD_SAFE | lib::RETURN_MALLOC_DEFAULT)
-      .set_page_size(OB_MALLOC_MIDDLE_BLOCK_SIZE)
-      .set_label("VectorIndexVsag")
-      .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
-    if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(memory_context_, param))) {
-      LOG_WARN("create memory entity failed", K(ret));
-    } else {
-      tenant_id_ = tenant_id;
-      schema_service_ = schema_service;
-      ls_service_ = ls_service;
-      sql_proxy_ = GCTX.sql_proxy_;
-      is_inited_ = true;
-      LOG_INFO("plugin vector index service: init", KR(ret), K_(tenant_id));
-    }
+    ObSharedMemAllocMgr *shared_mem_mgr = MTL(ObSharedMemAllocMgr*);
+    memory_context_ = shared_mem_mgr->vector_allocator().get_mem_context();
+    all_vsag_use_mem_ = shared_mem_mgr->vector_allocator().get_used_mem_ptr();
+    tenant_id_ = tenant_id;
+    schema_service_ = schema_service;
+    ls_service_ = ls_service;
+    sql_proxy_ = GCTX.sql_proxy_;
+    is_inited_ = true;
+    LOG_INFO("plugin vector index service: init", KR(ret), K_(tenant_id));
   }
   return ret;
 }

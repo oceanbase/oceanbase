@@ -87,6 +87,8 @@ public:
   bool has_triggered_throttle();
 
   template <typename ALLOCATOR>
+  bool exceeded_resource_limit(const int64_t alloc_size);
+  template <typename ALLOCATOR>
   bool is_throttling(ObThrottleInfoGuard &share_ti_guard, ObThrottleInfoGuard &module_ti_guard);
 
   template <typename ALLOCATOR>
@@ -108,6 +110,8 @@ public:
 
   template <typename ALLOCATOR>
   void set_resource_limit(const int64_t resource_limit);
+  template <typename ALLOCATOR>
+  int64_t get_resource_limit();
 
   template <typename ALLOCATOR>
   void update_throttle_config(const int64_t resource_limit,

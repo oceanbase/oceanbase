@@ -16250,6 +16250,31 @@ def_table_schema(
 # 12539 __all_virtual_ss_notify_tablets_stat
 # 12540: __all_virtual_balance_job_description
 
+def_table_schema(
+  owner = 'tonghui.ht',
+  table_name     = '__all_virtual_tenant_vector_mem_info',
+  table_id       = '12550',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+
+  normal_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('tenant_id', 'int'),
+  ('raw_malloc_size', 'int'),
+  ('index_metadata_size', 'int'),
+  ('vector_mem_hold', 'int'),
+  ('vector_mem_used', 'int'),
+  ('vector_mem_limit', 'int'),
+  ('tx_share_limit', 'int'),
+  ('vector_mem_detail_info', 'varchar:OB_MAX_MYSQL_VARCHAR_LENGTH')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -42062,6 +42087,64 @@ def_table_schema(
     BIGINT_PRECISION
   FROM oceanbase.__all_virtual_dynamic_partition_table;
 """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'tonghui.ht',
+  table_name      = 'GV$OB_VECTOR_MEMORY',
+  table_id        = '21661',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    RAW_MALLOC_SIZE,
+    INDEX_METADATA_SIZE,
+    VECTOR_MEM_HOLD,
+    VECTOR_MEM_USED,
+    VECTOR_MEM_LIMIT,
+    TX_SHARE_LIMIT,
+    VECTOR_MEM_DETAIL_INFO
+FROM
+    oceanbase.__all_virtual_tenant_vector_mem_info
+""".replace("\n", " "),
+
+)
+
+def_table_schema(
+  owner = 'tonghui.ht',
+  table_name      = 'V$OB_VECTOR_MEMORY',
+  table_id        = '21662',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    RAW_MALLOC_SIZE,
+    INDEX_METADATA_SIZE,
+    VECTOR_MEM_HOLD,
+    VECTOR_MEM_USED,
+    VECTOR_MEM_LIMIT,
+    TX_SHARE_LIMIT,
+    VECTOR_MEM_DETAIL_INFO
+FROM
+    OCEANBASE.GV$OB_VECTOR_MEMORY
+WHERE
+        SVR_IP=HOST_IP()
+    AND
+        SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+
 )
 
 # 余留位置（此行之前占位）

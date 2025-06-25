@@ -572,6 +572,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_storage_cache_task.cpp
   virtual_table/ob_all_virtual_tablet_local_cache.cpp
   virtual_table/ob_tenant_show_catalog_databases.cpp
+  virtual_table/ob_all_virtual_tenant_vector_mem_info.cpp
 )
 
 ob_server_add_target(ob_server)
