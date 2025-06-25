@@ -164,7 +164,9 @@ typedef common::ObArray<ObVecIndexAsyncTaskCtx*> ObVecIndexTaskCtxArray;
 class ObVecIndexAsyncTaskOption
 {
 public:
-  ObVecIndexAsyncTaskOption(uint64_t tenant_id) : allocator_(ObMemAttr(tenant_id, "VecIdxATaskCtx"))
+  ObVecIndexAsyncTaskOption(uint64_t tenant_id) :
+    allocator_(ObMemAttr(tenant_id, "VecIdxATaskCtx")),
+    ls_task_cnt_(0)
   {
   }
 
@@ -174,12 +176,16 @@ public:
   void destroy();
   int add_task_ctx(ObTabletID &tablet_id, ObVecIndexAsyncTaskCtx *task, bool &inc_new_task);
   int del_task_ctx(ObTabletID &tablet_id);
+  void inc_ls_task_cnt() { ATOMIC_INC(&ls_task_cnt_); }
+  void dec_ls_task_cnt() { ATOMIC_DEC(&ls_task_cnt_); }
+  int64_t get_ls_processing_task_cnt() const { return ATOMIC_LOAD(&ls_task_cnt_); }
   VecIndexAsyncTaskMap &get_async_task_map() { return task_ctx_map_; }
   ObIAllocator *get_allocator() { return &allocator_; }
 
 private:
   VecIndexAsyncTaskMap task_ctx_map_;
   ObArenaAllocator allocator_;
+  volatile int64_t ls_task_cnt_;
 };
 
 // QUEUE_THREAD
@@ -199,6 +205,7 @@ public:
   void inc_async_task_ref() { ATOMIC_INC(&async_task_ref_cnt_); }
   void dec_async_task_ref() { ATOMIC_DEC(&async_task_ref_cnt_); }
   int64_t get_async_task_ref() const { return ATOMIC_LOAD(&async_task_ref_cnt_); }
+  void handle_ls_process_task_cnt(const ObLSID &ls_id, const bool is_inc);
 
   virtual void handle(void *task) override;
   virtual void handle_drop(void *task) override;
@@ -232,6 +239,7 @@ public:
   virtual ~ObVecIndexAsyncTask() {}
   int init(const uint64_t tenant_id, const ObLSID &ls_id, const int task_type, ObVecIndexAsyncTaskCtx *ctx);
   int get_task_type() { return task_type_; }
+  ObLSID &get_ls_id() { return ls_id_; }
   ObVecIndexAsyncTaskCtx *get_task_ctx() { return ctx_; }
   int do_work();
 
