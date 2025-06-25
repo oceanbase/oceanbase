@@ -41,16 +41,17 @@ public:
   const static int64_t LOG_INTERVAL_US = 5 * 1000 * 1000; // 5s
 };
 
-class ObClusterVersionMgr: public ObClusterVersionBaseMgr
+class ObClusterStateMgr: public ObClusterStateBaseMgr
 {
 public:
-  ObClusterVersionMgr() {}
-  virtual ~ObClusterVersionMgr() {}
+  ObClusterStateMgr() {}
+  virtual ~ObClusterStateMgr() {}
   virtual int is_supported_assume_version() const override;
   virtual int is_supported_enable_worm_version() const override;
-  static ObClusterVersionMgr &get_instance()
+  virtual bool is_shared_storage_mode() const override;
+  static ObClusterStateMgr &get_instance()
   {
-    static ObClusterVersionMgr mgr;
+    static ObClusterStateMgr mgr;
     return mgr;
   }
 };

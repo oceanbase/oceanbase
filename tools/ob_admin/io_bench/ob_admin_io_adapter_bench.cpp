@@ -56,7 +56,7 @@ int ObAdminIOAdapterBenchmarkExecutor::execute(int argc, char *argv[])
     STORAGE_LOG(WARN, "failed to init io manager", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     STORAGE_LOG(WARN, "failed to start io manager", K(ret));
-  } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(&ObClusterVersionBaseMgr::get_instance()))) {
+  } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_state_mgr(&ObClusterStateBaseMgr::get_instance()))) {
     STORAGE_LOG(WARN, "fail to register cluster version mgr", KR(ret));
   }
 

@@ -176,11 +176,11 @@ struct ObObjectStorageCredential
   int64_t born_time_us_;
 };
 
-class ObClusterVersionBaseMgr
+class ObClusterStateBaseMgr
 {
 public:
-  ObClusterVersionBaseMgr() {}
-  virtual ~ObClusterVersionBaseMgr() {}
+  ObClusterStateBaseMgr() {}
+  virtual ~ObClusterStateBaseMgr() {}
   virtual int is_supported_assume_version() const
   {
     return OB_SUCCESS;
@@ -189,9 +189,13 @@ public:
   {
     return OB_SUCCESS;
   };
-  static ObClusterVersionBaseMgr &get_instance()
+  virtual bool is_shared_storage_mode() const
   {
-    static ObClusterVersionBaseMgr mgr;
+    return false;
+  }
+  static ObClusterStateBaseMgr &get_instance()
+  {
+    static ObClusterStateBaseMgr mgr;
     return mgr;
   }
 };
@@ -242,7 +246,7 @@ public:
   virtual int assign(const ObObjectStorageInfo &storage_info);
   virtual int clone(common::ObIAllocator &allocator, ObObjectStorageInfo *&storage_info) const;
   int reset_access_id_and_access_key(const char *access_id, const char *access_key);
-  static int register_cluster_version_mgr(ObClusterVersionBaseMgr *cluster_version_mgr);
+  static int register_cluster_state_mgr(ObClusterStateBaseMgr *cluster_version_mgr);
 
 public:
   int64_t hash() const;
@@ -312,7 +316,7 @@ public:
   char external_id_[OB_MAX_EXTERNAL_ID_LENGTH];                         // supported for assume role
   bool is_assume_role_mode_;
   bool enable_worm_;
-  static ObClusterVersionBaseMgr *cluster_version_mgr_;
+  static ObClusterStateBaseMgr *cluster_state_mgr_;
 };
 
 class ObTenantStsCredentialBaseMgr

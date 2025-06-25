@@ -281,16 +281,16 @@ bool ObObjectStorageInfo::is_enable_worm() const
   return enable_worm_;
 }
 
-ObClusterVersionBaseMgr *ObObjectStorageInfo::cluster_version_mgr_ = nullptr;
-int ObObjectStorageInfo::register_cluster_version_mgr(ObClusterVersionBaseMgr *cluster_version_mgr)
+ObClusterStateBaseMgr *ObObjectStorageInfo::cluster_state_mgr_ = nullptr;
+int ObObjectStorageInfo::register_cluster_state_mgr(ObClusterStateBaseMgr *cluster_version_mgr)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cluster_version_mgr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("cluster_version_mgr is null", K(ret));
   } else {
-    cluster_version_mgr_ = cluster_version_mgr;
-    LOG_INFO("register cluster_version_mgr successfully", K(ret), KP_(cluster_version_mgr));
+    cluster_state_mgr_ = cluster_version_mgr;
+    LOG_INFO("register cluster_version_mgr successfully", K(ret), KP_(cluster_state_mgr));
   }
   return ret;
 }
@@ -430,6 +430,7 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
     char *token = NULL;
     char *saved_ptr = NULL;
     int64_t info_len = strlen(storage_info);
+    bool has_checksum_type = false;
 
     MEMCPY(tmp, storage_info, info_len);
     tmp[info_len] = '\0';
@@ -506,6 +507,7 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
           LOG_WARN("failed to set addressing model", K(ret), K(token));
         }
       } else if (0 == strncmp(CHECKSUM_TYPE, token, strlen(CHECKSUM_TYPE))) {
+        has_checksum_type = true;
         const char *checksum_type_str = token + strlen(CHECKSUM_TYPE);
         if (OB_FAIL(set_checksum_type_(checksum_type_str))) {
           OB_LOG(WARN, "fail to set checksum type", K(ret), K(checksum_type_str));
@@ -538,13 +540,22 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
       }
     }
 
+    if (OB_SUCC(ret)) {
+      if (!has_checksum_type && cluster_state_mgr_ != nullptr && cluster_state_mgr_->is_shared_storage_mode()) {
+        // do not update extension_ because it only contains what the user has provided.
+        if (OB_FAIL(set_checksum_type_(CHECKSUM_TYPE_MD5))) {
+          OB_LOG(WARN, "failed to set default checksum type in shared storage mode", K(ret), K(CHECKSUM_TYPE_MD5));
+        }
+      }
+    }
+
     // If access by assume role, try to get temporary ak/sk into cache to speed up access
     if (OB_SUCC(ret)) {
       if (strlen(role_arn_) > strlen(ROLE_ARN)) {
-        if (OB_ISNULL(cluster_version_mgr_)) {
+        if (OB_ISNULL(cluster_state_mgr_)) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("cluster version mgr is null", K(ret), KP(cluster_version_mgr_));
-        } else if (OB_FAIL(cluster_version_mgr_->is_supported_assume_version())) {
+          LOG_WARN("cluster version mgr is null", K(ret), KP(cluster_state_mgr_));
+        } else if (OB_FAIL(cluster_state_mgr_->is_supported_assume_version())) {
           LOG_WARN("The current version does not support the assume role", K(ret), KPC(this));
         } else {
           is_assume_role_mode_ = true;
@@ -563,10 +574,10 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
 int ObObjectStorageInfo::set_enable_worm_(const char *enable_worm)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(cluster_version_mgr_)) {
+  if (OB_ISNULL(cluster_state_mgr_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("cluster version mgr is null", K(ret), KP(cluster_version_mgr_));
-  } else if (OB_FAIL(cluster_version_mgr_->is_supported_enable_worm_version())) {
+    LOG_WARN("cluster version mgr is null", K(ret), KP(cluster_state_mgr_));
+  } else if (OB_FAIL(cluster_state_mgr_->is_supported_enable_worm_version())) {
     LOG_WARN("The current version does not support enable worm", K(ret), KPC(this));
   } else if (OB_ISNULL(enable_worm)) {
     ret = OB_INVALID_ARGUMENT;

@@ -214,8 +214,8 @@ int ObAdminExecutor::set_sts_credential_key(const char *sts_credential)
   } else {
     if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
       STORAGE_LOG(WARN, "fail to init device env", KR(ret));
-    } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(
-                   &ObClusterVersionBaseMgr::get_instance()))) {
+    } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_state_mgr(
+                   &ObClusterStateBaseMgr::get_instance()))) {
       STORAGE_LOG(WARN, "fail to register cluster version mgr", KR(ret));
     } else {
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));

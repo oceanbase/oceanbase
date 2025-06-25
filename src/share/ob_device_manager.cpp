@@ -91,7 +91,7 @@ int ObTenantStsCredentialMgr::check_sts_credential(omt::ObTenantConfigGuard &ten
   return ret;
 }
 
-int ObClusterVersionMgr::is_supported_assume_version() const
+int ObClusterStateMgr::is_supported_assume_version() const
 {
   int ret = OB_SUCCESS;
   uint64 min_cluster_version = GET_MIN_CLUSTER_VERSION();
@@ -104,12 +104,17 @@ int ObClusterVersionMgr::is_supported_assume_version() const
   return ret;
 }
 
+bool ObClusterStateMgr::is_shared_storage_mode() const
+{
+  return GCTX.is_shared_storage_mode();
+}
+
 bool ObClusterEnableObdalConfig::is_enable_obdal() const
 {
   return GCONF._enable_obdal;
 }
 
-int ObClusterVersionMgr::is_supported_enable_worm_version() const
+int ObClusterStateMgr::is_supported_enable_worm_version() const
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -156,8 +161,8 @@ int ObDeviceManager::init_devices_env()
       OB_LOG(WARN, "fail to init s3 storage", K(ret));
     } else if (OB_FAIL(init_obdal_env())) {
       OB_LOG(WARN, "fail to init obdal", K(ret));
-    } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(
-        &ObClusterVersionMgr::get_instance()))) {
+    } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_state_mgr(
+        &ObClusterStateMgr::get_instance()))) {
       OB_LOG(WARN, "fail to register cluster version mgr", K(ret));
     } else if (OB_FAIL(ObStsCredential::register_sts_credential_mgr(
         &ObTenantStsCredentialMgr::get_instance()))) {
