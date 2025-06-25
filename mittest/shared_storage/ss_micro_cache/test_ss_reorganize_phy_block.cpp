@@ -398,7 +398,7 @@ TEST_F(TestSSReorganizePhyBlock, test_delete_block_from_sparse_blk_map)
   ObSSPhyBlockHandle phy_blk_handle;
   const int64_t blk_idx = 2;
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.get_block_handle(blk_idx, phy_blk_handle));
-  ASSERT_LT(static_cast<int64_t>(SS_PHY_BLK_REORGAN_USAGE_RATIO * DEFAULT_BLOCK_SIZE), phy_blk_handle()->valid_len_);
+  ASSERT_LT(static_cast<int64_t>(SS_PHY_BLK_REORGAN_USAGE_PCT * DEFAULT_BLOCK_SIZE), phy_blk_handle()->valid_len_);
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.add_sparse_block(ObSSPhyBlockIdx(blk_idx)));
   ASSERT_EQ(1, phy_blk_mgr.sparse_blk_map_.count());
   ObArray<ObSSPhyBlkReorganEntry> candidate_phy_blks;
