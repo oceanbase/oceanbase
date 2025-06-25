@@ -1401,6 +1401,9 @@ int ObDMLService::split_upd_to_del_and_ins(const ObUpdCtDef &upd_ctdef,
                                            ObChunkDatumStore::StoredRow *&new_row)
 {
   int ret = OB_SUCCESS;
+  if (dml_rtctx.das_ref_.get_parallel_type() == DAS_STREAMING_PARALLEL) {
+    dml_rtctx.das_ref_.get_das_parallel_ctx().set_das_parallel_type(DAS_BLOCKING_PARALLEL);
+  }
   if (OB_LIKELY(old_tablet_loc != new_tablet_loc && !upd_ctdef.multi_ctdef_->is_enable_row_movement_)) {
     ret = OB_ERR_UPD_CAUSE_PART_CHANGE;
     LOG_WARN("the updated row is moved across partitions", K(ret),
