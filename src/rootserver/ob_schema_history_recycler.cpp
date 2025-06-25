@@ -939,6 +939,11 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
                          catalog_id);
     ret = OB_SUCCESS; // overwrite ret
 
+    // --------------------------- ccl ---------------------------------------------------
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, ccl_rule, OB_ALL_CCL_RULE_HISTORY_TNAME,
+                         ccl_rule_id);
+    ret = OB_SUCCESS; // overwrite ret
+
 #undef RECYCLE_FIRST_SCHEMA
     int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
     ROOTSERVICE_EVENT_ADD("schema_recycler", "batch_recycle_by_tenant",

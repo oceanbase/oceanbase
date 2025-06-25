@@ -134,6 +134,8 @@
 #include "sql/resolver/cmd/ob_tenant_snapshot_resolver.h"
 #include "sql/resolver/cmd/ob_tenant_clone_resolver.h"
 #include "sql/resolver/cmd/ob_olap_async_job_resolver.h"
+#include "sql/resolver/ddl/ob_create_ccl_rule_resolver.h"
+#include "sql/resolver/ddl/ob_drop_ccl_rule_resolver.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_tablespace_resolver.h"
 #include "sql/resolver/ddl/ob_alter_tablespace_resolver.h"
@@ -1369,6 +1371,14 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
 #endif
       case T_SP_SYS_DISPATCH_CALL: {
         REGISTER_STMT_RESOLVER(SysDispatchCall);
+        break;
+      }
+      case T_CREATE_CCL_RULE: {
+        REGISTER_STMT_RESOLVER(CreateCCLRule);
+        break;
+      }
+      case T_DROP_CCL_RULE: {
+        REGISTER_STMT_RESOLVER(DropCCLRule);
         break;
       }
       default: {

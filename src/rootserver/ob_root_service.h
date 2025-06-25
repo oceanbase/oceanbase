@@ -62,6 +62,7 @@
 #endif
 #include "rootserver/ob_catalog_ddl_service.h"
 #include "rootserver/ob_root_rebuild_tablet.h"
+#include "rootserver/ob_ccl_ddl_service.h"
 
 namespace oceanbase
 {
@@ -723,6 +724,8 @@ public:
   //----Functions for managing catalog----
   int handle_catalog_ddl(const obrpc::ObCatalogDDLArg &arg);
   //----End of functions for managing catalog----
+  int create_ccl_rule_ddl(const obrpc::ObCreateCCLRuleArg &arg);
+  int drop_ccl_rule_ddl(const obrpc::ObDropCCLRuleArg &arg);
 
   // server related
   int load_server_manager();

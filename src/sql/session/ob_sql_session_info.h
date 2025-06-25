@@ -1414,7 +1414,7 @@ public:
   int get_spm_mode(int64_t &spm_mode);
   bool is_enable_new_query_range() const;
   bool is_sqlstat_enabled();
-
+  int has_ccl_rules(share::schema::ObSchemaGetterGuard *&schema_guard, bool &has_ccl_rules);
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   const ObSessionDDLInfo &get_ddl_info() const { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }
@@ -1981,6 +1981,8 @@ private:
   common::ObString audit_filter_name_;
   ObExecutingSqlStatRecord executing_sql_stat_record_;
   uint64_t unit_gc_min_sup_proxy_version_;
+  bool has_ccl_rule_;
+  int64_t last_update_ccl_cnt_time_;
 };
 
 

@@ -313,3 +313,5 @@
   RPC_S(PR5 root_rebuild_tablet, obrpc::OB_ROOT_REBUILD_TABLET, (ObRebuildTabletArg));
   // htable ddl
   RPC_S(PRD parallel_htable_ddl, obrpc::OB_PARALLEL_HTABLE_DDL, (ObHTableDDLArg), ObHTableDDLRes);
+  RPC_S(PRD create_ccl_rule, obrpc::OB_CREATE_CCL_RULE, (ObCreateCCLRuleArg));
+  RPC_S(PRD drop_ccl_rule, obrpc::OB_DROP_CCL_RULE, (ObDropCCLRuleArg));

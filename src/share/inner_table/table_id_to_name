@@ -391,6 +391,9 @@
 # 544: __all_pl_recompile_objinfo
 # 545: __all_vector_index_task
 # 546: __all_vector_index_task_history
+# 547: __all_ccl_rule
+# 548: __all_ccl_rule_history
+# 548: __all_ccl_rule  # BASE_TABLE_NAME
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1239,8 +1242,14 @@
 # 12527: __tenant_virtual_show_catalog_databases
 # 12529: __all_virtual_storage_cache_task
 # 12530: __all_virtual_tablet_local_cache
+# 12533: __all_virtual_ccl_rule
+# 12533: __all_ccl_rule  # BASE_TABLE_NAME
+# 12534: __all_virtual_ccl_status
 # 12535: __all_virtual_mview_running_job
 # 12536: __all_virtual_dynamic_partition_table
+# 12549: __all_virtual_ccl_rule_history
+# 12549: __all_ccl_rule  # BASE_TABLE_NAME
+# 12549: __all_ccl_rule_history  # BASE_TABLE_NAME1
 # 12550: __all_virtual_tenant_vector_mem_info
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
@@ -1930,6 +1939,10 @@
 # 15503: __all_pl_recompile_objinfo  # BASE_TABLE_NAME
 # 15504: TENANT_VIRTUAL_SHOW_CREATE_CATALOG
 # 15504: __tenant_virtual_show_create_catalog  # BASE_TABLE_NAME
+# 15505: ALL_VIRTUAL_CCL_RULE_REAL_AGENT
+# 15505: __all_ccl_rule  # BASE_TABLE_NAME
+# 15506: ALL_VIRTUAL_CCL_STATUS
+# 15506: __all_virtual_ccl_status  # BASE_TABLE_NAME
 # 15507: ALL_VIRTUAL_MVIEW_RUNNING_JOB
 # 15507: __all_virtual_mview_running_job  # BASE_TABLE_NAME
 # 15508: ALL_VIRTUAL_MVIEW_DEP_REAL_AGENT
@@ -2471,6 +2484,10 @@
 # 21645: V$OB_STORAGE_CACHE_TASKS
 # 21646: GV$OB_TABLET_LOCAL_CACHE
 # 21647: V$OB_TABLET_LOCAL_CACHE
+# 21648: DBA_OB_CCL_RULES
+# 21649: CDB_OB_CCL_RULES
+# 21650: GV$OB_SQL_CCL_STATUS
+# 21651: V$OB_SQL_CCL_STATUS
 # 21652: DBA_MVIEW_RUNNING_JOBS
 # 21653: CDB_MVIEW_RUNNING_JOBS
 # 21654: DBA_MVIEW_DEPS
@@ -2765,6 +2782,7 @@
 # 25302: DBA_OB_SERVICES
 # 25303: DBA_OB_STORAGE_IO_USAGE
 # 25305: USER_SCHEDULER_JOBS
+# 25307: DBA_OB_CCL_RULES
 # 25308: DBA_MVIEW_RUNNING_JOBS
 # 25309: DBA_MVIEW_DEPS
 # 25310: DBA_OB_DYNAMIC_PARTITION_TABLES
@@ -2996,6 +3014,8 @@
 # 28263: V$OB_FUNCTION_IO_STAT
 # 28264: DBA_OB_TEMP_FILES
 # 28271: DBA_OB_CS_REPLICA_STATS
+# 28272: GV$OB_SQL_CCL_STATUS
+# 28273: V$OB_SQL_CCL_STATUS
 # 28274: V$OB_DYNAMIC_PARTITION_TABLES
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
@@ -3435,6 +3455,9 @@
 # 101114: __idx_539_idx_catalog_priv_catalog_name
 # 101114: idx_catalog_priv_catalog_name  # INDEX_NAME
 # 101114: __all_catalog_privilege  # DATA_BASE_TABLE_NAME
+# 101115: __idx_547_idx_ccl_rule_id
+# 101115: idx_ccl_rule_id  # INDEX_NAME
+# 101115: __all_ccl_rule  # DATA_BASE_TABLE_NAME
 # 101104: __idx_482_idx_tablet_his_table_id_dest
 # 101104: idx_tablet_his_table_id_dest  # INDEX_NAME
 # 101104: __all_tablet_reorganize_history  # DATA_BASE_TABLE_NAME

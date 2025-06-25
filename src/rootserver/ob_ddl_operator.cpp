@@ -33,6 +33,7 @@
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
 #include "share/ob_scheduled_manage_dynamic_partition.h"
+#include "share/schema/ob_ccl_rule_sql_service.h"
 
 namespace oceanbase
 {

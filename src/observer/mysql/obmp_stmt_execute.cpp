@@ -1494,6 +1494,8 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       audit_record.user_client_addr_ = session.get_user_client_addr();
       audit_record.user_group_ = THIS_WORKER.get_group_id();
       MEMCPY(audit_record.sql_id_, ctx_.sql_id_, (int32_t)sizeof(audit_record.sql_id_));
+      audit_record.ccl_rule_id_ = ctx_.ccl_rule_id_;
+      audit_record.ccl_match_time_ = ctx_.ccl_match_time_;
       if (NULL != plan) {
         audit_record.plan_type_ = plan->get_plan_type();
         audit_record.table_scan_ = plan->contain_table_scan();

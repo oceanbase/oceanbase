@@ -128,8 +128,10 @@
 #include "observer/table/group/ob_table_tenant_group.h"
 #include "observer/table/ob_table_client_info_mgr.h"
 #include "observer/table/common/ob_table_query_session_mgr.h"
-
 #include "lib/resource/ob_affinity_ctrl.h"
+#include "observer/table/ob_table_query_async_processor.h"
+#include "observer/table/ob_htable_rowkey_mgr.h"
+#include "sql/ob_sql_ccl_rule_manager.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -591,6 +593,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObAutoSplitTaskCache::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObDDLServiceLauncher::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObDDLScheduler::mtl_init, nullptr, rootserver::ObDDLScheduler::mtl_stop, rootserver::ObDDLScheduler::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(ObSQLCCLRuleManager::mtl_new, ObSQLCCLRuleManager::mtl_init, nullptr, nullptr, nullptr, ObSQLCCLRuleManager::mtl_destroy);
   }
 
   if (OB_SUCC(ret)) {

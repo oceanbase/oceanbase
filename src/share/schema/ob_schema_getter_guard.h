@@ -24,6 +24,8 @@
 #include "share/schema/ob_outline_mgr.h"
 #include "share/schema/ob_udt_mgr.h"
 #include "share/schema/ob_catalog_schema_struct.h"
+#include "share/schema/ob_ccl_schema_struct.h"
+#include "share/schema/ob_ccl_rule_mgr.h"
 
 namespace oceanbase
 {
@@ -1166,6 +1168,18 @@ public:
                          const ObNeedPriv &routine_need_priv);
 
   int check_routine_definer_existed(uint64_t tenant_id, const ObString &user_name, bool &existed);
+
+  int get_ccl_rule_with_name(const uint64_t tenant_id,
+                             const common::ObString &name,
+                             const ObCCLRuleSchema *&ccl_rule_schema);
+
+  int get_ccl_rule_with_ccl_rule_id(const uint64_t tenant_id,
+                                    const uint64_t ccl_rule_id,
+                                    const ObCCLRuleSchema *&ccl_rule_schema);
+
+  int get_ccl_rule_infos(const uint64_t tenant_id, CclRuleContainsInfo,
+                         ObCCLRuleMgr::CCLRuleInfos *&ccl_rule_infos);
+  int get_ccl_rule_count(const uint64_t tenant_id, uint64_t & count);
 
 private:
   int check_ssl_access(const ObUserInfo &user_info,

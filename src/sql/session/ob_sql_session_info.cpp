@@ -183,7 +183,9 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       failover_mode_(false),
       service_name_(),
       executing_sql_stat_record_(),
-      unit_gc_min_sup_proxy_version_(0)
+      unit_gc_min_sup_proxy_version_(0),
+      has_ccl_rule_(false),
+      last_update_ccl_cnt_time_(-1)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -398,6 +400,8 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   service_name_.reset();
   executing_sql_stat_record_.reset();
   unit_gc_min_sup_proxy_version_ = 0;
+  has_ccl_rule_ = false;
+  last_update_ccl_cnt_time_ = -1;
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -686,6 +690,25 @@ bool ObSQLSessionInfo::is_sqlstat_enabled()
     // sqlstat has a dependency on the statistics mechanism, so turning off perf event will turn off sqlstat at the same time.
   }
   return bret;
+}
+
+// To avoid frequent ObSchemaMgr access in check_lazy_guard,
+// refresh ccl_cnt every 5s
+int ObSQLSessionInfo::has_ccl_rules(share::schema::ObSchemaGetterGuard *&schema_guard,
+                                    bool &has_ccl_rules)
+{
+  int ret = OB_SUCCESS;
+  int64_t cur_time = ObTimeUtility::current_time();
+  if (last_update_ccl_cnt_time_ == -1 || cur_time - last_update_ccl_cnt_time_ > 5 * 1000 * 1000LL) {
+    uint64_t ccl_cnt = 0;
+    last_update_ccl_cnt_time_ = cur_time;
+    if (OB_FAIL(schema_guard->get_ccl_rule_count(get_effective_tenant_id(), ccl_cnt))) {
+      LOG_WARN("fail to get ccl rule count", K(ret));
+    }
+    has_ccl_rule_ = (ccl_cnt > 0);
+  }
+  has_ccl_rules = has_ccl_rule_;
+  return ret;
 }
 
 void ObSQLSessionInfo::destroy(bool skip_sys_var)

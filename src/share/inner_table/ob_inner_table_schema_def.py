@@ -8139,8 +8139,36 @@ def_table_schema(
   ],
 )
 
-# 547: __all_ccl_rule
-# 548: __all_ccl_rule_history
+all_ccl_rule_def = dict(
+  owner = 'zhl413386',
+  table_name = '__all_ccl_rule',
+  table_id = '547',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('ccl_rule_id', 'int'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('ccl_rule_name', 'varchar:OB_MAX_COLUMN_NAME_LENGTH'),
+    ('affect_user_name', 'varchar:OB_MAX_USER_NAME_LENGTH'),
+    ('affect_host', 'varchar:OB_MAX_HOST_NAME_LENGTH'),
+    ('affect_for_all_databases', 'bool', 'false', 'true'),
+    ('affect_for_all_tables', 'bool', 'false', 'true'),
+    ('affect_database', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'true', 'NULL'),
+    ('affect_table', 'varchar:OB_MAX_TABLE_NAME_LENGTH', 'true', 'NULL'),
+    ('affect_dml', 'int', 'false', 0),
+    ('affect_scope', 'int', 'false', 0),
+    ('ccl_keywords', 'varchar:OB_MAX_VARCHAR_LENGTH'),
+    ('max_concurrency', 'int', 'false', 0),
+  ],
+)
+
+def_table_schema(**all_ccl_rule_def)
+def_table_schema(**gen_history_table_def(548, all_ccl_rule_def))
+
 # 549: __all_balance_job_description
 
 # 余留位置（此行之前占位）
@@ -16194,8 +16222,33 @@ def_table_schema(
 # 12531: __tenant_virtual_catalog_table_column
 # 12532: __tenant_virtual_show_create_catalog_table
 
-# 12533: __all_virtual_ccl_rule
-# 12534: __all_virtual_ccl_status
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12533',
+  table_name = '__all_virtual_ccl_rule',
+  keywords = all_def_keywords['__all_ccl_rule'],
+  in_tenant_space = True))
+
+def_table_schema(
+  owner = 'zhl413386',
+  table_name    = '__all_virtual_ccl_status',
+  table_id      = '12534',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('ccl_rule_id','int'),
+    ('format_sqlid','varchar:OB_MAX_SQL_ID_LENGTH'),
+  ],
+  normal_columns = [
+    ('current_concurrency', 'int'),
+    ('max_concurrency', 'int'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(
   owner = 'zg410411',
@@ -16249,6 +16302,11 @@ def_table_schema(
 # 12538 __all_virtual_ss_notify_tasks_stat
 # 12539 __all_virtual_ss_notify_tablets_stat
 # 12540: __all_virtual_balance_job_description
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12549',
+  table_name = '__all_virtual_ccl_rule_history',
+  keywords = all_def_keywords['__all_ccl_rule_history']))
 
 def_table_schema(
   owner = 'tonghui.ht',
@@ -16648,7 +16706,6 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keyword
 # 15374: idx_rls_group_table_id_real_agent
 # 15375: idx_rls_context_table_id_real_agent
 
-
 #######################################################################
 # end for oracle agent table index
 #######################################################################
@@ -16818,8 +16875,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15495', all_def_ke
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15503', all_def_keywords['__all_pl_recompile_objinfo']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15504', all_def_keywords['__tenant_virtual_show_create_catalog']))
 
-# 15505: __all_ccl_rule
-# 15506: __all_virtual_ccl_status
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15505', all_def_keywords['__all_ccl_rule']))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15506', all_def_keywords['__all_virtual_ccl_status']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15507', all_def_keywords['__all_virtual_mview_running_job']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15508', all_def_keywords['__all_mview_dep']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15509', all_def_keywords['__all_virtual_dynamic_partition_table']))
@@ -18420,7 +18477,9 @@ def_table_schema(
                          seq_num as SEQ_NUM,
                          network_wait_time as NETWORK_WAIT_TIME,
                          plsql_compile_time as PLSQL_COMPILE_TIME,
-                         insert_duplicate_row_count as INSERT_DUPLICATE_ROW_COUNT
+                         insert_duplicate_row_count as INSERT_DUPLICATE_ROW_COUNT,
+                         ccl_rule_id as CCL_RULE_ID,
+                         ccl_match_time as CCL_MATCH_TIME
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -18836,7 +18895,9 @@ def_table_schema(
     SEQ_NUM,
     NETWORK_WAIT_TIME,
     PLSQL_COMPILE_TIME,
-    INSERT_DUPLICATE_ROW_COUNT
+    INSERT_DUPLICATE_ROW_COUNT,
+    CCL_RULE_ID,
+    CCL_MATCH_TIME
   FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
@@ -41844,10 +41905,115 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
-# 21648: DBA_OB_CCL_RULE
-# 21649: CDB_OB_CCL_RULE
-# 21650: GV$OB_SQL_CCL_STATUS
-# 21651: V$OB_SQL_CCL_STATUS
+def_table_schema(
+    owner = 'zhl413386',
+    table_name     = 'DBA_OB_CCL_RULES',
+    table_id       = '21648',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+          SELECT
+          TENANT_ID,
+          CCL_RULE_ID,
+          CCL_RULE_NAME,
+          AFFECT_USER_NAME,
+          AFFECT_HOST,
+          AFFECT_FOR_ALL_DATABASES,
+          AFFECT_FOR_ALL_TABLES,
+          AFFECT_DATABASE,
+          AFFECT_TABLE,
+          AFFECT_DML,
+          AFFECT_SCOPE,
+          CCL_KEYWORDS,
+          MAX_CONCURRENCY
+        FROM oceanbase.__all_virtual_ccl_rule
+        WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " "),
+
+    normal_columns = [
+    ],
+)
+
+def_table_schema(
+    owner = 'zhl413386',
+    table_name     = 'CDB_OB_CCL_RULES',
+    table_id       = '21649',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+          SELECT
+          TENANT_ID,
+          CCL_RULE_ID,
+          CCL_RULE_NAME,
+          AFFECT_USER_NAME,
+          AFFECT_HOST,
+          AFFECT_FOR_ALL_DATABASES,
+          AFFECT_FOR_ALL_TABLES,
+          AFFECT_DATABASE,
+          AFFECT_TABLE,
+          AFFECT_DML,
+          AFFECT_SCOPE,
+          CCL_KEYWORDS,
+          MAX_CONCURRENCY
+        FROM oceanbase.__all_virtual_ccl_rule
+""".replace("\n", " "),
+
+    normal_columns = [
+    ],
+)
+
+def_table_schema(
+    owner = 'zhl413386',
+    table_name     = 'GV$OB_SQL_CCL_STATUS',
+    table_id       = '21650',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+          SELECT
+          TENANT_ID as CON_ID,
+          SVR_IP,
+          SVR_PORT,
+          CCL_RULE_ID,
+          FORMAT_SQLID,
+          CURRENT_CONCURRENCY,
+          MAX_CONCURRENCY
+        FROM oceanbase.__all_virtual_ccl_status
+""".replace("\n", " "),
+
+    normal_columns = [
+    ],
+)
+
+def_table_schema(
+    owner = 'zhl413386',
+    table_name     = 'V$OB_SQL_CCL_STATUS',
+    table_id       = '21651',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+          SELECT
+          TENANT_ID as CON_ID,
+          SVR_IP,
+          SVR_PORT,
+          CCL_RULE_ID,
+          FORMAT_SQLID,
+          CURRENT_CONCURRENCY,
+          MAX_CONCURRENCY
+        FROM oceanbase.__all_virtual_ccl_status
+        WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+
+    normal_columns = [
+    ],
+)
 
 
 def_table_schema(
@@ -63993,7 +64159,36 @@ def_table_schema(
 )
 
 # 25306: DBA_OB_TENANT_FLASHBACK_LOG_SCN
-# 25307: DBA_OB_CCL_RULE
+
+def_table_schema(
+  owner = 'zhl413386',
+  table_name      = 'DBA_OB_CCL_RULES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25307',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+          SELECT
+          TENANT_ID,
+          CCL_RULE_ID,
+          CCL_RULE_NAME,
+          AFFECT_USER_NAME,
+          AFFECT_HOST,
+          AFFECT_FOR_ALL_DATABASES,
+          AFFECT_FOR_ALL_TABLES,
+          AFFECT_DATABASE,
+          AFFECT_TABLE,
+          AFFECT_DML,
+          AFFECT_SCOPE,
+          CCL_KEYWORDS,
+          MAX_CONCURRENCY
+        FROM SYS.ALL_VIRTUAL_CCL_RULE_REAL_AGENT
+""".replace("\n", " ")
+)
 
 def_table_schema(
     owner           = 'zg410411',
@@ -64297,7 +64492,9 @@ def_table_schema(
                          seq_num as SEQ_NUM,
                          network_wait_time as  NETWORK_WAIT_TIME,
                          plsql_compile_time as PLSQL_COMPILE_TIME,
-                         insert_duplicate_row_count as INSERT_DUPLICATE_ROW_COUNT
+                         insert_duplicate_row_count as INSERT_DUPLICATE_ROW_COUNT,
+                         ccl_rule_id as CCL_RULE_ID,
+                         ccl_match_time as CCL_MATCH_TIME
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -64416,7 +64613,9 @@ PROXY_USER,
 SEQ_NUM,
 NETWORK_WAIT_TIME,
 PLSQL_COMPILE_TIME,
-INSERT_DUPLICATE_ROW_COUNT
+INSERT_DUPLICATE_ROW_COUNT,
+CCL_RULE_ID,
+CCL_MATCH_TIME
 FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
@@ -75498,8 +75697,54 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-# 28272: GV$OB_SQL_CCL_STATUS
-# 28273: V$OB_SQL_CCL_STATUS
+def_table_schema(
+  owner = 'zhl413386',
+  table_name      = 'GV$OB_SQL_CCL_STATUS',
+  name_postfix = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28272',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+          SELECT
+          TENANT_ID as CON_ID,
+          SVR_IP,
+          SVR_PORT,
+          CCL_RULE_ID,
+          FORMAT_SQLID,
+          CURRENT_CONCURRENCY,
+          MAX_CONCURRENCY
+        FROM SYS.ALL_VIRTUAL_CCL_STATUS
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'zhl413386',
+  table_name      = 'V$OB_SQL_CCL_STATUS',
+  name_postfix = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28273',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+          SELECT
+          TENANT_ID as CON_ID,
+          SVR_IP,
+          SVR_PORT,
+          CCL_RULE_ID,
+          FORMAT_SQLID,
+          CURRENT_CONCURRENCY,
+          MAX_CONCURRENCY
+        FROM SYS.ALL_VIRTUAL_CCL_STATUS
+        WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'zhaoziqian.zzq',
@@ -76540,7 +76785,14 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_catalog_privilege'])
 
-# 101115: __all_ccl_rule
+def_sys_index_table(
+  index_name = 'idx_ccl_rule_id',
+  index_table_id = 101115,
+  index_columns = ['ccl_rule_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_ccl_rule'])
+
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
 ################################################################################

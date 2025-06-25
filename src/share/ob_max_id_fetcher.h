@@ -75,7 +75,6 @@ enum ObMaxIdType
   OB_MAX_USED_RLS_POLICY_ID_TYPE,
   OB_MAX_USED_RLS_GROUP_ID_TYPE,
   OB_MAX_USED_RLS_CONTEXT_ID_TYPE,
-
   /* the following ObMaxIdType will be persisted. */
   OB_MAX_USED_SERVICE_NAME_ID_TYPE,
   OB_MAX_USED_STORAGE_ID_TYPE, /* used for storage id of zone storage */

@@ -86,6 +86,7 @@ class ObExprLike : public ObFuncExprOperator
     char *instr_buf_;
     uint32_t instr_buf_length_;
   };
+public:
   class ObExprLikeContext : public ObExprOperatorCtx
   {
   public:
@@ -195,14 +196,15 @@ template <typename TextVec, typename ResVec, bool NullCheck, bool UseInstrMode, 
                                              const ObBitVector &skip, const EvalBound &bound,
                                              ObExpr &text, ObDatum *pattern_datum);
 
-  DECLARE_SET_LOCAL_SESSION_VARS;
-private:
   static int set_instr_info(common::ObIAllocator *exec_allocator,
                             const common::ObCollationType cs_type,
                             const common::ObString &pattern,
                             const common::ObString &escape,
                             const common::ObCollationType escape_coll,
                             ObExprLikeContext &like_ctx);
+
+  DECLARE_SET_LOCAL_SESSION_VARS;
+private:
   static int is_escape(const common::ObCollationType cs_type,
                        const char *buf_start,
                        int32_t char_len,

@@ -28,6 +28,7 @@
 #include "sql/dblink/ob_dblink_utils.h"
 #include "sql/monitor/ob_sql_stat_record.h"
 #include "share/stat/ob_opt_ds_stat_cache.h"
+#include "sql/ob_sql_ccl_rule_manager.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_define.h"
 #endif
@@ -231,6 +232,7 @@ class ObRawExpr;
 class ObSQLSessionInfo;
 
 class ObSelectStmt;
+class ObCCLRuleConcurrencyValueWrapper;
 
 class ObMultiStmtItem
 {
@@ -783,6 +785,11 @@ public:
     };
   };
   common::ObString raw_sql_;
+  uint64_t ccl_rule_id_;
+  uint64_t ccl_match_time_;
+  common::ObString reconstruct_ps_sql_;
+  common::ObSEArray<ObCCLRuleConcurrencyValueWrapper*, 4> matched_ccl_rule_level_values_;
+  common::ObSEArray<ObCCLRuleConcurrencyValueWrapper*, 4> matched_ccl_format_sqlid_level_values_;
   TO_STRING_KV(K(stmt_type_));
 private:
   share::ObFeedbackRerouteInfo *reroute_info_;

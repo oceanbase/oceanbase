@@ -672,6 +672,8 @@ public:
   static int all_pl_recompile_objinfo_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ccl_rule_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ccl_rule_history_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_all_table_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_column_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_index_schema(share::schema::ObTableSchema &table_schema);
@@ -1175,8 +1177,11 @@ public:
   static int tenant_virtual_show_catalog_databases_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_storage_cache_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tablet_local_cache_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ccl_rule_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ccl_status_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mview_running_job_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_dynamic_partition_table_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ccl_rule_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_vector_mem_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -1488,6 +1493,8 @@ public:
   static int all_virtual_catalog_privilege_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_pl_recompile_objinfo_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_show_create_catalog_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ccl_rule_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ccl_status_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mview_running_job_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mview_dep_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_dynamic_partition_table_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -2026,6 +2033,10 @@ public:
   static int v_ob_storage_cache_tasks_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_tablet_local_cache_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_tablet_local_cache_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_ccl_rules_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_ccl_rules_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_sql_ccl_status_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_sql_ccl_status_schema(share::schema::ObTableSchema &table_schema);
   static int dba_mview_running_jobs_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_mview_running_jobs_schema(share::schema::ObTableSchema &table_schema);
   static int dba_mview_deps_schema(share::schema::ObTableSchema &table_schema);
@@ -2320,6 +2331,7 @@ public:
   static int dba_ob_services_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_storage_io_usage_ora_schema(share::schema::ObTableSchema &table_schema);
   static int user_scheduler_jobs_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_ccl_rules_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_mview_running_jobs_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_mview_deps_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_dynamic_partition_tables_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -2551,6 +2563,8 @@ public:
   static int v_ob_function_io_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_temp_files_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_cs_replica_stats_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_sql_ccl_status_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_sql_ccl_status_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_dynamic_partition_tables_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -2884,6 +2898,8 @@ public:
   static int all_pl_recompile_objinfo_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ccl_rule_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ccl_rule_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -3216,6 +3232,8 @@ public:
   static int all_pl_recompile_objinfo_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ccl_rule_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ccl_rule_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ddl_diagnose_info_all_virtual_ddl_diagnose_info_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ash_all_virtual_ash_i1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_plan_monitor_all_virtual_sql_plan_monitor_i1_schema(share::schema::ObTableSchema &table_schema);
@@ -3439,6 +3457,7 @@ public:
   static int all_pkg_coll_type_idx_pkg_coll_name_id_schema(share::schema::ObTableSchema &table_schema);
   static int all_catalog_idx_catalog_name_schema(share::schema::ObTableSchema &table_schema);
   static int all_catalog_privilege_idx_catalog_priv_catalog_name_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ccl_rule_idx_ccl_rule_id_schema(share::schema::ObTableSchema &table_schema);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObInnerTableSchema);
@@ -3786,6 +3805,8 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_pl_recompile_objinfo_schema,
   ObInnerTableSchema::all_vector_index_task_schema,
   ObInnerTableSchema::all_vector_index_task_history_schema,
+  ObInnerTableSchema::all_ccl_rule_schema,
+  ObInnerTableSchema::all_ccl_rule_history_schema,
   NULL,};
 
 const schema_create_func virtual_table_schema_creators [] = {
@@ -4292,8 +4313,11 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::tenant_virtual_show_catalog_databases_schema,
   ObInnerTableSchema::all_virtual_storage_cache_task_schema,
   ObInnerTableSchema::all_virtual_tablet_local_cache_schema,
+  ObInnerTableSchema::all_virtual_ccl_rule_schema,
+  ObInnerTableSchema::all_virtual_ccl_status_schema,
   ObInnerTableSchema::all_virtual_mview_running_job_schema,
   ObInnerTableSchema::all_virtual_dynamic_partition_table_schema,
+  ObInnerTableSchema::all_virtual_ccl_rule_history_schema,
   ObInnerTableSchema::all_virtual_tenant_vector_mem_info_schema,
   ObInnerTableSchema::all_virtual_ddl_diagnose_info_all_virtual_ddl_diagnose_info_i1_schema,
   ObInnerTableSchema::all_virtual_ash_all_virtual_ash_i1_schema,
@@ -4616,6 +4640,8 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_catalog_privilege_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_pl_recompile_objinfo_real_agent_ora_schema,
   ObInnerTableSchema::tenant_virtual_show_create_catalog_ora_schema,
+  ObInnerTableSchema::all_virtual_ccl_rule_real_agent_ora_schema,
+  ObInnerTableSchema::all_virtual_ccl_status_ora_schema,
   ObInnerTableSchema::all_virtual_mview_running_job_ora_schema,
   ObInnerTableSchema::all_virtual_mview_dep_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_dynamic_partition_table_ora_schema,
@@ -5249,6 +5275,10 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_storage_cache_tasks_schema,
   ObInnerTableSchema::gv_ob_tablet_local_cache_schema,
   ObInnerTableSchema::v_ob_tablet_local_cache_schema,
+  ObInnerTableSchema::dba_ob_ccl_rules_schema,
+  ObInnerTableSchema::cdb_ob_ccl_rules_schema,
+  ObInnerTableSchema::gv_ob_sql_ccl_status_schema,
+  ObInnerTableSchema::v_ob_sql_ccl_status_schema,
   ObInnerTableSchema::dba_mview_running_jobs_schema,
   ObInnerTableSchema::cdb_mview_running_jobs_schema,
   ObInnerTableSchema::dba_mview_deps_schema,
@@ -5543,6 +5573,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_services_ora_schema,
   ObInnerTableSchema::dba_ob_storage_io_usage_ora_schema,
   ObInnerTableSchema::user_scheduler_jobs_ora_schema,
+  ObInnerTableSchema::dba_ob_ccl_rules_ora_schema,
   ObInnerTableSchema::dba_mview_running_jobs_ora_schema,
   ObInnerTableSchema::dba_mview_deps_ora_schema,
   ObInnerTableSchema::dba_ob_dynamic_partition_tables_ora_schema,
@@ -5774,6 +5805,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_function_io_stat_ora_schema,
   ObInnerTableSchema::dba_ob_temp_files_ora_schema,
   ObInnerTableSchema::dba_ob_cs_replica_stats_ora_schema,
+  ObInnerTableSchema::gv_ob_sql_ccl_status_ora_schema,
+  ObInnerTableSchema::v_ob_sql_ccl_status_ora_schema,
   ObInnerTableSchema::v_ob_dynamic_partition_tables_ora_schema,
   NULL,};
 
@@ -5900,6 +5933,7 @@ const schema_create_func sys_index_table_schema_creators [] = {
   ObInnerTableSchema::all_pkg_coll_type_idx_pkg_coll_name_id_schema,
   ObInnerTableSchema::all_catalog_idx_catalog_name_schema,
   ObInnerTableSchema::all_catalog_privilege_idx_catalog_priv_catalog_name_schema,
+  ObInnerTableSchema::all_ccl_rule_idx_ccl_rule_id_schema,
   ObInnerTableSchema::all_tablet_reorganize_history_idx_tablet_his_table_id_dest_schema,
   NULL,};
 
@@ -6217,6 +6251,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_PL_RECOMPILE_OBJINFO_TID,
   OB_ALL_VECTOR_INDEX_TASK_TID,
   OB_ALL_VECTOR_INDEX_TASK_HISTORY_TID,
+  OB_ALL_CCL_RULE_TID,
+  OB_ALL_CCL_RULE_HISTORY_TID,
   OB_TENANT_VIRTUAL_ALL_TABLE_TID,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TID,
   OB_TENANT_VIRTUAL_TABLE_INDEX_TID,
@@ -6483,6 +6519,8 @@ const uint64_t tenant_space_tables [] = {
   OB_TENANT_VIRTUAL_SHOW_CATALOG_DATABASES_TID,
   OB_ALL_VIRTUAL_STORAGE_CACHE_TASK_TID,
   OB_ALL_VIRTUAL_TABLET_LOCAL_CACHE_TID,
+  OB_ALL_VIRTUAL_CCL_RULE_TID,
+  OB_ALL_VIRTUAL_CCL_STATUS_TID,
   OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_TID,
   OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_TID,
   OB_ALL_VIRTUAL_TENANT_VECTOR_MEM_INFO_TID,
@@ -6805,6 +6843,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_CATALOG_PRIVILEGE_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_PL_RECOMPILE_OBJINFO_REAL_AGENT_ORA_TID,
   OB_TENANT_VIRTUAL_SHOW_CREATE_CATALOG_ORA_TID,
+  OB_ALL_VIRTUAL_CCL_RULE_REAL_AGENT_ORA_TID,
+  OB_ALL_VIRTUAL_CCL_STATUS_ORA_TID,
   OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_ORA_TID,
   OB_ALL_VIRTUAL_MVIEW_DEP_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_ORA_TID,
@@ -7200,6 +7240,10 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_STORAGE_CACHE_TASKS_TID,
   OB_GV_OB_TABLET_LOCAL_CACHE_TID,
   OB_V_OB_TABLET_LOCAL_CACHE_TID,
+  OB_DBA_OB_CCL_RULES_TID,
+  OB_CDB_OB_CCL_RULES_TID,
+  OB_GV_OB_SQL_CCL_STATUS_TID,
+  OB_V_OB_SQL_CCL_STATUS_TID,
   OB_DBA_MVIEW_RUNNING_JOBS_TID,
   OB_DBA_MVIEW_DEPS_TID,
   OB_DBA_OB_DYNAMIC_PARTITION_TABLES_TID,
@@ -7492,6 +7536,7 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_SERVICES_ORA_TID,
   OB_DBA_OB_STORAGE_IO_USAGE_ORA_TID,
   OB_USER_SCHEDULER_JOBS_ORA_TID,
+  OB_DBA_OB_CCL_RULES_ORA_TID,
   OB_DBA_MVIEW_RUNNING_JOBS_ORA_TID,
   OB_DBA_MVIEW_DEPS_ORA_TID,
   OB_DBA_OB_DYNAMIC_PARTITION_TABLES_ORA_TID,
@@ -7723,6 +7768,8 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_FUNCTION_IO_STAT_ORA_TID,
   OB_DBA_OB_TEMP_FILES_ORA_TID,
   OB_DBA_OB_CS_REPLICA_STATS_ORA_TID,
+  OB_GV_OB_SQL_CCL_STATUS_ORA_TID,
+  OB_V_OB_SQL_CCL_STATUS_ORA_TID,
   OB_V_OB_DYNAMIC_PARTITION_TABLES_ORA_TID,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TID,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TID,
@@ -7837,6 +7884,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_PKG_COLL_TYPE_IDX_PKG_COLL_NAME_ID_TID,
   OB_ALL_CATALOG_IDX_CATALOG_NAME_TID,
   OB_ALL_CATALOG_PRIVILEGE_IDX_CATALOG_PRIV_CATALOG_NAME_TID,
+  OB_ALL_CCL_RULE_IDX_CCL_RULE_ID_TID,
   OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TID,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DATA_TABLE_ID_REAL_AGENT_TID,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DB_TB_NAME_REAL_AGENT_TID,
@@ -8227,6 +8275,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_META_TID,
   OB_ALL_VECTOR_INDEX_TASK_AUX_LOB_META_TID,
   OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_META_TID,
+  OB_ALL_CCL_RULE_AUX_LOB_META_TID,
+  OB_ALL_CCL_RULE_HISTORY_AUX_LOB_META_TID,
   OB_ALL_TABLE_AUX_LOB_PIECE_TID,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TID,
   OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TID,
@@ -8532,7 +8582,9 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_CATALOG_PRIVILEGE_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_PIECE_TID,
   OB_ALL_VECTOR_INDEX_TASK_AUX_LOB_PIECE_TID,
-  OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_PIECE_TID,  };
+  OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_PIECE_TID,
+  OB_ALL_CCL_RULE_AUX_LOB_PIECE_TID,
+  OB_ALL_CCL_RULE_HISTORY_AUX_LOB_PIECE_TID,  };
 
 const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_SQL_AUDIT_TID,
@@ -8706,6 +8758,7 @@ const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_WR_SQL_PLAN_AUX_KEY2SNAPSHOT_TID,
   OB_ALL_VIRTUAL_CS_REPLICA_TABLET_STATS_TID,
   OB_TENANT_VIRTUAL_SHOW_CREATE_CATALOG_TID,
+  OB_ALL_VIRTUAL_CCL_STATUS_TID,
   OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_TID,
   OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_TID,  };
 
@@ -8880,6 +8933,7 @@ const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_O
 ,  OB_ALL_VIRTUAL_WR_SQL_PLAN_AUX_KEY2SNAPSHOT_ORA_TID
 ,  OB_ALL_VIRTUAL_CS_REPLICA_TABLET_STATS_ORA_TID
 ,  OB_TENANT_VIRTUAL_SHOW_CREATE_CATALOG_ORA_TID
+,  OB_ALL_VIRTUAL_CCL_STATUS_ORA_TID
 ,  OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_ORA_TID
 ,  OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_ORA_TID
 ,  };
@@ -9203,6 +9257,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_PL_RECOMPILE_OBJINFO_TNAME,
   OB_ALL_VECTOR_INDEX_TASK_TNAME,
   OB_ALL_VECTOR_INDEX_TASK_HISTORY_TNAME,
+  OB_ALL_CCL_RULE_TNAME,
+  OB_ALL_CCL_RULE_HISTORY_TNAME,
   OB_TENANT_VIRTUAL_ALL_TABLE_TNAME,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TNAME,
   OB_TENANT_VIRTUAL_TABLE_INDEX_TNAME,
@@ -9469,6 +9525,8 @@ const char* const tenant_space_table_names [] = {
   OB_TENANT_VIRTUAL_SHOW_CATALOG_DATABASES_TNAME,
   OB_ALL_VIRTUAL_STORAGE_CACHE_TASK_TNAME,
   OB_ALL_VIRTUAL_TABLET_LOCAL_CACHE_TNAME,
+  OB_ALL_VIRTUAL_CCL_RULE_TNAME,
+  OB_ALL_VIRTUAL_CCL_STATUS_TNAME,
   OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_TNAME,
   OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_TNAME,
   OB_ALL_VIRTUAL_TENANT_VECTOR_MEM_INFO_TNAME,
@@ -9791,6 +9849,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_CATALOG_PRIVILEGE_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_PL_RECOMPILE_OBJINFO_REAL_AGENT_ORA_TNAME,
   OB_TENANT_VIRTUAL_SHOW_CREATE_CATALOG_ORA_TNAME,
+  OB_ALL_VIRTUAL_CCL_RULE_REAL_AGENT_ORA_TNAME,
+  OB_ALL_VIRTUAL_CCL_STATUS_ORA_TNAME,
   OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_ORA_TNAME,
   OB_ALL_VIRTUAL_MVIEW_DEP_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_ORA_TNAME,
@@ -10186,6 +10246,10 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_STORAGE_CACHE_TASKS_TNAME,
   OB_GV_OB_TABLET_LOCAL_CACHE_TNAME,
   OB_V_OB_TABLET_LOCAL_CACHE_TNAME,
+  OB_DBA_OB_CCL_RULES_TNAME,
+  OB_CDB_OB_CCL_RULES_TNAME,
+  OB_GV_OB_SQL_CCL_STATUS_TNAME,
+  OB_V_OB_SQL_CCL_STATUS_TNAME,
   OB_DBA_MVIEW_RUNNING_JOBS_TNAME,
   OB_DBA_MVIEW_DEPS_TNAME,
   OB_DBA_OB_DYNAMIC_PARTITION_TABLES_TNAME,
@@ -10478,6 +10542,7 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_SERVICES_ORA_TNAME,
   OB_DBA_OB_STORAGE_IO_USAGE_ORA_TNAME,
   OB_USER_SCHEDULER_JOBS_ORA_TNAME,
+  OB_DBA_OB_CCL_RULES_ORA_TNAME,
   OB_DBA_MVIEW_RUNNING_JOBS_ORA_TNAME,
   OB_DBA_MVIEW_DEPS_ORA_TNAME,
   OB_DBA_OB_DYNAMIC_PARTITION_TABLES_ORA_TNAME,
@@ -10709,6 +10774,8 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_FUNCTION_IO_STAT_ORA_TNAME,
   OB_DBA_OB_TEMP_FILES_ORA_TNAME,
   OB_DBA_OB_CS_REPLICA_STATS_ORA_TNAME,
+  OB_GV_OB_SQL_CCL_STATUS_ORA_TNAME,
+  OB_V_OB_SQL_CCL_STATUS_ORA_TNAME,
   OB_V_OB_DYNAMIC_PARTITION_TABLES_ORA_TNAME,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TNAME,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TNAME,
@@ -10823,6 +10890,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_PKG_COLL_TYPE_IDX_PKG_COLL_NAME_ID_TNAME,
   OB_ALL_CATALOG_IDX_CATALOG_NAME_TNAME,
   OB_ALL_CATALOG_PRIVILEGE_IDX_CATALOG_PRIV_CATALOG_NAME_TNAME,
+  OB_ALL_CCL_RULE_IDX_CCL_RULE_ID_TNAME,
   OB_ALL_TABLET_REORGANIZE_HISTORY_IDX_TABLET_HIS_TABLE_ID_DEST_TNAME,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DATA_TABLE_ID_REAL_AGENT_TNAME,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DB_TB_NAME_REAL_AGENT_TNAME,
@@ -11213,6 +11281,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_META_TNAME,
   OB_ALL_VECTOR_INDEX_TASK_AUX_LOB_META_TNAME,
   OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_META_TNAME,
+  OB_ALL_CCL_RULE_AUX_LOB_META_TNAME,
+  OB_ALL_CCL_RULE_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_TABLE_AUX_LOB_PIECE_TNAME,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TNAME,
   OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TNAME,
@@ -11518,7 +11588,9 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_CATALOG_PRIVILEGE_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_PIECE_TNAME,
   OB_ALL_VECTOR_INDEX_TASK_AUX_LOB_PIECE_TNAME,
-  OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_PIECE_TNAME,  };
+  OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_PIECE_TNAME,
+  OB_ALL_CCL_RULE_AUX_LOB_PIECE_TNAME,
+  OB_ALL_CCL_RULE_HISTORY_AUX_LOB_PIECE_TNAME,  };
 
 const uint64_t only_rs_vtables [] = {
   OB_ALL_VIRTUAL_CORE_META_TABLE_TID,
@@ -11694,6 +11766,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_PLUGIN_INFO_TID,
   OB_ALL_VIRTUAL_STORAGE_CACHE_TASK_TID,
   OB_ALL_VIRTUAL_TABLET_LOCAL_CACHE_TID,
+  OB_ALL_VIRTUAL_CCL_STATUS_TID,
   OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_TID,
   OB_ALL_VIRTUAL_TENANT_VECTOR_MEM_INFO_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
@@ -11783,6 +11856,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_TEMP_FILE_ORA_TID,
   OB_ALL_VIRTUAL_TABLET_POINTER_STATUS_ORA_TID,
   OB_ALL_VIRTUAL_CS_REPLICA_TABLET_STATS_ORA_TID,
+  OB_ALL_VIRTUAL_CCL_STATUS_ORA_TID,
   OB_ALL_VIRTUAL_MVIEW_RUNNING_JOB_ORA_TID,  };
 
 const uint64_t restrict_access_virtual_tables[] = {
@@ -14739,6 +14813,22 @@ LOBMapping const lob_aux_table_mappings [] = {
     ObInnerTableSchema::all_vector_index_task_history_aux_lob_piece_schema
   },
 
+  {
+    OB_ALL_CCL_RULE_TID,
+    OB_ALL_CCL_RULE_AUX_LOB_META_TID,
+    OB_ALL_CCL_RULE_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_ccl_rule_aux_lob_meta_schema,
+    ObInnerTableSchema::all_ccl_rule_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_CCL_RULE_HISTORY_TID,
+    OB_ALL_CCL_RULE_HISTORY_AUX_LOB_META_TID,
+    OB_ALL_CCL_RULE_HISTORY_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_ccl_rule_history_aux_lob_meta_schema,
+    ObInnerTableSchema::all_ccl_rule_history_aux_lob_piece_schema
+  },
+
 };
 
 static inline bool get_sys_table_lob_aux_table_id(const uint64_t tid, uint64_t& meta_tid, uint64_t& piece_tid)
@@ -14776,12 +14866,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 329;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 922;
-const int64_t OB_SYS_VIEW_COUNT = 1061;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2317;
+const int64_t OB_SYS_TABLE_COUNT = 331;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 927;
+const int64_t OB_SYS_VIEW_COUNT = 1068;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2331;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2320;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2334;
 
 } // end namespace share
 } // end namespace oceanbase

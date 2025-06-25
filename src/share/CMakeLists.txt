@@ -570,6 +570,7 @@ ob_set_subtarget(ob_share schema
   schema/ob_ddl_trans_controller.cpp
   schema/ob_schema_getter_guard.cpp
   schema/ob_schema_getter_guard_priv.cpp
+  schema/ob_schema_getter_guard_ccl_rule.cpp
   schema/ob_schema_struct.cpp
   schema/ob_sequence_sql_service.cpp
   schema/ob_server_schema_service.cpp
@@ -583,6 +584,10 @@ ob_set_subtarget(ob_share schema
   schema/ob_catalog_schema_struct.cpp
   schema/ob_catalog_mgr.cpp
   schema/ob_catalog_sql_service.cpp
+  schema/ob_ccl_schema_struct.cpp
+  schema/ob_ccl_rule_mgr.cpp
+  schema/ob_ccl_rule_sql_service.cpp
+
 )
 
 ob_set_subtarget(ob_share stat

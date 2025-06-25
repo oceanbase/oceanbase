@@ -2592,6 +2592,8 @@ private:
   // Currently, when inner sql is executed, the session will be created from session_mgr in most cases. We think he is an inner session;
   // In addition, in situations such as PL execution, the external session will be passed to the inner sql Connection. In this case, it is not considered an inner session.
   // There are differences between the two in terms of ASH statistics and so on, so they should be distinguished.
+  bool has_ccl_rule_;
+  int64_t last_ccl_cnt_update_time_;
 public:
   bool get_enable_hyperscan_regexp_engine() const;
   int8_t get_min_const_integer_precision() const;

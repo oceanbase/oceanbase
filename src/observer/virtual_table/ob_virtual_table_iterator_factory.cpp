@@ -115,6 +115,7 @@
 #include "observer/virtual_table/ob_iterate_virtual_table.h"
 #include "observer/virtual_table/ob_all_virtual_id_service.h"
 #include "observer/virtual_table/ob_all_virtual_timestamp_service.h"
+#include "rootserver/ob_root_service.h"
 #include "rootserver/virtual_table/ob_core_meta_table.h"
 #include "rootserver/virtual_table/ob_virtual_core_inner_table.h"
 #include "observer/virtual_table/ob_tenant_virtual_charset.h"
@@ -228,13 +229,13 @@
 #include "observer/virtual_table/ob_all_virtual_kv_group_commit_info.h"
 #include "observer/virtual_table/ob_all_virtual_plugin_info.h"
 #include "observer/virtual_table/ob_all_virtual_ddl_diagnose_info.h"
-#include "observer/virtual_table/ob_all_virtual_ddl_diagnose_info.h"
 #include "observer/virtual_table/ob_all_virtual_cs_replica_tablet_stats.h"
 #include "observer/virtual_table/ob_all_virtual_dynamic_partition_table.h"
 #include "observer/virtual_table/ob_all_virtual_storage_cache_task.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_local_cache.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_mview_running_job.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_vector_mem_info.h"
+#include "observer/virtual_table/ob_all_virtual_ccl_status.h"
 
 namespace oceanbase
 {
@@ -3031,6 +3032,18 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else {
               gv_tenant_vector_mem_info->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(gv_tenant_vector_mem_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_CCL_STATUS_TID:
+          {
+            ObAllVirtualCCLStatus *all_virtual_ccl_status = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualCCLStatus, all_virtual_ccl_status))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_ccl_status);
+              if (OB_FAIL(all_virtual_ccl_status->set_svr_addr(addr_)))
+              {
+                LOG_WARN("set server addr failed", K(ret), K(addr_));
+              }
             }
             break;
           }

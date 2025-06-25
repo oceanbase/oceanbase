@@ -17,6 +17,9 @@
 #include "share/external_table/ob_external_object_ctx.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/ob_sql_mock_schema_utils.h"
+#include "share/schema/ob_schema_getter_guard.h"
+#include "sql/dblink/ob_dblink_utils.h"
+#include "src/storage/tx/ob_trans_define_v4.h"
 
 using namespace ::oceanbase::common;
 namespace oceanbase
@@ -203,7 +206,10 @@ ObSqlCtx::ObSqlCtx()
     is_bulk_(false),
     ins_opt_ctx_(),
     flags_(0),
+    ccl_rule_id_(0),
+    ccl_match_time_(0),
     reroute_info_(nullptr)
+
 {
   sql_id_[0] = '\0';
   sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
@@ -268,6 +274,11 @@ void ObSqlCtx::reset()
   enable_user_defined_rewrite_ = false;
   is_bulk_ = false;
   ins_opt_ctx_.reset();
+  ccl_rule_id_ = 0;
+  ccl_match_time_ = 0;
+  reconstruct_ps_sql_.reset();
+  matched_ccl_rule_level_values_.reset();
+  matched_ccl_format_sqlid_level_values_.reset();
 }
 
 //release dynamic allocated memory
