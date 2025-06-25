@@ -7744,7 +7744,8 @@ int64_t ObTablet::to_string(char *buf, const int64_t buf_len) const
          K_(is_external_tablet),
          K_(table_store_cache),
          KP_(rowkey_read_info),
-         "is_cs_replica_compat", is_cs_replica_compat());
+         "is_cs_replica_compat", is_cs_replica_compat(),
+         "is_delete_insert_table", OB_NOT_NULL(rowkey_read_info_) ? rowkey_read_info_->is_delete_insert_table() : false);
     J_COMMA();
     BUF_PRINTF("memtables:");
     J_ARRAY_START();
