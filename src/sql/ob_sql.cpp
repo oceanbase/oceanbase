@@ -699,7 +699,7 @@ int ObSql::get_composite_type_field_name(ObSchemaGetterGuard &schema_guard,
                                             composite_field_name));
         }
         if (i < rec_type->get_member_count() - 1) {
-          OZ (composite_field_name.append(", "));
+          OZ (composite_field_name.append(","));
         }
       }
       OZ (composite_field_name.append(")"));
