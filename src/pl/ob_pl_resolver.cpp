@@ -17955,7 +17955,7 @@ int ObPLResolver::resolve_routine_decl(const ObStmtNodeTree *parse_tree,
         if (parent_routine_info->is_pipelined() != routine_info->is_pipelined()
             || (routine_info->is_deterministic() && !parent_routine_info->is_deterministic())
             || (routine_info->is_parallel_enable() && !parent_routine_info->is_parallel_enable())
-            || (routine_info->is_result_cache() && !parent_routine_info->is_result_cache())) {
+            || (routine_info->is_result_cache() != parent_routine_info->is_result_cache())) {
           ret = OB_ERR_ITEM_NOT_IN_BODY;
           LOG_USER_ERROR(OB_ERR_ITEM_NOT_IN_BODY,
                      routine_info->get_name().length(), routine_info->get_name().ptr());
