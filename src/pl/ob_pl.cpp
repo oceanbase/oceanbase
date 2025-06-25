@@ -235,6 +235,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 WRAP_SPI_CALL(sql::ObSPIService::spi_get_current_expr_allocator));
   jit::ObLLVMHelper::add_symbol(ObString("spi_adjust_error_trace"),
                                 WRAP_SPI_CALL(sql::ObSPIService::spi_adjust_error_trace));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_convert_anonymous_array"),
+                                WRAP_SPI_CALL(sql::ObSPIService::spi_convert_anonymous_array));
 #undef WRAP_SPI_CALL
 
   sql_proxy_ = &sql_proxy;
@@ -3257,7 +3259,7 @@ int ObPLExecState::final(int ret)
     }
   }
 
-  // 1. inner call inout nocopy参数会深拷一份, 执行异常时需要释放
+  // 1. inner call inout 非nocopy参数会深拷一份, 执行异常时需要释放
   // 2. inner call 纯out属性复杂数据类型参数, 会生成一个新的obj, 执行失败时会抛出异常, 不会走到geneate_out_param里面的释放内存逻辑
   // 需要提前释放内存
   for (int64_t i = 0; OB_SUCCESS != ret && inner_call_ && !func_.is_function() && i < func_.get_arg_count(); ++i) {

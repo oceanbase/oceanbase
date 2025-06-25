@@ -113,6 +113,7 @@ public:
     jit::ObLLVMFunction spi_get_current_expr_allocator_;
     jit::ObLLVMFunction spi_reinit_collection_element_;
     jit::ObLLVMFunction spi_adjust_error_trace_;
+    jit::ObLLVMFunction spi_convert_anonymous_array_;
   };
 
   struct EHStack

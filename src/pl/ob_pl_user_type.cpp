@@ -434,7 +434,7 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session, bool 
     case PL_ASSOCIATIVE_ARRAY_TYPE: //fallthrough
     case PL_VARRAY_TYPE: {
       ObPLCollection *collection = reinterpret_cast<ObPLCollection*>(src.get_ext());
-      CK  (OB_NOT_NULL(collection));
+      CK (OB_NOT_NULL(collection));
       if (OB_SUCC(ret) && OB_NOT_NULL(collection->get_allocator())) {
         ObPLAllocator1 *pl_allocator = dynamic_cast<ObPLAllocator1 *>(collection->get_allocator());
         CK (OB_NOT_NULL(pl_allocator));
