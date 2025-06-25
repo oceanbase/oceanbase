@@ -490,6 +490,7 @@ public:
   static int get_local_variable_constraint(
     const ObPLBlockNS &ns, int64_t var_idx, bool &not_null, ObPLIntegerRange &range);
 
+  static int check_udf_ret_type(ObPLINS &ctx, const ObPLDataType &ret_type);
   static int restriction_on_result_cache(ObPLINS &ctx,
                                          share::schema::ObIRoutineInfo *routine_info,
                                          const ObPLDataType &ret_type);

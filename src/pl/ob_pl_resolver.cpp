@@ -13376,24 +13376,18 @@ int ObPLResolver::check_local_variable_read_only(
   return ret;
 }
 
-int ObPLResolver::restriction_on_result_cache(ObPLINS &ctx,
-                                              ObIRoutineInfo *routine_info,
-                                              const ObPLDataType &ret_type)
-{
-  int ret = OB_SUCCESS;
-  CK (OB_NOT_NULL(routine_info));
-  /*
-   * RESULT_CACHE is disallowed on functions with OUT or IN OUT parameters
-   * RESULT_CACHE is disallowed on functions with IN or RETURN parameter of (or
-   *  containing) these types:
-   *   – BLOB
-   *   – CLOB
-   *   – NCLOB
-   *   – REF CURSOR
-   *   – Collection
-   *   – Object
-   *   – Record or PL/SQL collection that contains an unsupported return type
-   */
+/*
+  * RESULT_CACHE is disallowed on functions with OUT or IN OUT parameters
+  * RESULT_CACHE is disallowed on functions with IN or RETURN parameter of (or
+  *  containing) these types:
+  *   – BLOB
+  *   – CLOB
+  *   – NCLOB
+  *   – REF CURSOR
+  *   – Collection
+  *   – Object
+  *   – Record or PL/SQL collection that contains an unsupported return type
+  */
 #define RESTRICTION_ON_TYPE(type) \
   if (OB_FAIL(ret)) { \
   } else if (type.is_obj_type() && (ob_is_text_tc(type.get_obj_type())  \
@@ -13434,6 +13428,52 @@ int ObPLResolver::restriction_on_result_cache(ObPLINS &ctx,
              "RESULT_CACHE is disallowed on subprograms with IN/RETURN" \
              " parameter of (or containing) opaque type"); \
   }
+
+int ObPLResolver::check_udf_ret_type(ObPLINS &ctx, const ObPLDataType &ret_type)
+{
+  int ret = OB_SUCCESS;
+
+  const ObPLDataType &type = ret_type;
+  if (!type.is_cursor_type() && (!type.is_obj_type() || (OB_NOT_NULL(type.get_data_type()) &&
+      type.get_data_type()->get_meta_type().is_ext()))) {
+    const ObUserDefinedType *user_type = nullptr;
+    uint64_t type_id = (nullptr == type.get_data_type()) ? type.get_user_type_id()
+                                                      : type.get_data_type()->get_udt_id();
+    OZ (ctx.get_user_type(type_id, user_type));
+    CK (OB_NOT_NULL(user_type));
+    if (OB_SUCC(ret)) {
+      if (user_type->is_collection_type()) {
+        const ObCollectionType *collection_type = nullptr;
+        CK (OB_NOT_NULL(collection_type = static_cast<const ObCollectionType*>(user_type)));
+        RESTRICTION_ON_TYPE(collection_type->get_element_type());
+      } else if (user_type->is_record_type() && !type.is_udt_type()) {
+        const ObRecordType *record_type = nullptr;
+        CK (OB_NOT_NULL(record_type = static_cast<const ObRecordType*>(user_type)));
+        for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_record_member_count(); ++i) {
+          const ObPLDataType *into_pl_type = record_type->get_record_member_type(i);
+          CK (OB_NOT_NULL(into_pl_type));
+          RESTRICTION_ON_TYPE((*into_pl_type));
+        }
+      } else {
+        ret = OB_ERR_IMPL_RESTRICTION;
+        LOG_USER_ERROR(OB_ERR_IMPL_RESTRICTION,
+          "RESULT_CACHE is disallowed on subprograms with IN/RETURN"
+          " parameter of (or containing) udt type");
+      }
+    }
+  } else {
+    RESTRICTION_ON_TYPE(type);
+  }
+
+  return ret;
+}
+
+int ObPLResolver::restriction_on_result_cache(ObPLINS &ctx,
+                                              ObIRoutineInfo *routine_info,
+                                              const ObPLDataType &ret_type)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(routine_info));
 
   if (OB_SUCC(ret) &&
       routine_info->is_udt_routine() &&
@@ -13478,44 +13518,11 @@ int ObPLResolver::restriction_on_result_cache(ObPLINS &ctx,
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    const ObPLDataType &type = ret_type;
-    if (!type.is_cursor_type() && (!type.is_obj_type() || (OB_NOT_NULL(type.get_data_type()) &&
-        type.get_data_type()->get_meta_type().is_ext()))) {
-      const ObUserDefinedType *user_type = nullptr;
-      uint64_t type_id = (nullptr == type.get_data_type()) ? type.get_user_type_id()
-                                                        : type.get_data_type()->get_udt_id();
-      OZ (ctx.get_user_type(type_id, user_type));
-      CK (OB_NOT_NULL(user_type));
-      if (OB_SUCC(ret)) {
-        if (user_type->is_collection_type()) {
-          const ObCollectionType *collection_type = nullptr;
-          CK (OB_NOT_NULL(collection_type = static_cast<const ObCollectionType*>(user_type)));
-          RESTRICTION_ON_TYPE(collection_type->get_element_type());
-        } else if (user_type->is_record_type() && !type.is_udt_type()) {
-          const ObRecordType *record_type = nullptr;
-          CK (OB_NOT_NULL(record_type = static_cast<const ObRecordType*>(user_type)));
-          for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_record_member_count(); ++i) {
-            const ObPLDataType *into_pl_type = record_type->get_record_member_type(i);
-            CK (OB_NOT_NULL(into_pl_type));
-            RESTRICTION_ON_TYPE((*into_pl_type));
-          }
-        } else {
-          ret = OB_ERR_IMPL_RESTRICTION;
-          LOG_USER_ERROR(OB_ERR_IMPL_RESTRICTION,
-            "RESULT_CACHE is disallowed on subprograms with IN/RETURN"
-            " parameter of (or containing) udt type");
-        }
-      }
-    } else {
-      RESTRICTION_ON_TYPE(type);
-    }
-
-  }
-#undef RESTRICTION_ON_TYPE
+  OZ (check_udf_ret_type(ctx, ret_type));
 
   return ret;
 }
+#undef RESTRICTION_ON_TYPE
 
 int ObPLResolver::get_caller_accessor_item(const ObPLStmtBlock *caller, AccessorItem &caller_item)
 {

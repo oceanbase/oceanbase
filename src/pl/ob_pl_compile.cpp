@@ -472,7 +472,11 @@ int ObPLCompiler::compile(
         func_ast.set_ret_type(param_type);
         if (ob_is_enum_or_set_type(param->get_param_type().get_obj_type())) {
           OZ (func_ast.set_ret_type_info(param->get_extended_type_info(), &func_ast.get_enum_set_ctx()));
-         }
+        }
+        if (routine.is_result_cache()) {
+          ObPLResolveCtx resolve_ctx(allocator_, session_info_, schema_guard_, package_guard_, sql_proxy_, false);
+          OZ (ObPLResolver::check_udf_ret_type(resolve_ctx, param_type));
+        }
       } else {
         OZ (func_ast.add_argument(param->get_param_name(),
                                   param_type,
