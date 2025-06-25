@@ -116,13 +116,13 @@ public:
         IteratorCOMultiScan == iter_type;
   }
   OB_INLINE bool is_reclaimed() const { return is_reclaimed_; }
-  virtual int get_next_rowkey(const bool need_set_border_rowkey,
-                              int64_t &curr_scan_index,
-                              blocksstable::ObDatumRowkey& rowkey,
-                              blocksstable::ObDatumRowkey &border_rowkey,
-                              common::ObIAllocator &allocator)
+  virtual int get_next_rowkey(blocksstable::ObDatumRowkey& rowkey,
+                               int64_t &curr_scan_index,
+                               blocksstable::ObDatumRowkey &border_rowkey,
+                               common::ObIAllocator &allocator,
+                               bool need_set_border_rowkey)
   {
-    UNUSEDx(need_set_border_rowkey, curr_scan_index, rowkey, border_rowkey, allocator);
+    UNUSEDx(rowkey, border_rowkey, allocator, need_set_border_rowkey);
     return OB_NOT_IMPLEMENT;
   }
 

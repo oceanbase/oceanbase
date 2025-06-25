@@ -139,14 +139,6 @@ int ObMultipleScanMerge::calc_scan_range()
         range_ = &cow_range_;
       }
       cow_range_.change_boundary(curr_rowkey_, access_ctx_->query_flag_.is_reverse_scan());
-      // As memtable will use reverse scan when start rowkey is greater than end rowkey instead of
-      // empty result, make the range correct
-      if (access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey_.is_min_rowkey())
-      {
-        cow_range_.start_key_.set_min_rowkey();
-      } else if (!access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey_.is_max_rowkey()) {
-        cow_range_.end_key_.set_max_rowkey();
-      }
     }
     if (di_base_curr_rowkey_.is_valid()) {
       if (di_base_range_ != &di_base_cow_range_) {
@@ -176,12 +168,14 @@ int ObMultipleScanMerge::prepare()
 {
   int ret = OB_SUCCESS;
   consumer_cnt_ = 0;
+  scan_state_ = ScanState::NONE;
+  need_scan_di_base_ = false;
   is_unprojected_row_valid_ = false;
   unprojected_row_.reuse();
   return ret;
 }
 
-int ObMultipleScanMerge::construct_iters()
+int ObMultipleScanMerge::construct_iters(const bool is_refresh)
 {
   int ret = OB_SUCCESS;
 
@@ -193,20 +187,25 @@ int ObMultipleScanMerge::construct_iters()
     STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret), "iter cnt", iters_.count(),
         "di_base_iter cnt", di_base_iters_.count(), "table cnt", tables_.count(), KP(this));
   } else if (tables_.count() > 0) {
-    STORAGE_LOG(TRACE, "construct iters begin", K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()),
-                K(access_param_->iter_param_.is_delete_insert_), KPC_(range), KPC_(di_base_range), K_(tables), KPC_(access_param));
+    STORAGE_LOG(TRACE, "construct iters begin", K(is_refresh), K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), K(access_param_->iter_param_.is_delete_insert_),
+                       K_(di_base_border_rowkey), KPC_(range), KPC_(di_base_range), K_(tables), KPC_(access_param));
     ObITable *table = NULL;
     ObStoreRowIterator *iter = NULL;
     const ObTableIterParam *iter_param = NULL;
     const bool use_cache_iter = iters_.count() > 0 || di_base_iters_.count() > 0; // rescan with the same iters and different range
+    const int64_t table_cnt = tables_.count() - 1;
 
-    if (access_param_->iter_param_.is_delete_insert_) {
+    // for delete_insert scenario, handle no major before and major sstable generated after refresh
+    if (table_cnt > 0 && access_param_->iter_param_.is_delete_insert_ &&
+        (!is_refresh || use_di_merge_scan_)) {
       if (OB_FAIL(tables_.at(0, table))) {  // only one di base iter currently
         STORAGE_LOG(WARN, "Fail to get 0th store, ", K(ret), K_(tables));
       } else if (OB_ISNULL(iter_param = get_actual_iter_param(table))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Fail to get 0th access param", K(ret), KPC(table));
       } else if (table->is_major_sstable()) {
+        need_scan_di_base_ = true;
+        use_di_merge_scan_ = true;
         if (!use_cache_iter) {
           if (OB_FAIL(table->scan(*iter_param, *access_ctx_, *di_base_range_, iter))) {
             STORAGE_LOG(WARN, "Fail to get di base iterator", K(ret), KPC(table), K(*iter_param));
@@ -224,15 +223,23 @@ int ObMultipleScanMerge::construct_iters()
           STORAGE_LOG(DEBUG, "add di base iter for consumer", KPC(table));
         }
       }
+
+      if (OB_SUCC(ret) && need_scan_di_base_ && di_base_border_rowkey_.is_valid()) {
+        scan_state_ = ScanState::DI_BASE;
+        if (OB_FAIL(get_di_base_iter()->refresh_blockscan_checker(di_base_border_rowkey_))) {
+          STORAGE_LOG(WARN, "Failed to refresh di base blockscan checker", K(ret), K(di_base_border_rowkey_));
+        }
+      }
     }
 
-    consumer_cnt_ = 0;
     int32_t di_base_cnt = di_base_iters_.count();
-    if (OB_FAIL(ret) || di_base_cnt == tables_.count()) {
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(set_rows_merger(tables_.count() - di_base_cnt))) {
       STORAGE_LOG(WARN, "Failed to alloc rows merger", K(ret), K(di_base_cnt), K(tables_));
+    } else if (delta_iter_end_) { // construct_iters is called by refresh_table_on_demand, and minor sstable, mini sstable, memtable iter end
+      consumer_cnt_ = 0;
     } else {
-      const int64_t table_cnt = tables_.count() - 1;
+      consumer_cnt_ = 0;
       for (int64_t i = table_cnt; OB_SUCC(ret) && i >= di_base_cnt; --i) {
         if (OB_FAIL(tables_.at(i, table))) {
           STORAGE_LOG(WARN, "Fail to get ith store, ", K(ret), K(i), K_(tables));
@@ -260,24 +267,12 @@ int ObMultipleScanMerge::construct_iters()
       }
     }
 
-    if (OB_SUCC(ret) && access_param_->iter_param_.enable_pd_blockscan()) {
-      if (ScanState::DI_BASE == scan_state_) {
-        if (OB_FAIL(get_di_base_iter()->refresh_blockscan_checker(curr_rowkey_))) {
-          STORAGE_LOG(WARN, "Failed to refresh di base blockscan checker", K(ret), K(curr_rowkey_));
-        }
-      } else if (0 == consumer_cnt_ && 0 < di_base_iters_.count()) {
-        if (OB_FAIL(prepare_di_base_blockscan(true))) {
-          STORAGE_LOG(WARN, "Failed to prepare di base blockscan", K(ret));
-        } else {
-          scan_state_ = ScanState::DI_BASE;
-        }
-      } else if (consumer_cnt_ > 0 && nullptr != iters_.at(consumers_[0]) && iters_.at(consumers_[0])->is_sstable_iter()) {
-        if (OB_FAIL(locate_blockscan_border())) {
-          STORAGE_LOG(WARN, "Fail to locate blockscan border", K(ret), K(iters_.count()), K(di_base_iters_.count()), K_(tables));
-        }
-      }
+    if (OB_SUCC(ret) && access_param_->iter_param_.enable_pd_blockscan() &&
+        consumer_cnt_ > 0 && nullptr != iters_.at(consumers_[0]) && iters_.at(consumers_[0])->is_sstable_iter() &&
+        OB_FAIL(locate_blockscan_border())) {
+      STORAGE_LOG(WARN, "Fail to locate blockscan border", K(ret), K(is_refresh), K(iters_.count()), K(di_base_iters_.count()), K_(need_scan_di_base), K_(tables));
     }
-    STORAGE_LOG(DEBUG, "construct iters end", K(ret), K(iters_.count()), K(di_base_iters_.count()));
+    STORAGE_LOG(DEBUG, "construct iters end", K(ret), K(iters_.count()), K(di_base_iters_.count()), K_(need_scan_di_base));
   }
   return ret;
 }

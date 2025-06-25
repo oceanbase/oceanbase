@@ -740,7 +740,10 @@ int ObSSTableRowScanner<PrefetcheType>::try_skip_deleted_row(ObCSRowId &co_curre
   int ret = OB_SUCCESS;
   ObCOPrefetcher* co_prefetcher = reinterpret_cast<ObCOPrefetcher*>(&prefetcher_);
   const ObDatumRow *deleted_row = nullptr;
-  if (OB_FAIL(inner_get_next_row_with_row_id(deleted_row, co_current))) {
+  if (OB_UNLIKELY(nullptr == co_prefetcher)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected nullptr with co prefetcher", K(ret), K_(prefetcher));
+  } else if (OB_FAIL(inner_get_next_row_with_row_id(deleted_row, co_current))) {
     if (OB_UNLIKELY(OB_PUSHDOWN_STATUS_CHANGED == ret)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected pushdown status changed while skipping deleted row", K(ret), K(co_current));
@@ -950,23 +953,32 @@ int ObSSTableRowScanner<PrefetchType>::try_refreshing_blockscan_checker_for_colu
 }
 
 template<typename PrefetchType>
-int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(const bool need_set_border_rowkey,
-                                                       int64_t &curr_scan_index,
-                                                       blocksstable::ObDatumRowkey& rowkey,
-                                                       blocksstable::ObDatumRowkey &border_rowkey,
-                                                       common::ObIAllocator &allocator)
+int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(blocksstable::ObDatumRowkey& rowkey,
+                                                        int64_t &curr_scan_index,
+                                                        blocksstable::ObDatumRowkey &border_rowkey,
+                                                        common::ObIAllocator &allocator,
+                                                        bool need_set_border_rowkey)
 {
   int ret = OB_SUCCESS;
-  const ObDatumRow *row = nullptr;
+  const ObDatumRow *row;
   ObDatumRowkey tmp_rowkey;
   border_rowkey.reset();
   rowkey.reset();
-  block_row_store_->disable();
-  bool is_delete_insert = iter_param_->is_delete_insert_; // save is_delete_insert_
-  const_cast<ObTableIterParam*>(iter_param_)->is_delete_insert_ = false;  // to avoid using the blockscan path
 
+  // get di base border rowkey
+  if (need_set_border_rowkey) {
+    const blocksstable::ObDatumRowkey &tmp_border_rowkey = prefetcher_.get_border_rowkey();
+    if (!tmp_border_rowkey.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("border rowkey is invalid", K(ret), K(tmp_border_rowkey), KPC(this));
+    } else if (OB_FAIL(tmp_border_rowkey.deep_copy(border_rowkey, allocator))) {
+      LOG_WARN("fail to deep copy rowkey", K(ret), K(tmp_border_rowkey), KPC(this));
+    }
+  }
   // get next row
-  if (OB_FAIL(get_next_row(row))) {
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(block_row_store_->disable())) {
+  } else if (OB_FAIL(get_next_row(row))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("Failed to get next row from di base iterator", K(ret), KPC(this));
     } else {
@@ -980,21 +992,15 @@ int ObSSTableRowScanner<PrefetchType>::get_next_rowkey(const bool need_set_borde
       ret = OB_SUCCESS;
     }
   } else if (OB_FAIL(tmp_rowkey.assign(row->storage_datums_, iter_param_->get_schema_rowkey_count()))) {
-    LOG_WARN("assign rowkey failed", K(ret), K(row), K(iter_param_->get_schema_rowkey_count()));
+    LOG_WARN("assign rowkey failed", K(ret), K(tmp_rowkey), K(iter_param_->get_schema_rowkey_count()), KPC(this));
   } else if (OB_UNLIKELY(!tmp_rowkey.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tmp_rowkey is not valid", K(ret), K(tmp_rowkey));
+    LOG_WARN("tmp_rowkey is not valid", K(ret), K(tmp_rowkey), KPC(this));
   } else if (OB_FAIL(tmp_rowkey.deep_copy(rowkey, allocator))) {
-    LOG_WARN("fail to deep copy rowkey", K(ret), K(tmp_rowkey));
+    LOG_WARN("fail to deep copy rowkey", K(ret), K(tmp_rowkey), KPC(this));
   } else {
     curr_scan_index = cur_range_idx_;
   }
-
-  // get di base border rowkey
-  if (OB_SUCC(ret) && need_set_border_rowkey) {
-    border_rowkey = prefetcher_.get_border_rowkey();
-  }
-  const_cast<ObTableIterParam*>(iter_param_)->is_delete_insert_ = is_delete_insert; // restore is_delete_insert_
   return ret;
 }
 

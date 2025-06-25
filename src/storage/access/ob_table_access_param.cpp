@@ -368,7 +368,6 @@ int ObTableAccessParam::init(
       if (iter_param_.vectorized_enabled_ &&
           iter_param_.enable_pd_filter() &&
           !scan_param.is_get_ &&
-          scan_param.table_param_->is_safe_filter_with_di() &&
           ObQueryFlag::NoOrder == scan_param.scan_flag_.scan_order_ &&
           scan_param.sample_info_.is_no_sample() &&
           !iter_param_.is_skip_scan()) {

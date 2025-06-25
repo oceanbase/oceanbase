@@ -1203,6 +1203,10 @@ int ObMemtableMultiVersionScanIterator::iterate_multi_version_row_value_(ObDatum
         row.row_flag_.set_flag(mtd->dml_flag_);
       }
       compare_trans_version = reinterpret_cast<const ObMvccTransNode *>(tnode)->trans_version_.get_val_for_tx();
+      if (compare_trans_version <= version_range.base_version_) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "trans version smaller than base version", K(compare_trans_version), K(version_range.base_version_));
+      }
     }
 
     bool read_finished = false;

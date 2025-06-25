@@ -309,7 +309,9 @@ int ObMultiVersionValueIterator::get_next_node_for_compact(const void *&tnode)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret), KP(this));
-  } else if (OB_ISNULL(version_iter_)) {
+  } else if ((OB_NOT_NULL(version_iter_)
+              && version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_) ||
+      OB_ISNULL(version_iter_)) {
     version_iter_ = nullptr;
     ret = OB_ITER_END;
   } else if (!version_iter_->is_committed() && !version_iter_->is_aborted()) {
@@ -368,7 +370,10 @@ int ObMultiVersionValueIterator::get_next_multi_version_node(const void *&tnode)
     const SCN cur_trans_version = multi_version_iter_->trans_version_;
     ObMvccTransNode *record_node = nullptr;
     while (OB_SUCC(ret) && OB_NOT_NULL(multi_version_iter_) && OB_ISNULL(record_node)) {
-      if (NDT_COMPACT == multi_version_iter_->type_) { // meet compacted node
+      if (multi_version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_) {
+        multi_version_iter_ = NULL;
+        break;
+      } else if (NDT_COMPACT == multi_version_iter_->type_) { // meet compacted node
         if (multi_version_iter_->trans_version_.get_val_for_tx() > version_range_.multi_version_start_) {
           // ignore compact node
           is_compacted = true;
@@ -464,7 +469,8 @@ void ObMultiVersionValueIterator::reset()
 
 bool ObMultiVersionValueIterator::is_multi_version_iter_end() const
 {
-  return OB_ISNULL(multi_version_iter_);
+  return OB_ISNULL(multi_version_iter_)
+      || multi_version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_;
 }
 
 bool ObMultiVersionValueIterator::is_trans_node_iter_null() const
@@ -474,7 +480,8 @@ bool ObMultiVersionValueIterator::is_trans_node_iter_null() const
 
 bool ObMultiVersionValueIterator::is_compact_iter_end() const
 {
-  return OB_ISNULL(version_iter_);
+  return OB_ISNULL(version_iter_)
+      || version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_;
 }
 
 DEF_TO_STRING(ObMultiVersionValueIterator) {

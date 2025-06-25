@@ -1169,35 +1169,6 @@ OB_DEF_SERIALIZE_SIZE(ObPushdownFilter)
   return len;
 }
 
-// filter on lob or topn filter with lob column output is not safe for delete_insert scan
-int ObPushdownFilterNode::check_filter_info(const storage::ObITableReadInfo &read_info,
-                                            bool &is_safe_filter_with_di)
-{
-  int ret = OB_SUCCESS;
-  if (is_logic_op_node()) {
-    for (uint32_t i = 0; OB_SUCC(ret) && is_safe_filter_with_di && i < n_child_; i++) {
-      if (OB_NOT_NULL(childs_[i]) &&
-          OB_FAIL(childs_[i]->check_filter_info(read_info, is_safe_filter_with_di))) {
-        LOG_WARN("Fail to check filter info", K(ret));
-      }
-    }
-  } else {
-    const int64_t col_count = col_ids_.count();
-    const common::ObIArray<ObColDesc> &cols_desc = read_info.get_columns_desc();
-    for (int64_t i = 0; is_safe_filter_with_di && i < col_count; i++) {
-      for (int32_t col_pos = 0; col_pos < cols_desc.count(); col_pos++) {
-        if (col_ids_.at(i) == cols_desc.at(col_pos).col_id_) {
-          if (is_lob_storage(cols_desc.at(col_pos).col_type_.get_type())) {
-            is_safe_filter_with_di = false;
-          }
-          break;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 //--------------------- start filter executor ----------------------------
 int ObPushdownFilterExecutor::find_evaluated_datums(
     ObExpr *expr, const ObIArray<ObExpr*> &calc_exprs, ObIArray<ObExpr*> &eval_exprs)

@@ -270,11 +270,6 @@ int ObRowFuse::fuse_row(const blocksstable::ObDatumRow &former,
       ret = common::OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "wrong row flag", K(ret), K(former));
     }
-
-    if (OB_SUCC(ret) && first_val && former.mvcc_row_flag_.is_uncommitted_row()) {
-      result.trans_id_ = former.trans_id_;
-      result.set_uncommitted_row();
-    }
   }
   return ret;
 }

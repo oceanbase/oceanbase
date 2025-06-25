@@ -61,11 +61,11 @@ public:
             iter_param_->enable_pd_filter();
   }
   virtual int get_next_rows() override;
-  virtual int get_next_rowkey(const bool need_set_border_rowkey,
-                              int64_t &curr_scan_index,
-                              blocksstable::ObDatumRowkey& rowkey,
-                              blocksstable::ObDatumRowkey &border_rowkey,
-                              common::ObIAllocator &allocator) final;
+  int get_next_rowkey(blocksstable::ObDatumRowkey& rowkey,
+                       int64_t &curr_scan_index,
+                       blocksstable::ObDatumRowkey &border_rowkey,
+                       common::ObIAllocator &allocator,
+                       bool need_set_border_rowkey);
   TO_STRING_KV(K_(range_idx),
                K_(is_new_group),
                K_(reverse_scan),
