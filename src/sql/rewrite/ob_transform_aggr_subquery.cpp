@@ -852,6 +852,12 @@ int ObTransformAggrSubquery::check_subquery_conditions(ObQueryRefRawExpr &query_
         OPT_TRACE("subquery`s correlated condition is not equal cond");
       } else if (OB_FAIL(nested_conds.push_back(cond))) {
         LOG_WARN("failed to push back nested conditions", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(inner_expr, inner_expr, true, true))) {
+        LOG_WARN("failed to get expr without lossless cast", K(ret));
+      } else if ((OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(inner_expr, inner_expr)))) {
+        LOG_WARN("failed to get column expr without nvl", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::eliminate_implicit_cast_for_range(inner_expr, outer_expr, cond->get_expr_type()))) {
+        LOG_WARN("failed to eliminate implicit cast for range", K(ret));
       } else if (check_idx && inner_expr->is_column_ref_expr()) {
         bool is_match = false;
         if (OB_FAIL(ObTransformUtils::is_match_index(ctx_->sql_schema_guard_,
