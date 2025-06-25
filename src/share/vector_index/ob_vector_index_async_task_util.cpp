@@ -1384,6 +1384,8 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
   // refresh snapshot table data.
   if (OB_SUCC(ret) && OB_FAIL(refresh_snapshot_index_data(adaptor, tx_desc, snapshot))) {
     LOG_WARN("failed to refresh snapshot index data", K(ret));
+  } else if (OB_FAIL(adaptor.renew_single_snap_index())) {
+    LOG_WARN("fail to renew single snap index", K(ret));
   }
   RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
   int tmp_ret = OB_SUCCESS;
