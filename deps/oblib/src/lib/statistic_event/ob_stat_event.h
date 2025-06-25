@@ -980,6 +980,8 @@ STAT_EVENT_SET_DEF(EXTERNEL_TABLE_DISK_CACHE_MISS_CNT, "external table disk cach
 STAT_EVENT_SET_DEF(EXTERNEL_TABLE_DISK_CACHE_HIT_BYTES, "external table disk cache hit bytes", ObStatClassIds::CACHE, 245056, false, true, true)
 STAT_EVENT_SET_DEF(EXTERNEL_TABLE_DISK_CACHE_MISS_BYTES, "external table disk cache miss bytes", ObStatClassIds::CACHE, 245057, false, true, true)
 
+STAT_EVENT_SET_DEF(SS_MACRO_CACHE_ALLOC_DISK_SIZE, "ss_macro_cache total alloc disk size", ObStatClassIds::CACHE, 245058, false, true, true)
+
 // END
 STAT_EVENT_SET_DEF(STAT_EVENT_SET_END, "event set end", ObStatClassIds::DEBUG, 300000, false, false, true)
 #endif
