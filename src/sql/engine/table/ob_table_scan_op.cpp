@@ -1466,6 +1466,7 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
               range_allocator,
               ctx_,
               plan_ctx->get_param_store(),
+              tsc_rtdef_.range_buffer_idx_,
               locate_range_buffer(),
               key_ranges,
               ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
@@ -1814,6 +1815,7 @@ int ObTableScanOp::inner_open()
     if (MY_CTDEF.get_query_range_provider().is_fast_nlj_range()) {
       int64_t column_count = MY_CTDEF.get_query_range_provider().get_column_count();
       size_t range_size = sizeof(ObNewRange) + sizeof(ObObj) * column_count * 2;
+      tsc_rtdef_.fast_final_nlj_range_ctx_.max_group_size_ = tsc_rtdef_.max_group_size_;
       if (!MY_SPEC.batch_scan_flag_) {
         tsc_rtdef_.range_buffers_ = ctx_.get_allocator().alloc(range_size);
       } else {

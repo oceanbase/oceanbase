@@ -190,6 +190,10 @@ private:
                                                  const ObRangeMap &range_map,
                                                  bool is_equal_range,
                                                  bool &fast_nlj_range);
+  int check_can_general_nlj_range_extraction(const ObRangeNode *range_node,
+                                                    const ObRangeMap &range_map,
+                                                    ObIArray<ObFastFinalPos> &pos_arr,
+                                                    bool &general_nlj_range);
 
   static int formalize_one_range_node(ObRangeNode &range_node);
 private:

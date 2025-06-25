@@ -2523,7 +2523,7 @@ int ObLogTableScan::print_range_annotation(char *buf,
     }
   }
 
-  if (OB_SUCC(ret) && EXPLAIN_EXTENDED == type) {
+  if (OB_SUCC(ret) && (EXPLAIN_EXTENDED == type || EXPLAIN_EXTENDED_NOADDR == type)) {
     if (pre_range_graph_ != nullptr && pre_range_graph_->is_fast_nlj_range()) {
       if (OB_FAIL(BUF_PRINTF(", "))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));

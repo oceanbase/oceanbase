@@ -461,6 +461,7 @@ public:
                                          common::ObIAllocator &allocator,
                                          ObExecContext &exec_ctx,
                                          const ParamStore &param_store,
+                                         int64_t range_buffer_idx,
                                          void *range_buffer,
                                          ObQueryRangeArray &ranges,
                                          const common::ObDataTypeCastParams &dtc_params) const;
