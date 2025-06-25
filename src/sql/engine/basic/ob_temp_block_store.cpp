@@ -982,6 +982,8 @@ int ObTempBlockStore::load_buffer(BlockReader &reader, ShrinkBuffer &buf, int64_
   if (is_segment_read()) {
     length = MIN(length, file_size_ - offset);
     io_.io_desc_.set_no_preread();
+  } else {
+    io_.io_desc_.set_preread();
   }
   tmp_file::ObTmpFileIOHandle *read_io_handler_ptr = nullptr;
   if (length <= 0) {
