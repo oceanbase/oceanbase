@@ -5278,9 +5278,14 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
       if (OB_SUCC(ret)) {
         if (need_modify) {
           OZ (need_modify_exprs.push_back(i));
-          OZ (exec_param->formalize(&resolve_ctx_.session_info_));
-          if (OB_SUCC(ret) && exec_param->get_result_type().is_ext()) {
-            can_array_binding = false; // SQL Engine can not support SqlArray with ext element.
+          if (OB_SUCC(ret) && exec_param->is_obj_access_expr()) {
+            pl::ObPLDataType type;
+            ObObjAccessRawExpr *obj_access_expr = static_cast<ObObjAccessRawExpr*>(exec_param);
+            CK (OB_NOT_NULL(obj_access_expr));
+            OZ (obj_access_expr->get_final_type(type));
+            if (OB_SUCC(ret) && !type.is_obj_type()) {
+              can_array_binding = false; // SQL Engine can not support SqlArray with ext element.
+            }
           }
         }
       }
@@ -5334,9 +5339,14 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
         if (OB_SUCC(ret)) {
           if (need_modify) {
             OZ (need_modify_exprs.push_back(i));
-            OZ (exec_param->formalize(&resolve_ctx_.session_info_));
-            if (OB_SUCC(ret) && exec_param->get_result_type().is_ext()) {
-              is_array_binding = false; // SQL Engine can not support SqlArray with ext element.
+            if (OB_SUCC(ret) && exec_param->is_obj_access_expr()) {
+              pl::ObPLDataType type;
+              ObObjAccessRawExpr *obj_access_expr = static_cast<ObObjAccessRawExpr*>(exec_param);
+              CK (OB_NOT_NULL(obj_access_expr));
+              OZ (obj_access_expr->get_final_type(type));
+              if (OB_SUCC(ret) && !type.is_obj_type()) {
+                can_array_binding = false; // SQL Engine can not support SqlArray with ext element.
+              }
             }
           }
           OZ (sql_stmt->get_array_binding_params().push_back(params.at(i)));
