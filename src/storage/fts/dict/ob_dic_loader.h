@@ -75,6 +75,10 @@ public:
     K(is_load_),
     K(ref_cnt_),
     K(dic_tables_info_));
+
+public:
+  static constexpr int64_t DEFAULT_TIMEOUT_US = 3 * 60 * 1000 * 1000; // 3 min
+
 protected:
   int load_dictionary_in_trans(const uint64_t tenant_id, ObMySQLTransaction &trans);
   int check_need_load_dic(const uint64_t tenant_id, bool &check_need_load_dic);

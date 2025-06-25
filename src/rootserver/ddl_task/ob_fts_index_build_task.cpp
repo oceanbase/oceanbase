@@ -835,6 +835,9 @@ int ObFtsIndexBuildTask::load_dictionary()
   ObTenantDicLoaderHandle dic_loader_handle;
   ObCharsetType charset_type = ObCharsetType::CHARSET_ANY;
   const ObString &parser_name = create_index_arg_.index_option_.parser_name_;
+  ObTimeoutCtx timeout_ctx;
+  const int64_t default_timeout = ObTenantDicLoader::DEFAULT_TIMEOUT_US;
+  const int64_t timeout = MIN(GCONF._ob_ddl_timeout, MAX(default_timeout, GCONF.internal_sql_execute_timeout));
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("this task is not inited", K(ret), K(tenant_id_));
@@ -855,6 +858,10 @@ int ObFtsIndexBuildTask::load_dictionary()
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(timeout))) {
+    LOG_WARN("set trx timeout failed", K(ret));
+  } else if (OB_FAIL(timeout_ctx.set_timeout(timeout))) {
+    LOG_WARN("set timeout failed", K(ret));
   } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
     LOG_WARN("fail to start trans", K(ret), K(tenant_id_));
   } else if (OB_FAIL(dic_loader_handle.get_loader()->try_load_dictionary_in_trans(tenant_id_, trans))) {
