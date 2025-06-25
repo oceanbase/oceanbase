@@ -74,7 +74,7 @@ class ObOrcOutputStream : public orc::OutputStream {
 
     virtual void write(const void *buf, size_t length) override;
     virtual uint64_t getLength() const { return pos_; }
-    virtual uint64_t getNaturalWriteSize() const { return 1024; }
+    virtual uint64_t getNaturalWriteSize() const { return 128 * 1024; }
 
     virtual const std::string& getName() const override {
       return url_;
