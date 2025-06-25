@@ -74,14 +74,14 @@ OB_DEF_SERIALIZE(ObTask)
     if (OB_ISNULL(root_spec_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected status: op root is null", K(ret));
-    } else if (OB_FAIL(ObPxTreeSerializer::serialize_expr_frame_info(
+    } else if (OB_FAIL(ObPxTreeSerializer::serialize_expr_frame_info<true>(
         buf, buf_len, pos, *exec_ctx_, *const_cast<ObExprFrameInfo *>(frame_info)))) {
       LOG_WARN("failed to serialize rt expr", K(ret));
     } else if (OB_FAIL(ObPxTreeSerializer::serialize_tree(
                 buf, buf_len, pos, *root_spec_, false /**is full tree*/, runner_svr_))) {
       LOG_WARN("fail serialize root_op", K(ret), K(buf_len), K(pos));
     } else if (OB_FAIL(ObPxTreeSerializer::serialize_op_input(
-        buf, buf_len, pos, *root_spec_, exec_ctx_->get_kit_store(), false/*is full tree*/))) {
+        buf, buf_len, pos, *root_spec_, exec_ctx_->get_kit_store()))) {
       LOG_WARN("failed to deserialize kit store", K(ret));
     }
   }
@@ -125,7 +125,7 @@ OB_DEF_DESERIALIZE(ObTask)
 
     if (OB_SUCC(ret)) {
       const ObExprFrameInfo *frame_info = &des_phy_plan_->get_expr_frame_info();
-      if (OB_FAIL(ObPxTreeSerializer::deserialize_expr_frame_info(
+      if (OB_FAIL(ObPxTreeSerializer::deserialize_expr_frame_info<true>(
           buf, data_len, pos, *exec_ctx_, *const_cast<ObExprFrameInfo *>(frame_info)))) {
         LOG_WARN("failed to serialize rt expr", K(ret));
       } else if (OB_FAIL(ObPxTreeSerializer::deserialize_tree(
@@ -177,11 +177,11 @@ OB_DEF_SERIALIZE_SIZE(ObTask)
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected status: op root is null");
     } else {
       const ObExprFrameInfo *frame_info = &ser_phy_plan_->get_expr_frame_info();
-      len += ObPxTreeSerializer::get_serialize_expr_frame_info_size(*exec_ctx_,
+      len += ObPxTreeSerializer::get_serialize_expr_frame_info_size<true>(*exec_ctx_,
                                     *const_cast<ObExprFrameInfo *>(frame_info));
       len += ObPxTreeSerializer::get_tree_serialize_size(*root_spec_, false/*is fulltree*/);
       len += ObPxTreeSerializer::get_serialize_op_input_size(
-        *root_spec_, exec_ctx_->get_kit_store(),  false/*is fulltree*/);
+        *root_spec_, exec_ctx_->get_kit_store());
     }
     LOG_TRACE("trace get ser rpc init sqc args size", K(len));
     LST_DO_CODE(OB_UNIS_ADD_LEN, ranges_);
@@ -222,7 +222,7 @@ OB_DEF_SERIALIZE(ObMiniTask)
                   buf, buf_len, pos, *extend_root_spec_ , false /**is full tree*/, runner_svr_))) {
         LOG_WARN("fail serialize root_op", K(ret), K(buf_len), K(pos));
       } else if (OB_FAIL(ObPxTreeSerializer::serialize_op_input(
-          buf, buf_len, pos, *extend_root_spec_, exec_ctx_->get_kit_store(), false/*is full tree*/))) {
+          buf, buf_len, pos, *extend_root_spec_, exec_ctx_->get_kit_store()))) {
         LOG_WARN("failed to deserialize kit store", K(ret));
       }
     }
@@ -270,7 +270,7 @@ OB_DEF_SERIALIZE_SIZE(ObMiniTask)
       len += ObPxTreeSerializer::get_tree_serialize_size(*extend_root_spec_,
                                                          false/*is fulltree*/);
       len += ObPxTreeSerializer::get_serialize_op_input_size(
-        *extend_root_spec_, exec_ctx_->get_kit_store(), false/*is fulltree*/);
+        *extend_root_spec_, exec_ctx_->get_kit_store());
     }
   }
   return len;

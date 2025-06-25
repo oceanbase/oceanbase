@@ -211,7 +211,7 @@ public:
   int set_dynamic_param(ObEvalCtx &eval_ctx, common::ObObjParam *&param) const;
   int update_dynamic_param(ObEvalCtx &eval_ctx, common::ObDatum &datum) const;
 
-  static void clear_parent_evaluated_flag(ObEvalCtx &eval_ctx, ObExpr &expr);
+  static void clear_parent_evaluated_flag(ObEvalCtx &eval_ctx, const ObExpr &expr);
 
 public:
   int64_t param_idx_; // param idx in param store
@@ -471,6 +471,7 @@ public:
   uint32_t get_child_cnt() const { return child_cnt_; }
   ObOperator *get_child() { return child_; }
   ObOperator *get_child(int32_t child_idx) { return children_[child_idx]; }
+  ObOperator *get_parent() { return parent_; }
   bool is_opened() { return opened_; }
   ObMonitorNode &get_monitor_info() { return op_monitor_info_; }
   bool is_vectorized() const { return spec_.is_vectorized(); }
@@ -602,7 +603,7 @@ private:
   int output_expr_decint_datum_len_check_batch();
   int setup_op_feedback_info();
   // child can implement this interface, but can't call this directly
-  virtual int inner_drain_exch() { return common::OB_SUCCESS; };
+  virtual int inner_drain_exch() { return common::OB_SUCCESS; }
 
   bool enable_get_next_row() const;
   int try_push_stash_rows(const int64_t max_row_cnt);

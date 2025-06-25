@@ -87,7 +87,7 @@ public:
   ObPxSqcAsyncProxy(obrpc::ObPxRpcProxy &proxy, ObDfo &dfo,
                     ObExecContext &exec_ctx, ObPhysicalPlanCtx *phy_plan_ctx,
                     ObSQLSessionInfo *session, const ObPhysicalPlan *phy_plan,
-                    ObArray<ObPxSqcMeta *> &sqcs)
+                    ObIArray<ObPxSqcMeta> &sqcs)
       : proxy_(proxy), dfo_(dfo), exec_ctx_(exec_ctx),
         phy_plan_ctx_(phy_plan_ctx), session_(session), phy_plan_(phy_plan),
         sqcs_(sqcs), allocator_(ObModIds::OB_SQL_PX_ASYNC_SQC_RPC),
@@ -121,7 +121,7 @@ private:
   ObSQLSessionInfo *session_;
   const ObPhysicalPlan *phy_plan_;
   // 需要异步请求的sqc的集合
-  ObArray<ObPxSqcMeta *> &sqcs_;
+  ObIArray<ObPxSqcMeta> &sqcs_;
   // 异步init
   // sqc获得结果集合，每一个response都是从对应的
   // callback获得正确响应的结果中获得

@@ -577,6 +577,9 @@ public:
   {
     return px_node_addrs_;
   }
+  bool px_worker_share_plan_enabled() const { return px_worker_share_plan_enabled_; }
+  void set_px_worker_share_plan_enabled(bool v) { px_worker_share_plan_enabled_ = v; }
+
   bool is_active_status() const { return ObPlanStat::ACTIVE == ATOMIC_LOAD(&stat_.adaptive_pc_info_.status_); }
   void set_active_status() { ATOMIC_STORE(&(stat_.adaptive_pc_info_.status_), ObPlanStat::ACTIVE);; }
   void set_inactive_status() { ATOMIC_STORE(&(stat_.adaptive_pc_info_.status_), ObPlanStat::INACTIVE);; }

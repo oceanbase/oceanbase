@@ -113,7 +113,7 @@ public:
                                  ObExecContext &ctx,
                                  int64_t task_cnt,
                                  ObPieceMsgCtx *&msg_ctx);
-  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs) override;
+  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs) override;
   virtual void reset_resource() override;
   int received_; // 已经收到的 piece 数量
   int64_t tenant_id_;
@@ -129,7 +129,7 @@ public:
   ~ObWinbufPieceMsgListener() = default;
   static int on_message(
       ObWinbufPieceMsgCtx &ctx,
-      common::ObIArray<ObPxSqcMeta *> &sqcs,
+      common::ObIArray<ObPxSqcMeta> &sqcs,
       const ObWinbufPieceMsg &pkt);
 private:
   /* functions */
@@ -217,7 +217,7 @@ public:
   static int alloc_piece_msg_ctx(const SPWinFuncPXPieceMsg &pkt, ObPxCoordInfo &coord_info,
                                  ObExecContext &ctx, int64_t task_cnt, ObPieceMsgCtx *&msg_ctx);
 
-  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs) override;
+  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs) override;
   virtual void reset_resource() override;
 
 public:
@@ -233,7 +233,7 @@ private:
 class SPWinFuncPXPieceMsgListener
 {
 public:
-  static int on_message(SPWinFuncPXPieceMsgCtx &ctx, common::ObIArray<ObPxSqcMeta *> &sqcs,
+  static int on_message(SPWinFuncPXPieceMsgCtx &ctx, common::ObIArray<ObPxSqcMeta> &sqcs,
                         const SPWinFuncPXPieceMsg &pkt);
 
 private:

@@ -84,6 +84,7 @@ public:
   int compare(const ObCommonDatumRowkey &rhs, const ObStorageDatumUtils &datum_utils, int &cmp_ret,
               const bool compare_datum_cnt = true) const;
   int from_rowkey(const ObRowkey &rowkey, common::ObIAllocator &allocator);
+  int to_rowkey(ObRowkey &rowkey, const ObObjMeta* obj_metas, common::ObIAllocator &allocator) const;
   int from_rowkey(const ObRowkey &rowkey, ObStorageDatumBuffer &datum_buffer);
   int to_store_rowkey(const common::ObIArray<share::schema::ObColDesc> &col_descs,
                       common::ObIAllocator &allocator,
@@ -375,6 +376,10 @@ OB_INLINE int ObDatumRowkey::deep_copy(ObDatumRowkey &dest, common::ObIAllocator
   if (OB_UNLIKELY(!is_valid() || 0 == deep_copy_size)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected error for deep copy invalid datum rowkey", K(ret), K(*this));
+  } else if (is_max_rowkey()) {
+    dest.set_max_rowkey();
+  } else if (is_min_rowkey()) {
+    dest.set_min_rowkey();
   } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(deep_copy_size)))) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "Failed to alloc memory for datum rowkey", K(ret), K(deep_copy_size));

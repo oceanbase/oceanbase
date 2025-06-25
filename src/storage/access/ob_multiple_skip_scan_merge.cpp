@@ -138,7 +138,6 @@ int ObMultipleSkipScanMerge::open_skip_scan(const blocksstable::ObDatumRange &ra
     prepare_rowkey(end_key_of_scan_rowkey_range(), range.end_key_, schema_rowkey_cnt_, false);
     scan_rowkey_range_.set_border_flag(range.get_border_flag());
     scan_rowkey_range_.set_group_idx(range.get_group_idx());
-    scan_rowkey_range_.set_group_idx(range.get_group_idx());
     const ObColDescIArray *col_descs = nullptr;
     if (OB_ISNULL(col_descs = access_param_->iter_param_.get_out_col_descs())) {
       ret = OB_ERR_UNEXPECTED;

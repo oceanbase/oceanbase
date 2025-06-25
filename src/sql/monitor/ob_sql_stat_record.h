@@ -126,7 +126,7 @@ public:
   // which can be modified and risks CORE. It is only safe to use the result_set pointer.
   int move_to_sqlstat_cache(ObSQLSessionInfo &session_info,
                             ObString &cur_sql,
-                            ObPhysicalPlan *plan = nullptr,
+                            const ObPhysicalPlan *plan = nullptr,
                             const bool is_px_remote_exec = false);
   int move_to_sqlstat_cache(ObSqlStatRecordKey& key); // just for das remote exec
 

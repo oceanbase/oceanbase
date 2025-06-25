@@ -603,7 +603,7 @@ int ObExternalPathFilter::init(const ObString &pattern,
 int ObExternalTableUtils::assign_odps_file_to_sqcs(
   ObDfo &dfo,
   ObExecContext &exec_ctx,
-  ObIArray<ObPxSqcMeta *> &sqcs,
+  ObIArray<ObPxSqcMeta> &sqcs,
   int64_t parallel,
   ObODPSGeneralFormat::ApiMode odps_api_mode)
 {
@@ -719,7 +719,7 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
     int64_t sqc_idx = 0;
     int64_t sqc_count = sqcs.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); ++i) {
-      OZ (sqcs.at(sqc_idx++ % sqc_count)->get_access_external_table_files().push_back(files.at(i)));
+      OZ (sqcs.at(sqc_idx++ % sqc_count).get_access_external_table_files().push_back(files.at(i)));
     }
   } else {
     if (!GCONF._use_odps_jni_connector) {
@@ -745,8 +745,8 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
     const char* dummy_file_name = "#######DUMMY_FILE#######";
     dummy_file.file_url_ = dummy_file_name;
     for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); ++i) {
-      if (sqcs.at(i)->get_access_external_table_files().empty()) {
-        OZ(sqcs.at(i)->get_access_external_table_files().push_back(dummy_file));
+      if (sqcs.at(i).get_access_external_table_files().empty()) {
+        OZ(sqcs.at(i).get_access_external_table_files().push_back(dummy_file));
       }
     }
   }
@@ -754,7 +754,7 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
 }
 
 int ObExternalTableUtils::split_odps_to_sqcs_storage_api(int64_t split_task_count, int64_t table_total_row_count,
-    const ObString& session_str, const ObString &new_file_urls, ObIArray<ObPxSqcMeta *> &sqcs, int parallel, ObIAllocator &range_allocator, ObODPSGeneralFormat::ApiMode odps_api_mode)
+    const ObString& session_str, const ObString &new_file_urls, ObIArray<ObPxSqcMeta> &sqcs, int parallel, ObIAllocator &range_allocator, ObODPSGeneralFormat::ApiMode odps_api_mode)
 {
   int ret = OB_SUCCESS;
   int64_t sqc_count = sqcs.count();
@@ -775,7 +775,7 @@ int ObExternalTableUtils::split_odps_to_sqcs_storage_api(int64_t split_task_coun
         info.part_id_ = 0;  // 由于现在partition是多个一起合成的
         info.row_start_ = 0;
         info.row_count_ = 0;
-        if (OB_FAIL(sqcs.at(sqc_idx)->get_access_external_table_files().push_back(info))) {
+        if (OB_FAIL(sqcs.at(sqc_idx).get_access_external_table_files().push_back(info))) {
           LOG_WARN("failed to push back task info", K(ret));
         } else {
           sqc_idx = (sqc_idx + 1) % sqc_count;
@@ -807,7 +807,7 @@ int ObExternalTableUtils::split_odps_to_sqcs_storage_api(int64_t split_task_coun
         info.part_id_ = 0;  // for urls contain multi parts, part id has no meanings in current situation
         info.row_start_ = start;
         info.row_count_ = step;
-        if (OB_FAIL(sqcs.at(sqc_idx)->get_access_external_table_files().push_back(info))) {
+        if (OB_FAIL(sqcs.at(sqc_idx).get_access_external_table_files().push_back(info))) {
           LOG_WARN("failed to push back task info", K(ret), K(start), K(step));
         } else {
           sqc_idx = (sqc_idx + 1) % sqc_count;
@@ -820,7 +820,7 @@ int ObExternalTableUtils::split_odps_to_sqcs_storage_api(int64_t split_task_coun
 }
 
 int ObExternalTableUtils::split_odps_to_sqcs_process_tunnel(
-    common::ObIArray<share::ObExternalFileInfo> &files, ObIArray<ObPxSqcMeta *> &sqcs, int parallel)
+    common::ObIArray<share::ObExternalFileInfo> &files, ObIArray<ObPxSqcMeta> &sqcs, int parallel)
 {
   int ret = OB_SUCCESS;
   int64_t sqc_idx = 0;
@@ -913,7 +913,7 @@ int ObExternalTableUtils::split_odps_to_sqcs_process_tunnel(
             row_count_assigned_to_sqc += row_count_needed_to_sqc;
             file_start += row_count_needed_to_sqc;
           }
-          OZ(sqcs.at(sqc_idx)->get_access_external_table_files().push_back(splited_file_info));
+          OZ(sqcs.at(sqc_idx).get_access_external_table_files().push_back(splited_file_info));
         } else if (remaining_row_count_in_file > 0) {
           ObExternalFileInfo splited_file_info = files.at(file_idx);
           splited_file_info.row_start_ = file_start;
@@ -924,7 +924,7 @@ int ObExternalTableUtils::split_odps_to_sqcs_process_tunnel(
             droped_row_count_on_last_loop = expected_row_count_to_sqc - row_count_assigned_to_sqc;
             expected_row_count_to_sqc = row_count_assigned_to_sqc;
           }
-          OZ(sqcs.at(sqc_idx)->get_access_external_table_files().push_back(splited_file_info));
+          OZ(sqcs.at(sqc_idx).get_access_external_table_files().push_back(splited_file_info));
         } else {  // remaining_row_count_in_file == 0
           ++file_idx;
           file_start = 0;
@@ -952,7 +952,7 @@ int ObExternalTableUtils::split_odps_to_sqcs_process_tunnel(
       K(parallel),
       K(small_file_count));
   for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); ++i) {
-    ObIArray<share::ObExternalFileInfo> &sqc_files = sqcs.at(i)->get_access_external_table_files();
+    ObIArray<share::ObExternalFileInfo> &sqc_files = sqcs.at(i).get_access_external_table_files();
     if (sqc_files.empty() || sqc_row_counts.at(i) <= 0) {
       continue;
     }
@@ -1063,7 +1063,7 @@ int ObExternalTableUtils::split_odps_to_sqcs_process_tunnel(
     if (files.at(i).file_size_ <= SMALL_FILE_SIZE) {
       share::ObExternalFileInfo small_file = files.at(i);
       small_file.file_size_ = INT64_MAX;
-      OZ(sqcs.at(sqc_idx++ % sqc_count)->get_access_external_table_files().push_back(small_file));
+      OZ(sqcs.at(sqc_idx++ % sqc_count).get_access_external_table_files().push_back(small_file));
     }
   }
   return ret;

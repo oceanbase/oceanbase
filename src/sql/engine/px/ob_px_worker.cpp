@@ -202,7 +202,7 @@ void PxWorkerFunctor::operator ()(bool need_exec)
             lib::ContextTLOptGuard guard(true);
             // 在worker线程中进行args的deep copy，分担sqc的线程的负担。
             ObPxRpcInitTaskArgs runtime_arg;
-            if (OB_FAIL(runtime_arg.init_deserialize_param(mem_context, *env_arg_.get_gctx()))) {
+            if (OB_FAIL(runtime_arg.init_deserialize_param(task_arg_, mem_context, *env_arg_.get_gctx()))) {
               LOG_WARN("fail to init args", K(ret));
             } else if (OB_FAIL(runtime_arg.deep_copy_assign(task_arg_, mem_context->get_arena_allocator()))) {
               LOG_WARN("fail deep copy assign arg", K(task_arg_), K(ret));
@@ -356,7 +356,6 @@ int ObPxLocalWorker::run(ObPxRpcInitTaskArgs &task_arg)
   int ret = OB_SUCCESS;
   ObDIActionGuard action_guard("FastDFO");
   ObPxSqcHandler *h = task_arg.get_sqc_handler();
-
   if (OB_ISNULL(h)) {
   } else if (h->get_flt_ctx().trace_id_.is_inited()) {
     OBTRACE->init(h->get_flt_ctx());

@@ -1120,6 +1120,7 @@ public:
     hash_rollup_policy_(0),
     ndv_runtime_bloom_filter_size_(false),
     enable_topn_runtime_filter_(false),
+    enable_px_task_rebalance_(false),
     min_const_integer_precision_(1),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
@@ -1178,6 +1179,7 @@ public:
   int hash_rollup_policy_;
   bool ndv_runtime_bloom_filter_size_;
   bool enable_topn_runtime_filter_;
+  bool enable_px_task_rebalance_;
   int8_t min_const_integer_precision_;
 
 private:

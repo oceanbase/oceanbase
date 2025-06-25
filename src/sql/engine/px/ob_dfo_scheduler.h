@@ -78,7 +78,7 @@ private:
   int build_transmit_recieve_channel(ObExecContext &ctx, ObDfo *dfo) const;
   int init_dfo_channel(ObExecContext &ctx, ObDfo *child, ObDfo *parent) const;
   int init_data_xchg_ch(ObExecContext &ctx, ObDfo *dfo) const;
-  int dispatch_sqcs(ObExecContext &exec_ctx, ObDfo &dfo, ObArray<ObPxSqcMeta *> &sqcs) const;
+  int dispatch_sqcs(ObExecContext &exec_ctx, ObDfo &dfo, ObIArray<ObPxSqcMeta> &sqcs) const;
   int do_schedule_dfo(ObExecContext &ctx, ObDfo &dfo) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSerialDfoScheduler);
@@ -150,7 +150,7 @@ private:
     int on_root_dfo_scheduled(ObExecContext &ctx, ObDfo &root_dfo) const;
     int dispatch_sqc(ObExecContext &exec_ctx,
                      ObDfo &dfo,
-                     ObArray<ObPxSqcMeta *> &sqcs) const;
+                     ObIArray<ObPxSqcMeta> &sqcs) const;
     int deal_with_init_sqc_error(ObExecContext &exec_ctx,
                                  const ObPxSqcMeta &sqc,
                                  int rc) const;

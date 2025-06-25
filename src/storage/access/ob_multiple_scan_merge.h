@@ -56,6 +56,8 @@ protected:
   virtual int inner_merge_row(blocksstable::ObDatumRow &row);
   int set_rows_merger(const int64_t table_cnt);
   int locate_blockscan_border();
+  virtual int pause(bool& do_pause) override;
+  virtual int get_current_range(ObDatumRange& current_range) const;
 private:
   int prepare_blockscan(ObStoreRowIterator &iter);
 protected:

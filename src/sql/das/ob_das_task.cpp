@@ -53,7 +53,7 @@ OB_DEF_SERIALIZE(ObDASRemoteInfo)
     OB_UNIS_ENCODE(*session);
   }
   if (OB_SUCC(ret) && has_expr_) {
-    OZ(ObPxTreeSerializer::serialize_expr_frame_info(
+    OZ(ObPxTreeSerializer::serialize_expr_frame_info<true>(
         buf, buf_len, pos, *exec_ctx_, const_cast<ObExprFrameInfo &>(*frame_info_)));
   }
   OB_UNIS_ENCODE(ctdefs_.count());
@@ -169,7 +169,7 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
   }
   OZ(exec_ctx_->create_physical_plan_ctx());
   if (OB_SUCC(ret) && has_expr_) {
-    OZ(ObPxTreeSerializer::deserialize_expr_frame_info(
+    OZ(ObPxTreeSerializer::deserialize_expr_frame_info<true>(
         buf, data_len, pos, *exec_ctx_, const_cast<ObExprFrameInfo &>(*frame_info_)));
     OZ(exec_ctx_->init_expr_op(frame_info_->rt_exprs_.count()));
     if (OB_SUCC(ret)) {
@@ -270,7 +270,7 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
     OB_UNIS_ADD_LEN(*session);
   }
   if (has_expr_) {
-    len += ObPxTreeSerializer::get_serialize_expr_frame_info_size(*exec_ctx_,
+    len += ObPxTreeSerializer::get_serialize_expr_frame_info_size<true>(*exec_ctx_,
              const_cast<ObExprFrameInfo&>(*frame_info_));
   }
   OB_UNIS_ADD_LEN(ctdefs_.count());

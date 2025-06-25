@@ -34,6 +34,8 @@ namespace sql
 {
 
 class ObTableModifySpec;
+class ObPxSqcMeta;
+
 class ObGranulePumpArgs
 {
 public:
@@ -44,13 +46,14 @@ public:
 public:
   class ObGranulePumpOpInfo
   {
-    public:
-    ObGranulePumpOpInfo() : scan_ops_(), modify_op_(NULL) {}
+  public:
+    ObGranulePumpOpInfo() : scan_ops_(), modify_op_(NULL), gi_op_(nullptr) {}
     ~ObGranulePumpOpInfo() { reset(); }
     void reset()
     {
       scan_ops_.reset();
       modify_op_ = NULL;
+      gi_op_ = nullptr;
     }
     int push_back_scan_ops(const ObTableScanSpec *tsc)
     { return scan_ops_.push_back(tsc); }
@@ -62,6 +65,7 @@ public:
     int assign(const ObGranulePumpOpInfo &rhs);
     common::ObArray<const ObTableScanSpec*> scan_ops_;
     const ObTableModifySpec* modify_op_;
+    const ObGranuleIteratorSpec *gi_op_;
   };
 public :
   ObGranulePumpArgs() : ctx_(NULL), op_info_(),
@@ -101,6 +105,14 @@ public :
 
   int assign(const ObGranulePumpArgs &rhs);
 
+  int64_t get_pump_version() const { return ATOMIC_LOAD(&pump_version_); }
+  int64_t inc_pump_version() { return ATOMIC_FAA(&pump_version_, 1); }
+
+  int64_t try_inc_pump_version(int64_t old_version)
+  {
+    return ATOMIC_CAS(&pump_version_, old_version, old_version + 1);
+  }
+
   ObExecContext *ctx_;
   ObGranulePumpOpInfo op_info_;
   common::ObArray<DASTabletLocArray> tablet_arrays_;
@@ -112,7 +124,7 @@ public :
   PruningStatus pruning_status_;
   int pruning_ret_;
   //-----end
-  common::ObArray<ObPxTabletInfo> partitions_info_;
+  common::ObArray<ObPxTabletInfo> partitions_info_; // not used after 4.0, used for pkey split range with row info
   common::ObArray<share::ObExternalFileInfo> external_table_files_;
   int64_t parallelism_;
   int64_t tablet_size_;
@@ -140,8 +152,8 @@ public:
   {
     ObGITaskInfo() : tablet_loc_(nullptr), range_(), ss_range_(), idx_(0), hash_value_(0) {}
     ObGITaskInfo(ObDASTabletLoc *tablet_loc,
-                 common::ObNewRange range,
-                 common::ObNewRange ss_range,
+                 const common::ObNewRange &range,
+                 const common::ObNewRange &ss_range,
                  int64_t idx) :
         tablet_loc_(tablet_loc), range_(range), ss_range_(ss_range), idx_(idx), hash_value_(0) {}
     TO_STRING_KV(KPC(tablet_loc_),
@@ -174,11 +186,12 @@ public:
   int assign(const ObGITaskSet &other);
   int set_pw_affi_partition_order(bool asc, bool force_reverse);
   int set_block_order(bool asc);
-  int construct_taskset(common::ObIArray<ObDASTabletLoc*> &taskset_tablets,
-                        common::ObIArray<ObNewRange> &taskset_ranges,
-                        common::ObIArray<ObNewRange> &ss_ranges,
-                        common::ObIArray<int64_t> &taskset_idxs,
+  int construct_taskset(const common::ObIArray<ObDASTabletLoc*> &taskset_tablets,
+                        const common::ObIArray<ObNewRange> &taskset_ranges,
+                        const common::ObIArray<ObNewRange> &ss_ranges,
+                        const common::ObIArray<int64_t> &taskset_idxs,
                         ObGIRandomType random_type);
+  int append_taskset(ObGITaskSet &other);
 public:
   common::ObArray<ObGITaskInfo> gi_task_set_;
   int64_t cur_pos_;
@@ -235,6 +248,7 @@ public :
                              bool partition_granule,
                              bool with_param_down = false);
 
+
 protected :
   int split_gi_task(ObGranulePumpArgs &args,
                     const ObTableScanSpec *tsc,
@@ -260,6 +274,11 @@ public :
                     bool check_task_exist,
                     ObGITaskSet::ObGIRandomType random_type,
                     bool partition_granule = true);
+  int split_granule(ObIAllocator &allocator, ObGranuleIteratorOp *gi_op, ObGranulePumpArgs &args,
+                    const ObTableScanSpec *tsc, int64_t op_id, ObGITaskSet &task_set,
+                    ObGITaskSet::ObGIRandomType random_type, ObDASTabletLoc *tablet_loc,
+                    const ObIArray<ObNewRange> &ranges);
+
 private:
 };
 
@@ -374,7 +393,6 @@ public:
   tablet_size_(common::OB_DEFAULT_TABLET_SIZE),
   partition_wise_join_(false),
   gi_task_array_map_(),
-  splitter_type_(GIT_UNINITIALIZED),
   pump_args_(),
   need_partition_pruning_(false),
   pruning_table_locations_(),
@@ -388,29 +406,14 @@ public:
     destroy();
   }
 
-  int init_pump_args_inner(ObExecContext *ctx,
-                           ObIArray<const ObTableScanSpec*> &scan_ops,
-                           const common::ObIArray<DASTabletLocArray> &tablet_arrays,
-                           common::ObIArray<ObPxTabletInfo> &partitions_info,
-                           common::ObIArray<share::ObExternalFileInfo> &external_table_files,
-                           const ObTableModifySpec* modify_op,
-                           int64_t parallelism,
-                           int64_t tablet_size,
-                           uint64_t gi_attri_flag,
-                           const ObIArray<std::pair<int64_t, bool>> &locations_order,
-                           int64_t gi_op_id);
+  int init_pump_args(ObExecContext *ctx,
+                     ObPxSqcMeta &sqc,
+                     const ObGranuleIteratorSpec *gi_op,
+                     const ObIArray<const ObTableScanSpec*> &scan_ops,
+                     const ObTableModifySpec *modify_op,
+                     const common::ObIArray<DASTabletLocArray> &tablet_arrays,
+                     common::ObIArray<ObPxTabletInfo> &partitions_info);
 
-   int init_pump_args(ObExecContext *ctx,
-                      ObIArray<const ObTableScanSpec*> &scan_ops,
-                      const common::ObIArray<DASTabletLocArray> &tablet_arrays,
-                      common::ObIArray<ObPxTabletInfo> &partitions_info,
-                      common::ObIArray<share::ObExternalFileInfo> &external_table_files,
-                      const ObTableModifySpec* modify_op,
-                      int64_t parallelism,
-                      int64_t tablet_size,
-                      uint64_t gi_attri_flag,
-                      const ObIArray<std::pair<int64_t, bool>> &locations_order,
-                      int64_t gi_op_id);
   ObGranulePumpArgs *get_granule_pump_arg(const int64_t gi_op_id);
   int add_new_gi_task(ObGranulePumpArgs &args, bool check_task_exist);
 
@@ -420,6 +423,7 @@ public:
 
   int fetch_granule_task(const ObGITaskSet *&task_set,
                          int64_t &pos,
+                         ObGranuleTaskInfo &info,
                          int64_t worker_id,
                          uint64_t tsc_op_id,
                          uint64_t fetched_task_cnt,
@@ -430,6 +434,7 @@ public:
                           int64_t worker_id,
                           ObGranuleSplitterType splitter_type);
 
+
   bool is_taskset_reset() const { return is_taskset_reset_; }
   void set_fetch_task_ret(int ret) { ATOMIC_STORE(&fetch_task_ret_, ret); }
   int get_fetch_task_ret() const { return ATOMIC_LOAD(&fetch_task_ret_); }
@@ -439,10 +444,14 @@ public:
   int regenerate_gi_task();
   int regenerate_gi_task(ObGranulePumpArgs &args);
 
+  int split_granule(ObGranuleIteratorOp *gi_op, int64_t scan_op_id, ObDASTabletLoc *tablet_loc,
+                    const ObIArray<ObNewRange> &ranges);
+
   int reset_gi_task();
 
   common::ObIArray<ObGranulePumpArgs> &get_pump_args() { return pump_args_; }
   void set_parallelism(int64_t parallelism) { parallelism_ = parallelism; }
+  int64_t get_parallelism() const { return parallelism_; }
 
   inline void set_need_partition_pruning(bool flag) { need_partition_pruning_ = flag; };
   inline bool need_partition_pruning() { return need_partition_pruning_; }
@@ -483,11 +492,13 @@ private:
   int init_external_odps_table_downloader(ObGranulePumpArgs &args);
   int fetch_granule_by_worker_id(const ObGITaskSet *&task_set,
                                  int64_t &pos,
+                                 ObGranuleTaskInfo &info,
                                  int64_t thread_id,
                                  uint64_t tsc_op_id);
 
   int fetch_granule_from_shared_pool(const ObGITaskSet *&task_set,
                                      int64_t &pos,
+                                     ObGranuleTaskInfo &info,
                                      uint64_t tsc_op_id,
                                      uint64_t fetched_task_cnt);
 
@@ -505,7 +516,8 @@ private:
 
   int init_arg(ObGranulePumpArgs &arg,
                ObExecContext *ctx,
-               ObIArray<const ObTableScanSpec*> &scan_ops,
+               const ObGranuleIteratorSpec *gi_op,
+               const ObIArray<const ObTableScanSpec*> &scan_ops,
                const common::ObIArray<DASTabletLocArray> &tablet_arrays,
                common::ObIArray<ObPxTabletInfo> &partitions_info,
                const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
@@ -513,10 +525,12 @@ private:
                int64_t parallelism,
                int64_t tablet_size,
                uint64_t gi_attri_flag,
-               const ObIArray<std::pair<int64_t, bool>> &locations_order,
-               int64_t gi_op_id);
+               const ObIArray<std::pair<int64_t, bool>> &locations_order);
 
   int check_can_randomize(ObGranulePumpArgs &args, bool &can_randomize);
+
+  int fill_shared_pool(ObGITaskSet &new_task_set, GITaskArrayItem &taskset_array_item);
+
 private:
   //TODO::muhang 自旋锁还是阻塞锁，又或者按静态划分任务避免锁竞争？
   common::ObSpinLock lock_;
@@ -531,7 +545,6 @@ private:
   ObOdpsPartitionJNIScannerMgr odps_partition_jni_scanner_mgr_;
   ObOdpsJniUploaderMgr         odps_jni_uploader_mgr_;
 #endif
-  ObGranuleSplitterType splitter_type_;
   common::ObArray<ObGranulePumpArgs> pump_args_;
   bool need_partition_pruning_;
   common::ObArray<ObTableLocation> pruning_table_locations_;

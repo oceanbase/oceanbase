@@ -1776,7 +1776,6 @@ int ObMacroBlockWriter::flush_macro_block(ObMacroBlock &macro_block)
   ObStorageObjectHandle &prev_handle = macro_handles_[(current_index_ + 1) % 2];
   ObMacroBlock *prev_macro_block = is_need_macro_buffer_ ? &macro_blocks_[(current_index_ + 1) % 2] : nullptr;
   const int64_t cur_mb_row_count = macro_block.get_row_count();
-
   if (OB_UNLIKELY(!macro_block.is_dirty())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "empty macro block has no pre-alloc macro id", K(ret), K(current_index_));

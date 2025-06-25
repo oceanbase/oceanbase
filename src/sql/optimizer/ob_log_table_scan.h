@@ -369,7 +369,8 @@ public:
         is_tsc_with_vid_(false),
         rowkey_vid_tid_(common::OB_INVALID_ID),
         index_prefix_(-1),
-        mr_mv_scan_(common::ObQueryFlag::NormalMode)
+        mr_mv_scan_(common::ObQueryFlag::NormalMode),
+        is_scan_resumable_(false)
   {
   }
 
@@ -1002,6 +1003,9 @@ public:
   int try_adjust_scan_direction(const ObIArray<OrderItem> &sort_keys);
   int set_scan_order();
   int check_is_dbms_calc_partition_expr(const ObRawExpr &expr, bool &is_true);
+
+  bool is_scan_resumable() { return is_scan_resumable_; }
+  void set_scan_resumable(bool value) { is_scan_resumable_ = value; }
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
@@ -1224,6 +1228,7 @@ protected: // memeber variables
 
   int64_t index_prefix_;
   common::ObQueryFlag::MRMVScanMode mr_mv_scan_; // used for major refresh mview fast refresh and real-time mview
+  bool is_scan_resumable_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pseudo_columnref_exprs_;
 
   // disallow copy and assign

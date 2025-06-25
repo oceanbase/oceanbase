@@ -14,6 +14,7 @@
 #include "sql/das/ob_das_simple_op.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/px/ob_px_sqc_handler.h"
 
 namespace oceanbase
 {
@@ -310,7 +311,8 @@ int ObDASSimpleUtils::split_multi_ranges(ObExecContext &exec_ctx,
       LOG_WARN("assgin split multi ranges array failed", K(ret));
     } else {
       int64_t count = multi_range_split_array.count();
-      common::ObIAllocator &alloc = exec_ctx.get_allocator();
+      // scan range is finally shared by all px workers, use thread safe allocator to avoid data race
+      common::ObIAllocator &alloc = *exec_ctx.get_sqc_handler()->get_des_allocator();
       for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
         for (int64_t j = 0; OB_SUCC(ret) && j < multi_range_split_array.count(i); j++) {
           ObStoreRange &store_range = multi_range_split_array.at(i, j);

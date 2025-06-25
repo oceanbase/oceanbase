@@ -115,14 +115,14 @@ int ObReportingWFPieceMsgCtx::alloc_piece_msg_ctx(const ObReportingWFPieceMsg &p
   return ret;
 }
 
-int ObReportingWFPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs)
+int ObReportingWFPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs)
 {
   int ret = OB_SUCCESS;
   // datahub already received all pieces, will send whole msg to sqc
   whole_msg_.op_id_ = op_id_;
   // no need to sort here, will use pby_hash_value_array_ to build hash map later
   ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-    dtl::ObDtlChannel *ch = sqcs.at(idx)->get_qc_channel();
+    dtl::ObDtlChannel *ch = sqcs.at(idx).get_qc_channel();
     if (OB_ISNULL(ch)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null expected", K(ret));
@@ -148,7 +148,7 @@ void ObReportingWFPieceMsgCtx::reset_resource()
 
 int ObReportingWFPieceMsgListener::on_message(
     ObReportingWFPieceMsgCtx &ctx,
-    common::ObIArray<ObPxSqcMeta *> &sqcs,
+    common::ObIArray<ObPxSqcMeta> &sqcs,
     const ObReportingWFPieceMsg &pkt)
 {
   int ret = OB_SUCCESS;

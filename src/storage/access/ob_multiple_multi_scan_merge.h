@@ -38,6 +38,8 @@ protected:
   virtual int construct_iters() override;
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row);
   virtual int is_range_valid() const override;
+  virtual int pause(bool& do_pause) override final;
+  virtual int get_current_range(ObDatumRange& current_range) const override;
   virtual int get_range_count() const override { return ranges_->count(); }
 private:
   const ObIArray<blocksstable::ObDatumRange> *ranges_;

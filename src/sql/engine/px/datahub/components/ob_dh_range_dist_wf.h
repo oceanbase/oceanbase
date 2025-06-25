@@ -122,7 +122,7 @@ public:
       exec_ctx_(exec_ctx), eval_ctx_(exec_ctx)
   {
   }
-  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs) override;
+  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs) override;
   virtual void reset_resource() override;
   static int alloc_piece_msg_ctx(const ObRDWFPieceMsg &pkt,
                                  ObPxCoordInfo &coord_info,
@@ -148,7 +148,7 @@ class ObRDWFPieceMsgListener
 {
 public:
   static int on_message(ObRDWFPieceMsgCtx &ctx,
-                        common::ObIArray<ObPxSqcMeta *> &sqcs,
+                        common::ObIArray<ObPxSqcMeta> &sqcs,
                         const ObRDWFPieceMsg &pkt);
 };
 
@@ -289,7 +289,7 @@ public:
     eval_ctx_(exec_ctx)
   {}
 
-  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs) override;
+  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs) override;
   virtual void reset_resource() override;
   static int alloc_piece_msg_ctx(const RDWinFuncPXPieceMsg &pkt,
                                  ObPxCoordInfo &coord_info,
@@ -309,7 +309,7 @@ class RDWinFuncPXPieceMsgListener
 {
 public:
   static int on_message(RDWinFuncPXPieceMsgCtx &ctx,
-                        common::ObIArray<ObPxSqcMeta *> &sqcs,
+                        common::ObIArray<ObPxSqcMeta> &sqcs,
                         const RDWinFuncPXPieceMsg &pkt);
 };
 

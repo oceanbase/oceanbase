@@ -111,7 +111,7 @@ public:
       const SortDef &sort_def);
   virtual ~ObDynamicSamplePieceMsgCtx() = default;
   int init(const ObIArray<uint64_t> &tablet_ids);
-  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs) override;
+  virtual int send_whole_msg(common::ObIArray<ObPxSqcMeta> &sqcs) override;
   virtual void reset_resource() override;
   virtual void destroy();
   int process_piece(const ObDynamicSamplePieceMsg &piece);
@@ -122,7 +122,7 @@ public:
   int sort_row_store(ObChunkDatumStore &row_store);
   int build_whole_msg(ObDynamicSampleWholeMsg &whole_msg);
   int on_message(
-      common::ObIArray<ObPxSqcMeta *> &sqcs,
+      common::ObIArray<ObPxSqcMeta> &sqcs,
       const ObDynamicSamplePieceMsg &piece);
   INHERIT_TO_STRING_KV("meta", ObPieceMsgCtx, K(is_inited_), K(tenant_id_), K(received_), K(succ_count_), K(tablet_ids_));
   static int alloc_piece_msg_ctx(const ObDynamicSamplePieceMsg &pkt,
@@ -161,7 +161,7 @@ public:
   ~ObDynamicSamplePieceMsgListener() = default;
   static int on_message(
       ObDynamicSamplePieceMsgCtx &ctx,
-      common::ObIArray<ObPxSqcMeta *> &sqcs,
+      common::ObIArray<ObPxSqcMeta> &sqcs,
       const ObDynamicSamplePieceMsg &pkt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDynamicSamplePieceMsgListener);

@@ -596,10 +596,9 @@ public:
   // DFO 分布，DFO 在各个 server 上的任务状态
   int add_sqc(const ObPxSqcMeta &sqc);
   int get_addrs(common::ObIArray<common::ObAddr> &addrs) const;
-  int get_sqcs(common::ObIArray<ObPxSqcMeta *> &sqcs);
-  int get_sqcs(common::ObIArray<const ObPxSqcMeta *> &sqcs) const;
   int get_sqc(int64_t idx, ObPxSqcMeta *&sqc);
   common::ObIArray<ObPxSqcMeta>  &get_sqcs() { return sqcs_; }
+  const common::ObIArray<ObPxSqcMeta>  &get_sqcs() const { return sqcs_; }
   int64_t get_sqcs_count() { return sqcs_.count(); }
   int build_tasks();
   int alloc_data_xchg_ch();
@@ -990,7 +989,8 @@ public:
       ssstore_read_row_count_(0),
       px_worker_execute_start_schema_version_(0)
   {
-
+    allocator_.set_tenant_id(MTL_ID());
+    allocator_.set_label("PxTaskArena");
   }
   ~ObPxTask() = default;
   ObPxTask (const ObPxTask &other) {
@@ -1146,6 +1146,7 @@ public:
   //we don't need to serialize it from sqc rpc thread to px worker thread
   //because it is inited used only in px worker
   int64_t px_worker_execute_start_schema_version_;
+  ObArenaAllocator allocator_;
 };
 
 class ObPxRpcInitTaskArgs
@@ -1153,15 +1154,17 @@ class ObPxRpcInitTaskArgs
   OB_UNIS_VERSION(1);
 public:
   ObPxRpcInitTaskArgs()
-      : task_(),
-        exec_ctx_(NULL),
-        ser_phy_plan_(NULL),
-        des_phy_plan_(NULL),
-        op_spec_root_(nullptr),
-        static_engine_root_(nullptr),
-        sqc_task_ptr_(NULL),
-        des_allocator_(NULL),
-        sqc_handler_(nullptr)
+        : task_(),
+          exec_ctx_(NULL),
+          ser_phy_plan_(NULL),
+          inner_phy_plan_(NULL),
+          des_phy_plan_(NULL),
+          inner_op_spec_root_(nullptr),
+          op_spec_root_(nullptr),
+          static_engine_root_(nullptr),
+          sqc_task_ptr_(NULL),
+          des_allocator_(NULL),
+          sqc_handler_(nullptr)
   {}
 
   void set_serialize_param(ObExecContext &exec_ctx,
@@ -1170,7 +1173,8 @@ public:
   void set_deserialize_param(ObExecContext &exec_ctx,
                              ObPhysicalPlan &des_phy_plan,
                              ObIAllocator *des_allocator);
-  int init_deserialize_param(lib::MemoryContext &mem_context,
+  int init_deserialize_param(const ObPxRpcInitTaskArgs &arg,
+                           lib::MemoryContext &mem_context,
                            const observer::ObGlobalContext &gctx);
   int deep_copy_assign(ObPxRpcInitTaskArgs &src,
                       common::ObIAllocator &alloc);
@@ -1178,16 +1182,18 @@ public:
   void destroy() {
     // worker 执行完成后，立即释放当前 worker 持有的 physical plan、 exec ctx 等资源
     // 内含各种算子的上下文内存等
-    if (nullptr != des_phy_plan_) {
-      des_phy_plan_->~ObPhysicalPlan();
-      des_phy_plan_ = NULL;
+    if (nullptr != inner_phy_plan_) {
+      inner_phy_plan_->~ObPhysicalPlan();
+      inner_phy_plan_ = NULL;
     }
     if (nullptr != exec_ctx_) {
       exec_ctx_->~ObExecContext();
       exec_ctx_ = NULL;
     }
+    inner_op_spec_root_ = NULL;
     op_spec_root_ = NULL;
     ser_phy_plan_ = NULL;
+    des_phy_plan_ = NULL;
     sqc_task_ptr_ = NULL;
     des_allocator_ = NULL;
     sqc_handler_ = NULL;
@@ -1202,7 +1208,9 @@ public:
       task_ = other.task_;
       exec_ctx_ = other.exec_ctx_;
       ser_phy_plan_ = other.ser_phy_plan_;
+      inner_phy_plan_ = other.inner_phy_plan_;
       des_phy_plan_ = other.des_phy_plan_;
+      inner_op_spec_root_ = other.inner_op_spec_root_;
       op_spec_root_ = other.op_spec_root_;
       sqc_task_ptr_ = other.sqc_task_ptr_;
       des_allocator_ = other.des_allocator_;
@@ -1219,8 +1227,13 @@ public:
   ObPxTask task_;
   ObExecContext *exec_ctx_;
   const ObPhysicalPlan *ser_phy_plan_;
-  ObPhysicalPlan *des_phy_plan_;
-  ObOpSpec *op_spec_root_;
+  // When disable share plan between px workers in one sqc,
+  //  inner_phy_plan_ is created and owned by a px worker and des_phy_plan_ points to inner_phy_plan_.
+  // Otherwise, inner_phy_plan_ is NULL and des_phy_plan_ points to the plan owned by sqc.
+  ObPhysicalPlan *inner_phy_plan_;
+  const ObPhysicalPlan *des_phy_plan_;
+  ObOpSpec *inner_op_spec_root_;
+  const ObOpSpec *op_spec_root_;
   ObOperator *static_engine_root_;
   ObPxTask *sqc_task_ptr_; // 指针指向 SQC Ctx task 数组中对应的 task
   ObIAllocator *des_allocator_;

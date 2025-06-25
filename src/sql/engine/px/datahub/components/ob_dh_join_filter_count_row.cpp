@@ -70,7 +70,7 @@ int ObJoinFilterNdv::gather_piece_ndv(const ObJoinFilterNdv &piece_ndv, ObJoinFi
 }
 
 int ObJoinFilterCountRowPieceMsgListener::on_message(ObJoinFilterCountRowPieceMsgCtx &piece_ctx,
-                                                     common::ObIArray<ObPxSqcMeta *> &sqcs,
+                                                     common::ObIArray<ObPxSqcMeta> &sqcs,
                                                      const ObJoinFilterCountRowPieceMsg &pkt)
 {
   int ret = OB_SUCCESS;
@@ -126,7 +126,7 @@ int ObJoinFilterCountRowPieceMsgListener::on_message(ObJoinFilterCountRowPieceMs
           }
           if (OB_SUCC(ret) && sqc_row_info.expected_ == sqc_row_info.received_) {
             LOG_TRACE("send whole msg to one sqc", K(pkt), K(sqc_row_info));
-            if (OB_FAIL(piece_ctx.send_whole_msg_to_one_sqc(sqcs.at(i), sqc_row_info))) {
+            if (OB_FAIL(piece_ctx.send_whole_msg_to_one_sqc(&sqcs.at(i), sqc_row_info))) {
               LOG_WARN("send whole msg failed", K(ret));
             }
           }
@@ -147,7 +147,6 @@ int ObJoinFilterCountRowPieceMsgCtx::alloc_piece_msg_ctx(const ObJoinFilterCount
                                                          ObPieceMsgCtx *&msg_ctx)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObPxSqcMeta *> sqcs;
   ObDfo *target_dfo = nullptr;
   ObJoinFilterCountRowPieceMsgCtx *join_filter_count_row_ctx = nullptr;
   void *buf = ctx.get_allocator().alloc(sizeof(ObJoinFilterCountRowPieceMsgCtx));
@@ -156,9 +155,8 @@ int ObJoinFilterCountRowPieceMsgCtx::alloc_piece_msg_ctx(const ObJoinFilterCount
     LOG_WARN("failed to allocate for piece msg ctx");
   } else if (OB_FAIL(coord_info.dfo_mgr_.find_dfo_edge(pkt.target_dfo_id_, target_dfo))) {
     LOG_WARN("fail find dfo", K(pkt), K(ret));
-  } else if (OB_FAIL(target_dfo->get_sqcs(sqcs))) {
-    LOG_WARN("fail get qc-sqc channel for QC", K(ret));
   } else {
+    ObIArray<ObPxSqcMeta> &sqcs = target_dfo->get_sqcs();
     msg_ctx = new (buf) ObJoinFilterCountRowPieceMsgCtx(
         pkt.op_id_, task_cnt, ctx.get_physical_plan_ctx()->get_timeout_timestamp());
     join_filter_count_row_ctx = static_cast<ObJoinFilterCountRowPieceMsgCtx *>(msg_ctx);
@@ -169,16 +167,11 @@ int ObJoinFilterCountRowPieceMsgCtx::alloc_piece_msg_ctx(const ObJoinFilterCount
         LOG_WARN("failed to prepare_allocate sqc_row_infos_");
       } else {
         for (int64_t i = 0; i < sqcs.count() && OB_SUCC(ret); ++i) {
-          if (OB_ISNULL(sqcs.at(i))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected null sqc");
-          } else {
-            JoinFilterSqcRowInfo &sqc_row_info = join_filter_count_row_ctx->sqc_row_infos_.at(i);
-            sqc_row_info.sqc_id_ = sqcs.at(i)->get_sqc_id();
-            sqc_row_info.expected_ = sqcs.at(i)->get_task_count();
-            if (OB_FAIL(init_target_ndv_info(pkt.ndv_info_, sqc_row_info.ndv_info_))) {
-              LOG_WARN("failed to init ndv_info", K(ret));
-            }
+          JoinFilterSqcRowInfo &sqc_row_info = join_filter_count_row_ctx->sqc_row_infos_.at(i);
+          sqc_row_info.sqc_id_ = sqcs.at(i).get_sqc_id();
+          sqc_row_info.expected_ = sqcs.at(i).get_task_count();
+          if (OB_FAIL(init_target_ndv_info(pkt.ndv_info_, sqc_row_info.ndv_info_))) {
+            LOG_WARN("failed to init ndv_info", K(ret));
           }
         }
       }
@@ -192,7 +185,7 @@ int ObJoinFilterCountRowPieceMsgCtx::alloc_piece_msg_ctx(const ObJoinFilterCount
   return ret;
 }
 
-int ObJoinFilterCountRowPieceMsgCtx::send_whole_msg(ObIArray<ObPxSqcMeta *> &sqcs)
+int ObJoinFilterCountRowPieceMsgCtx::send_whole_msg(ObIArray<ObPxSqcMeta> &sqcs)
 {
   int ret = OB_SUCCESS;
   ObJoinFilterCountRowWholeMsg whole_msg;
@@ -209,7 +202,7 @@ int ObJoinFilterCountRowPieceMsgCtx::send_whole_msg(ObIArray<ObPxSqcMeta *> &sqc
     }
   }
   ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-    dtl::ObDtlChannel *ch = sqcs.at(idx)->get_qc_channel();
+    dtl::ObDtlChannel *ch = sqcs.at(idx).get_qc_channel();
     if (OB_ISNULL(ch)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null expected", K(ret));

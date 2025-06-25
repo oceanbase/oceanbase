@@ -87,6 +87,7 @@ public:
   virtual int64_t to_string(char *buf, const int64_t buf_len) const = 0;
   virtual int get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const = 0;
   virtual bool is_fast_nlj_range() const = 0;
+  virtual bool is_equal_range() const = 0;
 };
 
 }

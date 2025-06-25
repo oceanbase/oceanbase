@@ -93,6 +93,7 @@ public:
   common::ObFixedArray<int64_t, common::ObIAllocator> wf_hybrid_pby_exprs_cnt_array_;
   // for calc ddl sice idx
   ObExpr *ddl_slice_id_expr_;
+  ObExprFrameInfo *dfo_expr_frame_info_;
 };
 
 class ObPxTransmitOp : public ObTransmitOp

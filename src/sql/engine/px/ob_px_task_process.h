@@ -34,29 +34,22 @@ private:
     sqc_id_(common::OB_INVALID_ID),
     dfo_id_(common::OB_INVALID_ID),
     pw_gi_spec_(nullptr),
-    on_set_tscs_(false),
-    dml_spec_(NULL),
     task_(NULL)
     {}
     ~OpPreparation() = default;
-    virtual int apply(ObExecContext &ctx, ObOpSpec &op);
-    virtual int reset(ObOpSpec &op);
+    virtual int apply(ObExecContext &ctx, const ObOpSpec &op);
+    virtual int reset(const ObOpSpec &op);
     void set_task_id(int64_t task_id) { task_id_ = task_id; }
     void set_sqc_id(int64_t sqc_id) { sqc_id_ = sqc_id; }
     void set_dfo_id(int64_t dfo_id) { dfo_id_ = dfo_id; }
-    void set_pwj_gi_spec(ObGranuleIteratorSpec *gi) { pw_gi_spec_ = gi; on_set_tscs_ = true; }
-    bool to_set_tsc() { return on_set_tscs_; }
+    void set_pwj_gi_spec(const ObGranuleIteratorSpec *gi) { pw_gi_spec_ = gi; }
     void set_exec_ctx(ObExecContext *ctx) { ctx_ = ctx; }
     void set_px_task(ObPxTask *task) {task_ = task; }
   private:
     int64_t task_id_;
     int64_t sqc_id_;
     int64_t dfo_id_;
-    ObGranuleIteratorSpec *pw_gi_spec_;
-    // TODO: remove on_set_tscs_, tsc_op_specs_ and dml_spec_ on 4.2
-    bool on_set_tscs_;
-    common::ObSEArray<const ObTableScanSpec *, 32> tsc_op_specs_;
-    ObTableModifySpec *dml_spec_;
+    const ObGranuleIteratorSpec *pw_gi_spec_;
     ObExecContext *ctx_;
     ObPxTask *task_;
   };
@@ -66,8 +59,8 @@ private:
   public:
     OpPostparation(int ret): ret_(ret) {}
 
-    virtual int apply(ObExecContext &ctx, ObOpSpec &op);
-    virtual int reset(ObOpSpec &op);
+    virtual int apply(ObExecContext &ctx, const ObOpSpec &op);
+    virtual int reset(const ObOpSpec &op);
 
   private:
     int ret_;
@@ -104,7 +97,7 @@ public:
   uint64_t get_session_id() const;
   uint64_t get_tenant_id() const;
 
-  int execute(ObOpSpec &root);
+  int execute(const ObOpSpec &root);
 
 private:
   /* functions */
