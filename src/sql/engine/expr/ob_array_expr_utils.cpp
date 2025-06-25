@@ -1534,6 +1534,8 @@ int ObArrayExprUtils::deduce_array_type(ObExecContext *exec_ctx, ObExprResType &
              && coll_info->collection_meta_->type_id_ != ObNestedType::OB_VECTOR_TYPE) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("invalid collection type", K(ret), K(coll_info->collection_meta_->type_id_));
+  } else if (type2.is_null()) {
+    // do nothing
   } else if (!ob_is_collection_sql_type(type2.get_type())) {
     ObCollectionArrayType *arr_type = static_cast<ObCollectionArrayType *>(coll_info->collection_meta_);
     ObCollectionTypeBase *elem_type = arr_type->element_type_;
