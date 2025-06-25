@@ -4106,8 +4106,6 @@ int ObRawExprPrinter::print(ObPseudoColumnRawExpr *expr)
         SET_SYMBOL_IF_EMPTY("level");
       case T_CONNECT_BY_ISCYCLE :
         SET_SYMBOL_IF_EMPTY("connect_by_iscycle");
-      case T_ORA_ROWSCN :
-        SET_SYMBOL_IF_EMPTY("ora_rowscn");
       case T_CONNECT_BY_ISLEAF : {
         SET_SYMBOL_IF_EMPTY("connect_by_isleaf");
         if (0 != expr->get_param_count()) {
@@ -4125,6 +4123,14 @@ int ObRawExprPrinter::print(ObPseudoColumnRawExpr *expr)
           DATA_PRINTF(".");
         }
         PRINT_IDENT(expr->get_expr_name());
+        break;
+      }
+      case T_ORA_ROWSCN: {
+        if (!expr->get_table_name().empty()) {
+          PRINT_IDENT(expr->get_table_name());
+          DATA_PRINTF(".");
+        }
+        PRINT_IDENT("ORA_ROWSCN");
         break;
       }
       default : {
