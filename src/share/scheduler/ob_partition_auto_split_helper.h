@@ -308,7 +308,7 @@ public:
   static ObRsAutoSplitScheduler &get_instance();
   inline bool is_busy() { return polling_mgr_.is_busy(); }
   int push_tasks(const ObArray<ObAutoSplitTask> &task_array);
-  int pop_tasks(const int64_t num_tasks_can_pop, ObArray<ObAutoSplitTask> &task_array);
+  int pop_tasks(const int64_t num_tasks_can_pop, const bool throttle_by_table, ObArray<ObAutoSplitTask> &task_array);
   bool can_retry(const ObAutoSplitTask &task, const int ret);
   int init() { return polling_mgr_.init(); }
   void reset() { polling_mgr_.reset(); }

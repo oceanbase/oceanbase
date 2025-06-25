@@ -90,7 +90,8 @@ ObPartitionSplitTask::ObPartitionSplitTask()
     tablet_size_(0),
     data_tablet_parallel_rowkey_list_(),
     index_tablet_parallel_rowkey_list_(),
-    min_split_start_scn_()
+    min_split_start_scn_(),
+    split_start_delayed_(false)
 {
   ObMemAttr attr(OB_SERVER_TENANT_ID, "RSSplitRange", ObCtxIds::DEFAULT_CTX_ID);
   data_tablet_parallel_rowkey_list_.set_attr(attr);
@@ -422,6 +423,7 @@ int ObPartitionSplitTask::init(
     task_status_ = static_cast<ObDDLTaskStatus>(task_status);
     execution_id_ = 1L;
     data_format_version_ = tenant_data_format_version;
+    split_start_delayed_ = false;
     if (OB_FAIL(init_ddl_task_monitor_info(table_id))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
@@ -468,6 +470,7 @@ int ObPartitionSplitTask::init(const ObDDLTaskRecord &task_record)
     parent_task_id_ = task_record.parent_task_id_;
     task_status_ = static_cast<ObDDLTaskStatus>(task_record.task_status_);
     start_time_ = ObTimeUtility::current_time();
+    split_start_delayed_ = false;
     if (OB_FAIL(init_ddl_task_monitor_info(object_id_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret), K(object_id_), K(task_record));
     } else {
@@ -886,9 +889,15 @@ int ObPartitionSplitTask::write_split_start_log(const share::ObDDLTaskStatus nex
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObSEArray<blocksstable::ObDatumRowkey, 8>, 8> unused_rowkey_list;
+  const int64_t delay_sec = std::abs(OB_E(EventTable::EN_WRITE_SPLIT_START_LOG_DELAY_SEC) 0);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (!split_start_delayed_ && delay_sec != 0) {
+    set_delay_schedule_time(delay_sec * 1000000L);
+    split_start_delayed_ = true;
+    ret = OB_EAGAIN;
+    LOG_WARN("simulate delay before write split start log", K(ret), K(task_id_));
   } else if (OB_FAIL(prepare_tablet_split_ranges(unused_rowkey_list))) {
     LOG_WARN("prepare tablet split ranges failed", K(ret));
   } else if (all_src_tablet_ids_.empty() && OB_FAIL(setup_src_tablet_ids_array())) {

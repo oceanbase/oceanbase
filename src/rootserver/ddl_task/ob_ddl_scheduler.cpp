@@ -1743,6 +1743,9 @@ int ObDDLScheduler::cache_auto_split_task(const obrpc::ObAutoSplitTabletBatchArg
 int ObDDLScheduler::schedule_auto_split_task()
 {
   int ret = OB_SUCCESS;
+  const int64_t max_task_cnt_tp = std::abs(OB_E(EventTable::EN_AUTO_SPLIT_TASK_CNT_LESS_THAN) 0);
+  const int64_t max_task_cnt = max_task_cnt_tp > 0 ? (max_task_cnt_tp - 1) : ObRsAutoSplitScheduler::MAX_SPLIT_TASKS_ONE_ROUND;
+  const bool throttle_by_table = max_task_cnt_tp == 0;
   ObRsAutoSplitScheduler &split_task_scheduler = ObRsAutoSplitScheduler::get_instance();
   ObArray<ObAutoSplitTask> task_array;
   int tmp_ret = OB_SUCCESS;
@@ -1752,9 +1755,9 @@ int ObDDLScheduler::schedule_auto_split_task()
   }
   if (OB_FAIL(task_queue_.get_split_task_cnt(cur_running_split_task))) {
     LOG_WARN("failed to get current split task count", K(ret));
-  } else if (cur_running_split_task >= ObRsAutoSplitScheduler::MAX_SPLIT_TASKS_ONE_ROUND) {
+  } else if (cur_running_split_task >= max_task_cnt) {
     //do nothing
-  } else if (OB_FAIL(split_task_scheduler.pop_tasks(ObRsAutoSplitScheduler::MAX_SPLIT_TASKS_ONE_ROUND - cur_running_split_task/*num_tasks_to_pop*/, task_array))) {
+  } else if (OB_FAIL(split_task_scheduler.pop_tasks(max_task_cnt - cur_running_split_task/*num_tasks_to_pop*/, throttle_by_table, task_array))) {
     LOG_WARN("fail to pop tasks from auto_split_task_tree");
   } else if (task_array.count() == 0) {
     //do nothing
