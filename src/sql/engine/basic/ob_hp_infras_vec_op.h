@@ -606,6 +606,8 @@ protected:
   bool has_dump_preprocess_part_;
   HpGroupAggrFunc total_mem_used_func_;
   HpGroupAggrFunc slice_cnt_func_;
+  const ObCompactRow **store_rows_ = nullptr;
+  int store_rows_size_ = 0;
 };
 
 template<typename HashBucket>
