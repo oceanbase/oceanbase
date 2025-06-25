@@ -1284,6 +1284,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprCurrentCatalog);
     REG_OP(ObExprCheckCatalogAccess);
     REG_OP(ObExprInnerInfoColsColumnKeyPrinter);
+    REG_OP(ObExprVectorL2Squared);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);

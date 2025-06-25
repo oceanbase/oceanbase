@@ -1398,6 +1398,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprMapValues::eval_map_values,                                    /* 846 */
   ObExprSpivDim::generate_spiv_dim,                                    /* 847 */
   ObExprInnerInfoColsColumnKeyPrinter::eval_column_column_key,         /* 848 */
+  NULL, // ObExprCheckLocationAccess::eval_check_location_access,      /* 849 */
+  NULL, // ObExprUDF::eval_external_udf,                               /* 850 */
+  NULL, // ObExprStartUpMode::eval_startup_mode,                       /* 851 */
+  ObExprVectorL2Squared::calc_l2_squared,                              /* 852 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
