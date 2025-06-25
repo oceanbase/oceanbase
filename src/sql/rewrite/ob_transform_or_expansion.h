@@ -21,6 +21,7 @@ namespace oceanbase
 {
 namespace sql
 {
+struct DeducedExprInfo;
 
 class ObTransformOrExpansion: public ObTransformRule
 {
@@ -398,6 +399,8 @@ private:
                               TableItem *rel_table,
                               TableItem *table,
                               bool &left_bottom);
+  int build_deduced_index_expr_equal_sets(ObIArray<DeducedExprInfo> &deduced_exprs_info,
+                                          EqualSets &equal_sets);
   DISALLOW_COPY_AND_ASSIGN(ObTransformOrExpansion);
 private:
   int64_t try_times_;

@@ -3523,6 +3523,53 @@ int ObTransformUtils::check_index_extract_query_range(const ObDMLStmt *stmt,
   return ret;
 }
 
+int ObTransformUtils::preprocess_index_cols_for_index_match(ObSqlSchemaGuard *schema_guard,
+                                                            const int64_t table_id,
+                                                            ObIArray<uint64_t> &index_cols)
+{
+  ObSEArray<uint64_t, 4> index_cols_tmp;
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(schema_guard));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_cols.count(); ++i) {
+    uint64_t idx_col_id = index_cols.at(i);
+    uint64_t new_col_id = idx_col_id;
+    const ObColumnSchemaV2 *idx_col_schema = NULL;
+    if (OB_FAIL(schema_guard->get_column_schema(table_id, idx_col_id, idx_col_schema))) {
+      LOG_WARN("failed to get column schema", K(ret), K(table_id), K(idx_col_id));
+    } else if (OB_ISNULL(idx_col_schema)) {
+      // index column cannot be found in table schema, skip (e.g. shadow pk for unique index)
+    } else if (idx_col_schema->is_prefix_column()) {
+      // convert prefix index column to its reference column
+      const ColumnReferenceSet *col_ref_set = NULL;
+      int64_t ref_col_id = -1;
+      if (OB_ISNULL(col_ref_set = idx_col_schema->get_column_ref_set())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column reference set is null", K(ret));
+      } else if (OB_FAIL(col_ref_set->find_first(ref_col_id))) {
+        // there should be only one 1 bit that indicates the referenced column
+        // in the column_ref_idxs_ of the prefix index column
+        LOG_WARN("failed to find reference column for prefix index", K(ret));
+      } else if (OB_UNLIKELY(-1 == ref_col_id)) {
+        // should not be here
+      } else {
+        new_col_id = ref_col_id + OB_APP_MIN_COLUMN_ID;
+      }
+    } else { /* do nothing */ }
+    // it's necessary to de-duplicate index columns
+    // or else initialization of query range extraction check would fail
+    if (OB_SUCC(ret) && OB_FAIL(add_var_to_array_no_dup(index_cols_tmp, new_col_id))) {
+      LOG_WARN("failed to add var to array no dup", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(index_cols.assign(index_cols_tmp))) {
+    LOG_WARN("failed to assign index cols", K(ret));
+  }
+  return ret;
+}
+
 int ObTransformUtils::is_match_index(ObSqlSchemaGuard *schema_guard,
                                      const ObDMLStmt *stmt,
                                      const ObColumnRefRawExpr *col_expr,
@@ -3548,7 +3595,7 @@ int ObTransformUtils::is_match_index(ObSqlSchemaGuard *schema_guard,
   } else if (!table_item->is_basic_table()) {
     // do nothing
   } else if (OB_FAIL(get_valid_index_id(schema_guard, stmt, table_item, index_ids))) {
-    LOG_WARN("fail to get vaild index id", K(ret), K(table_item->ref_id_));
+    LOG_WARN("fail to get valid index id", K(ret), K(table_item->ref_id_));
   } else {
     ObSEArray<uint64_t, 8> index_cols;
     const ObTableSchema *index_schema = NULL;
@@ -3580,6 +3627,8 @@ int ObTransformUtils::is_match_index(ObSqlSchemaGuard *schema_guard,
         LOG_WARN("failed to get domain index cols", K(ret));
       } else if (OB_FAIL(index_schema->get_rowkey_info().get_column_ids(index_cols))) {
         LOG_WARN("failed to get index cols", K(ret));
+      } else if (OB_FAIL(preprocess_index_cols_for_index_match(schema_guard, table_item->ref_id_, index_cols))) {
+        LOG_WARN("failed to preprocess index cols for index match", K(ret));
       } else if (OB_FAIL(is_match_index(stmt,
                                         index_cols,
                                         col_expr,

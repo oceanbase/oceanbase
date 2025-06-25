@@ -795,6 +795,11 @@ int ObLogPlan::generate_join_orders()
       OPT_TRACE_MEM_USED;
       OPT_TRACE_END_SECTION;
     }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(append(get_optimizer_context().get_deduce_info(),
+                              join_rels.at(0).at(i)->get_deduce_info()))) {
+      LOG_WARN("failed to append deduce info", K(ret));
+    }
   }
 
   //枚举join order
