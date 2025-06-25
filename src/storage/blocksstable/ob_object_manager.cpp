@@ -14,17 +14,30 @@
 
 #include "ob_object_manager.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
+#include "share/ob_perf_stat.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
 #include "storage/shared_storage/ob_ss_object_access_util.h"
 #endif
 
+using namespace oceanbase::common;
 namespace oceanbase
 {
 namespace blocksstable
 {
 // ============================ ObStorageObjectOpt ======================================//
+#define OBJ_MGR_PERF_TIMEGUARD_INIT() PERF_TIMEGUARD_WITH_MOD_INIT(ObjectManager)
+
+PERF_STAT_ITEM(perf_alloc_object);
+PERF_STAT_ITEM(perf_async_read_object);
+PERF_STAT_ITEM(perf_async_write_object);
+PERF_STAT_ITEM(perf_read_object);
+PERF_STAT_ITEM(perf_write_object);
+PERF_STAT_ITEM(perf_get_object_size);
+PERF_STAT_ITEM(perf_ss_is_exist_object);
+PERF_STAT_ITEM(perf_seal_object);
+PERF_STAT_ITEM(perf_delete_object);
 
 int64_t ObStorageObjectOpt::to_string(char *buf, const int64_t buf_len) const
 {
@@ -295,6 +308,8 @@ void ObObjectManager::destroy()
 int ObObjectManager::alloc_object(const ObStorageObjectOpt &opt, ObStorageObjectHandle &object_handle)
 {
   int ret = OB_SUCCESS;
+  PERF_GUARD_INIT(perf_alloc_object);
+  OBJ_MGR_PERF_TIMEGUARD_INIT();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -304,15 +319,15 @@ int ObObjectManager::alloc_object(const ObStorageObjectOpt &opt, ObStorageObject
         && ObStorageObjectType::PRIVATE_CKPT_FILE != opt.object_type_) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("only support private marco for shared-nothing", K(ret), K(opt.object_type_), K(opt));
-    } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.alloc_object(object_handle))) {
+    } else if (CLICK_FAIL(OB_SERVER_BLOCK_MGR.alloc_object(object_handle))) {
       LOG_WARN("fail to alloc object", K(ret), K(opt));
     }
   } else {
 #ifdef OB_BUILD_SHARED_STORAGE
     MacroBlockId object_id;
-    if (OB_FAIL(ss_get_object_id(opt, object_id))) {
+    if (CLICK_FAIL(ss_get_object_id(opt, object_id))) {
       LOG_WARN("fail to alloc object", K(ret), K(opt));
-    } else if (OB_FAIL(object_handle.set_macro_block_id(object_id))) {
+    } else if (CLICK_FAIL(object_handle.set_macro_block_id(object_id))) {
       LOG_WARN("fail to set macro id", K(ret), K(object_id));
     }
 #endif
@@ -324,6 +339,8 @@ int ObObjectManager::async_read_object(
     const ObStorageObjectReadInfo &read_info,
     ObStorageObjectHandle &object_handle)
 {
+  PERF_GUARD_INIT(perf_async_read_object);
+  OBJ_MGR_PERF_TIMEGUARD_INIT();
   return object_handle.async_read(read_info);
 }
 
@@ -333,12 +350,14 @@ int ObObjectManager::async_write_object(
     ObStorageObjectHandle &object_handle)
 {
   int ret = OB_SUCCESS;
+  PERF_GUARD_INIT(perf_async_write_object);
+  OBJ_MGR_PERF_TIMEGUARD_INIT();
   if (OB_UNLIKELY(!write_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(write_info));
-  } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.alloc_object(opt, object_handle))) {
+  } else if (CLICK_FAIL(OB_STORAGE_OBJECT_MGR.alloc_object(opt, object_handle))) {
     LOG_WARN("fail to alloc object from object manager", K(ret), K(opt));
-  } else if (OB_FAIL(object_handle.async_write(write_info))) {
+  } else if (CLICK_FAIL(object_handle.async_write(write_info))) {
     LOG_WARN("Fail to async write block", K(ret), K(opt), K(object_handle));
   }
   return ret;
@@ -349,9 +368,11 @@ int ObObjectManager::read_object(
     ObStorageObjectHandle &object_handle)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(async_read_object(read_info, object_handle))) {
+  PERF_GUARD_INIT(perf_read_object);
+  OBJ_MGR_PERF_TIMEGUARD_INIT();
+  if (CLICK_FAIL(async_read_object(read_info, object_handle))) {
     LOG_WARN("fail to sync read object", K(ret), K(read_info));
-  } else if (OB_FAIL(object_handle.wait())) {
+  } else if (CLICK_FAIL(object_handle.wait())) {
     LOG_WARN("Fail to wait io finish", K(ret), K(read_info));
   }
   return ret;
@@ -362,9 +383,11 @@ int ObObjectManager::write_object(
     ObStorageObjectHandle &object_handle)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(async_write_object(opt, write_info, object_handle))) {
+  PERF_GUARD_INIT(perf_write_object);
+  OBJ_MGR_PERF_TIMEGUARD_INIT();
+  if (CLICK_FAIL(async_write_object(opt, write_info, object_handle))) {
     LOG_WARN("fail to sync write block", K(ret), K(write_info), K(object_handle));
-  } else if (OB_FAIL(object_handle.wait())) {
+  } else if (CLICK_FAIL(object_handle.wait())) {
     LOG_WARN("fail to wait io finish", K(ret), K(write_info));
   }
   return ret;
@@ -506,6 +529,8 @@ int ObObjectManager::get_object_size(
     int64_t &object_size) const
 {
   int ret = OB_SUCCESS;
+  PERF_GUARD_INIT(perf_get_object_size);
+  OBJ_MGR_PERF_TIMEGUARD_INIT();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -519,7 +544,7 @@ int ObObjectManager::get_object_size(
     }
   } else {
 #ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_FAIL(OB_SERVER_FILE_MGR.get_file_length(object_id, ls_epoch, object_size))) {
+    if (CLICK_FAIL(OB_SERVER_FILE_MGR.get_file_length(object_id, ls_epoch, object_size))) {
       LOG_WARN("fail to get file size", K(ret), K(object_id), K(ls_epoch), K(object_size));
     }
 #endif
@@ -568,17 +593,19 @@ void ObObjectManager::set_ss_object_first_id_(
 int ObObjectManager::ss_is_exist_object(const MacroBlockId &object_id, const int64_t ls_epoch, bool &is_exist)
 {
   int ret = OB_SUCCESS;
+  PERF_GUARD_INIT(perf_ss_is_exist_object);
+  OBJ_MGR_PERF_TIMEGUARD_INIT();
   const uint64_t tenant_id = (nullptr != MTL_CTX()) ? MTL_ID() : OB_SERVER_TENANT_ID;
   ObBaseFileManager *file_mgr = nullptr;
   if (OB_UNLIKELY(!object_id.is_valid() || (ls_epoch < 0) || !is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(object_id), K(ls_epoch), K(tenant_id));
-  } else if (OB_FAIL(ObSSObjectAccessUtil::get_file_manager(tenant_id, file_mgr))) {
+  } else if (CLICK_FAIL(ObSSObjectAccessUtil::get_file_manager(tenant_id, file_mgr))) {
     LOG_WARN("fail to get file manager", KR(ret), K(tenant_id));
   } else if (OB_ISNULL(file_mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("file manager is null", KR(ret));
-  } else if (OB_FAIL(file_mgr->is_exist_file(object_id, ls_epoch, is_exist))) {
+  } else if (CLICK_FAIL(file_mgr->is_exist_file(object_id, ls_epoch, is_exist))) {
     LOG_WARN("fail to check existence", K(ret), K(object_id), K(ls_epoch));
   }
   return ret;
@@ -587,6 +614,8 @@ int ObObjectManager::ss_is_exist_object(const MacroBlockId &object_id, const int
 int ObObjectManager::seal_object(const MacroBlockId &object_id, const int64_t ls_epoch_id)
 {
   int ret = OB_SUCCESS;
+  PERF_GUARD_INIT(perf_seal_object);
+  OBJ_MGR_PERF_TIMEGUARD_INIT();
   const uint64_t tenant_id = (nullptr != MTL_CTX()) ? MTL_ID() : OB_SERVER_TENANT_ID;
   ObSSMacroCacheMgr *macro_cache_mgr = nullptr;
   if (OB_UNLIKELY(!object_id.is_valid() || (ls_epoch_id < 0))) {
@@ -594,13 +623,13 @@ int ObObjectManager::seal_object(const MacroBlockId &object_id, const int64_t ls
     LOG_WARN("invalid arguments", KR(ret), K(object_id), K(ls_epoch_id));
   } else if (OB_SERVER_TENANT_ID == tenant_id) {
     // for 500 tenant seal object
-    if (OB_FAIL(OB_SERVER_FILE_MGR.push_to_flush_map(object_id))) {
+    if (CLICK_FAIL(OB_SERVER_FILE_MGR.push_to_flush_map(object_id))) {
       LOG_WARN("fail to flush to flush map", KR(ret), K(object_id), K(ls_epoch_id), K(tenant_id));
     }
   } else if (OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("macro cache mgr is null", KR(ret), "tenant_id", MTL_ID());
-  } else if (OB_FAIL(macro_cache_mgr->seal_and_push_to_flush_map(object_id, ls_epoch_id))) {
+  } else if (CLICK_FAIL(macro_cache_mgr->seal_and_push_to_flush_map(object_id, ls_epoch_id))) {
     LOG_WARN("fail to seal and push to flush map", KR(ret), K(object_id), K(ls_epoch_id));
   }
   return ret;
@@ -609,17 +638,19 @@ int ObObjectManager::seal_object(const MacroBlockId &object_id, const int64_t ls
 int ObObjectManager::delete_object(const MacroBlockId &object_id, const int64_t ls_epoch_id)
 {
   int ret = OB_SUCCESS;
+  PERF_GUARD_INIT(perf_delete_object);
+  OBJ_MGR_PERF_TIMEGUARD_INIT();
   const uint64_t tenant_id = (nullptr != MTL_CTX()) ? MTL_ID() : OB_SERVER_TENANT_ID;
   ObBaseFileManager *file_manager = nullptr;
   if (OB_UNLIKELY(!object_id.is_valid() || (ls_epoch_id < 0) || !is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(object_id), K(ls_epoch_id), K(tenant_id));
-  } else if (OB_FAIL(ObSSObjectAccessUtil::get_file_manager(tenant_id, file_manager))) {
+  } else if (CLICK_FAIL(ObSSObjectAccessUtil::get_file_manager(tenant_id, file_manager))) {
     LOG_WARN("fail to get file manager", KR(ret), K(tenant_id));
   } else if (OB_ISNULL(file_manager)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("file manager is null", KR(ret));
-  } else if (OB_FAIL(file_manager->delete_file(object_id, ls_epoch_id))) {
+  } else if (CLICK_FAIL(file_manager->delete_file(object_id, ls_epoch_id))) {
     LOG_WARN("fail to delete file", KR(ret), K(object_id), K(ls_epoch_id));
   }
   return ret;
@@ -992,12 +1023,14 @@ int ObObjectManager::async_write_object(
     ObStorageObjectHandle &object_handle)
 {
   int ret = OB_SUCCESS;
+  PERF_GUARD_INIT(perf_async_write_object);
+  OBJ_MGR_PERF_TIMEGUARD_INIT();
   if (OB_UNLIKELY(!write_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(write_info));
-  } else if (OB_FAIL(object_handle.set_macro_block_id(macro_block_id))) {
+  } else if (CLICK_FAIL(object_handle.set_macro_block_id(macro_block_id))) {
     LOG_WARN("failed to set macro block id", K(ret));
-  } else if (OB_FAIL(object_handle.async_write(write_info))) {
+  } else if (CLICK_FAIL(object_handle.async_write(write_info))) {
     LOG_WARN("failed to write info", K(ret), K(object_handle));
   }
   return ret;
