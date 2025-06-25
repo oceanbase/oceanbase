@@ -685,7 +685,7 @@ ObTableModifyOp::ObTableModifyOp(ObExecContext &ctx,
     inner_conn_(NULL),
     tenant_id_(0),
     saved_conn_(),
-    foreign_key_checks_(false),
+    need_foreign_key_check_(false),
     need_close_conn_(false),
     iter_end_(false),
     dml_rtctx_(eval_ctx_, ctx, *this),
@@ -719,6 +719,8 @@ int ObTableModifyOp::inner_open()
   } else {
     init_das_dml_ctx();
   }
+  LOG_TRACE("table_modify_op", K(execute_single_row_), K(need_foreign_key_check_),
+                               K(MY_SPEC.need_foreign_key_check_), K(MY_SPEC.need_trigger_fire_));
   return ret;
 }
 
@@ -927,10 +929,11 @@ OB_INLINE int ObTableModifyOp::init_foreign_key_operation()
   if (OB_ISNULL(phy_plan_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("modify_ctx or phy_plan_ctx is NULL", K(ret), KP(phy_plan_ctx));
-  } else if ((lib::is_mysql_mode() && phy_plan_ctx->need_foreign_key_checks())
-             || lib::is_oracle_mode()) {
+  } else if (lib::is_mysql_mode() && !phy_plan_ctx->need_foreign_key_checks()) {
     // set fk check even if ret != OB_SUCCESS. see ObTableModifyOp::inner_close()
-    set_foreign_key_checks();
+    need_foreign_key_check_ = false;
+  } else {
+    need_foreign_key_check_ = MY_SPEC.need_foreign_key_check_;
   }
   return ret;
 }
@@ -961,7 +964,7 @@ int ObTableModifyOp::inner_rescan()
 
 int ObTableModifyOp::check_need_exec_single_row() {
   int ret = OB_SUCCESS;
-  if (MY_SPEC.is_returning_ && need_foreign_key_checks()) {
+  if (MY_SPEC.is_returning_ && (need_foreign_key_checks() || MY_SPEC.need_trigger_fire_)) {
     execute_single_row_ = true;
   }
   return ret;
