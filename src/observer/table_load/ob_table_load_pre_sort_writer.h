@@ -21,6 +21,10 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObDirectLoadBatchRows;
+} // namespace storage
 namespace observer
 {
 class ObTableLoadPreSorter;
@@ -40,9 +44,7 @@ public:
            ObTableLoadErrorRowHandler *error_row_handler);
   int write(int32_t session_id, const table::ObTableLoadTabletObjRowArray &row_array);
   int px_write(common::ObIVector *tablet_id_vector,
-               const ObIArray<common::ObIVector *> &vectors,
-               const sql::ObBatchRows &batch_rows,
-               int64_t &affected_rows);
+               const storage::ObDirectLoadBatchRows &batch_rows);
   int close();
 private:
   int append_row(const ObTabletID &tablet_id,

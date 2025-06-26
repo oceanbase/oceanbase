@@ -157,6 +157,7 @@ int ObTableLoadEmptyInsertTabletCtxManager::execute(
   insert_table_param.datum_utils_ = &(table_load_schema.datum_utils_);
   insert_table_param.col_descs_ = &(table_load_schema.column_descs_);
   insert_table_param.cmp_funcs_ = &(table_load_schema.cmp_funcs_);
+  insert_table_param.col_nullables_ = table_load_schema.col_nullables_;
   insert_table_param.lob_column_idxs_ = &(table_load_schema.lob_column_idxs_);
   insert_table_param.online_sample_percent_ = 1.0;
   insert_table_param.is_no_logging_ = ddl_param.is_no_logging_;

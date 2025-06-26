@@ -346,6 +346,8 @@ int ObDirectLoadPartitionOriginDataUnrescanMergeTask::process()
     } else {
       LOG_INFO("add sstable slice begin", K(tablet_id), K(parallel_idx_));
       ObDirectLoadDatumRow datum_row;
+      ObDirectLoadRowFlag row_flag;
+      row_flag.uncontain_hidden_pk_ = true;
       const ObDirectLoadDatumRow *datum_row_ptr = nullptr;
       while (OB_SUCC(ret)) {
         if (OB_UNLIKELY(is_stop_)) {
@@ -361,7 +363,7 @@ int ObDirectLoadPartitionOriginDataUnrescanMergeTask::process()
         } else {
           datum_row.storage_datums_ = datum_row_ptr->storage_datums_ + 1;
           datum_row.count_ = datum_row_ptr->count_ - 1;
-          if (OB_FAIL(direct_writer.append_row(datum_row))) {
+          if (OB_FAIL(direct_writer.append_row(datum_row, row_flag))) {
             LOG_WARN("fail to append row", KR(ret), K(datum_row));
           } else {
             affected_rows_++;

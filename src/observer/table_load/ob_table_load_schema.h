@@ -116,7 +116,7 @@ public:
   common::ObArray<share::schema::ObColDesc> lob_meta_column_descs_;
   blocksstable::ObStorageDatumUtils lob_meta_datum_utils_;
   blocksstable::ObStoreCmpFuncs cmp_funcs_; // for sql statistics
-  common::ObIVector *non_partitioned_tablet_id_vector_;
+  sql::ObBitVector *col_nullables_;
   bool is_inited_;
 };
 

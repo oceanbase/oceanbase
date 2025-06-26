@@ -987,6 +987,7 @@ int ObDtlBasicChannel::switch_writer(const ObDtlMsg &msg)
       } else if (DtlWriterType::VECTOR_ROW_WRITER == msg_writer_map[px_row.get_data_type()]) {
         vector_row_msg_writer_.set_row_meta(meta_);
         msg_writer_ = &vector_row_msg_writer_;
+        vector_row_msg_writer_.set_plan_min_cluster_version(plan_min_cluster_version_);
       } else if (DtlWriterType::VECTOR_WRITER == msg_writer_map[px_row.get_data_type()]) {
         msg_writer_ = &vector_msg_writer_;
       } else {

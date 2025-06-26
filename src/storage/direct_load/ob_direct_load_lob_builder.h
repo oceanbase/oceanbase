@@ -35,9 +35,9 @@ public:
   // 中间过程数据
   int append_lob(ObDirectLoadDatumRow &datum_row,
                  const ObDirectLoadRowFlag &row_flag);
-  int append_lob(const IVectorPtrs &vectors,
-                 const int64_t row_idx,
-                 const ObDirectLoadRowFlag &row_flag);
+  int append_lob(const ObDirectLoadBatchRows &batch_rows,
+                 const uint16_t *selector,
+                 const int64_t size);
   int close();
 
 private:
@@ -47,6 +47,8 @@ private:
   inline int check_can_skip(char *ptr, uint32_t len, bool &can_skip);
   int check_can_skip(const blocksstable::ObDatumRow &datum_row, bool &can_skip);
   int check_can_skip(const blocksstable::ObBatchDatumRows &datum_rows, bool &can_skip);
+  int check_can_skip(const ObDirectLoadBatchRows &batch_rows, const uint16_t *selector,
+                     const int64_t size, bool &can_skip);
 
   int append_row(blocksstable::ObDatumRow &datum_row);
   int append_batch(blocksstable::ObBatchDatumRows &datum_rows);
@@ -56,13 +58,10 @@ private:
   int fetch_from_datum_row(ObDirectLoadDatumRow &datum_row,
                            const ObDirectLoadRowFlag &row_flag);
 
-  int fill_into_datum_row(const IVectorPtrs &vectors,
-                          const int64_t row_idx,
-                          const ObDirectLoadRowFlag &row_flag);
-  int fetch_from_datum_row(const IVectorPtrs &vectors,
-                           const int64_t row_idx,
-                           const ObDirectLoadRowFlag &row_flag);
-
+  int fill_into_datum_row(const ObDirectLoadBatchRows &batch_rows,
+                          const int64_t row_idx);
+  int fetch_from_datum_row(const ObDirectLoadBatchRows &batch_rows,
+                           const int64_t row_idx);
 private:
   ObDirectLoadInsertTabletContext *insert_tablet_ctx_;
   ObDirectLoadInsertLobTabletContext *insert_lob_tablet_ctx_;

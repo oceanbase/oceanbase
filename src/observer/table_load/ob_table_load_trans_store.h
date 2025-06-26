@@ -32,6 +32,8 @@ class ObDirectLoadTableDataDesc;
 class ObDirectLoadITable;
 class ObIDirectLoadPartitionTableBuilder;
 class ObDirectLoadInsertTableBatchRowDirectWriter;
+class ObDirectLoadBatchRows;
+class ObDirectLoadRowFlag;
 } // namespace storage
 namespace observer
 {
@@ -74,10 +76,12 @@ public:
 public:
   // 只在对应工作线程中调用, 串行执行
   int write(int32_t session_id, const table::ObTableLoadTabletObjRowArray &row_array);
-  int px_write(common::ObIVector *tablet_id_vector,
-               const ObIArray<common::ObIVector *> &vectors,
-               const sql::ObBatchRows &batch_rows,
-               int64_t &affected_rows);
+  int px_write(const common::ObTabletID &tablet_id,
+               const storage::ObDirectLoadBatchRows &batch_rows);
+  int px_write(const common::ObTabletID &tablet_id,
+               const storage::ObDirectLoadBatchRows &batch_rows,
+               const uint16_t *selector,
+               const int64_t size);
   int cast_row(int32_t session_id,
                const table::ObTableLoadObjRow &obj_row,
                const ObDirectLoadDatumRow *&datum_row);
@@ -120,11 +124,14 @@ private:
     virtual ~IWriter() = default;
     virtual void reset() = 0;
     virtual int append_row(const common::ObTabletID &tablet_id,
-                           const ObDirectLoadDatumRow &datum_row) = 0;
-    virtual int append_batch(common::ObIVector *tablet_id_vector,
-                             const ObIArray<common::ObIVector *> &vectors,
-                             const sql::ObBatchRows &batch_rows,
-                             int64_t &affected_rows) = 0;
+                           const ObDirectLoadDatumRow &datum_row,
+                           const storage::ObDirectLoadRowFlag &row_flag) = 0;
+    virtual int append_batch(const common::ObTabletID &tablet_id,
+                             const storage::ObDirectLoadBatchRows &batch_rows) = 0;
+    virtual int append_selective(const common::ObTabletID &tablet_id,
+                                 const storage::ObDirectLoadBatchRows &batch_rows,
+                                 const uint16_t *selector,
+                                 const int64_t size) = 0;
     virtual int close() = 0;
   };
 
@@ -138,11 +145,14 @@ private:
              ObTableLoadTransStore *trans_store,
              int32_t session_id);
     int append_row(const common::ObTabletID &tablet_id,
-                   const ObDirectLoadDatumRow &datum_row) override;
-    int append_batch(common::ObIVector *tablet_id_vector,
-                     const ObIArray<common::ObIVector *> &vectors,
-                     const sql::ObBatchRows &batch_rows,
-                     int64_t &affected_rows) override;
+                   const ObDirectLoadDatumRow &datum_row,
+                   const storage::ObDirectLoadRowFlag &row_flag) override;
+    int append_batch(const common::ObTabletID &tablet_id,
+                     const storage::ObDirectLoadBatchRows &batch_rows) override;
+    int append_selective(const common::ObTabletID &tablet_id,
+                         const storage::ObDirectLoadBatchRows &batch_rows,
+                         const uint16_t *selector,
+                         const int64_t size) override;
     int close() override;
   private:
     int new_table_builder(const common::ObTabletID &tablet_id,
@@ -150,6 +160,7 @@ private:
     int get_table_builder(const common::ObTabletID &tablet_id,
                           ObIDirectLoadPartitionTableBuilder *&table_builder);
     int inner_append_row(const common::ObTabletID &tablet_id,
+                         ObIDirectLoadPartitionTableBuilder *table_builder,
                          const ObDirectLoadDatumRow &datum_row);
   private:
     typedef common::hash::ObHashMap<common::ObTabletID, ObIDirectLoadPartitionTableBuilder *>
@@ -174,11 +185,14 @@ private:
     void reset() override;
     int init(ObTableLoadStoreCtx *store_ctx);
     int append_row(const common::ObTabletID &tablet_id,
-                   const ObDirectLoadDatumRow &datum_row) override;
-    int append_batch(common::ObIVector *tablet_id_vector,
-                     const ObIArray<common::ObIVector *> &vectors,
-                     const sql::ObBatchRows &batch_rows,
-                     int64_t &affected_rows) override;
+                   const ObDirectLoadDatumRow &datum_row,
+                   const storage::ObDirectLoadRowFlag &row_flag) override;
+    int append_batch(const common::ObTabletID &tablet_id,
+                     const storage::ObDirectLoadBatchRows &batch_rows) override;
+    int append_selective(const common::ObTabletID &tablet_id,
+                         const storage::ObDirectLoadBatchRows &batch_rows,
+                         const uint16_t *selector,
+                         const int64_t size) override;
     int close() override;
   private:
     int new_batch_writer(const common::ObTabletID &tablet_id,

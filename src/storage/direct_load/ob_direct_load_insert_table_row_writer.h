@@ -13,7 +13,7 @@
 #pragma once
 
 #include "storage/blocksstable/ob_batch_datum_rows.h"
-#include "storage/direct_load/ob_direct_load_batch_row_buffer.h"
+#include "storage/direct_load/ob_direct_load_batch_rows.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "storage/direct_load/ob_direct_load_insert_table_row_handler.h"
 #include "storage/direct_load/ob_direct_load_row_iterator.h"
@@ -43,7 +43,11 @@ public:
 protected:
   int inner_init(ObDirectLoadInsertTabletContext *insert_tablet_ctx,
                  const ObDirectLoadInsertTableRowInfo &row_info,
+                 const ObDirectLoadRowFlag &row_flag,
+                 const int64_t max_bytes_size,
                  common::ObIAllocator *lob_allocator = nullptr);
+  bool is_full() const;
+  int flush_buffer_if_need();
   int flush_buffer();
   int flush_batch(blocksstable::ObBatchDatumRows &datum_rows);
   virtual int before_flush_batch(blocksstable::ObBatchDatumRows &datum_rows) { return OB_SUCCESS; }
@@ -53,10 +57,11 @@ protected:
   ObArenaAllocator allocator_;
   ObDirectLoadInsertTabletContext *insert_tablet_ctx_;
   ObDirectLoadInsertTableRowHandler row_handler_;
-  ObDirectLoadBatchRowBuffer buffer_;
+  ObDirectLoadBatchRows batch_rows_;
   blocksstable::ObBatchDatumRows datum_rows_;
   ObTabletID tablet_id_;
   int64_t slice_id_;
+  int64_t max_bytes_size_;
   int64_t row_count_;
   bool is_canceled_;
   bool is_inited_;
@@ -66,6 +71,7 @@ protected:
 class ObDirectLoadInsertTableBatchRowDirectWriter
   : public ObDirectLoadInsertTableBatchRowBufferWriter
 {
+  static const int64_t DEFAULT_MAX_BYTES_SIZE = 64LL << 10; // 64K
 public:
   ObDirectLoadInsertTableBatchRowDirectWriter()
     : ObDirectLoadInsertTableBatchRowBufferWriter(),
@@ -73,8 +79,7 @@ public:
       job_stat_(nullptr),
       write_ctx_(),
       direct_datum_rows_(),
-      expect_column_count_(0),
-      row_flag_()
+      expect_column_count_(0)
   {
   }
   virtual ~ObDirectLoadInsertTableBatchRowDirectWriter() = default;
@@ -83,9 +88,12 @@ public:
            ObDirectLoadDMLRowHandler *dml_row_handler,
            common::ObIAllocator *lob_allocator,
            sql::ObLoadDataStat *job_stat = nullptr);
-  int append_batch(const IVectorPtrs &vectors, const int64_t batch_size);
-  int append_row(const IVectorPtrs &vectors, const int64_t row_idx);
-  int append_row(const ObDirectLoadDatumRow &datum_row);
+  int append_batch(const ObDirectLoadBatchRows &batch_rows);
+  int append_selective(const ObDirectLoadBatchRows &batch_rows,
+                       const uint16_t *selector,
+                       const int64_t size);
+  int append_row(const ObDirectLoadDatumRow &datum_row,
+                 const ObDirectLoadRowFlag &row_flag);
   int close() override;
 
 private:
@@ -101,12 +109,12 @@ private:
   ObDirectLoadInsertTabletWriteCtx write_ctx_;
   blocksstable::ObBatchDatumRows direct_datum_rows_;
   int64_t expect_column_count_;
-  ObDirectLoadRowFlag row_flag_;
 };
 
 class ObDirectLoadInsertTableBatchRowStoreWriter final
   : public ObDirectLoadInsertTableBatchRowBufferWriter
 {
+  static const int64_t DEFAULT_MAX_BYTES_SIZE = 2LL << 20; // 2M
 public:
   ObDirectLoadInsertTableBatchRowStoreWriter()
     : ObDirectLoadInsertTableBatchRowBufferWriter(), dml_row_handler_(nullptr), job_stat_(nullptr)

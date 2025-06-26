@@ -165,7 +165,10 @@ private:
                                 const int64_t col_idx,
                                 int64_t &size) const;
   int prescan_(const int64_t column_index);
-  int semistruct_scan_(const int64_t column_index);
+  int check_if_ndv_exceed_threshold_(const int64_t column_idx);
+  int build_dict_hash_table_(const int64_t column_index,
+                             ObDictEncodingHashTable *&ht);
+  int semistruct_prescan_(const int64_t column_index);
   int choose_encoder_(const int64_t column_idx);
   int choose_encoder_for_integer_(const int64_t column_idx, ObIColumnCSEncoder *&e);
   int choose_encoder_for_string_(const int64_t column_idx, ObIColumnCSEncoder *&e);
@@ -174,9 +177,9 @@ private:
                                const ObObjTypeStoreClass store_class,
                                const ObCSColumnHeader::Type type,
                                ObIColumnCSEncoder *&e);
-  int try_use_previous_encoder_(const int64_t column_idx,
-                                const ObObjTypeStoreClass store_class,
-                                ObIColumnCSEncoder *&e);
+  int use_previous_encoder_(const int64_t column_idx,
+                            const ObObjTypeStoreClass store_class,
+                            ObIColumnCSEncoder *&e);
   int update_previous_info_after_choose_encoder_(const int32_t col_idx, ObIColumnCSEncoder &e);
   int update_previous_info_after_encoding_(const int32_t col_idx, ObIColumnCSEncoder &e);
   void free_encoders_();
@@ -188,6 +191,7 @@ private:
   template <typename T>
   int alloc_and_init_encoder_(const int64_t column_index, ObIColumnCSEncoder *&e);
   void update_estimate_size_limit_(const ObMicroBlockEncodingCtx &ctx);
+  int create_ndv_calculator_();
   int init_all_col_values_(const ObMicroBlockEncodingCtx &ctx);
   int init_vec_batch_info_arrs_(const ObMicroBlockEncodingCtx &ctx);
   void print_micro_block_encoder_status_();
@@ -213,6 +217,7 @@ private:
   }
 
 private:
+  static const int64_t NDV_PERCENT_TO_USE_DICT;
   compaction::ObLocalArena allocator_;
   ObMicroBlockEncodingCtx ctx_;
   ObMicroBufferWriter row_buf_holder_;
@@ -232,8 +237,10 @@ private:
   common::ObArray<ObIColumnCSEncoder *> encoders_;
   common::ObArray<uint32_t> stream_offsets_;
   ObCSEncoderAllocator encoder_allocator_;
+  int64_t hash_tables_unused_times_;
   common::ObArray<ObDictEncodingHashTable *> hashtables_;
   ObDictEncodingHashTableFactory hashtable_factory_;
+  ObDictNDVCalculator ndv_calculator_;
   common::ObArray<ObColumnCSEncodingCtx> col_ctxs_;
   int64_t length_;
   bool is_inited_;

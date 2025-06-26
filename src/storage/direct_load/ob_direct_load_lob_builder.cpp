@@ -13,10 +13,11 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_lob_builder.h"
+#include "storage/direct_load/ob_direct_load_batch_rows.h"
 #include "storage/direct_load/ob_direct_load_datum_row.h"
 #include "storage/direct_load/ob_direct_load_insert_lob_table_ctx.h"
 #include "storage/direct_load/ob_direct_load_row_iterator.h"
-#include "storage/direct_load/ob_direct_load_vector_utils.h"
+#include "storage/direct_load/ob_direct_load_vector.h"
 
 namespace oceanbase
 {
@@ -204,6 +205,57 @@ int ObDirectLoadLobBuilder::check_can_skip(const ObBatchDatumRows &datum_rows, b
   return ret;
 }
 
+int ObDirectLoadLobBuilder::check_can_skip(const ObDirectLoadBatchRows &batch_rows,
+                                           const uint16_t *selector, const int64_t size,
+                                           bool &can_skip)
+{
+  int ret = OB_SUCCESS;
+  can_skip = true;
+  for (int64_t i = 0; OB_SUCC(ret) && can_skip && i < lob_column_idxs_->count(); ++i) {
+    const int64_t column_idx = lob_column_idxs_->at(i);
+    ObIVector *vector = batch_rows.get_vectors().at(column_idx)->get_vector();
+    const VectorFormat format = vector->get_format();
+    switch (format) {
+      case VEC_CONTINUOUS: {
+        ObContinuousBase *continuous_vec = static_cast<ObContinuousBase *>(vector);
+        ObBitVector *nulls = continuous_vec->get_nulls();
+        char *data = continuous_vec->get_data();
+        uint32_t *offsets = continuous_vec->get_offsets();
+        for (int64_t j = 0; OB_SUCC(ret) && can_skip && j < size; ++j) {
+          const uint16_t row_idx = selector[j];
+          if (nulls->at(row_idx)) {
+          } else if (OB_FAIL(check_can_skip(data + offsets[row_idx],
+                                            offsets[row_idx + 1] - offsets[row_idx], can_skip))) {
+            LOG_WARN("fail to check lob can skip", KR(ret), K(column_idx), K(j), K(row_idx),
+                     KP(data), K(offsets[row_idx]), K(offsets[row_idx + 1]));
+          }
+        }
+        break;
+      }
+      case VEC_DISCRETE: {
+        ObDiscreteBase *discrete_vec = static_cast<ObDiscreteBase *>(vector);
+        ObBitVector *nulls = discrete_vec->get_nulls();
+        char **ptrs = discrete_vec->get_ptrs();
+        int32_t *lens = discrete_vec->get_lens();
+        for (int64_t j = 0; OB_SUCC(ret) && can_skip && j < size; ++j) {
+          const uint16_t row_idx = selector[j];
+          if (nulls->at(row_idx)) {
+          } else if (OB_FAIL(check_can_skip(ptrs[row_idx], lens[row_idx], can_skip))) {
+            LOG_WARN("fail to check lob can skip", KR(ret), K(column_idx), K(j), K(row_idx),
+                     KP(ptrs[row_idx]), K(lens[row_idx]));
+          }
+        }
+        break;
+      }
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected vector format in lob column", KR(ret), K(column_idx), K(format));
+        break;
+    }
+  }
+  return ret;
+}
+
 int ObDirectLoadLobBuilder::append_row(ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
@@ -330,47 +382,45 @@ int ObDirectLoadLobBuilder::append_lob(ObDirectLoadDatumRow &datum_row,
   return ret;
 }
 
-int ObDirectLoadLobBuilder::fill_into_datum_row(const IVectorPtrs &vectors,
-                                                const int64_t row_idx,
-                                                const ObDirectLoadRowFlag &row_flag)
+int ObDirectLoadLobBuilder::fill_into_datum_row(const ObDirectLoadBatchRows &batch_rows,
+                                                const int64_t row_idx)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < lob_column_idxs_->count(); ++i) {
     const int64_t column_idx = lob_column_idxs_->at(i);
-    const int64_t src_column_idx = row_flag.uncontain_hidden_pk_ ? column_idx - 1 : column_idx;
+    const int64_t src_column_idx = column_idx;
     const int64_t dest_column_idx = column_idx < insert_tablet_ctx_->get_rowkey_column_count()
                                      ? column_idx : column_idx + extra_rowkey_cnt_;
-    ObIVector *vector = vectors.at(src_column_idx);
+    ObDirectLoadVector *vector = batch_rows.get_vectors().at(src_column_idx);
     ObDatum &datum = datum_row_.storage_datums_[dest_column_idx];
-    if (OB_FAIL(ObDirectLoadVectorUtils::to_datum(vector, row_idx, datum))) {
+    if (OB_FAIL(vector->get_datum(row_idx, datum))) {
       LOG_WARN("fail to get datum", KR(ret));
     }
   }
   return ret;
 }
 
-int ObDirectLoadLobBuilder::fetch_from_datum_row(const IVectorPtrs &vectors,
-                                                 const int64_t row_idx,
-                                                 const ObDirectLoadRowFlag &row_flag)
+int ObDirectLoadLobBuilder::fetch_from_datum_row(const ObDirectLoadBatchRows &batch_rows,
+                                                 const int64_t row_idx)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < lob_column_idxs_->count(); ++i) {
     const int64_t column_idx = lob_column_idxs_->at(i);
-    const int64_t src_column_idx = row_flag.uncontain_hidden_pk_ ? column_idx - 1 : column_idx;
+    const int64_t src_column_idx = column_idx;
     const int64_t dest_column_idx = column_idx < insert_tablet_ctx_->get_rowkey_column_count()
                                      ? column_idx : column_idx + extra_rowkey_cnt_;
-    ObIVector *vector = vectors.at(src_column_idx);
-    ObDatum &datum = datum_row_.storage_datums_[dest_column_idx];
-    if (OB_FAIL(ObDirectLoadVectorUtils::set_datum(vector, row_idx, datum))) {
+    ObDirectLoadVector *vector = batch_rows.get_vectors().at(src_column_idx);
+    const ObDatum &datum = datum_row_.storage_datums_[dest_column_idx];
+    if (OB_FAIL(vector->set_datum(row_idx, datum))) {
       LOG_WARN("fail to set datum", KR(ret));
     }
   }
   return ret;
 }
 
-int ObDirectLoadLobBuilder::append_lob(const IVectorPtrs &vectors,
-                                       const int64_t row_idx,
-                                       const ObDirectLoadRowFlag &row_flag)
+int ObDirectLoadLobBuilder::append_lob(const ObDirectLoadBatchRows &batch_rows,
+                                       const uint16_t *selector,
+                                       const int64_t size)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -382,12 +432,22 @@ int ObDirectLoadLobBuilder::append_lob(const IVectorPtrs &vectors,
   } else if (!datum_row_.is_valid() && OB_FAIL(insert_tablet_ctx_->init_datum_row(datum_row_))) {
     LOG_WARN("fail to init datum row", KR(ret));
   } else {
-    if (OB_FAIL(fill_into_datum_row(vectors, row_idx, row_flag))) {
-      LOG_WARN("fail to fill into datum row", KR(ret));
-    } else if (OB_FAIL(append_row(datum_row_))) {
-      LOG_WARN("fail to append row", KR(ret), K(datum_row_));
-    } else if (OB_FAIL(fetch_from_datum_row(vectors, row_idx, row_flag))) {
-      LOG_WARN("fail to fetch from datum row", KR(ret));
+    bool can_skip = false;
+    if (OB_FAIL(check_can_skip(batch_rows, selector, size, can_skip))) {
+      LOG_WARN("fail to check can skip", KR(ret));
+    } else if (can_skip) {
+    } else {
+      // 暂时不改ddl接口了, 这里先按行处理
+      for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+        const int64_t row_idx = selector[i];
+        if (OB_FAIL(fill_into_datum_row(batch_rows, row_idx))) {
+          LOG_WARN("fail to fill into datum row", KR(ret));
+        } else if (OB_FAIL(append_row(datum_row_))) {
+          LOG_WARN("fail to append row", KR(ret), K(datum_row_));
+        } else if (OB_FAIL(fetch_from_datum_row(batch_rows, row_idx))) {
+          LOG_WARN("fail to fetch from datum row", KR(ret));
+        }
+      }
     }
   }
   return ret;

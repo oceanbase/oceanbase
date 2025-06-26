@@ -32,6 +32,7 @@ class ObDirectLoadInsertTabletContext;
 class ObDirectLoadLobBuilder;
 class ObDirectLoadDatumRow;
 class ObDirectLoadRowFlag;
+class ObDirectLoadBatchRows;
 
 class ObDirectLoadInsertTableRowHandler
 {
@@ -47,9 +48,9 @@ public:
   // 中间过程数据
   int handle_row(ObDirectLoadDatumRow &datum_row,
                  const ObDirectLoadRowFlag &row_flag);
-  int handle_row(const IVectorPtrs &vectors,
-                 const int64_t row_idx,
-                 const ObDirectLoadRowFlag &row_flag);
+  int handle_batch(const ObDirectLoadBatchRows &batch_rows,
+                   const uint16_t *selector,
+                   const int64_t size);
   int close();
 
 private:

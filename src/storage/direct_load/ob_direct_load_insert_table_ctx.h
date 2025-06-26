@@ -34,6 +34,7 @@ namespace storage
 {
 class ObDirectLoadInsertTableContext;
 class ObDirectLoadInsertLobTabletContext;
+class ObDirectLoadBatchRows;
 class ObDirectLoadDatumRow;
 class ObDirectLoadRowFlag;
 
@@ -71,8 +72,8 @@ public:
                K_(column_count), K_(lob_inrow_threshold), K_(is_partitioned_table),
                K_(is_table_without_pk), K_(is_table_with_hidden_pk_column), K_(is_index_table),
                K_(online_opt_stat_gather), K_(is_incremental), K_(reuse_pk), K_(trans_param), KP_(datum_utils),
-               KP_(col_descs), KP_(cmp_funcs), KP_(lob_column_idxs), K_(online_sample_percent), K_(is_no_logging),
-               K_(max_batch_size));
+               KP_(col_descs), KP_(cmp_funcs), KP_(col_nullables), KP_(lob_column_idxs),
+               K_(online_sample_percent), K_(is_no_logging), K_(max_batch_size));
 
 public:
   uint64_t table_id_; // 目标表的table_id, 目前用于填充统计信息收集结果
@@ -97,6 +98,7 @@ public:
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
   const blocksstable::ObStoreCmpFuncs *cmp_funcs_;
+  sql::ObBitVector *col_nullables_;
   const common::ObIArray<int64_t> *lob_column_idxs_; // 不包含多版本列
   double online_sample_percent_;
   bool is_no_logging_;
@@ -183,6 +185,7 @@ public:
   DEFINE_INSERT_TABLE_PARAM_GETTER(const common::ObIArray<share::schema::ObColDesc> *, col_descs,
                                    nullptr);
   DEFINE_INSERT_TABLE_PARAM_GETTER(const blocksstable::ObStoreCmpFuncs *, cmp_funcs, nullptr);
+  DEFINE_INSERT_TABLE_PARAM_GETTER(const sql::ObBitVector *, col_nullables, nullptr);
   DEFINE_INSERT_TABLE_PARAM_GETTER(const common::ObIArray<int64_t> *, lob_column_idxs, nullptr);
   DEFINE_INSERT_TABLE_PARAM_GETTER(bool, is_no_logging, false);
   DEFINE_INSERT_TABLE_PARAM_GETTER(int64_t, max_batch_size, 0);
@@ -267,8 +270,14 @@ public:
     return OB_ERR_UNEXPECTED;
   }
   virtual int update_sql_statistics(table::ObTableLoadSqlStatistics &sql_statistics,
-                                    const IVectorPtrs &vectors, const int64_t row_idx,
-                                    const ObDirectLoadRowFlag &row_flag)
+                                    const ObDirectLoadBatchRows &batch_rows)
+  {
+    return OB_ERR_UNEXPECTED;
+  }
+  virtual int update_sql_statistics(table::ObTableLoadSqlStatistics &sql_statistics,
+                                    const ObDirectLoadBatchRows &batch_rows,
+                                    const uint16_t *selector,
+                                    const int64_t size)
   {
     return OB_ERR_UNEXPECTED;
   }

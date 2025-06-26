@@ -19,6 +19,7 @@
 #include "share/vector/ob_fixed_length_vector.h"
 #include "share/vector/ob_uniform_vector.h"
 #include "storage/blocksstable/ob_storage_datum.h"
+#include "storage/direct_load/ob_direct_load_batch_rows.h"
 
 namespace oceanbase
 {
@@ -272,28 +273,6 @@ int ObDirectLoadVectorUtils::new_vector(VectorFormat format, VecValueTypeClass v
   return ret;
 }
 
-int ObDirectLoadVectorUtils::new_vector(const ObColDesc &col_desc, ObIAllocator &allocator,
-                                        ObIVector *&vector)
-{
-  int ret = OB_SUCCESS;
-  const int16_t precision = col_desc.col_type_.is_decimal_int()
-                              ? col_desc.col_type_.get_stored_precision()
-                              : PRECISION_UNKNOWN_YET;
-  VecValueTypeClass value_tc =
-    get_vec_value_tc(col_desc.col_type_.get_type(), col_desc.col_type_.get_scale(), precision);
-  const bool is_fixed = is_fixed_length_vec(value_tc);
-  if (is_fixed) { // fixed format
-    if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_FIXED, value_tc, allocator, vector))) {
-      LOG_WARN("fail to new fixed vector", KR(ret), K(value_tc));
-    }
-  } else { // discrete format
-    if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(VEC_DISCRETE, value_tc, allocator, vector))) {
-      LOG_WARN("fail to new discrete vector", KR(ret), K(value_tc));
-    }
-  }
-  return ret;
-}
-
 int ObDirectLoadVectorUtils::prepare_vector(ObIVector *vector, const int64_t max_batch_size,
                                             ObIAllocator &allocator)
 {
@@ -319,6 +298,7 @@ int ObDirectLoadVectorUtils::prepare_vector(ObIVector *vector, const int64_t max
           LOG_WARN("fail to alloc mem", KR(ret), K(data_size));
         } else {
           nulls->reset(max_batch_size);
+          MEMSET(data, 0, data_size);
           fixed_vec->set_nulls(nulls);
           fixed_vec->set_data(data);
         }
@@ -327,7 +307,7 @@ int ObDirectLoadVectorUtils::prepare_vector(ObIVector *vector, const int64_t max
       case VEC_CONTINUOUS: {
         ObContinuousBase *continuous_vec = static_cast<ObContinuousBase *>(vector);
         const int64_t nulls_size = ObBitVector::memory_size(max_batch_size);
-        const int64_t offsets_size = sizeof(uint32_t) * max_batch_size;
+        const int64_t offsets_size = sizeof(uint32_t) * (max_batch_size + 1);
         ObBitVector *nulls = nullptr;
         uint32_t *offsets = nullptr;
         if (OB_ISNULL(nulls = to_bit_vector(allocator.alloc(nulls_size)))) {
@@ -338,6 +318,7 @@ int ObDirectLoadVectorUtils::prepare_vector(ObIVector *vector, const int64_t max
           LOG_WARN("fail to alloc mem", KR(ret), K(offsets_size));
         } else {
           nulls->reset(max_batch_size);
+          MEMSET(offsets, 0, offsets_size);
           continuous_vec->set_nulls(nulls);
           continuous_vec->set_offsets(offsets);
         }
@@ -362,6 +343,8 @@ int ObDirectLoadVectorUtils::prepare_vector(ObIVector *vector, const int64_t max
           LOG_WARN("fail to alloc mem", KR(ret), K(ptrs_size));
         } else {
           nulls->reset(max_batch_size);
+          MEMSET(lens, 0, lens_size);
+          MEMSET(ptrs, 0, ptrs_size);
           discrete_vec->set_nulls(nulls);
           discrete_vec->set_lens(lens);
           discrete_vec->set_ptrs(ptrs);
@@ -389,347 +372,6 @@ int ObDirectLoadVectorUtils::prepare_vector(ObIVector *vector, const int64_t max
           LOG_WARN("fail to alloc mem", KR(ret), K(datums_size));
         } else {
           uniform_vec->set_datums(datums);
-        }
-        break;
-      }
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected vector format", KR(ret), K(format));
-        break;
-    }
-  }
-  return ret;
-}
-
-namespace
-{
-inline static void shallow_copy_bitmap_null_vector_base(ObBitmapNullVectorBase *src_vec,
-                                                        ObBitmapNullVectorBase *dest_vec,
-                                                        const int64_t batch_size)
-{
-  ObBitVector *nulls = dest_vec->get_nulls();
-  uint16_t flag = src_vec->get_flag();
-  nulls->deep_copy(*src_vec->get_nulls(), 0, batch_size);
-  dest_vec->from(nulls, flag);
-}
-
-template <typename SRC_VEC, typename DEST_VEC>
-inline int shallow_copy_vector_impl(SRC_VEC *src_vec, DEST_VEC *dest_vec, const int64_t batch_size);
-
-// VEC_CONTINUOUS -> VEC_DISCRETE
-template <>
-inline int shallow_copy_vector_impl(ObContinuousBase *src_vec,
-                                    ObDiscreteBase *dest_vec,
-                                    const int64_t batch_size)
-{
-  int ret = OB_SUCCESS;
-  shallow_copy_bitmap_null_vector_base(src_vec, dest_vec, batch_size);
-  uint32_t *offsets = src_vec->get_offsets();
-  char *data = src_vec->get_data();
-  ObLength *lens = dest_vec->get_lens();
-  char **ptrs = dest_vec->get_ptrs();
-  for (int64_t i = 0; i < batch_size; ++i) {
-    ptrs[i] = data + offsets[i];
-    lens[i] = offsets[i + 1] - offsets[i];
-  }
-  return ret;
-}
-
-// VEC_DISCRETE -> VEC_DISCRETE
-template <>
-inline int shallow_copy_vector_impl(ObDiscreteBase *src_vec,
-                                    ObDiscreteBase *dest_vec,
-                                    const int64_t batch_size)
-{
-  int ret = OB_SUCCESS;
-  shallow_copy_bitmap_null_vector_base(src_vec, dest_vec, batch_size);
-  ObLength *src_lens = src_vec->get_lens();
-  char **src_ptrs = src_vec->get_ptrs();
-  ObLength *dest_lens = dest_vec->get_lens();
-  char **dest_ptrs = dest_vec->get_ptrs();
-  MEMCPY(dest_lens, src_lens, sizeof(ObLength) * batch_size);
-  MEMCPY(dest_ptrs, src_ptrs, sizeof(char *) * batch_size);
-  return ret;
-}
-
-// VEC_UNIFORM -> VEC_DISCRETE
-// VEC_UNIFORM -> VEC_UNIFORM
-// VEC_UNIFORM_CONST-> VEC_DISCRETE
-// VEC_UNIFORM_CONST-> VEC_UNIFORM_CONST
-template <bool IS_CONST>
-inline int shallow_copy_vector_impl(ObUniformBase *src_vec,
-                                    ObDiscreteBase *dest_vec,
-                                    const int64_t batch_size)
-{
-  int ret = OB_SUCCESS;
-  ObDatum *datums = src_vec->get_datums();
-  char **ptrs = dest_vec->get_ptrs();
-  ObLength *lens = dest_vec->get_lens();
-  dest_vec->reset_flag();
-  dest_vec->get_nulls()->reset(batch_size);
-  for (int64_t i = 0; i < batch_size; ++i) {
-    const ObDatum &datum = datums[IS_CONST ? 0 : i];
-    if (datum.is_null()) {
-      dest_vec->set_null(i);
-    } else {
-      ptrs[i] = const_cast<char *>(datum.ptr_);
-      lens[i] = datum.len_;
-    }
-  }
-  return ret;
-}
-template <bool IS_CONST>
-inline int shallow_copy_vector_impl(ObUniformBase *src_vec,
-                                    ObUniformBase *dest_vec,
-                                    const int64_t batch_size)
-{
-  int ret = OB_SUCCESS;
-  ObDatum *src_datums = src_vec->get_datums();
-  ObDatum *dest_datums = dest_vec->get_datums();
-  *dest_vec->get_eval_info() = *src_vec->get_eval_info();
-  MEMCPY(dest_datums, src_datums, sizeof(ObDatum) * (IS_CONST ? 1 : batch_size));
-  return ret;
-}
-} // namespace
-
-int ObDirectLoadVectorUtils::shallow_copy_vector(ObIVector *src_vec,
-                                                 ObIVector *dest_vec,
-                                                 const int64_t batch_size)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == src_vec || nullptr == dest_vec || batch_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(src_vec), KP(dest_vec), K(batch_size));
-  } else {
-    const VectorFormat src_format = src_vec->get_format();
-    const VectorFormat dest_format = dest_vec->get_format();
-    switch (src_format) {
-      // VEC_CONTINUOUS -> VEC_DISCRETE
-      case VEC_CONTINUOUS: {
-        switch (dest_format) {
-          case VEC_DISCRETE:
-            ret = shallow_copy_vector_impl(static_cast<ObContinuousBase *>(src_vec), static_cast<ObDiscreteBase *>(dest_vec), batch_size);
-            break;
-          default:
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected vector format", KR(ret), K(src_format), K(dest_format));
-            break;
-        }
-        break;
-      }
-      // VEC_DISCRETE -> VEC_DISCRETE
-      case VEC_DISCRETE: {
-        switch (dest_format) {
-          case VEC_DISCRETE:
-            ret = shallow_copy_vector_impl(static_cast<ObDiscreteBase *>(src_vec), static_cast<ObDiscreteBase *>(dest_vec), batch_size);
-            break;
-          default:
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected vector format", KR(ret), K(src_format), K(dest_format));
-            break;
-        }
-        break;
-      }
-      // VEC_UNIFORM -> VEC_DISCRETE
-      // VEC_UNIFORM -> VEC_UNIFORM
-      case VEC_UNIFORM: {
-        switch (dest_format) {
-          case VEC_DISCRETE:
-            ret = shallow_copy_vector_impl<false>(static_cast<ObUniformBase *>(src_vec), static_cast<ObDiscreteBase *>(dest_vec), batch_size);
-            break;
-          case VEC_UNIFORM:
-            ret = shallow_copy_vector_impl<false>(static_cast<ObUniformBase *>(src_vec), static_cast<ObUniformBase *>(dest_vec), batch_size);
-            break;
-          default:
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected vector format", KR(ret), K(src_format), K(dest_format));
-            break;
-        }
-        break;
-      }
-      // VEC_UNIFORM_CONST-> VEC_DISCRETE
-      // VEC_UNIFORM_CONST-> VEC_UNIFORM_CONST
-      case VEC_UNIFORM_CONST: {
-        switch (dest_format) {
-          case VEC_DISCRETE:
-            ret = shallow_copy_vector_impl<true>(static_cast<ObUniformBase *>(src_vec), static_cast<ObDiscreteBase *>(dest_vec), batch_size);
-            break;
-          case VEC_UNIFORM_CONST:
-            ret = shallow_copy_vector_impl<true>(static_cast<ObUniformBase *>(src_vec), static_cast<ObUniformBase *>(dest_vec), batch_size);
-            break;
-          default:
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected vector format", KR(ret), K(src_format), K(dest_format));
-            break;
-        }
-        break;
-      }
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected vector format", KR(ret), K(src_format));
-        break;
-    }
-  }
-  return ret;
-}
-
-int ObDirectLoadVectorUtils::expand_const_vector(ObIVector *const_vec,
-                                                 ObIVector *dest_vec,
-                                                 const int64_t batch_size)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == const_vec || nullptr == dest_vec || batch_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(const_vec), KP(dest_vec), K(batch_size));
-  } else if (OB_UNLIKELY(VEC_UNIFORM_CONST != const_vec->get_format())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected not const vector", KR(ret), K(const_vec->get_format()));
-  } else {
-    const ObDatum &const_datum = static_cast<ObUniformBase *>(const_vec)->get_datums()[0];
-    if (OB_FAIL(expand_const_datum(const_datum, dest_vec, batch_size))) {
-      LOG_WARN("fail to expaned const datum", KR(ret), K(const_datum), KP(dest_vec), K(batch_size));
-    }
-  }
-  return ret;
-}
-
-int ObDirectLoadVectorUtils::expand_const_datum(const ObDatum &const_datum,
-                                                ObIVector *dest_vec,
-                                                const int64_t batch_size)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(const_datum.is_ext() || nullptr == dest_vec || batch_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(const_datum), KP(dest_vec), K(batch_size));
-  } else {
-    const VectorFormat dest_format = dest_vec->get_format();
-    switch (dest_format) {
-      case VEC_DISCRETE: {
-        ObDiscreteBase *discrete_vec = static_cast<ObDiscreteBase *>(dest_vec);
-        discrete_vec->reset_flag();
-        discrete_vec->get_nulls()->reset(batch_size);
-        if (const_datum.is_null()) {
-          discrete_vec->set_has_null();
-          discrete_vec->get_nulls()->set_all(batch_size);
-        } else {
-          ObLength *lens = discrete_vec->get_lens();
-          char **ptrs = discrete_vec->get_ptrs();
-          for (int64_t i = 0; i < batch_size; ++i) {
-            lens[i] = const_datum.len_;
-          }
-          for (int64_t i = 0; i < batch_size; ++i) {
-            ptrs[i] = const_cast<char *>(const_datum.ptr_);
-          }
-        }
-        break;
-      }
-      case VEC_UNIFORM:
-      {
-        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(dest_vec);
-        ObDatum *datums = uniform_vec->get_datums();
-        for (int64_t i = 0; i < batch_size; ++i) {
-          datums[i] = const_datum;
-        }
-        break;
-      }
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected vector format", KR(ret), K(dest_format));
-        break;
-    }
-  }
-  return ret;
-}
-
-int ObDirectLoadVectorUtils::set_vector_all_null(ObIVector *vector, const int64_t batch_size)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == vector || batch_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(vector), K(batch_size));
-  } else {
-    const VectorFormat format = vector->get_format();
-    switch (format) {
-      case VEC_FIXED:
-      case VEC_CONTINUOUS:
-      case VEC_DISCRETE: {
-        ObBitmapNullVectorBase *base = static_cast<ObBitmapNullVectorBase *>(vector);
-        base->set_has_null();
-        base->get_nulls()->set_all(batch_size);
-        break;
-      }
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected vector format", KR(ret), K(format));
-        break;
-    }
-  }
-  return ret;
-}
-
-int ObDirectLoadVectorUtils::get_payload(ObIVector *vector, const int64_t idx, bool &is_null,
-                                         const char *&payload, ObLength &len)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == vector || idx < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(vector), K(idx));
-  } else {
-    const VectorFormat format = vector->get_format();
-    switch (format) {
-      case VEC_FIXED: {
-        ObFixedLengthBase *fixed_vec = static_cast<ObFixedLengthBase *>(vector);
-        if (fixed_vec->is_null(idx)) {
-          is_null = true;
-        } else {
-          len = fixed_vec->get_length();
-          payload = fixed_vec->get_data() + len * idx;
-        }
-        break;
-      }
-      case VEC_CONTINUOUS: {
-        ObContinuousBase *continuous_vec = static_cast<ObContinuousBase *>(vector);
-        if (continuous_vec->is_null(idx)) {
-          is_null = true;
-        } else {
-          const uint32_t offset1 = continuous_vec->get_offsets()[idx];
-          const uint32_t offset2 = continuous_vec->get_offsets()[idx + 1];
-          payload = continuous_vec->get_data() + offset1;
-          len = (offset2 - offset1);
-        }
-        break;
-      }
-      case VEC_DISCRETE: {
-        ObDiscreteBase *discrete_vec = static_cast<ObDiscreteBase *>(vector);
-        if (discrete_vec->is_null(idx)) {
-          is_null = true;
-        } else {
-          payload = discrete_vec->get_ptrs()[idx];
-          len = discrete_vec->get_lens()[idx];
-        }
-        break;
-      }
-      case VEC_UNIFORM: {
-        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
-        ObDatum &datum = uniform_vec->get_datums()[idx];
-        if (datum.is_null()) {
-          is_null = true;
-        } else {
-          is_null = false;
-          payload = datum.ptr_;
-          len = datum.len_;
-        }
-        break;
-      }
-      case VEC_UNIFORM_CONST: {
-        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
-        ObDatum &datum = uniform_vec->get_datums()[0];
-        if (datum.is_null()) {
-          is_null = true;
-        } else {
-          is_null = false;
-          payload = datum.ptr_;
-          len = datum.len_;
         }
         break;
       }
@@ -803,92 +445,37 @@ int ObDirectLoadVectorUtils::to_datum(ObIVector *vector, const int64_t idx, ObDa
   return ret;
 }
 
-int ObDirectLoadVectorUtils::to_datums(const ObIArray<ObIVector *> &vectors, int64_t idx,
-                                       ObDatum *datums, const int64_t count)
+int ObDirectLoadVectorUtils::check_rowkey_length(const ObDirectLoadBatchRows &batch_rows,
+                                                 const int64_t rowkey_column_count)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == datums || vectors.count() != count)) {
+  if (OB_UNLIKELY(batch_rows.empty() || batch_rows.get_column_count() < rowkey_column_count ||
+                  rowkey_column_count <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(vectors), KP(datums), K(count));
+    LOG_WARN("invalid args", KR(ret), K(batch_rows), K(rowkey_column_count));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
-      if (OB_FAIL(to_datum(vectors.at(i), idx, datums[i]))) {
-        LOG_WARN("fail to datum", KR(ret));
+    int64_t *rowkey_len = nullptr;
+    const int64_t row_count = batch_rows.size();
+    if (OB_ISNULL(rowkey_len = static_cast<int64_t *>(
+                    ob_malloc(sizeof(int64_t) * row_count, "TLD_CheckRK")))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", KR(ret), K(rowkey_len));
+    } else {
+      memset(rowkey_len, 0, sizeof(int64_t) * row_count);
+      for (int64_t col_idx = 0; col_idx < rowkey_column_count; col_idx++) {
+        ObDirectLoadVector *vector = batch_rows.get_vectors().at(col_idx);
+        vector->sum_bytes_usage(rowkey_len, row_count);
       }
     }
-  }
-  return ret;
-}
-
-int ObDirectLoadVectorUtils::to_datums(const ObIArray<ObIVector *> &vectors, int64_t idx,
-                                       ObStorageDatum *datums, const int64_t count)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(idx < 0 || nullptr == datums || vectors.count() != count)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(vectors), K(idx), KP(datums), K(count));
-  } else {
-    bool is_null = false;
-    const char *payload = nullptr;
-    ObLength length = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
-      ObIVector *vec = vectors.at(i);
-      ObStorageDatum &datum = datums[i];
-      if (OB_FAIL(to_datum(vec, idx, datum))) {
-        LOG_WARN("fail to datum", KR(ret));
+    for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_count; row_idx++) {
+      if (rowkey_len[row_idx] > OB_MAX_VARCHAR_LENGTH_KEY) {
+        ret = OB_ERR_TOO_LONG_KEY_LENGTH;
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_VARCHAR_LENGTH_KEY);
+        LOG_WARN("rowkey is too long", K(ret), K(row_idx), K(rowkey_len[row_idx]));
       }
     }
-  }
-  return ret;
-}
-
-int ObDirectLoadVectorUtils::set_datum(ObIVector *vector, const int64_t idx, const ObDatum &datum)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == vector || idx < 0 || datum.is_ext())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(vector), K(idx), K(datum));
-  } else {
-    const VectorFormat format = vector->get_format();
-    switch (format) {
-      case VEC_FIXED: {
-        ObFixedLengthBase *fixed_vec = static_cast<ObFixedLengthBase *>(vector);
-        if (datum.is_null()) {
-          fixed_vec->set_null(idx);
-        } else if (OB_UNLIKELY(fixed_vec->get_length() != datum.len_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected datum length", KR(ret), K(fixed_vec->get_length()), K(datum));
-        } else {
-          fixed_vec->unset_null(idx);
-          MEMCPY(fixed_vec->get_data() + datum.len_ * idx, datum.ptr_, datum.len_);
-        }
-        break;
-      }
-      case VEC_DISCRETE: {
-        ObDiscreteBase *discrete_vec = static_cast<ObDiscreteBase *>(vector);
-        if (datum.is_null()) {
-          discrete_vec->set_null(idx);
-        } else {
-          discrete_vec->unset_null(idx);
-          discrete_vec->get_ptrs()[idx] = const_cast<char *>(datum.ptr_);
-          discrete_vec->get_lens()[idx] = datum.len_;
-        }
-        break;
-      }
-      case VEC_UNIFORM: {
-        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
-        uniform_vec->get_datums()[idx] = datum;
-        break;
-      }
-      case VEC_UNIFORM_CONST: {
-        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
-        uniform_vec->get_datums()[0] = datum;
-        break;
-      }
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected vector format", KR(ret), K(format));
-        break;
+    if (OB_NOT_NULL(rowkey_len)) {
+      ob_free(rowkey_len);
     }
   }
   return ret;
@@ -925,56 +512,6 @@ int ObDirectLoadVectorUtils::make_const_tablet_id_vector(const ObTabletID &table
   return ret;
 }
 
-int ObDirectLoadVectorUtils::set_tablet_id(ObIVector *vector,
-                                           const int64_t batch_idx,
-                                           const ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == vector || batch_idx < 0 || !tablet_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(vector), K(batch_idx), K(tablet_id));
-  } else {
-    const VectorFormat format = vector->get_format();
-    switch (format) {
-      case VEC_FIXED: {
-        ObFixedLengthBase *fixed_vec = static_cast<ObFixedLengthBase *>(vector);
-        const ObLength len = fixed_vec->get_length();
-        if (OB_UNLIKELY(len != sizeof(uint64_t))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected fixed len", KR(ret), K(len), K(sizeof(uint64_t)));
-        } else {
-          reinterpret_cast<uint64_t *>(fixed_vec->get_data())[batch_idx] = tablet_id.id();
-        }
-        break;
-      }
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected tablet id vector format", KR(ret), K(format));
-        break;
-    }
-  }
-  return ret;
-}
-
-ObTabletID ObDirectLoadVectorUtils::get_tablet_id(ObFixedLengthBase *vec, const int64_t batch_idx)
-{
-  ObTabletID tablet_id;
-  if (OB_NOT_NULL(vec)) {
-    tablet_id = reinterpret_cast<const uint64_t *>(vec->get_data())[batch_idx];
-  }
-  return tablet_id;
-}
-
-template <bool IS_CONST>
-ObTabletID ObDirectLoadVectorUtils::get_tablet_id(ObUniformBase *vec, const int64_t batch_idx)
-{
-  ObTabletID tablet_id;
-  if (OB_NOT_NULL(vec)) {
-    tablet_id = vec->get_datums()[IS_CONST ? 0 : batch_idx].get_uint();
-  }
-  return tablet_id;
-}
-
 ObTabletID ObDirectLoadVectorUtils::get_tablet_id(ObIVector *vec, const int64_t batch_idx)
 {
   ObTabletID tablet_id;
@@ -982,13 +519,14 @@ ObTabletID ObDirectLoadVectorUtils::get_tablet_id(ObIVector *vec, const int64_t 
     const VectorFormat format = vec->get_format();
     switch (format) {
       case VEC_FIXED:
-        tablet_id = get_tablet_id(static_cast<ObFixedLengthBase *>(vec), batch_idx);
+        tablet_id = reinterpret_cast<const uint64_t *>(
+          static_cast<ObFixedLengthBase *>(vec)->get_data())[batch_idx];
         break;
       case VEC_UNIFORM:
-        tablet_id = get_tablet_id<false>(static_cast<ObUniformBase *>(vec), batch_idx);
+        tablet_id = static_cast<ObUniformBase *>(vec)->get_datums()[batch_idx].get_uint();
         break;
       case VEC_UNIFORM_CONST:
-        tablet_id = get_tablet_id<true>(static_cast<ObUniformBase *>(vec), batch_idx);
+        tablet_id = static_cast<ObUniformBase *>(vec)->get_datums()[0].get_uint();
         break;
       default:
         LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected vector format", K(format));
@@ -998,17 +536,31 @@ ObTabletID ObDirectLoadVectorUtils::get_tablet_id(ObIVector *vec, const int64_t 
   return tablet_id;
 }
 
-bool ObDirectLoadVectorUtils::check_all_tablet_id_is_same(ObIVector *vec, const int64_t size)
+bool ObDirectLoadVectorUtils::check_all_tablet_id_is_same(const uint64_t *tablet_ids,
+                                                          const int64_t size)
 {
   bool is_same = true;
-  if (OB_NOT_NULL(vec)) {
-    const VectorFormat format = vec->get_format();
+  for (int64_t i = 1; i < size; ++i) {
+    if (tablet_ids[i] != tablet_ids[0]) {
+      is_same = false;
+      break;
+    }
+  }
+  return is_same;
+}
+
+bool ObDirectLoadVectorUtils::check_is_same_tablet_id(const ObTabletID &tablet_id,
+                                                      ObIVector *vector, const int64_t size)
+{
+  bool is_same = true;
+  if (nullptr != vector) {
+    const VectorFormat format = vector->get_format();
     switch (format) {
       case VEC_FIXED: {
-        ObFixedLengthBase *fixed_vec = static_cast<ObFixedLengthBase *>(vec);
-        const uint64_t *ids = reinterpret_cast<const uint64_t *>(fixed_vec->get_data());
-        for (int64_t i = 1; i < size; ++i) {
-          if (ids[i] != ids[0]) {
+        ObFixedLengthBase *fixed_vec = static_cast<ObFixedLengthBase *>(vector);
+        const uint64_t *tablet_ids = reinterpret_cast<const uint64_t *>(fixed_vec->get_data());
+        for (int64_t i = 0; i < size; ++i) {
+          if (tablet_ids[i] != tablet_id.id()) {
             is_same = false;
             break;
           }
@@ -1016,18 +568,22 @@ bool ObDirectLoadVectorUtils::check_all_tablet_id_is_same(ObIVector *vec, const 
         break;
       }
       case VEC_UNIFORM: {
-        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vec);
+        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
         const ObDatum *datums = uniform_vec->get_datums();
-        for (int64_t i = 1; i < size; ++i) {
-          if (datums[i].get_uint() != datums[0].get_uint()) {
+        for (int64_t i = 0; i < size; ++i) {
+          if (datums[i].get_uint() != tablet_id.id()) {
             is_same = false;
             break;
           }
         }
         break;
       }
-      case VEC_UNIFORM_CONST:
+      case VEC_UNIFORM_CONST: {
+        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
+        const ObDatum &datum = uniform_vec->get_datums()[0];
+        is_same = (datum.get_uint() == tablet_id.id());
         break;
+      }
       default:
         is_same = false;
         LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected vector format", K(format));
@@ -1037,121 +593,94 @@ bool ObDirectLoadVectorUtils::check_all_tablet_id_is_same(ObIVector *vec, const 
   return is_same;
 }
 
-int ObDirectLoadVectorUtils::check_rowkey_length(
-    const ObIArray<ObIVector *> &vectors,
-    const ObBatchRows &batch_rows,
-    const int64_t rowkey_column_count)
+bool ObDirectLoadVectorUtils::check_is_same_tablet_id(const ObTabletID &tablet_id,
+                                                      ObIVector *vector, const uint16_t *selector,
+                                                      const int64_t size)
 {
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(rowkey_column_count < 0 || vectors.count() < rowkey_column_count || batch_rows.size_ < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(vectors), K(rowkey_column_count), K(batch_rows.size_));
-  } else {
-    int64_t *rowkey_len = nullptr;
-    int64_t row_count = batch_rows.size_;
-    if (OB_ISNULL(rowkey_len = static_cast<int64_t *>(ob_malloc(sizeof(int64_t) * batch_rows.size_, "TLD_CheckRK")))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", K(ret), K(rowkey_len));
-    } else {
-      memset(rowkey_len, 0, sizeof(int64_t) * row_count);
-      for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < rowkey_column_count; col_idx++) {
-        const ObIVector *vector = vectors.at(col_idx);
-        const VectorFormat format = vector->get_format();
-        switch (format) {
-          case VEC_FIXED: {
-            const ObFixedLengthBase *vec = static_cast<const ObFixedLengthBase *>(vector);
-            if (batch_rows.all_rows_active_) {
-              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
-                rowkey_len[row_idx] += vec->get_length();
-              }
-            } else {
-              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
-                if (!batch_rows.skip_->at(row_idx)) {
-                  rowkey_len[row_idx] += vec->get_length();
-                }
-              }
-            }
+  bool is_same = true;
+  if (nullptr != vector) {
+    const VectorFormat format = vector->get_format();
+    switch (format) {
+      case VEC_FIXED: {
+        ObFixedLengthBase *fixed_vec = static_cast<ObFixedLengthBase *>(vector);
+        const uint64_t *tablet_ids = reinterpret_cast<const uint64_t *>(fixed_vec->get_data());
+        for (int64_t i = 0; i < size; ++i) {
+          const uint16_t idx = selector[i];
+          if (tablet_ids[idx] != tablet_id.id()) {
+            is_same = false;
             break;
           }
-          case VEC_CONTINUOUS: {
-            const ObContinuousBase *vec = static_cast<const ObContinuousBase *>(vector);
-            if (batch_rows.all_rows_active_) {
-              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
-                rowkey_len[row_idx] += vec->get_offsets()[row_idx + 1] - vec->get_offsets()[row_idx];
-              }
-            } else {
-              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
-                if (!batch_rows.skip_->at(row_idx)) {
-                  rowkey_len[row_idx] += vec->get_offsets()[row_idx + 1] - vec->get_offsets()[row_idx];
-                }
-              }
-            }
-            break;
-          }
-          case VEC_DISCRETE: {
-            const ObDiscreteBase *vec = static_cast<const ObDiscreteBase *>(vector);
-            if (batch_rows.all_rows_active_) {
-              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
-                rowkey_len[row_idx] += vec->get_lens()[row_idx];
-              }
-            } else {
-              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
-                if (!batch_rows.skip_->at(row_idx)) {
-                  rowkey_len[row_idx] += vec->get_lens()[row_idx];
-                }
-              }
-            }
-            break;
-          }
-          case VEC_UNIFORM: {
-            const ObUniformBase *vec = static_cast<const ObUniformBase *>(vector);
-            if (batch_rows.all_rows_active_) {
-              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
-                rowkey_len[row_idx] += vec->get_datums()[row_idx].len_;
-              }
-            } else {
-              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
-                if (!batch_rows.skip_->at(row_idx)) {
-                  rowkey_len[row_idx] += vec->get_datums()[row_idx].len_;
-                }
-              }
-            }
-            break;
-          }
-          case VEC_UNIFORM_CONST: {
-            const ObUniformBase *vec = static_cast<const ObUniformBase *>(vector);
-            if (batch_rows.all_rows_active_) {
-              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
-                rowkey_len[row_idx] += vec->get_datums()[0].len_;
-              }
-            } else {
-              for (int64_t row_idx = 0; row_idx < row_count; row_idx++) {
-                if (!batch_rows.skip_->at(row_idx)) {
-                  rowkey_len[row_idx] += vec->get_datums()[0].len_;
-                }
-              }
-            }
-            break;
-          }
-          default:
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected vector format", KR(ret), K(format));
-            break;
         }
+        break;
       }
-      for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_count; row_idx++) {
-        if (rowkey_len[row_idx] > OB_MAX_VARCHAR_LENGTH_KEY) {
-          ret = OB_ERR_TOO_LONG_KEY_LENGTH;
-          LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_VARCHAR_LENGTH_KEY);
-          LOG_WARN("rowkey is too long", K(ret), K(row_idx), K(rowkey_len[row_idx]));
+      case VEC_UNIFORM: {
+        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
+        const ObDatum *datums = uniform_vec->get_datums();
+        for (int64_t i = 0; i < size; ++i) {
+          const uint16_t idx = selector[i];
+          if (datums[idx].get_uint() != tablet_id.id()) {
+            is_same = false;
+            break;
+          }
         }
+        break;
       }
-    }
-    if (OB_NOT_NULL(rowkey_len)) {
-      ob_free(rowkey_len);
+      case VEC_UNIFORM_CONST: {
+        ObUniformBase *uniform_vec = static_cast<ObUniformBase *>(vector);
+        const ObDatum &datum = uniform_vec->get_datums()[0];
+        is_same = (datum.get_uint() == tablet_id.id());
+        break;
+      }
+      default:
+        is_same = false;
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected vector format", K(format));
+        break;
     }
   }
-  return ret;
+  return is_same;
+}
+
+bool ObDirectLoadVectorUtils::check_is_same_tablet_id(const ObTabletID &tablet_id,
+                                                      const ObDatumVector &datum_vec,
+                                                      const int64_t size)
+{
+  bool is_same = true;
+  if (nullptr != datum_vec.datums_) {
+    if (datum_vec.is_batch()) {
+      for (int64_t i = 0; i < size; ++i) {
+        if (datum_vec.datums_[i].get_uint() != tablet_id.id()) {
+          is_same = false;
+          break;
+        }
+      }
+    } else {
+      const ObDatum &datum = datum_vec.datums_[0];
+      is_same = (datum.get_uint() == tablet_id.id());
+    }
+  }
+  return is_same;
+}
+
+bool ObDirectLoadVectorUtils::check_is_same_tablet_id(const ObTabletID &tablet_id,
+                                                      const ObDatumVector &datum_vec,
+                                                      const uint16_t *selector, const int64_t size)
+{
+  bool is_same = true;
+  if (nullptr != datum_vec.datums_) {
+    if (datum_vec.is_batch()) {
+      for (int64_t i = 0; i < size; ++i) {
+        const uint16_t idx = selector[i];
+        if (datum_vec.datums_[idx].get_uint() != tablet_id.id()) {
+          is_same = false;
+          break;
+        }
+      }
+    } else {
+      const ObDatum &datum = datum_vec.datums_[0];
+      is_same = (datum.get_uint() == tablet_id.id());
+    }
+  }
+  return is_same;
 }
 
 /**

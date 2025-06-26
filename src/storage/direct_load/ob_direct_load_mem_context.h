@@ -12,6 +12,8 @@
 
 #pragma once
 
+#include "share/ob_order_perserving_encoder.h"
+#include "share/schema/ob_table_param.h"
 #include "storage/direct_load/ob_direct_load_easy_queue.h"
 #include "storage/direct_load/ob_direct_load_i_table.h"
 #include "storage/direct_load/ob_direct_load_mem_define.h"
@@ -51,6 +53,7 @@ private:
 class ObDirectLoadMemContext
 {
 public:
+  static int init_enc_param(const ObColDesc &col_desc, share::ObEncParam &param);
   typedef ObDirectLoadExternalMultiPartitionRowChunk ChunkType;
   ObDirectLoadMemContext() : datum_utils_(nullptr),
                              dml_row_handler_(nullptr),
@@ -76,6 +79,8 @@ public:
 
 public:
   int init();
+  int init_enc_params(const sql::ObLoadDupActionType dup_acton,
+                      const common::ObIArray<share::schema::ObColDesc> &column_descs);
   void reset();
   int add_tables_from_table_builder(ObIDirectLoadPartitionTableBuilder &builder);
   int add_tables_from_table_compactor(ObIDirectLoadTabletTableCompactor &compactor);
@@ -87,6 +92,7 @@ public:
 
 public:
   ObDirectLoadTableDataDesc table_data_desc_;
+  ObArray<share::ObEncParam> enc_params_; // for ObAdaptiveQS
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
   ObDirectLoadTmpFileManager *file_mgr_;

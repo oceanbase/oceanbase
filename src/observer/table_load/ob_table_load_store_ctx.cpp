@@ -501,6 +501,7 @@ int ObTableLoadStoreCtx::init_write_ctx()
   } else {
     static const int64_t MACRO_BLOCK_WRITER_MEM_SIZE = 10 * 1024LL * 1024LL;
     static const int64_t cg_chunk_mem_limit = 64 * 1024L; // 64K
+    write_ctx_.schema_ = data_store_table_ctx_->schema_;
     // table_data_desc_
     write_ctx_.table_data_desc_ = basic_table_data_desc_;
     write_ctx_.table_data_desc_.rowkey_column_num_ =
@@ -616,8 +617,7 @@ int ObTableLoadStoreCtx::init_write_ctx()
         const ObColumnSchemaV2 *col_schema = nullptr;
         write_ctx_.px_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
         write_ctx_.px_column_project_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
-        write_ctx_.px_null_vectors_.set_block_allocator(ModulePageAllocator(allocator_));
-        write_ctx_.px_null_vector_project_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
+        write_ctx_.null_column_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
         int64_t project_idx = 0;
         for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
           const ObColDesc &col_desc = col_descs.at(i);
@@ -631,36 +631,60 @@ int ObTableLoadStoreCtx::init_write_ctx()
             if (OB_UNLIKELY(!col_schema->is_unused())) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected xmltype column is not unused", KR(ret));
-            } else if (OB_FAIL(ObDirectLoadVectorUtils::new_vector(col_desc, allocator_, vector))) {
-              LOG_WARN("fail to new vector", KR(ret), K(col_desc));
-            } else if (OB_FAIL(ObDirectLoadVectorUtils::prepare_vector(
-                         vector, ctx_->param_.batch_size_, allocator_))) {
-              LOG_WARN("fail to prepare vector", KR(ret), KPC(vector));
-            } else if (OB_FAIL(ObDirectLoadVectorUtils::set_vector_all_null(
-                         vector, ctx_->param_.batch_size_))) {
-              LOG_WARN("fail to set vector all null", KR(ret), KPC(vector));
-            } else if (OB_FAIL(write_ctx_.px_null_vectors_.push_back(vector))) {
+            } else if (OB_FAIL(write_ctx_.null_column_idxs_.push_back(project_idx++))) {
               LOG_WARN("fail to push back", KR(ret));
-            } else if (OB_FAIL(write_ctx_.px_null_vector_project_idxs_.push_back(project_idx++))) {
-              LOG_WARN("fail to push back", KR(ret));
-            } else {
-              write_ctx_.px_need_project_ = true;
             }
           }
           // SQL执行计划包含隐藏主键列、虚拟生成列以及其他普通列
           else if (OB_FAIL(write_ctx_.px_column_descs_.push_back(col_desc))) {
             LOG_WARN("fail to push back", KR(ret));
           }
-          // 旁路不接收隐藏主键列, 存储层不写虚拟生成列, 都需要过滤
-          else if (ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_) ||
-                   col_schema->is_virtual_generated_column()) {
+          // 存储层不写虚拟生成列
+          else if (col_schema->is_virtual_generated_column()) {
             if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(-1))) {
               LOG_WARN("fail to push back", KR(ret));
-            } else {
-              write_ctx_.px_need_project_ = true;
             }
-          } else if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(project_idx++))) {
-            LOG_WARN("fail to push back", KR(ret));
+          } else {
+            // 旁路不接收隐藏主键列
+            if (ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_)) {
+              if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(-1))) {
+                LOG_WARN("fail to push back", KR(ret));
+              }
+            } else {
+              if (OB_FAIL(write_ctx_.px_column_project_idxs_.push_back(project_idx))) {
+                LOG_WARN("fail to push back", KR(ret));
+              }
+            }
+            ++project_idx;
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && ctx_->param_.px_mode_) {
+      const ObArray<ObTableLoadLSIdAndPartitionId> &ls_partition_ids =
+        data_store_table_ctx_->ls_partition_ids_;
+      write_ctx_.is_single_part_ = (1 == ls_partition_ids.count());
+      if (write_ctx_.is_single_part_) {
+        write_ctx_.single_tablet_id_ = ls_partition_ids[0].part_tablet_id_.tablet_id_;
+        if (OB_FAIL(ObDirectLoadVectorUtils::make_const_tablet_id_vector(write_ctx_.single_tablet_id_,
+                                                                         allocator_,
+                                                                         write_ctx_.single_tablet_id_vector_))) {
+          LOG_WARN("fail to make const tablet id vector", KR(ret), K(write_ctx_.single_tablet_id_));
+        }
+      } else {
+        if (OB_FAIL(write_ctx_.tablet_idx_map_.create(1024, "TLD_TbtIdxMap", "TLD_TbtIdxMap",
+                                                      MTL_ID()))) {
+          LOG_WARN("fail to create hashmap", KR(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < ls_partition_ids.count(); ++i) {
+            const ObTabletID &tablet_id = ls_partition_ids[i].part_tablet_id_.tablet_id_;
+            if (OB_FAIL(write_ctx_.tablet_idx_map_.set_refactored(tablet_id.id(), i))) {
+              LOG_WARN("fail to set refactored", KR(ret), K(tablet_id));
+              if (OB_HASH_EXIST == ret) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected duplicate tablet id", KR(ret), K(tablet_id));
+              }
+            }
           }
         }
       }

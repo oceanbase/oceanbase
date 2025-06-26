@@ -162,7 +162,7 @@ int ObTableLoadMemChunkManager::close_chunk(int64_t chunk_node_id)
                K(chunk_node));
     } else if (OB_FAIL(compare.init(*(mem_ctx_->datum_utils_), mem_ctx_->dup_action_))) {
       LOG_WARN("fail to init compare", KR(ret));
-    } else if (OB_FAIL(chunk_node.chunk_->sort(compare))) {
+    } else if (OB_FAIL(chunk_node.chunk_->sort(compare, mem_ctx_->enc_params_))) {
       LOG_WARN("fail to sort chunk", KR(ret));
     } else if (OB_FAIL(mem_ctx_->mem_chunk_queue_.push(chunk_node.chunk_))) {
       LOG_WARN("fail to push", KR(ret));
@@ -193,7 +193,7 @@ int ObTableLoadMemChunkManager::close_and_acquire_chunk(int64_t chunk_node_id, C
       LOG_WARN("chunk node should be used and chunk not null", KR(ret), K(chunk_node_id), K(chunk_node));
     } else if (OB_FAIL(compare.init(*(mem_ctx_->datum_utils_), mem_ctx_->dup_action_))) {
       LOG_WARN("fail to init compare", KR(ret));
-    } else if (OB_FAIL(chunk->sort(compare))) {
+    } else if (OB_FAIL(chunk->sort(compare, mem_ctx_->enc_params_))) {
       LOG_WARN("fail to sort chunk", KR(ret));
     } else if (OB_FAIL(mem_ctx_->mem_chunk_queue_.push(chunk))) {
       LOG_WARN("fail to push", KR(ret));

@@ -1791,6 +1791,7 @@ const int64_t OB_MALLOC_MIDDLE_BLOCK_SIZE = (1LL << 16) - 256;                 /
 const int64_t OB_MALLOC_BIG_BLOCK_SIZE = (1LL << 21) - ACHUNK_PRESERVE_SIZE;// 2MB (-17KB)
 const int64_t OB_MALLOC_REQ_NORMAL_BLOCK_SIZE = (240LL << 10);                 // 240KB
 const int64_t WARMUP_MAX_KEY_SET_SIZE_IN_RPC = (1LL << 22);                    // 4M
+const int64_t OB_MAX_CSV_BATCHLINE_BUF_SIZE = (1LL << 23); // 8M
 
 const int64_t OB_MAX_MYSQL_RESPONSE_PACKET_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;
 

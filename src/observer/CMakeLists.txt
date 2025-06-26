@@ -325,6 +325,7 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_partition_location.cpp
   table_load/ob_table_load_pre_sort_writer.cpp
   table_load/ob_table_load_pre_sorter.cpp
+  table_load/ob_table_load_px_batch_rows.cpp
   table_load/ob_table_load_redef_table.cpp
   table_load/ob_table_load_row_projector.cpp
   table_load/ob_table_load_rpc_processor.cpp

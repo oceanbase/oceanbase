@@ -177,8 +177,9 @@ int ObReceiveRowReader::add_buffer(dtl::ObDtlLinkedBuffer &buf, bool &transferre
       if (NULL != vec_row_iter_ && vec_row_iter_->is_valid() && vec_row_iter_->has_next()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("rows must be all iterated before new iterate added", K(ret));
-      } else if (OB_FAIL(row_meta_.assign(buf.get_row_meta()))) {
-        LOG_WARN("row_meta assign failed", K(ret));
+      // no need assign here
+      // } else if (OB_FAIL(row_meta_.assign(buf.get_row_meta()))) {
+      //   LOG_WARN("row_meta assign failed", K(ret));
       } else {
         vec_row_iter_ = reinterpret_cast<ObTempRowStore::Iterator *>(buf.buf());
       }
@@ -679,6 +680,18 @@ int ObReceiveRowReader::get_next_batch(const ObIArray<ObExpr*> &exprs,
   return ret;
 }
 
+int ObReceiveRowReader::init_row_meta()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(child_exprs_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child exprs is null", K(ret));
+  } else if (OB_FAIL(row_meta_.init(*child_exprs_, 0, reorder_fixed_expr_, allocator_))) {
+    LOG_WARN("failed to init row meta", K(reorder_fixed_expr_), K(child_exprs_->count()), KP(allocator_), K(ret));
+  }
+  return ret;
+}
+
 //shanting2.0
 int ObReceiveRowReader::get_next_batch_vec(const ObIArray<ObExpr*> &exprs,
                                            const ObIArray<ObExpr*> &dynamic_const_exprs,
@@ -688,7 +701,15 @@ int ObReceiveRowReader::get_next_batch_vec(const ObIArray<ObExpr*> &exprs,
                                            const ObCompactRow **srows)
  {
   int ret = OB_SUCCESS;
-  if (NULL == srows) {
+  if (!row_meta_init_) {
+    if (OB_FAIL(init_row_meta())) {
+      LOG_WARN("failed to init row meta", K(ret));
+    } else {
+      row_meta_init_ = true;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (NULL == srows) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("NULL store rows", K(ret));
   } else if (NULL != datum_iter_) {
@@ -755,7 +776,7 @@ int ObReceiveRowReader::get_next_batch_vec(const ObIArray<ObExpr*> &exprs,
                 LOG_WARN("failed to init vector", K(ret));
               }
             }
-            OZ(attach_vectors(exprs, dynamic_const_exprs, curr_buffer->get_row_meta(), eval_ctx, srows, read_rows));
+            OZ(attach_vectors(exprs, dynamic_const_exprs, row_meta_, eval_ctx, srows, read_rows));
           }
           break;
         }
@@ -807,6 +828,7 @@ void ObReceiveRowReader::reset()
   datum_iter_ = NULL;
   vec_row_iter_ = NULL;
   row_meta_.reset();
+  row_meta_init_ = false;
 }
 
 

@@ -14,6 +14,9 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/container/ob_vector.h"
 #include "observer/table_load/ob_table_load_stat.h"
+#include "share/ob_order_perserving_encoder.h"
+#include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/engine/sort/ob_sort_op_impl.h"
 #include "storage/direct_load/ob_direct_load_external_scanner.h"
 
 namespace oceanbase
@@ -48,6 +51,7 @@ class ObDirectLoadMemChunk
   friend class ObDirectLoadMemChunkIter<T, Compare>;
 public:
   static const constexpr int64_t MIN_MEMORY_LIMIT = 8 * 1024LL * 1024LL; // min memory limit is 8M
+  static const constexpr int64_t ADS_ENCODE_BUFFER_LIMIT = 1 * 1024LL * 1024LL; //buffer for encode
 
   ObDirectLoadMemChunk();
   int init(uint64_t tenant_id, int64_t mem_limit);
@@ -82,7 +86,7 @@ public:
 
   void reuse();
   void reset();
-  int sort(Compare &compare);
+  int sort(Compare &compare, const ObArray<share::ObEncParam> &enc_params);
   TO_STRING_KV(K(buf_mem_limit_), "size", item_list_.size());
 private:
   int64_t buf_mem_limit_;
@@ -104,15 +108,74 @@ int ObDirectLoadMemChunkIter<T, Compare>::get_next_item(const T *&item) {
 }
 
 template <typename T, typename Compare>
-int ObDirectLoadMemChunk<T, Compare>::sort(Compare &compare)
+int ObDirectLoadMemChunk<T, Compare>::sort(Compare &compare, const ObArray<share::ObEncParam> &enc_params)
 {
   int ret = common::OB_SUCCESS;
   if (item_list_.size() > 1) {
     OB_TABLE_LOAD_STATISTICS_TIME_COST(DEBUG, memory_sort_item_time_us);
-    lib::ob_sort(item_list_.begin(), item_list_.end(), compare);
-    if (OB_FAIL(compare.get_error_code())) {
-      ret = compare.get_error_code();
-      STORAGE_LOG(WARN, "fail to sort memory item list", KR(ret));
+    if (enc_params.empty()) {
+      lib::ob_sort(item_list_.begin(), item_list_.end(), compare);
+      if (OB_FAIL(compare.get_error_code())) {
+        ret = compare.get_error_code();
+        STORAGE_LOG(WARN, "fail to sort memory item list", KR(ret));
+      }
+    } else {
+      common::ObArenaAllocator sort_allocator("TLD_Sort"); // sort memory
+      sort_allocator.set_tenant_id(MTL_ID());
+      common::ObArenaAllocator encode_buffer_allocator("TLD_Encode"); // encode tmp buffer
+      encode_buffer_allocator.set_tenant_id(MTL_ID());
+      ObArray<share::ObEncParam> enc_params_copy;
+      common::ObArray<sql::ObChunkDatumStore::StoredRow *> sort_item_list;
+      for (int i = 0; OB_SUCC(ret) && i < enc_params.count(); i++) {
+        if (OB_FAIL(enc_params_copy.push_back(enc_params[i]))) {
+          STORAGE_LOG(WARN, "fail to push back enc param", KR(ret));
+        }
+      }
+      // allocator encode buf
+      unsigned char *encode_buf = nullptr;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(sort_item_list.prepare_allocate(item_list_.count()))) {
+        STORAGE_LOG(WARN, "fail to prepare allocate", KR(ret));
+      } else if (OB_ISNULL(encode_buf = static_cast<unsigned char *>(
+                             encode_buffer_allocator.alloc(ADS_ENCODE_BUFFER_LIMIT)))) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "fail to allocate memory", KR(ret));
+      }
+      // encode
+      bool has_invalid_uni = false;
+      for (int i = 0; OB_SUCC(ret) && !has_invalid_uni && i < item_list_.count(); i++) {
+        if (OB_FAIL(item_list_[i]->generate_aqs_store_row(encode_buf, ADS_ENCODE_BUFFER_LIMIT,
+                                                          enc_params_copy, sort_allocator,
+                                                          sort_item_list[i], has_invalid_uni))) {
+          STORAGE_LOG(WARN, "fail to generate aqs store row", KR(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (has_invalid_uni) {
+        lib::ob_sort(item_list_.begin(), item_list_.end(), compare);
+        if (OB_FAIL(compare.get_error_code())) {
+          ret = compare.get_error_code();
+          STORAGE_LOG(WARN, "fail to sort memory item list", KR(ret));
+        }
+      } else {
+        // sort
+        bool can_encode = true;
+        ObSortOpImpl::ObAdaptiveQS aqs(sort_item_list, sort_allocator);
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(aqs.init(sort_item_list, sort_allocator, 0, sort_item_list.count(),
+                                    can_encode))) {
+          STORAGE_LOG(WARN, "fail to init aqs", KR(ret));
+        } else if (!can_encode) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "unexpected can_encode", KR(ret));
+        } else {
+          aqs.sort(0, sort_item_list.count());
+          for (int i = 0; OB_SUCC(ret) && i < sort_item_list.count(); i++) {
+            item_list_[i] =
+              reinterpret_cast<T *>(const_cast<char *>(sort_item_list[i]->cells()[1].ptr_));
+          }
+        }
+      }
     }
   }
   return ret;

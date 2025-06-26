@@ -132,6 +132,7 @@ private:
   ObExternalStreamFileReader file_reader_;
   ObSqlString url_;
   ObExpr *file_name_expr_;
+  bool use_handle_batch_lines_ = false;
 };
 
 

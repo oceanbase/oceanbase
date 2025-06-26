@@ -96,6 +96,7 @@ public:
     STRING_TC,
     DECIMAL_INT_TC,
     OTHER_TC,
+    TEXT_TC,
   };
 
   static const int64_t PARAMS_COUNT_WITHOUT_COLUMN_INFO = 5;

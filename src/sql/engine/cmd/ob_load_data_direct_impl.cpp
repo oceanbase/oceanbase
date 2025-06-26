@@ -737,6 +737,10 @@ int ObLoadDataDirectImpl::DataParser::get_next_row(ObNewRow &row)
         UNUSED(param);
         return OB_SUCCESS;
       }
+      int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
+        UNUSED(param);
+        return OB_SUCCESS;
+      }
     };
     struct Functor handle_one_line;
     while (OB_SUCC(ret)) {
