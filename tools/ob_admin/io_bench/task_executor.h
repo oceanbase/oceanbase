@@ -24,25 +24,50 @@ namespace oceanbase
 namespace tools
 {
 
-enum BenchmarkTaskType
+enum BenchmarkTaskType //FARM COMPAT WHITELIST
 {
-  BENCHMARK_TASK_NORMAL_WRITE = 0,
-  BENCHMARK_TASK_APPEND_WRITE = 1,
-  BENCHMARK_TASK_MULTIPART_WRITE = 2,
-  BENCHMARK_TASK_READ = 3,
-  BENCHMARK_TASK_DEL = 4,
-  BENCHMARK_TASK_IS_EXIST = 5,
-  BENCHMARK_TASK_READ_USER_PROVIDED = 6,
+  BENCHMARK_TASK_AUTO_RUN = 0,
+  BENCHMARK_TASK_NORMAL_WRITE = 1,
+  BENCHMARK_TASK_APPEND_WRITE = 2,
+  BENCHMARK_TASK_MULTIPART_WRITE = 3,
+  BENCHMARK_TASK_READ = 4,
+  BENCHMARK_TASK_DEL = 5,
+  BENCHMARK_TASK_IS_EXIST = 6,
+  BENCHMARK_TASK_READ_USER_PROVIDED = 7,
   BENCHMARK_TASK_MAX_TYPE
 };
+
+static const char *BenchmarkTaskTypeStr[] = {
+  "AUTO_RUN",
+  "NORMAL_WRITE",
+  "APPEND_WRITE",
+  "MULTIPART_WRITE",
+  "READ",
+  "DEL",
+  "IS_EXIST",
+  "READ_USER_PROVIDED",
+  "MAX_TYPE"
+};
+
+STATIC_ASSERT(static_cast<int64_t>(BENCHMARK_TASK_MAX_TYPE) + 1 == ARRAYSIZEOF(BenchmarkTaskTypeStr), "BenchmarkTaskType count mismatch");
 
 struct TaskConfig
 {
   TaskConfig();
+  TaskConfig(
+      const int64_t thread_num,
+      const int64_t max_task_runs,
+      const int64_t time_limit_s,
+      const int64_t obj_size,
+      const int64_t obj_num,
+      const int64_t fragment_size,
+      const bool is_adaptive,
+      BenchmarkTaskType type,
+      const char *type_str);
   int assign(const TaskConfig &other);
   TO_STRING_KV(K_(thread_num), K_(max_task_runs), K_(time_limit_s),
-      K_(obj_size), K_(obj_num), K_(fragment_size), K_(is_adaptive), K_(type));
-
+      K_(obj_size), K_(obj_num), K_(fragment_size), K_(is_adaptive), K_(type_str));
+  char base_path_[OB_MAX_URI_LENGTH];
   int64_t thread_num_;
   int64_t max_task_runs_;   // 每个线程执行次数
   int64_t time_limit_s_;
@@ -51,6 +76,7 @@ struct TaskConfig
   int64_t fragment_size_;
   bool is_adaptive_;
   BenchmarkTaskType type_;
+  const char *type_str_;
 };
 
 struct TimeMap
@@ -68,6 +94,7 @@ struct TimeMap
 struct Metrics
 {
   Metrics();
+  void reset();
   int assign(const Metrics &other);
   int add(const Metrics &other);
   void summary(
