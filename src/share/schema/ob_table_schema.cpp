@@ -2371,18 +2371,103 @@ int ObTableSchema::set_compress_func_name(const char *compressor)
     compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   } else if (OB_FAIL(ObCompressorPool::get_instance().get_compressor_type(compressor, compressor_type_))) {
     LOG_WARN("fail to get compressor type", K(ret), K(*compressor));
+  } else if (OB_FAIL(set_compressor_type_for_cg(compressor_type_))) {
+    LOG_WARN("fail to set compressor type", K(ret), K(compressor_type_));
+  }
+  return ret;
+}
+
+int ObTableSchema::set_compressor_type_for_cg(const common::ObCompressorType &compressor_type)
+{
+  int ret = OB_SUCCESS;
+  ObTableSchema::const_column_group_iterator iter_begin = column_group_begin();
+  ObTableSchema::const_column_group_iterator iter_end   = column_group_end();
+  if (common::ObCompressorType::INVALID_COMPRESSOR >= compressor_type||
+      common::ObCompressorType::MAX_COMPRESSOR <= compressor_type) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid compressor type", K(ret), K(compressor_type));
+  }
+  for (; OB_SUCC(ret) && iter_begin!= iter_end; iter_begin++) {
+    ObColumnGroupSchema *cg_schema = *iter_begin;
+    if (OB_ISNULL(cg_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column group schema is null", K(ret), KPC(this));
+    } else {
+      cg_schema->set_compressor_type(compressor_type_);
+    }
   }
   return ret;
 }
 
 int ObTableSchema::set_compress_func_name(const ObString &compressor)
 {
-  return ObCompressorPool::get_instance().get_compressor_type(compressor, compressor_type_);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObCompressorPool::get_instance().get_compressor_type(compressor, compressor_type_))) {
+    LOG_WARN("failed to set compress type", K(ret), K(compressor));
+  } else if (OB_FAIL(set_compressor_type_for_cg(compressor_type_))) {
+    LOG_WARN("failed to set compressor type for cg", K(ret));
+  }
+  return ret;
 }
 
+int ObTableSchema::set_row_store_type_for_cg(const common::ObRowStoreType row_store_type)
+{
+  int ret = OB_SUCCESS;
+  ObTableSchema::const_column_group_iterator iter_begin = column_group_begin();
+  ObTableSchema::const_column_group_iterator iter_end   = column_group_end();
+  for (; OB_SUCC(ret) && iter_begin!= iter_end; iter_begin++) {
+    ObColumnGroupSchema *cg_schema = *iter_begin;
+    if (OB_ISNULL(cg_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column group schema is null", K(ret), KPC(this));
+    } else {
+      cg_schema->set_row_store_type(row_store_type_);
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::set_block_size_for_cg(int64_t block_size_)
+{
+  int ret = OB_SUCCESS;
+  if (block_size_ < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid block size", K(ret), K(block_size_));
+  } else {
+    block_size_ = block_size_;
+    ObTableSchema::const_column_group_iterator iter_begin = column_group_begin();
+    ObTableSchema::const_column_group_iterator iter_end   = column_group_end();
+    for (; OB_SUCC(ret) && iter_begin!= iter_end; iter_begin++) {
+      ObColumnGroupSchema *cg_schema = *iter_begin;
+      if (OB_ISNULL(cg_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column group schema is null", K(ret));
+      } else {
+        cg_schema->set_block_size(block_size_);
+      }
+    }
+  }
+  return ret;
+}
 int ObTableSchema::set_row_store_type(const ObString &row_store)
 {
-  return ObStoreFormat::find_row_store_type(row_store, row_store_type_);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObStoreFormat::find_row_store_type(row_store, row_store_type_))) {
+    LOG_WARN("failed to set row store type for table schema", K(ret), K(row_store), K(row_store_type_));
+  } else {
+    ObTableSchema::const_column_group_iterator iter_begin = column_group_begin();
+    ObTableSchema::const_column_group_iterator iter_end   = column_group_end();
+    for (; OB_SUCC(ret) && iter_begin!= iter_end; iter_begin++) {
+      ObColumnGroupSchema *cg_schema = *iter_begin;
+      if (OB_ISNULL(cg_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column group schema is null", K(ret));
+      } else {
+        cg_schema->set_row_store_type(row_store_type_);
+      }
+    }
+  }
+  return ret;
 }
 
 int ObTableSchema::set_store_format(const ObString &store_format)

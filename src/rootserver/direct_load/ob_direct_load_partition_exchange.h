@@ -34,7 +34,6 @@ public:
 private:
   virtual int check_table_conditions_in_common_(const share::schema::ObTableSchema &base_table_schema,
                                                 const share::schema::ObTableSchema &inc_table_schema,
-                                                const share::schema::ObPartitionLevel exchange_partition_level,
                                                 const bool is_oracle_mode) override;
   int check_multipart_exchange_conditions(share::schema::ObSchemaGetterGuard &schema_guard,
                                           const share::schema::ObTableSchema &base_table_schema,

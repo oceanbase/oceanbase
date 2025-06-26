@@ -314,6 +314,10 @@ public:
       common::ObISQLClient &sql_client,
       const ObTableSchema &table,
       const ObConstraint &cst);
+  int update_column_group_options(ObISQLClient &sql_client,
+                                  const ObTableSchema &ori_table_schema,
+                                  ObTableSchema &new_table_schema);
+
 
 private:
   int inner_update_table_options_(ObISQLClient &sql_client,

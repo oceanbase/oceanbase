@@ -1470,12 +1470,14 @@ public:
   inline void set_max_column_id(const uint64_t id) { max_used_column_id_ = id; }
   inline void set_is_use_bloomfilter(const bool is_use_bloomfilter) { is_use_bloomfilter_ = is_use_bloomfilter; }
   inline void set_block_size(const int64_t block_size) { block_size_ = block_size; }
+  int set_block_size_for_cg(const int64_t block_size);
   inline void set_read_only(const bool read_only) { read_only_ = read_only; }
   inline void set_store_format(const common::ObStoreFormatType store_format) { store_format_ = store_format; }
   inline void set_storage_format_version(const int64_t storage_format_version) { storage_format_version_ = storage_format_version; }
   inline void set_merge_engine_type(const ObMergeEngineType merge_engine_type) { merge_engine_type_ = merge_engine_type; }
   int set_store_format(const common::ObString &store_format);
   inline void set_row_store_type(const common::ObRowStoreType row_store_type) { row_store_type_ = row_store_type; }
+  int set_row_store_type_for_cg(const common::ObRowStoreType row_store_type);
   int set_row_store_type(const common::ObString &row_store);
   int set_tablegroup_name(const char *tablegroup_name) { return deep_copy_str(tablegroup_name, tablegroup_name_); }
   int set_tablegroup_name(const common::ObString &tablegroup_name) { return deep_copy_str(tablegroup_name, tablegroup_name_); }
@@ -1488,6 +1490,7 @@ public:
   int set_expire_info(const common::ObString &expire_info) { return deep_copy_str(expire_info, expire_info_); }
   int set_compress_func_name(const char *compressor);
   int set_compress_func_name(const common::ObString &compressor);
+  int set_compressor_type_for_cg(const common::ObCompressorType &compressor_type);
   inline void set_dop(int64_t table_dop) { table_dop_ = table_dop; }
   int set_external_file_location(const common::ObString &location) { return deep_copy_str(location, external_file_location_); }
   int set_external_file_location_access_info(const common::ObString &access_info) { return deep_copy_str(access_info, external_file_location_access_info_); }
