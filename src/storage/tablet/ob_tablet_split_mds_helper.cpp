@@ -736,7 +736,7 @@ int ObTabletSplitMdsHelper::get_is_spliting(const ObTablet &tablet, bool &is_spl
   int ret = OB_SUCCESS;
   const ObTabletMeta &tablet_meta = tablet.get_tablet_meta();
   is_split_dst = false;
-  if (OB_UNLIKELY(!tablet_meta.table_store_flag_.with_major_sstable() && tablet_meta.split_info_.get_split_src_tablet_id().is_valid())) {
+  if (OB_UNLIKELY(tablet_meta.split_info_.is_data_incomplete() && !tablet_meta.table_store_flag_.with_major_sstable() && tablet_meta.split_info_.get_split_src_tablet_id().is_valid())) {
     is_split_dst = true;
   } else if (OB_UNLIKELY(!tablet_meta.table_store_flag_.with_major_sstable())) {
     const int64_t timeout = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S;
