@@ -59,6 +59,8 @@ struct ObCSColumnHeader
     IS_FIXED_LENGTH = 0x01,
     HAS_NULL_BITMAP = 0x02,
     OUT_ROW = 0x04,
+    HAS_NOP_BITMAP = 0x08,
+    HAS_NOP = 0x10,
     MAX_ATTRIBUTE,
   };
 
