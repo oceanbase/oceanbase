@@ -1067,8 +1067,8 @@ int ObLS::register_common_service()
       MTL(ObSSLogUIDService *)->set_ls(this);
       REGISTER_TO_LOGSERVICE(SSLOG_UID_LOG_BASE_TYPE, MTL(ObSSLogUIDService *));
       // register for ckpt
-      REGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_GTS, MTL(ObTimestampService *));
-      REGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_UID, MTL(ObTransIDService *));
+      REGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_GTS, MTL(ObSSLogGTSService *));
+      REGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_UID, MTL(ObSSLogUIDService *));
     } else {
       REGISTER_TO_LOGSERVICE(TRANS_ID_LOG_BASE_TYPE, MTL(ObTransIDService *));
       REGISTER_TO_LOGSERVICE(TIMESTAMP_LOG_BASE_TYPE, MTL(ObTimestampService *));
@@ -1231,8 +1231,8 @@ void ObLS::unregister_common_service_()
 #ifdef OB_BUILD_SHARED_STORAGE
     if (SSLOG_LS == ls_meta_.ls_id_) {
       // unregister for ckpt
-      UNREGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_GTS, MTL(ObTimestampService *));
-      UNREGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_UID, MTL(ObTransIDService *));
+      UNREGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_GTS, MTL(ObSSLogGTSService *));
+      UNREGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_UID, MTL(ObSSLogUIDService *));
       // for sslog gts service and unique id service
       MTL(ObSSLogGTSService *)->reset_ls();
       UNREGISTER_FROM_LOGSERVICE(SSLOG_GTS_LOG_BASE_TYPE, MTL(ObSSLogGTSService *));
