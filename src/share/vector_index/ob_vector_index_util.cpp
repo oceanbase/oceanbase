@@ -20,6 +20,8 @@
 #include "share/vector_index/ob_plugin_vector_index_util.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
+#include "share/vector_index/ob_plugin_vector_index_adaptor.h"
+#include "lib/roaringbitmap/ob_rb_memory_mgr.h"
 
 namespace oceanbase
 {
@@ -4210,6 +4212,114 @@ int ObVectorIndexUtil::split_vector(
         start_idx += sub_dim;
       }
     }
+  }
+  return ret;
+}
+
+bool ObVectorIndexUtil::check_vector_index_memory(
+    ObSchemaGetterGuard &schema_guard, const ObTableSchema &index_schema, const uint64_t tenant_id, const int64_t row_count)
+{
+  int ret = OB_SUCCESS;
+  bool is_satisfied = true;
+  ObPluginVectorIndexService *service = MTL(ObPluginVectorIndexService*);
+  if (OB_ISNULL(service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("service is nullptr", K(ret));
+  } else {
+    ObRbMemMgr *mem_mgr = nullptr;
+    int64_t bitmap_mem_used = 0;
+    int64_t mem_limited_size = 0;
+    int64_t estimate_memory = 0;
+    int64_t all_vsag_mem_used = service->get_all_vsag_use_mem();
+    if (OB_ISNULL(mem_mgr = MTL(ObRbMemMgr *))) {
+    } else {
+      bitmap_mem_used = mem_mgr->get_vec_idx_used();
+    }
+    if (OB_FAIL(ObPluginVectorIndexHelper::get_vector_memory_limit_size(tenant_id, mem_limited_size))) {
+      LOG_WARN("failed to get vector mem limit size.", K(ret), K(tenant_id));
+    } else if (OB_FAIL(estimate_vector_memory_used(schema_guard, index_schema, tenant_id, row_count, estimate_memory))) {
+      LOG_WARN("failed to estimate vector memory used", K(ret), K(index_schema), K(row_count));
+    } else if (OB_FALSE_IT(estimate_memory = ceil(estimate_memory * VEC_ESTIMATE_MEMORY_FACTOR))) { // multiple 2.0
+    } else if (all_vsag_mem_used + bitmap_mem_used + estimate_memory > mem_limited_size) {
+      is_satisfied = false;
+    }
+    LOG_INFO("finish estimate size", K(ret), K(is_satisfied),
+      K(index_schema.get_table_name_str()), K(row_count), K(mem_limited_size), K(all_vsag_mem_used), K(bitmap_mem_used), K(estimate_memory));
+  }
+
+  return is_satisfied;
+}
+
+// one tablet one vsag instance
+int ObVectorIndexUtil::estimate_vector_memory_used(
+    ObSchemaGetterGuard &schema_guard, const ObTableSchema &index_schema, const uint64_t tenant_id, const int64_t row_count, int64_t &estimate_memory)
+{
+  int ret = OB_SUCCESS;
+  estimate_memory = 0;
+
+  const char* const DATATYPE_FLOAT32 = "float32";
+  obvectorlib::VectorIndexPtr index_handler = nullptr;
+  ObVectorIndexParam param;
+  int64_t dim = 0;
+  ObSEArray<uint64_t , 1> col_ids;
+  const ObTableSchema *data_table_schema = nullptr;
+  const uint64_t data_table_id = index_schema.get_data_table_id();
+  bool need_estimate = true;
+
+  // get index schema param
+  if (!index_schema.is_vec_index_snapshot_data_type() || row_count <= 0) {
+    need_estimate = false;
+    LOG_INFO("target table is not table 5 or row_count <= 0, skip estimated",
+      K(ret), K(index_schema), K(row_count));
+  } else if (tenant_id == OB_INVALID_TENANT_ID || data_table_id == OB_INVALID_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument, skip estimated", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_dim(index_schema, dim))) {
+    LOG_WARN("failed to get vec_index_col_param", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_ISNULL(data_table_schema) || data_table_schema->is_in_recyclebin()) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", K(ret), K(tenant_id), K(data_table_id), K(data_table_schema));
+  } else if OB_FAIL(get_vector_index_column_id(*data_table_schema, index_schema, col_ids)) {
+    LOG_WARN("failed to get vector index column id", K(ret), K(index_schema));
+  } else if (col_ids.count() != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid col id array", K(ret), K(col_ids));
+  } else if (OB_FAIL(get_vector_index_param(&schema_guard, *data_table_schema, col_ids.at(0), param))) {
+    LOG_WARN("failed to get vector index param", K(ret), K(col_ids.at(0)));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (VIAT_HNSW == param.type_) {
+    // vsag not support hnsw estimate now, skip for tmp
+    LOG_INFO("skip esitmate hnsw memory, vsag not support");
+  } else if (need_estimate) {
+    ObVectorIndexAlgorithmType build_type = param.type_;
+    int64_t build_metric = param.m_;
+    param.dim_ = dim;
+    build_metric = param.type_ == VIAT_HNSW_SQ ? get_hnswsq_type_metric(param.m_) : param.m_;
+    if (OB_FAIL(obvectorutil::create_index(index_handler,
+                                           build_type,
+                                           DATATYPE_FLOAT32,
+                                           VEC_INDEX_ALGTH[param.dist_algorithm_],
+                                           param.dim_,
+                                           build_metric,
+                                           param.ef_construction_,
+                                           param.ef_search_,
+                                           nullptr, /* memory ctx, use default */
+                                           param.extra_info_actual_size_))) {
+      ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
+      LOG_WARN("failed to create vsag index.", K(ret), K(param));
+    } else if (OB_ISNULL(index_handler)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret), KP(index_handler));
+    } else if (OB_FALSE_IT(estimate_memory = obvectorutil::estimate_memory(index_handler, row_count))) {
+    } else if (OB_FALSE_IT(obvectorutil::delete_index(index_handler))) {
+    }
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("estimate vector index memory used.", K(estimate_memory), K(index_schema.get_table_name_str()));
   }
   return ret;
 }

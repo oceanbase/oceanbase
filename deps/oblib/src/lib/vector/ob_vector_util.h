@@ -73,6 +73,7 @@ int get_extra_info_by_ids(obvectorlib::VectorIndexPtr& index_handler,
                           int64_t count,
                           char *extra_infos);
 int get_vid_bound(obvectorlib::VectorIndexPtr index_handler, int64_t &min_vid, int64_t &max_vid);
+uint64_t estimate_memory(obvectorlib::VectorIndexPtr& index_handler, uint64_t row_count);
 int knn_search(obvectorlib::VectorIndexPtr index_handler,
                float *query_vector,
                int dim,

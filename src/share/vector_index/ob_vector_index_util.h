@@ -90,6 +90,13 @@ enum ObKmeansAlgoType
   KAT_ELKAN = 0,
   KAT_MAX
 };
+const static double VEC_ESTIMATE_MEMORY_FACTOR = 2.0;
+constexpr static uint32_t VEC_INDEX_MIN_METRIC = 8;
+constexpr const static char* const VEC_INDEX_ALGTH[ObVectorIndexDistAlgorithm::VIDA_MAX] = {
+  "l2",
+  "ip",
+  "cosine",
+};
 
 struct ObIvfConstant {
   static const int SQ8_META_STEP_SIZE = 255;
@@ -504,6 +511,20 @@ public:
   static int alter_vec_aux_column_schema(const ObTableSchema &aux_table_schema,
                                          const ObColumnSchemaV2 &new_column_schema,
                                          ObColumnSchemaV2 &new_aux_column_schema);
+  static int64_t get_hnswsq_type_metric(int64_t origin_metric) {
+    return origin_metric / 2 > VEC_INDEX_MIN_METRIC ? origin_metric / 2 : VEC_INDEX_MIN_METRIC;
+  }
+  static bool check_vector_index_memory(
+      ObSchemaGetterGuard &schema_guard,
+      const ObTableSchema &index_schema,
+      const uint64_t tenant_id,
+      const int64_t row_count);
+  static int estimate_vector_memory_used(
+      ObSchemaGetterGuard &schema_guard,
+      const ObTableSchema &index_schema,
+      const uint64_t tenant_id,
+      const int64_t tablet_row_count,
+      int64_t &estimate_memory);
 
 private:
   static void save_column_schema(

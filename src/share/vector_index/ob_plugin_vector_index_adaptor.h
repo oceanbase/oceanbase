@@ -651,9 +651,6 @@ public:
   ObAdapterCreateType &get_create_type() { return create_type_; };
   void set_create_type(ObAdapterCreateType type) { create_type_ = type; };
   ObVectorIndexAlgorithmType get_snap_index_type();
-  int64_t get_hnswsq_type_metric(int64_t origin_metric) {
-    return origin_metric / 2 > VEC_INDEX_MIN_METRIC ? origin_metric / 2 : VEC_INDEX_MIN_METRIC;
-  }
   OB_INLINE int64_t get_extra_column_count()
   {
     return extra_info_column_count_;
@@ -694,7 +691,6 @@ public:
            && snapshot_tablet_id_ == ctx.snapshot_tablet_id_
            && data_tablet_id_ == ctx.data_tablet_id_;
   }
-
   TO_STRING_KV(K_(create_type), K_(type), KP_(algo_data),
               KP_(incr_data), KP_(snap_data), KP_(vbitmap_data), K_(tenant_id),
               K_(data_tablet_id),K_(rowkey_vid_tablet_id), K_(vid_rowkey_tablet_id),
@@ -790,14 +786,8 @@ private:
   constexpr static uint32_t VEC_INDEX_VBITMAP_SYNC_THRESHOLD = 100;
   constexpr static uint32_t VEC_INDEX_SNAP_DATA_SYNC_THRESHOLD = 1;
   constexpr static uint32_t VEC_INDEX_ADAPTER_MAX_IDLE_COUNT = 3;
-  constexpr static uint32_t VEC_INDEX_MIN_METRIC = 8;
   constexpr static uint32_t VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD = 10000;
   constexpr static int64_t  VSAG_MAX_EF_SEARCH = 1000;
-  constexpr const static char* const VEC_INDEX_ALGTH[ObVectorIndexDistAlgorithm::VIDA_MAX] = {
-    "l2",
-    "ip",
-    "cosine",
-  };
 };
 
 class ObPluginVectorIndexAdapterGuard
