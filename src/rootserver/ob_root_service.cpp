@@ -3944,7 +3944,7 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
       } // check foreign key info end.
 
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(schema_guard, table_schema.get_tenant_id(), arg.dep_infos_, false/*by_admin*/))) {
+        if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(schema_guard, table_schema.get_tenant_id(), arg.dep_infos_))) {
           LOG_WARN("failed to check htable ddl supported", K(ret), "tenant_id", table_schema.get_tenant_id(), K(arg.dep_infos_));
         }
       }

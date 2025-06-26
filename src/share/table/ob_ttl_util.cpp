@@ -1655,10 +1655,10 @@ int ObTTLUtil::check_htable_ddl_supported(const schema::ObTableSchema &table_sch
   return ret;
 }
 
+// cannot create view dependent on hbase admin table
 int ObTTLUtil::check_htable_ddl_supported(share::schema::ObSchemaGetterGuard &schema_guard,
-                                              const uint64_t tenant_id,
-                                              const common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                                              bool by_admin)
+                                          const uint64_t tenant_id,
+                                          const common::ObIArray<share::schema::ObDependencyInfo> &dep_infos)
 {
   int ret = OB_SUCCESS;
   for (int i = 0; OB_SUCC(ret) && i < dep_infos.count(); i++) {
@@ -1666,12 +1666,14 @@ int ObTTLUtil::check_htable_ddl_supported(share::schema::ObSchemaGetterGuard &sc
     if (dep_info.get_ref_obj_type() == ObObjectType::TABLE) {
       const uint64_t table_id = dep_info.get_ref_obj_id();
       const ObTableSchema *table_schema = NULL;
-      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+      if (is_cte_table(table_id) || is_external_object_id(table_id)) {
+        // skip, cte table and external table has not table schema and will not be hbase admin table
+      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
         LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null table schema", K(ret), K(tenant_id), K(table_id));
-      } else if (OB_FAIL(check_htable_ddl_supported(*table_schema, by_admin))) {
+      } else if (OB_FAIL(check_htable_ddl_supported(*table_schema, false))) {
         LOG_WARN("failed to check htable ddl supported", K(ret));
       }
     }

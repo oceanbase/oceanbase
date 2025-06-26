@@ -399,8 +399,7 @@ public:
   static int check_htable_ddl_supported(const share::schema::ObTableSchema &table_schema, bool by_admin);
   static int check_htable_ddl_supported(share::schema::ObSchemaGetterGuard &schema_guard,
                                         const uint64_t tenant_id,
-                                        const common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
-                                        bool by_admin);
+                                        const common::ObIArray<share::schema::ObDependencyInfo> &dep_infos);
   const static uint64_t TTL_TENNAT_TASK_TABLET_ID = -1;
   const static uint64_t TTL_TENNAT_TASK_TABLE_ID = -1;
   const static uint64_t TTL_ROWKEY_TASK_TABLET_ID = -2;

@@ -1577,11 +1577,16 @@ int ObCreateViewResolver::collect_dependency_infos(ObQueryCtx *query_ctx,
   }
 
   CK (OB_NOT_NULL(schema_checker_));
-  ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
-  CK (OB_NOT_NULL(schema_guard));
-  const uint64_t tenant_id = session_info_->get_effective_tenant_id();
-  if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*schema_guard, tenant_id, create_arg.dep_infos_, false/*by_admin*/))) {
-    LOG_WARN("failed to check htable ddl supported", K(ret), K(tenant_id), K(create_arg.dep_infos_));
+  CK (OB_NOT_NULL(session_info_));
+  if (OB_SUCC(ret)) {
+    ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+    const uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    if (OB_ISNULL(schema_guard)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null", K(ret));
+    } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*schema_guard, tenant_id, create_arg.dep_infos_))) {
+      LOG_WARN("failed to check htable ddl supported", K(ret), K(tenant_id), K(create_arg.dep_infos_));
+    }
   }
 
   return ret;
