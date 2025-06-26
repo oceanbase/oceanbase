@@ -864,14 +864,37 @@ int ObSchemaUtils::batch_get_latest_table_schemas(
     common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas)
 {
   int ret = OB_SUCCESS;
+  const int64_t schema_version = INT64_MAX - 1; // get latest schema
+  if (OB_FAIL(batch_get_table_schemas_by_version(
+      sql_client,
+      allocator,
+      tenant_id,
+      schema_version,
+      table_ids,
+      table_schemas))) {
+    LOG_WARN("batch get table schemas by version failed",
+        KR(ret), K(tenant_id), K(table_ids), K(schema_version));
+  }
+  return ret;
+}
+
+int ObSchemaUtils::batch_get_table_schemas_by_version(
+    common::ObISQLClient &sql_client,
+    common::ObIAllocator &allocator,
+    const uint64_t tenant_id,
+    const int64_t schema_version,
+    const common::ObIArray<ObObjectID> &table_ids,
+    common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas)
+{
+  int ret = OB_SUCCESS;
   table_schemas.reset();
   ObSchemaService *schema_service = NULL;
   ObArray<ObTableLatestSchemaVersion> table_schema_versions;
   ObArray<SchemaKey> need_refresh_table_schema_keys;
   ObArray<ObSimpleTableSchemaV2 *> table_schemas_from_inner_table;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || table_ids.empty())) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || table_ids.empty() || schema_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(table_ids));
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(table_ids), K(schema_version));
   } else if (OB_ISNULL(GCTX.schema_service_)
       || OB_ISNULL(schema_service = GCTX.schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
@@ -885,6 +908,7 @@ int ObSchemaUtils::batch_get_latest_table_schemas(
   } else if (OB_FAIL(batch_get_table_schemas_from_cache_(
       allocator,
       tenant_id,
+      schema_version,
       table_schema_versions,
       need_refresh_table_schema_keys,
       table_schemas))) {
@@ -893,6 +917,7 @@ int ObSchemaUtils::batch_get_latest_table_schemas(
       sql_client,
       allocator,
       tenant_id,
+      schema_version,
       need_refresh_table_schema_keys,
       table_schemas_from_inner_table))) {
     LOG_WARN("batch get table_schemas from inner table failed", KR(ret), K(need_refresh_table_schema_keys));
@@ -1327,6 +1352,7 @@ int ObSchemaUtils::get_latest_table_schema(
 int ObSchemaUtils::batch_get_table_schemas_from_cache_(
     common::ObIAllocator &allocator,
     const uint64_t tenant_id,
+    const int64_t specified_schema_version,
     const ObIArray<ObTableLatestSchemaVersion> &table_schema_versions,
     common::ObIArray<SchemaKey> &need_refresh_table_schema_keys,
     common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas)
@@ -1335,9 +1361,9 @@ int ObSchemaUtils::batch_get_table_schemas_from_cache_(
   need_refresh_table_schema_keys.reset();
   table_schemas.reset();
   ObSchemaGetterGuard schema_guard;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || specified_schema_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(specified_schema_version));
   } else if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("multiversion_schema_service is null", KR(ret));
@@ -1359,7 +1385,8 @@ int ObSchemaUtils::batch_get_table_schemas_from_cache_(
           cached_table_schema))) {
         LOG_WARN("get simple table schema failed", KR(ret), K(tenant_id), K(table_schema_version));
       } else if (OB_ISNULL(cached_table_schema)
-          || (cached_table_schema->get_schema_version() < table_schema_version.get_schema_version())) {
+          || (cached_table_schema->get_schema_version() < table_schema_version.get_schema_version())
+          || (cached_table_schema->get_schema_version() > specified_schema_version)) {
         // need fetch new table schema
         SchemaKey table_schema_key;
         table_schema_key.tenant_id_ = tenant_id;
@@ -1381,6 +1408,7 @@ int ObSchemaUtils::batch_get_table_schemas_from_inner_table_(
     common::ObISQLClient &sql_client,
     common::ObIAllocator &allocator,
     const uint64_t tenant_id,
+    const int64_t schema_version,
     common::ObArray<SchemaKey> &need_refresh_table_schema_keys,
     common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas)
 {
@@ -1389,10 +1417,9 @@ int ObSchemaUtils::batch_get_table_schemas_from_inner_table_(
   ObSchemaService *schema_service = NULL;
   ObRefreshSchemaStatus schema_status;
   schema_status.tenant_id_ = tenant_id;
-  int64_t schema_version = INT64_MAX - 1; // get latest schema
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || schema_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(schema_version));
   } else if (OB_ISNULL(GCTX.schema_service_)
       || OB_ISNULL(schema_service = GCTX.schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
