@@ -1368,6 +1368,7 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
   bool end_search = false;
   bool first_search = true;
   int recycle_times = 0;
+  int64_t iter_scan_total_num = 0;
   if (post_with_filter_) {
     query_cond_.query_limit_ = std::max(query_cond_.ef_search_, static_cast<int64_t>(std::ceil(query_cond_.query_limit_ * FIXEX_MAGNIFICATION_RATIO)));
     query_cond_.ef_search_ = std::max(query_cond_.ef_search_, static_cast<int64_t>(query_cond_.query_limit_));
@@ -1378,6 +1379,8 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
   }
   LOG_TRACE("vector index show post-filter query info", K(post_with_filter_), K(simple_cmp_info_.inited_), KPC(simple_cmp_info_.filter_expr_),
   K(extra_column_count_), K(query_cond_.query_limit_), K(query_cond_.ef_search_), K(post_with_filter_));
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  int64_t hnsw_max_iter_scan_nums = tenant_config->_hnsw_max_scan_vectors;
   while (OB_SUCC(ret) && !end_search) {
     ++recycle_times;
     if (first_search && OB_FAIL(process_adaptor_state_post_filter_once(ada_ctx, adaptor))) {
@@ -1389,7 +1392,7 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
     } else if (OB_ISNULL(tmp_adaptor_vid_iter_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("shouldn't be null.", K(ret), K(tmp_adaptor_vid_iter_));
-    } else if (OB_FAIL(post_query_vid_with_filter(ada_ctx, adaptor, is_vectorized))) {
+    } else if (OB_FAIL(post_query_vid_with_filter(ada_ctx, adaptor, hnsw_max_iter_scan_nums, iter_scan_total_num, is_vectorized))) {
       LOG_WARN("failed to query vid with filter.", K(ret), K(extra_column_count_), K(recycle_times));
     } else if (query_cond_.query_limit_ == 0) {
       end_search = true;
@@ -1498,6 +1501,8 @@ int ObDASHNSWScanIter::get_simple_cmp_filter_res(ObNewRow *row, bool& res)
 int ObDASHNSWScanIter::post_query_vid_with_filter(
     ObVectorQueryAdaptorResultContext *ada_ctx,
     ObPluginVectorIndexAdaptor* adaptor,
+    int64_t hnsw_max_iter_scan_nums,
+    int64_t& iter_scan_total_num,
     bool is_vectorized)
 {
   int ret = OB_SUCCESS;
@@ -1538,6 +1543,7 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
       const ObVecExtraInfoPtr &unfiltered_extra_info = tmp_adaptor_vid_iter_->get_extra_info();
       int64_t total_before_add = adaptor_vid_iter_->get_total();
       int64_t extra_column_cnt = tmp_adaptor_vid_iter_->get_extra_column_count();
+      iter_scan_total_num += unfiltered_vid_cnt;
       for (int i = 0; OB_SUCC(ret) && i < unfiltered_vid_cnt && !adaptor_vid_iter_->get_enough(); ++i) {
         ObNewRow *row = nullptr;
         if (OB_FAIL(tmp_adaptor_vid_iter_->get_next_row(row, vec_aux_ctdef_->result_output_))) {
@@ -1581,7 +1587,8 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
         }
       } // end for
       if (OB_FAIL(ret)) {
-      } else if (tmp_adaptor_vid_iter_->get_total() < query_cond_.query_limit_) {
+      } else if (tmp_adaptor_vid_iter_->get_total() < query_cond_.query_limit_
+      || (iter_scan_total_num > hnsw_max_iter_scan_nums && hnsw_max_iter_scan_nums > 0)) {
         // res is already less than limit, no need to find again
         query_cond_.query_limit_ = 0;
         LOG_TRACE("iteractive filter log:", K(tmp_adaptor_vid_iter_->get_total()), K(query_cond_.query_limit_), K(total_before_add), K(adaptor_vid_iter_->get_total()));
@@ -1880,11 +1887,7 @@ int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query
     } else if (OB_FALSE_IT(query_cond.ef_search_ = ob_hnsw_ef_search)) {
     } else {
       uint64_t real_limit = limit_param_.limit_ + limit_param_.offset_;
-      // if selectivity_ == 1 means there is no filter
-      if (!is_pre_filter_ && (selectivity_ != 1 && selectivity_ != 0)) {
-        real_limit = real_limit * 2 > ob_hnsw_ef_search ? real_limit * 2 : ob_hnsw_ef_search;
-        real_limit = real_limit > MAX_VSAG_QUERY_RES_SIZE ? MAX_VSAG_QUERY_RES_SIZE : real_limit;
-      } else if (is_hnsw_bq()) {
+      if (is_hnsw_bq()) {
         // normally topK(real_limit) should be the same as ef_search for bq
         // but if topK is larger than ef_search, use topK
         real_limit = OB_MIN(OB_MAX(real_limit, ob_hnsw_ef_search), MAX_VSAG_QUERY_RES_SIZE);

@@ -1684,5 +1684,16 @@ bool ObConfigGlobalIndexAutoSplitPolicyChecker::check(const ObConfigItem &t) con
   return bret;
 }
 
+bool ObHNSWIterFilterScanNumChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  int64_t iter_max_scan_num = ObConfigIntParser::get(t.str(), is_valid);
+  if (is_valid) {
+    is_valid = (iter_max_scan_num >= MIN_HNSW_ITER_SCAN_NUMS &&
+                iter_max_scan_num <= MAX_HNSW_ITER_SCAN_NUMS);
+  }
+  return is_valid;
+}
+
 } // end of namepace common
 } // end of namespace oceanbase
