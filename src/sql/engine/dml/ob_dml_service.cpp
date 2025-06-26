@@ -161,6 +161,8 @@ int ObDMLService::check_column_null(
         const ObString &column_name = column_info.column_name_;
         LOG_USER_WARN(OB_BAD_NULL_ERROR, column_name.length(), column_name.ptr());
       }
+    } else if (ob_is_user_defined_type(expr->obj_meta_.get_type())) {
+      // do nothing for xml column
     } else {
       //output warning msg
       const ObString &column_name = column_info.column_name_;

@@ -1620,6 +1620,9 @@ int ObTableParam::convert_column_schema_to_param(const ObColumnSchemaV2 &column_
   column_param.set_accuracy(column_schema.get_accuracy());
   column_param.set_nullable_for_write(!column_schema.is_not_null_for_write());
   column_param.set_nullable_for_read(!column_schema.is_not_null_for_read());
+  if (column_schema.is_xmltype()) {
+    column_param.set_nullable_for_write(true);
+  }
   column_param.set_gen_col_flag(column_schema.is_generated_column(),
                                 column_schema.is_virtual_generated_column());
   column_param.set_gen_col_udf_expr(column_schema.is_generated_column_using_udf());

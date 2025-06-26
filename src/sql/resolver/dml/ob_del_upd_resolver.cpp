@@ -3170,13 +3170,20 @@ int ObDelUpdResolver::build_column_conv_function_for_udt_column(ObInsertTableInf
       }
 
       if (OB_SUCC(ret)) {
-       ObConstRawExpr *c_expr = NULL;
-       if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_NULL,
+        ObConstRawExpr *c_expr = NULL;
+        ObRawExpr *raw_c_expr = NULL;
+        if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_NULL,
                                                           c_expr))) {
           LOG_WARN("create raw expr failed", K(ret));
+        } else if (FALSE_IT(raw_c_expr = c_expr)) {
+        } else if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
+                                                                  *params_.allocator_,
+                                                                  *column_item->get_expr(), // build col conv for udt column
+                                                                  raw_c_expr, session_info_))) {
+          LOG_WARN("fail to build column conv expr", K(ret));
         } else {
           // udt column convert expr is useless, make T_NULL for it;
-          table_info.column_conv_exprs_.at(idx) = c_expr;
+          table_info.column_conv_exprs_.at(idx) = raw_c_expr;
           table_info.column_conv_exprs_.at(hidd_idx) = function_expr;
           LOG_DEBUG("add column conv expr", K(*function_expr));
         }

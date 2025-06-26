@@ -1803,7 +1803,7 @@ int ObDelUpdLogPlan::prune_virtual_column(IndexDMLInfo &index_dml_info)
     for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info.column_exprs_.count(); ++i) {
       const ObColumnRefRawExpr *col_expr = index_dml_info.column_exprs_.at(i);
       if (lib::is_oracle_mode() &&
-          (col_expr->is_virtual_generated_column() || col_expr->is_xml_column()) && // udt/xml column need remove
+          (col_expr->is_virtual_generated_column()) && // udt/xml column need remove
           !optimizer_context_.has_trigger()) {
         //why need to exclude trigger here?
         //see the issue:
