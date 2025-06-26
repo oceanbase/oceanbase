@@ -351,6 +351,7 @@ private:
   int prepare_sstable_index_builder(const ObTabletLobWriteSSTableCtx &write_sstable_ctx,
                                     const ObTabletID &new_tablet_id,
                                     const ObStorageSchema &storage_schema,
+                                    ObWholeDataStoreDesc &data_desc,
                                     ObSSTableIndexBuilder *&index_builder);
   int dispatch_rows(ObIArray<ObIStoreRowIteratorPtr>& iters,
                     ObArrayArray<ObMacroBlockWriter*>& slice_writers);

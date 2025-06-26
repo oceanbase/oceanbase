@@ -1286,16 +1286,20 @@ int ObTabletLobWriteDataTask::prepare_sstable_writers_and_builders(
       } else if (OB_FAIL(data_desc_arr.push_back(ObArray<ObWholeDataStoreDesc>()))) {
         LOG_WARN("false to init index_builders array", K(ret));
       }
+      // push_back all elements first so that address used to init macro_block_writer won't be changed
+      for (int64_t j = 0; j < ctx_->new_lob_tablet_ids_.count() && OB_SUCC(ret); j++) {
+        ObWholeDataStoreDesc data_desc;
+        if (OB_FAIL(data_desc_arr.push_back(i, data_desc))) {
+          LOG_WARN("fail to push index builder", K(ret));
+        }
+      }
     }
   }
   for (int64_t i = 0; i < write_sstable_ctx_array_.count() && OB_SUCC(ret); i++) {
     for (int64_t j = 0; j < ctx_->new_lob_tablet_ids_.count() && OB_SUCC(ret); j++) {
-      ObWholeDataStoreDesc data_desc;
       ObMacroBlockWriter *new_slice_writer = nullptr;
       ObSSTableIndexBuilder *new_index_builder = nullptr;
-      if (OB_FAIL(data_desc_arr.push_back(i, data_desc))) {
-        LOG_WARN("fail to push index builder", K(ret));
-      } else if (OB_FAIL(prepare_sstable_writer(write_sstable_ctx_array_.at(i),
+      if (OB_FAIL(prepare_sstable_writer(write_sstable_ctx_array_.at(i),
                                           j/*index of the new lob tablet*/,
                                           storage_schema,
                                           data_desc_arr.at(i, j),
@@ -1337,6 +1341,7 @@ int ObTabletLobWriteDataTask::prepare_sstable_writer(const ObTabletLobWriteSSTab
   } else if (OB_FAIL(prepare_sstable_index_builder(write_sstable_ctx,
                                                    ctx_->new_lob_tablet_ids_.at(dest_tablet_index),
                                                    storage_schema,
+                                                   data_desc,
                                                    index_builder))) {
     LOG_WARN("fail to prepare index builder", K(ret));
   } else if (OB_FAIL(prepare_sstable_macro_writer(write_sstable_ctx, dest_tablet_index, storage_schema, data_desc, index_builder, slice_writer))) {
@@ -1413,42 +1418,18 @@ int ObTabletLobWriteDataTask::prepare_sstable_macro_writer(const ObTabletLobWrit
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_arena("SplitGetLob", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   void *buf = nullptr;
-  ObTabletHandle tablet_handle;
   ObTabletID new_tablet_id;
   if (OB_UNLIKELY(dest_tablet_index < 0
       || dest_tablet_index >= ctx_->new_lob_tablet_ids_.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(dest_tablet_index), "cnt", ctx_->new_lob_tablet_ids_.count());
   } else if (OB_FALSE_IT(new_tablet_id = ctx_->new_lob_tablet_ids_.at(dest_tablet_index))) {
-  } else if (OB_FAIL(ObTabletSplitUtil::get_tablet(tmp_arena, ctx_->ls_handle_, new_tablet_id,
-      false/*is_shared_mode*/, tablet_handle, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
-    LOG_WARN("get tablet failed", K(ret), K(new_tablet_id));
   } else {
-    const ObMergeType merge_type = write_sstable_ctx.merge_type_;
-    const int64_t snapshot_version = write_sstable_ctx.get_version();
-    const bool micro_index_clustered = ctx_->lob_meta_tablet_handle_.get_obj()->get_tablet_meta().micro_index_clustered_;
     ObMacroSeqParam macro_seq_param;
     ObPreWarmerParam pre_warm_param;
     ObSSTablePrivateObjectCleaner *object_cleaner = nullptr;
-    compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() ?
-        ObExecMode::EXEC_MODE_OUTPUT : ObExecMode::EXEC_MODE_LOCAL;
     if (OB_FAIL(prepare_macro_seq_param(write_sstable_ctx, dest_tablet_index, macro_seq_param))) {
       LOG_WARN("prepare macro seq param failed", K(ret), K(write_sstable_ctx));
-    } else if (OB_FAIL(data_desc.init(true/*is_ddl*/, storage_schema,
-                               param_->ls_id_,
-                               new_tablet_id,
-                               merge_type,
-                               snapshot_version,
-                               param_->data_format_version_,
-                               micro_index_clustered,
-                               tablet_handle.get_obj()->get_transfer_seq(),
-                               ctx_->split_scn_,
-                               write_sstable_ctx.table_key_.get_end_scn(),
-                               nullptr/*cg_schema*/,
-                               0/*table_cg_idx*/,
-                               exec_mode))) {
-      LOG_WARN("fail to init data store desc", K(ret), "dest_tablet_id", new_tablet_id, KPC(param_), KPC(ctx_));
-    } else if (FALSE_IT(data_desc.get_desc().sstable_index_builder_ = index_builder)) {
     } else if (OB_ISNULL(buf = ctx_->allocator_.alloc(sizeof(ObMacroBlockWriter)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc mem failed", K(ret));
@@ -1480,12 +1461,12 @@ int ObTabletLobWriteDataTask::prepare_sstable_macro_writer(const ObTabletLobWrit
 int ObTabletLobWriteDataTask::prepare_sstable_index_builder(const ObTabletLobWriteSSTableCtx &write_sstable_ctx,
                                                             const ObTabletID &new_tablet_id,
                                                             const ObStorageSchema &storage_schema,
+                                                            ObWholeDataStoreDesc &data_desc,
                                                             ObSSTableIndexBuilder *&index_builder)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_arena("SplitGetLob", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObTabletHandle tablet_handle;
-  ObWholeDataStoreDesc data_desc;
   ObITable::TableKey dest_table_key = write_sstable_ctx.table_key_;
   dest_table_key.tablet_id_ = new_tablet_id;
   const ObMergeType merge_type = write_sstable_ctx.merge_type_;
@@ -1507,7 +1488,7 @@ int ObTabletLobWriteDataTask::prepare_sstable_index_builder(const ObTabletLobWri
         merge_type,
         snapshot_version,
         param_->data_format_version_,
-        tablet_handle.get_obj()->get_tablet_meta().micro_index_clustered_,
+        ctx_->lob_meta_tablet_handle_.get_obj()->get_tablet_meta().micro_index_clustered_,
         tablet_handle.get_obj()->get_transfer_seq(),
         ctx_->split_scn_,
         write_sstable_ctx.table_key_.get_end_scn(),
@@ -1527,6 +1508,8 @@ int ObTabletLobWriteDataTask::prepare_sstable_index_builder(const ObTabletLobWri
     } else if (OB_FAIL(index_builder->init(data_desc.get_desc(),
                                             ObSSTableIndexBuilder::DISABLE))) {
       LOG_WARN("failed to init index builder", K(ret), K(data_desc));
+    } else {
+      data_desc.get_desc().sstable_index_builder_ = index_builder;
     }
     if (OB_FAIL(ret)) {
       if (nullptr != index_builder) {
