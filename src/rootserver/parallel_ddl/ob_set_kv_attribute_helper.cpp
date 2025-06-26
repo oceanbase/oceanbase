@@ -407,13 +407,13 @@ int ObSetKvAttributeHelper::check_and_modify_kv_attr_(ObKVAttr &kv_attr, bool is
   int ret = OB_SUCCESS;
   const ObString &tablegroup_name = get_params_().table_group_name_;
   if (kv_attr.is_disable_ && is_table_disable) {
-    ret = OB_KV_TABLE_NOT_DISABLED;
-    LOG_WARN("table has already disable", KR(ret), K(kv_attr));
-    LOG_USER_ERROR(OB_KV_TABLE_NOT_DISABLED, tablegroup_name.length(), tablegroup_name.ptr());
-  } else if (!kv_attr.is_disable_ && !is_table_disable) {
     ret = OB_KV_TABLE_NOT_ENABLED;
-    LOG_WARN("table has already enable", KR(ret), K(kv_attr));
+    LOG_WARN("table has already disable, can't disable again", KR(ret), K(kv_attr));
     LOG_USER_ERROR(OB_KV_TABLE_NOT_ENABLED, tablegroup_name.length(), tablegroup_name.ptr());
+  } else if (!kv_attr.is_disable_ && !is_table_disable) {
+    ret = OB_KV_TABLE_NOT_DISABLED;
+    LOG_WARN("table has already enable, can't enable again", KR(ret), K(kv_attr));
+    LOG_USER_ERROR(OB_KV_TABLE_NOT_DISABLED, tablegroup_name.length(), tablegroup_name.ptr());
   } else {
     kv_attr.is_disable_ = is_table_disable;
   }

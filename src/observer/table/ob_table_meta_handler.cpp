@@ -1507,9 +1507,9 @@ int ObHTableDisableTableHandler::handle(ObTableExecCtx &ctx, ObTableMetaResponse
       LOG_WARN("failed get table state", K(ret), K(schema->get_kv_attributes()));
     } else if (kv_attr.is_disable_) {
       // table is already disabled, error
-      ret = OB_KV_TABLE_NOT_DISABLED;
-      LOG_WARN("table is already disabled", K(ret));
-      LOG_USER_ERROR(OB_KV_TABLE_NOT_DISABLED, table_group_name_.length(), table_group_name_.ptr());
+      ret = OB_KV_TABLE_NOT_ENABLED;
+      LOG_WARN("table is not enabled, can't disable", K(ret));
+      LOG_USER_ERROR(OB_KV_TABLE_NOT_ENABLED, table_group_name_.length(), table_group_name_.ptr());
     } else {
       // table is enabled, disable table
       ObTableApiSessGuard &session_guard = ctx.get_sess_guard();
@@ -1558,9 +1558,9 @@ int ObHTableEnableTableHandler::handle(ObTableExecCtx &ctx, ObTableMetaResponse 
     } else if (OB_FAIL(ObTTLUtil::parse_kv_attributes(schema->get_kv_attributes(), kv_attr))) {
       LOG_WARN("failed get table state", K(ret), K(schema->get_kv_attributes()));
     } else if (!kv_attr.is_disable_) {
-      ret = OB_KV_TABLE_NOT_ENABLED;
-      LOG_WARN("table is not enabled", K(ret));
-      LOG_USER_ERROR(OB_KV_TABLE_NOT_ENABLED, table_group_name_.length(), table_group_name_.ptr());
+      ret = OB_KV_TABLE_NOT_DISABLED;
+      LOG_WARN("table is not disabled, can't enable", K(ret));
+      LOG_USER_ERROR(OB_KV_TABLE_NOT_DISABLED, table_group_name_.length(), table_group_name_.ptr());
     } else {
       // table is enabled, disable table
       ObTableApiSessGuard &session_guard = ctx.get_sess_guard();
