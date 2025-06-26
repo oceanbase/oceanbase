@@ -227,7 +227,7 @@ ObTablet::ObTablet(const bool is_external_tablet)
     is_external_tablet_(is_external_tablet)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  check_size<ObTablet, ObRowkeyReadInfo, 1488>();
+  check_size<ObTablet, ObRowkeyReadInfo, 1496>();
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
@@ -7708,7 +7708,10 @@ int ObTablet::build_transfer_tablet_param_current_(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(mig_tablet_param.transfer_info_.init(tablet_meta_.ls_id_, user_data.transfer_scn_, transfer_seq))) {
+    } else if (OB_FAIL(mig_tablet_param.transfer_info_.init(tablet_meta_.ls_id_,
+                                                            user_data.transfer_scn_,
+                                                            transfer_seq,
+                                                            tablet_meta_.transfer_info_.transfer_start_scn_))) {
       LOG_WARN("failed to init transfer info", K(ret), K(tablet_meta_), K(user_data));
     } else {
       mig_tablet_param.version_ = ObMigrationTabletParam::PARAM_VERSION_V3;

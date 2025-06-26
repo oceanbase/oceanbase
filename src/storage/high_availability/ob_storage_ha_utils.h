@@ -89,6 +89,9 @@ public:
   static int get_tablet_backup_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &backup_size);
   static int get_tablet_occupy_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &occupy_size);
   static int deal_compat_with_ls_inner_tablet(const ObLSID &ls_id);
+#ifdef ERRSIM
+  static int is_errsim_transfer_server(bool &is_errsim_server);
+#endif
 private:
   struct TableKeySnapshotVersionComparator final
   {

@@ -23,7 +23,8 @@ ObTabletTransferInfo::ObTabletTransferInfo()
     transfer_start_scn_(),
     transfer_seq_(-1),
     has_transfer_table_(false),
-    is_transfer_out_deleted_(false)
+    is_transfer_out_deleted_(false),
+    src_reorganization_scn_()
 {
 }
 
@@ -35,24 +36,31 @@ int ObTabletTransferInfo::init()
   transfer_seq_ = TRANSFER_INIT_SEQ;
   has_transfer_table_ = false;
   is_transfer_out_deleted_ = false;
+  src_reorganization_scn_.set_min();
   return ret;
 }
 
 int ObTabletTransferInfo::init(
     const share::ObLSID &ls_id,
     const share::SCN &transfer_start_scn,
-    const int64_t transfer_seq)
+    const int64_t transfer_seq,
+    const share::SCN &src_reorganization_scn)
 {
   int ret = OB_SUCCESS;
-  if (!ls_id.is_valid() || !transfer_start_scn.is_valid_and_not_min() || transfer_seq < 0) {
+  if (!ls_id.is_valid()
+   || !transfer_start_scn.is_valid_and_not_min()
+   || transfer_seq < 0
+   || !src_reorganization_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("init transfer info get invalid argument", K(ret), K(ls_id), K(transfer_start_scn), K(transfer_seq));
+    LOG_WARN("init transfer info get invalid argument",
+      K(ret), K(ls_id), K(transfer_start_scn), K(transfer_seq), K(src_reorganization_scn));
   } else {
     ls_id_ = ls_id;
     transfer_start_scn_ = transfer_start_scn;
     transfer_seq_ = transfer_seq;
     has_transfer_table_ = true;
     is_transfer_out_deleted_ = false;
+    src_reorganization_scn_ = src_reorganization_scn;
   }
   return ret;
 }
@@ -64,6 +72,7 @@ void ObTabletTransferInfo::reset()
   transfer_seq_ = -1;
   has_transfer_table_ = false;
   is_transfer_out_deleted_ = false;
+  src_reorganization_scn_.reset();
 }
 
 bool ObTabletTransferInfo::is_valid() const
@@ -71,6 +80,7 @@ bool ObTabletTransferInfo::is_valid() const
   return ls_id_.is_valid()
       && transfer_start_scn_.is_valid()
       && transfer_seq_ >= 0;
+      // won't check src_reorganization_scn_ for compatibility
 }
 
 bool ObTabletTransferInfo::has_transfer_table() const
@@ -90,4 +100,4 @@ bool ObTabletTransferInfo::is_transfer_out_deleted() const
 }
 
 OB_SERIALIZE_MEMBER(ObTabletTransferInfo, ls_id_, transfer_start_scn_, transfer_seq_, has_transfer_table_,
-  is_transfer_out_deleted_);
+  is_transfer_out_deleted_, src_reorganization_scn_);

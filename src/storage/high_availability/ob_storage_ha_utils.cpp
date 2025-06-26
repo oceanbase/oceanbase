@@ -1735,6 +1735,25 @@ void ObStorageHAUtils::sort_table_key_array_by_snapshot_version(common::ObArray<
   lib::ob_sort(table_key_array.begin(), table_key_array.end(), cmp);
 }
 
+#ifdef ERRSIM
+int ObStorageHAUtils::is_errsim_transfer_server(bool &is_errsim_server)
+{
+  int ret = OB_SUCCESS;
+  is_errsim_server = false;
+  const ObString &errsim_addr_str = GCONF.errsim_transfer_backfill_server_addr.str();
+  common::ObAddr errsim_addr;
+  const common::ObAddr &self_addr = GCONF.self_addr_;
+
+  if (!errsim_addr_str.empty() && OB_FAIL(errsim_addr.parse_from_string(errsim_addr_str))) {
+    LOG_WARN("failed to parse errsim addr", K(errsim_addr_str));
+  } else if (self_addr == errsim_addr) {
+    is_errsim_server = true;
+  }
+
+  return ret;
+}
+#endif
+
 bool ObTransferUtils::enable_transfer_dml_ctrl(const uint64_t data_version)
 {
   bool b_ret = false;

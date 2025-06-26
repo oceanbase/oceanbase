@@ -17,6 +17,7 @@
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "rootserver/ob_tenant_info_loader.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/incremental/ob_shared_meta_service.h"
 #endif
@@ -28,6 +29,7 @@ namespace storage
 {
 namespace checkpoint
 {
+ERRSIM_POINT_DEF(EN_DONT_UPDATE_TABLET_TO_EMPTY_SHELL);
 
 // The time interval for checking deleted tablet trigger is 5s
 const int64_t ObEmptyShellTask::GC_EMPTY_TABLET_SHELL_INTERVAL = 5 * 1000 * 1000L;
@@ -213,17 +215,34 @@ int ObTabletEmptyShellHandler::get_empty_shell_tablet_ids(common::ObTabletIDArra
 int ObTabletEmptyShellHandler::update_tablets_to_empty_shell(ObLS *ls, const common::ObIArray<common::ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-    const ObTabletID &tablet_id = tablet_ids.at(i);
-    if (OB_FAIL(ls->get_tablet_svr()->update_tablet_to_empty_shell(tablet_id))) {
-      STORAGE_LOG(WARN, "failed to update tablet to shell", K(ret), K(ls->get_ls_id()), K(tablet_id));
-    } else if (OB_FAIL(ddl_empty_shell_checker_.erase_tablet_record(tablet_id))) {
-      STORAGE_LOG(WARN, "erase ddl tablet record failed", K(ret));
-    } else {
-    #ifdef ERRSIM
-      const uint64_t tenant_id = MTL_ID();
-      SERVER_EVENT_ADD("gc", "turn_into_empty_shell", "tenant_id", tenant_id, "ls_id", ls->get_ls_id(), "tablet_id", tablet_id);
-    #endif
+  bool need_update = true;
+#ifdef ERRSIM
+  int tmp_ret = OB_SUCCESS;
+  bool is_errsim_transfer_server = false;
+
+  if (OB_TMP_FAIL(ObStorageHAUtils::is_errsim_transfer_server(is_errsim_transfer_server))) {
+    LOG_WARN_RET(tmp_ret, "failed to check is errsim transfer server");
+  } else if (is_errsim_transfer_server) {
+    if (OB_SUCCESS != EN_DONT_UPDATE_TABLET_TO_EMPTY_SHELL) {
+      LOG_INFO("errsim do not set tablet status to transfer out deleted", "ls_id", ls->get_ls_id(), "tablet_ids", tablet_ids);
+      need_update = false;
+    }
+  }
+#endif
+
+  if (need_update) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+      const ObTabletID &tablet_id = tablet_ids.at(i);
+      if (OB_FAIL(ls->get_tablet_svr()->update_tablet_to_empty_shell(tablet_id))) {
+        STORAGE_LOG(WARN, "failed to update tablet to shell", K(ret), K(ls->get_ls_id()), K(tablet_id));
+      } else if (OB_FAIL(ddl_empty_shell_checker_.erase_tablet_record(tablet_id))) {
+        STORAGE_LOG(WARN, "erase ddl tablet record failed", K(ret));
+      } else {
+#ifdef ERRSIM
+        const uint64_t tenant_id = MTL_ID();
+        SERVER_EVENT_ADD("gc", "turn_into_empty_shell", "tenant_id", tenant_id, "ls_id", ls->get_ls_id(), "tablet_id", tablet_id);
+#endif
+      }
     }
   }
 
