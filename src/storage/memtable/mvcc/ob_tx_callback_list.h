@@ -73,11 +73,7 @@ public:
                                        const transaction::ObTxSEQ from_seq,
                                        const share::SCN replay_scn);
 
-  // reverse_search_callback_by_seq_no will search callback from back to front
-  // until callbacks smaller or equal than the seq_no
-  int reverse_search_callback_by_seq_no(const transaction::ObTxSEQ seq_no, ObITransCallback *search_res);
-
-  // get_memtable_key_arr_w_timeout get all memtable key until timeout
+  // get_memtable_key_arr__timeout get all memtable key until timeout
   int get_memtable_key_arr_w_timeout(transaction::ObMemtableKeyArray &memtable_key_arr);
 
   // clean_unlog_callbacks will remove all unlogged callbacks. Which is called
