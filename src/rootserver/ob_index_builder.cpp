@@ -202,7 +202,8 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
                                                       trans,
                                                       new_index_schema))) {
           LOG_WARN("renmae index name failed", K(ret));
-        } else if (OB_FAIL(submit_drop_index_task(trans, *table_schema, new_index_schema, new_index_schema.get_schema_version(), arg, allocator, task_record))) {
+        } else if (OB_FAIL(submit_drop_index_task(trans, *table_schema, new_index_schema, new_index_schema.get_schema_version(),
+                           arg, nullptr/*inc_data_tablet_ids*/, nullptr/*del_data_tablet_ids*/, allocator, task_record))) {
           LOG_WARN("submit drop index task failed", K(ret));
         } else {
           res.tenant_id_ = new_index_schema.get_tenant_id();
@@ -386,6 +387,8 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
                                            const ObTableSchema &index_schema,
                                            const int64_t schema_version,
                                            const obrpc::ObDropIndexArg &arg,
+                                           const common::ObIArray<common::ObTabletID> *inc_data_tablet_ids,
+                                           const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
                                            common::ObIAllocator &allocator,
                                            ObDDLTaskRecord &task_record)
 {
@@ -409,7 +412,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
     if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
       LOG_WARN("submit create index ddl task failed", K(ret));
     } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(
-        data_schema, nullptr/*inc_data_tablet_ids*/, nullptr/*del_data_tablet_ids*/, index_schema, ObTableLockOwnerID(task_record.task_id_), trans))) {
+                       data_schema, inc_data_tablet_ids, del_data_tablet_ids, index_schema, ObTableLockOwnerID(task_record.task_id_), trans))) {
       LOG_WARN("failed to lock online ddl lock", K(ret));
     }
   }

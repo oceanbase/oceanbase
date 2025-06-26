@@ -80,10 +80,12 @@ public:
                       share::schema::ObTableSchema &index_schema);
   int submit_drop_index_task(
       common::ObMySQLTransaction &trans,
-      const share::schema::ObTableSchema &data_schema,
-      const share::schema::ObTableSchema &index_schema,
+      const ObTableSchema &data_schema,
+      const ObTableSchema &index_schema,
       const int64_t schema_version,
       const obrpc::ObDropIndexArg &arg,
+      const common::ObIArray<common::ObTabletID> *inc_data_tablet_ids,
+      const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
       common::ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
   int submit_build_index_task(common::ObMySQLTransaction &trans,
