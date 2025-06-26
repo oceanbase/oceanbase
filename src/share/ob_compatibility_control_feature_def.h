@@ -37,4 +37,9 @@ DEF_COMPAT_CONTROL_FEATURE(NULL_VALUE_FOR_CLOSED_CURSOR,
 DEF_COMPAT_CONTROL_FEATURE(FUNC_LOCATE_NULL,
     "The result of REPLACE('x', 'abc', null) is different in MySQL 5.7 and 8.0",
     CLUSTER_VERSION_4_2_5_0)
+
+DEF_COMPAT_CONTROL_FEATURE(OUT_ANONYMOUS_COLLECTION_IS_ALLOW,
+    "The output parameter is returned according to the original input param \n"
+    "type which is not empty for inout anonymous array which used in anonymous block",
+    CLUSTER_VERSION_4_2_5_5)
 #endif

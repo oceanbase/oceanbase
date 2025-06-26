@@ -1165,7 +1165,10 @@ do {                                                                            
               } else {
                 param_type = iparam->get_pl_data_type();
               }
-              OZ (pl::ObPLResolver::set_question_mark_type(iexpr, params.secondary_namespace_, &param_type));
+              OZ (pl::ObPLResolver::set_question_mark_type( iexpr,
+                                                            params.secondary_namespace_,
+                                                            &param_type,
+                                                            *(params.session_info_)));
             }
           } else if (T_OP_GET_PACKAGE_VAR == iexpr->get_expr_type()) {
             const ObSysFunRawExpr *f_expr = static_cast<const ObSysFunRawExpr *>(iexpr);
