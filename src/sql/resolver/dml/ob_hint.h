@@ -219,6 +219,7 @@ struct ObOptParamHint
     DEF(PARQUET_FILTER_PUSHDOWN_LEVEL,)             \
     DEF(ORC_FILTER_PUSHDOWN_LEVEL,)                 \
     DEF(ENABLE_INDEX_MERGE,)                        \
+    DEF(ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY, )     \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);

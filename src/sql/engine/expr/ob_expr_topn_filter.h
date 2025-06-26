@@ -95,7 +95,9 @@ public:
   inline void collect_sample_info(const int64_t filter_count,
                                   const int64_t total_count) override final
   {
-    (void)slide_window_.update_slide_window_info(filter_count, total_count);
+    if (enable_slide_window_) {
+      (void)slide_window_.update_slide_window_info(filter_count, total_count);
+    }
   }
 
   template <typename... Args>
@@ -141,7 +143,8 @@ public:
     struct
     {
       bool is_first_ : 1;
-      int64_t reserved_ : 63;
+      bool enable_slide_window_ : 1;
+      int64_t reserved_ : 62;
     };
   };
   FilterState state_;

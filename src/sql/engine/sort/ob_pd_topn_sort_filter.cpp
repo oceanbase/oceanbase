@@ -164,6 +164,7 @@ int ObPushDownTopNFilter::create_pd_topn_filter_ctx(
       topn_filter_ctx->topn_filter_key_ = dh_key;
       topn_filter_ctx->slide_window_.set_adptive_ratio_thresheld(
           pd_topn_filter_info->adaptive_filter_ratio_);
+      topn_filter_ctx_->enable_slide_window_ = pd_topn_filter_info->enable_runtime_filter_adaptive_apply_;
       int64_t max_batch_size = max(pd_topn_filter_info->max_batch_size_, 1);
       void *buf = nullptr;
       if (OB_ISNULL(buf = exec_ctx->get_allocator().alloc((sizeof(uint16_t) * max_batch_size)))) {

@@ -74,7 +74,8 @@ OB_SERIALIZE_MEMBER((ObJoinFilterSpec, ObOpSpec),
                     full_hash_join_keys_,
                     hash_join_is_ns_equal_cond_,
                     rf_max_wait_time_ms_, // FARM COMPAT WHITELIST
-                    use_ndv_runtime_bloom_filter_size_ // FARM COMPAT WHITELIST
+                    use_ndv_runtime_bloom_filter_size_, // FARM COMPAT WHITELIST
+                    enable_runtime_filter_adaptive_apply_
                     );
 
 OB_SERIALIZE_MEMBER(ObJoinFilterOpInput,
@@ -2013,6 +2014,7 @@ int ObJoinFilterOp::open_join_filter_use()
           join_filter_ctx->hash_funcs_.set_allocator(&ctx_.get_allocator());
           join_filter_ctx->cmp_funcs_.set_allocator(&ctx_.get_allocator());
           join_filter_ctx->is_partition_wise_jf_ = !MY_SPEC.is_shared_join_filter();
+          join_filter_ctx->enable_slide_window_ = MY_SPEC.enable_runtime_filter_adaptive_apply_;
           if (OB_FAIL(join_filter_ctx->hash_funcs_.init(MY_SPEC.hash_funcs_.count()))) {
             LOG_WARN("failed to assign hash_func");
           } else if (OB_FAIL(join_filter_ctx->cmp_funcs_.init(MY_SPEC.cmp_funcs_.count()))) {
