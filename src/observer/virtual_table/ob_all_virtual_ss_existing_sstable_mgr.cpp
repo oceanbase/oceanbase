@@ -302,7 +302,7 @@ int ObAllVirtualSSExistingSSTableMgr::get_next_table_(ObITable *&table)
       while (OB_SUCC(ret)) {
         table_store_iter_.reset();
         if (OB_FAIL(get_next_tablet_())) {
-          if (OB_ITER_END != ret) {
+          if (OB_ITER_END != ret && OB_INVALID_QUERY_TIMESTAMP != ret) {
             SERVER_LOG(WARN, "fail to get next tablet", K(ret));
           }
         } else if (OB_FAIL(tablet_->get_all_tables(table_store_iter_, true/*unpack_cg_table*/))) {

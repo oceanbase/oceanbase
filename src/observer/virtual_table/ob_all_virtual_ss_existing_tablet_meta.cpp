@@ -30,7 +30,8 @@ ObAllVirtualSSExistingTabletMeta::ObAllVirtualSSExistingTabletMeta()
       tenant_id_(0),
       ls_id_(),
       tablet_id_(),
-      transfer_scn_()
+      transfer_scn_(),
+      result_()
 {
 }
 
@@ -45,6 +46,7 @@ void ObAllVirtualSSExistingTabletMeta::reset()
   ls_id_.reset();
   tablet_id_.reset();
   transfer_scn_.reset();
+  result_.reset();
 }
 
 int ObAllVirtualSSExistingTabletMeta::inner_get_next_row(common::ObNewRow *&row)
@@ -232,11 +234,11 @@ int ObAllVirtualSSExistingTabletMeta::fill_in_rows_(const ObArray<VirtualTabletM
         cells[col_i].set_int(row_data.sstable_op_id_);
         break;
       case UPDATE_REASON:
-      if (row_data.update_reason_str_.empty()) {
-        cells[col_i].set_varchar(get_meta_update_reason_name(row_data.update_reason_));
-      } else {
-        cells[col_i].set_varchar(row_data.update_reason_str_);
-      }
+        if (row_data.update_reason_str_.empty()) {
+          cells[col_i].set_varchar(get_meta_update_reason_name(row_data.update_reason_));
+        } else {
+          cells[col_i].set_varchar(row_data.update_reason_str_);
+        }
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -326,21 +328,19 @@ int ObAllVirtualSSExistingTabletMeta::get_virtual_rows_remote_(
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "lst operator ptr or sql proxy is null", KR(ret), KP(GCTX.sql_proxy_));
   } else {
-    SMART_VAR(ObISQLClient::ReadResult, result) {
-      ObSqlString sql;
-      if (OB_FAIL(sql.assign_fmt(
-                     "SELECT * FROM %s WHERE tenant_id=%lu and tablet_id=%lu and ls_id=%lu and transfer_scn=%lu",
-                     OB_ALL_VIRTUAL_SS_EXISTING_TABLET_META_TNAME, tenant_id, tablet_id.id(),
-                     ls_id.id(), transfer_scn.get_val_for_sql()))) {
-        SERVER_LOG(WARN, "failed to assign sql", KR(ret), K(sql), K(tenant_id), K(ls_id));
-       } else if (OB_FAIL(GCTX.sql_proxy_->read(result, tenant_id, sql.ptr()))) {
-        SERVER_LOG(WARN, "execute sql failed", KR(ret), K(tenant_id), K(sql));
-      } else if (OB_ISNULL(result.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "get mysql result failed", KR(ret), K(sql));
-      } else if (OB_FAIL(get_virtual_rows_remote_(*result.get_result(), row_datas))) {
-        SERVER_LOG(WARN, "generate virtual row remote failed", KR(ret));
-      }
+    ObSqlString sql;
+    if (OB_FAIL(sql.assign_fmt(
+                    "SELECT * FROM %s WHERE tenant_id=%lu and tablet_id=%lu and ls_id=%lu and transfer_scn=%lu",
+                    OB_ALL_VIRTUAL_SS_EXISTING_TABLET_META_TNAME, tenant_id, tablet_id.id(),
+                    ls_id.id(), transfer_scn.get_val_for_sql()))) {
+      SERVER_LOG(WARN, "failed to assign sql", KR(ret), K(sql), K(tenant_id), K(ls_id));
+    } else if (OB_FAIL(GCTX.sql_proxy_->read(result_, tenant_id, sql.ptr()))) {
+      SERVER_LOG(WARN, "execute sql failed", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_ISNULL(result_.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "get mysql result failed", KR(ret), K(sql));
+    } else if (OB_FAIL(get_virtual_rows_remote_(*result_.get_result(), row_datas))) {
+      SERVER_LOG(WARN, "generate virtual row remote failed", KR(ret));
     }
   }
   return ret;

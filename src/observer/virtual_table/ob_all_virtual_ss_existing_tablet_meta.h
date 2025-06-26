@@ -69,6 +69,7 @@ private:
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   share::SCN transfer_scn_;
+  ObISQLClient::ReadResult result_; // make sure lifetime is long enough to hold varchar results.
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualSSExistingTabletMeta);
 };
