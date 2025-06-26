@@ -216,7 +216,8 @@ struct ObOptStatRunningMonitor
     last_start_time_(current_time),
     last_memory_used_(current_memory_used),
     opt_stat_gather_stat_(opt_stat_gather_stat),
-    audit_(audit)
+    audit_(audit),
+    failed_part_ids_()
   {
     opt_stat_gather_stat_.set_start_time(current_time);
   }
@@ -244,6 +245,8 @@ struct ObOptStatRunningMonitor
   int64_t last_memory_used_;
   ObOptStatGatherStat &opt_stat_gather_stat_;
   ObOptStatGatherAudit &audit_;
+
+   ObSEArray<int64_t, 4> failed_part_ids_;
 };
 
 class ObOptStatGatherStatList

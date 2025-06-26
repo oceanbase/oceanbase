@@ -66,6 +66,8 @@ extern int init_top_fre_hist_aggregate(RuntimeContext &agg_ctx, const int64_t ag
                                        ObIAllocator &allocator, IAggregate *&agg);
 extern int init_hybrid_hist_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                       ObIAllocator &allocator, IAggregate *&agg);
+extern int init_string_prefix_max_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                            ObIAllocator &allocator, IAggregate *&agg);
 #define INIT_AGGREGATE_CASE(OP_TYPE, func_name, col_id)                                            \
   case (OP_TYPE): {                                                                                \
     ret = init_##func_name##_aggregate(agg_ctx, col_id, allocator, aggregate);                     \
@@ -113,6 +115,7 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
         INIT_AGGREGATE_CASE(T_FUN_GROUP_CONCAT, group_concat, i);
         INIT_AGGREGATE_CASE(T_FUN_TOP_FRE_HIST, top_fre_hist, i);
         INIT_AGGREGATE_CASE(T_FUN_HYBRID_HIST, hybrid_hist, i);
+        INIT_AGGREGATE_CASE(T_FUN_INNER_PREFIX_MAX, string_prefix_max, i);
       default: {
         ret = OB_NOT_SUPPORTED;
         SQL_LOG(WARN, "not supported aggregate function", K(ret), K(aggr_info.expr_->type_));

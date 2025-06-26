@@ -342,7 +342,7 @@ class ObGatherStatBatchSizePrefs : public ObStatPrefs
       ObStatPrefs(alloc, session_info, pvalue) {}
     virtual int check_pref_value_validity(ObTableStatParam *param = NULL) override;
     virtual const char* get_stat_pref_name() const { return "GATHER_STATS_BATCH_SIZE"; }
-    virtual const char* get_stat_pref_default_value() const { return "0"; }
+    virtual const char* get_stat_pref_default_value() const { return "16"; }
 };
 
 class ObSkipRateSamplePrefs : public ObStatPrefs

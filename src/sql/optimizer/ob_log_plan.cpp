@@ -5865,7 +5865,7 @@ int ObLogPlan::try_push_aggr_into_table_scan(ObLogicalOperator *top,
       //4. TSC is point get
       //5. TSC is text retrieval scan
       //6. TSC is index table scan with group by
-    } else if (OB_FAIL(scan_op->get_pushdown_aggr_exprs().assign(aggr_items))) {
+          } else if (OB_FAIL(scan_op->get_pushdown_aggr_exprs().assign(aggr_items))) {
       LOG_WARN("failed to assign group exprs", K(ret));
     } else if (OB_FAIL(scan_op->get_pushdown_groupby_columns().assign(groupby_columns))) {
       LOG_WARN("failed to assign groupby columns", K(ret));
@@ -6648,7 +6648,7 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
     LOG_WARN("failed to check has virtual generated column", K(ret), K(*table_item));
   } else if (has_virtual_col) {
     /* do not push down when exists virtual generated column */
-  } else if (OB_FAIL(ObTransformUtils::check_stmt_is_only_full_group_by(static_cast<const ObSelectStmt*>(stmt),
+      } else if (OB_FAIL(ObTransformUtils::check_stmt_is_only_full_group_by(static_cast<const ObSelectStmt*>(stmt),
                                                                         is_only_full_group_by))) {
     LOG_WARN("failed to check stmt is only full group by", K(ret));
   } else if (!is_only_full_group_by) {
@@ -6675,7 +6675,7 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
     } else if (group_exprs.count() != 1) {
       can_push = false;
     } else if (OB_LIKELY(!EN_FORCE_GBY_PUSHDOWN_STORAGE) && aggrs.count() > 5) {
-      can_push = false;
+             can_push = false;
     } else if (OB_ISNULL(groupby_column = group_exprs.at(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
@@ -6687,7 +6687,7 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
                                                               can_push))) {
       LOG_WARN("failed to check normal aggr can storage pushdown", K(ret));
     } else if (!can_push) {
-      // do nothing
+            // do nothing
     } else if (OB_FAIL(pushdown_groupby_columns.push_back(groupby_column))) {
       LOG_WARN("failed to push back column", K(ret));
     }
@@ -14894,43 +14894,44 @@ int ObLogPlan::perform_gather_stat_replace(ObLogicalOperator *op)
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null table schema", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < table_scan->get_pushdown_aggr_exprs().count(); ++i) {
-        ObAggFunRawExpr *old_aggr = table_scan->get_pushdown_aggr_exprs().at(i);
-        ObRawExpr *param_expr = NULL;
-        ObAggFunRawExpr *new_aggr = NULL;
-        const ObColumnSchemaV2 *column_schema = NULL;
-        if (OB_ISNULL(old_aggr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (old_aggr->get_expr_type() != T_FUN_MIN &&
-                   old_aggr->get_expr_type() != T_FUN_MAX) {
-          // do nothing
-        } else if (OB_UNLIKELY(old_aggr->get_param_count() != 1) ||
-                   OB_ISNULL(param_expr = old_aggr->get_param_expr(0))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected push down aggr", K(ret), KPC(old_aggr));
-        } else if (OB_UNLIKELY(!param_expr->is_column_ref_expr())) {
-          // do nothing
-        } else if (OB_ISNULL(column_schema = table_schema->get_column_schema(
-                   static_cast<ObColumnRefRawExpr*>(param_expr)->get_column_id()))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected column schema", K(ret));
-        } else if (!column_schema->is_string_type()) {
-          // do nothing
-        } else if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(
-                           get_optimizer_context().get_expr_factory(),
-                           session,
-                           old_aggr->get_expr_type() == T_FUN_MIN ? T_FUN_INNER_PREFIX_MIN : T_FUN_INNER_PREFIX_MAX,
-                           param_expr,
-                           new_aggr))) {
-          LOG_WARN("failed to build common aggr expr", K(ret));
-        } else if (OB_FAIL(stat_gather_replacer_.add_replace_expr(old_aggr, new_aggr))) {
-          LOG_WARN("failed to add replace expr", K(ret));
-        } else {
-          table_scan->get_pushdown_aggr_exprs().at(i) = new_aggr;
-        }
-      }
+    // } else {
+    //   for (int64_t i = 0; OB_SUCC(ret) && i < table_scan->get_pushdown_aggr_exprs().count(); ++i) {
+    //     ObAggFunRawExpr *old_aggr = table_scan->get_pushdown_aggr_exprs().at(i);
+    //     ObRawExpr *param_expr = NULL;
+    //     ObAggFunRawExpr *new_aggr = NULL;
+    //     const ObColumnSchemaV2 *column_schema = NULL;
+    //     if (OB_ISNULL(old_aggr)) {
+    //       ret = OB_ERR_UNEXPECTED;
+    //       LOG_WARN("get unexpected null", K(ret));
+    //     } else if (old_aggr->get_expr_type() != T_FUN_MIN &&
+    //                old_aggr->get_expr_type() != T_FUN_MAX) {
+    //       // do nothing
+    //     } else if (OB_UNLIKELY(old_aggr->get_param_count() != 1) ||
+    //                OB_ISNULL(param_expr = old_aggr->get_param_expr(0))) {
+    //       ret = OB_ERR_UNEXPECTED;
+    //       LOG_WARN("get unexpected push down aggr", K(ret), KPC(old_aggr));
+    //     } else if (OB_UNLIKELY(!param_expr->is_column_ref_expr())) {
+    //       // do nothing
+    //     } else if (OB_ISNULL(column_schema = table_schema->get_column_schema(
+    //                static_cast<ObColumnRefRawExpr*>(param_expr)->get_column_id()))) {
+    //       ret = OB_ERR_UNEXPECTED;
+    //       LOG_WARN("get unexpected column schema", K(ret));
+    //     } else if (!column_schema->is_string_type()) {
+    //       // do nothing
+    //     } else if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(
+    //                        get_optimizer_context().get_expr_factory(),
+    //                        session,
+    //                        old_aggr->get_expr_type() == T_FUN_MIN ? T_FUN_INNER_PREFIX_MIN : T_FUN_INNER_PREFIX_MAX,
+    //                        param_expr,
+    //                        new_aggr))) {
+    //       LOG_WARN("failed to build common aggr expr", K(ret));
+    //     } else if (OB_FAIL(stat_gather_replacer_.add_replace_expr(old_aggr, new_aggr))) {
+    //       LOG_WARN("failed to add replace expr", K(ret));
+    //     } else {
+    //       table_scan->get_pushdown_aggr_exprs().at(i) = new_aggr;
+    //     }
+    //   }
+
     }
 
     if (OB_FAIL(ret)) {
@@ -15235,7 +15236,7 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
                 && T_FUN_SYS_RB_OR_AGG != cur_aggr->get_expr_type()
                 && T_FUN_SYS_RB_BUILD_AGG != cur_aggr->get_expr_type()) {
       can_push = false;
-    } else if (T_FUN_SYS_RB_BUILD_AGG == cur_aggr->get_expr_type() &&
+            } else if (T_FUN_SYS_RB_BUILD_AGG == cur_aggr->get_expr_type() &&
               (! enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0)) {
       // if vector 2.0 is not enable  can not storage pushdown for rb_build_agg
       can_push = false;
@@ -15245,7 +15246,7 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
       can_push = false;
     } else if (1 < cur_aggr->get_real_param_count()) {
       can_push = false;
-    } else if (cur_aggr->get_real_param_exprs().empty()) {
+            } else if (cur_aggr->get_real_param_exprs().empty()) {
       /* do nothing */
     } else if (OB_ISNULL(first_param = cur_aggr->get_param_expr(0))) {
       ret = OB_ERR_UNEXPECTED;
@@ -15253,12 +15254,12 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
     } else if (!first_param->is_column_ref_expr() ||
                 table_id != static_cast<ObColumnRefRawExpr*>(first_param)->get_table_id()) {
       can_push = false;
-    } else if (first_param->is_column_ref_expr() &&
+            } else if (first_param->is_column_ref_expr() &&
               static_cast<const ObColumnRefRawExpr*>(first_param)->is_pseudo_column_ref()) {
       can_push = false;
-    } else if (!cur_aggr->is_param_distinct() && !distinct_exprs.empty()) {
+            } else if (!cur_aggr->is_param_distinct() && !distinct_exprs.empty()) {
       can_push = false;
-    } else if (!cur_aggr->is_param_distinct()) {
+            } else if (!cur_aggr->is_param_distinct()) {
       /*do nothing*/
     } else if (distinct_exprs.empty()) {
       if (OB_FAIL(append(distinct_exprs, cur_aggr->get_real_param_exprs()))) {
@@ -15272,13 +15273,13 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
       ++distinct_count;
     }
   }
-  if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret)) {
   } else if (distinct_count > 0 && distinct_count < aggrs.count()) {
     can_push = false;
   } else if (can_push && OB_FAIL(append(pushdown_groupby_columns, distinct_exprs))) {
     LOG_WARN("failed to pushdown groupby columns", K(ret));
   }
-  return ret;
+    return ret;
 }
 
 int ObLogPlan::check_normal_aggr_can_storage_pushdown(const uint64_t table_id,
@@ -16326,7 +16327,7 @@ int ObLogPlan::check_can_scala_storage_pushdown(ObSQLSessionInfo &session_info,
     LOG_WARN("get unexpected null", K(ret));
   } else if (group_expr->get_expr_type() != T_FUN_SYS_CALC_PARTITION_ID) {
     // do nothing
-  } else if (OB_FAIL(global_hint.opt_params_.get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED,
+      } else if (OB_FAIL(global_hint.opt_params_.get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED,
                                                                 hint_rowsets_enable,
                                                                 is_exist_hint))) {
     LOG_WARN("failed to get bool opt param", K(ret));
@@ -16335,5 +16336,5 @@ int ObLogPlan::check_can_scala_storage_pushdown(ObSQLSessionInfo &session_info,
                                            (tenant_config.is_valid() && tenant_config->_rowsets_enabled);
     can_pushdown = rowsets_enabled;
   }
-  return ret;
+    return ret;
 }

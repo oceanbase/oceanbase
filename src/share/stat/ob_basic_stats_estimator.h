@@ -66,8 +66,7 @@ public:
   static int estimate_block_count(ObExecContext &ctx,
                                   const ObTableStatParam &param,
                                   PartitionIdBlockMap &id_block_map,
-                                  bool &use_column_store,
-                                  bool &use_split_part);
+                                  bool &use_column_store);
 
   static int estimate_modified_count(ObExecContext &ctx,
                                      const uint64_t tenant_id,
@@ -155,6 +154,8 @@ public:
   static int get_async_gather_stats_tables(ObExecContext &ctx,
                                            const int64_t tenant_id,
                                            const int64_t max_table_cnt,
+                                           int64_t &last_table_id,
+                                           int64_t &last_tablet_id,
                                            int64_t &total_part_cnt,
                                            ObIArray<AsyncStatTable> &stat_tables);
 
@@ -248,13 +249,12 @@ private:
                                  ObIArray<uint64_t> &sample_counts,
                                  ObIArray<uint64_t> &column_ids);
 
-  static int check_can_use_column_store_and_split_part_gather(const int64_t sstable_row_cnt,
-                                                              const int64_t memtable_row_cnt,
-                                                              const int64_t cg_cnt,
-                                                              const int64_t part_cnt,
-                                                              const int64_t degree,
-                                                              bool &use_column_store,
-                                                              bool &use_split_part);
+  static int check_can_use_column_store(const int64_t sstable_row_cnt,
+                                        const int64_t memtable_row_cnt,
+                                        const int64_t cg_cnt,
+                                        const int64_t part_cnt,
+                                        const int64_t degree,
+                                        bool &use_column_store);
 
   static int get_gather_table_type_list(ObSqlString &gather_table_type_list);
 

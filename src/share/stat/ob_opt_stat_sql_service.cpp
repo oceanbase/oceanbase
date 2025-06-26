@@ -965,7 +965,7 @@ int ObOptStatSqlService::get_column_stat_sql(const uint64_t tenant_id,
                           stat.get_histogram().get_bucket_cnt() == 0) ||
                          stat.get_num_distinct() < 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(stat));
+    LOG_WARN("get unexpected error", K(ret));
   } else if (OB_FAIL(get_valid_obj_str(stat.get_min_value(), min_meta, allocator, min_str, print_params)) ||
              OB_FAIL(get_valid_obj_str(stat.get_max_value(), max_meta, allocator, max_str, print_params))) {
     LOG_WARN("failed to get valid obj str", K(stat.get_min_value()), K(stat.get_max_value()));

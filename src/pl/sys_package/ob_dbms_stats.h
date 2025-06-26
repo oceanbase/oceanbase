@@ -556,8 +556,7 @@ public:
                                       const common::ObDataTypeCastParams &dtc_params,
                                       ObString &ident_name,
                                       bool need_extra_conv = false);
-  static int parse_refine_min_max_options(ObExecContext &ctx,
-                                          ObTableStatParam &param);
+
 private:
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);
 
@@ -602,13 +601,6 @@ private:
                                    const ObObjParam &part_name,
                                    const ObObjParam &table_name,
                                    ObTableStatParam &param);
-
-  static int get_table_index_infos(share::schema::ObSchemaGetterGuard *schema_guard,
-                                   const uint64_t tenant_id,
-                                   const uint64_t table_id,
-                                   uint64_t *index_tid_arr,
-                                   int64_t &index_count);
-
   static int get_table_partition_infos(const ObTableSchema &table_schema,
                                        ObIAllocator &allocator,
                                        ObIArray<PartInfo> &partition_infos);
@@ -688,34 +680,8 @@ private:
                                          ObSEArray<int64_t, 4> &failed_part_ids,
                                          ObSEArray<int64_t, 4> &succ_part_and_subpart_ids,
                                          ObOptStatRunningMonitor &running_monitor);
-
-  static int do_batch_gather_table_stats(ObExecContext &ctx,
-                                         const int64_t task_start_time,
-                                         const int64_t duration_time,
-                                         ObTableStatParam &stat_param,
-                                         ObSEArray<int64_t, 4> &failed_part_ids,
-                                         ObSEArray<int64_t, 4> &succ_part_and_subpart_ids,
-                                         ObOptStatRunningMonitor &running_monitor,
-                                         ObSEArray<int64_t, 4> &succed_part_ids);
-
-  static int construct_part_to_subpart_map(const ObTableStatParam &stat_param,
-                                           hash::ObHashMap<int64_t, PartInfo> &part_id_to_approx_part_map,
-                                           hash::ObHashMap<int64_t, ObArray<PartInfo>> &part_id_to_subpart_map);
-
-  static int add_L0_L1_part_to_param(uint64_t part_id,
-                                     const hash::ObHashMap<int64_t, PartInfo> &part_id_to_approx_part_map,
-                                     ObTableStatParam &temp_stat_param);
-
-  static int add_L1_part_to_param(const PartInfo &part_info,
-                                  ObTableStatParam &temp_stat_param,
-                                  int64_t &batch_cnt);
-
   static int collect_executed_part_ids(const ObTableStatParam &stat_param, ObSEArray<int64_t, 4> &part_ids);
 
-  static int get_stats_collect_batch_size(ObMySQLProxy *mysql_proxy,
-                                          const uint64_t tenant_id,
-                                          const uint64_t table_id,
-                                          int64_t &batch_part_size);
 
   static int append_part_id_if_valid(hash::ObHashMap<int64_t, ObPartitionStatInfo *> &id_to_part_stat_map,
                                      int64_t part_id,

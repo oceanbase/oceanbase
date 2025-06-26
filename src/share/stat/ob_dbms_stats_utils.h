@@ -26,9 +26,19 @@ namespace common {
 class ObDbmsStatsUtils
 {
 public:
+
+  static int init_table_stats(ObIAllocator &allocator,
+                            int64_t cnt,
+                            ObIArray<ObOptTableStat *> &table_stats);
+
   static int init_col_stats(ObIAllocator &allocator,
                             int64_t col_cnt,
                             ObIArray<ObOptColumnStat *> &col_stats);
+
+  static int assign_col_param(const ObIArray<ObColumnStatParam> *src_col_params,
+                              int64_t start,
+                              int64_t end,
+                              ObIArray<ObColumnStatParam> &target_col_params);
 
   static int check_range_skew(ObHistType hist_type,
                               const ObHistogram::Buckets &bkts,
@@ -88,7 +98,14 @@ public:
   static bool is_subpart_id(const ObIArray<PartInfo> &partition_infos,
                             const int64_t partition_id,
                             int64_t &part_id);
-  
+
+  static int get_subpart_ids(const ObIArray<PartInfo> &partition_infos,
+                             const int64_t partition_id,
+                             ObIArray<int64_t> &sub_part_ids);
+  static int get_no_need_collect_part_ids(const ObTableStatParam &param,
+                                          const int64_t partition_id,
+                                          ObIArray<int64_t> &no_collect_subpart_ids);
+
   static int get_valid_duration_time(const int64_t start_time,
                                      const int64_t max_duration_time,
                                      int64_t &valid_duration_time);
@@ -241,6 +258,15 @@ public:
                                              const ObOptColumnStat &col_stat,
                                              const ObObjMeta &text_col_meta,
                                              ObOptColumnStat *&text_column_stat);
+
+  static int get_max_work_area_size(uint64_t tenant_id, int64_t &max_wa_memory_size);
+
+
+  static int get_table_index_infos(share::schema::ObSchemaGetterGuard *schema_guard,
+                                   const uint64_t tenant_id,
+                                   const uint64_t table_id,
+                                   uint64_t *index_tid_arr,
+                                   int64_t &index_count);
 
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,

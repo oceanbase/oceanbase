@@ -153,24 +153,20 @@ int ObIncrementalStatEstimator::derive_global_stat_from_part_stats(
     //get regather partition stats(stats is locked or not stale).
     } else {
       int64_t cur_part_id = OB_INVALID_ID;
-      for (int64_t i = 0; OB_SUCC(ret) && i < param.no_regather_partition_ids_.count(); ++i) {
-        if (!ObDbmsStatsUtils::is_subpart_id(param.all_subpart_infos_,
-                                             param.no_regather_partition_ids_.at(i),
-                                             cur_part_id)) {
-          if (OB_FAIL(no_regather_part_ids.push_back(param.no_regather_partition_ids_.at(i)))) {
-            LOG_WARN("failed to push back", K(ret));
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        ObSEArray<uint64_t, 4> column_ids;
-        if (OB_FAIL(get_column_ids(param.column_params_, column_ids))) {
-          LOG_WARN("failed to get column ids", K(ret));
-        } else if (OB_FAIL(get_no_regather_partition_stats(param.tenant_id_, param.table_id_, column_ids,
-                                                           no_regather_part_ids, table_stats,
-                                                           col_handles, tmp_opt_stats))) {
-          LOG_WARN("failed to get locked partition stats", K(ret));
-        } else {/*do nothing*/}
+      ObSEArray<uint64_t, 4> column_ids;
+      if (OB_FAIL(ObDbmsStatsUtils::get_no_need_collect_part_ids(
+              param, cur_part_id, no_regather_part_ids))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(get_column_ids(param.column_params_, column_ids))) {
+        LOG_WARN("failed to get column ids", K(ret));
+      } else if (OB_FAIL(get_no_regather_partition_stats(param.tenant_id_,
+                                                         param.table_id_,
+                                                         column_ids,
+                                                         no_regather_part_ids,
+                                                         table_stats,
+                                                         col_handles,
+                                                         tmp_opt_stats))) {
+        LOG_WARN("failed to get locked partition stats", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -370,6 +366,8 @@ int ObIncrementalStatEstimator::do_derive_part_stats_from_subpart_stats(
         } else {/*do nothing*/}
       } else {/*do nothing*/}
     }
+
+
     //derive part stat from subpart stats
     if (OB_SUCC(ret)) {
       if (OB_UNLIKELY(subpart_opt_stats.count() != param.approx_part_infos_.at(i).subpart_cnt_)) {
@@ -1000,19 +998,13 @@ int ObIncrementalStatEstimator::get_no_regather_subpart_stats(
   ObSEArray<int64_t, 4> derive_need_no_regather_subpart_ids;
   int64_t part_id = OB_INVALID_ID;
   for (int64_t i = 0; OB_SUCC(ret) && i < param.approx_part_infos_.count(); ++i) {
-    for (int64_t j = 0; OB_SUCC(ret) && j < param.no_regather_partition_ids_.count(); ++j) {
-      if (ObDbmsStatsUtils::is_subpart_id(param.all_subpart_infos_,
-                                          param.no_regather_partition_ids_.at(j),
-                                          part_id)) {
-        if (part_id == param.approx_part_infos_.at(i).part_id_) {
-          if (OB_FAIL(derive_need_no_regather_subpart_ids.push_back(
-                                                         param.no_regather_partition_ids_.at(j)))) {
-            LOG_WARN("failed to push back", K(ret));
-          }
-        }
-      }
+    if (OB_FAIL(ObDbmsStatsUtils::get_no_need_collect_part_ids(param,
+                                                               param.approx_part_infos_.at(i).part_id_,
+                                                               derive_need_no_regather_subpart_ids))) {
+      LOG_WARN("failed to push back", K(ret));
     }
   }
+
   if (OB_SUCC(ret)) {
     ObSEArray<uint64_t, 4> column_ids;
     if (OB_FAIL(get_column_ids(param.column_params_, column_ids))) {

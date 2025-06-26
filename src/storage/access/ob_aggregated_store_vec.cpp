@@ -184,6 +184,8 @@ OB_INLINE int ObAggGroupVec::set_agg_type_flag(const ObPDAggType agg_type)
       agg_type_flag_.set_count_flag(true);
       break;
     }
+    case PD_STR_PREFIX_MIN:
+    case PD_STR_PREFIX_MAX:
     case PD_MIN:
     case PD_MAX : {
       agg_type_flag_.set_minmax_flag(true);

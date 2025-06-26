@@ -147,6 +147,7 @@ protected:
                                sql::ObEvalCtx &eval_ctx,
                                const int32_t batch_size);
   OB_INLINE virtual bool can_use_index_info() const { return true; }
+  OB_INLINE virtual bool is_skip_index_valid() const { return !skip_index_datum_.is_null() && !skip_index_datum_is_prefix_; }
   OB_INLINE bool is_lob_col()
   {
     bool bret = false;
@@ -327,6 +328,33 @@ public:
 protected:
   OB_INLINE bool can_use_index_info() const override { return false; }
 };
+
+class ObStrPrefixMinAggCellVec final : public ObAggCellVec
+{
+public:
+  ObStrPrefixMinAggCellVec(const int64_t agg_idx,
+                           const ObAggCellVecBasicInfo &basic_info,
+                           common::ObIAllocator &allocator);
+  int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info,
+                         const int32_t col_index, bool &can_agg) override;
+protected:
+  OB_INLINE bool can_use_index_info() const override { return true; }
+  OB_INLINE virtual bool is_skip_index_valid() const override { return !skip_index_datum_.is_null(); }
+};
+
+class ObStrPrefixMaxAggCellVec final : public ObAggCellVec
+{
+public:
+  ObStrPrefixMaxAggCellVec(const int64_t agg_idx,
+                           const ObAggCellVecBasicInfo &basic_info,
+                           common::ObIAllocator &allocator);
+  int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info,
+                         const int32_t col_index, bool &can_agg) override;
+protected:
+  OB_INLINE bool can_use_index_info() const override { return true; }
+  OB_INLINE virtual bool is_skip_index_valid() const override { return !skip_index_datum_.is_null(); }
+};
+
 
 class ObPDAggVecFactory
 {
