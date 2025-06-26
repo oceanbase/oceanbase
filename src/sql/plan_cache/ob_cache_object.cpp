@@ -38,7 +38,7 @@ OB_SERIALIZE_MEMBER(ObParamInfo,
                     flag_,
                     scale_,
                     type_,
-                    ext_real_type_,
+                    ext_real_type_,  // FARM COMPAT WHITELIST
                     is_oracle_null_value_,  // FARM COMPAT WHITELIST
                     col_type_,
                     precision_);
@@ -94,7 +94,7 @@ int ObPlanCacheObject::set_params_info(const ParamStore &params)
     } else if (params.at(i).get_param_meta().is_ext() || params.at(i).is_user_defined_sql_type() || params.at(i).is_collection_sql_type()) {
       param_info.scale_ = 0;
       uint64_t udt_id = params.at(i).get_accuracy().get_accuracy();
-      *(reinterpret_cast<uint32 *>(&param_info.ext_real_type_)) = (udt_id >> 32) & UINT_MAX32;
+      param_info.ext_real_type_ = (udt_id >> 32) & UINT_MAX32;
       *(reinterpret_cast<uint32 *>(&param_info.col_type_)) = (udt_id) & UINT_MAX32;
     } else {
       param_info.scale_ = params.at(i).get_scale();

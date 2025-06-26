@@ -46,7 +46,6 @@ namespace sql
 {
 class ObPlanCacheValue;
 class ObPlanCacheAtomicOp;
-class ObPsPCVSetAtomicOp;
 class ObTaskExecutorCtx;
 struct ObSqlCtx;
 class ObExecContext;
@@ -287,7 +286,7 @@ public:
   int ref_plan(const ObCacheObjID obj_id, ObCacheObjGuard& guard);
   int add_cache_obj(ObILibCacheCtx &ctx, ObILibCacheKey *key, ObILibCacheObject *cache_obj);
   int get_cache_obj(ObILibCacheCtx &ctx, ObILibCacheKey *key, ObCacheObjGuard &guard);
-  int cache_node_exists(ObILibCacheKey* key, bool& is_exists);
+  int cache_node_exists(ObILibCacheCtx &ctx, ObILibCacheKey* key, bool& is_exists);
   int evict_plan(uint64_t table_id);
   int evict_plan_by_table_name(uint64_t database_id, ObString tab_name);
 

@@ -1145,7 +1145,7 @@ int ObPlanCache::add_cache_obj(ObILibCacheCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ctx.need_destroy_node_ = false;
-  ObLibCacheWlockAndRef w_ref_lock(LC_NODE_WR_HANDLE);
+  ObLibCacheWlockAndRef w_ref_lock(LC_NODE_WR_HANDLE, ctx.get_lock_timeout());
   ObILibCacheNode *cache_node = NULL;
   if (OB_ISNULL(key) || OB_ISNULL(cache_obj)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1267,7 +1267,7 @@ int ObPlanCache::get_cache_obj(ObILibCacheCtx &ctx,
   ObILibCacheNode *cache_node = NULL;
   ObILibCacheObject *cache_obj = NULL;
   // get the read lock and increase reference count
-  ObLibCacheRlockAndRef r_ref_lock(LC_NODE_RD_HANDLE);
+  ObLibCacheRlockAndRef r_ref_lock(LC_NODE_RD_HANDLE, ctx.get_lock_timeout());
   if (OB_ISNULL(key)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid null argument", K(ret), K(key));
@@ -1299,13 +1299,14 @@ int ObPlanCache::get_cache_obj(ObILibCacheCtx &ctx,
   return ret;
 }
 
-int ObPlanCache::cache_node_exists(ObILibCacheKey* key,
+int ObPlanCache::cache_node_exists(ObILibCacheCtx &ctx,
+                                   ObILibCacheKey* key,
                                    bool& is_exists)
 {
   int ret = OB_SUCCESS;
   ObILibCacheNode *cache_node = NULL;
   // get the read lock and increase reference count
-  ObLibCacheRlockAndRef r_ref_lock(LC_NODE_RD_HANDLE);
+  ObLibCacheRlockAndRef r_ref_lock(LC_NODE_RD_HANDLE, ctx.get_lock_timeout());
   is_exists = false;
   if (OB_ISNULL(key)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1925,7 +1926,7 @@ int ObPlanCache::create_node_and_add_cache_obj(ObILibCacheKey *cache_key,
     cache_node = NULL;
   }
   if (NULL != cache_node) {
-    cache_node->lock(true); // add read lock
+    cache_node->lock(true, ctx.get_lock_timeout()); // add read lock
   }
   return ret;
 }

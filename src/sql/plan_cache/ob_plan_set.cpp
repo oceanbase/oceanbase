@@ -2568,7 +2568,7 @@ bool ObPlanSet::match_decint_precision(const ObParamInfo &param_info, ObPrecisio
   bool ret = false;
   if (ob_is_decimal_int(param_info.type_) || ob_is_integer_type(param_info.type_)) {
     ret = (param_info.precision_ == other_prec);
-  } else if (ob_is_extend(param_info.type_) && ob_is_decimal_int(param_info.ext_real_type_)) {
+  } else if (ob_is_extend(param_info.type_) && ob_is_decimal_int(static_cast<common::ObObjType>(param_info.ext_real_type_))) {
     ret = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(param_info.precision_)
           == wide::ObDecimalIntConstValue::get_int_bytes_by_precision(other_prec);
   } else {

@@ -1719,6 +1719,9 @@ int ObSql::handle_sql_execute(const ObString &sql,
   }
 
   if (OB_SUCC(ret)) {
+    int64_t timeout = 0;
+    session->get_query_timeout(timeout);
+    pc_ctx.set_lock_timeout(timeout);
     if (!use_plan_cache) {
       // do nothing
     } else if (OB_FAIL(pc_get_plan_and_fill_result(pc_ctx, result,
@@ -2489,6 +2492,9 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
             ps_info->get_no_param_sql().ptr(),
             ps_info->get_no_param_sql().length());
         pc_ctx.ps_need_parameterized_ = ps_info->is_ps_need_parameterization();
+        int64_t timeout = 0;
+        session.get_query_timeout(timeout);
+        pc_ctx.set_lock_timeout(timeout);
         if (OB_FAIL(construct_parameterized_params(ps_params, pc_ctx))) {
           LOG_WARN("construct parameterized params failed", K(ret));
         } else {
@@ -2631,6 +2637,9 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
                                          exec_ctx,
                                          tenant_id);
     pc_ctx->is_remote_executor_ = true;
+    int64_t query_timeout = 0;
+    session->get_query_timeout(query_timeout);
+    pc_ctx->set_lock_timeout(query_timeout);
     if (remote_sql_info.use_ps_) {
       //由于现在ps模式和普通的文本协议的执行计划不能复用，因此这里需要区分，避免在查询plan的时候引起一些问题
       //由于普通的文本协议key_id是OB_INVALID_ID,因此这里使用key_id=0+name=参数化SQL的方式来区分
@@ -2848,6 +2857,9 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
       //记录当前语句是begin/commit 语句，用于性能优化
       pc_ctx->set_begin_commit_stmt();
     }
+    int64_t timeout = 0;
+    session.get_query_timeout(timeout);
+    pc_ctx->set_lock_timeout(timeout);
     uint64_t database_id = OB_INVALID_ID;
 
     if (OB_FAIL(session.get_database_id(database_id))) {
@@ -4791,6 +4803,9 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
     phy_plan->stat_.rule_version_ = rule_mgr->get_rule_version();
     phy_plan->stat_.enable_udr_ = enable_udr;
     phy_plan->stat_.is_inner_ = result.get_session().is_inner();
+    if (OB_UNLIKELY(phy_plan->get_phy_plan_hint().query_timeout_ > 0)) {
+      pc_ctx.set_lock_timeout(phy_plan->get_phy_plan_hint().query_timeout_);
+    }
 
     if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
       // pc_key_ may be modified elsewhere, so reset it before adding plan
@@ -5209,6 +5224,7 @@ int ObSql::pc_add_udr_plan(const ObUDRItemMgr::UDRItemRefGuard &item_guard,
   tmp_pc_ctx.normal_parse_const_cnt_ = pc_ctx.normal_parse_const_cnt_;
   tmp_pc_ctx.set_is_rewrite_sql(true);
   tmp_pc_ctx.rule_name_ = pc_ctx.rule_name_;
+  tmp_pc_ctx.set_lock_timeout(tmp_pc_ctx.get_lock_timeout());
   const ObUDRItem *rule_item = item_guard.get_ref_obj();
   ObParser parser(allocator, session.get_sql_mode(),
                   session.get_charsets4parser(),
