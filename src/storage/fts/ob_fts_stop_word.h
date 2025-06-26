@@ -15,6 +15,7 @@
 
 #include "lib/container/ob_iarray.h"
 #include "lib/hash/ob_hashset.h"
+#include "object/ob_object.h"
 #include "storage/fts/ob_fts_struct.h"
 
 namespace oceanbase
@@ -80,7 +81,7 @@ private:
   typedef common::hash::ObHashSet<storage::ObFTWord> StopWordSet;
 
   StopWordSet stopword_set_;
-  ObCollationType stopword_type_ = ObCollationType::CS_TYPE_INVALID;
+  ObObjMeta stopword_type_;
 
   bool inited_ = false;
 
@@ -93,7 +94,7 @@ class ObAddWord final
 public:
   ObAddWord(
       const ObFTParserProperty &property,
-      const ObCollationType &type,
+      const ObObjMeta &meta,
       const ObAddWordFlag &flag,
       common::ObIAllocator &allocator,
       ObFTWordMap &word_map);
@@ -104,15 +105,22 @@ public:
       const int64_t char_cnt,
       const int64_t word_freq);
   virtual int64_t get_add_word_count() const { return non_stopword_cnt_; }
-  VIRTUAL_TO_STRING_KV(K_(collation_type), K_(min_max_word_cnt), K_(non_stopword_cnt), K_(stopword_cnt),
-                       K_(min_token_size), K_(max_token_size), K(word_map_.size()));
+  VIRTUAL_TO_STRING_KV(
+      K_(word_meta),
+      K_(min_max_word_cnt),
+      K_(non_stopword_cnt),
+      K_(stopword_cnt),
+      K_(min_token_size),
+      K_(max_token_size),
+      K(word_map_.size()));
+
 private:
   bool is_min_max_word(const int64_t c_len) const;
   int casedown_word(const ObFTWord &src, ObFTWord &dst);
   int check_stopword(const ObFTWord &word, bool &is_stopword);
   int groupby_word(const ObFTWord &word, const int64_t word_cnt);
 private:
-  ObCollationType collation_type_;
+  ObObjMeta word_meta_;
   common::ObIAllocator &allocator_;
   ObFTWordMap &word_map_;
   int64_t min_max_word_cnt_;

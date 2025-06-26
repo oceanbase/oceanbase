@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "object/ob_object.h"
 #define USING_LOG_PREFIX STORAGE_FTS
 
 #include "storage/fts/ob_fts_plugin_helper.h"
@@ -344,7 +345,7 @@ void ObFTParseHelper::reset()
 }
 
 int ObFTParseHelper::segment(
-    const ObCollationType &type,
+    const ObObjMeta &meta,
     const char *fulltext,
     const int64_t fulltext_len,
     int64_t &doc_length,
@@ -352,6 +353,7 @@ int ObFTParseHelper::segment(
 {
   int ret = OB_SUCCESS;
   const ObCharsetInfo *cs = nullptr;
+  ObCollationType type = meta.get_collation_type();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("this fulltext parser helper hasn't been initialized", K(ret), K(is_inited_));
@@ -366,9 +368,17 @@ int ObFTParseHelper::segment(
     LOG_WARN("unexpected error, charset info is nullptr", K(ret), K(type));
   } else {
     words.reuse();
-    ObAddWord add_word(parser_property_, type, add_word_flag_, *allocator_, words);
-    if (OB_FAIL(segment(parser_property_, parser_name_.get_parser_version(), parser_desc_, plugin_param_, cs, fulltext, fulltext_len, *allocator_,
-            add_word))) {
+    ObAddWord add_word(parser_property_, meta, add_word_flag_, *allocator_, words);
+    if (OB_FAIL(segment(
+                    parser_property_,
+                    parser_name_.get_parser_version(),
+                    parser_desc_,
+                    plugin_param_,
+                    cs,
+                    fulltext,
+                    fulltext_len,
+                    *allocator_,
+                    add_word))) {
       LOG_WARN("fail to segment fulltext", K(ret), K(parser_name_), KP(parser_desc_), KP(cs), KP(fulltext),
           K(fulltext_len), KP(allocator_), K(parser_property_));
     } else {
@@ -427,7 +437,7 @@ int ObFTParseHelper::make_detail_json(
     new (token_array) ObJsonArray(allocator_);
 
     for (ObFTWordMap::const_iterator it = words.begin(); OB_SUCC(ret) && it != words.end(); ++it) {
-      ObString key = it->first.get_word();
+      ObString key = it->first.get_word().get_string();
       ObJsonObject *node = static_cast<ObJsonObject *>(allocator_->alloc(sizeof(ObJsonObject)));
       ObJsonInt *token_cnt_node = static_cast<ObJsonInt *>(allocator_->alloc(sizeof(ObJsonInt)));
       if (OB_ISNULL(token_cnt_node) || OB_ISNULL(node)) {
@@ -477,7 +487,7 @@ int ObFTParseHelper::make_token_array_json(
   } else {
     new (token_array) ObJsonArray(allocator_);
     for (ObFTWordMap::const_iterator it = words.begin(); OB_SUCC(ret) && it != words.end(); ++it) {
-      ObString key = it->first.get_word();
+      ObString key = it->first.get_word().get_string();
       ObJsonString *token = static_cast<ObJsonString *>(allocator_->alloc(sizeof(ObJsonString)));
       if (OB_UNLIKELY(OB_ISNULL(token))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;

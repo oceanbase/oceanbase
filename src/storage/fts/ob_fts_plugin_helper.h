@@ -13,12 +13,13 @@
 #ifndef OB_FTS_PLUGIN_HELPER_H_
 #define OB_FTS_PLUGIN_HELPER_H_
 
+#include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/string/ob_string.h"
-#include "lib/allocator/ob_fifo_allocator.h"
-#include "storage/fts/ob_fts_struct.h"
+#include "object/ob_object.h"
 #include "share/ob_plugin_helper.h"
 #include "storage/fts/ob_fts_parser_property.h"
+#include "storage/fts/ob_fts_struct.h"
 
 namespace oceanbase
 {
@@ -168,7 +169,7 @@ public:
    * @param[out] words, word lists after segment
    */
   int segment(
-      const common::ObCollationType &type,
+      const common::ObObjMeta &meta,
       const char *fulltext,
       const int64_t fulltext_len,
       int64_t &doc_length,
