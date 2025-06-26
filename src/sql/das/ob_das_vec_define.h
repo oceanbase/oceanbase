@@ -42,6 +42,7 @@ public:
       spiv_scan_docid_col_(nullptr),
       spiv_scan_value_col_(nullptr),
       vector_index_param_(),
+      vec_query_param_(),
       adaptive_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
       is_multi_value_index_(false),
       is_spatial_index_(false),

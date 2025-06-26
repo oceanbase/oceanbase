@@ -1398,6 +1398,7 @@ int ObDASHNSWScanIter::process_adaptor_state_post_filter(
       end_search = true;
     }
   }
+  LOG_TRACE("print hnsw search times", K(recycle_times));
   return ret;
 }
 
@@ -1587,7 +1588,7 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
       } // end for
       if (OB_FAIL(ret)) {
       } else if (tmp_adaptor_vid_iter_->get_total() < query_cond_.query_limit_
-      || (hnsw_max_iter_scan_nums > 0 && iter_scan_total_num > hnsw_max_iter_scan_nums)) {
+      || (iter_scan_total_num > hnsw_max_iter_scan_nums && hnsw_max_iter_scan_nums > 0)) {
         // res is already less than limit, no need to find again
         query_cond_.query_limit_ = 0;
         LOG_TRACE("iteractive filter log:", K(tmp_adaptor_vid_iter_->get_total()), K(query_cond_.query_limit_), K(total_before_add), K(adaptor_vid_iter_->get_total()));
@@ -1887,11 +1888,7 @@ int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query
     } else if (OB_FALSE_IT(query_cond.ef_search_ = ob_hnsw_ef_search)) {
     } else {
       uint64_t real_limit = limit_param_.limit_ + limit_param_.offset_;
-      // if selectivity_ == 1 means there is no filter
-      if (!is_pre_filter_ && (selectivity_ != 1 && selectivity_ != 0)) {
-        real_limit = real_limit * 2 > ob_hnsw_ef_search ? real_limit * 2 : ob_hnsw_ef_search;
-        real_limit = real_limit > MAX_VSAG_QUERY_RES_SIZE ? MAX_VSAG_QUERY_RES_SIZE : real_limit;
-      } else if (is_hnsw_bq()) {
+      if (is_hnsw_bq()) {
         // normally topK(real_limit) should be the same as ef_search for bq
         // but if topK is larger than ef_search, use topK
         real_limit = OB_MIN(OB_MAX(real_limit, ob_hnsw_ef_search), MAX_VSAG_QUERY_RES_SIZE);

@@ -16108,7 +16108,7 @@ int ObLogPlan::try_push_topn_into_vector_index_scan(ObLogicalOperator *&top,
       // if there is filter or pushdown filter, vector will return more data than limit n, need to add a topn
       // ivf pq index always need top n to calculate vector distance
       need_further_sort = table_scan->is_distributed() ||  table_scan->get_table_partition_info()->get_table_location().is_partitioned()
-                        || (vc_info.vec_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER
+                        || (vc_info.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
                         && (table_scan->get_filter_exprs().count() != 0 || table_scan->get_pushdown_filter_exprs().count() != 0))
                         || vc_info.is_ivf_pq_scan()
                         || vc_info.is_hnsw_bq_scan();
