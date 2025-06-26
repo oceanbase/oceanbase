@@ -9938,7 +9938,8 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
       int tmp_ret = OB_SUCCESS;
       bool use_vec_sort = true;
       const ObLogSort &sort_op = static_cast<const ObLogSort &>(log_op);
-      if (NULL != sort_op.get_topn_expr() && sort_op.get_part_cnt() > 0) {
+      if ((1 == sort_op.get_sort_keys().count() && !sort_op.enable_pd_topn_filter())
+          || (NULL != sort_op.get_topn_expr() && sort_op.get_part_cnt() > 0)) {
         use_vec_sort = false;
       }
       tmp_ret = OB_E(EventTable::EN_DISABLE_VEC_SORT) OB_SUCCESS;
