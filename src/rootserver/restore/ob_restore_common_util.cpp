@@ -367,7 +367,8 @@ int ObRestoreCommonUtil::set_tde_parameters(common::ObMySQLProxy *sql_proxy,
   return ret;
 }
 
-int ObRestoreCommonUtil::rebuild_master_key_version(obrpc::ObCommonRpcProxy *rpc_proxy, const uint64_t tenant_id)
+int ObRestoreCommonUtil::rebuild_master_key_version(obrpc::ObCommonRpcProxy *rpc_proxy,
+    const uint64_t tenant_id, bool need_wait)
 {
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_TDE_SECURITY
@@ -386,9 +387,10 @@ int ObRestoreCommonUtil::rebuild_master_key_version(obrpc::ObCommonRpcProxy *rpc
     obrpc::ObReloadMasterKeyArg arg;
     obrpc::ObReloadMasterKeyResult result;
     arg.tenant_id_ = tenant_id;
+    //备库切成主库的逻辑值触发reload，不等master_key生效，交给后台线程
     if (OB_FAIL(rpc_proxy->timeout(DEFAULT_TIMEOUT).reload_master_key(arg, result))) {
       LOG_WARN("fail to reload master key", KR(ret), K(arg), K(DEFAULT_TIMEOUT));
-    } else if (result.master_key_id_ > 0 ) {
+    } else if (result.master_key_id_ > 0  && need_wait) {
       bool is_active = false;
       const int64_t SLEEP_US = 5 * 1000 * 1000L; // 5s
       const int64_t MAX_WAIT_US = 60 * 1000 * 1000L; // 60s
