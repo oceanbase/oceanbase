@@ -3658,8 +3658,7 @@ void ObLogicalOperator::do_project_pruning(ObIArray<ObRawExpr *> &exprs, PPDeps 
   int64_t j = 0;
   LOG_TRACE("start to do project pruning", K(type_), K(exprs), K(deps));
   for (i = 0, j = 0; i < exprs.count(); i++) {
-    if (deps.has_member(static_cast<int32_t>(i))
-        || T_ORA_ROWSCN == exprs.at(i)->get_expr_type()) {
+    if (deps.has_member(static_cast<int32_t>(i))) {
       exprs.at(j++) = exprs.at(i);
     } else {
       LOG_TRACE("project pruning remove expr", K(exprs.at(i)), K(*exprs.at(i)),
