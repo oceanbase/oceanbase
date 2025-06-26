@@ -55,6 +55,7 @@ enum SelectParserOffset
   PARSE_SELECT_ORDER,
   PARSE_SELECT_APPROX,
   PARSE_SELECT_LIMIT,
+  PARSE_SELECT_VECTOR_INDEX_PARAMS,
   PARSE_SELECT_FOR_UPD,
   PARSE_SELECT_HINTS,
   PARSE_SELECT_WHEN, // I find that it is no longer used.
@@ -62,7 +63,7 @@ enum SelectParserOffset
   PARSE_SELECT_FETCH_TEMP, //use to temporary store fetch clause in parser
   PARSE_SELECT_WITH_CHECK_OPTION,
   PARSE_SELECT_INTO_EXTRA,// ATTENTION!! SELECT_INTO_EXTRA must be the last one
-  PARSE_SELECT_MAX_IDX  // = 24, ATTENTION!! adjust malloc_select_node(node, malloc_pool) after adding a new enum value
+  PARSE_SELECT_MAX_IDX  // = 25, ATTENTION!! adjust malloc_select_node(node, malloc_pool) after adding a new enum value
 };
 
 enum GrantParseOffset

@@ -21,6 +21,7 @@
 #include "rootserver/ob_ddl_service.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "share/vector_type/ob_vector_common_util.h"
+#include "share/vector_index/ob_vector_index_param.h"
 
 namespace oceanbase
 {
@@ -143,8 +144,14 @@ struct ObVectorIndexAlgorithmHeader
 // TODO: opt struct
 struct ObVectorIndexParam
 {
+  static constexpr float DEFAULT_REFINE_K = 4.0;
+  static constexpr int DEFAULT_BQ_BITS_QUERY = 32;
+
   ObVectorIndexParam() :
-    type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0), nlist_(0), sample_per_nlist_(0), extra_info_max_size_(0), extra_info_actual_size_(0), nbits_(0)
+    type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0),
+    nlist_(0), sample_per_nlist_(0), extra_info_max_size_(0), extra_info_actual_size_(0),
+    refine_type_(0), bq_bits_query_(DEFAULT_BQ_BITS_QUERY),
+    refine_k_(DEFAULT_REFINE_K), bq_use_fht_(false), nbits_(0)
   {}
   void reset() {
     type_ = VIAT_MAX;
@@ -158,6 +165,10 @@ struct ObVectorIndexParam
     sample_per_nlist_ = 0;
     extra_info_max_size_ = 0;
     extra_info_actual_size_ = 0;
+    refine_type_ = 0;
+    bq_bits_query_ = DEFAULT_BQ_BITS_QUERY;
+    refine_k_= DEFAULT_REFINE_K;
+    bq_use_fht_ = false;
     nbits_ = 0;
   };
   int assign(const ObVectorIndexParam &other) {
@@ -173,6 +184,10 @@ struct ObVectorIndexParam
     sample_per_nlist_ = other.sample_per_nlist_;
     extra_info_max_size_ = other.extra_info_max_size_;
     extra_info_actual_size_ = other.extra_info_actual_size_;
+    refine_type_ = other.refine_type_;
+    bq_bits_query_ = other.bq_bits_query_;
+    refine_k_ = other.refine_k_;
+    bq_use_fht_ = other.bq_use_fht_;
     nbits_ = other.nbits_;
     return ret;
   };
@@ -189,11 +204,19 @@ struct ObVectorIndexParam
   // default: 1024
   int64_t extra_info_max_size_;
   int64_t extra_info_actual_size_;
+  int16_t refine_type_;
+  int16_t bq_bits_query_;
+  float refine_k_;
+  bool bq_use_fht_;
   int64_t nbits_;
   OB_UNIS_VERSION(1);
 public:
   TO_STRING_KV(K_(type), K_(lib), K_(dist_algorithm), K_(dim), K_(m), K_(ef_construction), K_(ef_search),
-    K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size), K_(nbits));
+    K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size),
+    K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht), K_(nbits));
+
+public:
+  static int build(const ObString &index_param_str, const ObVectorIndexQueryParam &query_param, const ObVectorIndexType index_type, ObVectorIndexParam &param);
 };
 
 struct ObVecIdxExtraInfo
@@ -339,6 +362,9 @@ public:
       ObVectorIndexType vector_index_type,
       ObVectorIndexParam &param,
       const bool set_default=true);
+  static int resolve_query_param(
+      const ParseNode *option_node,
+      ObVectorIndexQueryParam& query_param);
   static int filter_index_param(
     const ObString &index_param_str,
     const char *to_filter,

@@ -586,18 +586,5 @@ int ObPluginVectorIndexHelper::get_vector_memory_limit_size(const uint64_t tenan
   return ret;
 }
 
-
-int ObPluginVectorIndexHelper::vsag_errcode_2ob(int vsag_errcode)
-{
-  int ret = OB_ERR_VSAG_RETURN_ERROR;
-  if (vsag_errcode == 10) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("vsag failed to allocator.", K(ret), K(vsag_errcode));
-  } else {
-    LOG_WARN("get vsag failed.", K(ret), K(vsag_errcode));
-  }
-  return ret;
-}
-
 };
 };

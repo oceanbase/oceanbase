@@ -30,7 +30,7 @@ namespace oceanbase {
 using namespace storage;
 using namespace common;
 
-class TestFilter : public obvectorlib::FilterInterface
+class TestFilter : public obvsag::FilterInterface
 {
 public:
     TestFilter(roaring::api::roaring64_bitmap_t *bitmap) : bitmap_(bitmap) {}
@@ -89,7 +89,7 @@ void* global_allocator_free(void *size) {
   return res;
 }
 
-int test_knn_search(obvectorlib::VectorIndexPtr& index,
+int test_knn_search(obvsag::VectorIndexPtr& index,
                         int64_t *ids,
                         float *vecs,
                         const int dim,
@@ -141,7 +141,7 @@ using namespace oceanbase::share;
 
 TEST_F(TestVectorIndexAdaptor, vsag_add_duplicate)
 {
-  obvectorlib::VectorIndexPtr index_handler = nullptr;
+  obvsag::VectorIndexPtr index_handler = nullptr;
   std::mt19937 rng;
   rng.seed(47);
   int dim = 128;
@@ -152,7 +152,7 @@ TEST_F(TestVectorIndexAdaptor, vsag_add_duplicate)
   const char* const DATATYPE_FLOAT32 = "float32";
 
   ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvectorlib::HNSW_TYPE,
+                                      obvsag::HNSW_TYPE,
                                       DATATYPE_FLOAT32,
                                       METRIC_L2,
                                       dim,
@@ -193,7 +193,7 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_index)
 {
   //ASSERT_EQ(obvectorutil::example(), 0);
 
-  obvectorlib::VectorIndexPtr index_handler = nullptr;
+  obvsag::VectorIndexPtr index_handler = nullptr;
   std::mt19937 rng;
   rng.seed(47);
   int dim = 128;
@@ -204,7 +204,7 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_index)
   const char* const DATATYPE_FLOAT32 = "float32";
 
   ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvectorlib::HNSW_TYPE,
+                                      obvsag::HNSW_TYPE,
                                       DATATYPE_FLOAT32,
                                       METRIC_L2,
                                       dim,
@@ -315,7 +315,7 @@ TEST_F(TestVectorIndexAdaptor, vsag_add_index)
 {
   //ASSERT_EQ(obvectorutil::example(), 0);
 
-  obvectorlib::VectorIndexPtr index_handler = nullptr;
+  obvsag::VectorIndexPtr index_handler = nullptr;
   std::mt19937 rng;
   rng.seed(50);
   int dim = 128;
@@ -326,7 +326,7 @@ TEST_F(TestVectorIndexAdaptor, vsag_add_index)
   const char* const DATATYPE_FLOAT32 = "float32";
 
   ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvectorlib::HNSW_TYPE,
+                                      obvsag::HNSW_TYPE,
                                       DATATYPE_FLOAT32,
                                       METRIC_L2,
                                       dim,
@@ -437,7 +437,7 @@ TEST_F(TestVectorIndexAdaptor, test_insert)
 {
   //ASSERT_EQ(obvectorutil::example(), 0);
 
-  obvectorlib::VectorIndexPtr index_handler = nullptr;
+  obvsag::VectorIndexPtr index_handler = nullptr;
   std::mt19937 rng;
   rng.seed(50);
   int dim = 3;
@@ -448,7 +448,7 @@ TEST_F(TestVectorIndexAdaptor, test_insert)
   const char* const DATATYPE_FLOAT32 = "float32";
 
   ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvectorlib::HNSW_TYPE,
+                                      obvsag::HNSW_TYPE,
                                       DATATYPE_FLOAT32,
                                       METRIC_L2,
                                       dim,
@@ -633,8 +633,8 @@ TEST_F(TestVectorIndexAdaptor, test_ser_deser)
 {
   void* raw_memory = (void*)malloc(sizeof(common::obvectorutil::ObVsagLogger));
   common::obvectorutil::ObVsagLogger* ob_logger = new (raw_memory)common::obvectorutil::ObVsagLogger();
-  obvectorlib::set_logger(ob_logger);
-  obvectorlib::VectorIndexPtr index_handler = nullptr;
+  obvsag::set_logger(ob_logger);
+  obvsag::VectorIndexPtr index_handler = nullptr;
   std::mt19937 rng;
   rng.seed(50);
   int dim = 3;
@@ -644,7 +644,7 @@ TEST_F(TestVectorIndexAdaptor, test_ser_deser)
   const char* const METRIC_L2 = "l2";
   const char* const DATATYPE_FLOAT32 = "float32";
   ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvectorlib::HNSW_TYPE,
+                                      obvsag::HNSW_TYPE,
                                       DATATYPE_FLOAT32,
                                       METRIC_L2,
                                       dim,
@@ -685,7 +685,7 @@ TEST_F(TestVectorIndexAdaptor, test_ser_deser)
   ASSERT_EQ(0, index_seri.serialize(index_handler, ser_param, ser_cb, MTL_ID()));
 
   // do deserialize
-  obvectorlib::VectorIndexPtr des_index_handler = nullptr;
+  obvsag::VectorIndexPtr des_index_handler = nullptr;
   ObTestHNSWDeserializeCallback des_callback;
   ObIStreamBuf::Callback des_cb = des_callback;
 
@@ -696,7 +696,7 @@ TEST_F(TestVectorIndexAdaptor, test_ser_deser)
   des_param.cur_pos_ = 0;
   des_param.part_size_ = 10;
   ASSERT_EQ(obvectorutil::create_index(des_index_handler,
-                                      obvectorlib::HNSW_TYPE,
+                                      obvsag::HNSW_TYPE,
                                       DATATYPE_FLOAT32,
                                       METRIC_L2,
                                       dim,
@@ -920,7 +920,7 @@ TEST_F(TestVectorIndexAdaptor, mem_ctx)
 
 TEST_F(TestVectorIndexAdaptor, vsag_build_hnswsq_index)
 {
-  obvectorlib::VectorIndexPtr index_handler = nullptr;
+  obvsag::VectorIndexPtr index_handler = nullptr;
   std::mt19937 rng;
   rng.seed(47);
   int dim = 128;
@@ -931,7 +931,7 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_hnswsq_index)
   const char* const DATATYPE_FLOAT32 = "float32";
 
   ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvectorlib::HNSW_SQ_TYPE,
+                                      obvsag::HNSW_SQ_TYPE,
                                       DATATYPE_FLOAT32,
                                       METRIC_L2,
                                       dim,
@@ -1037,9 +1037,9 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_hnswsq_index)
 
 TEST_F(TestVectorIndexAdaptor, vsag_build_hnswsq_index_query)
 {
-  obvectorlib::VectorIndexPtr index_handler_sq = nullptr;
-  obvectorlib::VectorIndexPtr index_handler = nullptr;
-  obvectorlib::VectorIndexPtr index_handler_bq = nullptr;
+  obvsag::VectorIndexPtr index_handler_sq = nullptr;
+  obvsag::VectorIndexPtr index_handler = nullptr;
+  obvsag::VectorIndexPtr index_handler_bq = nullptr;
   std::mt19937 rng;
   rng.seed(47);
   int dim = 128;
@@ -1050,7 +1050,7 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_hnswsq_index_query)
   const char* const DATATYPE_FLOAT32 = "float32";
 
   ASSERT_EQ(obvectorutil::create_index(index_handler_sq,
-                                      obvectorlib::HNSW_SQ_TYPE,
+                                      obvsag::HNSW_SQ_TYPE,
                                       DATATYPE_FLOAT32,
                                       METRIC_L2,
                                       dim,
@@ -1059,7 +1059,7 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_hnswsq_index_query)
                                       ef_search), 0);
 
   ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvectorlib::HNSW_TYPE,
+                                      obvsag::HNSW_TYPE,
                                       DATATYPE_FLOAT32,
                                       METRIC_L2,
                                       dim,
@@ -1068,7 +1068,7 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_hnswsq_index_query)
                                       ef_search), 0);
 
   ASSERT_EQ(obvectorutil::create_index(index_handler_bq,
-                                      obvectorlib::HNSW_BQ_TYPE,
+                                      obvsag::HNSW_BQ_TYPE,
                                       DATATYPE_FLOAT32,
                                       METRIC_L2,
                                       dim,
@@ -1175,7 +1175,7 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_hnswsq_index_query)
 /*  too much to execute all
 TEST_F(TestVectorIndexAdaptor, test_for_hnsw_insert_time)
 {
-  obvectorlib::VectorIndexPtr index_handler = nullptr;
+  obvsag::VectorIndexPtr index_handler = nullptr;
   std::mt19937 rng;
   rng.seed(47);
   int dim = 128;
@@ -1201,7 +1201,7 @@ TEST_F(TestVectorIndexAdaptor, test_for_hnsw_insert_time)
 
   std::time_t start_timestamp = std::time(nullptr);
   ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvectorlib::HNSW_TYPE,
+                                      obvsag::HNSW_TYPE,
                                       DATATYPE_FLOAT32,
                                       METRIC_L2,
                                       dim,
@@ -1221,7 +1221,7 @@ TEST_F(TestVectorIndexAdaptor, test_for_hnsw_insert_time)
 
 TEST_F(TestVectorIndexAdaptor, test_for_hnswsq_insert_time)
 {
-  obvectorlib::VectorIndexPtr index_handler = nullptr;
+  obvsag::VectorIndexPtr index_handler = nullptr;
   std::mt19937 rng;
   rng.seed(47);
   int dim = 128;
@@ -1247,7 +1247,7 @@ TEST_F(TestVectorIndexAdaptor, test_for_hnswsq_insert_time)
 
   std::time_t start_timestamp = std::time(nullptr);
   ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvectorlib::HNSW_SQ_TYPE,
+                                      obvsag::HNSW_SQ_TYPE,
                                       DATATYPE_FLOAT32,
                                       METRIC_L2,
                                       dim,
@@ -1269,7 +1269,7 @@ TEST_F(TestVectorIndexAdaptor, test_for_hnswsq_insert_time)
 
 TEST_F(TestVectorIndexAdaptor, vsag_build_hnswbq_index)
 {
-  obvectorlib::VectorIndexPtr index_handler = nullptr;
+  obvsag::VectorIndexPtr index_handler = nullptr;
   std::mt19937 rng;
   rng.seed(47);
   int dim = 128;
@@ -1280,7 +1280,7 @@ TEST_F(TestVectorIndexAdaptor, vsag_build_hnswbq_index)
   const char* const DATATYPE_FLOAT32 = "float32";
 
   ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                      obvectorlib::HNSW_BQ_TYPE,
+                                      obvsag::HNSW_BQ_TYPE,
                                       DATATYPE_FLOAT32,
                                       METRIC_L2,
                                       dim,
@@ -1387,9 +1387,9 @@ TEST_F(TestVectorIndexAdaptor, test_hnsw_bq_ser_deser)
 {
   void* raw_memory = (void*)malloc(sizeof(common::obvectorutil::ObVsagLogger));
   common::obvectorutil::ObVsagLogger* ob_logger = new (raw_memory)common::obvectorutil::ObVsagLogger();
-  obvectorlib::set_logger(ob_logger);
-  obvectorlib::VectorIndexPtr index_handler = nullptr;
-  obvectorlib::VectorIndexPtr index_handler_flat = nullptr;
+  obvsag::set_logger(ob_logger);
+  obvsag::VectorIndexPtr index_handler = nullptr;
+  obvsag::VectorIndexPtr index_handler_flat = nullptr;
   std::mt19937 rng;
   rng.seed(50);
   int dim = 128;
@@ -1399,7 +1399,7 @@ TEST_F(TestVectorIndexAdaptor, test_hnsw_bq_ser_deser)
   const char* const METRIC_L2 = "l2";
   const char* const DATATYPE_FLOAT32 = "float32";
   ASSERT_EQ(obvectorutil::create_index(index_handler,
-                                       obvectorlib::HNSW_BQ_TYPE,
+                                       obvsag::HNSW_BQ_TYPE,
                                        DATATYPE_FLOAT32,
                                        METRIC_L2,
                                        dim,
@@ -1407,7 +1407,7 @@ TEST_F(TestVectorIndexAdaptor, test_hnsw_bq_ser_deser)
                                        ef_construction,
                                        ef_search), 0);
   ASSERT_EQ(obvectorutil::create_index(index_handler_flat,
-                                      obvectorlib::HGRAPH_TYPE,
+                                      obvsag::HGRAPH_TYPE,
                                       DATATYPE_FLOAT32,
                                       METRIC_L2,
                                       dim,
@@ -1468,7 +1468,7 @@ TEST_F(TestVectorIndexAdaptor, test_hnsw_bq_ser_deser)
   std::cout << "flat serialize size " << flat_ser_param.size_ << std::endl;
 
   // do deserialize
-  obvectorlib::VectorIndexPtr des_index_handler = nullptr;
+  obvsag::VectorIndexPtr des_index_handler = nullptr;
   ObTestHNSWDeserializeCallback des_callback;
   ObIStreamBuf::Callback des_cb = des_callback;
 
@@ -1479,7 +1479,7 @@ TEST_F(TestVectorIndexAdaptor, test_hnsw_bq_ser_deser)
   des_param.cur_pos_ = 0;
   des_param.part_size_ = 10;
   ASSERT_EQ(obvectorutil::create_index(des_index_handler,
-                                      obvectorlib::HNSW_BQ_TYPE,
+                                      obvsag::HNSW_BQ_TYPE,
                                       DATATYPE_FLOAT32,
                                       METRIC_L2,
                                       dim,

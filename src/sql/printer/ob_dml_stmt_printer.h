@@ -113,6 +113,7 @@ public:
   int print_order_by();
   int print_approx();
   int print_limit();
+  int print_vector_index_query_param();
   int print_fetch();
   int print_returning();
   int print_json_table(const TableItem *table_item);

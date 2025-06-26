@@ -973,6 +973,7 @@ for (int32_t _i = 0; _i < _yyleng; ++_i) {                                      
                            NULL,                                                  \
                            NULL,                                                  \
                            NULL,                                                  \
+                           NULL,                                                  \
                            NULL,  /* PARSE_SELECT_WITH_CHECK_OPTION */            \
                            NULL   /* PARSE_SELECT_INTO_EXTRA */);
 
@@ -1140,7 +1141,7 @@ do {\
     }                                                                           \
   } while(0);                                                                   \
 
-#define malloc_select_values_stmt(node, result, values_node, order_by_node, approx_node, limit_node)\
+#define malloc_select_values_stmt(node, result, values_node, order_by_node, approx_node, limit_node, vector_index_params)\
   do {\
     /*gen select list*/\
     ParseNode *star_node = NULL;\
@@ -1162,6 +1163,7 @@ do {\
     node->children_[PARSE_SELECT_ORDER] = order_by_node;\
     node->children_[PARSE_SELECT_APPROX] = approx_node;\
     node->children_[PARSE_SELECT_LIMIT] = limit_node;\
+    node->children_[PARSE_SELECT_VECTOR_INDEX_PARAMS] = vector_index_params;\
   } while(0);\
 
 #define refine_insert_values_table(node)\

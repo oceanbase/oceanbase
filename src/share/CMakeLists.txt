@@ -729,6 +729,7 @@ ob_set_subtarget(ob_share vector_index
   vector_index/ob_tenant_vector_index_async_task.cpp
   vector_index/ob_vector_index_async_task.cpp
   vector_index/ob_vector_index_async_task_util.cpp
+  vector_index/ob_vector_index_param.cpp
   vector_index/ob_vector_index_ivf_cache_mgr.cpp
   vector_index/ob_ivf_async_task.cpp
   vector_index/ob_ivf_async_task_executor.cpp
