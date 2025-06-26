@@ -9410,6 +9410,14 @@ int ObDDLService::resolve_orig_default_value(ObColumnSchemaV2 &alter_column_sche
                                                     nls_formats,
                                                     allocator))) {
         LOG_WARN("fail to calc default now expr", K(ret));
+      } else if (!alter_column_schema.is_nullable() && orig_default_value.is_null()) {
+        ObObj default_value;
+        default_value.set_type(alter_column_schema.get_data_type());
+        if (OB_FAIL(default_value.build_not_strict_default_value(alter_column_schema.get_accuracy().get_precision(), alter_column_schema.get_collation_type()))) {
+          LOG_WARN("failed to build not strict default value", K(ret));
+        } else if (OB_FAIL(alter_column_schema.set_orig_default_value(default_value))) {
+          LOG_WARN("failed to set orig default value", K(ret));
+        }
       } else if (OB_FAIL(alter_column_schema.set_orig_default_value(orig_default_value))) {
         LOG_WARN("fail to set orig default value", K(orig_default_value), K(ret));
       }
