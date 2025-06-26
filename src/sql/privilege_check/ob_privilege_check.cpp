@@ -761,7 +761,7 @@ int add_proc_priv_in_expr(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ObRawExpr *param_expr = expr->get_param_expr(i);
-      if (OB_FAIL(add_proc_priv_in_expr(ctx, param_expr, user_id, need_privs, check_flag))) {
+      if (OB_FAIL(SMART_CALL(add_proc_priv_in_expr(ctx, param_expr, user_id, need_privs, check_flag)))) {
         LOG_WARN("failed to add proc priv in expr", K(ret));
       }
     }
