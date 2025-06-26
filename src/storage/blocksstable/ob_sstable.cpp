@@ -1003,7 +1003,7 @@ int ObSSTable::check_valid_for_reading()
   return ret;
 }
 
-int ObSSTable::serialize_full_table(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObSSTable::serialize_full_table(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   ObSSTableMetaHandle meta_handle;
@@ -1025,14 +1025,14 @@ int ObSSTable::serialize_full_table(char *buf, const int64_t buf_len, int64_t &p
   } else {
     OB_UNIS_ENCODE(status.pack_);
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(meta_handle.get_sstable_meta().serialize(buf, buf_len, pos))) {
+    } else if (OB_FAIL(meta_handle.get_sstable_meta().serialize(data_version, buf, buf_len, pos))) {
       LOG_WARN("fail to serialize sstable meta", K(ret), K(buf_len), K(pos));
     }
   }
   return ret;
 }
 
-int64_t ObSSTable::get_full_serialize_size() const
+int64_t ObSSTable::get_full_serialize_size(const uint64_t data_version) const
 {
   int64_t len = 0;
   int ret = OB_SUCCESS;
@@ -1043,7 +1043,7 @@ int64_t ObSSTable::get_full_serialize_size() const
   if (OB_FAIL(get_meta(meta_handle))) {
     LOG_WARN("fail to get sstable meta", K(ret));
   } else {
-    sstable_meta_serialize_size = meta_handle.get_sstable_meta().get_serialize_size();
+    sstable_meta_serialize_size = meta_handle.get_sstable_meta().get_serialize_size(data_version);
   }
 
   if (OB_SUCC(ret)) {
@@ -1057,7 +1057,7 @@ int64_t ObSSTable::get_full_serialize_size() const
 }
 
 
-int ObSSTable::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObSSTable::serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   ObSSTableMetaHandle meta_handle;
@@ -1088,7 +1088,7 @@ int ObSSTable::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
     if (OB_FAIL(ret)) {
     } else if (status.with_fixed_struct() && OB_FAIL(serialize_fixed_struct(buf, buf_len, pos))) {
       LOG_WARN("fail to serialize fix sstable struct", K(ret), K(buf_len), K(pos));
-    } else if (status.with_meta() && OB_FAIL(meta_->serialize(buf, buf_len, pos))) {
+    } else if (status.with_meta() && OB_FAIL(meta_->serialize(data_version, buf, buf_len, pos))) {
       LOG_WARN("fail to serialize sstable meta", K(ret), K(buf_len), K(pos));
     } else if (!lib::is_log_reduction()) {
       LOG_INFO("succeed to serialize sstable", K(status.pack_), KPC(this), K(lbt()));
@@ -1162,7 +1162,7 @@ int ObSSTable::deserialize(common::ObArenaAllocator &allocator,
   return ret;
 }
 
-int64_t ObSSTable::get_serialize_size() const
+int64_t ObSSTable::get_serialize_size(const uint64_t data_version) const
 {
   int ret = OB_SUCCESS;
   int64_t len = 0; // invalid
@@ -1178,7 +1178,7 @@ int64_t ObSSTable::get_serialize_size() const
     fixed_struct_serialize_size = get_sstable_fix_serialize_size();
   } else {
     status.set_with_meta();
-    sstable_meta_serialize_size = meta_->get_serialize_size();
+    sstable_meta_serialize_size = meta_->get_serialize_size(data_version);
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_ADD_LEN(status.pack_);

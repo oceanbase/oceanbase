@@ -233,7 +233,8 @@ TEST_F(TestBlockIdList, test_meta_macro_ref_cnt)
   blocksstable::ObStorageObjectOpt default_opt;
 
   // persist 4k tablet
-  const ObTabletPersisterParam param(ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  const ObTabletPersisterParam param(data_version, ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
   ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
   ASSERT_EQ(OB_SUCCESS, meta_service->get_shared_object_reader_writer().switch_object(object_handle, default_opt));
   ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle));
@@ -408,11 +409,12 @@ TEST_F(TestBlockIdList, test_empty_shell_macro_ref_cnt)
   ObLSService *ls_svr = MTL(ObLSService*);
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
   ObLSTabletService *ls_tablet_svr = ls_handle.get_ls()->get_tablet_svr();
+  const uint64_t data_version = DATA_CURRENT_VERSION;
 
   // create and get empty shell
   ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_, ObTabletStatus::Status::DELETED);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = ls_tablet_svr->update_tablet_to_empty_shell(tablet_id);
+  ret = ls_tablet_svr->update_tablet_to_empty_shell(data_version, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTabletMapKey key(ls_id, tablet_id);
   ObTabletHandle tablet_handle;
@@ -431,7 +433,7 @@ TEST_F(TestBlockIdList, test_empty_shell_macro_ref_cnt)
   ObBlockManager::BlockInfo block_info;
   int64_t ref_cnt = 0;
   ObTabletHandle new_tablet_handle;
-  const ObTabletPersisterParam param(ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
+  const ObTabletPersisterParam param(data_version, ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
   ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle));
   ObTablet *new_tablet = new_tablet_handle.get_obj();
   ASSERT_EQ(OB_SUCCESS, new_tablet->tablet_addr_.get_block_addr(macro_id, offset, size));

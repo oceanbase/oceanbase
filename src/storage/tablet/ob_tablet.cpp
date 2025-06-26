@@ -2265,7 +2265,7 @@ int ObTablet::check_sstable_column_checksum() const
           // since empty major sstable may have wrong column count, skip for compatibility from 4.0 to 4.1
         } else if ((sstable_col_cnt = meta_handle.get_sstable_meta().get_col_checksum_cnt()) > schema_col_cnt) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("The storage schema is older than the sstable, and cann’t explain the data.",
+          LOG_ERROR("The storage schema is older than the sstable, and cann't explain the data.",
               K(ret), K(sstable_col_cnt), K(schema_col_cnt), KPC(cur), KPC(storage_schema));
         }
       }
@@ -2314,11 +2314,16 @@ int ObTablet::check_no_backup_data() const
   return ret;
 }
 
-int ObTablet::serialize(char *buf, const int64_t len, int64_t &pos, const ObSArray<ObInlineSecondaryMeta> &meta_arr) const
+int ObTablet::serialize(
+    const uint64_t data_version,
+    char *buf,
+    const int64_t len,
+    int64_t &pos,
+    const ObSArray<ObInlineSecondaryMeta> &meta_arr) const
 {
   int ret = OB_SUCCESS;
   ObTabletBlockHeader block_header;
-  const int64_t total_length = get_serialize_size(meta_arr);
+  const int64_t total_length = get_serialize_size(data_version, meta_arr);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -2340,14 +2345,15 @@ int ObTablet::serialize(char *buf, const int64_t len, int64_t &pos, const ObSArr
     LOG_WARN("shouldn't have more than one inline meta", K(meta_arr.count()));
   } else {
     const int64_t header_size = block_header.get_serialize_size();
-    const int64_t self_size = get_self_serialize_size();
+    const int64_t self_size = get_self_serialize_size(data_version);
     int64_t payload_pos = pos + header_size;
     int64_t header_pos = pos;
-    if (OB_FAIL(self_serialize(buf, len, payload_pos))) {
+    if (OB_FAIL(self_serialize(data_version, buf, len, payload_pos))) {
       LOG_WARN("fail to serialize itself", K(ret), K(len), K(payload_pos), KPC(this));
     } else {
-      block_header.length_ = self_size;
-      block_header.checksum_ = ob_crc64(buf + (pos + header_size), self_size);
+      block_header.first_level_size_ = self_size;
+      block_header.first_level_checksum_ = ob_crc64(buf + (pos + header_size), self_size);
+      block_header.data_version_ = data_version;
       const ObTabletMacroInfo *macro_info = nullptr;
       for (int64_t i = 0; OB_SUCC(ret) && i < meta_arr.count(); i++) {
         if (OB_ISNULL(meta_arr[i].obj_)) {
@@ -2372,7 +2378,10 @@ int ObTablet::serialize(char *buf, const int64_t len, int64_t &pos, const ObSArr
     } else if (OB_FAIL(block_header.serialize(buf, len, header_pos))) {
       LOG_WARN("fail to serialize block header", K(ret), K(len), K(header_pos), K(block_header));
     } else if (OB_UNLIKELY(header_pos - pos != header_size)) {
-      LOG_WARN("block header's length doesn't match calculated length", K(ret), K(header_pos), K(pos), K(header_pos), K(block_header));
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("block header's length doesn't match calculated length", K(ret), K(header_pos), K(pos), K(header_size), K(block_header));
+    } else if (OB_FAIL(block_header.check_data_version_for_compat())) {
+      LOG_WARN("fail to check data version for compat", K(ret), K(block_header), K(data_version));
     } else {
       pos = payload_pos;
     }
@@ -2380,11 +2389,15 @@ int ObTablet::serialize(char *buf, const int64_t len, int64_t &pos, const ObSArr
   return ret;
 }
 
-int ObTablet::self_serialize(char *buf, const int64_t len, int64_t &pos) const
+int ObTablet::self_serialize(
+    const uint64_t data_version,
+    char *buf,
+    const int64_t len,
+    int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
-  const int64_t length = get_self_serialize_size();
+  const int64_t length = get_self_serialize_size(data_version);
   if (OB_UNLIKELY(length > len - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("buffer's length is not enough", K(ret), K(length), K(len - new_pos));
@@ -2392,7 +2405,7 @@ int ObTablet::self_serialize(char *buf, const int64_t len, int64_t &pos) const
     LOG_WARN("failed to serialize tablet meta's version", K(ret), K(len), K(new_pos), K_(version));
   } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i32(buf, len, new_pos, length))) {
     LOG_WARN("failed to serialize tablet meta's length", K(ret), K(len), K(new_pos), K(length));
-  } else if (new_pos - pos < length && OB_FAIL(tablet_meta_.serialize(buf, len, new_pos))) {
+  } else if (new_pos - pos < length && OB_FAIL(tablet_meta_.serialize(data_version, buf, len, new_pos))) {
     LOG_WARN("failed to serialize tablet meta", K(ret), K(len), K(new_pos));
   } else if (new_pos - pos < length && OB_FAIL(table_store_addr_.addr_.serialize(buf, len, new_pos))) {
     LOG_WARN("failed to serialize table store addr", K(ret), K(len), K(new_pos), K(table_store_addr_));
@@ -2463,15 +2476,13 @@ int ObTablet::partial_deserialize(
     LOG_WARN("invalid args", K(ret), K(buf), K(len), K(pos));
   } else if (OB_FAIL(get_tablet_block_header_version(buf + pos, len - pos, bhv))) {
     LOG_WARN("fail to get tablet block header version", K(ret));
-  } else if (ObTabletBlockHeader::TABLET_VERSION_V1 == bhv || ObTabletBlockHeader::TABLET_VERSION_V2 == bhv) {
+  } else if (OB_UNLIKELY(!ObTabletBlockHeader::is_supported_version(bhv))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected tablet version", K(ret));
   } else {
     do {
-      if (ObTabletBlockHeader::TABLET_VERSION_V3 == bhv) {
-        if (OB_FAIL(load_deserialize_v3(allocator, buf, len, new_pos, false/*pull memtable*/))) {
-          LOG_WARN("fail to load deserialize tablet v3", K(ret), KPC(this));
-        }
+      if (OB_FAIL(load_deserialize_v3(allocator, buf, len, new_pos, false/*pull memtable*/))) {
+        LOG_WARN("fail to load deserialize tablet v3", K(ret), KPC(this));
       }
     } while (ignore_ret(ret));
   }
@@ -2502,13 +2513,13 @@ int ObTablet::deserialize_for_replay(
     LOG_WARN("invalid args", K(ret), K(buf), K(len), K(pos));
   } else if (OB_FAIL(get_tablet_block_header_version(buf + pos, len - pos, bhv))) {
     LOG_WARN("fail to get tablet block header version", K(ret), K(buf), K(len), K(pos));
-  } else if ((ObTabletBlockHeader::TABLET_VERSION_V1 == bhv || ObTabletBlockHeader::TABLET_VERSION_V2 == bhv)) {
+  } else if (OB_UNLIKELY(!ObTabletBlockHeader::is_supported_version(bhv))) {
     if (OB_FAIL(deserialize(allocator, buf, len, new_pos))) {
       LOG_WARN("fail to deserialize", K(ret));
     } else {
       pos = new_pos;
     }
-  } else if (ObTabletBlockHeader::TABLET_VERSION_V3 == bhv) {
+  } else if (ObTabletBlockHeader::is_supported_version(bhv)) {
     if (OB_FAIL(load_deserialize_v3(allocator, buf, len, new_pos, false/*pull memtable*/))) {
       LOG_WARN("fail to deserialize with id array", K(ret));
     } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
@@ -2523,7 +2534,7 @@ int ObTablet::deserialize_for_replay(
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected version", K(ret), K(version_));
+    LOG_WARN("unexpected version", K(ret), K(bhv));
   }
   return ret;
 }
@@ -2577,6 +2588,7 @@ int ObTablet::load_deserialize(
         }
         break;
       case ObTabletBlockHeader::TABLET_VERSION_V3:
+      case ObTabletBlockHeader::TABLET_VERSION_V4:
         if (OB_FAIL(load_deserialize_v3(allocator, buf, len, new_pos, true/*prepare_memtable*/))) {
           LOG_WARN("failed to load deserialize v3", K(ret), K(new_pos), KPC(this));
         }
@@ -2898,8 +2910,8 @@ int ObTablet::load_deserialize_v3(
   if (OB_FAIL(header.deserialize(buf, len, pos))) {
     LOG_WARN("fail to deserialize tablet block header", K(ret));
   } else if (FALSE_IT(new_pos = pos)) {
-  } else if (FALSE_IT(crc = ob_crc64(buf + new_pos, header.length_))) {
-  } else if (OB_UNLIKELY(header.checksum_ != crc)) {
+  } else if (FALSE_IT(crc = ob_crc64(buf + new_pos, header.first_level_size_))) {
+  } else if (OB_UNLIKELY(header.first_level_checksum_ != crc)) {
     ret = OB_CHECKSUM_ERROR;
     LOG_WARN("tablet's checksum doesn't match", K(ret), K(header), K(crc));
   } else if (OB_UNLIKELY(1 < header.inline_meta_count_)) {
@@ -2935,7 +2947,9 @@ int ObTablet::load_deserialize_v3(
       LOG_WARN("fail to set tablet macro info's addr", K(ret), K(tablet_addr_), K(secondary_meta_size));
     }
   }
-  if (OB_SUCC(ret)) {
+  if (FAILEDx(header.check_data_version_for_compat())) {
+    LOG_WARN("fail to check data version for compat", K(ret), K(header), KPC(this));
+  } else {
     pos = new_pos;
   }
   return ret;
@@ -2970,11 +2984,11 @@ int ObTablet::deserialize(
   } else if (OB_FAIL(get_tablet_block_header_version(buf + pos, len - pos, bhv))) {
     LOG_WARN("fail to get tablet block header version", K(ret));
   } else if (OB_UNLIKELY(ObTabletBlockHeader::TABLET_VERSION_V2 != bhv
-      && ObTabletBlockHeader::TABLET_VERSION_V3 != bhv)) {
+                      && ObTabletBlockHeader::TABLET_VERSION_V3 != bhv
+                      && ObTabletBlockHeader::TABLET_VERSION_V4 != bhv)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("invalid version", K(ret), K(bhv));
-  } else if ((ObTabletBlockHeader::TABLET_VERSION_V3 == bhv)
-      && OB_FAIL(header.deserialize(buf, len, pos))) {
+  } else if (ObTabletBlockHeader::is_supported_version(bhv) && OB_FAIL(header.deserialize(buf, len, pos))) {
     LOG_WARN("fail to deserialize ObTabletBlockHeader", K(ret));
   } else {
     int64_t new_pos = pos;
@@ -3063,7 +3077,7 @@ int ObTablet::deserialize(
     }
 
     if (OB_FAIL(ret)) {
-    } else if ((ObTabletBlockHeader::TABLET_VERSION_V3 == bhv)
+    } else if (ObTabletBlockHeader::is_supported_version(bhv)
         && new_pos - pos < length_
         && OB_FAIL(macro_info_addr_.addr_.deserialize(buf, len, new_pos))) {
       LOG_WARN("fail to deserialize macro info addr", K(ret), K(len), K(new_pos));
@@ -3140,7 +3154,7 @@ int ObTablet::deserialize(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (ObTabletBlockHeader::TABLET_VERSION_V3 == bhv) {
+    } else if (ObTabletBlockHeader::is_supported_version(bhv)) {
       if (OB_UNLIKELY(1 < header.inline_meta_count_)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("shouldn't have more than one inline meta", K(ret), K(header));
@@ -3184,7 +3198,10 @@ int ObTablet::deserialize(
       }
     }
 
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+    } else if (ObTabletBlockHeader::is_supported_version(bhv) && OB_FAIL(header.check_data_version_for_compat())) {
+      LOG_WARN("fail to check data version for compat", K(ret));
+    } else {
       pos = new_pos;
       is_inited_ = true;
       // must succeed if hold_ref_cnt_ has been set to true
@@ -3954,7 +3971,9 @@ int ObTablet::get_snapshot_version(SCN &scn) const
   return ret;
 }
 
-int64_t ObTablet::get_serialize_size(const ObSArray<ObInlineSecondaryMeta> &meta_arr) const
+int64_t ObTablet::get_serialize_size(
+  const uint64_t data_version,
+  const ObSArray<ObInlineSecondaryMeta> &meta_arr) const
 {
   ObTabletBlockHeader header;
   int64_t size = 0;
@@ -3963,8 +3982,9 @@ int64_t ObTablet::get_serialize_size(const ObSArray<ObInlineSecondaryMeta> &meta
     LOG_WARN("fail to init tablet block header", K(ret), K(meta_arr));
     size = -1;
   } else {
+    header.data_version_ = data_version;
     size += header.get_serialize_size();
-    size += get_self_serialize_size();
+    size += get_self_serialize_size(data_version);
     for (int64_t i = 0; OB_SUCC(ret) && i < meta_arr.count(); i++) {
       if (OB_ISNULL(meta_arr[i].obj_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -3982,12 +4002,12 @@ int64_t ObTablet::get_serialize_size(const ObSArray<ObInlineSecondaryMeta> &meta
   return size;
 }
 
-int64_t ObTablet::get_self_serialize_size() const
+int64_t ObTablet::get_self_serialize_size(const uint64_t data_version) const
 {
   int64_t size = 0;
   size += serialization::encoded_length_i32(version_);
   size += serialization::encoded_length_i32(length_);
-  size += tablet_meta_.get_serialize_size();
+  size += tablet_meta_.get_serialize_size(data_version);
   size += storage_schema_addr_.addr_.get_serialize_size();
   size += table_store_addr_.addr_.get_serialize_size();
   size += is_empty_shell() ? 0 : rowkey_read_info_->get_serialize_size();
@@ -4028,7 +4048,7 @@ int ObTablet::deserialize_id(
     LOG_WARN("fail to deserialize tablet meta's version", K(ret), K(len), K(pos));
   } else if (OB_FAIL(serialization::decode_i32(buf, len, pos, (int32_t *)&length))) {
     LOG_WARN("fail to deserialize tablet meta's length", K(ret), K(len), K(pos));
-  } else if (ObTabletBlockHeader::TABLET_VERSION_V1 == version || ObTabletBlockHeader::TABLET_VERSION_V2 == version) {
+  } else if (OB_UNLIKELY(!ObTabletBlockHeader::is_supported_version(version))) {
     if (OB_FAIL(ObTabletMeta::deserialize_id(buf, len, pos, ls_id, tablet_id))) {
       LOG_WARN("fail to deserialize ls_id and tablet_id from tablet meta", K(ret), K(len));
     }
@@ -4119,7 +4139,7 @@ int ObTablet::get_tablet_block_header_version(const char *buf, const int64_t len
     LOG_WARN("tablet version length is unexpected", K(ret), K(len));
   } else if (OB_FAIL(serialization::decode_i32(buf, len, tmp_pos, &version))) {
     LOG_WARN("fail to decode version", K(ret));
-  } else if (ObTabletBlockHeader::TABLET_VERSION_V1 > version || ObTabletBlockHeader::TABLET_VERSION_V3 < version) {
+  } else if (OB_UNLIKELY(!ObTabletBlockHeader::is_valid_version(version))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid version, data may be wrong", K(ret), K(version));
     hex_dump(buf, len, true, OB_LOG_LEVEL_WARN);

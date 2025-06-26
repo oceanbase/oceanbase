@@ -102,9 +102,12 @@ int ObRootBlockInfo::deserialize(
     } else if (OB_FAIL(deserialize_(allocator, des_meta, buf + pos, data_len, tmp_pos))) {
       LOG_WARN("fail to deserialize address and load", K(ret), K(des_meta), KP(buf),
           K(data_len), K(pos));
-    } else if (OB_UNLIKELY(len != tmp_pos)) {
+    } else if (OB_UNLIKELY(len < tmp_pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, serialize may have bug", K(ret), K(len), K(tmp_pos), KPC(this));
+    } else if (len > tmp_pos) {
+      LOG_WARN("old server may deserialize value written by new server", K(ret), K(len), K(tmp_pos), KPC(this));
+      pos += len;
     } else {
       pos += tmp_pos;
     }
@@ -955,9 +958,12 @@ int ObSSTableMacroInfo::deserialize(
       LOG_WARN("payload is out of the buf's boundary", K(ret), K(data_len), K(pos), K(len));
     } else if (OB_FAIL(deserialize_(allocator, des_meta, buf + pos, len, tmp_pos))) {
       LOG_WARN("fail to deserialize_", K(ret), K(des_meta), KP(buf), K(len), K(tmp_pos));
-    } else if (OB_UNLIKELY(len != tmp_pos)) {
+    } else if (OB_UNLIKELY(len < tmp_pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, serialize may have bug", K(ret), K(len), K(tmp_pos), K(*this));
+    } else if (len > tmp_pos) {
+      LOG_WARN("old server may deserialize value written by new server", K(ret), K(len), K(tmp_pos), K(*this));
+      pos += len;
     } else {
       pos += tmp_pos;
     }

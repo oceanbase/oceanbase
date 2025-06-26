@@ -356,6 +356,8 @@ static void update_sslog(
     ObSSTabletSSLogValue meta_value;
     meta_value.set_meta_info(*meta_info);
     meta_value.tablet_ = ret_meta_value.tablet_;
+    meta_value.data_version_ = DATA_CURRENT_VERSION;
+    meta_value.macro_info_ = ret_meta_value.tablet_->macro_info_addr_.get_ptr();
     const int64_t meta_value_size = meta_value.get_serialize_size();
     char *meta_value_buf = (char*)mtl_malloc(meta_value_size, "gc_unittest");
     pos = 0;

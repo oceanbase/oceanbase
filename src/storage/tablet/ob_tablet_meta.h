@@ -107,12 +107,12 @@ public:
   bool is_valid() const;
 
   // serialize & deserialize
-  int serialize(char *buf, const int64_t len, int64_t &pos) const;
+  int serialize(const uint64_t data_version, char *buf, const int64_t len, int64_t &pos) const;
   int deserialize(
       const char *buf,
       const int64_t len,
       int64_t &pos);
-  int64_t get_serialize_size() const;
+  int64_t get_serialize_size(const uint64_t data_version) const;
   int reset_transfer_table();
   bool has_transfer_table() const;
   share::SCN get_ddl_sstable_start_scn() const;

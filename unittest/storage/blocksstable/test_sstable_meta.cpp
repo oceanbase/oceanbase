@@ -675,10 +675,11 @@ TEST_F(TestSSTableMeta, test_common_sstable_persister_linked_block)
   ASSERT_EQ(0, sstable_macro_info.linked_block_count_);
   total_write_ctxs.push_back(linked_block_write_ctx);
 
-  const int64_t size = sstable.get_serialize_size();
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  const int64_t size = sstable.get_serialize_size(data_version);
   char *full_buf = static_cast<char *>(allocator_.alloc(size));
   int64_t pos = 0;
-  ASSERT_EQ(common::OB_SUCCESS, sstable.serialize(full_buf, size, pos));
+  ASSERT_EQ(common::OB_SUCCESS, sstable.serialize(data_version, full_buf, size, pos));
   blocksstable::ObSSTable tmp_sstable;
   pos = 0;
   ASSERT_EQ(common::OB_SUCCESS, tmp_sstable.deserialize(allocator_, full_buf, size, pos));
@@ -759,10 +760,11 @@ TEST_F(TestSSTableMeta, test_huge_sstable_persister_linked_block)
   ASSERT_EQ(1, sstable_macro_info.linked_block_count_);
   total_write_ctxs.push_back(linked_block_write_ctx);
 
-  const int64_t size = sstable.get_serialize_size();
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  const int64_t size = sstable.get_serialize_size(data_version);
   char *full_buf = static_cast<char *>(allocator_.alloc(size));
   int64_t pos = 0;
-  ASSERT_EQ(common::OB_SUCCESS, sstable.serialize(full_buf, size, pos));
+  ASSERT_EQ(common::OB_SUCCESS, sstable.serialize(data_version, full_buf, size, pos));
   blocksstable::ObSSTable tmp_sstable;
   pos = 0;
   ASSERT_EQ(common::OB_SUCCESS, tmp_sstable.deserialize(allocator_, full_buf, size, pos));
@@ -801,9 +803,10 @@ TEST_F(TestSSTableMeta, test_empty_sstable_serialize_and_deserialize)
   ASSERT_TRUE(sstable_meta.get_col_checksum_cnt() > 0);
 
   int64_t pos = 0;
-  const int64_t buf_len = sstable_meta.get_serialize_size();
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  const int64_t buf_len = sstable_meta.get_serialize_size(data_version);
   char *buf = new char [buf_len];
-  ASSERT_EQ(OB_SUCCESS, sstable_meta.serialize(buf, buf_len, pos));
+  ASSERT_EQ(OB_SUCCESS, sstable_meta.serialize(data_version, buf, buf_len, pos));
   ASSERT_TRUE(sstable_meta.is_valid());
   ASSERT_TRUE(sstable_meta.data_root_info_.is_valid());
   ASSERT_TRUE(sstable_meta.macro_info_.is_valid());

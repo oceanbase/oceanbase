@@ -163,10 +163,11 @@ void TestDDLClogCase::prepare_ddl_finish_log(ObTabletID &tablet_id, ObDDLFinishL
     ASSERT_EQ(OB_SUCCESS, table_handle.get_sstable(sstable));
     int64_t buf_len = 0;
     if (sstable) {
-      char *buf = (char*)mtl_malloc((buf_len = sstable->get_serialize_size()), "MajorSSTable");
+      const uint64_t data_version = DATA_CURRENT_VERSION;
+      char *buf = (char*)mtl_malloc((buf_len = sstable->get_serialize_size(data_version)), "MajorSSTable");
       if (buf) {
         int64_t pos = 0;
-        ASSERT_EQ(OB_SUCCESS, sstable->serialize(buf, buf_len, pos));
+        ASSERT_EQ(OB_SUCCESS, sstable->serialize(data_version, buf, buf_len, pos));
         ASSERT_EQ(OB_SUCCESS, finish_log.init(tenant_id_, ObLSID(ls_id_), sstable->key_, buf, pos, mock_data_format_version));
       } else {
         ASSERT_EQ(true, false) <<"buf is null";

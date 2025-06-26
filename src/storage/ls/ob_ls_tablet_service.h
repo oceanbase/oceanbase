@@ -288,7 +288,9 @@ public:
       const ObTabletMapKey &key,
       common::ObArenaAllocator &allocator,
       ObTabletHandle &handle);
-  int update_tablet_to_empty_shell(const common::ObTabletID &tablet_id);
+  int update_tablet_to_empty_shell(
+      const uint64_t data_version,
+      const common::ObTabletID &tablet_id);
   int replay_create_tablet(
       const ObUpdateTabletPointerParam &param,
       const char *buf,
@@ -594,6 +596,7 @@ private:
       ObTimeGuard &time_guard,
       const share::SCN &ss_change_version = share::SCN::invalid_scn());
   int safe_update_cas_empty_shell(
+      const uint64_t data_version,
       const ObTabletMapKey &key,
       const ObTabletHandle &old_handle,
       ObTabletHandle &new_handle,
@@ -606,6 +609,7 @@ private:
       ObTimeGuard &time_guard,
       const share::SCN &ss_change_version = share::SCN::invalid_scn());
   int safe_create_cas_empty_shell(
+      const uint64_t data_version,
       const ObLSID &ls_id,
       const ObTabletID &tablet_id,
       ObTabletHandle &tablet_handle,
@@ -626,6 +630,7 @@ private:
       const common::ObTabletID &tablet_id,
       bool &b_exist);
   int create_inner_tablet(
+      const uint64_t data_version,
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const common::ObTabletID &data_tablet_id,
@@ -665,15 +670,20 @@ private:
   int rollback_remove_tablet_without_lock(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id);
-  int migrate_update_tablet(const ObMigrationTabletParam &mig_tablet_param);
+  int migrate_update_tablet(
+      const uint64_t data_version,
+      const ObMigrationTabletParam &mig_tablet_param);
   int migrate_create_tablet(
+      const uint64_t data_version,
       const ObMigrationTabletParam &mig_tablet_param,
       ObTabletHandle &handle);
   // Create tablet with shared tablet.
   int update_with_ss_tablet(
+      const uint64_t data_version,
       const ObTablet &ss_tablet,
       const SCN &meta_version);
   int create_with_ss_tablet(
+      const uint64_t data_version,
       const ObTablet &ss_tablet,
       const SCN &meta_version,
       ObTabletHandle &handle);
@@ -935,6 +945,7 @@ private:
   int set_allow_to_read_(ObLS *ls);
   // TODO(chenqingxiang.cqx): remove this
   int create_empty_shell_tablet(
+      const uint64_t data_version,
       const ObMigrationTabletParam &param,
       ObTabletHandle &tablet_handle);
   int check_rollback_tablet_is_same_(

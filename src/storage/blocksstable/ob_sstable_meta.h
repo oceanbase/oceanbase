@@ -303,13 +303,17 @@ public:
   {
     return data_root_info_.transform_root_block_extra_buf(allocator);
   }
-  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int serialize(
+      const uint64_t data_version,
+      char *buf,
+      const int64_t buf_len,
+      int64_t &pos) const;
   int deserialize(
       common::ObArenaAllocator &allocator,
       const char *buf,
       const int64_t data_len,
       int64_t &pos);
-  int64_t get_serialize_size() const;
+  int64_t get_serialize_size(const uint64_t data_version) const;
   int64_t get_variable_size() const;
   inline int64_t get_deep_copy_size() const
   {
@@ -333,13 +337,13 @@ private:
   int prepare_tx_context(
     const ObTxContext::ObTxDesc &tx_desc,
     common::ObArenaAllocator &allocator);
-  int serialize_(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int serialize_(const uint64_t data_verion, char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_(
       common::ObArenaAllocator &allocator,
       const char *buf,
       const int64_t data_len,
       int64_t &pos);
-  int64_t get_serialize_size_() const;
+  int64_t get_serialize_size_(const uint64_t data_version) const;
 private:
   friend class ObSSTable;
   static const int64_t MAX_PROGRESSIVE_MERGE_STEP = 100;

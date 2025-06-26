@@ -370,13 +370,15 @@ int ObTenantStorageCheckpointWriter::record_tablet_meta(
   ObLSTabletAddrIterator tablet_iter;
   ObTabletMapKey tablet_key;
   char slog_buf[sizeof(ObUpdateTabletLog)];
-
+  uint64_t data_version = 0;
   tablet_item_writer_.reuse_for_next_round();
   ObMemAttr mem_attr(MTL_ID(), ObModIds::OB_CHECKPOINT);
   if (OB_FAIL(tablet_item_writer_.init_for_slog_ckpt(MTL_ID(), MTL_EPOCH_ID(), mem_attr, fd_dispenser))) {
     LOG_WARN("failed to init tablet item writer", K(ret));
   } else if (OB_FAIL(ls.get_tablet_svr()->build_tablet_iter(tablet_iter))) {
     LOG_WARN("fail to build ls tablet iter", K(ret), K(ls));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("fail to get min data version", K(ret));
   }
 
   while (OB_SUCC(ret)) {
@@ -397,8 +399,8 @@ int ObTenantStorageCheckpointWriter::record_tablet_meta(
       LOG_WARN("addr is none", K(ret));
     } else if (ObTenantStorageMetaType::CKPT == meta_type_) {
       do {
-        if (OB_FAIL(persist_and_copy_tablet(tablet_key, addr, ls.get_ls_epoch(), slog_buf))) {
-          LOG_WARN("fail to persist and copy tablet", K(ret), K(tablet_key), K(addr));
+        if (OB_FAIL(persist_and_copy_tablet(data_version, tablet_key, addr, ls.get_ls_epoch(), slog_buf))) {
+          LOG_WARN("fail to persist and copy tablet", K(ret), K(tablet_key), K(addr), K(data_version));
         }
       } while (OB_SERVER_OUTOF_DISK_SPACE == ret);
       if (OB_SUCC(ret)) {
@@ -407,8 +409,8 @@ int ObTenantStorageCheckpointWriter::record_tablet_meta(
           FLOG_INFO("print compat processing procedure", K(ret), "ls_id", ls.get_ls_id(), K(processed_cnt), K(total_tablet_cnt));
         }
       }
-    } else if (ObTenantStorageMetaType::SNAPSHOT == meta_type_ && OB_FAIL(copy_tablet(tablet_key, ls.get_ls_epoch(), slog_buf, clog_max_scn))) {
-      LOG_WARN("fail to copy tablet", K(ret), K(tablet_key));
+    } else if (ObTenantStorageMetaType::SNAPSHOT == meta_type_ && OB_FAIL(copy_tablet(data_version, tablet_key, ls.get_ls_epoch(), slog_buf, clog_max_scn))) {
+      LOG_WARN("fail to copy tablet", K(ret), K(tablet_key), K(data_version));
     }
   }
 
@@ -425,6 +427,7 @@ int ObTenantStorageCheckpointWriter::record_tablet_meta(
 }
 
 int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
+    const uint64_t data_version,
     const ObTabletMapKey &tablet_key,
     const ObMetaDiskAddr &old_addr,
     const int64_t ls_epoch,
@@ -486,7 +489,7 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
         transfer_seq = src_tablet->get_transfer_seq();
       }
 
-      const ObTabletPersisterParam param(tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, transfer_seq);
+      const ObTabletPersisterParam param(data_version, tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, transfer_seq);
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *src_tablet, new_tablet_handle))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
@@ -531,6 +534,7 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
 }
 
 int ObTenantStorageCheckpointWriter::copy_tablet(
+    const uint64_t data_version,
     const ObTabletMapKey &tablet_key,
     const int64_t ls_epoch,
     char (&slog_buf)[sizeof(ObUpdateTabletLog)],
@@ -554,7 +558,7 @@ int ObTenantStorageCheckpointWriter::copy_tablet(
     }
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else if (tablet->get_tablet_addr().is_file()) {
-    const ObTabletPersisterParam param(tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, tablet->get_transfer_seq());
+    const ObTabletPersisterParam param(data_version, tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, tablet->get_transfer_seq());
     if (OB_UNLIKELY(!tablet->is_empty_shell())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("addr format normal tablet's shouldn't be file", K(ret), KPC(tablet));

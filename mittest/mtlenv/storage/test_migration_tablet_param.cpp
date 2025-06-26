@@ -352,7 +352,8 @@ TEST_F(TestMigrationTabletParam, empty_shell_transfer)
   ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_, ObTabletStatus::Status::DELETED);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = ls_tablet_service->update_tablet_to_empty_shell(tablet_id);
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  ret = ls_tablet_service->update_tablet_to_empty_shell(data_version, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTabletHandle empty_shell_tablet_handle;

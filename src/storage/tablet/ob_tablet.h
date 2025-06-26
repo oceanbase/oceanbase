@@ -350,6 +350,7 @@ public:
   // serialize & deserialize
   // TODO: change the impl of serialize and get_serialize_size after rebase
   int serialize(
+      const uint64_t data_version,
       char *buf,
       const int64_t len,
       int64_t &pos,
@@ -388,7 +389,9 @@ public:
       const char *buf,
       const int64_t len,
       int64_t &pos);
-  int64_t get_serialize_size(const ObSArray<ObInlineSecondaryMeta> &meta_arr = ObSArray<ObInlineSecondaryMeta>()) const;
+  int64_t get_serialize_size(
+      const uint64_t data_version,
+      const ObSArray<ObInlineSecondaryMeta> &meta_arr = ObSArray<ObInlineSecondaryMeta>()) const;
 
   // dml operation
   int insert_rows(
@@ -760,8 +763,12 @@ private:
 private:
   static bool ignore_ret(const int ret);
   int inner_check_valid(const bool ignore_ha_status = false) const;
-  int self_serialize(char *buf, const int64_t len, int64_t &pos) const;
-  int64_t get_self_serialize_size() const;
+  int self_serialize(
+      const uint64_t data_version,
+      char *buf,
+      const int64_t len,
+      int64_t &pos) const;
+  int64_t get_self_serialize_size(const uint64_t data_version) const;
   static int check_schema_version(const ObDDLInfoCache& ddl_info_cache, const int64_t schema_version);
   static int check_snapshot_readable(const ObDDLInfoCache& ddl_info_cache, const int64_t snapshot_version, const int64_t schema_version);
   logservice::ObLogHandler *get_log_handler() const { return log_handler_; } // TODO(gaishun.gs): get log handler from tablet pointer handle

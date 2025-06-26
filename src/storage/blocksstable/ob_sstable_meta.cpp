@@ -296,9 +296,12 @@ DEFINE_DESERIALIZE(ObSSTableBasicMeta)
       //Since the data len is greater than the actual length_, it is not compatible when adding a field
       if (OB_FAIL(decode_for_compat(buf, start_pos + length_, pos))) {
         LOG_WARN("failed to decode", K(ret), K(pos), K(start_pos), KPC(this));
-      } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
+      } else if (OB_UNLIKELY(length_ < pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, deserialize may has bug", K(ret), K(pos), K(start_pos), KPC(this));
+      } else if (length_ > pos - start_pos) {
+        LOG_WARN("old server may deserialize value written by new server", K(ret), K(length_), K(pos), K(start_pos), KPC(this));
+        pos = start_pos + length_;
       }
     }
   }
@@ -501,9 +504,12 @@ int ObTxContext::deserialize(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(pos - tmp_pos != len_)) {
+  } else if (OB_UNLIKELY(pos - tmp_pos > len_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected len_", K(ret), K(len_), K(tmp_pos), K(pos));
+  } else if (pos - tmp_pos < len_) {
+    LOG_WARN("old server may deserialize value written by new server", K(ret), K(len_), K(tmp_pos), K(pos));
+    pos = tmp_pos + len_;
   }
   return ret;
 }
@@ -799,7 +805,7 @@ int ObSSTableMeta::fill_cg_sstables(
   return ret;
 }
 
-int ObSSTableMeta::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObSSTableMeta::serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
@@ -807,11 +813,11 @@ int ObSSTableMeta::serialize(char *buf, const int64_t buf_len, int64_t &pos) con
     LOG_WARN("argument is invalid", K(ret), KP(buf), K(buf_len));
   } else {
     int64_t tmp_pos = 0;
-    const int64_t len = get_serialize_size_();
+    const int64_t len = get_serialize_size_(data_version);
     OB_UNIS_ENCODE(SSTABLE_META_VERSION);
     OB_UNIS_ENCODE(len);
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(serialize_(buf + pos, buf_len, tmp_pos))) {
+    } else if (OB_FAIL(serialize_(data_version, buf + pos, buf_len, tmp_pos))) {
       LOG_WARN("fail to serialize_", K(ret), KP(buf), K(buf_len), K(pos), K(tmp_pos));
     } else if (OB_UNLIKELY(len != tmp_pos)) {
       ret = OB_ERR_UNEXPECTED;
@@ -823,7 +829,7 @@ int ObSSTableMeta::serialize(char *buf, const int64_t buf_len, int64_t &pos) con
   return ret;
 }
 
-int ObSSTableMeta::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObSSTableMeta::serialize_(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(basic_meta_.serialize(buf, buf_len, pos))) {
@@ -834,7 +840,7 @@ int ObSSTableMeta::serialize_(char *buf, const int64_t buf_len, int64_t &pos) co
     LOG_WARN("fail to serialize data root info", K(ret), K(buf_len), K(pos), K(data_root_info_));
   } else if (OB_FAIL(macro_info_.serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize macro info", K(ret), K(buf_len), K(pos), K(macro_info_));
-  } else if (OB_FAIL(cg_sstables_.serialize(buf, buf_len, pos))) {
+  } else if (OB_FAIL(cg_sstables_.serialize(data_version, buf, buf_len, pos))) {
     LOG_WARN("fail to serialize cg sstables", K(ret), K(buf_len), K(pos), K(cg_sstables_));
   } else if (OB_FAIL(tx_ctx_.serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize tx ids", K(ret), K(buf_len), K(pos), K(tx_ctx_));
@@ -867,11 +873,14 @@ int ObSSTableMeta::deserialize(
       LOG_WARN("object version mismatch", K(ret), K(version));
     } else if (OB_FAIL(deserialize_(allocator, buf + pos, len, tmp_pos))) {
       LOG_WARN("fail to deserialize_", K(ret), K(data_len), K(tmp_pos), K(pos));
-    } else if (OB_UNLIKELY(len != tmp_pos)) {
+    } else if (OB_UNLIKELY(len < tmp_pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, serialize may have bug", K(ret), K(len), K(tmp_pos), KPC(this));
-    } else {
-      pos += tmp_pos;
+    } else if (len > tmp_pos) {
+      LOG_WARN("old server may deserialize value written by new server", K(ret), K(len), K(tmp_pos), KPC(this));
+    }
+    if (OB_SUCC(ret)) {
+      pos += len;
       is_inited_ = true;
     }
   }
@@ -911,24 +920,24 @@ int ObSSTableMeta::deserialize_(
   return ret;
 }
 
-int64_t ObSSTableMeta::get_serialize_size() const
+int64_t ObSSTableMeta::get_serialize_size(const uint64_t data_version) const
 {
   int64_t len = 0;
-  const int64_t payload_size = get_serialize_size_();
+  const int64_t payload_size = get_serialize_size_(data_version);
   OB_UNIS_ADD_LEN(SSTABLE_META_VERSION);
   OB_UNIS_ADD_LEN(payload_size);
-  len += get_serialize_size_();
+  len += get_serialize_size_(data_version);
   return len;
 }
 
-int64_t ObSSTableMeta::get_serialize_size_() const
+int64_t ObSSTableMeta::get_serialize_size_(const uint64_t data_version) const
 {
   int64_t len = 0;
   len += basic_meta_.get_serialize_size();
   len += column_ckm_struct_.get_serialize_size();
   len += data_root_info_.get_serialize_size();
   len += macro_info_.get_serialize_size();
-  len += cg_sstables_.get_serialize_size();
+  len += cg_sstables_.get_serialize_size(data_version);
   len += tx_ctx_.get_serialize_size();
   return len;
 }
@@ -1227,9 +1236,12 @@ DEFINE_DESERIALIZE(ObMigrationSSTableParam)
       LOG_WARN("payload is out of the buf's boundary", K(ret), K(data_len), K(pos), K(len));
     } else if (OB_FAIL(deserialize_(buf + pos, len, tmp_pos))) {
        LOG_WARN("fail to deserialize_", K(ret), KP(buf), K(data_len), K(pos));
-    } else if (OB_UNLIKELY(len != tmp_pos)) {
+    } else if (OB_UNLIKELY(len < tmp_pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, serialize may have bug", K(ret), K(len), K(tmp_pos), KPC(this));
+    } else if (len > tmp_pos) {
+      LOG_WARN("old server may deserialize value written by new server", K(ret), K(len), K(tmp_pos), KPC(this));
+      pos += len;
     } else {
       pos += tmp_pos;
     }

@@ -64,8 +64,8 @@ public:
   int64_t get_deep_copy_size() const;
   int deep_copy(char *dst_buf, const int64_t buf_size, int64_t &pos, ObSSTableArray &dst_array) const;
 
-  int64_t get_serialize_size() const;
-  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int64_t get_serialize_size(const uint64_t data_version) const;
+  int serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(
       ObArenaAllocator &allocator,
       const char *buf,

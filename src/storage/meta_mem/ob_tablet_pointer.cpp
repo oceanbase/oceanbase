@@ -353,7 +353,7 @@ int ObTabletPointer::dump_meta_obj(ObTabletHandle &guard, void *&free_obj)
     const ObTabletID tablet_id = obj_.ptr_->tablet_meta_.tablet_id_;
     const int64_t wash_score = obj_.ptr_->get_wash_score();
     guard.get_obj(meta_obj);
-    const ObTabletPersisterParam param(ls_id, ls_handle_.get_ls()->get_ls_epoch(), tablet_id, obj_.ptr_->get_transfer_seq());
+    const ObTabletPersisterParam param(0/*data_version*/, ls_id, ls_handle_.get_ls()->get_ls_epoch(), tablet_id, obj_.ptr_->get_transfer_seq());
     ObTablet *tmp_obj = obj_.ptr_;
     if (OB_NOT_NULL(meta_obj.ptr_) && obj_.ptr_->get_try_cache_size() <= ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
       char *buf = reinterpret_cast<char*>(meta_obj.ptr_);

@@ -73,6 +73,7 @@ public:
       const ObIArray<common::ObTabletID> &tablet_id_arr,
       const ObIArray<ObMetaDiskAddr> &tablet_addr_arr);
   int write_empty_shell_tablet(
+      const uint64_t data_version,
       const int64_t ls_epoch,
       ObTablet *tablet,
       ObMetaDiskAddr &tablet_addr);

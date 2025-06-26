@@ -123,14 +123,14 @@ public:
   virtual int64_t get_deep_copy_size() const override;
   virtual int64_t get_try_cache_size() const;
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIStorageMetaObj *&value) const override;
-  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(
       common::ObArenaAllocator &allocator,
       const ObTablet &tablet,
       const char *buf,
       const int64_t data_len,
       int64_t &pos);
-  int64_t get_serialize_size() const;
+  int64_t get_serialize_size(const uint64_t data_version) const;
   OB_INLINE bool is_valid() const
   {
     return is_inited_ &&

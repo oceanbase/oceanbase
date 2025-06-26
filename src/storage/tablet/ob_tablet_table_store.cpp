@@ -69,10 +69,10 @@ void ObTabletTableStore::reset()
   is_inited_ = false;
 }
 
-int ObTabletTableStore::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObTabletTableStore::serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  int64_t serialized_length = get_serialize_size();
+  int64_t serialized_length = get_serialize_size(data_version);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -83,14 +83,18 @@ int ObTabletTableStore::serialize(char *buf, const int64_t buf_len, int64_t &pos
     LOG_WARN("failed to serialize table_store_version", K(ret));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, serialized_length))) {
     LOG_WARN("failed to seriazlie serialized_length", K(ret));
+  } else if (OB_FAIL(major_tables_.serialize(data_version, buf, buf_len, pos))) {
+    LOG_WARN("failed to serialize major sstables", K(ret));
+  } else if (OB_FAIL(minor_tables_.serialize(data_version, buf, buf_len, pos))) {
+    LOG_WARN("failed to serialize minor sstables", K(ret));
+  } else if (OB_FAIL(ddl_sstables_.serialize(data_version, buf, buf_len, pos))){
+    LOG_WARN("failed to serialize ddl sstables", K(ret));
+  } else if (OB_FAIL(meta_major_tables_.serialize(data_version, buf, buf_len, pos))) {
+    LOG_WARN("failed to serialize meta major sstables", K(ret));
+  } else if (OB_FAIL(mds_sstables_.serialize(data_version, buf, buf_len, pos))){
+    LOG_WARN("failed to serialize mds sstables", K(ret));
   } else {
-    LST_DO_CODE(OB_UNIS_ENCODE,
-        major_tables_,
-        minor_tables_,
-        ddl_sstables_,
-        meta_major_tables_,
-        mds_sstables_);
-    if (OB_SUCC(ret) && version_ >= TABLE_STORE_VERSION_V4) {
+    if (version_ >= TABLE_STORE_VERSION_V4) {
       LST_DO_CODE(OB_UNIS_ENCODE,
         major_ckm_info_);
     }
@@ -142,10 +146,14 @@ int ObTabletTableStore::deserialize(
     LOG_WARN("fail to pull memtables from tablet", K(ret));
   } else if (OB_FAIL(pull_ddl_memtables(allocator, tablet))) {
     LOG_WARN("pull_ddl_memtables failed", K(ret));
-  } else if (OB_UNLIKELY(pos - start_pos != serialized_length)) {
+  } else if (OB_UNLIKELY(pos - start_pos > serialized_length)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected deserialization length not match", K(ret), K(pos), K(start_pos), K(serialized_length));
-  } else {
+  } else if (pos - start_pos < serialized_length) {
+    LOG_WARN("old server may deserialize value written by new server", K(ret), K(pos), K(start_pos), K(serialized_length));
+    pos = start_pos + serialized_length;
+  }
+  if (OB_SUCC(ret)) {
     version_ = TABLE_STORE_VERSION_V4;
     is_inited_ = true;
     if (OB_FAIL(check_ready_for_read(tablet))) {
@@ -159,17 +167,16 @@ int ObTabletTableStore::deserialize(
   return ret;
 }
 
-int64_t ObTabletTableStore::get_serialize_size() const
+int64_t ObTabletTableStore::get_serialize_size(const uint64_t data_version) const
 {
   int64_t len = 0;
   len += serialization::encoded_length_i64(version_);
   len += serialization::encoded_length_i64(len);
-  LST_DO_CODE(OB_UNIS_ADD_LEN,
-      major_tables_,
-      minor_tables_,
-      ddl_sstables_,
-      meta_major_tables_,
-      mds_sstables_);
+  len += major_tables_.get_serialize_size(data_version);
+  len += minor_tables_.get_serialize_size(data_version);
+  len += ddl_sstables_.get_serialize_size(data_version);
+  len += meta_major_tables_.get_serialize_size(data_version);
+  len += mds_sstables_.get_serialize_size(data_version);
   if (version_ >= TABLE_STORE_VERSION_V4) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, major_ckm_info_);
   }

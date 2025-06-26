@@ -762,11 +762,11 @@ bool ObTabletMeta::is_valid() const
       && is_valid_cs_replica_ddl_status(ddl_replay_status_);
 }
 
-int ObTabletMeta::serialize(char *buf, const int64_t len, int64_t &pos) const
+int ObTabletMeta::serialize(const uint64_t data_version, char *buf, const int64_t len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
-  const int64_t length = get_serialize_size();
+  const int64_t length = get_serialize_size(data_version);
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -964,11 +964,16 @@ int ObTabletMeta::deserialize(
       LOG_WARN("failed to deserialize has_truncate_info", K(ret), K(len));
     } else if (new_pos - pos < length_ && OB_FAIL(min_ss_tablet_version_.fixed_deserialize(buf, len, new_pos))) {
       LOG_WARN("failed to deserialize min_ss_tablet_version", K(ret), K(len), K(new_pos));
-    } else if (OB_UNLIKELY(length_ != new_pos - pos)) {
+    } else if (OB_UNLIKELY(length_ < new_pos - pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K_(length));
+    } else if (OB_UNLIKELY(length_ > new_pos - pos)) {
+      LOG_WARN("old server may deserialize value written by new server", K(ret), K(length_), K(new_pos - pos), K(pos));
+      pos += length_;
     } else {
       pos = new_pos;
+    }
+    if (OB_SUCC(ret)) {
       compat_mode_ = static_cast<lib::Worker::CompatMode>(compat_mode);
       is_inited_ = true;
     }
@@ -981,7 +986,7 @@ int ObTabletMeta::deserialize(
   return ret;
 }
 
-int64_t ObTabletMeta::get_serialize_size() const
+int64_t ObTabletMeta::get_serialize_size(const uint64_t data_version) const
 {
   int64_t size = 0;
   size += serialization::encoded_length_i32(version_);
@@ -1558,10 +1563,16 @@ int ObMigrationTabletParam::deserialize_v2_v3(const char *buf, const int64_t len
     LOG_WARN("failed to deserialize has_truncate_info", K(ret), K(len));
   } else if (PARAM_VERSION_V3 <= version_ && new_pos - pos < length && OB_FAIL(min_ss_tablet_version_.fixed_deserialize(buf, len, new_pos))) {
     LOG_WARN("failed to deserialize min_ss_tablet_version", K(ret), K(len), K(new_pos));
-  } else if (OB_UNLIKELY(length != new_pos - pos)) {
+  } else if (OB_UNLIKELY(length < new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length), KPC(this));
+  } else if (OB_UNLIKELY(length > new_pos - pos)) {
+    LOG_WARN("old server may deserailize value written by new server", K(ret), K(length), K(new_pos - pos));
+    pos += length;
   } else {
+    pos = new_pos;
+  }
+  if (OB_SUCC(ret)) {
     if (PARAM_VERSION_V2 == version_) {
       int64_t tmp_pos = 0;
       extra_medium_info_ = mds_data_.medium_info_list_.extra_medium_info_;
@@ -1573,7 +1584,6 @@ int ObMigrationTabletParam::deserialize_v2_v3(const char *buf, const int64_t len
       }
     }
     compat_mode_ = static_cast<lib::Worker::CompatMode>(compat_mode);
-    pos = new_pos;
     LOG_DEBUG("succeed to deserialize migration tablet param v2_v3", K(ret), KPC(this));
   }
 

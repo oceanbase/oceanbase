@@ -957,8 +957,9 @@ TEST_F(ObTestSSLogAtomicProtocol, test_tablet_meta_write_op)
     uint64_t op_id = 0;
     ASSERT_EQ(OB_SUCCESS, op_handle.get_op_id(op_id));
     ASSERT_EQ(tablet_cur_op_id, op_id);
+    const uint64_t data_version = DATA_CURRENT_VERSION;
     // write tablet_meta and sub_tablet_meta
-    MTL(ObSSMetaService*)->persist_tablet_(tablet, ObMetaUpdateReason::CREATE_TABLET, -1, op_handle, tablet_meta_file);
+    MTL(ObSSMetaService*)->persist_tablet_(data_version, tablet, ObMetaUpdateReason::CREATE_TABLET, -1, op_handle, tablet_meta_file);
 
     // read tablet meta
     tablet = nullptr;

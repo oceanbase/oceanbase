@@ -281,10 +281,11 @@ TEST_F(TestCOSSTable, co_table_basic_test)
   EXPECT_EQ(true, co_sstable->valid_for_cs_reading_);
 
   // serialize co sstable
-  const int64_t buf_len = co_sstable->get_serialize_size();
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  const int64_t buf_len = co_sstable->get_serialize_size(data_version);
   char * encode_buf = static_cast<char *>(allocator_.alloc(sizeof(char) * buf_len));
   int64_t pos = 0;
-  ret = co_sstable->serialize(encode_buf, buf_len, pos);
+  ret = co_sstable->serialize(data_version, encode_buf, buf_len, pos);
   EXPECT_EQ(OB_SUCCESS, ret);
 
   // deserialize co sstable

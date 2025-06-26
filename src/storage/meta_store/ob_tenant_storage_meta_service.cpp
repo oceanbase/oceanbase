@@ -470,6 +470,7 @@ int ObTenantStorageMetaService::batch_remove_tablet(
 }
 
 int ObTenantStorageMetaService::write_empty_shell_tablet(
+    const uint64_t data_version,
     const int64_t ls_epoch,
     ObTablet *tablet,
     ObMetaDiskAddr &tablet_addr)
@@ -486,7 +487,8 @@ int ObTenantStorageMetaService::write_empty_shell_tablet(
     LOG_WARN("the tablet is not empty shell", K(ret), K(tablet));
   } else {
     const ObTabletMapKey tablet_key(tablet->get_tablet_meta().ls_id_, tablet->get_tablet_meta().tablet_id_);
-    ObEmptyShellTabletLog slog_entry(tablet->get_tablet_meta().ls_id_,
+    ObEmptyShellTabletLog slog_entry(data_version,
+                                     tablet->get_tablet_meta().ls_id_,
                                      tablet->get_tablet_meta().tablet_id_,
                                      ls_epoch,
                                      tablet);
