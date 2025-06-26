@@ -57,7 +57,12 @@ inline bool allow_ddl_thread_rpc_not_match(const obrpc::ObRpcPacketCode pcode)
          || obrpc::OB_SPLIT_RESOURCE_POOL == pcode
          || obrpc::OB_MERGE_RESOURCE_POOL == pcode
          || obrpc::OB_BACKUP_DATABASE == pcode
-         || obrpc::OB_GET_TENANT_SCHEMA_VERSIONS == pcode;
+         || obrpc::OB_GET_TENANT_SCHEMA_VERSIONS == pcode
+         || obrpc::OB_BROADCAST_SCHEMA == pcode
+         || obrpc::OB_PHYSICAL_RESTORE_TENANT == pcode
+         || obrpc::OB_RUN_UPGRADE_JOB == pcode
+         || obrpc::OB_DROP_RESTORE_POINT == pcode
+         || obrpc::OB_CLEAN_SPLITTED_TABLET == pcode;
 }
 
 // precondition: enable_ddl = false
