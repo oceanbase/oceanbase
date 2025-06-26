@@ -19,7 +19,7 @@ template<>
 int ObVectorL2Distance<float>::l2_square_func(const float *a, const float *b, const int64_t len, double &square)
 {
   int ret = OB_SUCCESS;
-#if OB_USE_MULTITARGET_CODE
+#if OB_USE_MULTITARGET_CODE && defined(__x86_64__)
     if (common::is_arch_supported(ObTargetArch::AVX512)) {
       ret = common::specific::avx512::l2_square(a, b, len, square);
     } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
@@ -28,6 +28,12 @@ int ObVectorL2Distance<float>::l2_square_func(const float *a, const float *b, co
       ret = common::specific::avx::l2_square(a, b, len, square);
     } else if (common::is_arch_supported(ObTargetArch::SSE42)) {
       ret = common::specific::sse42::l2_square(a, b, len, square);
+    } else {
+      ret = common::specific::normal::l2_square(a, b, len, square);
+    }
+#elif defined(__aarch64__)
+    if (common::is_arch_supported(ObTargetArch::NEON)) {
+      ret = l2_square_neon(a, b, len, square);
     } else {
       ret = common::specific::normal::l2_square(a, b, len, square);
     }

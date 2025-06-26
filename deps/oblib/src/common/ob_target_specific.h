@@ -27,6 +27,7 @@ enum ObTargetArch : uint32_t
   AVX      = (1 << 1),
   AVX2     = (1 << 2),
   AVX512    = (1 << 3),
+  NEON    = (1 << 4),
 };
 
 bool is_arch_supported(ObTargetArch arch);
@@ -60,7 +61,7 @@ bool is_arch_supported(ObTargetArch arch);
 #define OB_AVX512_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw,avx512vl,tune=native")))
 #define OB_AVX2_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,tune=native")))
 #define OB_AVX_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,tune=native")))
-#define OB_SSE42_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt",tune=native)))
+#define OB_SSE42_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,tune=native“)))
 #define OB_DEFAULT_FUNCTION_SPECIFIC_ATTRIBUTE
 
 #   define OB_BEGIN_AVX512_SPECIFIC_CODE \

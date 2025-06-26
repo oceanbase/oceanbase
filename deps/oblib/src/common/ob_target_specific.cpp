@@ -35,6 +35,9 @@ void init_arches()
   if (flags.have_flag(CpuFlag::AVX512BW)) {
     arches |= static_cast<uint32_t>(ObTargetArch::AVX512);
   }
+  if (flags.have_flag(CpuFlag::NEON)) {
+    arches |= static_cast<uint32_t>(ObTargetArch::NEON);
+  }
 }
 
 } // namespace common
