@@ -97,6 +97,7 @@ enum ObStorageType : uint8_t
   OB_STORAGE_S3 = 4,
   OB_STORAGE_LOCAL_CACHE = 5,
   OB_STORAGE_HDFS = 6,
+  OB_STORAGE_AZBLOB = 7,
   OB_STORAGE_MAX_TYPE
 };
 

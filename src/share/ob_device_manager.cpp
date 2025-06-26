@@ -13,6 +13,7 @@
 #include "lib/restore/ob_object_device.h"
 #include "ob_device_manager.h"
 #include "share/config/ob_server_config.h"
+#include "share/ob_server_struct.h"
 #include "share/io/ob_io_manager.h"
 #include "share/ob_local_device.h"
 #include "share/external_table/ob_hdfs_table_device.h"
@@ -119,6 +120,20 @@ int ObClusterVersionMgr::is_supported_enable_worm_version() const
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "date version is less than 4.3.5.2, set enable_worm is");
     OB_LOG(WARN, "date version is less than 4.3.5.2, setting enable_worm is not supported", K(ret), K(data_version));
+  }
+  return ret;
+}
+
+int ObClusterVersionMgr::is_supported_azblob_version() const
+{
+  int ret = OB_SUCCESS;
+  const uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  if (min_cluster_version < CLUSTER_VERSION_4_3_5_3) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "cluster version is too low for azblob", K(ret), K(min_cluster_version));
+  } else if (GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "azblob is not supported as a storage destination in shared storage mode.", KR(ret));
   }
   return ret;
 }
@@ -270,6 +285,10 @@ int parse_storage_info(common::ObString storage_type_prefix, ObIODevice*& device
     if (NULL != mem) {new(mem)ObObjectDevice;}
   } else if (storage_type_prefix.prefix_match(OB_S3_PREFIX)) {
     device_type = OB_STORAGE_S3;
+    mem = allocator.alloc(sizeof(ObObjectDevice));
+    if (NULL != mem) {new(mem)ObObjectDevice;}
+  } else if (storage_type_prefix.prefix_match(OB_AZBLOB_PREFIX)) {
+    device_type = OB_STORAGE_AZBLOB;
     mem = allocator.alloc(sizeof(ObObjectDevice));
     if (NULL != mem) {new(mem)ObObjectDevice;}
   } else if (storage_type_prefix.prefix_match(OB_HDFS_PREFIX)) {
@@ -647,7 +666,8 @@ int ObDeviceManager::get_device_key_(
   } else if (storage_type_prefix.prefix_match(OB_OSS_PREFIX)
              || storage_type_prefix.prefix_match(OB_COS_PREFIX)
              || storage_type_prefix.prefix_match(OB_S3_PREFIX)
-             || storage_type_prefix.prefix_match(OB_HDFS_PREFIX)) {
+             || storage_type_prefix.prefix_match(OB_HDFS_PREFIX)
+             || storage_type_prefix.prefix_match(OB_AZBLOB_PREFIX)) {
     const int64_t storage_info_key_len = storage_info.get_device_map_key_len();
     char storage_info_key_str[storage_info_key_len];
     storage_info_key_str[0] = '\0';

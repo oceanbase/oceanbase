@@ -115,7 +115,7 @@ enum ObStorageChecksumType : uint8_t
 bool is_oss_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_cos_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type);
-bool is_obdal_supported_checksum(const ObStorageChecksumType checksum_type);
+bool is_obdal_supported_checksum(const ObStorageType storage_type, const ObStorageChecksumType checksum_type);
 const char *get_storage_checksum_type_str(const ObStorageChecksumType &type);
 bool is_use_obdal();
 // [Extensions]
@@ -185,6 +185,10 @@ public:
   {
     return OB_SUCCESS;
   };
+  virtual int is_supported_azblob_version() const
+  {
+    return OB_SUCCESS;
+  }
   static ObClusterVersionBaseMgr &get_instance()
   {
     static ObClusterVersionBaseMgr mgr;

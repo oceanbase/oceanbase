@@ -22,7 +22,7 @@ namespace oceanbase
 namespace common
 {
 
-const char *OB_STORAGE_TYPES_STR[] = {"OSS", "FILE", "COS", "LOCAL", "S3", "LOCAL_CACHE", "HDFS"};
+const char *OB_STORAGE_TYPES_STR[] = {"OSS", "FILE", "COS", "LOCAL", "S3", "LOCAL_CACHE", "HDFS", "AZBLOB"};
 
 void print_access_storage_log(
     const char *msg,
@@ -56,7 +56,8 @@ int validate_uri_type(const common::ObString &uri)
       !uri.prefix_match(OB_COS_PREFIX) &&
       !uri.prefix_match(OB_S3_PREFIX) &&
       !uri.prefix_match(OB_FILE_PREFIX) &&
-      !uri.prefix_match(OB_HDFS_PREFIX)) {
+      !uri.prefix_match(OB_HDFS_PREFIX) &&
+      !uri.prefix_match(OB_AZBLOB_PREFIX)) {
     ret = OB_INVALID_BACKUP_DEST;
     STORAGE_LOG(ERROR, "invalid backup uri", KR(ret), KS(uri));
   }
@@ -78,6 +79,8 @@ int get_storage_type_from_path(const common::ObString &uri, ObStorageType &type)
     type = OB_STORAGE_FILE;
   } else if (uri.prefix_match(OB_HDFS_PREFIX)) {
     type = OB_STORAGE_HDFS;
+  } else if (uri.prefix_match(OB_AZBLOB_PREFIX)) {
+    type = OB_STORAGE_AZBLOB;
   } else {
     ret = OB_INVALID_BACKUP_DEST;
     STORAGE_LOG(ERROR, "invalid backup uri", KR(ret), KS(uri));
@@ -101,7 +104,8 @@ bool is_storage_type_match(const common::ObString &uri, const ObStorageType &typ
       || (OB_STORAGE_COS == type && uri.prefix_match(OB_COS_PREFIX))
       || (OB_STORAGE_S3 == type && uri.prefix_match(OB_S3_PREFIX))
       || (OB_STORAGE_FILE == type && uri.prefix_match(OB_FILE_PREFIX))
-      || (OB_STORAGE_HDFS == type && uri.prefix_match(OB_HDFS_PREFIX));
+      || (OB_STORAGE_HDFS == type && uri.prefix_match(OB_HDFS_PREFIX))
+      || (OB_STORAGE_AZBLOB == type && uri.prefix_match(OB_AZBLOB_PREFIX));
 }
 
 bool is_object_storage_type(const ObStorageType &type)
@@ -542,7 +546,7 @@ int ObStorageUtil::open(common::ObObjectStorageInfo *storage_info)
     util_ = &file_util_;
   } else if (OB_STORAGE_HDFS == device_type_) {
     util_ = &hdfs_util_;
-  } else if (is_use_obdal()) {
+  } else if (is_use_obdal() || OB_STORAGE_AZBLOB == device_type_) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
@@ -1838,7 +1842,8 @@ int ObStorageUtil::list_files_with_marker(const common::ObString &uri, common::O
   } else {}
 
   if (OB_FAIL(ret)) {
-  } else if (OB_STORAGE_FILE != device_type_) {
+  } else if (OB_STORAGE_FILE != device_type_ && OB_STORAGE_AZBLOB != device_type_) {
+    // azblob does not support list with start after (marker), so a similar compatibility is required for NFS
     if (OB_FAIL(list_adaptive_files(uri_buf, op))) {
       STORAGE_LOG(WARN, "failed to list adaptive files with marker",
           K(ret), K(uri), K(uri_buf), K(marker));
@@ -1996,7 +2001,7 @@ int ObStorageReader::open(const common::ObString &uri,
     reader_ = &file_reader_;
   } else if (OB_STORAGE_HDFS == type) {
     reader_ = &hdfs_reader_;
-  } else if (is_use_obdal()) {
+  } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
@@ -2145,18 +2150,18 @@ static int alloc_reader(ObIAllocator &allocator, const ObStorageType &type, ObIS
 {
   int ret = OB_SUCCESS;
   reader = nullptr;
-  if (OB_STORAGE_OSS == type) {
+  if (OB_STORAGE_FILE == type) {
+    ret = alloc_reader_type<ObStorageFileReader>(allocator, reader);
+  } else if (OB_STORAGE_HDFS == type) {
+    ret = alloc_reader_type<ObStorageHdfsReader>(allocator, reader);
+  } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
+    ret = alloc_reader_type<ObStorageObDalReader>(allocator, reader);
+  } else if (OB_STORAGE_OSS == type) {
     ret = alloc_reader_type<ObStorageOssReader>(allocator, reader);
   } else if (OB_STORAGE_COS == type) {
     ret = alloc_reader_type<ObStorageCosReader>(allocator, reader);
   } else if (OB_STORAGE_S3 == type) {
     ret = alloc_reader_type<ObStorageS3Reader>(allocator, reader);
-  } else if (OB_STORAGE_FILE == type) {
-    ret = alloc_reader_type<ObStorageFileReader>(allocator, reader);
-  } else if (OB_STORAGE_HDFS == type) {
-    ret = alloc_reader_type<ObStorageHdfsReader>(allocator, reader);
-  } else {
-    ret = OB_INVALID_ARGUMENT;
   }
 
   if (OB_FAIL(ret)) {
@@ -2200,7 +2205,7 @@ int ObStorageAdaptiveReader::open(const common::ObString &uri,
     reader_ = &file_reader_;
   } else if (OB_STORAGE_HDFS == type) {
     reader_ = &hdfs_reader_;
-  } else if (is_use_obdal()) {
+  } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
@@ -2430,7 +2435,7 @@ int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageIn
   } else if (FALSE_IT(storage_info_ = storage_info)) {
   } else if (OB_STORAGE_FILE == type) {
     writer_ = &file_writer_;
-  } else if (is_use_obdal()) {
+  } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
@@ -2584,7 +2589,7 @@ int ObStorageAppender::open(
   } else if (FALSE_IT(storage_info_ = storage_info)) {
   } else if (OB_STORAGE_FILE == type_) {
     appender_ = &file_appender_;
-  } else if (is_use_obdal()) {
+  } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type_) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
@@ -2886,7 +2891,7 @@ int ObStorageMultiPartWriter::open(
   } else if (FALSE_IT(storage_info_ = storage_info)) {
   } else if (OB_STORAGE_FILE == type) {
     multipart_writer_ = &file_multipart_writer_;
-  } else if (is_use_obdal()) {
+  } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));
@@ -3124,7 +3129,7 @@ int ObStorageParallelMultiPartWriterBase::open(
     STORAGE_LOG(WARN, "failed to fill uri", K(ret), K(uri));
   } else if (OB_STORAGE_FILE == type) {
     multipart_writer_ = &file_multipart_writer_;
-  } else if (is_use_obdal()) {
+  } else if (is_use_obdal() || OB_STORAGE_AZBLOB == type) {
     if (OB_UNLIKELY(storage_info->is_enable_worm())) {
       ret = OB_NOT_SUPPORTED;
       STORAGE_LOG(WARN, "obdal do not support worm", K(ret), KPC(storage_info));

@@ -48,6 +48,7 @@ public:
   virtual ~ObClusterVersionMgr() {}
   virtual int is_supported_assume_version() const override;
   virtual int is_supported_enable_worm_version() const override;
+  virtual int is_supported_azblob_version() const override;
   static ObClusterVersionMgr &get_instance()
   {
     static ObClusterVersionMgr mgr;

@@ -330,6 +330,16 @@ int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char
   } else if (OB_ISNULL(storage_info) || strlen(storage_info) >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("storage info is invalid", K(ret), KP(storage_info));
+  } else if (device_type == OB_STORAGE_AZBLOB) {
+    if (OB_ISNULL(cluster_version_mgr_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("cluster_version_mgr is null", K(ret), KP(cluster_version_mgr_));
+    } else if (OB_FAIL(cluster_version_mgr_->is_supported_azblob_version())) {
+      LOG_WARN("azblob version is not supported", K(ret), K(device_type));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (FALSE_IT(device_type_ = device_type)) {
   } else if (0 == strlen(storage_info)) {
     // Only file/hdfs storage could be with empty storage_info.
@@ -524,7 +534,9 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
           LOG_WARN("failed to set enable worm", K(ret), K(token));
         }
       } else if (0 == strncmp(ROLE_ARN, token, strlen(ROLE_ARN))) {
-        if (ObStorageType::OB_STORAGE_FILE == device_type_) {
+        if (ObStorageType::OB_STORAGE_FILE == device_type_
+            || ObStorageType::OB_STORAGE_AZBLOB == device_type_
+            || is_use_obdal()) {
           ret = OB_INVALID_BACKUP_DEST;
           LOG_WARN("OB_STORAGE_FILE don't support assume role yet",
               K(ret), K_(device_type), KP(token));
@@ -642,11 +654,32 @@ bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type)
       || checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
 }
 
-bool is_obdal_supported_checksum(const ObStorageChecksumType checksum_type)
+bool is_obdal_supported_checksum(const ObStorageType storage_type, const ObStorageChecksumType checksum_type)
 {
-  return checksum_type == ObStorageChecksumType::OB_CRC32_ALGO
-      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO
-      || checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
+  bool ret = true;
+  if (storage_type == OB_STORAGE_S3) {
+    if (checksum_type != ObStorageChecksumType::OB_MD5_ALGO
+        && checksum_type != ObStorageChecksumType::OB_CRC32_ALGO
+        && checksum_type != ObStorageChecksumType::OB_NO_CHECKSUM_ALGO) {
+      ret = false;
+    }
+  } else if (storage_type == OB_STORAGE_OSS) {
+    if (checksum_type != ObStorageChecksumType::OB_MD5_ALGO
+        && checksum_type != ObStorageChecksumType::OB_NO_CHECKSUM_ALGO) {
+      ret = false;
+    }
+  } else if (storage_type == OB_STORAGE_AZBLOB) {
+    if (checksum_type != ObStorageChecksumType::OB_MD5_ALGO
+        && checksum_type != ObStorageChecksumType::OB_NO_CHECKSUM_ALGO) {
+      ret = false;
+    }
+  } else if (storage_type == OB_STORAGE_COS) {
+    if (checksum_type != ObStorageChecksumType::OB_MD5_ALGO
+        && checksum_type != ObStorageChecksumType::OB_NO_CHECKSUM_ALGO) {
+      ret = false;
+    }
+  }
+  return ret;
 }
 
 int ObObjectStorageInfo::set_checksum_type_(const char *checksum_type_str)
