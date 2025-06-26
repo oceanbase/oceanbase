@@ -1917,6 +1917,18 @@ constexpr int OB_ERR_MVIEW_BASE_TABLE_ALTERED = -9809;
 constexpr int OB_ERR_MVIEW_MISSING_DEPENDENCE = -9810;
 constexpr int OB_ERR_INVALID_NESTED_CURSOR = -9811;
 constexpr int OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH = -9812;
+constexpr int OB_UTL_HTTP_BAD_ARGUMENT = -9813;
+constexpr int OB_UTL_HTTP_BAD_URL = -9814;
+constexpr int OB_UTL_HTTP_END_OF_BODY = -9815;
+constexpr int OB_UTL_HTTP_HTTP_CLIENT_ERROR = -9816;
+constexpr int OB_UTL_HTTP_HTTP_SERVER_ERROR = -9817;
+constexpr int OB_UTL_HTTP_NETWORK_ACCESS_DENIED = -9818;
+constexpr int OB_UTL_HTTP_PARTIAL_MULTIBYTE_EXCEPTION = -9819;
+constexpr int OB_UTL_HTTP_PROTOCOL_ERROR = -9820;
+constexpr int OB_UTL_HTTP_REQUEST_FAILED = -9821;
+constexpr int OB_UTL_HTTP_TOO_MANY_REQUESTS = -9822;
+constexpr int OB_UTL_HTTP_TRANSFER_TIMEOUT = -9823;
+constexpr int OB_UTL_HTTP_UNKNOWN_SCHEME = -9824;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -2021,8 +2033,8 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
+constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -4338,6 +4350,18 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_MVIEW_MISSING_DEPENDENCE__USER_ERROR_MSG "Materialized view %s.%s has invalid dependency info, please perform a complete refresh to recover."
 #define OB_ERR_INVALID_NESTED_CURSOR__USER_ERROR_MSG "Cursor Variable in record, object, or collection is not supported by this release"
 #define OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH__USER_ERROR_MSG "materialized view can not nested consistent refresh"
+#define OB_UTL_HTTP_BAD_ARGUMENT__USER_ERROR_MSG "bad argument"
+#define OB_UTL_HTTP_BAD_URL__USER_ERROR_MSG "bad URL"
+#define OB_UTL_HTTP_END_OF_BODY__USER_ERROR_MSG "end-of-body reached"
+#define OB_UTL_HTTP_HTTP_CLIENT_ERROR__USER_ERROR_MSG "HTTP client error"
+#define OB_UTL_HTTP_HTTP_SERVER_ERROR__USER_ERROR_MSG "HTTP server error"
+#define OB_UTL_HTTP_NETWORK_ACCESS_DENIED__USER_ERROR_MSG "network access denied by access control list (ACL)"
+#define OB_UTL_HTTP_PARTIAL_MULTIBYTE_EXCEPTION__USER_ERROR_MSG "partial multibyte character"
+#define OB_UTL_HTTP_PROTOCOL_ERROR__USER_ERROR_MSG "HTTP protocol error"
+#define OB_UTL_HTTP_REQUEST_FAILED__USER_ERROR_MSG "HTTP request failed"
+#define OB_UTL_HTTP_TOO_MANY_REQUESTS__USER_ERROR_MSG "too many open HTTP requests"
+#define OB_UTL_HTTP_TRANSFER_TIMEOUT__USER_ERROR_MSG "transfer timeout"
+#define OB_UTL_HTTP_UNKNOWN_SCHEME__USER_ERROR_MSG "unknown or unsupported URL scheme"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -4482,8 +4506,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -9112,6 +9136,30 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_INVALID_NESTED_CURSOR__OBE_USER_ERROR_MSG "PLS-00989: Cursor Variable in record, object, or collection is not supported by this release"
 #define OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9812, materialized view can not nested consistent refresh"
 #define OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9812, materialized view can not nested consistent refresh"
+#define OB_UTL_HTTP_BAD_ARGUMENT__ORA_USER_ERROR_MSG "ORA-29261: bad argument"
+#define OB_UTL_HTTP_BAD_ARGUMENT__OBE_USER_ERROR_MSG "OBE-29261: bad argument"
+#define OB_UTL_HTTP_BAD_URL__ORA_USER_ERROR_MSG "ORA-29262: bad URL"
+#define OB_UTL_HTTP_BAD_URL__OBE_USER_ERROR_MSG "OBE-29262: bad URL"
+#define OB_UTL_HTTP_END_OF_BODY__ORA_USER_ERROR_MSG "ORA-29266: end-of-body reached"
+#define OB_UTL_HTTP_END_OF_BODY__OBE_USER_ERROR_MSG "OBE-29266: end-of-body reached"
+#define OB_UTL_HTTP_HTTP_CLIENT_ERROR__ORA_USER_ERROR_MSG "ORA-29268: HTTP client error"
+#define OB_UTL_HTTP_HTTP_CLIENT_ERROR__OBE_USER_ERROR_MSG "OBE-29268: HTTP client error"
+#define OB_UTL_HTTP_HTTP_SERVER_ERROR__ORA_USER_ERROR_MSG "ORA-29269: HTTP server error"
+#define OB_UTL_HTTP_HTTP_SERVER_ERROR__OBE_USER_ERROR_MSG "OBE-29269: HTTP server error"
+#define OB_UTL_HTTP_NETWORK_ACCESS_DENIED__ORA_USER_ERROR_MSG "ORA-24247: network access denied by access control list (ACL)"
+#define OB_UTL_HTTP_NETWORK_ACCESS_DENIED__OBE_USER_ERROR_MSG "OBE-24247: network access denied by access control list (ACL)"
+#define OB_UTL_HTTP_PARTIAL_MULTIBYTE_EXCEPTION__ORA_USER_ERROR_MSG "ORA-29275: partial multibyte character"
+#define OB_UTL_HTTP_PARTIAL_MULTIBYTE_EXCEPTION__OBE_USER_ERROR_MSG "OBE-29275: partial multibyte character"
+#define OB_UTL_HTTP_PROTOCOL_ERROR__ORA_USER_ERROR_MSG "ORA-29263: HTTP protocol error"
+#define OB_UTL_HTTP_PROTOCOL_ERROR__OBE_USER_ERROR_MSG "OBE-29263: HTTP protocol error"
+#define OB_UTL_HTTP_REQUEST_FAILED__ORA_USER_ERROR_MSG "ORA-29273: HTTP request failed"
+#define OB_UTL_HTTP_REQUEST_FAILED__OBE_USER_ERROR_MSG "OBE-29273: HTTP request failed"
+#define OB_UTL_HTTP_TOO_MANY_REQUESTS__ORA_USER_ERROR_MSG "ORA-29270: too many open HTTP requests"
+#define OB_UTL_HTTP_TOO_MANY_REQUESTS__OBE_USER_ERROR_MSG "OBE-29270: too many open HTTP requests"
+#define OB_UTL_HTTP_TRANSFER_TIMEOUT__ORA_USER_ERROR_MSG "ORA-29276: transfer timeout"
+#define OB_UTL_HTTP_TRANSFER_TIMEOUT__OBE_USER_ERROR_MSG "OBE-29276: transfer timeout"
+#define OB_UTL_HTTP_UNKNOWN_SCHEME__ORA_USER_ERROR_MSG "ORA-29264: unknown or unsupported URL scheme"
+#define OB_UTL_HTTP_UNKNOWN_SCHEME__OBE_USER_ERROR_MSG "OBE-29264: unknown or unsupported URL scheme"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -9400,12 +9448,12 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2456];
+extern int g_all_ob_errnos[2469];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

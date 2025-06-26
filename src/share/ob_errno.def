@@ -2719,6 +2719,18 @@ DEFINE_ERROR(OB_ERR_MVIEW_BASE_TABLE_ALTERED, -9809, -1, "HY000", "Base tables a
 DEFINE_ERROR(OB_ERR_MVIEW_MISSING_DEPENDENCE, -9810, -1, "HY000", "Materialized view %s.%s has invalid dependency info, please perform a complete refresh to recover.");
 DEFINE_PLS_ERROR(OB_ERR_INVALID_NESTED_CURSOR, -9811, -1, "HY000", "Cursor Variable in record, object, or collection is not supported by this release", 989, "Cursor Variable in record, object, or collection is not supported by this release");
 DEFINE_ERROR(OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH, -9812, -1, "HY000", "materialized view can not nested consistent refresh");
+DEFINE_ORACLE_ERROR(OB_UTL_HTTP_BAD_ARGUMENT, -9813, -1, "HY000", "bad argument", 29261, "bad argument");
+DEFINE_ORACLE_ERROR(OB_UTL_HTTP_BAD_URL, -9814, -1, "HY000", "bad URL", 29262, "bad URL");
+DEFINE_ORACLE_ERROR(OB_UTL_HTTP_END_OF_BODY, -9815, -1, "HY000", "end-of-body reached", 29266, "end-of-body reached");
+DEFINE_ORACLE_ERROR(OB_UTL_HTTP_HTTP_CLIENT_ERROR, -9816, -1, "HY000", "HTTP client error", 29268, "HTTP client error");
+DEFINE_ORACLE_ERROR(OB_UTL_HTTP_HTTP_SERVER_ERROR, -9817, -1, "HY000", "HTTP server error", 29269, "HTTP server error");
+DEFINE_ORACLE_ERROR(OB_UTL_HTTP_NETWORK_ACCESS_DENIED, -9818, -1, "HY000", "network access denied by access control list (ACL)", 24247, "network access denied by access control list (ACL)");
+DEFINE_ORACLE_ERROR(OB_UTL_HTTP_PARTIAL_MULTIBYTE_EXCEPTION, -9819, -1, "HY000", "partial multibyte character", 29275, "partial multibyte character");
+DEFINE_ORACLE_ERROR(OB_UTL_HTTP_PROTOCOL_ERROR, -9820, -1, "HY000", "HTTP protocol error", 29263, "HTTP protocol error");
+DEFINE_ORACLE_ERROR(OB_UTL_HTTP_REQUEST_FAILED, -9821, -1, "HY000", "HTTP request failed", 29273, "HTTP request failed");
+DEFINE_ORACLE_ERROR(OB_UTL_HTTP_TOO_MANY_REQUESTS, -9822, -1, "HY000", "too many open HTTP requests", 29270, "too many open HTTP requests");
+DEFINE_ORACLE_ERROR(OB_UTL_HTTP_TRANSFER_TIMEOUT, -9823, -1, "HY000", "transfer timeout", 29276, "transfer timeout");
+DEFINE_ORACLE_ERROR(OB_UTL_HTTP_UNKNOWN_SCHEME, -9824, -1, "HY000", "unknown or unsupported URL scheme", 29264, "unknown or unsupported URL scheme");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)
