@@ -57,6 +57,7 @@ int ObVectorIndexUtil::parser_params_from_string(
     const int64_t default_ef_search_value = 64;
     const int64_t default_nlist_value = 128;
     const int64_t default_sample_per_nlist_value = 256;
+    const int64_t default_nbits_value = 8;
 
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_param_strs.count(); ++i) {
       ObString one_tmp_param_str = tmp_param_strs.at(i).trim();
@@ -119,7 +120,7 @@ int ObVectorIndexUtil::parser_params_from_string(
               LOG_WARN("not support vector index m value", K(ret), K(int_value), K(new_param_value));
             }
           } else if (ObVectorIndexType::VIT_IVF_INDEX == index_type) {
-            if (int_value > 0) {
+            if (int_value >= 1 && int_value <= 65536) {
               param.m_ = int_value;
             } else {
               ret = OB_NOT_SUPPORTED;
@@ -150,7 +151,7 @@ int ObVectorIndexUtil::parser_params_from_string(
           int64_t int_value = 0;
           if (OB_FAIL(ObSchemaUtils::str_to_int(new_param_value, int_value))) {
             LOG_WARN("fail to str_to_int", K(ret), K(new_param_value));
-          } else if (int_value >= 1 && int_value <= 65535) {
+          } else if (int_value >= 1 && int_value <= 65536) {
             param.nlist_ = int_value;
           } else {
             ret = OB_NOT_SUPPORTED;
@@ -192,6 +193,18 @@ int ObVectorIndexUtil::parser_params_from_string(
             } else {
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("not support vector index extra_info_actual_size value", K(ret), K(int_value), K(new_param_value));
+            }
+          }
+        } else if (new_param_name == "NBITS") {
+          int64_t int_value = 0;
+          if (OB_FAIL(ObSchemaUtils::str_to_int(new_param_value, int_value))) {
+            LOG_WARN("fail to str_to_int", K(ret), K(new_param_value));
+          } else if (ObVectorIndexType::VIT_IVF_INDEX == index_type) {
+            if (int_value >= 1 && int_value <= 24) {
+              param.nbits_ = int_value;
+            } else {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("not support vector index nbits value", K(ret), K(int_value), K(new_param_value));
             }
           }
         } else {
@@ -238,6 +251,9 @@ int ObVectorIndexUtil::parser_params_from_string(
         }
         if (param.lib_ == ObVectorIndexAlgorithmLib::VIAL_MAX) {
           param.lib_ = ObVectorIndexAlgorithmLib::VIAL_OB;
+        }
+        if (param.nbits_ == 0) {
+          param.nbits_ = default_nbits_value;
         }
       } else if (index_type == ObVectorIndexType::VIT_SPIV_INDEX) {
       } else {
@@ -1875,19 +1891,6 @@ int ObVectorIndexUtil::check_vec_index_param(
       } else if (share::schema::is_vec_ivf_index(vec_index_type)) {
         int64_t lob_inrow_threshold = tbl_schema.get_lob_inrow_threshold();
         int64_t max_vec_len = 4 * vector_dim;
-        if (share::schema::is_vec_ivfpq_index(vec_index_type)) {
-          ObVectorIndexParam tmp_index_param;
-          if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(index_params, ObVectorIndexType::VIT_IVF_INDEX, tmp_index_param))) {
-            LOG_WARN("fail to parse ivf params", K(ret), K(index_params));
-          } else {
-            // 4(offset) * m + 16(pq centroid id) * m + 1(bitmap) * m = 21 * m
-            int64_t pq_cent_ids_len = (OB_DOC_ID_COLUMN_BYTE_LENGTH/*pq center id length*/ +
-                                       sizeof(uint8_t)/*array bitmap length*/ +
-                                       sizeof(uint32_t)/*array offset length*/) *
-                                       tmp_index_param.m_;
-            max_vec_len = pq_cent_ids_len > max_vec_len ? pq_cent_ids_len : max_vec_len;
-          }
-        }
         if (OB_SUCC(ret) && lob_inrow_threshold < max_vec_len) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("create ivf index on column with outrow lob data not supported", K(ret), K(vector_dim), K(lob_inrow_threshold));
@@ -1958,6 +1961,35 @@ int ObVectorIndexUtil::get_vector_index_tid_check_valid(
   }
   return ret;
 }
+
+int ObVectorIndexUtil::get_vector_index_param_with_dim(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      uint64_t tenant_id,
+      int64_t index_table_id,
+      int64_t data_table_id,
+      ObVectorIndexType index_type,
+      ObVectorIndexParam &param)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *index_table_schema = nullptr;
+  const ObTableSchema *data_table_schema = nullptr;
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_table_id, index_table_schema))) {
+    LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id), K(index_table_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table_schema))) {
+    LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_ISNULL(index_table_schema) || OB_ISNULL(data_table_schema)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("invalid null table schema", K(ret), KP(index_table_schema), KP(data_table_schema));
+  } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(
+                 index_table_schema->get_index_params(), index_type, param))) {
+    LOG_WARN("fail to parse params from string", K(ret), K(index_table_schema->get_index_params()));
+  } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_dim(
+        *index_table_schema, *data_table_schema, param.dim_))) {
+    LOG_WARN("fail to get vec_index_col_param", K(ret));
+  }
+  return ret;
+}
+
 /*
   NOTE: Only one vector index can be created on the same column now
  */
@@ -2087,6 +2119,7 @@ int ObVectorIndexUtil::check_index_param(
     int64_t sample_per_nlist_value = 0;
     int64_t extra_info_max_size = 0;
     int64_t nlist_value = 0;
+    int64_t nbits_value = 0;
 
     bool distance_is_set = false;       // ivf/hnsw/spiv
     bool lib_is_set = false;            // ivf/hnsw
@@ -2097,6 +2130,7 @@ int ObVectorIndexUtil::check_index_param(
     bool extra_info_max_size_is_set = false; // hnsw
     bool nlist_is_set = false;          // ivf
     bool sample_per_nlist_is_set = false; // ivf
+    bool nbits_is_set = false;          // ivf
     bool type_ivf_flat_is_set = false;  // ivf
     bool type_ivf_sq8_is_set = false;   // ivf
     bool type_ivf_pq_is_set = false;    // ivf
@@ -2107,6 +2141,7 @@ int ObVectorIndexUtil::check_index_param(
     const int64_t default_ef_search_value = 64;
     const int64_t default_nlist_value = 128;
     const int64_t default_sample_per_nlist_value = 256;
+    const int64_t default_nbits_value = 8;
     hash::ObHashSet<ObString> param_set;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(param_set.create(option_node->num_child_, lib::ObMemAttr(MTL_ID(), "VecParamSet")))) {
@@ -2129,7 +2164,8 @@ int ObVectorIndexUtil::check_index_param(
                    new_variable_name != "EF_SEARCH" &&
                    new_variable_name != "NLIST" &&
                    new_variable_name != "SAMPLE_PER_NLIST" &&
-                   new_variable_name != "EXTRA_INFO_MAX_SIZE") {
+                   new_variable_name != "EXTRA_INFO_MAX_SIZE" &&
+                   new_variable_name != "NBITS") {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("unexpected vector variable name", K(ret), K(new_variable_name));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "unexpected vector index params items is");
@@ -2223,8 +2259,9 @@ int ObVectorIndexUtil::check_index_param(
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index ef_search is");
           }
         } else if (last_variable == "NLIST") {
-          if (parser_value >= 1 && parser_value <= 65535 ) {
+          if (parser_value >= 1 && parser_value <= 65536 ) {
             nlist_is_set = true;
+            nlist_value = parser_value;
           } else {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("invalid vector index nlist value", K(ret), K(parser_value));
@@ -2233,6 +2270,7 @@ int ObVectorIndexUtil::check_index_param(
         } else if (last_variable == "SAMPLE_PER_NLIST") {
           if (parser_value >= 1 && parser_value <= INT64_MAX ) {
             sample_per_nlist_is_set = true;
+            sample_per_nlist_value = parser_value;
           } else {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("invalid vector index sample_per_nlist value", K(ret), K(parser_value));
@@ -2246,6 +2284,15 @@ int ObVectorIndexUtil::check_index_param(
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("invalid vector index extra_info_max_size value", K(ret), K(parser_value));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index extra_info_max_size is");
+          }
+        } else if (last_variable == "NBITS") {
+          if (parser_value >= 1 && parser_value <= 24) {
+            nbits_is_set = true;
+            nbits_value = parser_value;
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("invalid vector index nbits value", K(ret), K(parser_value));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index nbits is");
           }
         } else {
           ret = OB_NOT_SUPPORTED;
@@ -2293,6 +2340,10 @@ int ObVectorIndexUtil::check_index_param(
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("ivf vector index param m only need to be set of ivf_pq mode", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "ivf vector index param m to be set in ivf_sq8 or ivf_flat is");
+        } else if (!type_ivf_pq_is_set && nbits_is_set) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("ivf vector index param nbits only need to be set of ivf_pq mode", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "ivf vector index param nbits to be set in ivf_sq8 or ivf_flat is");
         }
         if (OB_FAIL(ret)) {
         } else if (type_ivf_pq_is_set && !m_is_set) {
@@ -2318,6 +2369,17 @@ int ObVectorIndexUtil::check_index_param(
         }
         nlist_value = nlist_is_set ? nlist_value : default_nlist_value;
         sample_per_nlist_value = sample_per_nlist_is_set ? sample_per_nlist_value : default_sample_per_nlist_value;
+        nbits_value = nbits_is_set ? nbits_value : default_nbits_value;
+        if (OB_FAIL(ret)) {
+        } else if (INT64_MAX / sample_per_nlist_value < nlist_value) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("ivf vector index param nlist_value * sample_per_nlist_value should less than int64_max", K(ret), K(nlist_value), K(sample_per_nlist_value));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "ivf vector index param nlist_value * sample_per_nlist_value should less than int64_max");
+        } else if (INT64_MAX / sample_per_nlist_value < (1L << nbits_value)) {
+           ret = OB_NOT_SUPPORTED;
+          LOG_WARN("ivf vector index param (1L << nbits_value) * sample_per_nlist_value should less than int64_max", K(ret), K(nbits_value), K(sample_per_nlist_value));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "ivf vector index param (1L << nbits_value) * sample_per_nlist_value should less than int64_max");
+        }
       } else if (hnsw_is_set) {
         ef_construction_value = ef_construction_is_set ? ef_construction_value : default_ef_construction_value;
         m_value = m_is_set ? m_value : default_m_value;
@@ -2341,11 +2403,11 @@ int ObVectorIndexUtil::check_index_param(
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "the vector index params ef_construction less than or equal to m value is");
         }
         if (OB_FAIL(ret)) {
-        } else if (nlist_is_set || sample_per_nlist_is_set) {
+        } else if (nlist_is_set || sample_per_nlist_is_set || nbits_is_set) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("hnsw vector index no need to set nlist or sample_per_nlist",
+          LOG_WARN("hnsw vector index no need to set nlist or sample_per_nlist or nbits",
             K(ret), K(nlist_is_set), K(sample_per_nlist_is_set));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "hnsw vector index setting nlist or sample_per_nlist is");
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "hnsw vector index setting nlist or sample_per_nlist or nbits is");
         }
       }
       if (OB_SUCC(ret)) {
@@ -2375,6 +2437,10 @@ int ObVectorIndexUtil::check_index_param(
         } else if (!sample_per_nlist_is_set && !hnsw_is_set &&
                    OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos,
                                            ", SAMPLE_PER_NLIST=%ld", default_sample_per_nlist_value))) {
+          LOG_WARN("fail to printf databuff", K(ret));
+        } else if (!nbits_is_set && type_ivf_pq_is_set &&
+                   OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos,
+                                           ", NBITS=%ld", default_nbits_value))) {
           LOG_WARN("fail to printf databuff", K(ret));
         } else if (hnsw_is_set && OB_FAIL(check_extra_info_size(tbl_schema, session_info, extra_info_max_size_is_set,
                                                                 extra_info_max_size, extra_info_actual_size))) {
@@ -2411,6 +2477,7 @@ int ObVectorIndexUtil::check_index_param(
             || ef_construction_is_set
             || ef_search_is_set
             || nlist_is_set
+            || nbits_is_set
             || sample_per_nlist_is_set
             || type_ivf_flat_is_set
             || type_ivf_sq8_is_set
@@ -4099,6 +4166,24 @@ int ObVectorIndexUtil::calc_residual_vector(
 }
 
 int ObVectorIndexUtil::calc_residual_vector(
+  int dim,
+  const float *vector,
+  const float *center_vec,
+  float *residual)
+{
+int ret = OB_SUCCESS;
+if (OB_ISNULL(residual)) {
+  ret = OB_ERR_UNEXPECTED;
+  LOG_WARN("fail to alloc vector", K(ret));
+} else {
+  for (int64_t i = 0; i < dim; ++i) {
+    residual[i] = vector[i] - center_vec[i];
+  }
+}
+return ret;
+}
+
+int ObVectorIndexUtil::calc_residual_vector(
     ObIAllocator &alloc,
     int dim,
     ObIArray<float *> &centers,
@@ -4121,8 +4206,22 @@ int ObVectorIndexUtil::calc_residual_vector(
     LOG_WARN("failed to get nearest center", K(ret));
   } else if (OB_FAIL(helper.get_center_vector(0/*idx*/, centers, center_vec))) {
     LOG_WARN("failed to get center idx", K(ret));
-  } else if (OB_FAIL(calc_residual_vector(alloc, dim, vector, center_vec, residual))) {
-    LOG_WARN("fail to calc residual vector", K(ret), K(dim));
+  } else {
+    float *norm_vector = nullptr;
+    if (OB_NOT_NULL(norm_info)) {
+      if (OB_ISNULL(norm_vector = static_cast<float*>(alloc.alloc(dim * sizeof(float))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc norm vector", K(ret));
+      } else if (FALSE_IT(MEMSET(norm_vector, 0, dim * sizeof(float)))) {
+      } else if (OB_FAIL(norm_info->normalize_func_(dim, vector, norm_vector))) {
+        LOG_WARN("failed to normalize vector", K(ret));
+      }
+    }
+    float *data = norm_vector == nullptr ? vector : norm_vector;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(calc_residual_vector(alloc, dim, data, center_vec, residual))) {
+      LOG_WARN("fail to calc residual vector", K(ret), K(dim));
+    }
   }
   return ret;
 }
@@ -4422,6 +4521,27 @@ int ObVectorIndexUtil::split_vector(
   return ret;
 }
 
+int ObVectorIndexUtil::split_vector(
+  int pq_m,
+  int dim,
+  float* vector,
+  ObIArray<float*> &splited_arrs)
+{
+  int ret = OB_SUCCESS;
+  int64_t sub_dim = dim / pq_m;
+  if (OB_ISNULL(vector)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector is null", K(ret), KP(vector));
+  }
+  for (int i = 0; OB_SUCC(ret) && i < pq_m; ++i) {
+    float *splited_vec = vector + i * sub_dim;
+    if (OB_FAIL(splited_arrs.push_back(splited_vec))) {
+      SHARE_LOG(WARN, "failed to push back array", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
 bool ObVectorIndexUtil::check_vector_index_memory(
     ObSchemaGetterGuard &schema_guard, const ObTableSchema &index_schema, const uint64_t tenant_id, const int64_t row_count)
 {
@@ -4611,7 +4731,7 @@ int ObVectorIndexUtil::alter_vec_aux_column_schema(const ObTableSchema &aux_tabl
                                                    ObColumnSchemaV2 &new_aux_column_schema)
 {
   int ret = OB_SUCCESS;
-  if (aux_table_schema.is_vec_index_snapshot_data_type()) {
+  if (aux_table_schema.is_vec_index_snapshot_data_type() || aux_table_schema.is_vec_ivfpq_pq_centroid_index()) {
     // extra_info column in snapshot table is null
     if (new_column_schema.get_rowkey_position() > 0 || new_column_schema.get_tbl_part_key_pos() > 0) {
       new_aux_column_schema.set_nullable(true);

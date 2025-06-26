@@ -23,6 +23,16 @@ namespace oceanbase
 {
 namespace share
 {
+int ObPluginVectorIndexLoadScheduler::init_task_executors(uint64_t tenant_id, ObLS &ls)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(async_task_exec_.init(tenant_id, &ls))) {
+    LOG_WARN("fail to init async task exec", K(ret), K(ls));
+  } else if (OB_FAIL(ivf_task_exec_.init(tenant_id, &ls))) {
+    LOG_WARN("fail to init async task exec", K(ret), K(ls));
+  }
+  return ret;
+}
 
 int ObPluginVectorIndexLoadScheduler::init(uint64_t tenant_id, ObLS *ls, int ttl_timer_tg_id)
 {
@@ -32,7 +42,7 @@ int ObPluginVectorIndexLoadScheduler::init(uint64_t tenant_id, ObLS *ls, int ttl
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant vector index load task fail",
       KP(vector_index_service), KP(ls), K(ttl_timer_tg_id), KR(ret));
-  } else if (OB_FAIL(async_task_exec_.init(tenant_id, ls))) {
+  } else if (OB_FAIL(init_task_executors(tenant_id, *ls))) {
     LOG_WARN("fail to init async task exec", K(ret), KP(ls));
   } else {
     vector_index_service_ = vector_index_service;
@@ -510,6 +520,25 @@ int read_tenant_task_status(uint64_t tenant_id,
   return ret;
 }
 
+int ObPluginVectorIndexLoadScheduler::check_and_load_task_executors()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(async_task_exec_.check_and_set_thread_pool())) {
+    LOG_WARN("fail to check and open thread pool", K(ret));
+  } else if (OB_FAIL(async_task_exec_.clear_old_task_ctx_if_need())) {
+    LOG_WARN("fail to clear old task ctx", K(ret));
+  } else if (OB_FAIL(async_task_exec_.load_task())) {
+    LOG_WARN("fail to load tenant sync task", K(ret));
+  } else if (OB_FAIL(ivf_task_exec_.check_and_set_thread_pool())) {
+    LOG_WARN("fail to check and open thread pool", K(ret));
+  } else if (OB_FAIL(ivf_task_exec_.clear_old_task_ctx_if_need())) {
+    LOG_WARN("fail to clear old task ctx", K(ret));
+  } else if (OB_FAIL(ivf_task_exec_.load_task())) {
+    LOG_WARN("fail to load tenant sync task", K(ret));
+  }
+  return ret;
+}
+
 // 1. check if loading feature is allowed:
 //    read from sys table with tenant id, special table id & special tablet id, not implemented
 // 2. check if need mem load task
@@ -555,12 +584,8 @@ int ObPluginVectorIndexLoadScheduler::reload_tenant_task()
   // vector index async task
   int tmp_ret = OB_SUCCESS;
   if (is_stopped() || !is_leader_) { // skip
-  } else if (OB_TMP_FAIL(async_task_exec_.check_and_set_thread_pool())) {
-    LOG_WARN("fail to check and open thread pool", K(tmp_ret));
-  } else if (OB_TMP_FAIL(async_task_exec_.clear_old_task_ctx_if_need())) {
-    LOG_WARN("fail to clear old task ctx", K(tmp_ret));
-  } else if (OB_TMP_FAIL(async_task_exec_.load_task())) {
-    LOG_WARN("fail to load tenant sync task", K(tmp_ret));
+  } else if (OB_TMP_FAIL(check_and_load_task_executors())) {
+    LOG_WARN("fail to check and load task executors", K(tmp_ret));
   }
 
   return ret;
@@ -1040,6 +1065,17 @@ int ObPluginVectorIndexLoadScheduler::get_ls_mgr(ObPluginVectorIndexMgr *&index_
   return ret;
 }
 
+int ObPluginVectorIndexLoadScheduler::start_task_executors()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(async_task_exec_.start_task())) {
+    LOG_WARN("fail to start index async task", K(ret));
+  } else if (OB_FAIL(ivf_task_exec_.start_task())) {
+    LOG_WARN("fail to start index async task", K(ret));
+  }
+  return ret;
+}
+
 int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
 {
   int ret = OB_SUCCESS;
@@ -1072,8 +1108,8 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
     // start exec index async task
     int tmp_ret = OB_SUCCESS;
     if (is_stopped() || !is_leader_) { // skip
-    } else if (OB_TMP_FAIL(async_task_exec_.start_task())) {
-      LOG_WARN("fail to start index async task", K(tmp_ret));
+    } else if (OB_TMP_FAIL(start_task_executors())) {
+      LOG_WARN("fail to start task executors", K(tmp_ret));
     }
     // write tablets need memdata sync to clog
     if (OB_NOT_NULL(index_ls_mgr)
@@ -1089,6 +1125,17 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
       LOG_WARN("fail to check and execute memdata sync task",
         KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
     }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexLoadScheduler::resume_task_executors()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(async_task_exec_.resume_task())) {
+    LOG_WARN("fail to resume async task", K(ret));
+  } else if (OB_FAIL(ivf_task_exec_.resume_task())) {
+    LOG_WARN("fail to resume async task", K(ret));
   }
   return ret;
 }
@@ -1110,7 +1157,7 @@ void ObPluginVectorIndexLoadScheduler::run_task()
     int tmp_ret = OB_SUCCESS;
     LOG_INFO("switch leader", K(tenant_id_), K(ls_->get_ls_id()), K(is_leader_), K(is_stopped_));
     if (!check_can_do_work() || is_stopped() || !is_leader_) { // skip
-    } else if (OB_TMP_FAIL(async_task_exec_.resume_task())) {
+    } else if (OB_TMP_FAIL(resume_task_executors())) {
       LOG_WARN("fail to resume async task", K(tmp_ret));
     }
   } else if (check_can_do_work()){

@@ -181,7 +181,8 @@ int ObExprVecIVFSQ8DataVector::generate_data_vector(
         ObString res_str;
         if (OB_FAIL(ObArrayExprUtils::set_array_res(nullptr,
                                           data_str.length(),
-                                          eval_ctx.get_expr_res_alloc(),
+                                          expr,
+                                          eval_ctx,
                                           res_str,
                                           data_str.ptr()))) {
           LOG_WARN("fail to set array res", K(ret), K(data_str));

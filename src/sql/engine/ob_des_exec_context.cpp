@@ -176,7 +176,7 @@ DEFINE_DESERIALIZE(ObDesExecContext)
   }
 
   if (OB_SUCC(ret)) {
-    set_mem_attr(ObMemAttr(tenant_id, ObModIds::OB_SQL_EXEC_CONTEXT, ObCtxIds::EXECUTE_CTX_ID));
+    set_mem_attr(ObMemAttr(my_session_->get_effective_tenant_id(), ObModIds::OB_SQL_EXEC_CONTEXT, ObCtxIds::EXECUTE_CTX_ID));
     // init operator context need session info, initialized after session deserialized.
     if (OB_FAIL(init_phy_op(phy_op_size))) {
       LOG_WARN("init exec context phy op failed", K(ret), K_(phy_op_size));

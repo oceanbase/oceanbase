@@ -42,11 +42,7 @@ public:
       ObDatum &expr_datum);
   virtual bool need_rt_ctx() const override { return true; }
 private :
-  static int generate_empty_pq_ids(
-      ObIAllocator &allocator,
-      int pq_m,
-      const ObTabletID &pq_cent_tablet_id,
-      ObArrayBinary &arr_binary);
+  static int generate_empty_pq_ids(char *buf, int pq_m, int nbits, uint64_t tablet_id);
   //disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprVecIVFPQCenterIds);
 };

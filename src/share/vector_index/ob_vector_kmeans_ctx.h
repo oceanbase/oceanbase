@@ -93,6 +93,7 @@ public:
       cur_idx_(0),
       weight_(nullptr),
       status_(PREPARE_CENTERS),
+      force_stop_(false),
       tmp_allocator_()
   {}
   virtual ~ObKmeansAlgo() {
@@ -111,17 +112,21 @@ public:
                K(status_));
 
   virtual int inner_build(const ObIArray<float*> &input_vectors) = 0;
-  virtual int calc_kmeans_distance(const float* a, const float* b, const int64_t len, double &distance) = 0;
+  virtual int calc_kmeans_distance(const float* a, const float* b, const int64_t len, float &distance) = 0;
   int quick_centers(const ObIArray<float*> &input_vectors); // use samples as finally centers
+  void set_stop() { ATOMIC_STORE(&force_stop_, true); }
+  bool check_stop() { return ATOMIC_LOAD(&force_stop_) == true; }
 
 protected:
   bool is_inited_;
   const ObKmeansCtx *kmeans_ctx_;
   ObIAllocator *allocator_; // from kmeans_ctx
   int64_t cur_idx_; // switch center buffer
-  ObCentersBuffer<float> centers_[2]; // TODO(@jingshui): vector<FLOAT> may need DOUBLE to avoids overflow
-  double *weight_; // only for kmeans++ // each vector has a weight
+  ObCentersBuffer<float> centers_[2]; // TODO(@jingshui): vector<FLOAT> may need float to avoids overflow
+  float *weight_; // only for kmeans++ // each vector has a weight
   ObKMeansStatus status_;
+  // When executing in parallel, tasks may be forcibly stopped.
+  volatile bool force_stop_;
   ObArenaAllocator tmp_allocator_;
 };
 
@@ -144,7 +149,7 @@ public:
 
 protected:
   virtual int inner_build(const ObIArray<float*> &input_vectors) override;
-  virtual int calc_kmeans_distance(const float* a, const float* b, const int64_t len, double &distance) override;
+  virtual int calc_kmeans_distance(const float* a, const float* b, const int64_t len, float &distance) override;
 
 private:
   int init_first_center(const ObIArray<float*> &input_vectors);
@@ -152,8 +157,8 @@ private:
   int do_kmeans(const ObIArray<float*> &input_vectors);
 
 protected:
-  common::ObArrayWrap<double*> lower_bounds_; // the minimum possible distance from a vector to the every cluster center
-  double *upper_bounds_; // the distance from a vector to its nearest cluster center
+  common::ObArrayWrap<float*> lower_bounds_; // the minimum possible distance from a vector to the every cluster center
+  float *upper_bounds_; // the distance from a vector to its nearest cluster center
   int32_t *nearest_centers_; // idx of each vector's nearest cluster center
 };
 
@@ -172,6 +177,7 @@ public:
            ObVectorIndexDistAlgorithm dist_algo,
            ObVectorNormalizeInfo *norm_info = nullptr,
            const int64_t pq_m_size = 1) = 0;
+  virtual int get_center(const int64_t pos, float *&center_vector) = 0;
   virtual int append_sample_vector(float* vector);
   bool is_empty() { return ctx_.is_empty(); }
 
@@ -206,7 +212,7 @@ public:
   int get_kmeans_algo(ObKmeansAlgo *&algo);
   int64_t get_centers_count() const;
   int64_t get_centers_dim() const;
-  float *get_center(const int64_t pos);
+  int get_center(const int64_t pos, float *&center_vector) override;
 
   TO_STRING_KV(K(is_inited_),
                K(ctx_),
@@ -216,6 +222,7 @@ private:
   ObKmeansAlgo *algo_;
 };
 
+class ObKmeansBuildTaskHandler;
 class ObMultiKmeansExecutor : public ObKmeansExecutor
 {
 public:
@@ -233,16 +240,19 @@ public:
           ObVectorNormalizeInfo *norm_info = nullptr,
           const int64_t pq_m_size = 1) override;
   virtual int build();
+  int init_build_handle(ObKmeansBuildTaskHandler &handle);
+  int build_parallel(const common::ObTableID &table_id, const common::ObTabletID &tablet_id);
   int64_t get_total_centers_count() const;
   int64_t get_centers_count_per_kmeans() const;
   int64_t get_centers_dim() const;
-  float *get_center(const int64_t pos);
+  int get_center(const int64_t pos, float *&center_vector) override;
 
   TO_STRING_KV(K(is_inited_),
                K(ctx_));
 
 private:
-  int split_vector(ObIAllocator &alloc, float* vector, ObArrayArray<float*> &splited_arrs);
+  int split_vector(float* vector, ObArrayArray<float*> &splited_arrs);
+  int prepare_splited_arrs(ObArrayArray<float *> &splited_arrs);
 
   int pq_m_size_;
   ObSEArray<ObKmeansAlgo *, 4> algos_;
@@ -257,7 +267,8 @@ public:
     ref_cnt_(0),
     allocator_(allocator),
     param_(),
-    inner_allocator_("IvfBuHel", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_)
+    inner_allocator_("IvfBuHel", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_),
+    first_ret_code_(OB_SUCCESS)
   {}
   virtual ~ObIvfBuildHelper() = default;
   virtual int init(ObString &init_str);
@@ -267,7 +278,7 @@ public:
   void inc_ref();
   bool dec_ref_and_check_release();
   OB_INLINE const ObVectorIndexParam &get_param() const { return param_; }
-  VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(ref_cnt), KP_(allocator), K_(param));
+  VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(ref_cnt), KP_(allocator), K_(param), K_(first_ret_code));
 
 protected:
   bool is_inited_;
@@ -277,6 +288,7 @@ protected:
   lib::ObMutex lock_;
   ObVectorIndexParam param_;
   ObArenaAllocator inner_allocator_;
+  int first_ret_code_;
 };
 
 
@@ -385,7 +397,109 @@ private:
   ObIvfBuildHelper *helper_;
 };
 
-}
+struct ObKmeansBuildTaskCtx {
+  ObKmeansBuildTaskCtx()
+      : table_id_(OB_INVALID_ID),
+        tablet_id_(OB_INVALID_ID),
+        gmt_create_(0),
+        gmt_modified_(0),
+        is_finish_(false),
+        m_idx_(-1),
+        ret_code_(OB_ERR_UNEXPECTED)
+  {}
+  TO_STRING_KV(K_(table_id), K_(tablet_id), K_(gmt_create), K_(gmt_modified), K_(is_finish), K_(m_idx), K_(ret_code));
+  void reset()
+  {
+    gmt_create_ = 0;
+    gmt_modified_ = 0;
+    is_finish_ = false;
+    m_idx_ = -1;
+    ret_code_ = OB_ERR_UNEXPECTED;
+  }
+  common::ObTableID table_id_;
+  common::ObTabletID tablet_id_;
+  int64_t gmt_create_;
+  int64_t gmt_modified_;
+  bool is_finish_;
+  int m_idx_;
+  int ret_code_;
+};
+
+class ObKmeansBuildTask
+{
+public:
+
+  ObKmeansBuildTask() : is_inited_(false), algo_(nullptr), vectors_(nullptr) {}
+  ~ObKmeansBuildTask() { reset(); }
+  int init(const common::ObTableID &table_id, const common::ObTabletID &tablet_id, int m_idx, ObKmeansAlgo *algo,
+           const ObIArray<float *> *vectors);
+  void reset();
+  int do_work();
+  OB_INLINE bool is_finish() const { return is_inited_ == false || task_ctx_.is_finish_; }
+  OB_INLINE int get_ret() const { return task_ctx_.ret_code_; }
+  OB_INLINE void set_task_stop()
+  {
+    if (OB_NOT_NULL(algo_)) {
+      algo_->set_stop();
+    }
+  }
+
+  TO_STRING_KV(K_(is_inited), K_(task_ctx));
+
+private:
+  bool is_inited_;
+  ObKmeansAlgo *algo_;
+  const ObIArray<float *> *vectors_;
+  // task ctx
+  ObKmeansBuildTaskCtx task_ctx_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObKmeansBuildTask);
+};
+
+// QUEUE_THREAD
+class ObKmeansBuildTaskHandler : public lib::TGTaskHandler
+{
+public:
+  ObKmeansBuildTaskHandler() : is_inited_(false), tg_id_(INVALID_TG_ID), task_ref_cnt_(0), lock_() {};
+  virtual ~ObKmeansBuildTaskHandler() = default;
+  int init();
+  int start();
+  void stop();
+  void wait();
+  void destroy();
+  int push_task(ObKmeansBuildTask &build_task);
+  int get_tg_id() { return tg_id_; }
+
+  void inc_task_ref() { ATOMIC_INC(&task_ref_cnt_); }
+  void dec_task_ref() { ATOMIC_DEC(&task_ref_cnt_); }
+  int64_t get_task_ref() const { return ATOMIC_LOAD(&task_ref_cnt_); }
+
+  virtual void handle(void *task) override;
+  virtual void handle_drop(void *task) override;
+
+public:
+  // dynamic thread cnt, max cnt is THREAD_FACTOR * tenent_cpu_cnt
+  constexpr static const float THREAD_FACTOR = 0.8;
+  // 1s
+  const static int64_t WAIT_RETRY_PUSH_TASK_TIME = 1 * 1000 * 1000; // us
+  // push task max wait time: 1s * 5 * 60 = 5 min
+  const static int64_t MAX_RETRY_PUSH_TASK_CNT = 5 * 60;
+  static const int64_t INVALID_TG_ID = -1;
+  static const int64_t MIN_THREAD_COUNT = 1;
+
+private:
+  bool is_inited_;
+  int tg_id_;
+  volatile int64_t task_ref_cnt_;
+
+public:
+  common::ObSpinLock lock_; // lock for init
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObKmeansBuildTaskHandler);
+};
+
+}  // namespace share
 }
 
 #endif

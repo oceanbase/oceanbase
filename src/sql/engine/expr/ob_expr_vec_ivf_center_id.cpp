@@ -91,9 +91,8 @@ int ObExprVecIVFCenterID::calc_center_id(
   } else if (OB_UNLIKELY(4 != expr.arg_cnt_) || OB_ISNULL(expr.args_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(expr), KP(expr.args_));
-  } else {
-    ObEvalCtx::TempAllocGuard tmp_alloc_g(eval_ctx);
-    common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+  } else {;
+    common::ObArenaAllocator tmp_allocator("IVFExprCID", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObTableID table_id;
     ObTabletID tablet_id;
     ObVectorIndexDistAlgorithm dis_algo = VIDA_MAX;
@@ -115,7 +114,7 @@ int ObExprVecIVFCenterID::calc_center_id(
           centers,
           1/*nprobe*/,
           tmp_allocator,
-          VIDA_L2 == dis_algo ? nullptr: &norm_info))) {
+          VIDA_COS != dis_algo ? nullptr: &norm_info))) {
         LOG_WARN("failed to get nearest center", K(ret));
       } else if (OB_FAIL(helper.get_center_idx(0, center_idx))) {
         LOG_WARN("failed to get center idx", K(ret));

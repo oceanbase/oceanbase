@@ -1486,6 +1486,20 @@ int ObPluginVectorIndexUtils::release_vector_index_build_helper(ObIvfBuildHelper
   return ret;
 }
 
+int ObPluginVectorIndexUtils::release_ivf_cache_mgr(ObIvfCacheMgr* &mgr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mgr)) {
+    // do nothing
+  } else if (mgr->dec_ref_and_check_release()) {
+    ObIAllocator &allocator = mgr->get_self_allocator();
+    mgr->~ObIvfCacheMgr();
+    allocator.free(mgr);
+    mgr = nullptr;
+  }
+  return ret;
+}
+
 ObVectorIndexRecordType ObPluginVectorIndexUtils::index_type_to_record_type(schema::ObIndexType type)
 {
   ObVectorIndexRecordType record_type = VIRT_MAX;
@@ -1547,6 +1561,23 @@ int ObPluginVectorIndexUtils::get_vector_index_prefix(const ObTableSchema &index
       prefix.assign_ptr(tmp_table_name.ptr(), prefix_len);
       LOG_INFO("get_index_prefix", K(prefix), K(tmp_table_name));
     }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::erase_ivf_build_helper(ObLSID ls_id, const ObIvfHelperKey &key)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexService *vec_index_service = MTL(ObPluginVectorIndexService *);
+  if (OB_ISNULL(vec_index_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null ObPluginVectorIndexService ptr", K(ret), K(MTL_ID()));
+  } else if (OB_FAIL(vec_index_service->erase_ivf_build_helper(ls_id, key))) {
+    LOG_WARN("failed to erase ivf build helper", K(ret), K(ls_id), K(key));
+  }
+  if (ret == OB_HASH_NOT_EXIST) {
+    LOG_WARN("erase ivf build helper, key not exist", K(ret), K(ls_id), K(key));
+    ret = OB_SUCCESS;
   }
   return ret;
 }

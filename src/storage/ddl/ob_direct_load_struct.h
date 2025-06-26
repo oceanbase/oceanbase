@@ -555,6 +555,7 @@ public:
       vec_dim_(0),
       cur_row_pos_(0),
       tablet_id_(),
+      table_id_(),
       vec_idx_param_(),
       current_row_()
   {}
@@ -600,6 +601,7 @@ public:
   int64_t vec_dim_;
   int64_t cur_row_pos_;
   ObTabletID tablet_id_;
+  ObTableID table_id_;
   ObString vec_idx_param_;
   blocksstable::ObDatumRow current_row_;
 };

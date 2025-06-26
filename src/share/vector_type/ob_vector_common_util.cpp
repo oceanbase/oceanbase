@@ -101,7 +101,7 @@ int ObVectorClusterHelper::get_nearest_probe_centers(
   } else if (centers.empty()) {
     // do nothing
   } else {
-    double distance = DBL_MAX;
+    float distance = FLT_MAX;
     // normalize if needed
     float *norm_vector = nullptr;
     if (OB_NOT_NULL(norm_info)) {
@@ -118,9 +118,8 @@ int ObVectorClusterHelper::get_nearest_probe_centers(
     r_idx = r_idx < 0 ? centers.count() : r_idx;
     for (int64_t i = l_idx; OB_SUCC(ret) && i < r_idx; ++i) {
       // cosine/inner_product use l2_normalize + l2_distance to replace
-      if (OB_FAIL(ObVectorL2Distance<float>::l2_distance_func(data, centers.at(i), dim, distance))) {
-        LOG_WARN("failed to calc l2 distance", K(ret));
-      } else if (max_heap_.count() < nprobe) {
+      distance = ObVectorL2Distance<float>::l2_square_flt_func(data, centers.at(i), dim);
+      if (max_heap_.count() < nprobe) {
         if (OB_FAIL(max_heap_.push(HeapCenterItem(distance, i)))) {
           LOG_WARN("failed to push center heap", K(ret), K(i), K(distance));
         }
@@ -158,6 +157,20 @@ int ObVectorClusterHelper::get_center_idx(const int64_t idx, int64_t &center_id)
   return ret;
 }
 
+int ObVectorClusterHelper::get_pq_center_idx(const int64_t idx, const int64_t pq_center_num, int64_t &center_id)
+{
+  int ret = OB_SUCCESS;
+  if (max_heap_.empty()) {
+    center_id = 1; // default center_id for empty center_id_table
+  } else if (0 > idx || max_heap_.count() <= idx) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    center_id = (max_heap_.at(idx).center_idx_ % pq_center_num) + 1; // idx 0 is id 1
+  }
+  return ret;
+}
+
 int ObVectorClusterHelper::get_center_vector(const int64_t idx, const ObIArray<float *> &centers, float*& center_vector)
 {
   int ret = OB_SUCCESS;
@@ -182,7 +195,10 @@ void ObVectorClusterHelper::reset()
   max_heap_.reset();
 }
 
-int ObVectorClusterHelper::get_center_id_from_string(ObCenterId &center_id, const ObString &str)
+int ObVectorClusterHelper::get_center_id_from_string(
+    ObCenterId &center_id,
+    const ObString &str,
+    uint8_t flag/* = IVF_PARSE_CENTER*/)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str.ptr()) || OB_UNLIKELY(str.length() < OB_DOC_ID_COLUMN_BYTE_LENGTH)) {
@@ -190,19 +206,35 @@ int ObVectorClusterHelper::get_center_id_from_string(ObCenterId &center_id, cons
     LOG_WARN("invalid cluster center id str", K(ret), KP(str.ptr()), K(str.length()));
   } else {
     const ObCenterId *center_id_ptr = reinterpret_cast<const ObCenterId *>(str.ptr());
-    center_id.tablet_id_ = ntohll(center_id_ptr->tablet_id_);
-    center_id.center_id_ = ntohll(center_id_ptr->center_id_);
+    if (flag & IVF_PARSE_TABLET_ID) {
+      center_id.tablet_id_ = ntohll(center_id_ptr->tablet_id_);
+    }
+    if (flag & IVF_PARSE_CENTER_ID) {
+      center_id.center_id_ = ntohll(center_id_ptr->center_id_);
+    }
   }
   return ret;
 }
 
-int ObVectorClusterHelper::set_center_id_to_string(const ObCenterId &center_id, ObString &str)
+int ObVectorClusterHelper::set_center_id_to_string(const ObCenterId &center_id, ObString &str, ObIAllocator *allocator/* = nullptr*/)
 {
   int ret = OB_SUCCESS;
   if (!center_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid cluster center id", K(ret), K(center_id));
-  } else {
+  } else if (OB_NOT_NULL(allocator)) {
+    char *buf = nullptr;
+    if (OB_ISNULL(buf = static_cast<char*>(allocator->alloc(OB_DOC_ID_COLUMN_BYTE_LENGTH)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc cid", K(ret));
+    } else {
+      str.assign(buf, OB_DOC_ID_COLUMN_BYTE_LENGTH);
+      // assign will set length = buffer_size
+      str.set_length(0);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     ObCenterId tmp;
     tmp.tablet_id_ = htonll(center_id.tablet_id_);
     tmp.center_id_ = htonll(center_id.center_id_);
@@ -214,7 +246,10 @@ int ObVectorClusterHelper::set_center_id_to_string(const ObCenterId &center_id, 
   return ret;
 }
 
-int ObVectorClusterHelper::get_pq_center_id_from_string(ObPqCenterId &pq_center_id, const ObString &str)
+int ObVectorClusterHelper::get_pq_center_id_from_string(
+    ObPqCenterId &pq_center_id,
+    const ObString &str,
+    uint8_t flag/* = IVF_PARSE_PQ_CENTER*/)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str.ptr()) || OB_UNLIKELY(str.length() < OB_DOC_ID_COLUMN_BYTE_LENGTH)) {
@@ -222,9 +257,15 @@ int ObVectorClusterHelper::get_pq_center_id_from_string(ObPqCenterId &pq_center_
     COMMON_LOG(WARN, "invalid cluster center id str", K(ret), K(str));
   } else {
     const ObPqCenterId *pq_center_id_ptr = reinterpret_cast<const ObPqCenterId *>(str.ptr());
-    pq_center_id.tablet_id_ = ntohll(pq_center_id_ptr->tablet_id_);
-    pq_center_id.m_id_ = ntohll(pq_center_id_ptr->m_id_);
-    pq_center_id.center_id_ = ntohll(pq_center_id_ptr->center_id_);
+    if (flag & IVF_PARSE_TABLET_ID) {
+      pq_center_id.tablet_id_ = ntohll(pq_center_id_ptr->tablet_id_);
+    }
+    if (flag & IVF_PARSE_M_ID) {
+      pq_center_id.m_id_ = ntohl(pq_center_id_ptr->m_id_);
+    }
+    if (flag & IVF_PARSE_CENTER_ID) {
+      pq_center_id.center_id_ = ntohl(pq_center_id_ptr->center_id_);
+    }
   }
   return ret;
 }
@@ -255,8 +296,8 @@ int ObVectorClusterHelper::set_pq_center_id_to_string(
   if (OB_SUCC(ret)) {
     ObPqCenterId tmp;
     tmp.tablet_id_ = htonll(pq_center_id.tablet_id_);
-    tmp.m_id_ = ghtonl(pq_center_id.m_id_);
-    tmp.center_id_ = ghtonl(pq_center_id.center_id_);
+    tmp.m_id_ = htonl(pq_center_id.m_id_);
+    tmp.center_id_ = htonl(pq_center_id.center_id_);
     if (OB_DOC_ID_COLUMN_BYTE_LENGTH != str.write(reinterpret_cast<const char *>(&tmp), OB_DOC_ID_COLUMN_BYTE_LENGTH)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed write data to string", K(ret), K(str), KP(alloc));
@@ -468,5 +509,68 @@ int ObCenterWithBuf<ObString>::new_from_src(const ObString &src_cid)
   return ret;
 }
 
+template <>
+int ObCenterWithBuf<ObCenterId>::new_from_src(const ObCenterId &src_cid)
+{
+  int ret = OB_SUCCESS;
+  center_ = src_cid;
+  return ret;
+}
+// ------------------------------- ObVectorCenterClusterHelper implement --------------------------------
+template <>
+int ObVectorCenterClusterHelper<float, ObCenterId>::get_nearest_probe_center_ids_dist(ObArrayWrap<bool> &nearest_cid_dist)
+{
+  int ret = OB_SUCCESS;
+  if (heap_.count() > nprobe_) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(heap_.count()), K(nprobe_));
+  }
+  while(OB_SUCC(ret) && !heap_.empty()) {
+    const HeapCenterItemTemp &cur_top = heap_.top();
+    if (OB_ISNULL(cur_top.center_with_buf_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(WARN, "center_with_buf is null", K(ret), K(cur_top));
+    } else {
+      const ObCenterId &center_id = cur_top.center_with_buf_->get_center();
+      if (OB_UNLIKELY(center_id.center_id_ >= nearest_cid_dist.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        SHARE_LOG(WARN, "center_id is not less than nearest_cid_dist", K(ret), K(center_id), K(nearest_cid_dist.count()));
+      } else if (OB_FALSE_IT(nearest_cid_dist.at(center_id.center_id_) = true)) {
+      } else if (OB_FAIL(heap_.pop())) {
+        ret = OB_ERR_UNEXPECTED;
+        SHARE_LOG(WARN, "failed to pop max heap", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+template <>
+int ObVectorCenterClusterHelper<float, ObCenterId>::get_nearest_probe_centers_ptrs(ObArrayWrap<float *> &nearest_cid_dist)
+{
+  int ret = OB_SUCCESS;
+  if (heap_.count() > nprobe_) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "max heap count is not equal to nprobe", K(ret), K(heap_.count()), K(nprobe_));
+  }
+  while(OB_SUCC(ret) && !heap_.empty()) {
+    const HeapCenterItemTemp &cur_top = heap_.top();
+    if (OB_ISNULL(cur_top.center_with_buf_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SHARE_LOG(WARN, "center_with_buf is null", K(ret), K(cur_top));
+    } else {
+      const ObCenterId &center_id = cur_top.center_with_buf_->get_center();
+      if (OB_UNLIKELY(center_id.center_id_ >= nearest_cid_dist.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        SHARE_LOG(WARN, "center_id is not less than nearest_cid_dist", K(ret), K(center_id), K(nearest_cid_dist.count()));
+      } else if (OB_FALSE_IT(nearest_cid_dist.at(center_id.center_id_) = cur_top.vec_dim_.vec_)) {
+      } else if (OB_FAIL(heap_.pop())) {
+        ret = OB_ERR_UNEXPECTED;
+        SHARE_LOG(WARN, "failed to pop max heap", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 }
 }

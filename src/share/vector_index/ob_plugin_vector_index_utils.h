@@ -25,6 +25,8 @@
 #include "lib/vector/ob_vector_util.h"
 #include "ob_vector_kmeans_ctx.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "share/vector_index/ob_vector_index_ivf_cache_mgr.h"
+#include "share/vector_index/ob_plugin_vector_index_service.h"
 
 namespace oceanbase
 {
@@ -62,6 +64,7 @@ public:
                                     ObIAllocator &allocator);
   static int release_vector_index_adapter(ObPluginVectorIndexAdaptor* &adapter);
   static int release_vector_index_build_helper(ObIvfBuildHelper* &helper);
+  static int release_ivf_cache_mgr(ObIvfCacheMgr* &mgr);
   static ObVectorIndexRecordType index_type_to_record_type(schema::ObIndexType type);
 
   static ObAdapterCreateType index_type_to_create_type(schema::ObIndexType type);
@@ -130,6 +133,7 @@ public:
                                   ObIndexType index_type,
                                   SCN target_scn,
                                   ObIAllocator &allocator);
+  static int erase_ivf_build_helper(ObLSID ls_id, const ObIvfHelperKey &key);
 
 private:
   static int init_common_scan_param(storage::ObTableScanParam& scan_param,

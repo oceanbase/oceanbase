@@ -59,7 +59,8 @@ public:
                              transaction::ObTxDesc *tx_desc,
                              transaction::ObTxReadSnapshot *snapshot,
                              ObTableScanParam &scan_param,
-                             bool is_get = true);
+                             bool is_get = true,
+                             ObIAllocator *allocator = nullptr);
   static int init_vec_aux_scan_param(const share::ObLSID &ls_id,
                                       const common::ObTabletID &tablet_id,
                                       const sql::ObDASScanCtDef *ctdef,
@@ -67,7 +68,8 @@ public:
                                       transaction::ObTxDesc *tx_desc,
                                       transaction::ObTxReadSnapshot *snapshot,
                                       ObTableScanParam &scan_param,
-                                      bool is_get = false);
+                                      bool is_get = false,
+                                      ObIAllocator *scan_allocator = nullptr);
   static int get_rowkey(ObIAllocator &allocator, const ObDASScanCtDef * ctdef, ObDASScanRtDef *rtdef, ObRowkey *&rowkey);
 
   static int get_rowkey_pre_filter(ObIAllocator &allocator,

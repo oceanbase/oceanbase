@@ -130,6 +130,8 @@ struct ObIvfConstant {
   static const int SQ8_META_MIN_IDX = 0;
   static const int SQ8_META_MAX_IDX = 1;
   static const int SQ8_META_STEP_IDX = 2;
+  // ivfpq
+  static const int IVF_VEC_EXPR_PARAM_COUNT = 3;
 };
 
 struct ObVectorIndexAlgorithmHeader
@@ -142,7 +144,7 @@ struct ObVectorIndexAlgorithmHeader
 struct ObVectorIndexParam
 {
   ObVectorIndexParam() :
-    type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0), nlist_(0), sample_per_nlist_(0), extra_info_max_size_(0), extra_info_actual_size_(0)
+    type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0), nlist_(0), sample_per_nlist_(0), extra_info_max_size_(0), extra_info_actual_size_(0), nbits_(0)
   {}
   void reset() {
     type_ = VIAT_MAX;
@@ -156,6 +158,7 @@ struct ObVectorIndexParam
     sample_per_nlist_ = 0;
     extra_info_max_size_ = 0;
     extra_info_actual_size_ = 0;
+    nbits_ = 0;
   };
   int assign(const ObVectorIndexParam &other) {
     int ret = OB_SUCCESS;
@@ -170,6 +173,7 @@ struct ObVectorIndexParam
     sample_per_nlist_ = other.sample_per_nlist_;
     extra_info_max_size_ = other.extra_info_max_size_;
     extra_info_actual_size_ = other.extra_info_actual_size_;
+    nbits_ = other.nbits_;
     return ret;
   };
   ObVectorIndexAlgorithmType type_;
@@ -185,10 +189,11 @@ struct ObVectorIndexParam
   // default: 1024
   int64_t extra_info_max_size_;
   int64_t extra_info_actual_size_;
+  int64_t nbits_;
   OB_UNIS_VERSION(1);
 public:
   TO_STRING_KV(K_(type), K_(lib), K_(dist_algorithm), K_(dim), K_(m), K_(ef_construction), K_(ef_search),
-    K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size));
+    K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size), K_(nbits));
 };
 
 struct ObVecIdxExtraInfo
@@ -199,6 +204,7 @@ static constexpr double DEFAULT_PRE_RATE_FILTER_WITH_IDX = 0.15;
 static const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
 static const uint64_t MAX_HNSW_PRE_ROW_CNT_WITH_ROWKEY = 1000000;
 static const uint64_t MAX_HNSW_PRE_ROW_CNT_WITH_IDX = 300000;
+static constexpr double DEFAULT_IVFPQ_SELECTIVITY_RATE = 0.9;
   ObVecIdxExtraInfo()
     : vec_idx_type_(ObVecIndexType::VEC_INDEX_INVALID),
       adaptive_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
@@ -230,6 +236,12 @@ static const uint64_t MAX_HNSW_PRE_ROW_CNT_WITH_IDX = 300000;
   bool is_post_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER || vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
   int set_vec_param_info(const ObTableSchema *vec_index_schema);
   ObVectorIndexParam get_vector_index_param() const {return vector_index_param_;}
+  double get_default_selectivity_rate() const {
+    if (vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ) {
+      return DEFAULT_IVFPQ_SELECTIVITY_RATE;
+    }
+    return DEFAULT_SELECTIVITY_RATE;
+  }
   TO_STRING_KV(K_(vec_idx_type), K_(adaptive_try_path), K_(selectivity), K_(row_count),
   K_(can_use_vec_pri_opt), K_(is_multi_value_index), K_(is_spatial_index),
   K_(can_extract_range), K_(with_extra_info), K_(vector_index_param));
@@ -453,6 +465,13 @@ public:
       const ObTableSchema &data_table_schema,
       const int64_t col_id,
       ObVectorIndexParam &param);
+  static int get_vector_index_param_with_dim(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      uint64_t tenant_id,
+      int64_t index_table_id,
+      int64_t data_table_id,
+      ObVectorIndexType index_type,
+      ObVectorIndexParam &param);
   static int get_vector_index_type(
       sql::ObRawExpr *&raw_expr,
       const ObVectorIndexParam &param,
@@ -573,6 +592,12 @@ public:
       const float *center_vec,
       float *&residual
   );
+  static int calc_residual_vector(
+    int dim,
+    const float *vector,
+    const float *center_vec,
+    float *residual
+  );
   static int calc_location_ids(sql::ObEvalCtx &eval_ctx,
                                sql::ObExpr *table_id_expr,
                                sql::ObExpr *part_id_expr,
@@ -607,6 +632,7 @@ public:
                                   common::ObIAllocator &allocator,
                                   ObIArray<float*> &centers);
   static int split_vector(ObIAllocator &alloc, int pq_m, int dim, float *vector, ObIArray<float *> &splited_arrs);
+  static int split_vector(int pq_m, int dim, float *vector, ObIArray<float *> &splited_arrs);
   static int set_extra_info_actual_size_param(ObIAllocator *allocator, const ObString &old_param, int64_t actual_size,
                                        ObString &new_param);
   static bool column_id_asc_compare(uint64_t lhs, uint64_t rhs) { return lhs < rhs; }
@@ -863,6 +889,33 @@ struct ObVecTidCandidateMaxCompare
     return lhs.version_ < rhs.version_ ? true : false;
   }
   int get_error_code() const { return OB_SUCCESS; }
+};
+
+// make pq ids binary format
+// [version][tablet_id]{[idx]...}
+struct ObVecIVFPQCenterIDS
+{
+public:
+  static const int64_t CUR_VERSION = 1;
+  static const int64_t VERSION_SIZE = sizeof(int32_t);
+  static const int64_t TABLET_ID_SIZE = sizeof(uint64_t);
+  inline static int64_t get_pq_id_size(int64_t nbits) {
+    int64_t pq_id_size = 0;
+    if (nbits <= 8) pq_id_size = sizeof(uint8_t);
+    else if (nbits <= 16) pq_id_size = sizeof(uint16_t);
+    else pq_id_size = sizeof(uint32_t);
+    return pq_id_size;
+  }
+  inline static int64_t get_total_size(int64_t m, int64_t nbits) {
+
+    return VERSION_SIZE + TABLET_ID_SIZE + get_pq_id_size(nbits) * m;
+  }
+  inline static const uint8_t* get_pq_id_ptr(const char *ptr) {
+    return reinterpret_cast<const uint8_t*>(ptr + VERSION_SIZE + TABLET_ID_SIZE);
+  }
+  inline static uint64_t get_tablet_id(const char *ptr) {
+    return *reinterpret_cast<const uint64_t*>(ptr + VERSION_SIZE);
+  }
 };
 
 }  // namespace share
