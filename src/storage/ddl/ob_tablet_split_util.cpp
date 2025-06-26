@@ -536,13 +536,13 @@ int ObTabletSplitUtil::check_satisfy_split_condition(
       LOG_INFO("need wait max decided scn reach", K(ret), "ls_id", ls_handle.get_ls()->get_ls_id(),
         "source_tablet_id", tablet->get_tablet_meta().tablet_id_, K(max_decided_scn), K(min_split_start_scn));
     }
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode() &&
-      OB_FAIL(ObSSDataSplitHelper::check_satisfy_ss_split_condition(ls_handle, local_source_tablet_handle, dest_tablets_id, is_data_split_executor))) {
-    LOG_WARN("check satisfy ss split condition failed", K(ret), K(dest_tablets_id));
-#endif
   } else if (MTL_TENANT_ROLE_CACHE_IS_RESTORE()) {
-    LOG_INFO("dont check compaction in restore progress", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
+    if (GCTX.is_shared_storage_mode()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support now", K(ret));
+    } else {
+      LOG_INFO("dont check compaction in restore progress", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_);
+    }
   } else {
     const compaction::ObMediumCompactionInfoList *medium_list = nullptr;
     ObArenaAllocator tmp_allocator("SplitGetMedium", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // for load medium info
@@ -553,6 +553,11 @@ int ObTabletSplitUtil::check_satisfy_split_condition(
       if (REACH_COUNT_INTERVAL(1000L)) {
         LOG_INFO("should wait compact end", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_, KPC(medium_list));
       }
+  #ifdef OB_BUILD_SHARED_STORAGE
+    } else if (GCTX.is_shared_storage_mode() &&
+        OB_FAIL(ObSSDataSplitHelper::check_satisfy_ss_split_condition(ls_handle, local_source_tablet_handle, dest_tablets_id, is_data_split_executor))) {
+      LOG_WARN("check satisfy ss split condition failed", K(ret), K(dest_tablets_id));
+  #endif
     }
   }
   return ret;
