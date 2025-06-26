@@ -2012,6 +2012,9 @@ int ObNumber::round_scale_v3_(const int64_t scale, const bool using_floating_sca
         // 因此在number to char转换出现前缀0时（decimal_prefix_zero_count > 0），保持与修改前一致
         valid_precision = OB_MAX_NUMBER_PRECISION_INNER - is_negative()
                            - (has_decimal() ? (decimal_prefix_zero_count > 0 ? 2 : 1) : 0);
+        if (decimal_prefix_zero_count >=2 && decimal_prefix_zero_count <= 4) {
+          valid_precision -= (decimal_prefix_zero_count - 1);
+        }
       } else {
         valid_precision = (OB_MAX_NUMBER_PRECISION_INNER - ((0 == integer_count ? decimal_prefix_zero_count : integer_count) % 2));
       }
@@ -3410,14 +3413,10 @@ int ObNumber::format_v2(
                 K(max_need_size), K(buf_len), KPC(this), K(scale), K(ret));
       OB_ASSERT(pos - orig_pos <= max_need_size);
     } else if (is_oracle_mode() && need_to_sci && pos - orig_pos > SCI_NUMBER_LENGTH) {
-      if (pos - orig_pos <= SCI_NUMBER_LENGTH + 3) {
-        pos = orig_pos + SCI_NUMBER_LENGTH;
-      } else {
-        ObString num_str(pos - orig_pos, buf + orig_pos);
-        pos = orig_pos;
-        if (OB_FAIL(to_sci_str_(num_str, buf, buf_len, pos))) {
-          LOG_ERROR("fail to conv to sci str", K(buf_len), K(orig_pos));
-        }
+      ObString num_str(pos - orig_pos, buf + orig_pos);
+      pos = orig_pos;
+      if (OB_FAIL(to_sci_str_(num_str, buf, buf_len, pos))) {
+        LOG_ERROR("fail to conv to sci str", K(buf_len), K(orig_pos));
       }
     }
   }
