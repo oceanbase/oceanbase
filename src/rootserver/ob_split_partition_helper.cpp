@@ -88,6 +88,8 @@ int ObSplitPartitionHelper::execute(ObDDLTaskRecord &task_record)
                                       split_type_,
                                       inc_table_schemas_,
                                       parallelism_,
+                                      ls_id_,
+                                      tenant_data_version_,
                                       allocator_,
                                       task_record,
                                       trans_))) {
@@ -615,6 +617,8 @@ int ObSplitPartitionHelper::create_ddl_task_(
     const ObDDLType split_type,
     const ObIArray<const ObTableSchema *> &inc_table_schemas,
     const int64_t parallelism,
+    const share::ObLSID &ls_id,
+    const uint64_t tenant_data_version,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record,
     ObMySQLTransaction &trans)
@@ -623,6 +627,7 @@ int ObSplitPartitionHelper::create_ddl_task_(
   ObPartitionSplitArg split_arg;
   int64_t split_part_num = 0;
   const ObTableSchema *split_table = nullptr;
+  uint64_t tenant_data_format_version = 0;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || !share::is_tablet_split(split_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tenant_id), K(split_type), K(inc_table_schemas.count()));
@@ -640,6 +645,9 @@ int ObSplitPartitionHelper::create_ddl_task_(
     LOG_WARN("global index should not have aux tables", K(ret), KPC(split_table));
   } else {
     split_arg.task_type_ = split_type;
+    if (DATA_VERSION_4_3_5_3 <= tenant_data_version) {
+      split_arg.src_ls_id_ = ls_id;
+    }
     ObPartition** table_parts = split_table->get_part_array();
     // for main table or global_index.
     for (int64_t i = 0; OB_SUCC(ret) && i < split_part_num; i++) {
@@ -738,6 +746,7 @@ int ObSplitPartitionHelper::create_ddl_task_(
                                &split_arg,
                                0/*parent_task_id*/,
                                task_id);
+    param.tenant_data_version_ = tenant_data_version;
     if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
       LOG_WARN("submit ddl task failed", KR(ret));
     }

@@ -1574,6 +1574,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                 param.parent_task_id_,
                                                 param.task_id_,
                                                 partition_split_arg,
+                                                param.tenant_data_version_,
                                                 *param.allocator_,
                                                 task_record))) {
           LOG_WARN("fail to create partition split task", K(ret));
@@ -2936,6 +2937,7 @@ int ObDDLScheduler::create_partition_split_task(
     const int64_t parent_task_id,
     const int64_t task_id,
     const obrpc::ObPartitionSplitArg *partition_split_arg,
+    const uint64_t tenant_data_version,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
 {
@@ -2954,6 +2956,7 @@ int ObDDLScheduler::create_partition_split_task(
                                       parallelism,
                                       *partition_split_arg,
                                       table_schema->get_tablet_size(),
+                                      tenant_data_version,
                                       parent_task_id))) {
       LOG_WARN("init global index task failed", K(ret), KPC(table_schema));
     } else if (OB_FAIL(split_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {

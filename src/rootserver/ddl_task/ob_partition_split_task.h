@@ -90,6 +90,7 @@ public:
       const int64_t parallelism,
       const obrpc::ObPartitionSplitArg &partition_split_arg,
       const int64_t tablet_size,
+      const uint64_t tenant_data_version,
       const int64_t parent_task_id = 0,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE);
   int init(const ObDDLTaskRecord &task_record);

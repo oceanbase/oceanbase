@@ -974,6 +974,8 @@ public:
       const common::ObString *&locality_str) const override;
   int get_tablet_ids(
       common::ObIArray<ObTabletID> &tablet_ids) const;
+  int get_first_level_hidden_tablet_ids(
+      common::ObIArray<ObTabletID> &tablet_ids) const;
   int get_part_idx_by_tablet(
       const ObTabletID &tablet_id,
       int64_t &part_id,

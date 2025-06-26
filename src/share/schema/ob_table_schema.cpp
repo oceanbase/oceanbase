@@ -1101,6 +1101,37 @@ int ObSimpleTableSchemaV2::get_tablet_ids(common::ObIArray<ObTabletID> &tablet_i
   return ret;
 }
 
+int ObSimpleTableSchemaV2::get_first_level_hidden_tablet_ids(common::ObIArray<ObTabletID> &tablet_ids) const
+{
+  int ret = OB_SUCCESS;
+  ObPartitionLevel part_level = get_part_level();
+  if (part_level >= PARTITION_LEVEL_MAX) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part level is unexpected", KPC(this), KR(ret));
+  } else if (OB_UNLIKELY(!has_tablet())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("must be user table", KPC(this), KR(ret));
+  } else if (PARTITION_LEVEL_ONE != part_level || OB_ISNULL(hidden_partition_array_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("hidden tablets only exist on part-level-one table", KPC(this), KR(ret));
+  } else {
+    if (get_hidden_partition_num() < 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("hidden part_num less than 1", KPC(this), KR(ret));
+    } else {
+      for (int64_t i = 0; i < get_hidden_partition_num() && OB_SUCC(ret); ++i) {
+        if (OB_ISNULL(hidden_partition_array_[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL ptr", K(i), KPC(this), KR(ret));
+        } else if (OB_FAIL(tablet_ids.push_back(hidden_partition_array_[i]->get_tablet_id()))) {
+          LOG_WARN("fail to push_back", KR(ret), K(i), KPC(this));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSimpleTableSchemaV2::get_part_idx_by_tablet(const ObTabletID &tablet_id, int64_t &part_idx, int64_t &subpart_idx) const
 {
   int ret = OB_SUCCESS;

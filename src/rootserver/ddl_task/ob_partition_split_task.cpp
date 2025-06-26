@@ -368,11 +368,11 @@ int ObPartitionSplitTask::init(
     const int64_t parallelism,
     const obrpc::ObPartitionSplitArg &partition_split_arg,
     const int64_t tablet_size,
+    const uint64_t tenant_data_version,
     const int64_t parent_task_id,   /* = 0 */
     const int64_t task_status)     /* = TaskStatus::PREPARE */
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_data_format_version = 0;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
@@ -402,9 +402,6 @@ int ObPartitionSplitTask::init(
   } else if (OB_FAIL(deep_copy_table_arg(
           allocator_, partition_split_arg, partition_split_arg_))) {
     LOG_WARN("failed to copy partition split arg", K(ret), K(partition_split_arg));
-  } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(
-          *GCTX.sql_proxy_, tenant_id, tenant_data_format_version))) {
-    LOG_WARN("failed to get min data version", K(ret), K(tenant_id));
   } else {
     set_gmt_create(ObTimeUtility::current_time());
     start_time_ = ObTimeUtility::current_time();
@@ -422,7 +419,7 @@ int ObPartitionSplitTask::init(
     task_version_ = OB_PARTITION_SPLIT_TASK_VERSION;
     task_status_ = static_cast<ObDDLTaskStatus>(task_status);
     execution_id_ = 1L;
-    data_format_version_ = tenant_data_format_version;
+    data_format_version_ = tenant_data_version;
     split_start_delayed_ = false;
     if (OB_FAIL(init_ddl_task_monitor_info(table_id))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));

@@ -108,6 +108,8 @@ private:
       const share::ObDDLType split_type,
       const ObIArray<const share::schema::ObTableSchema *> &inc_table_schemas,
       const int64_t parallelism,
+      const share::ObLSID &ls_id,
+      const uint64_t tenant_data_version,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record,
       ObMySQLTransaction &trans);

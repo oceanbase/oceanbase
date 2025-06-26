@@ -219,7 +219,7 @@ protected:
                                          ObDMLSqlSplicer &dml) = 0;
 
   int iterate_part_info(const bool only_history);
-  int iterate_all_part(const bool only_history);
+  int iterate_all_part(const bool only_history, const bool include_hidden);
   int iterate_all_sub_part(const bool only_history);
   int iterate_all_def_sub_part(const bool only_history);
 protected:

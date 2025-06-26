@@ -24878,32 +24878,7 @@ int ObDDLService::cleanup_garbage(ObAlterTableArg &alter_table_arg)
           // previous step succeeds, no need to unbind
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(lock_table(trans, new_hidden_table_schema))) {
-          LOG_WARN("fail to lock_table", KR(ret), K(new_hidden_table_schema));
-        } else if (OB_FAIL(drop_table_in_trans(schema_guard,
-                                        new_hidden_table_schema,
-                                        false,
-                                        new_hidden_table_schema.is_index_table(),
-                                        to_recyclebin,
-                                        NULL,
-                                        &trans,
-                                        NULL,
-                                        NULL))) {
-          LOG_WARN("failed to drop table in trans", K(ret));
         } else {
-          // update table state flag
-          ObSchemaOperationType operation_type = OB_DDL_ALTER_TABLE;
-          new_orig_table_schema.set_association_table_id(OB_INVALID_ID);
-          new_orig_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_NORMAL);
-          new_orig_table_schema.set_in_offline_ddl_white_list(true);
-          if (OB_FAIL(ddl_operator.update_table_attribute(
-                                  new_orig_table_schema,
-                                  trans,
-                                  operation_type))) {
-            LOG_WARN("failed to update data table schema attribute", K(ret));
-          }
-        }
-        if (OB_SUCC(ret)) {
           ObTableLockOwnerID owner_id;
           if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
                                                   alter_table_arg.task_id_))) {
@@ -24952,6 +24927,40 @@ int ObDDLService::cleanup_garbage(ObAlterTableArg &alter_table_arg)
                 LOG_WARN("failed to unlock ddl", K(ret));
               }
             }
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(lock_table(trans, new_hidden_table_schema))) {
+          LOG_WARN("fail to lock_table", KR(ret), K(new_hidden_table_schema));
+        } else if (OB_FAIL(drop_table_in_trans(schema_guard,
+                                        new_hidden_table_schema,
+                                        false,
+                                        new_hidden_table_schema.is_index_table(),
+                                        to_recyclebin,
+                                        NULL,
+                                        &trans,
+                                        NULL,
+                                        NULL))) {
+          LOG_WARN("failed to drop table in trans", K(ret));
+        } else {
+          // update table state flag
+          ObSchemaOperationType operation_type = OB_DDL_ALTER_TABLE;
+          new_orig_table_schema.set_association_table_id(OB_INVALID_ID);
+          new_orig_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_NORMAL);
+          new_orig_table_schema.set_in_offline_ddl_white_list(true);
+          if (OB_FAIL(ddl_operator.update_table_attribute(
+                                  new_orig_table_schema,
+                                  trans,
+                                  operation_type))) {
+            LOG_WARN("failed to update data table schema attribute", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ObTableLockOwnerID owner_id;
+          if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                  alter_table_arg.task_id_))) {
+            LOG_WARN("failed to get owner id", K(ret), K(alter_table_arg.task_id_));
+          } else if (share::PARTITION_SPLIT_RECOVERY_CLEANUP_GARBAGE_TASK == alter_table_arg.ddl_task_type_) {
           } else if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id,
                                                                orig_table_schema->get_table_id(),
                                                                nullptr/*hidden_tablet_ids_alone*/,
@@ -25176,7 +25185,7 @@ int ObDDLService::inner_drop_and_create_tablet_(const int64_t &schema_version,
     if (FAILEDx(tablet_drop.init())) {
       LOG_WARN("fail to init tablet_drop", KR(ret), K(tenant_id));
     // get old ls
-    } else if (OB_FAIL(tablet_drop.get_ls_from_table(*orig_table_schemas.at(0), orig_ls_id_array))) {
+    } else if (OB_FAIL(tablet_drop.get_ls_from_table(*orig_table_schemas.at(0),  false /*is_include_hidden*/, orig_ls_id_array))) {
       LOG_WARN("failed to get drop tablet's ls", KR(ret), K(tenant_id));
     } else if (OB_FAIL(tablet_drop.add_drop_tablets_of_table_arg(orig_table_schemas))) {
       LOG_WARN("fail to add drop tablets table args", KR(ret), K(tenant_id));
