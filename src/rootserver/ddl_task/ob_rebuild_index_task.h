@@ -59,12 +59,25 @@ public:
   }
   virtual int cleanup_impl() override;
   uint64_t get_new_index_id() { return new_index_id_; };
+  static bool is_ddl_type_for_rebuild_index_task(const share::ObDDLType &ddl_type)
+  {
+    return share::DDL_REBUILD_INDEX == ddl_type || share::DDL_REPLACE_MLOG == ddl_type;
+  }
 private:
   int check_switch_succ();
   int prepare(const share::ObDDLTaskStatus new_status);
-  int rebuild_index_impl();
+  int rebuild_index();
+  int rebuild_vec_index_impl();
+  int rebuild_mlog_impl();
   int drop_index_impl();
+  int prepare_drop_index_arg(ObSchemaGetterGuard &schema_guard,
+                             const ObTableSchema *index_schema,
+                             const ObDatabaseSchema *database_schema,
+                             const ObTableSchema *data_table_schema,
+                             obrpc::ObDropIndexArg &drop_index_arg);
+  int purge_old_mlog(const share::ObDDLTaskStatus next_task_status);
   int switch_index_name(const share::ObDDLTaskStatus next_task_status);
+  int get_switch_index_name_task_type(share::ObDDLTaskType &ddl_task_type);
   int create_and_wait_rebuild_task_finish(const share::ObDDLTaskStatus new_status);
   int create_and_wait_drop_task_finish(const share::ObDDLTaskStatus new_status);
   int succ();
@@ -86,9 +99,13 @@ private:
       obrpc::ObRebuildIndexArg &dst_index_arg);
   virtual bool is_error_need_retry(const int ret_code) override
   {
-    UNUSED(ret_code);
-    // we should always retry on drop index task
-    return task_status_ < share::ObDDLTaskStatus::DROP_SCHEMA;
+    bool retry = false;
+    if (share::ObDDLTaskStatus::DROP_SCHEMA == task_status_) {
+      retry = true;
+    } else {
+      retry = ObDDLTask::is_error_need_retry(ret_code);
+    }
+    return retry;
   }
 private:
   static const int64_t OB_REBUILD_INDEX_TASK_VERSION = 1;

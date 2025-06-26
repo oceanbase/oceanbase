@@ -3062,24 +3062,6 @@ int ObDMLStmt::append_column_items_nodup(uint64_t table_id, uint64_t column_id, 
   return ret;
 }
 
-int ObDMLStmt::get_column_exprs(ObIArray<ObColumnRefRawExpr *> &column_exprs) const
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); ++i) {
-    ret = column_exprs.push_back(column_items_.at(i).expr_);
-  }
-  return ret;
-}
-
-int ObDMLStmt::get_column_exprs(ObIArray<ObRawExpr *> &column_exprs) const
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); ++i) {
-    ret = column_exprs.push_back(column_items_.at(i).expr_);
-  }
-  return ret;
-}
-
 int ObDMLStmt::get_view_output(const TableItem &table,
                                ObIArray<ObRawExpr *> &select_list,
                                ObIArray<ObRawExpr *> &column_list) const
@@ -3933,32 +3915,6 @@ ObColumnRefRawExpr *ObDMLStmt::get_column_expr_by_id(uint64_t table_id, uint64_t
     ref_expr = column_item->expr_;
   }
   return ref_expr;
-}
-
-int ObDMLStmt::get_column_exprs(uint64_t table_id, ObIArray<ObColumnRefRawExpr *> &table_cols) const
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); ++i) {
-    if (column_items_.at(i).table_id_ == table_id) {
-      if (OB_FAIL(table_cols.push_back(column_items_.at(i).expr_))) {
-        LOG_WARN("failed to push back column exprs", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDMLStmt::get_column_exprs(uint64_t table_id, ObIArray<ObRawExpr*> &table_cols) const
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_items_.count(); ++i) {
-    if (column_items_.at(i).table_id_ == table_id) {
-      if (OB_FAIL(table_cols.push_back(column_items_.at(i).expr_))) {
-        LOG_WARN("failed to push back column exprs", K(ret));
-      }
-    }
-  }
-  return ret;
 }
 
 int ObDMLStmt::get_column_exprs(ObIArray<TableItem *> &table_items,

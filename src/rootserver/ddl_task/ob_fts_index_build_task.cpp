@@ -1339,7 +1339,7 @@ int ObFtsIndexBuildTask::deserialize_params_from_message(
   int8_t is_domain_aux_succ = false;
   int8_t is_fts_doc_word_succ = false;
   int8_t is_retryable_ddl = true;
-  obrpc::ObCreateIndexArg tmp_arg;
+  SMART_VAR(ObCreateIndexArg, tmp_arg) {
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
                   nullptr == buf ||
                   data_len <= 0)) {
@@ -1503,6 +1503,7 @@ int ObFtsIndexBuildTask::deserialize_params_from_message(
     is_domain_aux_succ_ = is_domain_aux_succ;
     is_fts_doc_word_succ_ = is_fts_doc_word_succ;
     is_retryable_ddl_ = is_retryable_ddl;
+  }
   }
   return ret;
 }

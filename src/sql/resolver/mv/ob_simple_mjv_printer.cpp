@@ -60,11 +60,15 @@ int ObSimpleMJVPrinter::gen_delete_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmt
   ObDeleteStmt *base_del_stmt = NULL;
   ObDeleteStmt *del_stmt = NULL;
   TableItem *mv_table = NULL;
+  ObRawExpr *marker_filter = NULL;
   const ObIArray<SelectItem> &orig_select_items = mv_def_stmt_.get_select_items();
   if (OB_FAIL(create_simple_stmt(base_del_stmt))) {
     LOG_WARN("failed to create simple stmt", K(ret));
   } else if (OB_FAIL(create_simple_table_item(base_del_stmt, mv_schema_.get_table_name(), mv_table))) {
     LOG_WARN("failed to create simple table item", K(ret));
+  } else if (ctx_.for_union_all_child_query()
+             && OB_FAIL(create_union_all_child_refresh_filter(ctx_.marker_idx_, mv_table, marker_filter))) {
+    LOG_WARN("failed to create union all child refresh filter", K(ret));
   } else {
     mv_table->database_name_ = mv_db_name_;
     const ObIArray<TableItem*> &orig_table_items = mv_def_stmt_.get_table_items();
@@ -75,6 +79,9 @@ int ObSimpleMJVPrinter::gen_delete_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmt
       } else if (orig_table_items.count() - 1 == i) {
         if (OB_FAIL(base_del_stmt->get_condition_exprs().push_back(semi_filter))) {
           LOG_WARN("failed to push back semi filter", K(ret));
+        } else if (NULL != marker_filter
+                   && OB_FAIL(base_del_stmt->get_condition_exprs().push_back(marker_filter))) {
+          LOG_WARN("failed to push back maker filter", K(ret));
         } else if (OB_FAIL(dml_stmts.push_back(base_del_stmt))) {
           LOG_WARN("failed to push back delete stmt", K(ret));
         }
@@ -85,6 +92,9 @@ int ObSimpleMJVPrinter::gen_delete_for_simple_mjv(ObIArray<ObDMLStmt*> &dml_stmt
         LOG_WARN("failed to assign structure", K(ret));
       } else if (OB_FAIL(del_stmt->get_condition_exprs().push_back(semi_filter))) {
         LOG_WARN("failed to push back semi filter", K(ret));
+      } else if (NULL != marker_filter
+                 && OB_FAIL(del_stmt->get_condition_exprs().push_back(marker_filter))) {
+        LOG_WARN("failed to push back maker filter", K(ret));
       } else if (OB_FAIL(dml_stmts.push_back(del_stmt))) {
         LOG_WARN("failed to push back delete stmt", K(ret));
       }
@@ -133,7 +143,7 @@ int ObSimpleMJVPrinter::gen_insert_into_select_for_simple_mjv(ObIArray<ObDMLStmt
         LOG_WARN("failed to assign structure", K(ret));
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(create_simple_table_item(insert_stmt, DELTA_MAV_VIEW_NAME, source_table, access_delta_stmts.at(i)))) {
+      } else if (OB_FAIL(create_simple_table_item(insert_stmt, DELTA_MV_VIEW_NAME, source_table, access_delta_stmts.at(i)))) {
         LOG_WARN("failed to create simple table item", K(ret));
       } else if (OB_FAIL(dml_stmts.push_back(insert_stmt))) {
         LOG_WARN("failed to push back", K(ret));
@@ -185,7 +195,7 @@ int ObSimpleMJVPrinter::gen_access_delta_data_for_simple_mjv(ObIArray<ObSelectSt
   ObSEArray<ObRawExpr*, 2> semi_filters;
   ObSEArray<ObRawExpr*, 2> anti_filters;
   const int64_t table_size = mv_def_stmt_.get_table_items().count();
-  if (OB_UNLIKELY(table_size < 2)) {
+  if (OB_UNLIKELY(table_size < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected params", K(ret), K(table_size));
   } else if (OB_FAIL(access_delta_stmts.prepare_allocate(table_size))) {
@@ -218,46 +228,25 @@ int ObSimpleMJVPrinter::prepare_gen_access_delta_data_for_simple_mjv(ObSelectStm
 {
   int ret = OB_SUCCESS;
   base_delta_stmt = NULL;
-  ObRawExprCopier copier(ctx_.expr_factory_);
   ObSemiToInnerHint *semi_to_inner_hint = NULL;
   ObSEArray<ObItemType, 1> conflict_hints;
   const ObIArray<TableItem*> &orig_table_items = mv_def_stmt_.get_table_items();
   if (OB_FAIL(semi_filters.prepare_allocate(orig_table_items.count()))
       || OB_FAIL(anti_filters.prepare_allocate(orig_table_items.count()))) {
     LOG_WARN("failed to prepare allocate arrays", K(ret), K(orig_table_items.count()));
-  } else if (OB_FAIL(create_simple_stmt(base_delta_stmt))) {
-    LOG_WARN("failed to create simple stmt", K(ret));
-  } else if (OB_FAIL(construct_table_items_for_simple_mjv_delta_data(base_delta_stmt))) {
-    LOG_WARN("failed to construct table items for simple mjv delta data", K(ret));
-  } else if (OB_FAIL(init_expr_copier_for_stmt(*base_delta_stmt, copier))) {
-    LOG_WARN("failed to init expr copier for stmt", K(ret));
+  } else if (OB_FAIL(deep_copy_mv_def_stmt(base_delta_stmt))) {
+    LOG_WARN("failed to deep copy mv def stmt", K(ret));
   } else if (OB_FAIL(ObQueryHint::create_hint(&ctx_.alloc_, T_SEMI_TO_INNER, semi_to_inner_hint))) {
     LOG_WARN("failed to create hint", K(ret));
   } else if (OB_FAIL(base_delta_stmt->get_stmt_hint().merge_hint(*semi_to_inner_hint,
                                                                   ObHintMergePolicy::HINT_DOMINATED_EQUAL,
                                                                   conflict_hints))) {
     LOG_WARN("failed to merge hint", K(ret));
-  } else if (OB_FAIL(construct_from_items_for_simple_mjv_delta_data(copier, *base_delta_stmt))) {
-    LOG_WARN("failed to construct from items for simple mjv delta data", K(ret));
-  } else if (OB_FAIL(copier.copy_on_replace(mv_def_stmt_.get_condition_exprs(), base_delta_stmt->get_condition_exprs()))) {
-    LOG_WARN("failed to deep copy where conditions", K(ret));
   } else {
-    SelectItem sel_item;
     const ObIArray<TableItem*> &cur_table_items = base_delta_stmt->get_table_items();
-    const ObIArray<SelectItem> &orig_select_items = mv_def_stmt_.get_select_items();
-    ObIArray<SelectItem> &select_items = base_delta_stmt->get_select_items();
     if (OB_UNLIKELY(cur_table_items.count() != orig_table_items.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected table items count", K(ret), K(cur_table_items.count()), K(orig_table_items.count()));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < orig_select_items.count(); ++i) {
-      sel_item.is_real_alias_ = true;
-      sel_item.alias_name_ = orig_select_items.at(i).alias_name_;
-      if (OB_FAIL(copier.copy_on_replace(orig_select_items.at(i).expr_, sel_item.expr_))) {
-        LOG_WARN("failed to generate group by exprs", K(ret));
-      } else if (OB_FAIL(select_items.push_back(sel_item))) {
-        LOG_WARN("failed to pushback", K(ret));
-      }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < orig_table_items.count(); ++i) {
       if (OB_FAIL(gen_exists_cond_for_table(orig_table_items.at(i),
@@ -271,25 +260,6 @@ int ObSimpleMJVPrinter::prepare_gen_access_delta_data_for_simple_mjv(ObSelectStm
                                                    anti_filters.at(i)))) {
         LOG_WARN("failed to generate not exists filter", K(ret));
       }
-    }
-  }
-  return ret;
-}
-
-int ObSimpleMJVPrinter::construct_table_items_for_simple_mjv_delta_data(ObSelectStmt *stmt)
-{
-  int ret = OB_SUCCESS;
-  const TableItem *orig_table = NULL;
-  TableItem *table = NULL;
-  const ObIArray<TableItem*> &orig_table_items = mv_def_stmt_.get_table_items();
-  for (int64_t i = 0; OB_SUCC(ret) && i < orig_table_items.count(); ++i) {
-    if (OB_ISNULL(orig_table = orig_table_items.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret), K(i), K(orig_table_items));
-    } else if (OB_FAIL(create_simple_table_item(stmt, orig_table->table_name_, table, NULL, false))) {
-      LOG_WARN("failed to create simple table item", K(ret));
-    } else {
-      set_info_for_simple_table_item(*table, *orig_table);
     }
   }
   return ret;

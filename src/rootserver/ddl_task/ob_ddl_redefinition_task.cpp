@@ -20,6 +20,7 @@
 #include "pl/sys_package/ob_dbms_stats.h"
 #include "storage/ob_partition_pre_split.h"
 #include "storage/mview/ob_mview_mds.h"
+#include "storage/mview/ob_mview_refresh_helper.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -47,13 +48,16 @@ ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
     ObRootService *root_service,
     const common::ObAddr &inner_sql_exec_addr,
     const int64_t data_format_version,
-    const bool is_retryable_ddl)
+    const bool is_retryable_ddl,
+    const uint64_t mview_target_data_sync_scn,
+    const ObString &mview_select_sql)
   : is_inited_(false), tenant_id_(tenant_id), task_id_(task_id), data_table_id_(data_table_id),
     dest_table_id_(dest_table_id), schema_version_(schema_version), snapshot_version_(snapshot_version),
     execution_id_(execution_id), consumer_group_id_(consumer_group_id), sql_mode_(sql_mode), trace_id_(trace_id),
     parallelism_(parallelism), use_heap_table_ddl_plan_(use_heap_table_ddl_plan),
     is_mview_complete_refresh_(is_mview_complete_refresh), is_retryable_ddl_(is_retryable_ddl), mview_table_id_(mview_table_id),
-    root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr), data_format_version_(0)
+    root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr), data_format_version_(0),
+    mview_target_data_sync_scn_(mview_target_data_sync_scn), mview_select_sql_(mview_select_sql)
 {
   set_retry_times(0); // do not retry
 }
@@ -101,7 +105,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
   bool need_exec_new_inner_sql = true;
   const ObTableSchema *data_table_schema = nullptr;
 
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (OB_UNLIKELY(!is_inited_ || OB_ISNULL(GCTX.sql_proxy_))) {
     ret = OB_NOT_INIT;
     LOG_WARN("ddl redefinition sstable build task not inited", K(ret));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, BUILD_REPLICA_ASYNC_TASK_FAILED))) {
@@ -126,17 +130,26 @@ int ObDDLRedefinitionSSTableBuildTask::process()
     LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(tenant_id_), K(data_table_id_));
   } else {
     if (is_mview_complete_refresh_) {
-      if (OB_FAIL(ObDDLUtil::generate_build_mview_replica_sql(tenant_id_,
-                                                              mview_table_id_,
-                                                              data_table_id_,
-                                                              schema_guard,
-                                                              snapshot_version_,
-                                                              execution_id_,
-                                                              task_id_,
-                                                              parallelism_,
-                                                              true/*use_schema_version_hint_for_src_table*/,
-                                                              based_schema_object_infos_,
-                                                              sql_string))) {
+      LOG_INFO("print select sql", K(mview_select_sql_));
+      if (mview_target_data_sync_scn_ != OB_INVALID_SCN_VAL &&
+          OB_FAIL(ObMViewRefreshHelper::collect_deps_and_check_satisfy(
+                  tenant_id_, mview_table_id_, mview_target_data_sync_scn_,
+                  snapshot_version_, *GCTX.sql_proxy_, schema_guard))) {
+          LOG_WARN("fail to check satisfied", K(ret), K(oracle_mode),
+                   K(mview_table_id_), K(mview_target_data_sync_scn_), K(snapshot_version_));
+      } else if (OB_FAIL(ObDDLUtil::generate_build_mview_replica_sql(tenant_id_,
+                                                                     mview_table_id_,
+                                                                     data_table_id_,
+                                                                     schema_guard,
+                                                                     snapshot_version_,
+                                                                     mview_target_data_sync_scn_,
+                                                                     execution_id_,
+                                                                     task_id_,
+                                                                     parallelism_,
+                                                                     true/*use_schema_version_hint_for_src_table*/,
+                                                                     based_schema_object_infos_,
+                                                                     mview_select_sql_,
+                                                                     sql_string))) {
         LOG_WARN("fail to generate build mview replica sql", K(ret));
       }
     } else {
@@ -210,7 +223,10 @@ int ObDDLRedefinitionSSTableBuildTask::process()
           arg.start_ts_ = ObTimeUtil::current_time();
           arg.mview_op_type_ = MVIEW_OP_TYPE::COMPLETE_REFRESH;
           arg.read_snapshot_ = snapshot_version_;
-          if (OB_FAIL(trans.start(user_sql_proxy, tenant_id_))) {
+          if (mview_target_data_sync_scn_ != OB_INVALID_SCN_VAL &&
+              OB_FAIL(arg.target_data_sync_scn_.convert_for_tx(mview_target_data_sync_scn_))) {
+            LOG_WARN("fail to conver to scn", K(ret), K(mview_target_data_sync_scn_), K(arg));
+          } else if (OB_FAIL(trans.start(user_sql_proxy, tenant_id_))) {
             LOG_WARN("fail to start trans", K(ret), K(tenant_id_));
           } else if (OB_FAIL(ObMViewMdsOpHelper::register_mview_mds(tenant_id_, arg, trans))) {
             LOG_WARN("register mview mds failed", K(ret), K(tenant_id_), K(arg));
@@ -291,7 +307,9 @@ ObAsyncTask *ObDDLRedefinitionSSTableBuildTask::deep_copy(char *buf, const int64
         root_service_,
         inner_sql_exec_addr_,
         data_format_version_,
-        is_retryable_ddl_);
+        is_retryable_ddl_,
+        mview_target_data_sync_scn_,
+        mview_select_sql_);
     if (OB_FAIL(new_task->tz_info_wrap_.deep_copy(tz_info_wrap_))) {
       LOG_WARN("failed to copy tz info wrap", K(ret));
     } else if (OB_FAIL(new_task->col_name_map_.assign(col_name_map_))) {

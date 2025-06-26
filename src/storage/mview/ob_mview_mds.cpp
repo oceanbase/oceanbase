@@ -30,7 +30,10 @@ OB_SERIALIZE_MEMBER(ObMViewOpArg,
                     read_snapshot_,
                     parallel_,
                     session_id_,
-                    start_ts_);
+                    start_ts_,
+                    refresh_id_,
+                    nested_mview_lists_,
+                    target_data_sync_scn_);
 
 int ObMViewMdsOpHelper::on_register(
       const char* buf,
@@ -51,6 +54,13 @@ int ObMViewMdsOpHelper::on_register(
   } else {
     int64_t ts = ObTimeUtil::current_time();
     MTL(ObMViewMaintenanceService*)->update_mview_mds_ts(ts);
+    int tmp_ret = OB_SUCCESS;
+    if (arg.mview_op_type_ == MVIEW_OP_TYPE::NESTED_SYNC_REFRESH) {
+      if (OB_TMP_FAIL(MTL(ObMViewMaintenanceService*)->get_mview_mds_op().set_refactored(tx_id, arg, 1))) {
+        LOG_WARN("fail to set refactored mview mds op map", K(ret), K(tx_id), K(arg));
+      }
+      LOG_INFO("register nested mview mds op", K(tx_id), K(arg));
+    }
   }
   return ret;
 }
@@ -95,6 +105,11 @@ int ObMViewOpArg::assign(const ObMViewOpArg& other)
   parallel_ = other.parallel_;
   session_id_ = other.session_id_;
   start_ts_ = other.start_ts_;
+  refresh_id_ = other.refresh_id_;
+  target_data_sync_scn_ = other.target_data_sync_scn_;
+  if (OB_FAIL(nested_mview_lists_.assign(other.nested_mview_lists_))) {
+    LOG_WARN("failed to copy nested mview lists", KR(ret), K(other));
+  }
   return ret;
 }
 
@@ -131,6 +146,10 @@ void ObMViewMdsOpCtx::on_commit(const share::SCN &commit_version, const share::S
 {
   transaction::ObTransID tx_id = writer_.writer_id_;
   int64_t ts = ObTimeUtil::current_time();
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(MTL(ObMViewMaintenanceService*)->get_mview_mds_op().erase_refactored(tx_id))) {
+    LOG_WARN("fail to erase mview mds op map", K(ret), K(tx_id), K(arg_));
+  }
   MTL(ObMViewMaintenanceService*)->update_mview_mds_ts(ts);
   LOG_INFO("mview mds on_commit", K(tx_id), KPC(this), K(commit_scn), K(commit_version));
 }
@@ -139,6 +158,10 @@ void ObMViewMdsOpCtx::on_abort(const share::SCN &abort_scn)
 {
   transaction::ObTransID tx_id = writer_.writer_id_;
   int64_t ts = ObTimeUtil::current_time();
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(MTL(ObMViewMaintenanceService*)->get_mview_mds_op().erase_refactored(tx_id))) {
+    LOG_WARN("fail to erase mview mds op map", K(ret), K(tx_id), K(arg_));
+  }
   MTL(ObMViewMaintenanceService*)->update_mview_mds_ts(ts);
   LOG_INFO("mview mds on_abort", K(tx_id), KPC(this), K(abort_scn));
 }

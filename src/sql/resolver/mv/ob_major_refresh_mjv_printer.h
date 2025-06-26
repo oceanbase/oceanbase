@@ -24,8 +24,9 @@ class ObMajorRefreshMJVPrinter : public ObMVPrinter
 public:
   explicit ObMajorRefreshMJVPrinter(ObMVPrinterCtx &ctx,
                                     const share::schema::ObTableSchema &mv_schema,
+                                    const share::schema::ObTableSchema &mv_container_schema,
                                     const ObSelectStmt &mv_def_stmt)
-    : ObMVPrinter(ctx, mv_schema, mv_def_stmt, NULL)
+    : ObMVPrinter(ctx, mv_schema, mv_container_schema, mv_def_stmt, NULL)
     {}
 
   ~ObMajorRefreshMJVPrinter() {}
@@ -54,6 +55,9 @@ private:
                                               const TableItem &delta_left_table,
                                               const TableItem &delta_right_table);
   int gen_mr_rt_mv_left_delta_data_stmt(ObSelectStmt *&stmt);
+  int gen_exists_cond_for_mview(const TableItem &source_table,
+                                const TableItem &outer_table,
+                                ObRawExpr *&exists_expr);
   int gen_one_refresh_select_for_major_refresh_mjv(const ObIArray<int64_t> &rowkey_sel_pos,
                                                    const bool is_delta_left,
                                                    ObSelectStmt *&delta_stmt);

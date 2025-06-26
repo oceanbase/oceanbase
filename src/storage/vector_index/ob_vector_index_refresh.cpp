@@ -679,7 +679,7 @@ int ObVectorIndexRefresher::do_rebuild() {
     ObTimeoutCtx timeout_ctx;
     ObAddr rs_addr;
     obrpc::ObCommonRpcProxy *common_rpc_proxy = GCTX.rs_rpc_proxy_;
-    ObRebuildIndexArg rebuild_index_arg;
+    SMART_VAR(ObRebuildIndexArg, rebuild_index_arg) {
     obrpc::ObAlterTableRes rebuild_index_res;
     const bool is_support_cancel = true;
     rebuild_index_arg.tenant_id_ = tenant_id;
@@ -692,6 +692,7 @@ int ObVectorIndexRefresher::do_rebuild() {
     rebuild_index_arg.index_action_type_ = obrpc::ObIndexArg::ADD_INDEX;
     rebuild_index_arg.parallelism_ = refresh_ctx_->idx_parallel_creation_;
     rebuild_index_arg.vidx_refresh_info_.index_params_ = idx_parameters;
+    rebuild_index_arg.rebuild_index_type_ = obrpc::ObRebuildIndexArg::RebuildIndexType::REBUILD_INDEX_TYPE_VEC;
     if (OB_ISNULL(GCTX.rs_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("GCTX.rs_mgr is null", K(ret));
@@ -716,6 +717,7 @@ int ObVectorIndexRefresher::do_rebuild() {
       } else {
         LOG_INFO("succ to wait rebuild vec index", K(ret), K(rebuild_index_res.task_id_), K(rebuild_index_arg));
       }
+    }
     }
   }
   return ret;

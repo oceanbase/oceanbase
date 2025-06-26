@@ -398,6 +398,7 @@ public:
   static int get_valid_dynamic_sampling_level(const ObSQLSessionInfo *session_info,
                                               const ObTableDynamicSamplingHint *table_ds_hint,
                                               const int64_t global_ds_level,
+                                              const ObTableType table_type,
                                               int64_t &ds_level,
                                               int64_t &sample_block_cnt,
                                               bool &specify_ds);

@@ -522,6 +522,7 @@ public:
    * All these index status and name will change in the same trans
   */
   int switch_index_name_and_status_for_vec_index_table(obrpc::ObAlterTableArg &alter_table_arg);
+  int switch_index_name_and_status_for_mlog_table(obrpc::ObAlterTableArg &alter_table_arg);
 
   /**
    * This function is called by the storage layer in the three stage of offline ddl.
@@ -2067,8 +2068,8 @@ int check_will_be_having_domain_index_operation(
       common::ObMySQLTransaction &trans,
       const bool need_sync_schema_version,
       bool &is_add_lob);
-  int lock_tables_of_database(const share::schema::ObDatabaseSchema &database_schema,
-                              ObMySQLTransaction &trans);
+  int lock_tables_of_database_for_drop(const share::schema::ObDatabaseSchema &database_schema,
+                                       ObMySQLTransaction &trans);
   int lock_tables_in_recyclebin(const share::schema::ObDatabaseSchema &database_schema,
                                 ObMySQLTransaction &trans);
   int get_dropping_domain_index_invisiable_aux_table_schema(
@@ -2171,6 +2172,15 @@ private:
   int check_alter_heap_table_index(const obrpc::ObIndexArg::IndexActionType type,
                                    const ObTableSchema &orig_table_schema,
                                    obrpc::ObIndexArg *index_arg);
+  int validate_rename_table_args(const ObTableSchema *table_schema);
+  int construct_rename_table_items_for_mview(uint64_t tenant_id,
+                                             const ObTableSchema *table_schema,
+                                             bool is_oracle_mode,
+                                             share::schema::ObSchemaGetterGuard &schema_guard,
+                                             const obrpc::ObRenameTableItem &rename_item,
+                                             common::ObArenaAllocator &allocator,
+                                             ObIArray<obrpc::ObRenameTableItem> &full_rename_items);
+
 public:
   int check_restore_point_allow(const int64_t tenant_id, const share::schema::ObTableSchema &table_schema);
   // used only by create normal tenant

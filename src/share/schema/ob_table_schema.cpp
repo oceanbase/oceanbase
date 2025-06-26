@@ -1678,6 +1678,7 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     rls_context_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
     name_generated_type_(GENERATED_TYPE_UNKNOWN),
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+    micro_block_format_version_(ObMicroBlockFormatVersionHelper::DEFAULT_VERSION),
     micro_index_clustered_(false),
     enable_macro_block_bloom_filter_(false),
     local_session_vars_(allocator),
@@ -1768,6 +1769,8 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       mlog_tid_ = src_schema.mlog_tid_;
       catalog_id_ = src_schema.catalog_id_;
       merge_engine_type_ = src_schema.merge_engine_type_;
+      external_location_id_ = src_schema.external_location_id_;
+      tmp_mlog_tid_ = src_schema.tmp_mlog_tid_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -1792,6 +1795,8 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
         LOG_WARN("deep copy external_file_pattern failed", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_properties_, external_properties_))) {
         LOG_WARN("deep copy external_properties failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_sub_path_, external_sub_path_))) {
+        LOG_WARN("deep copy external_sub_path failed", K(ret));
       }
       //view schema
       if (OB_SUCC(ret)) {
@@ -3881,6 +3886,7 @@ int64_t ObTableSchema::get_convert_size() const
   convert_size += storage_cache_policy_.length() + 1;
   convert_size += semistruct_encoding_type_.get_deep_copy_size();
   convert_size += dynamic_partition_policy_.length() + 1;
+  convert_size += external_sub_path_.length() + 1;
   return convert_size;
 }
 
@@ -3947,6 +3953,7 @@ void ObTableSchema::reset()
   virtual_column_cnt_ = 0;
   micro_index_clustered_ = false;
   enable_macro_block_bloom_filter_ = false;
+  micro_block_format_version_ = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION;
 
   cst_cnt_ = 0;
   cst_array_capacity_ = 0;
@@ -3984,11 +3991,14 @@ void ObTableSchema::reset()
   cg_id_hash_arr_ = NULL;
   cg_name_hash_arr_ = NULL;
   mlog_tid_ = OB_INVALID_ID;
+  tmp_mlog_tid_ = OB_INVALID_ID;
   local_session_vars_.reset();
   mv_mode_.reset();
   storage_cache_policy_.reset();
   semistruct_encoding_type_.reset();
   dynamic_partition_policy_.reset();
+  external_location_id_ = OB_INVALID_ID;
+  external_sub_path_.reset();
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -7567,6 +7577,10 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(merge_engine_type_);
   OB_UNIS_ENCODE(semistruct_encoding_type_);
   OB_UNIS_ENCODE(dynamic_partition_policy_);
+  OB_UNIS_ENCODE(external_location_id_);
+  OB_UNIS_ENCODE(external_sub_path_);
+  OB_UNIS_ENCODE(micro_block_format_version_);
+  OB_UNIS_ENCODE(tmp_mlog_tid_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7813,6 +7827,10 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(merge_engine_type_);
   OB_UNIS_DECODE(semistruct_encoding_type_);
   OB_UNIS_DECODE_AND_FUNC(dynamic_partition_policy_, deep_copy_str);
+  OB_UNIS_DECODE(external_location_id_);
+  OB_UNIS_DECODE_AND_FUNC(external_sub_path_, deep_copy_str);
+  OB_UNIS_DECODE(micro_block_format_version_);
+  OB_UNIS_DECODE(tmp_mlog_tid_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7959,6 +7977,10 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(merge_engine_type_);
   OB_UNIS_ADD_LEN(semistruct_encoding_type_);
   OB_UNIS_ADD_LEN(dynamic_partition_policy_);
+  OB_UNIS_ADD_LEN(external_location_id_);
+  OB_UNIS_ADD_LEN(external_sub_path_);
+  OB_UNIS_ADD_LEN(micro_block_format_version_);
+  OB_UNIS_ADD_LEN(tmp_mlog_tid_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员

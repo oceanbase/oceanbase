@@ -3951,6 +3951,14 @@ enum class ObMVRefreshStatsCollectionLevel : int64_t
   MAX
 };
 
+enum class ObMVNestedRefreshMode : int64_t
+{
+  INDIVIDUAL = 0,
+  INCONSISTENT = 1,
+  CONSISTENT = 2,
+  MAX
+};
+
 struct ObVectorIndexRefreshInfo
 {
   OB_UNIS_VERSION(1);
@@ -3985,6 +3993,7 @@ public:
   ObString exec_env_;
   int64_t parallel_;
   int64_t refresh_dop_;
+  ObMVNestedRefreshMode nested_refresh_mode_;
 
   ObMVRefreshInfo() :
   refresh_method_(ObMVRefreshMethod::NEVER),
@@ -3993,7 +4002,8 @@ public:
   next_time_expr_(),
   exec_env_(),
   parallel_(OB_INVALID_COUNT),
-  refresh_dop_(0) {}
+  refresh_dop_(0),
+  nested_refresh_mode_(ObMVNestedRefreshMode::INDIVIDUAL) {}
 
   void reset() {
     refresh_method_ = ObMVRefreshMethod::NEVER;
@@ -4003,6 +4013,7 @@ public:
     exec_env_.reset();
     parallel_ = OB_INVALID_COUNT;
     refresh_dop_ = 0;
+    nested_refresh_mode_ = ObMVNestedRefreshMode::INDIVIDUAL;
   }
 
   bool operator == (const ObMVRefreshInfo &other) const {
@@ -4012,7 +4023,8 @@ public:
       && next_time_expr_ == other.next_time_expr_
       && exec_env_ == other.exec_env_
       && parallel_ == other.parallel_
-      && refresh_dop_ == other.refresh_dop_;
+      && refresh_dop_ == other.refresh_dop_
+      && nested_refresh_mode_ == other.nested_refresh_mode_;
   }
 
 
@@ -4022,7 +4034,8 @@ public:
       K_(next_time_expr),
       K_(exec_env),
       K_(parallel),
-      K_(refresh_dop));
+      K_(refresh_dop),
+      K_(nested_refresh_mode));
 };
 
 class ObViewSchema : public ObSchema
@@ -7499,30 +7512,35 @@ public:
   ObAuxTableMetaInfo()
     : table_id_(common::OB_INVALID_ID),
       table_type_(MAX_TABLE_TYPE),
-      index_type_(INDEX_TYPE_MAX)
+      index_type_(INDEX_TYPE_MAX),
+      is_tmp_mlog_(false)
   {}
   ObAuxTableMetaInfo(
       const uint64_t table_id,
       const ObTableType table_type,
-      const ObIndexType index_type)
+      const ObIndexType index_type,
+      const bool is_tmp_mlog = false)
       : table_id_(table_id),
         table_type_(table_type),
-        index_type_(index_type)
+        index_type_(index_type),
+        is_tmp_mlog_(is_tmp_mlog)
   {}
   bool operator ==(const ObAuxTableMetaInfo &other) const {
     return (table_id_ == other.table_id_
             && table_type_ == other.table_type_
-            && index_type_ == other.index_type_);
+            && index_type_ == other.index_type_
+            && is_tmp_mlog_ == other.is_tmp_mlog_);
   }
   int64_t get_convert_size() const
   {
     int64_t convert_size = sizeof(*this);
     return convert_size;
   }
-  TO_STRING_KV(K_(table_id), K_(table_type), K_(index_type));
+  TO_STRING_KV(K_(table_id), K_(table_type), K_(index_type), K_(is_tmp_mlog));
   uint64_t table_id_;
   ObTableType table_type_;
   ObIndexType index_type_;
+  bool is_tmp_mlog_;
 };
 
 enum ObConstraintType

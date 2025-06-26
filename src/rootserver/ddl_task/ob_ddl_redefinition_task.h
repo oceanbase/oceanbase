@@ -43,7 +43,9 @@ public:
       ObRootService *root_service,
       const common::ObAddr &inner_sql_exec_addr,
       const int64_t data_format_version,
-      const bool is_retryable_ddl);
+      const bool is_retryable_ddl,
+      const uint64_t mview_target_data_sync_scn,
+      const ObString &mview_select_sql);
   int init(
       const ObTableSchema &orig_table_schema,
       const ObTableSchema &hidden_table_schema,
@@ -79,6 +81,8 @@ private:
   ObRootService *root_service_;
   common::ObAddr inner_sql_exec_addr_;
   int64_t data_format_version_;
+  uint64_t mview_target_data_sync_scn_;
+  ObString mview_select_sql_;
 };
 
 class ObSyncTabletAutoincSeqCtx final

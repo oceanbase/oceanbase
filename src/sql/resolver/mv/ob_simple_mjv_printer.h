@@ -24,9 +24,10 @@
  public:
    explicit ObSimpleMJVPrinter(ObMVPrinterCtx &ctx,
                                const share::schema::ObTableSchema &mv_schema,
+                               const share::schema::ObTableSchema &mv_container_schema,
                                const ObSelectStmt &mv_def_stmt,
                                const MlogSchemaPairIArray &mlog_tables)
-    : ObMVPrinter(ctx, mv_schema, mv_def_stmt, &mlog_tables)
+    : ObMVPrinter(ctx, mv_schema, mv_container_schema, mv_def_stmt, &mlog_tables)
      {}
 
    ~ObSimpleMJVPrinter() {}
@@ -41,7 +42,6 @@ private:
   int prepare_gen_access_delta_data_for_simple_mjv(ObSelectStmt *&base_delta_stmt,
                                                    ObIArray<ObRawExpr*> &semi_filters,
                                                    ObIArray<ObRawExpr*> &anti_filters);
-  int construct_table_items_for_simple_mjv_delta_data(ObSelectStmt *stmt);
   int gen_one_access_delta_data_for_simple_mjv(const ObSelectStmt &base_delta_stmt,
                                                const int64_t table_idx,
                                                const ObIArray<ObRawExpr*> &semi_filters,

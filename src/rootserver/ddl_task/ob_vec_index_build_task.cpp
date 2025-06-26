@@ -1270,7 +1270,7 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
   int8_t drop_index_submitted = 0;
   int8_t is_rebuild_index = 0;
   int8_t is_offline_rebuild = 0;
-  obrpc::ObCreateIndexArg tmp_arg;
+  SMART_VAR(ObCreateIndexArg, tmp_arg) {
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) ||
                   nullptr == buf ||
                   data_len <= 0)) {
@@ -1438,6 +1438,7 @@ int ObVecIndexBuildTask::deserialize_params_from_message(
             K(index_snapshot_aux_status));
       }
     }
+  }
   }
   return ret;
 }

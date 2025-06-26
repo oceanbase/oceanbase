@@ -5137,6 +5137,7 @@ int ObSchemaRetrieveUtils::retrieve_aux_tables(
     uint64_t table_id = OB_INVALID_ID;
     ObTableType table_type = MAX_TABLE_TYPE;
     ObIndexType index_type = INDEX_TYPE_MAX;
+    ObString table_name;
 
     EXTRACT_INT_FIELD_MYSQL(result, "table_type", table_type, ObTableType);
 
@@ -5148,8 +5149,10 @@ int ObSchemaRetrieveUtils::retrieve_aux_tables(
 
       EXTRACT_INT_FIELD_MYSQL_WITH_TENANT_ID(result, "table_id", table_id, tenant_id);
       EXTRACT_INT_FIELD_MYSQL(result, "index_type", index_type, ObIndexType);
+      EXTRACT_VARCHAR_FIELD_MYSQL(result, "table_name", table_name);
+      const bool is_tmp_mlog = ObSimpleTableSchemaV2::is_tmp_mlog_table(table_type, table_name);
 
-      ObAuxTableMetaInfo aux_table_meta(table_id, table_type, index_type);
+      ObAuxTableMetaInfo aux_table_meta(table_id, table_type, index_type, is_tmp_mlog);
       if (FAILEDx(aux_tables.push_back(aux_table_meta))) {
         SHARE_SCHEMA_LOG(WARN, "fail to push back aux table", KR(ret), K(aux_table_meta));
       }

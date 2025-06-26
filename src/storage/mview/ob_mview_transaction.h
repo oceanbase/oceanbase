@@ -41,6 +41,7 @@ public:
                                     : ObCompatibilityMode::OCEANBASE_MODE;
   }
   bool is_inner_session() const { return session_param_saved_.is_inner_session(); }
+  sql::ObSQLSessionInfo *get_session_info() { return session_info_; }
 
 protected:
   int connect(sql::ObSQLSessionInfo *session_info, ObISQLClient *sql_client);
@@ -71,6 +72,7 @@ protected:
     bool autocommit_;
     uint64_t database_id_;
     char *database_name_;
+    ObObj collation_connection_var_;
   };
 
   class ObSessionSavedForInner

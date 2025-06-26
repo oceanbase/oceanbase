@@ -10402,6 +10402,43 @@ int ObOptimizerUtil::get_rescan_path_index_id(const ObLogicalOperator *op,
   return ret;
 }
 
+int ObOptimizerUtil::find_joined_table(ObDMLStmt *stmt,
+                                       const uint64_t table_id,
+                                       JoinedTable *&joined_table)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<JoinedTable*, 4> table_stack;
+  joined_table = NULL;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(stmt));
+  } else if (OB_FAIL(table_stack.assign(stmt->get_joined_tables()))) {
+    LOG_WARN("failed to assign table stack", K(ret));
+  }
+  while (OB_SUCC(ret) && NULL == joined_table && !table_stack.empty()) {
+    JoinedTable *cur_table = NULL;
+    if (OB_FAIL(table_stack.pop_back(cur_table))) {
+      LOG_WARN("failed to pop back", K(ret));
+    } else if (OB_ISNULL(cur_table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (cur_table->table_id_ == table_id) {
+      joined_table = cur_table;
+      break;
+    } else if (OB_ISNULL(cur_table->left_table_) || OB_ISNULL(cur_table->right_table_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null table", K(ret), KPC(cur_table));
+    } else if (cur_table->left_table_->is_joined_table()
+               && OB_FAIL(table_stack.push_back(static_cast<JoinedTable*>(cur_table->left_table_)))) {
+      LOG_WARN("failed to push back left table", K(ret));
+    } else if (cur_table->right_table_->is_joined_table()
+               && OB_FAIL(table_stack.push_back(static_cast<JoinedTable*>(cur_table->right_table_)))) {
+      LOG_WARN("failed to push back right table", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::flatten_multivalue_index_exprs(ObRawExpr* expr, ObIArray<ObRawExpr*> &exprs)
 {
   int ret = OB_SUCCESS;

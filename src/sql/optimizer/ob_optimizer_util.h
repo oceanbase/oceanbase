@@ -1627,6 +1627,10 @@ public:
                                                const ObIArray<ObRawExpr*> &range_exprs,
                                                ObIArray<ObRawExpr*> &out_range_exprs);
 
+  static int find_joined_table(ObDMLStmt *stmt,
+                               const uint64_t table_id,
+                               JoinedTable *&joined_table);
+
   template<typename T>
   static int choose_random_members(const uint64_t seed,
                                    const ObIArray<T> &input_array,

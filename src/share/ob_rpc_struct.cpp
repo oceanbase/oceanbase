@@ -3516,7 +3516,8 @@ DEF_TO_STRING(ObDropIndexArg) {
        K_(is_vec_inner_drop),
        K_(only_set_status),
        K_(index_ids),
-       K_(table_id));
+       K_(table_id),
+       K_(is_drop_in_rebuild_task));
   J_OBJ_END();
   return pos;
 }
@@ -3536,7 +3537,8 @@ OB_SERIALIZE_MEMBER((ObDropIndexArg, ObIndexArg),
                     index_ids_,
                     is_parent_task_dropping_fts_index_,
                     is_parent_task_dropping_multivalue_index_,
-                    table_id_);
+                    table_id_,
+                    is_drop_in_rebuild_task_);
 
 OB_SERIALIZE_MEMBER(ObDropIndexRes, tenant_id_, index_table_id_, schema_version_, task_id_);
 
@@ -3558,6 +3560,7 @@ int ObDropIndexArg::assign(const ObDropIndexArg &other)
     is_parent_task_dropping_multivalue_index_ = other.is_parent_task_dropping_multivalue_index_;
     only_set_status_ = other.only_set_status_;
     table_id_ = other.table_id_;
+    is_drop_in_rebuild_task_ = other.is_drop_in_rebuild_task_;
   }
   return ret;
 }
@@ -3581,13 +3584,17 @@ DEF_TO_STRING(ObRebuildIndexArg) {
        K_(database_name),
        K_(index_action_type),
        K_(index_table_id),
-       K_(vidx_refresh_info));
+       K_(vidx_refresh_info),
+       K_(rebuild_index_type),
+       K_(create_mlog_arg));
   J_OBJ_END();
   return pos;
 }
 OB_SERIALIZE_MEMBER((ObRebuildIndexArg, ObIndexArg),
                     index_table_id_,
-                    vidx_refresh_info_);
+                    vidx_refresh_info_,
+                    rebuild_index_type_,
+                    create_mlog_arg_);
 
 bool ObRenameIndexArg::is_valid() const
 {
@@ -3634,72 +3641,6 @@ DEF_TO_STRING(ObRenameIndexArg)
 }
 
 OB_SERIALIZE_MEMBER((ObRenameIndexArg, ObIndexArg), origin_index_name_, new_index_name_);
-
-OB_SERIALIZE_MEMBER(ObCreateMLogArg::PurgeOptions,
-                    purge_mode_,
-                    start_datetime_expr_,
-                    next_datetime_expr_,
-                    exec_env_);
-
-bool ObCreateMLogArg::is_valid() const
-{
-  return (OB_INVALID_TENANT_ID != tenant_id_)
-         && !database_name_.empty()
-         && !table_name_.empty()
-         && purge_options_.is_valid();
-}
-
-DEF_TO_STRING(ObCreateMLogArg)
-{
-  int64_t pos = 0;
-  J_OBJ_START();
-  pos += ObDDLArg::to_string(buf + pos, buf_len - pos);
-  J_KV(K_(database_name),
-       K_(table_name),
-       K_(mlog_name),
-       K_(tenant_id),
-       K_(base_table_id),
-       K_(mlog_table_id),
-       K_(session_id),
-       K_(with_rowid),
-       K_(with_primary_key),
-       K_(with_sequence),
-       K_(include_new_values),
-       K_(purge_options),
-       K_(mlog_schema),
-       K_(store_columns),
-       K_(nls_date_format),
-       K_(nls_timestamp_format),
-       K_(nls_timestamp_tz_format),
-       K_(sql_mode));
-  J_OBJ_END();
-  return pos;
-}
-
-OB_SERIALIZE_MEMBER((ObCreateMLogArg, ObDDLArg),
-                    database_name_,
-                    table_name_,
-                    mlog_name_,
-                    tenant_id_,
-                    base_table_id_,
-                    mlog_table_id_,
-                    session_id_,
-                    with_rowid_,
-                    with_primary_key_,
-                    with_sequence_,
-                    include_new_values_,
-                    purge_options_,
-                    mlog_schema_,
-                    store_columns_,
-                    nls_date_format_,
-                    nls_timestamp_format_,
-                    nls_timestamp_tz_format_,
-                    sql_mode_);
-
-OB_SERIALIZE_MEMBER(ObCreateMLogRes,
-                    mlog_table_id_,
-                    schema_version_,
-                    task_id_);
 
 bool ObCreateForeignKeyArg::is_valid() const
 {
@@ -13752,6 +13693,8 @@ int ObFetchArbMemberArg::init(const uint64_t tenant_id, const ObLSID &ls_id)
 
 OB_SERIALIZE_MEMBER(ObFetchArbMemberArg, tenant_id_, ls_id_);
 #endif
+OB_SERIALIZE_MEMBER(ObCheckNestedMViewMdsArg, tenant_id_, mview_id_, refresh_id_, target_data_sync_scn_);
+OB_SERIALIZE_MEMBER(ObCheckNestedMViewMdsRes, target_data_sync_scn_, ret_);
 
 bool ObHTableDDLArg::is_valid() const
 {

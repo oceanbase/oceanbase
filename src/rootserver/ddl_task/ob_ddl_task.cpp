@@ -914,6 +914,9 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
     case DDL_PARTITION_SPLIT_RECOVERY_TABLE_REDEFINITION:
       ddl_type_str = "partition split recovery table redefinition";
       break;
+    case DDL_REPLACE_MLOG:
+      ddl_type_str = "replace materialized view log";
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
   }
@@ -3007,7 +3010,7 @@ int ObDDLTaskRecordOperator::update_parent_task_message(
       } else if (OB_FAIL(task.update_task_message(proxy))) {
         LOG_WARN("fail to update task message", K(ret), K(parent_task_id));
       }
-    } else if (task_record.ddl_type_ == DDL_REBUILD_INDEX) { // rebuild vec index
+    } else if (ObRebuildIndexTask::is_ddl_type_for_rebuild_index_task(task_record.ddl_type_)) { // rebuild vec index
       SMART_VAR(ObRebuildIndexTask, task) {
         if (OB_FAIL(task.init(task_record))) {
           LOG_WARN("fail to init ObRebuildIndexTask", K(ret), K(task_record));

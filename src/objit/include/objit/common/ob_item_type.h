@@ -2831,6 +2831,7 @@ typedef enum ObItemType
   T_LOGSERVICE_ACCESS_POINT = 4847,
 
   T_SP_SYS_DISPATCH_CALL = 4849,
+  T_MV_NESTED_REFRESH_CLAUSE = 4868, //placeholder in master
   T_ALTER_SUBPARTITION_EXCHANGE = 4869,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

@@ -1322,8 +1322,10 @@ int ObCreateViewResolver::resolve_mv_options(const ObSelectStmt *stmt,
                 ObMVRefreshMethod::FAST == refresh_info.refresh_method_)) {
       ObMVRefreshableType refresh_type = OB_MV_REFRESH_INVALID;
       if (OB_FAIL(ObMVChecker::check_mv_fast_refresh_type(
-              stmt, params_.stmt_factory_, params_.expr_factory_, params_.session_info_,
-              container_table_schema, refresh_type, fast_refreshable_note))) {
+              stmt, params_.allocator_, params_.schema_checker_, params_.stmt_factory_,
+              params_.expr_factory_, params_.session_info_,
+              container_table_schema, table_schema.mv_on_query_computation(),
+              refresh_type, fast_refreshable_note))) {
         LOG_WARN("fail to check mv type", KR(ret));
       } else if (OB_UNLIKELY(!IS_VALID_FAST_REFRESH_TYPE(refresh_type))) {
 	      // When creating an MV, which can not be fast refreshed, with both fast refresh
@@ -1369,6 +1371,7 @@ int ObCreateViewResolver::resolve_mv_refresh_info(ParseNode *refresh_info_node,
                                               ObMVRefreshInfo &refresh_info)
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
   if (allocator_ == nullptr) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator_ is null", KR(ret));
@@ -1378,15 +1381,17 @@ int ObCreateViewResolver::resolve_mv_refresh_info(ParseNode *refresh_info_node,
   OZ (ObExecEnv::gen_exec_env(*session_info_, buf, OB_MAX_PROC_ENV_LENGTH, pos));
   OX (refresh_info.exec_env_.assign(buf, pos));
   OZ (ob_write_string(*allocator_, refresh_info.exec_env_, refresh_info.exec_env_));
+  OZ (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version)));
   if (OB_SUCC(ret) && refresh_info_node != nullptr) {
     if (refresh_info_node->int32_values_[0] == 1) { //never refresh
       refresh_info.refresh_method_ = ObMVRefreshMethod::NEVER;
       refresh_info.refresh_mode_ = ObMVRefreshMode::NEVER;
-    } else if ((2 == refresh_info_node->num_child_)
+    } else if ((3 == refresh_info_node->num_child_)
                && OB_NOT_NULL(refresh_info_node->children_)) {
       int32_t refresh_method = refresh_info_node->int32_values_[1];
-      ParseNode *refresh_on_clause = refresh_info_node->children_[0];
-      ParseNode *refresh_interval_node = refresh_info_node->children_[1];
+      ParseNode *refresh_on_clause = refresh_info_node->children_[1];
+      ParseNode *refresh_interval_node = refresh_info_node->children_[2];
+      ParseNode *nested_refresh_node = refresh_info_node->children_[0];
 
       switch (refresh_method) {
         case 0:
@@ -1423,6 +1428,40 @@ int ObCreateViewResolver::resolve_mv_refresh_info(ParseNode *refresh_info_node,
               break;
           }
         }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_NOT_NULL(nested_refresh_node)) {
+        ParseNode *nested_refresh_mode_node = nested_refresh_node->children_[0];
+        if (data_version < DATA_VERSION_4_3_5_3 ) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("data version below 4.3.5.3, not support nested refresh type", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version below 4.3.5.3, set nested refresh type");
+        } else if (OB_ISNULL(nested_refresh_mode_node) ||
+                   OB_UNLIKELY(T_MV_NESTED_REFRESH_CLAUSE != nested_refresh_node->type_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid nested refresh node", K(ret), K(nested_refresh_node->type_),
+                   KP(nested_refresh_mode_node));
+        } else if (data_version >= DATA_VERSION_4_3_5_3) {
+          switch (nested_refresh_mode_node->value_) {
+            case 0:
+              refresh_info.nested_refresh_mode_ = ObMVNestedRefreshMode::INDIVIDUAL;
+              break;
+            case 1:
+              refresh_info.nested_refresh_mode_ = ObMVNestedRefreshMode::INCONSISTENT;
+              break;
+            case 2:
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("sync refresh not supported now", K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "nested sync refresh");
+              refresh_info.nested_refresh_mode_ = ObMVNestedRefreshMode::CONSISTENT;
+              break;
+            default:
+              break;
+          }
+        }
+        LOG_INFO("nested refresh mode", K(nested_refresh_mode_node->value_));
+      } else if (OB_ISNULL(nested_refresh_node)) {
+        refresh_info.nested_refresh_mode_ = ObMVNestedRefreshMode::INDIVIDUAL;
       }
 
       if (OB_SUCC(ret) && refresh_interval_node != nullptr

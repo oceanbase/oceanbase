@@ -1423,6 +1423,7 @@ bool ObDynamicSampling::allow_cache_ds_result_to_sql_ctx() const {
 int ObDynamicSamplingUtils::get_valid_dynamic_sampling_level(const ObSQLSessionInfo *session_info,
                                                              const ObTableDynamicSamplingHint *table_ds_hint,
                                                              const int64_t global_ds_level,
+                                                             const ObTableType table_type,
                                                              int64_t &ds_level,
                                                              int64_t &sample_block_cnt,
                                                              bool &specify_ds)
@@ -1450,6 +1451,9 @@ int ObDynamicSamplingUtils::get_valid_dynamic_sampling_level(const ObSQLSessionI
     LOG_WARN("failed to get opt dynamic sampling level", K(ret));
   } else if (session_ds_level == ObDynamicSamplingLevel::BASIC_DYNAMIC_SAMPLING) {
     ds_level = session_ds_level;
+  } else if (!session_info->is_user_session() && table_type == MATERIALIZED_VIEW_LOG) {
+    ds_level = ObDynamicSamplingLevel::BASIC_DYNAMIC_SAMPLING;
+    specify_ds = true;
   }
   LOG_TRACE("get valid dynamic sampling level", KPC(table_ds_hint), K(global_ds_level), K(specify_ds),
                                                 K(session_ds_level), K(ds_level), K(sample_block_cnt));
@@ -1467,7 +1471,7 @@ int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
   bool is_valid = true;
   int64_t ds_level = ObDynamicSamplingLevel::NO_DYNAMIC_SAMPLING;
   int64_t sample_block_cnt = 0;
-  if (OB_ISNULL(log_plan) || OB_ISNULL(table_meta) ||
+  if (OB_ISNULL(log_plan) || OB_ISNULL(table_meta) || OB_ISNULL(table_meta->get_base_meta_info()) ||
       OB_ISNULL(table_item = log_plan->get_stmt()->get_table_item_by_id(table_meta->get_table_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(log_plan), KPC(table_meta), KPC(table_item));
@@ -1480,6 +1484,7 @@ int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
   } else if (OB_FAIL(get_valid_dynamic_sampling_level(ctx.get_session_info(),
                                                       log_plan->get_log_plan_hint().get_dynamic_sampling_hint(table_meta->get_table_id()),
                                                       ctx.get_global_hint().get_dynamic_sampling(),
+                                                      table_meta->get_base_meta_info()->table_type_,
                                                       ds_level,
                                                       sample_block_cnt,
                                                       specify_ds))) {

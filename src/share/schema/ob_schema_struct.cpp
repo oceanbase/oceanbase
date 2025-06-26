@@ -6520,6 +6520,9 @@ int ObPartitionUtils::check_param_valid_(
           if (OB_SUCC(ret) && !finded && data_schema->has_mlog_table()) {
             finded = (related_tid == data_schema->get_mlog_tid());
           }
+          if (OB_SUCC(ret) && !finded && data_schema->has_tmp_mlog_table()) {
+            finded = (related_tid == data_schema->get_tmp_mlog_tid());
+          }
           if (OB_SUCC(ret) && !finded && related_tid != data_table_id) {
             ret = OB_TABLE_NOT_EXIST;
             LOG_WARN("local index not exist", KR(ret), K(related_tid), K(data_table_id), K(table_id), K(simple_index_infos));
@@ -8206,7 +8209,8 @@ OB_SERIALIZE_MEMBER(ObMVRefreshInfo,
     next_time_expr_,
     exec_env_,
     parallel_,
-    refresh_dop_);
+    refresh_dop_,
+    nested_refresh_mode_);
 
 /*-------------------------------------------------------------------------------------------------
  * ------------------------------ObViewSchema-------------------------------------------
@@ -12255,7 +12259,8 @@ OB_SERIALIZE_MEMBER(ObSAuditSchema,
 OB_SERIALIZE_MEMBER(ObAuxTableMetaInfo,
                     table_id_,
                     table_type_,
-                    index_type_);
+                    index_type_,
+                    is_tmp_mlog_);
 
 ObForeignKeyInfo::ObForeignKeyInfo(ObIAllocator *allocator)
   : table_id_(common::OB_INVALID_ID),

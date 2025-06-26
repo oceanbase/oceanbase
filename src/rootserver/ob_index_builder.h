@@ -192,6 +192,9 @@ private:
   int create_index_column_group(const obrpc::ObCreateIndexArg &arg,
                                 share::schema::ObTableSchema &index_table_schema);
 
+  static int get_rebuild_drop_index_id_and_name(share::schema::ObSchemaGetterGuard &schema_guard,
+                                                obrpc::ObDropIndexArg &arg);
+
 private:
   ObDDLService &ddl_service_;
 private:

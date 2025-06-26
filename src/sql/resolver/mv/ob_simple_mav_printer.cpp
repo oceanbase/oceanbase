@@ -84,7 +84,7 @@ int ObSimpleMAVPrinter::gen_insert_for_mav(ObSelectStmt *delta_mv_stmt,
   if (OB_FAIL(create_simple_stmt(sel_stmt))
       || OB_FAIL(create_simple_stmt(insert_stmt))) {
     LOG_WARN("failed to create simple stmt", K(ret));
-  } else if (OB_FAIL(create_simple_table_item(sel_stmt, DELTA_BASIC_MAV_VIEW_NAME, source_table, delta_mv_stmt))) {
+  } else if (OB_FAIL(create_simple_table_item(sel_stmt, DELTA_BASIC_MV_VIEW_NAME, source_table, delta_mv_stmt))) {
     LOG_WARN("failed to create simple table item", K(ret));
   } else if (OB_FAIL(create_simple_table_item(insert_stmt, mv_schema_.get_table_name(), target_table, NULL, false))) {
     LOG_WARN("failed to create simple table item", K(ret));
@@ -93,7 +93,7 @@ int ObSimpleMAVPrinter::gen_insert_for_mav(ObSelectStmt *delta_mv_stmt,
                                                 insert_stmt->get_values_desc(),
                                                 values))) {
     LOG_WARN("failed to gen insert values and desc", K(ret), K(*target_table), K(*source_table));
-  } else if (OB_FAIL(create_simple_table_item(insert_stmt, DELTA_MAV_VIEW_NAME, source_table, sel_stmt))) {
+  } else if (OB_FAIL(create_simple_table_item(insert_stmt, DELTA_MV_VIEW_NAME, source_table, sel_stmt))) {
     LOG_WARN("failed to create simple table item", K(ret));
   } else if (OB_FAIL(gen_select_for_insert_subquery(values, sel_stmt->get_select_items()))) {
     LOG_WARN("failed to gen select for insert subquery ", K(ret));
@@ -137,6 +137,7 @@ int ObSimpleMAVPrinter::gen_exists_cond_for_insert(const ObIArray<ObRawExpr*> &v
   sel_item.expr_ = exprs_.int_one_;
   const ObIArray<SelectItem> &select_items = mv_def_stmt_.get_select_items();
   const ObIArray<ObRawExpr*> &group_by_exprs = mv_def_stmt_.get_group_exprs();
+  ObRawExpr *marker_filter = NULL;
   if (OB_UNLIKELY(values.count() != select_items.count())) {
     LOG_WARN("unexpected params", K(ret), K(values.count()), K(select_items.count()));
   } else if (OB_FAIL(create_simple_stmt(subquery))) {
@@ -155,6 +156,12 @@ int ObSimpleMAVPrinter::gen_exists_cond_for_insert(const ObIArray<ObRawExpr*> &v
     LOG_WARN("failed to create simple table item", K(ret));
   } else if (OB_FAIL(subquery->get_select_items().push_back(sel_item))) {
     LOG_WARN("failed to push back not exists expr", K(ret));
+  } else if (ctx_.for_union_all_child_query()
+             && OB_FAIL(create_union_all_child_refresh_filter(ctx_.marker_idx_, mv_table, marker_filter))) {
+    LOG_WARN("failed to create union all child refresh filter", K(ret));
+  } else if (NULL != marker_filter
+             && OB_FAIL(subquery->get_condition_exprs().push_back(marker_filter))) {
+    LOG_WARN("failed to push back null safe equal expr", K(ret));
   } else {
     mv_table->database_name_ = mv_db_name_;
     query_ref_expr->set_ref_stmt(subquery);
@@ -192,6 +199,7 @@ int ObSimpleMAVPrinter::gen_update_for_mav(ObSelectStmt *delta_mv_stmt,
   TableItem *source_table = NULL;
   void *ptr = NULL;
   ObUpdateTableInfo *table_info = NULL;
+  ObRawExpr *marker_filter = NULL;
   if (OB_FAIL(create_simple_stmt(update_stmt))) {
     LOG_WARN("failed to create simple stmt", K(ret));
   } else if (OB_ISNULL((ptr = ctx_.alloc_.alloc(sizeof(ObUpdateTableInfo))))) {
@@ -202,12 +210,18 @@ int ObSimpleMAVPrinter::gen_update_for_mav(ObSelectStmt *delta_mv_stmt,
     LOG_WARN("failed to push back", K(ret));
   } else if (OB_FAIL(create_simple_table_item(update_stmt, mv_schema_.get_table_name(), target_table))) {
     LOG_WARN("failed to create simple table item", K(ret));
-  } else if (OB_FAIL(create_simple_table_item(update_stmt, DELTA_BASIC_MAV_VIEW_NAME, source_table, delta_mv_stmt))) {
+  } else if (OB_FAIL(create_simple_table_item(update_stmt, DELTA_BASIC_MV_VIEW_NAME, source_table, delta_mv_stmt))) {
     LOG_WARN("failed to create simple table item", K(ret));
   } else if (OB_FAIL(gen_update_assignments(mv_columns, values, source_table, table_info->assignments_, true))) {
     LOG_WARN("failed gen update assignments", K(ret));
   } else if (OB_FAIL(gen_update_conds(mv_columns, values, update_stmt->get_condition_exprs()))) {
     LOG_WARN("failed gen update conds", K(ret));
+  } else if (ctx_.for_union_all_child_query()
+             && OB_FAIL(create_union_all_child_refresh_filter(ctx_.marker_idx_, target_table, marker_filter))) {
+    LOG_WARN("failed to create union all child refresh filter", K(ret));
+  } else if (NULL != marker_filter
+             && OB_FAIL(update_stmt->get_condition_exprs().push_back(marker_filter))) {
+    LOG_WARN("failed to push back null safe equal expr", K(ret));
   } else {
     target_table->database_name_ = mv_db_name_;
   }
@@ -245,12 +259,19 @@ int ObSimpleMAVPrinter::gen_delete_for_mav(const ObIArray<ObColumnRefRawExpr*> &
   int ret = OB_SUCCESS;
   delete_stmt = NULL;
   TableItem *target_table = NULL;
+  ObRawExpr *marker_filter = NULL;
   if (OB_FAIL(create_simple_stmt(delete_stmt))) {
     LOG_WARN("failed to create simple stmt", K(ret));
   } else if (OB_FAIL(create_simple_table_item(delete_stmt, mv_schema_.get_table_name(), target_table))) {
     LOG_WARN("failed to create simple table item", K(ret));
   } else if (OB_FAIL(gen_delete_conds(mv_columns, delete_stmt->get_condition_exprs()))) {
     LOG_WARN("failed gen update conds", K(ret));
+  } else if (ctx_.for_union_all_child_query()
+             && OB_FAIL(create_union_all_child_refresh_filter(ctx_.marker_idx_, target_table, marker_filter))) {
+    LOG_WARN("failed to create union all child refresh filter", K(ret));
+  } else if (NULL != marker_filter
+             && OB_FAIL(delete_stmt->get_condition_exprs().push_back(marker_filter))) {
+    LOG_WARN("failed to push back null safe equal expr", K(ret));
   } else {
     target_table->database_name_ = mv_db_name_;
   }
@@ -473,8 +494,9 @@ int ObSimpleMAVPrinter::gen_merge_for_simple_mav_use_delta_view(ObSelectStmt *de
     LOG_WARN("failed to create simple stmt", K(ret));
   } else if (OB_FAIL(create_simple_table_item(merge_stmt, mv_schema_.get_table_name(), target_table, NULL, false))) {
     LOG_WARN("failed to create simple table item", K(ret));
-  } else if (OB_FAIL(create_simple_table_item(merge_stmt, DELTA_BASIC_MAV_VIEW_NAME, source_table, delta_mav, false))) {
+  } else if (OB_FAIL(create_simple_table_item(merge_stmt, DELTA_BASIC_MV_VIEW_NAME, source_table, delta_mav, false))) {
     LOG_WARN("failed to create simple table item", K(ret));
+  } else if (OB_FALSE_IT(merge_stmt->set_target_table_id(target_table->table_id_))) {
   } else if (OB_FAIL(gen_insert_values_and_desc(target_table,
                                                 source_table,
                                                 merge_stmt->get_values_desc(),
@@ -489,7 +511,6 @@ int ObSimpleMAVPrinter::gen_merge_for_simple_mav_use_delta_view(ObSelectStmt *de
     LOG_WARN("failed to gen merge conds", K(ret));
   } else {
     target_table->database_name_ = mv_db_name_;
-    merge_stmt->set_target_table_id(target_table->table_id_);
     merge_stmt->set_source_table_id(source_table->table_id_);
   }
   return ret;
@@ -789,7 +810,8 @@ int ObSimpleMAVPrinter::gen_update_assignments(const ObIArray<ObColumnRefRawExpr
       if (OB_ISNULL(expr = select_items.at(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected select item", K(ret), K(i), K(select_items));
-      } else if (T_FUN_COUNT == expr->get_expr_type()
+      } else if (expr->is_const_raw_expr()
+                 || T_FUN_COUNT == expr->get_expr_type()
                  || T_FUN_SUM == expr->get_expr_type()
                  || ObOptimizerUtil::find_item(group_by_exprs, expr)) {
         /* do nothing */
@@ -871,6 +893,20 @@ int ObSimpleMAVPrinter::gen_merge_conds(ObMergeStmt &merge_stmt)
     } else if (OB_FAIL(merge_stmt.get_insert_condition_exprs().push_back(insert_cond))
                || OB_FAIL(merge_stmt.get_delete_condition_exprs().push_back(delete_cond))) {
       LOG_WARN("failed to push back equal expr", K(ret));
+    }
+  }
+
+  // add union all child query marker filter
+  if (OB_SUCC(ret) && ctx_.for_union_all_child_query()) {
+    ObRawExpr *marker_filter = NULL;
+    const TableItem *target_table = NULL;
+    if (OB_ISNULL(target_table = merge_stmt.get_table_item_by_id(merge_stmt.get_target_table_id()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(merge_stmt.get_target_table_id()), K(merge_stmt.get_table_items()));
+    } else if (OB_FAIL(create_union_all_child_refresh_filter(ctx_.marker_idx_, target_table, marker_filter))) {
+      LOG_WARN("failed to create union all child refresh filter", K(ret));
+    } else if (OB_FAIL(merge_stmt.get_match_condition_exprs().push_back(marker_filter))) {
+      LOG_WARN("failed to push back null safe equal expr", K(ret));
     }
   }
   return ret;

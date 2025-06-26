@@ -81,6 +81,7 @@ public:
                                         const common::ObObj &start_date,
                                         const common::ObString &repeat_interval,
                                         const common::ObString &exec_env,
+                                        const share::schema::ObMVNestedRefreshMode nested_refresh_mode,
                                         ObArenaAllocator &allocator,
                                         common::ObString &job_name);
   static int create_mlog_scheduler_job(common::ObISQLClient &sql_client,
@@ -134,6 +135,9 @@ public:
                                     const common::ObString &db_name,
                                     const common::ObString &table_name,
                                     const common::ObString &exec_env);
+
+  static int disable_and_stop_job(const uint64_t tenant_id,
+                                  const uint64_t mview_id);
 
 private:
   static int acquire_major_refresh_mv_merge_scn_(common::ObISQLClient &trans,

@@ -227,7 +227,7 @@ int ObSimpleJoinMAVPrinter::gen_delta_data_access_stmt(const TableItem &source_t
 {
   int ret = OB_SUCCESS;
   access_sel = NULL;
-  const uint64_t mlog_sel_flags = MLOG_EXT_COL_DML_FACTOR;
+  const uint64_t mlog_sel_flags = MLOG_EXT_COL_DML_FACTOR | MLOG_EXT_COL_ALL_NORMAL_COL;
   if (OB_FAIL(gen_delta_table_view(source_table, access_sel, mlog_sel_flags))) {
     LOG_WARN("failed to gen delta table view", K(ret));
   }
@@ -272,7 +272,7 @@ int ObSimpleJoinMAVPrinter::gen_unchanged_data_access_stmt(const TableItem &sour
   access_sel = NULL;
   TableItem *table = NULL;
   ObRawExpr *anti_filter = NULL;
-  const uint64_t access_sel_flags = 0;
+  const uint64_t access_sel_flags = MLOG_EXT_COL_ALL_NORMAL_COL;
   if (OB_FAIL(create_simple_stmt(access_sel))) {
     LOG_WARN("failed to create simple stmt", K(ret));
   } else if (OB_FAIL(create_simple_table_item(access_sel, source_table.table_name_, table))) {
@@ -293,8 +293,8 @@ int ObSimpleJoinMAVPrinter::gen_deleted_data_access_stmt(const TableItem &source
 {
   int ret = OB_SUCCESS;
   access_sel = NULL;
-  const uint64_t mlog_sel_flags = MLOG_EXT_COL_OLD_NEW | MLOG_EXT_COL_SEQ | MLOG_EXT_COL_WIN_MIN_SEQ;
-  const uint64_t access_sel_flags = 0;
+  const uint64_t mlog_sel_flags = MLOG_EXT_COL_OLD_NEW | MLOG_EXT_COL_SEQ | MLOG_EXT_COL_WIN_MIN_SEQ | MLOG_EXT_COL_ALL_NORMAL_COL;
+  const uint64_t access_sel_flags = MLOG_EXT_COL_ALL_NORMAL_COL;
   ObSelectStmt *mlog_delta_sel = NULL;
   TableItem *cur_table = NULL;
   if (OB_FAIL(gen_delta_table_view(source_table, mlog_delta_sel, mlog_sel_flags))) {

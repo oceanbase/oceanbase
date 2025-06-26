@@ -52,10 +52,19 @@ public:
                                           ObIAllocator &alloc,
                                           ObString &expand_view,
                                           bool &is_major_refresh_mview);
+  static int get_complete_refresh_mview_str(const ObTableSchema &mv_schema,
+                                            ObSQLSessionInfo &session_info,
+                                            ObSchemaGetterGuard &schema_guard,
+                                            const share::SCN *mv_refresh_scn,
+                                            const share::SCN *table_refresh_scn,
+                                            ObIAllocator &str_alloc,
+                                            ObString &mview_str);
   int get_mlog_mv_refresh_infos(ObSQLSessionInfo *session_info,
                                 ObSchemaGetterGuard *schema_guard,
                                 const share::SCN &last_refresh_scn,
                                 const share::SCN &refresh_scn,
+                                const share::SCN *mv_last_refresh_scn,
+                                const share::SCN *mv_refresh_scn,
                                 ObIArray<ObDependencyInfo> &dep_infos,
                                 bool &can_fast_refresh,
                                 const ObIArray<ObString> *&operators);
@@ -76,6 +85,12 @@ public:
                                           bool &is_vars_matched);
   OB_INLINE bool is_major_refresh_mview()
   { return ObMVRefreshableType::OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV == refreshable_type_; }
+  static int transform_mv_def_stmt(ObDMLStmt *&mv_def_stmt,
+                                   ObIAllocator *allocator,
+                                   ObSchemaChecker *schema_checker,
+                                   ObSQLSessionInfo *session_info,
+                                   ObRawExprFactory *expr_factory,
+                                   ObStmtFactory *stmt_factory);
 private:
   int init_mv_provider(ObSQLSessionInfo *session_info,
                        ObSchemaGetterGuard *schema_guard,
@@ -87,20 +102,22 @@ private:
   int check_column_type_and_accuracy(const ObColumnSchemaV2 &org_column,
                                      const ObColumnSchemaV2 &cur_column,
                                      bool &is_match);
-  int generate_mv_stmt(ObIAllocator &alloc,
-                       ObStmtFactory &stmt_factory,
-                       ObRawExprFactory &expr_factory,
-                       ObSchemaChecker &schema_checker,
-                       ObSQLSessionInfo &session_info,
-                       const uint64_t mv_id,
-                       const ObTableSchema *&mv_schema,
-                       const ObTableSchema *&mv_container_schema,
-                       const ObSelectStmt *&view_stmt);
+  static int generate_mv_stmt(ObIAllocator &alloc,
+                              ObStmtFactory &stmt_factory,
+                              ObRawExprFactory &expr_factory,
+                              ObSchemaChecker &schema_checker,
+                              ObSQLSessionInfo &session_info,
+                              const ObTableSchema &mv_schema,
+                              ObSelectStmt *&view_stmt);
+  int pre_process_view_stmt(ObSelectStmt &view_stmt);
   int print_mv_operators(ObMVPrinterCtx &mv_printer_ctx,
                          ObMVChecker &checker,
                          const ObTableSchema &mv_schema,
+                         const ObTableSchema &mv_container_schema,
                          const ObSelectStmt &mv_def_stmt,
                          ObIArray<ObString> &operators);
+  static int get_trans_rule_set(const ObDMLStmt *mv_def_stmt,
+                                uint64_t &rule_set);
   TO_STRING_KV(K_(mview_id), K_(inited), K_(refreshable_type),
                 K_(operators), K_(dependency_infos));
 

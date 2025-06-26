@@ -89,6 +89,7 @@ enum ObDDLType
   DDL_DROP_VEC_IVFSQ8_INDEX = 22,
   DDL_DROP_VEC_IVFPQ_INDEX = 23,
   DDL_DROP_VEC_SPIV_INDEX = 24,
+  DDL_REPLACE_MLOG = 25,
 
   ///< @note tablet split.
   DDL_AUTO_SPLIT_BY_RANGE = 100,
@@ -163,6 +164,7 @@ enum ObDDLTaskType
   PARTITION_SPLIT_RECOVERY_TASK = 13,
   PARTITION_SPLIT_RECOVERY_CLEANUP_GARBAGE_TASK = 14,
   SWITCH_VEC_INDEX_NAME_TASK = 15,
+  SWITCH_MLOG_NAME_TASK = 16
 };
 
 enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
@@ -213,6 +215,7 @@ enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
   GENERATE_PQ_CENTROID_TABLE_SCHEMA = 44,
   WAIT_PQ_CENTROID_TABLE_COMPLEMENT = 45,
   LOAD_DICTIONARY = 46,
+  PURGE_OLD_MLOG = 47,
 
   FAIL = 99,
   SUCCESS = 100
@@ -386,6 +389,9 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::WAIT_PQ_CENTROID_TABLE_COMPLEMENT:
       str = "WAIT_PQ_CENTROID_TABLE_COMPLEMENT";
+      break;
+    case ObDDLTaskStatus::PURGE_OLD_MLOG:
+      str = "PURGE_OLD_MLOG";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
@@ -1083,11 +1089,13 @@ public:
       const int64_t container_table_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
       const int64_t snapshot_version,
+      const uint64_t mview_target_data_sync_scn,
       const int64_t execution_id,
       const int64_t task_id,
       const int64_t parallelism,
       const bool use_schema_version_hint_for_src_table,
       const common::ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos,
+      const ObString &mview_select_sql,
       ObSqlString &sql_string);
 
   static int get_tablet_leader_addr(

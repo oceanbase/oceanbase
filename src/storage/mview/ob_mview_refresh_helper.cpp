@@ -16,6 +16,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "storage/mview/ob_mview_transaction.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
+#include "src/share/schema/ob_mview_info.h"
 
 namespace oceanbase
 {
@@ -379,5 +380,224 @@ int ObMViewRefreshHelper::get_mlog_dml_row_num(ObMViewTransaction &trans, const 
   return ret;
 }
 
+int ObMViewRefreshHelper::sync_post_nested_mview_rpc(
+                          obrpc::ObCheckNestedMViewMdsArg &arg,
+                          obrpc::ObCheckNestedMViewMdsRes &res)
+{
+  int ret = OB_SUCCESS;
+  common::ObAddr leader;
+  const uint64_t tenant_id = arg.tenant_id_;
+  ObLocationService *location_service = GCTX.location_service_;
+  obrpc::ObSrvRpcProxy *rpc_proxy = GCTX.srv_rpc_proxy_;
+  int64_t abs_timeout_ts = ObTimeUtility::current_time()+
+                           GCONF.location_cache_refresh_sql_timeout;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invalid", K(ret), K(arg));
+  } else if (OB_ISNULL(location_service) || OB_ISNULL(rpc_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("location_service or rpc_proxy is NULL", K(ret), KP(location_service), KP(rpc_proxy));
+  } else if (OB_FAIL(location_service->get_leader_with_retry_until_timeout(
+             GCONF.cluster_id, tenant_id, share::SYS_LS, leader, abs_timeout_ts))) {
+    LOG_WARN("failed to get ls leader with retry until timeout",
+             K(ret), K(tenant_id), K(leader), K(abs_timeout_ts));
+  } else if (OB_FAIL(rpc_proxy->to(leader).
+                                by(tenant_id).
+                                timeout(obrpc::ObRpcProxy::MAX_RPC_TIMEOUT).
+                                check_nested_mview_mds(arg, res))) {
+    LOG_WARN("fail to check nested mview mds", K(ret), K(arg), K(res), K(leader));
+  } else if (OB_FAIL(res.ret_)) {
+    LOG_WARN("check nested mview mds failed", K(ret), K(res), K(arg), K(leader));
+  }
+  return ret;
+}
+
+int ObMViewRefreshHelper::sync_get_min_target_data_sync_scn(
+                          const uint64_t tenant_id,
+                          const uint64_t mview_id,
+                          share::SCN &min_target_scn)
+{
+  int ret = OB_SUCCESS;
+  min_target_scn.reset();
+  obrpc::ObCheckNestedMViewMdsArg arg;
+  arg.tenant_id_ = tenant_id;
+  arg.mview_id_ = mview_id;
+  arg.refresh_id_ = OB_INVALID_ID;
+  arg.target_data_sync_scn_.reset();
+  obrpc::ObCheckNestedMViewMdsRes res;
+  int64_t start_ts = ObTimeUtility::fast_current_time();
+  const int64_t timeout_ts = 30 * 1000 * 1000; // 30s
+  if (mview_id == OB_INVALID_ID || tenant_id == OB_INVALID_TENANT_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(mview_id), K(tenant_id));
+  } else {
+    do {
+      if (OB_FAIL(ObMViewRefreshHelper::sync_post_nested_mview_rpc(arg, res))) {
+        LOG_WARN("fail to post nested mview rpc", K(ret));
+      } else {
+        ret = res.ret_;
+      }
+      if (OB_NOT_MASTER == ret || OB_EAGAIN == ret) {
+        int64_t cur_ts = ObTimeUtility::fast_current_time();
+        if (cur_ts - start_ts > timeout_ts) {
+          ret = OB_TIMEOUT;
+          LOG_WARN("post nested mview cost too long time", K(ret));
+          break;
+        }
+        usleep(200 * 1000); // 200ms
+      }
+    } while (OB_NOT_MASTER == ret ||
+            OB_EAGAIN == ret);
+    if (OB_SUCC(ret)) {
+      min_target_scn = res.target_data_sync_scn_;
+    }
+  }
+  LOG_INFO("get min target scn for nested refresh", K(ret), K(mview_id), K(min_target_scn));
+  return ret;
+}
+
+int ObMViewRefreshHelper::get_dep_mviews_from_dep_info(
+                          const uint64_t tenant_id,
+                          const ObIArray<share::schema::ObDependencyInfo> &dependency_infos,
+                          ObSchemaGetterGuard &schema_guard,
+                          ObIArray<uint64_t> &dep_mview_ids)
+{
+  int ret = OB_SUCCESS;
+  dep_mview_ids.reuse();
+  ARRAY_FOREACH(dependency_infos, idx) {
+    const ObDependencyInfo &dep_info = dependency_infos.at(idx);
+    const ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, dep_info.get_ref_obj_id(), table_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K(tenant_id));
+    } else if (OB_ISNULL(table_schema)) {
+      LOG_INFO("table schema is null, maybe dep container tale not exist",
+                K(ret), K(tenant_id), K(dep_info.get_ref_obj_id()));
+    } else if (table_schema->is_materialized_view() &&
+               OB_FAIL(dep_mview_ids.push_back(dep_info.get_ref_obj_id()))) {
+      LOG_WARN("fail to push back dep mview id", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMViewRefreshHelper::check_dep_mviews_satisfy_target_scn(
+                          const uint64_t tenant_id,
+                          const share::SCN &target_data_sync_scn,
+                          const share::SCN &read_snapshot,
+                          const ObIArray<uint64_t> &dep_mview_ids,
+                          common::ObISQLClient &sql_proxy,
+                          bool &satisfy,
+                          bool oracle_mode)
+{
+  int ret = OB_SUCCESS;
+  satisfy = true;
+  if (tenant_id == OB_INVALID_TENANT_ID ||
+      !target_data_sync_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(target_data_sync_scn));
+  } else {
+    // check dep mview's data sync scn fit target data_sync_scn
+    ObSEArray<ObMViewInfo, 2> dep_mview_infos;
+    if (OB_FAIL(ret)) {
+    } else if (dep_mview_ids.empty()) {
+      satisfy = true;
+      LOG_INFO("no dep mview");
+    } else if (OB_FAIL(ObMViewInfo::bacth_fetch_mview_infos(sql_proxy, tenant_id,
+                       read_snapshot.get_val_for_sql(), dep_mview_ids, dep_mview_infos, oracle_mode))) {
+      LOG_WARN("fail to batch fetch mview info", K(ret));
+    } else {
+      const uint64_t target_data_sync_ts = target_data_sync_scn.get_val_for_gts();
+      satisfy = true;
+      ARRAY_FOREACH(dep_mview_infos, idx) {
+        ObMViewInfo &dep_mview_info = dep_mview_infos.at(idx);
+        if (OB_FAIL(ObMViewInfo::check_satisfy_target_data_sync_scn(
+                    dep_mview_info, target_data_sync_ts, satisfy))) {
+          LOG_INFO("fail to check satisfy target data sync scn", K(ret), K(dep_mview_info));
+          break;
+        } else if (!satisfy) {
+          break;
+        }
+      }
+    }
+    LOG_INFO("check satified", K(tenant_id), K(target_data_sync_scn), K(satisfy));
+  }
+  return ret;
+}
+
+int ObMViewRefreshHelper::collect_deps_and_check_satisfy(
+                          const uint64_t tenant_id,
+                          const uint64_t mview_id,
+                          const uint64_t target_data_sync_ts,
+                          const uint64_t snapshot_version,
+                          common::ObISQLClient &sql_proxy,
+                          ObSchemaGetterGuard &schema_guard,
+                          bool oracle_mode)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObDependencyInfo> dep_infos;
+  ObSEArray<uint64_t, 2> dep_mview_ids;
+  share::SCN target_data_sync_scn;
+  share::SCN read_snapshot;
+  bool satisfy = false;
+  if (tenant_id == OB_INVALID_TENANT_ID ||
+      target_data_sync_ts == OB_INVALID_SCN_VAL ||
+      snapshot_version == OB_INVALID_SCN_VAL) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(tenant_id), K(mview_id),
+             K(target_data_sync_ts), K(snapshot_version));
+  } else if (OB_FAIL(target_data_sync_scn.convert_for_sql(target_data_sync_ts))) {
+    LOG_WARN("failed to convert to scn", K(target_data_sync_ts));
+  } else if (OB_FAIL(read_snapshot.convert_for_sql(snapshot_version))) {
+    LOG_WARN("failed to convert to scn", K(snapshot_version));
+  } else if (OB_FAIL(ObDependencyInfo::collect_ref_infos(tenant_id,
+              mview_id, sql_proxy, dep_infos))) {
+    LOG_WARN("fail to collect mview ref infos", KR(ret), K(tenant_id), K(mview_id));
+  } else if (OB_FAIL(ObMViewRefreshHelper::get_dep_mviews_from_dep_info(
+                     tenant_id, dep_infos, schema_guard, dep_mview_ids))) {
+    LOG_WARN("fail to get dep mview ids", K(ret));
+  } else if (OB_FAIL(ObMViewRefreshHelper::check_dep_mviews_satisfy_target_scn(
+                     tenant_id, target_data_sync_scn, read_snapshot,
+                     dep_mview_ids, sql_proxy, satisfy, oracle_mode))) {
+    LOG_WARN("fail to target data sync scn satisfied", K(ret));
+  } else if (!satisfy) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dep mviews not satisfy target data sync scn, need retry",
+             K(ret), K(target_data_sync_scn));
+  }
+  return ret;
+}
+
+int ObMViewRefreshHelper::replace_all_snapshot_zero(
+                          const std::string &input,
+                          const uint64_t snapshot_version,
+                          std::string &output,
+                          const bool oracle_mode)
+{
+  int ret = OB_SUCCESS;
+  output = input;
+  std::string search = oracle_mode ? "as of scn " : "as of snapshot ";
+  std::string new_value_str = std::to_string(snapshot_version);
+
+  int64_t pos = 0;
+  while ((pos = output.find(search, pos)) != std::string::npos) {
+    int64_t value_pos = pos + search.size();
+    if (value_pos >= output.size()) break;
+
+    if (output[value_pos] == '0' &&
+        (value_pos + 1 == output.size() || !isdigit(output[value_pos + 1]))) {
+      int64_t value_end = value_pos;
+      while (value_end < output.size() && isdigit(output[value_end])) {
+        ++value_end;
+      }
+      output.replace(pos + search.size(), value_end - value_pos, new_value_str);
+      pos += search.size() + new_value_str.size();
+    } else {
+      ++pos;
+    }
+  }
+  // for debug
+  LOG_DEBUG("print generate sql", K(input.c_str()), K(output.c_str()), K(oracle_mode));
+  return ret;
+}
 } // namespace storage
 } // namespace oceanbase

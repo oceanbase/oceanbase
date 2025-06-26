@@ -34,7 +34,8 @@ ObMViewTransaction::ObSessionParamSaved::ObSessionParamSaved()
     is_inner_(false),
     autocommit_(false),
     database_id_(OB_INVALID_ID),
-    database_name_(nullptr)
+    database_name_(nullptr),
+    collation_connection_var_()
 {
 }
 
@@ -82,6 +83,12 @@ int ObMViewTransaction::ObSessionParamSaved::save(ObSQLSessionInfo *session_info
         session_info->set_autocommit(false);
         session_info_->get_ddl_info().set_refreshing_mview(true);
       }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(session_info->get_sys_variable(
+                         ObSysVarClassType::SYS_VAR_COLLATION_CONNECTION, collation_connection_var_))) {
+        LOG_WARN("fail to get sys varibale", K(ret));
+      }
+      LOG_DEBUG("print session var when save", K(collation_connection_var_));
     }
   }
   return ret;
@@ -110,6 +117,7 @@ int ObMViewTransaction::ObSessionParamSaved::restore()
     session_info_->set_database_id(database_id_);
     database_id_ = OB_INVALID_ID;
     session_info_->get_ddl_info().set_refreshing_mview(false);
+    session_info_->update_sys_variable(ObSysVarClassType::SYS_VAR_COLLATION_CONNECTION, collation_connection_var_);
     session_info_ = nullptr;
   }
   return ret;

@@ -285,10 +285,14 @@ int ObAccessPathEstimation::check_can_use_dynamic_sampling(ObOptimizerContext &c
   const ObBaseTableEstMethod EST_DS_METHODS =  EST_DS_BASIC | EST_DS_FULL;
   int64_t total_expr_cnt = 0;
   int64_t valid_filter_cnt = 0;
-  if (OB_FAIL(ObDynamicSamplingUtils::get_valid_dynamic_sampling_level(
+  if (OB_ISNULL(table_meta.get_base_meta_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(table_meta));
+  } else if (OB_FAIL(ObDynamicSamplingUtils::get_valid_dynamic_sampling_level(
       ctx.get_session_info(),
       log_plan.get_log_plan_hint().get_dynamic_sampling_hint(table_meta.get_table_id()),
       ctx.get_global_hint().get_dynamic_sampling(),
+      table_meta.get_base_meta_info()->table_type_,
       ds_level,
       sample_block_cnt,
       specify_ds))) {

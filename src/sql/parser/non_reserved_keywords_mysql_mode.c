@@ -1158,6 +1158,8 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"tablets", TABLETS},
   {"enable_macro_block_bloom_filter", ENABLE_MACRO_BLOCK_BLOOM_FILTER},
   {"api_mode", API_MODE},
+  {"INCONSISTENT", INCONSISTENT},
+  {"INDIVIDUAL", INDIVIDUAL},
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

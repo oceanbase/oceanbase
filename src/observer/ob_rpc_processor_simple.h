@@ -331,6 +331,7 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_NOTIFY_START_ARCHIVE, ObRpcStartArchiveP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_FETCH_ARB_MEMBER, ObFetchArbMemberP);
 #endif
 OB_DEFINE_PROCESSOR_S(Srv, OB_ESTIMATE_SKIP_RATE, ObEstimateSkipRateP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_NESTED_MVIEW_MDS, ObCheckNestedMViewMdsP);
 } // end of namespace observer
 } // end of namespace oceanbase
 

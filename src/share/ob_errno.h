@@ -1911,6 +1911,7 @@ constexpr int OB_ERR_MVIEW_INVALID_TABLE_TYPE = -9808;
 constexpr int OB_ERR_MVIEW_BASE_TABLE_ALTERED = -9809;
 constexpr int OB_ERR_MVIEW_MISSING_DEPENDENCE = -9810;
 constexpr int OB_ERR_INVALID_NESTED_CURSOR = -9811;
+constexpr int OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH = -9812;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -4303,6 +4304,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MVIEW_BASE_TABLE_ALTERED__USER_ERROR_MSG "Base tables are altered during the creation or complete refresh of materialized views, please try again when base tables have no ongoing DDL operations"
 #define OB_ERR_MVIEW_MISSING_DEPENDENCE__USER_ERROR_MSG "Materialized view %s.%s has invalid dependency info, please perform a complete refresh to recover."
 #define OB_ERR_INVALID_NESTED_CURSOR__USER_ERROR_MSG "Cursor Variable in record, object, or collection is not supported by this release"
+#define OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH__USER_ERROR_MSG "materialized view can not nested consistent refresh"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -9040,6 +9042,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MVIEW_MISSING_DEPENDENCE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9810, Materialized view %s.%s has invalid dependency info, please perform a complete refresh to recover."
 #define OB_ERR_INVALID_NESTED_CURSOR__ORA_USER_ERROR_MSG "PLS-00989: Cursor Variable in record, object, or collection is not supported by this release"
 #define OB_ERR_INVALID_NESTED_CURSOR__OBE_USER_ERROR_MSG "PLS-00989: Cursor Variable in record, object, or collection is not supported by this release"
+#define OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9812, materialized view can not nested consistent refresh"
+#define OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9812, materialized view can not nested consistent refresh"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -9287,7 +9291,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2427];
+extern int g_all_ob_errnos[2428];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

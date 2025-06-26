@@ -15,6 +15,7 @@
 
 #include "lib/ob_define.h"
 #include "share/schema/ob_schema_struct.h"
+#include "share/schema/ob_table_schema.h"
 #include "ob_ddl_args.h"
 
 namespace oceanbase
@@ -36,7 +37,9 @@ public:
       tz_info_(),
       tz_info_wrap_(),
       nls_formats_(),
-      parent_task_id_(0)
+      parent_task_id_(0),
+      target_data_sync_scn_(),
+      select_sql_()
   {
   }
   ~ObMViewCompleteRefreshArg() = default;
@@ -52,7 +55,9 @@ public:
                        K_(tz_info),
                        K_(tz_info_wrap),
                        "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
-                       K_(parent_task_id));
+                       K_(parent_task_id),
+                       K_(target_data_sync_scn),
+                       K_(select_sql));
 public:
   uint64_t tenant_id_;
   uint64_t table_id_; // mview table id
@@ -64,6 +69,8 @@ public:
   common::ObTimeZoneInfoWrap tz_info_wrap_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
   int64_t parent_task_id_;
+  share::SCN target_data_sync_scn_;
+  ObString select_sql_;
 };
 
 struct ObMViewCompleteRefreshRes final
@@ -100,7 +107,9 @@ public:
       last_refresh_scn_(),
       refresh_scn_(),
       start_time_(OB_INVALID_TIMESTAMP),
-      is_mview_complete_refresh_(false)
+      is_mview_complete_refresh_(false),
+      mview_target_data_sync_scn_(),
+      select_sql_()
   {
   }
   ~ObMViewRefreshInfo() = default;
@@ -111,13 +120,17 @@ public:
                K_(last_refresh_scn),
                K_(refresh_scn),
                K_(start_time),
-               K_(is_mview_complete_refresh));
+               K_(is_mview_complete_refresh),
+               K_(mview_target_data_sync_scn),
+               K_(select_sql));
 public:
   uint64_t mview_table_id_;
   share::SCN last_refresh_scn_;
   share::SCN refresh_scn_;
   int64_t start_time_;
   bool is_mview_complete_refresh_;
+  share::SCN mview_target_data_sync_scn_;
+  ObString select_sql_;
 };
 
 struct ObAlterMViewArg
@@ -137,7 +150,9 @@ public:
     is_alter_refresh_start_(false),
     start_time_(),
     is_alter_refresh_next_(false),
-    next_time_expr_()
+    next_time_expr_(),
+    is_alter_nested_refresh_mode_(false),
+    nested_refresh_mode_(share::schema::ObMVNestedRefreshMode::MAX)
   {
   }
   ~ObAlterMViewArg() = default;
@@ -157,7 +172,9 @@ public:
                K_(is_alter_refresh_start),
                K_(start_time),
                K_(is_alter_refresh_next),
-               K_(next_time_expr));
+               K_(next_time_expr),
+               K_(is_alter_nested_refresh_mode),
+               K_(nested_refresh_mode));
 public:
   void set_exec_env(const ObString &exec_env)
   {
@@ -193,6 +210,11 @@ public:
     is_alter_refresh_next_ = true;
     next_time_expr_ = next_time_expr;
   }
+  void set_alter_nested_refresh_mode(const share::schema::ObMVNestedRefreshMode nested_refresh_mode)
+  {
+    is_alter_nested_refresh_mode_ = true;
+    nested_refresh_mode_ = nested_refresh_mode;
+  }
   const ObString &get_exec_env() const { return exec_env_; }
   bool is_alter_on_query_computation() const { return is_alter_on_query_computation_; }
   bool get_enable_on_query_computation() const { return enable_on_query_computation_; }
@@ -206,6 +228,8 @@ public:
   const common::ObObj &get_start_time() const { return start_time_; }
   bool is_alter_refresh_next() const { return is_alter_refresh_next_; }
   const ObString &get_next_time_expr() const { return next_time_expr_; }
+  bool is_alter_nested_refresh_mode() const { return is_alter_nested_refresh_mode_; }
+  share::schema::ObMVNestedRefreshMode get_nested_refresh_mode() const { return nested_refresh_mode_; }
 private:
   ObString exec_env_;
   bool is_alter_on_query_computation_;
@@ -220,6 +244,8 @@ private:
   common::ObObj start_time_;
   bool is_alter_refresh_next_;
   ObString next_time_expr_;
+  bool is_alter_nested_refresh_mode_;
+  share::schema::ObMVNestedRefreshMode nested_refresh_mode_;
 };
 
 struct ObAlterMLogArg
@@ -296,6 +322,172 @@ private:
   ObString next_time_expr_;
   bool is_alter_lob_threshold_;
   int64_t lob_threshold_;
+};
+
+struct ObCreateMLogArg : public ObDDLArg
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObCreateMLogArg()
+      : ObDDLArg(),
+        database_name_(),
+        table_name_(),
+        mlog_name_(),
+        tenant_id_(OB_INVALID_TENANT_ID),
+        base_table_id_(common::OB_INVALID_ID),
+        mlog_table_id_(common::OB_INVALID_ID),
+        session_id_(common::OB_INVALID_ID),
+        with_rowid_(false),
+        with_primary_key_(false),
+        with_sequence_(false),
+        include_new_values_(false),
+        purge_options_(),
+        mlog_schema_(),
+        store_columns_(),
+        nls_date_format_(),
+        nls_timestamp_format_(),
+        nls_timestamp_tz_format_(),
+        sql_mode_(0),
+        replace_if_exists_(false),
+        create_tmp_mlog_(false)
+  {
+
+  }
+  virtual ~ObCreateMLogArg() {}
+  bool is_valid() const;
+  int assign(const ObCreateMLogArg &other) {
+    int ret = common::OB_SUCCESS;
+    if (OB_FAIL(ObDDLArg::assign(other))) {
+      SHARE_LOG(WARN, "failed to assign base", KR(ret));
+    } else if (OB_FAIL(mlog_schema_.assign(other.mlog_schema_))) {
+      SHARE_LOG(WARN, "failed to assign mlog schema", KR(ret));
+    } else if (OB_FAIL(store_columns_.assign(other.store_columns_))) {
+      SHARE_LOG(WARN, "failed to assign store columns", KR(ret));
+    } else {
+      database_name_ = other.database_name_;
+      table_name_ = other.table_name_;
+      mlog_name_ = other.mlog_name_;
+      tenant_id_ = other.tenant_id_;
+      base_table_id_ = other.base_table_id_;
+      mlog_table_id_ = other.mlog_table_id_;
+      session_id_ = other.session_id_;
+      with_rowid_ = other.with_rowid_;
+      with_primary_key_ = other.with_primary_key_;
+      with_sequence_ = other.with_sequence_;
+      include_new_values_ = other.include_new_values_;
+      purge_options_ = other.purge_options_;
+      nls_date_format_ = other.nls_date_format_;
+      nls_timestamp_format_ = other.nls_timestamp_format_;
+      nls_timestamp_tz_format_ = other.nls_timestamp_tz_format_;
+      sql_mode_ = other.sql_mode_;
+      replace_if_exists_ = other.replace_if_exists_;
+      create_tmp_mlog_ = other.create_tmp_mlog_;
+    }
+
+    return ret;
+  }
+  void reset()
+  {
+    database_name_.reset();
+    table_name_.reset();
+    mlog_name_.reset();
+    tenant_id_ = common::OB_INVALID_TENANT_ID;
+    base_table_id_ = common::OB_INVALID_ID;
+    mlog_table_id_ = common::OB_INVALID_ID;
+    session_id_ = common::OB_INVALID_ID;
+    with_rowid_ = false;
+    with_primary_key_ = false;
+    with_sequence_ = false;
+    include_new_values_ = false;
+    purge_options_.reset();
+    mlog_schema_.reset();
+    store_columns_.reset();
+    nls_date_format_.reset();
+    nls_timestamp_format_.reset();
+    nls_timestamp_tz_format_.reset();
+    sql_mode_ = 0;
+    replace_if_exists_ = false;
+    create_tmp_mlog_ = false;
+    ObDDLArg::reset();
+  }
+  DECLARE_TO_STRING;
+
+  struct PurgeOptions {
+    OB_UNIS_VERSION(1);
+  public:
+    PurgeOptions() : purge_mode_(share::schema::ObMLogPurgeMode::MAX)
+    {
+    }
+    ~PurgeOptions() {}
+    void reset()
+    {
+      purge_mode_ = share::schema::ObMLogPurgeMode::MAX;
+      start_datetime_expr_.reset();
+      next_datetime_expr_.reset();
+      exec_env_.reset();
+    }
+    bool is_valid() const
+    {
+      return (share::schema::ObMLogPurgeMode::MAX != purge_mode_) && !exec_env_.empty();
+    }
+    TO_STRING_KV(K_(purge_mode),
+                 K_(start_datetime_expr),
+                 K_(next_datetime_expr),
+                 K_(exec_env));
+    share::schema::ObMLogPurgeMode purge_mode_;
+    common::ObObj start_datetime_expr_;
+    common::ObString next_datetime_expr_;
+    common::ObString exec_env_;
+  };
+  common::ObString database_name_;
+  common::ObString table_name_;
+  common::ObString mlog_name_; // for privilege check
+  uint64_t tenant_id_;
+  uint64_t base_table_id_;
+  uint64_t mlog_table_id_;
+  uint64_t session_id_;
+  bool with_rowid_;
+  bool with_primary_key_;
+  bool with_sequence_;
+  bool include_new_values_;
+  PurgeOptions purge_options_;
+  share::schema::ObTableSchema mlog_schema_;
+  common::ObSEArray<common::ObString, common::OB_PREALLOCATED_NUM> store_columns_;
+  common::ObString nls_date_format_;
+  common::ObString nls_timestamp_format_;
+  common::ObString nls_timestamp_tz_format_;
+  ObSQLMode sql_mode_;
+  bool replace_if_exists_;
+  bool create_tmp_mlog_;
+};
+
+struct ObCreateMLogRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCreateMLogRes()
+      : mlog_table_id_(common::OB_INVALID_ID),
+        schema_version_(common::OB_INVALID_VERSION),
+        task_id_(0)
+  {}
+  void reset()
+  {
+    mlog_table_id_ = OB_INVALID_ID;
+    schema_version_ = OB_INVALID_VERSION;
+    task_id_ = 0;
+  }
+  int assign(const ObCreateMLogRes &other) {
+    int ret = common::OB_SUCCESS;
+    mlog_table_id_ = other.mlog_table_id_;
+    schema_version_ = other.schema_version_;
+    task_id_ = other.task_id_;
+    return ret;
+  }
+public:
+  TO_STRING_KV(K_(mlog_table_id), K_(schema_version), K_(task_id));
+  uint64_t mlog_table_id_;
+  int64_t schema_version_;
+  int64_t task_id_;
 };
 
 } // namespace obrpc
