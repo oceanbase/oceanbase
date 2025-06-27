@@ -636,6 +636,7 @@ _tx_data_memory_limit_percentage
 _tx_debug_level
 _tx_result_retention
 _tx_share_memory_limit_percentage
+_update_all_columns_for_trigger
 _upgrade_stage
 _use_hash_rollup
 _use_odps_jni_connector

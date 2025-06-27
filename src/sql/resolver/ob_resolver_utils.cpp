@@ -11056,42 +11056,50 @@ int ObResolverUtils::check_whether_assigned_for_before_update_trigger(ObResolver
                                                                       bool &need)
 {
   int ret = OB_SUCCESS;
-  need = false;
-  ObPLPackageGuard *package_guard = params.package_guard_;
-  if (OB_ISNULL(params.allocator_)
-      || OB_ISNULL(params.session_info_)
-      || OB_ISNULL(params.sql_proxy_)
-      || OB_ISNULL(schema_checker)) {
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (OB_UNLIKELY(!tenant_config.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params is NULL", K(ret));
-  } else if (OB_ISNULL(package_guard)) {
-    if (OB_ISNULL(params.session_info_->get_cur_exec_ctx())) {
+    LOG_WARN("fail to get tenant config", K(ret));
+  } else if (tenant_config->_update_all_columns_for_trigger) {
+    need = true;
+  } else {
+    need = false;
+    ObPLPackageGuard *package_guard = params.package_guard_;
+    if (OB_ISNULL(params.allocator_)
+        || OB_ISNULL(params.session_info_)
+        || OB_ISNULL(params.sql_proxy_)
+        || OB_ISNULL(schema_checker)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("exec ctx is NULL", K(ret));
-    } else if (OB_FAIL(params.session_info_->get_cur_exec_ctx()->get_package_guard(package_guard))) {
-      LOG_WARN("failed to get package guard", K(ret));
+      LOG_WARN("params is NULL", K(ret));
     } else if (OB_ISNULL(package_guard)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("package guard is NULL", K(ret));
+      if (OB_ISNULL(params.session_info_->get_cur_exec_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("exec ctx is NULL", K(ret));
+      } else if (OB_FAIL(params.session_info_->get_cur_exec_ctx()->get_package_guard(package_guard))) {
+        LOG_WARN("failed to get package guard", K(ret));
+      } else if (OB_ISNULL(package_guard)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("package guard is NULL", K(ret));
+      }
     }
-  }
-  if (OB_SUCC(ret)) {
-    uint64_t tenant_id = params.session_info_->get_effective_tenant_id();
-    const ObTableSchema *table_schema = NULL;
-    ObSchemaGetterGuard *schema_guard = schema_checker->get_schema_guard();
-    if (OB_ISNULL(schema_guard)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("schema guard is NULL", K(ret));
-    } else if (OB_FAIL(schema_checker->get_table_schema(tenant_id, table_id, table_schema))) {
-      LOG_WARN("failed to get table schema", K(ret), K(table_id));
-    } else if (OB_ISNULL(table_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table schema is NULL", K(ret));
-    } else if (OB_FAIL(ObResolverUtils::check_before_update_row_trigger_ref_cols(
-                      *package_guard, *params.allocator_,
-                      *schema_guard, *params.session_info_, *params.sql_proxy_,
-                      table_schema->get_trigger_list(), column.get_column_name_str(), need))) {
-      LOG_WARN("failed to get ref cols", K(ret));
+    if (OB_SUCC(ret)) {
+      uint64_t tenant_id = params.session_info_->get_effective_tenant_id();
+      const ObTableSchema *table_schema = NULL;
+      ObSchemaGetterGuard *schema_guard = schema_checker->get_schema_guard();
+      if (OB_ISNULL(schema_guard)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema guard is NULL", K(ret));
+      } else if (OB_FAIL(schema_checker->get_table_schema(tenant_id, table_id, table_schema))) {
+        LOG_WARN("failed to get table schema", K(ret), K(table_id));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is NULL", K(ret));
+      } else if (OB_FAIL(ObResolverUtils::check_before_update_row_trigger_ref_cols(
+                        *package_guard, *params.allocator_,
+                        *schema_guard, *params.session_info_, *params.sql_proxy_,
+                        table_schema->get_trigger_list(), column.get_column_name_str(), need))) {
+        LOG_WARN("failed to get ref cols", K(ret));
+      }
     }
   }
 
