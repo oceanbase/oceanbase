@@ -1351,6 +1351,7 @@ int ObPluginVectorIndexLoadScheduler::switch_to_leader()
     ATOMIC_STORE(&need_do_for_switch_, true);
   }
   if (OB_SUCC(ret)) {
+    (void) ObPluginVectorIndexUtils::set_ls_leader_flag(ls_->get_ls_id(), is_leader_);
     refresh_adapter_rb_flag();
   }
   const int64_t cost_us = ObTimeUtility::current_time() - start_time_us;
@@ -1376,6 +1377,7 @@ void ObPluginVectorIndexLoadScheduler::inner_switch_to_follower_()
   const int64_t start_time_us = ObTimeUtility::current_time();
   ATOMIC_STORE(&is_leader_, false);
   ATOMIC_STORE(&need_do_for_switch_, true);
+  (void) ObPluginVectorIndexUtils::set_ls_leader_flag(ls_->get_ls_id(), is_leader_);
   const int64_t cost_us = ObTimeUtility::current_time() - start_time_us;
   FLOG_INFO("vector index scheduler: finish to switch_to_follower", K_(tenant_id), KPC_(ls), K(cost_us));
 }

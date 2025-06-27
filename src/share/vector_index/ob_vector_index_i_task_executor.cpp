@@ -117,12 +117,12 @@ int ObVecITaskExecutor::start_task()
               LOG_DEBUG("task is in thread pool already", KPC(task_ctx));
             } else if (OB_FAIL(task_handle.push_task(tenant_id_, ls_->get_ls_id(), task_ctx))) {
               LOG_WARN("fail to push task to thread pool", K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
+            } else if (FALSE_IT(task_ctx->in_thread_pool_ = true)) {
             } else if (OB_FAIL(update_status_and_ret_code(task_ctx))) {
               LOG_WARN("fail to update task status to inner table",
                 K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
             } else if (task_ctx->sys_task_id_.is_invalid() && OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::add_sys_task(task_ctx))) {
               LOG_WARN("add sys task failed", K(tmp_ret));
-            } else if (FALSE_IT(task_ctx->in_thread_pool_ = true)) {
             }
             break;
           }
@@ -255,10 +255,10 @@ int ObVecITaskExecutor::clear_task_ctxs(
     if (OB_ISNULL(task_ctx)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr", K(ret), KP(task_ctx));
-    } else if (OB_FAIL(clear_task_ctx(task_opt, task_ctx))) {
-      LOG_WARN("fail to clear task map", K(ret), K(task_ctx));
     } else if (OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::remove_sys_task(task_ctx))) { // ignore sys task ret code
       LOG_WARN("remove sys task failed", K(tmp_ret));
+    } else if (OB_FAIL(clear_task_ctx(task_opt, task_ctx))) {
+      LOG_WARN("fail to clear task map", K(ret), K(task_ctx));
     }
   }
   return ret;
@@ -292,6 +292,7 @@ int ObVecITaskExecutor::check_task_result(ObVecIndexAsyncTaskCtx *task_ctx)
         LOG_WARN("vector index async task is finish and not retry anymore", KR(ret), KPC(task_ctx));
       } else {
         task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
+        task_ctx->task_status_.ret_code_ = VEC_ASYNC_TASK_DEFAULT_ERR_CODE; // reset ret_code
         LOG_WARN("vector index async task is finish and will do retry", KR(ret), KPC(task_ctx));
         // check task is canceled
         if (task_ctx->sys_task_id_.is_valid()) {

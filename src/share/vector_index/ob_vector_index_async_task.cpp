@@ -25,7 +25,7 @@ bool ObVecAsyncTaskExector::check_operation_allow()
   uint64_t tenant_data_version = 0;
   bool bret = true;
   bool is_active_time = true;
-  const bool is_not_support = true;
+  const bool is_not_support = false;
   if (is_not_support) {
     bret = false;
     LOG_DEBUG("skip this round, not support async task.");
@@ -49,7 +49,7 @@ int ObVecAsyncTaskExector::check_and_set_thread_pool()
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
-  const bool is_not_support = true;
+  const bool is_not_support = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("vector index load task not inited", K(ret));
@@ -152,7 +152,7 @@ int ObVecAsyncTaskExector::load_task()
         }
       }
     }
-    LOG_INFO("finish load async task", K(ret), K(task_ctx_array.count()), K(current_task_cnt));
+    LOG_INFO("finish load async task", K(ret), K(ls_->get_ls_id()), K(task_ctx_array.count()), K(current_task_cnt));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(insert_new_task(task_ctx_array))) {

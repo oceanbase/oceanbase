@@ -35,6 +35,7 @@ enum ObVidAdaLookupStatus
   STATES_SET_RESULT,
   STATES_ERROR,
   STATES_FINISH,
+  STATES_REFRESH,
 };
 
 enum ObAdaptorIterRowIdx
@@ -399,6 +400,7 @@ private:
   int check_pre_filter_need_retry();
   int reset_filter_path();
   int updata_vec_exec_ctx(ObPlanStat* plan_stat);
+  int prepare_follower_query_cond(ObVectorQueryConditions &query_cond);
 private:
   static const uint64_t MAX_VSAG_QUERY_RES_SIZE = 16384;
   static const uint64_t VSAG_MAX_EF_SEARCH = 1000;

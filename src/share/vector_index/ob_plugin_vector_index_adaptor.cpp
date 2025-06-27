@@ -408,7 +408,8 @@ ObPluginVectorIndexAdaptor::ObPluginVectorIndexAdaptor(common::ObIAllocator *all
     snapshot_table_id_(OB_INVALID_ID), data_table_id_(OB_INVALID_ID),
     rowkey_vid_table_id_(OB_INVALID_ID), vid_rowkey_table_id_(OB_INVALID_ID),
     ref_cnt_(0), idle_cnt_(0), mem_check_cnt_(0), is_mem_limited_(false), all_vsag_use_mem_(nullptr), allocator_(allocator),
-    parent_mem_ctx_(entity), index_identity_(), follower_sync_statistics_(), is_in_opt_task_(false), need_be_optimized_(false), extra_info_column_count_(0)
+    parent_mem_ctx_(entity), index_identity_(), follower_sync_statistics_(), is_in_opt_task_(false), need_be_optimized_(false), extra_info_column_count_(0),
+    query_lock_(), reload_finish_(false)
 {
 }
 
@@ -1535,6 +1536,32 @@ int ObPluginVectorIndexAdaptor::set_snapshot_key_prefix(uint64_t tablet_id, uint
         snapshot_key_prefix_.reset();
       }
       snapshot_key_prefix_.assign(key_prefix_str, pos);
+    }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexAdaptor::set_snapshot_key_prefix(const ObString &snapshot_key_prefix)
+{
+  int ret = OB_SUCCESS;
+  if (!snapshot_key_prefix_.empty() && snapshot_key_prefix_ == snapshot_key_prefix) {
+    // do nothing
+    LOG_INFO("try to change same vector index snapshot_key_prefix", K(snapshot_key_prefix), K(*this));
+  } else if (snapshot_key_prefix.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index snapshot_key_prefix is empty", KR(ret), K(*this));
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null allocator to set vector index snapshot_key_prefix ", KR(ret), K(*this));
+  } else {
+    if (!snapshot_key_prefix_.empty()) {
+      allocator_->free(snapshot_key_prefix_.ptr());
+      snapshot_key_prefix_.reset();
+    }
+    if (OB_FAIL(ob_write_string(*allocator_, snapshot_key_prefix, snapshot_key_prefix_))) {
+      LOG_WARN("fail set vector index snapshot_key_prefix ", KR(ret), K(*this));
+    } else {
+      LOG_INFO("change vector index snapshot_key_prefix success", K(snapshot_key_prefix), K(*this));
     }
   }
   return ret;
@@ -2886,18 +2913,21 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
   } else if (OB_FAIL(get_extra_info_actual_size(extra_info_actual_size))) {
     LOG_WARN("failed to get extra info actual size.", K(ret));
   } else if (OB_FALSE_IT(vids_iter = new(iter_buff) ObVectorQueryVidIterator(query_cond->extra_column_count_, extra_info_actual_size))) {
-  } else if (ctx->flag_ == PVQP_FIRST) {
+  }
+
+  const bool need_load_data_from_table = (ctx->flag_ == PVQP_SECOND || !ctx->get_ls_leader()) ? true : false;
+  if (OB_FAIL(ret)) {
+  } else if (!need_load_data_from_table) {
     if (query_cond->only_complete_data_) {
       // do nothing
     } else if (OB_FAIL(vsag_query_vids(ctx, query_cond, dim, query_vector, vids_iter))) {
       LOG_WARN("failed to query vids.", K(ret), K(dim));
     }
-  } else if (ctx->flag_ == PVQP_SECOND) {
-    LOG_INFO("load snapshot data from table");
-    ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
+  } else { // need load data
     if (OB_ISNULL(query_cond->row_iter_) || OB_ISNULL(query_cond->scan_param_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get snapshot table iter null.", K(ret), KP(query_cond), KP(query_cond->row_iter_), KP(query_cond->scan_param_));
+      LOG_WARN("get snapshot table iter null.", K(ret),
+        K(ctx->get_ls_leader()), KP(query_cond), KP(query_cond->row_iter_), KP(query_cond->scan_param_));
     } else {
       blocksstable::ObDatumRow *row = nullptr;
       ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(query_cond->row_iter_);
@@ -2913,31 +2943,26 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
       } else if (get_snapshot_key_prefix().empty() ||
           !row->storage_datums_[0].get_string().prefix_match(get_snapshot_key_prefix()))
       {
-        ObPluginVectorIndexAdaptor *adapter = this;
-        int64_t current_time = ObTimeUtility::fast_current_time();
-        SCN target_scn;
-        if (OB_FAIL(target_scn.convert_from_ts(current_time))) {
-          LOG_WARN("failed to convert ts to scn", K(current_time));
-        } else if (OB_FAIL(ObPluginVectorIndexUtils::refresh_adp_from_table(ls_id, adapter, false, target_scn, tmp_allocator))) { // TODO: replace adapter with new
-          LOG_WARN("failed to refresh adapter", K(ret), KPC(this));
-        }
+        ctx->status_ = PVQ_REFRESH;
+        LOG_INFO("query result need refresh adapter, ls leader",
+          K(ret), K(ls_id), K(ctx->get_ls_leader()), K(get_snapshot_key_prefix()), K(row->storage_datums_[0].get_string()));
       }
     }
 
     if (OB_FAIL(ret)) {
+    } else if (PVQ_REFRESH == ctx->status_) { // skip
     } else if (query_cond->only_complete_data_) {
       // do nothing
     } else if (OB_FAIL(vsag_query_vids(ctx, query_cond, dim, query_vector, vids_iter))) {
       LOG_WARN("failed to query vids.", K(ret), K(dim));
-    }
-
-    if (OB_SUCC(ret)) {
+    } else {
       close_snap_data_rb_flag();
     }
   }
 
   int tmp_ret = OB_SUCCESS;
-  if ((tmp_ret = check_if_need_optimize(ctx)) != OB_SUCCESS) {
+  if (PVQ_REFRESH == ctx->status_) {
+  } else if ((tmp_ret = check_if_need_optimize(ctx)) != OB_SUCCESS) {
     LOG_WARN("failed to check if vector index need optimize", K(tmp_ret));
   }
 
@@ -3087,32 +3112,6 @@ int ObPluginVectorIndexAdaptor::set_index_identity(ObString &index_identity)
       LOG_WARN("fail set vector index identity ", KR(ret), K(*this));
     } else {
       LOG_INFO("change vector index identity success", K(index_identity), K(*this));
-    }
-  }
-  return ret;
-}
-
-int ObPluginVectorIndexAdaptor::set_snapshot_key_prefix(const ObString &snapshot_key_prefix)
-{
-  int ret = OB_SUCCESS;
-  if (!snapshot_key_prefix_.empty() && snapshot_key_prefix_ == snapshot_key_prefix) {
-    // do nothing
-    LOG_INFO("try to change same vector index snapshot_key_prefix", K(snapshot_key_prefix), K(*this));
-  } else if (snapshot_key_prefix.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("vector index snapshot_key_prefix is empty", KR(ret), K(*this));
-  } else if (OB_ISNULL(allocator_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null allocator to set vector index snapshot_key_prefix ", KR(ret), K(*this));
-  } else {
-    if (!snapshot_key_prefix_.empty()) {
-      allocator_->free(snapshot_key_prefix_.ptr());
-      snapshot_key_prefix_.reset();
-    }
-    if (OB_FAIL(ob_write_string(*allocator_, snapshot_key_prefix, snapshot_key_prefix_))) {
-      LOG_WARN("fail set vector index snapshot_key_prefix ", KR(ret), K(*this));
-    } else {
-      LOG_INFO("change vector index snapshot_key_prefix success", K(snapshot_key_prefix), K(*this));
     }
   }
   return ret;

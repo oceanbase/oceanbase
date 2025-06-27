@@ -602,6 +602,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
     } else if (adapter->get_snapshot_key_prefix().empty() ||
                !row->storage_datums_[0].get_string().prefix_match(adapter->get_snapshot_key_prefix())) {
       ObString key_prefix;
+      ObString target_prefix;
       if (OB_ISNULL(vector_index_service)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr", K(ret));
@@ -763,6 +764,31 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
         LOG_WARN("revert delta_buf_iter failed", K(tmp_ret));
       }
       delta_buf_iter = nullptr;
+    }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::query_need_refresh_memdata(ObPluginVectorIndexAdaptor *adapter, ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  SCN target_scn;
+  if (OB_ISNULL(adapter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), KP(adapter), K(ls_id));
+  } else {
+    common::ObSpinLockGuard ctx_guard(adapter->get_reload_lock());
+    if (adapter->get_reload_finish()) {
+      // skip
+    } else if (OB_FAIL(target_scn.convert_from_ts(ObTimeUtility::fast_current_time()))) {
+      LOG_WARN("failed to convert ts to scn", K(ret));
+    } else if (OB_FAIL(ObPluginVectorIndexUtils::refresh_memdata(ls_id, adapter, target_scn, allocator))) {
+      LOG_WARN("fail to refresh adapter", K(ret));
+    } else if (OB_FALSE_IT(adapter->set_reload_finish(true))) {
+    } else {
+      ret = OB_SCHEMA_EAGAIN; // sql retry
+      LOG_WARN("sql retry ret_code to process_adapter_state", K(ret));
     }
   }
   return ret;
@@ -1620,6 +1646,42 @@ int ObPluginVectorIndexUtils::split_snapshot_prefix(const ObString &src, const O
       const int64_t len = str - src.ptr();
       dst.assign_ptr(src.ptr(), static_cast<int32_t>(len));
     }
+  }
+  return ret;
+}
+
+void ObPluginVectorIndexUtils::set_ls_leader_flag(const ObLSID &ls_id, const bool is_leader)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
+  ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+  if (OB_FAIL(vector_index_service->get_ls_index_mgr_map().get_refactored(ls_id, index_ls_mgr))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get vector index ls mgr", KR(ret), K(ls_id));
+    }
+  }
+  // set ls leader flag
+  if (OB_SUCC(ret) && OB_NOT_NULL(index_ls_mgr)) {
+    index_ls_mgr->set_ls_leader(is_leader);
+    LOG_INFO("success to set ls leader", K(ls_id), K(is_leader));
+  }
+}
+
+int ObPluginVectorIndexUtils::get_ls_leader_flag(const ObLSID &ls_id, bool &is_leader)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+  ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
+  if (OB_FAIL(vector_index_service->get_ls_index_mgr_map().get_refactored(ls_id, index_ls_mgr))) {
+    LOG_WARN("fail to get vector index ls mgr", KR(ret), K(ls_id));
+  } else if (OB_ISNULL(index_ls_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret));
+  } else {
+    is_leader = index_ls_mgr->get_ls_leader();
+    LOG_INFO("success to set ls leader", K(ls_id), K(is_leader));
   }
   return ret;
 }
