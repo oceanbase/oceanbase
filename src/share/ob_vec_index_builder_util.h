@@ -156,6 +156,13 @@ public:
       const ObTableSchema &data_schema,
       ObVectorIndexParam &index_param,
       ObTableSchema &index_schema);
+  static int check_alter_column_is_offline(
+      const ObTableSchema &orig_table_schema,
+      const ObColumnSchemaV2 *src_column,
+      ObColumnSchemaV2 *dst_column,
+      ObSchemaGetterGuard &schema_guard,
+      bool &is_offline);
+
 private:
   static int append_vec_hnsw_args(
       const sql::ObPartitionResolveResult &resolve_result,
