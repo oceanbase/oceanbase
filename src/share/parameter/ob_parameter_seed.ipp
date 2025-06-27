@@ -2718,7 +2718,7 @@ DEF_BOOL(_enable_pl_recompile_job, OB_TENANT_PARAMETER, "False",
          "Enable pl recompile task.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_BOOL(_enable_px_task_rebalance, OB_TENANT_PARAMETER, "True",
+DEF_BOOL(_enable_px_task_rebalance, OB_TENANT_PARAMETER, "False",
          "Enable or disable px task rebalance.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_px_task_rebalance_trigger_time, OB_TENANT_PARAMETER, "10ms", "[1us, 1h]",
