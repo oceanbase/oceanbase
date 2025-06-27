@@ -146,6 +146,16 @@ public:
       const ObTableSchema &data_schema,
       const obrpc::ObCreateIndexArg &arg,
       schema::ColumnReferenceSet &index_column_ids);
+  static int set_extra_info_columns(
+      const ObTableSchema &data_schema,
+      ObRowDesc &row_desc,
+      bool need_set_rk,
+      ObVectorIndexParam &index_param,
+      ObTableSchema &index_schema);
+  static int del_extra_info_columns(
+      const ObTableSchema &data_schema,
+      ObVectorIndexParam &index_param,
+      ObTableSchema &index_schema);
 private:
   static int append_vec_hnsw_args(
       const sql::ObPartitionResolveResult &resolve_result,
@@ -465,13 +475,6 @@ private:
   static int get_extra_info_actual_size(
       const ObTableSchema &data_schema,
       ObVectorIndexParam &index_param);
-
-  static int set_extra_info_columns(
-    const ObTableSchema &data_schema,
-    ObRowDesc &row_desc,
-    bool need_set_rk,
-    ObVectorIndexParam &index_param,
-    ObTableSchema &index_schema);
 };
 
 

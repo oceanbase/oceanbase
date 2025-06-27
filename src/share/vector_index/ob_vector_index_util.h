@@ -574,6 +574,7 @@ private:
       bool &has_same_col_id);
   static bool check_is_match_index_type(
       const ObIndexType type1, const ObIndexType type2);
+  static int is_int_val(const ObString &str, bool &is_int);
 };
 
 // For vector index snapshot write data
