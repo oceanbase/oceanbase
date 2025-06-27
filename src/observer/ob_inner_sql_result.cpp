@@ -170,6 +170,7 @@ int ObInnerSQLResult::open()
             iter_end_ = true;
             ret = OB_SUCCESS;
           } else {
+            result_set_->refresh_location_cache_by_errno(true, ret);
             LOG_WARN("get_next_row failed", K(ret), K(has_tenant_resource()));
           }
         } else {
