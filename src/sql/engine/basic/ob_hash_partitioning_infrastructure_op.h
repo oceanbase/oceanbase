@@ -1034,6 +1034,10 @@ void ObHashPartInfrastructure<HashCol, HashRowStore>::destroy()
       my_skip_ = nullptr;
       alloc_->free(items_);
       items_ = nullptr;
+      if (store_rows_ != nullptr) {
+        alloc_->free(store_rows_);
+        store_rows_ = nullptr;
+      }
     }
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = NULL;
@@ -2618,7 +2622,10 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::get_left_next_batch(
   int ret = OB_SUCCESS;
   //const ObChunkDatumStore::StoredRow **store_row = nullptr;
   if (store_rows_ == nullptr || store_rows_size_ < max_row_cnt) {
-    store_rows_ = nullptr;
+    if (store_rows_ != nullptr) {
+      alloc_->free(store_rows_);
+      store_rows_ = nullptr;
+    }
     if (OB_ISNULL(store_rows_ = static_cast<ObChunkDatumStore::StoredRow **>
         (alloc_->alloc(max_row_cnt * sizeof(ObChunkDatumStore::StoredRow *))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
