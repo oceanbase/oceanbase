@@ -1116,6 +1116,7 @@ int ObTempBlockStore::load_idx_block(BlockReader &reader, IndexBlock *&ib, const
       ib = bi.idx_blk_;
     } else {
       tmp_file::ObTmpFileIOHandle *read_io_handler_ptr = nullptr;
+      io_.io_desc_.set_preread();
       if (OB_UNLIKELY(bi.length_ > IndexBlock::INDEX_BLOCK_SIZE)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid argument", K(ret), K(bi));
