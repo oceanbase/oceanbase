@@ -106,12 +106,12 @@ int obpl_mysql_check_specific_node(const ParseNode *node, const ObItemType type,
 int obpl_mysql_wrap_node_into_subquery(ObParseCtx *_parse_ctx, ParseNode *node) {
   int ret = OB_PARSER_SUCCESS;
   if (OB_NOT_NULL(node) && OB_NOT_NULL(node->str_value_)) {
-    int max_query_len = node->str_len_ + 10;
+    int max_query_len = node->str_len_ + 22;
     char *subquery = (char *)parse_malloc(max_query_len, _parse_ctx->mem_pool_);
     int len = 0;
     if (OB_UNLIKELY(NULL == subquery)) {
       ret = OB_PARSER_ERR_NO_MEMORY;
-    } else if ((len = snprintf(subquery, max_query_len, "(SELECT %s)", node->str_value_)) <= 0) {
+    } else if ((len = snprintf(subquery, max_query_len, "(SELECT %s AS SUBQUERY)", node->str_value_)) <= 0) {
       ret = OB_PARSER_ERR_UNEXPECTED;
     } else {
       ParseResult parse_result;
