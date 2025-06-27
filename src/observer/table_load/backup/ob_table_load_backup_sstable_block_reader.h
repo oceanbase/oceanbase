@@ -15,7 +15,6 @@
 #include "observer/table_load/backup/ob_table_load_backup_icolumn_map.h"
 #include "observer/table_load/backup/ob_table_load_backup_imacro_block_reader.h"
 #include "share/backup/ob_backup_struct.h"
-#include "storage/blocksstable/ob_micro_block_encryption.h"
 #include "lib/compress/ob_compressor.h"
 
 namespace oceanbase
@@ -55,7 +54,6 @@ public:
                K(common::ObArrayWrap<int64_t>(column_checksum_, sstable_macro_block_header_->column_count_)),
                K_(columns),
                KP_(col_map),
-               KP_(encryption),
                KP_(compressor),
                K_(backup_version),
                K_(macro_block_meta_v2),
@@ -68,12 +66,6 @@ private:
   int init_macro_block_common_header();
   int inner_init_data_block();
   int inner_init_lob_block();
-  int decrypt_data_buf(
-      const char *buf,
-      const int64_t size,
-      const char *&decrypt_buf,
-      int64_t &decrypt_size);
-  int init_encrypter_if_needed();
   int alloc_buf(const int64_t size);
   OB_INLINE uint64_t extract_tenant_id(uint64_t id) { return id >> OB_TENANT_ID_SHIFT; }
 private:
@@ -98,7 +90,6 @@ private:
   const int64_t *column_checksum_;
   common::ObArray<share::schema::ObColDesc> columns_;
   ObIColumnMap *col_map_;
-  blocksstable::ObMicroBlockEncryption *encryption_;
   common::ObCompressor *compressor_;
   int64_t cur_block_idx_;
   ObMicroBlockData micro_block_data_;

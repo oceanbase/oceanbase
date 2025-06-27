@@ -44,7 +44,6 @@ ObTableLoadBackupSSTableBlockReader::ObTableLoadBackupSSTableBlockReader()
     column_types_(nullptr),
     column_checksum_(nullptr),
     col_map_(nullptr),
-    encryption_(nullptr),
     compressor_(nullptr),
     cur_block_idx_(0),
     backup_version_(ObTableLoadBackupVersion::INVALID),
@@ -294,11 +293,6 @@ void ObTableLoadBackupSSTableBlockReader::reset()
     allocator_.free(col_map_);
     col_map_ = nullptr;
   }
-  if (encryption_ != nullptr) {
-    encryption_->~ObMicroBlockEncryption();
-    allocator_.free(encryption_);
-    encryption_ = nullptr;
-  }
   compressor_ = nullptr;
   allocator_.reset();
   cur_block_idx_ = 0;
@@ -350,96 +344,40 @@ int ObTableLoadBackupSSTableBlockReader::get_next_micro_block(const ObMicroBlock
       LOG_WARN("fail to deserialize record header", KR(ret));
     } else if (OB_FAIL(header.check_and_get_record(micro_block_buf, micro_block_size, header_magic, payload_buf, payload_size))) {
       LOG_WARN("micro block data is corrupted", KR(ret), KP(micro_block_buf), K(micro_block_size));
+    } else if (OB_UNLIKELY(sstable_macro_block_header_->encrypt_id_ > 0)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("encryption block is not supported", KR(ret), K(sstable_macro_block_header_->encrypt_id_));
     } else {
-      if (OB_UNLIKELY(sstable_macro_block_header_->encrypt_id_ > 0)) {
-        const char *decrypt_buf = nullptr;
-        int64_t decrypt_size = 0;
-        if (OB_FAIL(decrypt_data_buf(payload_buf, payload_size, decrypt_buf, decrypt_size))) {
-          LOG_WARN("fail to decrypt buf", KR(ret));
-        } else {
-          payload_buf = decrypt_buf;
-          payload_size = decrypt_size;
-          is_compressed = (header.data_length_ != decrypt_size);
+      is_compressed = header.is_compressed_data();
+      micro_block_data_.store_type_ = (ObRowStoreType) sstable_macro_block_header_->row_store_type_;
+      if (is_compressed) {
+        if (compressor_ == nullptr || strcmp(compressor_->get_compressor_name(), sstable_macro_block_header_->compressor_name_)) {
+          if (OB_FAIL(ObCompressorPool::get_instance().get_compressor(sstable_macro_block_header_->compressor_name_, compressor_))) {
+            LOG_WARN("fail to get compressor", KR(ret), K(sstable_macro_block_header_->compressor_name_));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          const int64_t data_length = header.data_length_;
+          int64_t decomp_size;
+          if (OB_FAIL(alloc_buf(data_length))) {
+            LOG_WARN("Fail to allocate buf, ", KR(ret));
+          } else if (OB_FAIL(compressor_->decompress(
+              payload_buf, payload_size, decomp_buf_, decomp_buf_size_, decomp_size))) {
+            LOG_WARN("compressor fail to decompress.", KR(ret));
+          } else {
+            micro_block_data_.buf_ = decomp_buf_;
+            micro_block_data_.size_ = data_length;
+            micro_block_data = &micro_block_data_;
+            cur_block_idx_++;
+          }
         }
       } else {
-        is_compressed = header.is_compressed_data();
-      }
-
-      if (OB_SUCC(ret)) {
-        micro_block_data_.store_type_ = (ObRowStoreType) sstable_macro_block_header_->row_store_type_;
-        if (is_compressed) {
-          if (compressor_ == nullptr || strcmp(compressor_->get_compressor_name(), sstable_macro_block_header_->compressor_name_)) {
-            if (OB_FAIL(ObCompressorPool::get_instance().get_compressor(sstable_macro_block_header_->compressor_name_, compressor_))) {
-              LOG_WARN("fail to get compressor", KR(ret), K(sstable_macro_block_header_->compressor_name_));
-            }
-          }
-          if (OB_SUCC(ret)) {
-            const int64_t data_length = header.data_length_;
-            int64_t decomp_size;
-            if (OB_FAIL(alloc_buf(data_length))) {
-              LOG_WARN("Fail to allocate buf, ", KR(ret));
-            } else if (OB_FAIL(compressor_->decompress(
-                payload_buf, payload_size, decomp_buf_, decomp_buf_size_, decomp_size))) {
-              LOG_WARN("compressor fail to decompress.", KR(ret));
-            } else {
-              micro_block_data_.buf_ = decomp_buf_;
-              micro_block_data_.size_ = data_length;
-              micro_block_data = &micro_block_data_;
-              cur_block_idx_++;
-            }
-          }
-        } else {
-          micro_block_data_.buf_ = payload_buf;
-          micro_block_data_.size_ = payload_size;
-          micro_block_data = &micro_block_data_;
-          cur_block_idx_++;
-        }
+        micro_block_data_.buf_ = payload_buf;
+        micro_block_data_.size_ = payload_size;
+        micro_block_data = &micro_block_data_;
+        cur_block_idx_++;
       }
     }
-  }
-  return ret;
-}
-
-int ObTableLoadBackupSSTableBlockReader::decrypt_data_buf(
-    const char *buf,
-    const int64_t size,
-    const char *&decrypt_buf,
-    int64_t &decrypt_size)
-{
-#ifndef OB_BUILD_TDE_SECURITY
-  int ret = OB_ERR_UNEXPECTED;
-#else
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(buf == nullptr || size < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(buf), K(size));
-  } else if (OB_FAIL(init_encrypter_if_needed())) {
-    LOG_WARN("fail to init encrypter", KR(ret));
-  } else if (OB_FAIL(encryption_->init(
-      sstable_macro_block_header_->encrypt_id_,
-      extract_tenant_id(sstable_macro_block_header_->table_id_),
-      sstable_macro_block_header_->master_key_id_,
-      sstable_macro_block_header_->encrypt_key_,
-      OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH))) {
-    LOG_WARN("fail to init micro block encryption", KR(ret));
-  } else if (OB_FAIL(encryption_->decrypt(buf, size, decrypt_buf, decrypt_size))) {
-    LOG_WARN("fail to decrypt data", KR(ret));
-  }
-#endif
-  return ret;
-}
-
-int ObTableLoadBackupSSTableBlockReader::init_encrypter_if_needed()
-{
-  int ret = OB_SUCCESS;
-  void *buf = nullptr;
-
-  if (nullptr != encryption_) {
-  } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMicroBlockEncryption)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("Failed to alloc memory for encrypter", KR(ret));
-  } else {
-    encryption_ = new (buf) ObMicroBlockEncryption();
   }
   return ret;
 }
