@@ -630,6 +630,14 @@ int ObHTableRegionLocatorHandler::get_tablet_location(ObTableExecCtx &ctx)
 }
 
 // ================================ ObHTableCreateHandler ================================
+ObHTableCreateHandler::~ObHTableCreateHandler()
+{
+  for (int i = 0; i < column_families_.count(); ++i) {
+    OB_DELETEx(ColumnFamilyDescriptor, &allocator_, column_families_.at(i));
+  }
+}
+
+
 int ObHTableCreateHandler::handle(ObTableExecCtx &ctx, ObTableMetaResponse &response)
 {
   int ret = OB_SUCCESS;
@@ -939,6 +947,9 @@ int ObHTableRegionMetricsHandler::handle(ObTableExecCtx &ctx, ObTableMetaRespons
       if (OB_FAIL(construct_response(table_metrics_results, response))) {
         LOG_WARN("failed to construct response", K(ret));
       }
+    }
+    for (int i = 0; i < table_metrics_results.count(); ++i) {
+      OB_DELETEx(ObTableRegionMetricsResult, &allocator_, table_metrics_results.at(i));
     }
   }
   response.set_err(ret);

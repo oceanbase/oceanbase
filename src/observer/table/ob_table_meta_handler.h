@@ -223,8 +223,9 @@ public:
       partition_type_(PARTITION_TYPE_INVALID),
       htable_name_()
   {
+    column_families_.set_attr(ObMemAttr(MTL_ID(), "TbColFamily"));
   }
-  virtual ~ObHTableCreateHandler() = default;
+  virtual ~ObHTableCreateHandler();
   virtual int handle(ObTableExecCtx &ctx, ObTableMetaResponse &response) override;
   virtual int parse(const ObTableMetaRequest &request) override;
   virtual int pre_check() override { return check_hbase_ddl_enable(); }

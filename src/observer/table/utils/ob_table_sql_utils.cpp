@@ -138,6 +138,7 @@ int ObTableSqlUtils::resolve(ObResolver &resolver,
       if (OB_FAIL(resolve(resolver, parse_result, stmt))) {
         LOG_WARN("fail to resolve", K(ret), K(i));
       } else if (OB_FAIL(stmts.push_back(stmt))) {
+        OB_DELETEx(ObStmt, resolver.get_params().allocator_, stmt);
         LOG_WARN("fail to push back stmt", K(ret), K(i));
       }
     }
@@ -307,11 +308,16 @@ int ObTableSqlUtils::create_table(ObIAllocator &allocator,
             LOG_WARN("fail to execute create table", K(ret), K(create_tablegroup_sql),
               K(create_table_sqls), K(timeout));
           }
+          OB_DELETEx(ObStmt, resolver_ctx.allocator_, tablegroup_stmt);
+          for (int64_t i = 0; OB_SUCC(ret) && i < table_stmts.count(); ++i) {
+            OB_DELETEx(ObStmt, resolver_ctx.allocator_, table_stmts.at(i));
+          }
         }
       }
     }
     // exec_ctx expired, reset session cur_exec_ctx
     MyExecCtxSessionRegister ctx_unregister(session, nullptr);
+    OB_DELETEx(ParseResult, &allocator, table_parse_results);
   }
 
   return ret;
@@ -372,11 +378,13 @@ int ObTableSqlUtils::drop_table(ObIAllocator &allocator,
               *tablegroup_stmt, timeout))) {
             LOG_WARN("fail to execute create table", K(ret), K(drop_tg_sql), K(timeout));
           }
+          OB_DELETEx(ObStmt, resolver_ctx.allocator_, tablegroup_stmt);
         }
       }
     }
     // exec_ctx expired, reset session cur_exec_ctx
     MyExecCtxSessionRegister ctx_unregister(session, nullptr);
+    OB_DELETEx(ParseResult, &allocator, table_parse_results);
   }
 
   return ret;
