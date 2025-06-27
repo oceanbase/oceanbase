@@ -4514,34 +4514,5 @@ int ObAdminForceDropLonelyLobAuxTableP::process()
   return ret;
 }
 
-int ObWakeupStorageHAServiceP::process()
-{
-  int ret = OB_SUCCESS;
-  if (!arg_.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(arg_));
-  } else {
-    MTL_SWITCH(arg_.get_tenant_id()) {
-      switch (arg_.get_service_type()) {
-        case obrpc::ObWakeupStorageHAServiceArg::ServiceType::RESTORE_SERVICE: {
-          rootserver::ObRestoreService* restore_service = MTL(rootserver::ObRestoreService*);
-          if (OB_ISNULL(restore_service)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("restore service is null", KR(ret), K(arg_));
-          } else {
-            restore_service->wakeup();
-          }
-          break;
-        }
-        default: {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("unrecognized service type", KR(ret), K(arg_));
-          break;
-        }
-      }
-    }
-  }
-  return ret;
-}
 } // end of namespace observer
 } // end of namespace oceanbase

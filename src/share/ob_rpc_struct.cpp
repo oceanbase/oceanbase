@@ -14025,39 +14025,5 @@ int ObFetchArbMemberArg::init(const uint64_t tenant_id, const ObLSID &ls_id)
 
 OB_SERIALIZE_MEMBER(ObFetchArbMemberArg, tenant_id_, ls_id_);
 #endif
-
-OB_SERIALIZE_MEMBER(ObWakeupStorageHAServiceArg, tenant_id_, service_type_);
-bool ObWakeupStorageHAServiceArg::is_valid() const
-{
-  return is_valid_tenant_id(tenant_id_)
-        && ServiceType::RESTORE_SERVICE <= service_type_
-        && ServiceType::MAX_TYPE > service_type_;
-}
-
-int ObWakeupStorageHAServiceArg::assign(const ObWakeupStorageHAServiceArg &other)
-{
-  int ret = OB_SUCCESS;
-  if (this == &other) {
-  } else {
-    tenant_id_ = other.tenant_id_;
-    service_type_ = other.service_type_;
-  }
-  return ret;
-}
-
-int ObWakeupStorageHAServiceArg::init(const uint64_t tenant_id, const ServiceType service_type)
-{
-  int ret = OB_SUCCESS;
-  if (!is_valid_tenant_id(tenant_id_)
-      || ServiceType::RESTORE_SERVICE > service_type_
-      || ServiceType::MAX_TYPE <= service_type_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(service_type));
-  } else {
-    tenant_id_ = tenant_id;
-    service_type_ = service_type;
-  }
-  return ret;
-}
 }//end namespace obrpc
 }//end namespace oceanbase

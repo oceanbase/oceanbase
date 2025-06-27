@@ -72,11 +72,7 @@ public:
 public:
   int idle();
   int check_stop() const override;
-  void wakeup()
-  {
-    ATOMIC_INC(&wakeup_cnt_);
-    ObTenantThreadHelper::wakeup();
-  }
+  void wakeup() { ATOMIC_INC(&wakeup_cnt_);}
 
 private:
   bool inited_;

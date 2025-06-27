@@ -30,7 +30,6 @@
 #include "share/ob_global_stat_proxy.h" // ObGlobalStatProxy
 #include "rootserver/mview/ob_collect_mv_merge_info_task.h"
 #include "rootserver/mview/ob_mview_push_refresh_scn_task.h"
-#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {
@@ -111,6 +110,7 @@ void ObRestoreScheduler::do_work()
       }
     }
     ret = OB_SUCCESS;
+    restore_service_->idle();
   }
   LOG_INFO("[RESTORE] restore scheduler quit");
   return;
@@ -246,12 +246,6 @@ int ObRestoreScheduler::restore_tenant(const ObPhysicalRestoreJob &job_info)
       LOG_WARN("fail to set tenant sts credential config", K(ret), K(new_tenant_id));
     } else {
       restore_service_->wakeup();
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(storage::ObStorageHAUtils::wakeup_service(
-                      obrpc::ObWakeupStorageHAServiceArg::ServiceType::RESTORE_SERVICE,
-                      gen_meta_tenant_id(new_tenant_id), ObLSID(ObLSID::SYS_LS_ID)))) {
-        LOG_WARN("fail to wake up restore service", K(tmp_ret), "tenant_id", gen_meta_tenant_id(new_tenant_id));
-      }
     }
   }
   int tmp_ret = OB_SUCCESS;
@@ -742,12 +736,6 @@ int ObRestoreScheduler::restore_finish(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("finish restore tasks failed", K(job_info), K(ret), K(tenant_id_));
   } else {
     LOG_INFO("[RESTORE] restore tenant success", K(ret), K(job_info));
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(storage::ObStorageHAUtils::wakeup_service(
-                    obrpc::ObWakeupStorageHAServiceArg::ServiceType::RESTORE_SERVICE,
-                    OB_SYS_TENANT_ID, ObLSID(ObLSID::SYS_LS_ID)))) {
-      LOG_WARN("fail to wake up restore service", K(tmp_ret));
-    }
   }
   ROOTSERVICE_EVENT_ADD("physical_restore", "restore_finish",
                         "restore_stauts", job_info.get_status(),

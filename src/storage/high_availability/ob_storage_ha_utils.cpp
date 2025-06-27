@@ -1729,26 +1729,6 @@ int ObStorageHAUtils::build_reuse_info_(
   return ret;
 }
 
-int ObStorageHAUtils::wakeup_service(const obrpc::ObWakeupStorageHAServiceArg::ServiceType service_type, const uint64_t tenant_id, const ObLSID &ls_id)
-{
-  int ret = OB_SUCCESS;
-  common::ObAddr leader_addr;
-  obrpc::ObWakeupStorageHAServiceArg arg;
-
-  if (OB_FAIL(arg.init(tenant_id, service_type))) {
-    LOG_WARN("fail to init ObWakeupStorageHAServiceArg", K(ret), K(tenant_id), K(service_type));
-  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.location_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rpc proxy or location service is null", KR(ret), KP(GCTX.srv_rpc_proxy_), KP(GCTX.location_service_));
-  } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
-              GCONF.cluster_id, tenant_id, ls_id, leader_addr))) {
-    LOG_WARN("failed to get meta tenant leader address", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr).by(tenant_id).wakup_storage_ha_service(arg))) {
-    LOG_WARN("failed to notify tenant restore scheduler", KR(ret), K(leader_addr), K(arg));
-  }
-  return ret;
-}
-
 void ObStorageHAUtils::sort_table_key_array_by_snapshot_version(common::ObArray<ObITable::TableKey> &table_key_array)
 {
   TableKeySnapshotVersionComparator cmp;
