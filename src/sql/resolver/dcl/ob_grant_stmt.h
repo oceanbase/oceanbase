@@ -90,7 +90,9 @@ public:
   void set_table_schema_version(int64_t schema_version) { table_schema_version_ = schema_version; }
   int64_t get_table_schema_version() { return table_schema_version_; }
   void set_catalog_name(const common::ObString &catalog_name) { grant_arg_.catalog_ = catalog_name; }
+  void set_sensitive_rule_name(const common::ObString &sensitive_rule_name) { grant_arg_.sensitive_rule_ = sensitive_rule_name; }
   const common::ObString& get_catalog_name() const { return grant_arg_.catalog_; }
+  const common::ObString& get_sensitive_rule_name() const { return grant_arg_.sensitive_rule_; }
 
   bool is_grant_stmt() const { return true; }
   DECLARE_VIRTUAL_TO_STRING;

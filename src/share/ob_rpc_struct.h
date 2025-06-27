@@ -96,6 +96,7 @@
 #include "share/sequence/ob_sequence_cache.h" // ObSeqCleanCacheRes
 #include "share/schema/ob_catalog_schema_struct.h"
 #include "share/schema/ob_ccl_schema_struct.h"
+#include "share/schema/ob_sensitive_rule_schema_struct.h"
 #include "ob_ddl_args.h"
 #include "ob_mview_args.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
@@ -6165,7 +6166,7 @@ public:
                  upd_col_ids_(), ref_col_ids_(),
                  grantor_id_(common::OB_INVALID_ID), remain_roles_(), is_inner_(false),
 		             sel_col_ids_(), column_names_priv_(), grantor_(), grantor_host_(),
-                 catalog_()
+                 catalog_(), sensitive_rule_()
   { }
   virtual ~ObGrantArg() {}
   bool is_valid() const;
@@ -6177,7 +6178,7 @@ public:
                K_(users_passwd), K_(hosts), K_(need_create_user), K_(has_create_user_priv),
                K_(option), K_(object_type), K_(object_id), K_(grantor_id), K_(ins_col_ids),
                K_(upd_col_ids), K_(ref_col_ids), K_(grantor_id), K_(column_names_priv),
-               K_(grantor), K_(grantor_host), K_(catalog));
+               K_(grantor), K_(grantor_host), K_(catalog), K_(sensitive_rule));
 
   uint64_t tenant_id_;
   share::schema::ObPrivLevel priv_level_;
@@ -6207,6 +6208,7 @@ public:
   common::ObString grantor_;
   common::ObString grantor_host_;
   common::ObString catalog_;
+  common::ObString sensitive_rule_;
 };
 
 struct ObStandbyGrantArg : public ObDDLArg
@@ -6270,6 +6272,28 @@ public:
   common::ObString catalog_;
   ObPrivSet priv_set_;
 };
+
+struct ObRevokeSensitiveRuleArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObRevokeSensitiveRuleArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID),
+                               user_id_(common::OB_INVALID_ID), priv_set_(0)
+  { }
+  bool is_valid() const;
+  TO_STRING_KV(K_(tenant_id),
+               K_(user_id),
+               K_(sensitive_rule),
+               "priv_set", share::schema::ObPrintPrivSet(priv_set_));
+
+  uint64_t tenant_id_;
+  uint64_t user_id_;
+  common::ObString sensitive_rule_;
+  ObPrivSet priv_set_;
+};
+
+
 
 struct ObRevokeDBArg : public ObDDLArg
 {
@@ -13998,6 +14022,68 @@ public:
   ~ObCreateTableGroupRes() = default;
   int assign(const ObCreateTableGroupRes &other);
   uint64_t tablegroup_id_;
+};
+
+struct ObSensitiveRuleDDLArg : public ObDDLArg
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  enum ObSensitiveProtectionPolicy
+  {
+    SENSITIVE_PROTECTION_POLICY_INVALID = 0,
+    SENSITIVE_PROTECTION_POLICY_NONE = 1, // special non-protection policy
+    SENSITIVE_PROTECTION_POLICY_ENCRYPTION = 2,
+    SENSITIVE_PROTECTION_POLICY_MASKING = 3,
+    SENSITIVE_PROTECTION_POLICY_MAX
+  };
+
+  ObSensitiveRuleDDLArg():
+    ObDDLArg(),
+    ddl_type_(OB_INVALID_DDL_OP),
+    schema_(),
+    user_id_(common::OB_INVALID_ID)
+  {}
+
+  virtual ~ObSensitiveRuleDDLArg() {}
+
+  TO_STRING_KV(K_(ddl_type), K_(schema), K_(user_id));
+
+  void reset()
+  {
+    ObDDLArg::reset();
+    ddl_type_ = OB_INVALID_DDL_OP;
+    user_id_ = OB_INVALID_ID;
+    schema_.reset();
+  }
+
+  int assign(const ObSensitiveRuleDDLArg &other)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_FAIL(ObDDLArg::assign(other))) {
+      SHARE_LOG(WARN, "failed to assign ObDDLArg", KR(ret));
+    } else {
+      schema_.assign(other.schema_);
+      ddl_type_ = other.ddl_type_;
+      user_id_ = other.user_id_;
+    }
+    return ret;
+  }
+
+  bool is_valid() const
+  {
+    bool is_valid = OB_DDL_SENSITIVE_RULE_OPERATION_BEGIN < ddl_type_ && ddl_type_ < OB_DDL_SENSITIVE_RULE_OPERATION_END;
+    if (!is_valid) {
+    } else if (!schema_.is_valid()) {
+      is_valid = false;
+    } else if (OB_INVALID_ID == user_id_) {
+      is_valid = false;
+    }
+    return is_valid;
+  }
+
+  share::schema::ObSchemaOperationType ddl_type_;
+  share::schema::ObSensitiveRuleSchema schema_;
+  uint64_t user_id_; // grant privilege when create
 };
 
 }//end namespace obrpc

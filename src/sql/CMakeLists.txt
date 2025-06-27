@@ -311,6 +311,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_trigger_storage_cache_executor.cpp
   engine/cmd/ob_sys_dispatch_call_executor.cpp
   engine/cmd/ob_ccl_rule_executor.cpp
+  engine/cmd/ob_sensitive_rule_executor.cpp
 )
 
 ob_set_subtarget(ob_sql engine_connector
@@ -1440,6 +1441,8 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_create_ccl_rule_stmt.cpp
   resolver/ddl/ob_drop_ccl_rule_resolver.cpp
   resolver/ddl/ob_drop_ccl_rule_stmt.cpp
+  resolver/ddl/ob_sensitive_rule_resolver.cpp
+  resolver/ddl/ob_sensitive_rule_stmt.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dml

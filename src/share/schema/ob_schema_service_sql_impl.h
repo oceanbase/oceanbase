@@ -44,6 +44,7 @@
 #include "share/schema/ob_rls_sql_service.h"
 #include "share/schema/ob_catalog_sql_service.h"
 #include "share/schema/ob_ccl_rule_sql_service.h"
+#include "share/schema/ob_sensitive_rule_sql_service.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -136,6 +137,7 @@ public:
   GET_DDL_SQL_SERVICE_FUNC(Rls, rls)
   GET_DDL_SQL_SERVICE_FUNC(Catalog, catalog)
   GET_DDL_SQL_SERVICE_FUNC(CCLRule, ccl_rule)
+  GET_DDL_SQL_SERVICE_FUNC(SensitiveRule, sensitive_rule)
 
   /* sequence_id related */
   virtual int init_sequence_id_by_rs_epoch(const int64_t rootservice_epoch); // for compatible use
@@ -241,6 +243,8 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE(rls_context, ObRlsContextSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(catalog, ObCatalogSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(ccl_rule, ObSimpleCCLRuleSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE(sensitive_rule, ObSensitiveRuleSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE(sensitive_rule_priv, ObSensitiveRulePriv);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
   virtual int get_increment_schema_operations(const ObRefreshSchemaStatus &schema_status,
@@ -325,6 +329,7 @@ public:
   virtual int fetch_new_rls_context_id(const uint64_t tenant_id, uint64_t &new_rls_context_id);
   virtual int fetch_new_priv_id(const uint64_t tenant_id, uint64_t &new_priv_id);
   virtual int fetch_new_catalog_id(const uint64_t tenant_id, uint64_t &new_catalog_id);
+  virtual int fetch_new_sensitive_rule_id(const uint64_t tenant_id, uint64_t &new_sensitive_rule_id);
 //  virtual int insert_sys_param(const ObSysParam &sys_param,
 //                               common::ObISQLClient *sql_client);
 
@@ -394,6 +399,9 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE(rls_context, ObRlsContextSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(catalog, ObCatalogSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(ccl_rule, ObSimpleCCLRuleSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(sensitive_rule, ObSensitiveRuleSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(sensitive_rule_priv, ObSensitiveRulePriv);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(sensitive_column, ObSensitiveColumnSchema);
 
   //batch will split big query into batch query, each time MAX_IN_QUERY_PER_TIME
   //get_batch_xxx_schema will call fetch_all_xxx_schema
@@ -488,6 +496,9 @@ public:
   FETCH_SCHEMAS_FUNC_DECLARE(rls_context, ObRlsContextSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(catalog, ObCatalogSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(ccl_rule, ObSimpleCCLRuleSchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(sensitive_rule, ObSensitiveRuleSchema);
+  FETCH_SCHEMAS_FUNC_DECLARE(sensitive_rule_priv, ObSensitiveRulePriv);
+  FETCH_SCHEMAS_FUNC_DECLARE(sensitive_column, ObSensitiveColumnSchema);
 
   int fetch_mock_fk_parent_table_column_info(
       const ObRefreshSchemaStatus &schema_status,
@@ -1158,6 +1169,14 @@ private:
                         common::ObArray<ObRlsPolicySchema *> &rls_policy_array,
                         const uint64_t *table_ids,
                         const int64_t table_ids_size);
+  int fetch_sensitive_columns_for_sensitive_rules(
+    const ObRefreshSchemaStatus &schema_status,
+    const int64_t schema_version,
+    const uint64_t tenant_id,
+    ObISQLClient &sql_client,
+    ObArray<ObSensitiveRuleSchema *> &sensitive_rule_array,
+    const uint64_t *sensitive_rule_ids,
+    const int64_t sensitive_rule_ids_size);
 
   // whether we can see the expected version or not
   // @return OB_SCHEMA_EAGAIN when not readable
@@ -1371,6 +1390,7 @@ private:
   ObRlsSqlService rls_service_;
   ObCatalogSqlService catalog_service_;
   ObCCLRuleSqlService ccl_rule_service_;
+  ObSensitiveRuleSqlService sensitive_rule_service_;
 
   ObClusterSchemaStatus cluster_schema_status_;
   common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> gen_schema_version_map_;

@@ -26,6 +26,7 @@
 #include "share/schema/ob_routine_info.h"
 #include "share/schema/ob_catalog_schema_struct.h"
 #include "share/schema/ob_ccl_schema_struct.h"
+#include "share/schema/ob_sensitive_rule_schema_struct.h"
 
 namespace oceanbase
 {
@@ -364,6 +365,19 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_CREATE_CCL_RULE, = 2102)                            \
   ACT(OB_DDL_DROP_CCL_RULE, = 2103)                              \
   ACT(OB_DDL_CCL_RULE_OPERATION_END, = 2110)                     \
+  ACT(OB_DDL_SENSITIVE_RULE_OPERATION_BEGIN, = 2141)             \
+  ACT(OB_DDL_CREATE_SENSITIVE_RULE, = 2142)                      \
+  ACT(OB_DDL_DROP_SENSITIVE_RULE, = 2143)                        \
+  ACT(OB_DDL_ALTER_SENSITIVE_RULE_ADD_COLUMN, = 2144)            \
+  ACT(OB_DDL_ALTER_SENSITIVE_RULE_DROP_COLUMN, = 2145)           \
+  ACT(OB_DDL_ALTER_SENSITIVE_RULE_ENABLE, = 2146)                \
+  ACT(OB_DDL_ALTER_SENSITIVE_RULE_DISABLE, = 2147)               \
+  ACT(OB_DDL_ALTER_SENSITIVE_RULE_SET_PROTECTION_SPEC, = 2148)   \
+  ACT(OB_DDL_SENSITIVE_RULE_OPERATION_END, = 2149)               \
+  ACT(OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_BEGIN, = 2150)        \
+  ACT(OB_DDL_GRANT_REVOKE_SENSITIVE_RULE, = 2151)                \
+  ACT(OB_DDL_DEL_SENSITIVE_RULE_PRIV, = 2152)                    \
+  ACT(OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_END, = 2153)          \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
@@ -414,6 +428,7 @@ IS_DDL_TYPE(RLS_GROUP, rls_group)
 IS_DDL_TYPE(RLS_CONTEXT, rls_context)
 IS_DDL_TYPE(CATALOG, catalog)
 IS_DDL_TYPE(CCL_RULE, ccl_rule)
+IS_DDL_TYPE(SENSITIVE_RULE, sensitive_rule)
 
 struct ObSchemaOperation
 {
@@ -463,6 +478,7 @@ public:
     uint64_t column_priv_id_;
     uint64_t catalog_id_;
     uint64_t ccl_rule_id_;
+    uint64_t sensitive_rule_id_;
   };
   union {
     common::ObString table_name_;
@@ -474,6 +490,7 @@ public:
     common::ObString mock_fk_parent_table_name_;
     common::ObString routine_name_;
     common::ObString catalog_name_;
+    common::ObString sensitive_rule_name_;
   };
   ObSchemaOperationType op_type_;
   common::ObString ddl_stmt_str_;
@@ -762,6 +779,7 @@ class ObServerSchemaService;
 class ObContextSqlService;
 class ObCatalogSqlService;
 class ObCCLRuleSqlService;
+class ObSensitiveRuleSqlService;
 class ObSchemaService
 {
 public:
@@ -819,6 +837,7 @@ public:
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Context, context);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Rls, rls);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Catalog, catalog);
+  DECLARE_GET_DDL_SQL_SERVICE_FUNC(SensitiveRule, sensitive_rule);
   //DECLARE_GET_DDL_SQL_SERVICE_FUNC(sys_priv, priv);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(CCLRule, ccl_rule);
 
@@ -935,6 +954,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(database, ObSimpleDatabaseSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(tablegroup, ObSimpleTablegroupSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(catalog_priv, ObCatalogPriv);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(sensitive_rule_priv, ObSensitiveRulePriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(db_priv, ObDBPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(table_priv, ObTablePriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(routine_priv, ObRoutinePriv);
@@ -966,6 +986,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(rls_context, ObRlsContextSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(catalog, ObCatalogSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(ccl_rule, ObSimpleCCLRuleSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(sensitive_rule, ObSensitiveRuleSchema);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
   virtual int get_increment_schema_operations(const ObRefreshSchemaStatus &schema_status,
@@ -1043,6 +1064,7 @@ public:
   virtual int fetch_new_priv_id(const uint64_t tenant_id, uint64_t &new_priv_id) = 0;
   virtual int fetch_new_catalog_id(const uint64_t tenant_id, uint64_t &new_catalog_id) = 0;
   virtual int fetch_new_ccl_rule_id(const uint64_t tenant_id, uint64_t &new_ccl_rule_id) = 0;
+  virtual int fetch_new_sensitive_rule_id(const uint64_t tenant_id, uint64_t &new_sensitive_rule_id) = 0;
 
 //------------------For managing privileges-----------------------------//
   #define GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE_PURE_VIRTUAL(SCHEMA, SCHEMA_TYPE)  \
@@ -1099,6 +1121,9 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(rls_context, ObRlsContextSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(catalog, ObCatalogSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(ccl_rule, ObSimpleCCLRuleSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(sensitive_rule, ObSensitiveRuleSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(sensitive_rule_priv, ObSensitiveRulePriv);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(sensitive_column, ObSensitiveColumnSchema);
 
 
   //--------------For manaing recyclebin -----//

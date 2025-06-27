@@ -89,6 +89,10 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "CREATE CATALOG";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_USE_CATALOG_SHIFT] =
                                                    "USE CATALOG";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_SENSITIVE_RULE_SHIFT] =
+                                                   "CREATE SENSITIVE RULE";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_PLAINACCESS_SHIFT] =
+                                                   "PLAINACCESS";
 }
 
 ObInfoSchemaUserPrivilegesTable::ObInfoSchemaUserPrivilegesTable()

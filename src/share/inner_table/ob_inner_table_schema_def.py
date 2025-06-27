@@ -8197,6 +8197,73 @@ def_table_schema(**gen_history_table_def(548, all_ccl_rule_def))
 
 # 549: __all_balance_job_description
 
+all_sensitive_rule_def = dict(
+  owner 			= 'zhuangyifeng.zyf',
+  table_name  = '__all_sensitive_rule',
+  table_type 	= 'SYSTEM_TABLE',
+  table_id		= '556',
+  gm_columns  = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('sensitive_rule_id', 'int'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('sensitive_rule_name', 'varchar:OB_MAX_ORIGINAL_NANE_LENGTH'),
+    ('protection_policy', 'int'),  # 1: NONE, 2: ENCRYPTION, 3: MASKING
+    ('method', 'varchar: OB_MAX_COMMAND_LENGTH'),
+    ('enabled', 'int'), # 0: disabled, 1: enabled
+  ]
+)
+
+def_table_schema(**all_sensitive_rule_def)
+
+def_table_schema(**gen_history_table_def(557, all_sensitive_rule_def))
+
+all_sensitive_column_def = dict(
+  owner 			= 'zhuangyifeng.zyf',
+  table_name  = '__all_sensitive_column',
+  table_type 	= 'SYSTEM_TABLE',
+  table_id		= '558',
+  gm_columns  = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('sensitive_rule_id', 'int'),
+    ('table_id', 'int'),
+    ('column_id', 'int'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = []
+)
+
+def_table_schema(**all_sensitive_column_def)
+
+def_table_schema(**gen_history_table_def(559, all_sensitive_column_def))
+
+all_sensitive_rule_privilege_def = dict(
+  owner          = 'zhuangyifeng.zyf',
+  table_name     = '__all_sensitive_rule_privilege',
+  table_type     = 'SYSTEM_TABLE',
+  table_id       = '560',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns  = [
+    ('tenant_id', 'int'),
+    ('user_id', 'int'),
+    ('sensitive_rule_name', 'varchar:OB_MAX_USER_NAME_LENGTH'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('priv_set', 'int', 'false', '0')
+  ]
+)
+
+def_table_schema(**all_sensitive_rule_privilege_def)
+
+def_table_schema(**gen_history_table_def(561, all_sensitive_rule_privilege_def))
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -16359,6 +16426,36 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12555',
+  table_name = '__all_virtual_sensitive_rule',
+  keywords = all_def_keywords['__all_sensitive_rule']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12556',
+  table_name = '__all_virtual_sensitive_rule_history',
+  keywords = all_def_keywords['__all_sensitive_rule_history']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12557',
+  table_name = '__all_virtual_sensitive_column',
+  keywords = all_def_keywords['__all_sensitive_column']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12558',
+  table_name = '__all_virtual_sensitive_column_history',
+  keywords = all_def_keywords['__all_sensitive_column_history']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12559',
+  table_name = '__all_virtual_sensitive_rule_privilege',
+  keywords = all_def_keywords['__all_sensitive_rule_privilege']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12560',
+  table_name = '__all_virtual_sensitive_rule_privilege_history',
+  keywords = all_def_keywords['__all_sensitive_rule_privilege_history']))
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -31689,7 +31786,9 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 12)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DECRYPT,
           (CASE WHEN (PRIV_OTHERS & (1 << 13)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EVENT,
           (CASE WHEN (PRIV_OTHERS & (1 << 14)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_CATALOG,
-          (CASE WHEN (PRIV_OTHERS & (1 << 15)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_USE_CATALOG
+          (CASE WHEN (PRIV_OTHERS & (1 << 15)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_USE_CATALOG,
+          (CASE WHEN (PRIV_OTHERS & (1 << 17)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_SENSITIVE_RULE,
+          (CASE WHEN (PRIV_OTHERS & (1 << 18)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_PLAINACCESS
   FROM OCEANBASE.__all_user;
   """.replace("\n", " ")
 )
@@ -31759,7 +31858,9 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 12)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DECRYPT,
           (CASE WHEN (PRIV_OTHERS & (1 << 13)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EVENT,
           (CASE WHEN (PRIV_OTHERS & (1 << 14)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_CATALOG,
-          (CASE WHEN (PRIV_OTHERS & (1 << 15)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_USE_CATALOG
+          (CASE WHEN (PRIV_OTHERS & (1 << 15)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_USE_CATALOG,
+          (CASE WHEN (PRIV_OTHERS & (1 << 17)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_SENSITIVE_RULE,
+          (CASE WHEN (PRIV_OTHERS & (1 << 18)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_PLAINACCESS
   FROM OCEANBASE.__all_virtual_user;
   """.replace("\n", " ")
 )
@@ -32454,6 +32555,10 @@ def_table_schema(
                      AND (U.PRIV_OTHERS & (1 << 14) != 0) THEN 'CREATE CATALOG'
                 WHEN V1.C1 = 51
                      AND (U.PRIV_OTHERS & (1 << 15) != 0) THEN 'USE CATALOG'
+                WHEN V1.C1 = 52
+                     AND (U.PRIV_OTHERS & (1 << 17) != 0) THEN 'CREATE SENSITIVE RULE'
+                WHEN V1.C1 = 53
+                     AND (U.PRIV_OTHERS & (1 << 18) != 0) THEN 'PLAINACCESS'
                 WHEN V1.C1 = 0
                      AND U.PRIV_ALTER = 0
                      AND U.PRIV_CREATE = 0
@@ -32551,7 +32656,9 @@ def_table_schema(
         UNION ALL SELECT 47 AS C1
         UNION ALL SELECT 49 AS C1
         UNION ALL SELECT 50 AS C1
-        UNION ALL SELECT 51 AS C1) V1,
+        UNION ALL SELECT 51 AS C1
+        UNION ALL SELECT 52 AS C1
+        UNION ALL SELECT 53 AS C1) V1,
        (SELECT USER_ID
         FROM oceanbase.__all_user
         WHERE TENANT_ID = 0
@@ -42371,6 +42478,180 @@ WHERE
         SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 
+)
+
+def_table_schema(
+  owner           = 'zhuangyifeng.zyf',
+  table_name      = 'DBA_OB_SENSITIVE_RULES',
+  table_id        = '21663',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SR.sensitive_rule_name as RULE_NAME,
+    CASE WHEN SR.protection_policy = 1 THEN 'NONE'
+         WHEN SR.protection_policy = 2 THEN 'ENCRYPTION'
+         WHEN SR.protection_policy = 3 THEN 'MASKING'
+         ELSE NULL
+         END as PROTECTION_POLICY,
+    SR.method as METHOD,
+    CASE WHEN SR.enabled = 1 THEN 'YES' ELSE 'NO' END as ENABLED
+  FROM oceanbase.__all_sensitive_rule SR
+  ORDER BY SR.sensitive_rule_id;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhuangyifeng.zyf',
+  table_name      = 'CDB_OB_SENSITIVE_RULES',
+  table_id        = '21664',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+    SR.TENANT_ID as TENANT_ID,
+    SR.sensitive_rule_name as RULE_NAME,
+    CASE WHEN SR.protection_policy = 1 THEN 'NONE'
+         WHEN SR.protection_policy = 2 THEN 'ENCRYPTION'
+         WHEN SR.protection_policy = 3 THEN 'MASKING'
+         ELSE NULL
+         END as PROTECTION_POLICY,
+    SR.method as METHOD,
+    CASE WHEN SR.enabled = 1 THEN 'YES' ELSE 'NO' END as ENABLED
+  FROM oceanbase.__all_virtual_sensitive_rule SR
+  ORDER BY SR.sensitive_rule_id;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhuangyifeng.zyf',
+  table_name      = 'DBA_OB_SENSITIVE_COLUMNS',
+  table_id        = '21665',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SR.sensitive_rule_name as RULE_NAME,
+    D.database_name as DATABASE_NAME,
+    T.table_name as TABLE_NAME,
+    C.column_name as COLUMN_NAME
+  FROM
+    oceanbase.__all_sensitive_column SC
+    JOIN oceanbase.__all_sensitive_rule SR
+      ON  SC.tenant_id = SR.tenant_id
+      AND SC.sensitive_rule_id = SR.sensitive_rule_id
+    JOIN oceanbase.__all_column C
+      ON  SC.tenant_id = C.tenant_id
+      AND SC.table_id  = C.table_id
+      AND SC.column_id = C.column_id
+    JOIN oceanbase.__all_table T
+      ON  SC.tenant_id = T.tenant_id
+      AND C.table_id = T.table_id
+    JOIN oceanbase.__all_database D
+      ON  SC.tenant_id = D.tenant_id
+      AND T.database_id = D.database_id
+  WHERE D.in_recyclebin = 0
+    AND D.database_name != '__recyclebin'
+    AND T.table_mode >> 12 & 15 in (0,1)
+  ORDER BY SR.sensitive_rule_id, D.database_id, T.table_id, C.column_id
+  ;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhuangyifeng.zyf',
+  table_name      = 'CDB_OB_SENSITIVE_COLUMNS',
+  table_id        = '21666',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+    SC.TENANT_ID as TENANT_ID,
+    SR.sensitive_rule_name as RULE_NAME,
+    D.database_name as DATABASE_NAME,
+    T.table_name as TABLE_NAME,
+    C.column_name as COLUMN_NAME
+  FROM
+    oceanbase.__all_virtual_sensitive_column SC
+    JOIN oceanbase.__all_virtual_sensitive_rule SR
+      ON SC.tenant_id = SR.tenant_id
+      AND SC.sensitive_rule_id = SR.sensitive_rule_id
+    JOIN oceanbase.__all_virtual_column C
+      ON  SC.tenant_id = C.tenant_id
+      AND SC.table_id  = C.table_id
+      AND SC.column_id = C.column_id
+    JOIN oceanbase.__all_virtual_table T
+      ON SC.tenant_id = T.tenant_id
+      AND C.table_id = T.table_id
+    JOIN oceanbase.__all_virtual_database D
+      ON SC.tenant_id = D.tenant_id
+      AND T.database_id = D.database_id
+  WHERE D.in_recyclebin = 0
+    AND D.database_name != '__recyclebin'
+    AND T.table_mode >> 12 & 15 in (0,1)
+  ORDER BY SR.sensitive_rule_id, D.database_id, T.table_id, C.column_id
+  ;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhuangyifeng.zyf',
+  table_name      = 'DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS',
+  table_id        = '21667',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SR.sensitive_rule_name as RULE_NAME,
+    U.user_name as USER_NAME,
+    CASE WHEN U.type = 0 THEN 'USER'
+         WHEN U.type = 1 THEN 'ROLE'
+         ELSE NULL
+         END as USER_TYPE
+  FROM oceanbase.__all_sensitive_rule_privilege SR
+  JOIN oceanbase.__all_user U
+    ON  SR.tenant_id = U.tenant_id
+    AND SR.user_id = U.user_id
+  ORDER BY SR.sensitive_rule_name, U.user_id;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhuangyifeng.zyf',
+  table_name      = 'CDB_OB_SENSITIVE_RULE_PLAINACCESS_USERS',
+  table_id        = '21668',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  SELECT
+    SR.TENANT_ID as TENANT_ID,
+    SR.sensitive_rule_name as RULE_NAME,
+    U.user_name as USER_NAME,
+    CASE WHEN U.type = 0 THEN 'USER'
+         WHEN U.type = 1 THEN 'ROLE'
+         ELSE NULL
+         END as USER_TYPE
+  FROM oceanbase.__all_virtual_sensitive_rule_privilege SR
+  JOIN oceanbase.__all_virtual_user U
+    ON  SR.tenant_id = U.tenant_id
+    AND SR.user_id = U.user_id
+  ORDER BY SR.sensitive_rule_name, U.user_id;
+""".replace("\n", " ")
 )
 
 # 余留位置（此行之前占位）

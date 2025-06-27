@@ -5485,6 +5485,7 @@ int ObGrantArg::assign(const ObGrantArg &other)
   grantor_ = other.grantor_;
   grantor_host_ = other.grantor_host_;
   catalog_ = other.catalog_;
+  sensitive_rule_ = other.sensitive_rule_;
 
   if (OB_FAIL(ObDDLArg::assign(other))) {
     SHARE_LOG(WARN, "fail to assign ddl arg", K(ret));
@@ -5542,7 +5543,8 @@ OB_DEF_SERIALIZE(ObGrantArg)
               column_names_priv_,
               grantor_,
               grantor_host_,
-              catalog_);
+              catalog_,
+              sensitive_rule_);
 return ret;
 }
 
@@ -5576,7 +5578,8 @@ OB_DEF_DESERIALIZE(ObGrantArg)
               column_names_priv_,
               grantor_,
               grantor_host_,
-              catalog_);
+              catalog_,
+              sensitive_rule_);
 
   //compatibility for old version
   if (OB_SUCC(ret) && users_passwd_.count() > 0 && hosts_.empty()) {
@@ -5620,7 +5623,8 @@ OB_DEF_SERIALIZE_SIZE(ObGrantArg)
               column_names_priv_,
               grantor_,
               grantor_host_,
-              catalog_);
+              catalog_,
+              sensitive_rule_);
   return len;
 }
 
@@ -5648,6 +5652,18 @@ OB_SERIALIZE_MEMBER((ObRevokeCatalogArg, ObDDLArg),
                     user_id_,
                     catalog_,
                     priv_set_);
+
+bool ObRevokeSensitiveRuleArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && OB_INVALID_ID != user_id_
+      && !sensitive_rule_.empty();
+}
+
+OB_SERIALIZE_MEMBER((ObRevokeSensitiveRuleArg, ObDDLArg),
+                     tenant_id_,
+                     user_id_,
+                     sensitive_rule_,
+                     priv_set_);
 
 bool ObRevokeDBArg::is_valid() const
 {
@@ -13828,6 +13844,12 @@ int ObCreateTableGroupRes::assign(const ObCreateTableGroupRes &other)
 
 OB_SERIALIZE_MEMBER((ObCreateTableGroupRes, ObParallelDDLRes), tablegroup_id_);
 
+
+
+OB_SERIALIZE_MEMBER((ObSensitiveRuleDDLArg, ObDDLArg),
+                     ddl_type_,
+                     schema_,
+                     user_id_);
 
 }//end namespace obrpc
 }//end namespace oceanbase

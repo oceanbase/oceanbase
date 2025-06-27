@@ -1826,6 +1826,7 @@ struct ObRawExprExtraInfo
     uint64_t aggr_type_; // T_FUN_SYS_SQRT
     uint64_t range_flag_; // T_FUN_SYS_INNER_DOUBLE_TO_INT
                           // T_FUN_SYS_INNER_DECIMAL_TO_YEAR
+    int64_t encryption_mode_;  // T_FUN_SYS_ENHANCED_AES_ENCRYPT
     struct {  // T_OP_RUNTIME_FILTER
       RuntimeFilterType runtime_filter_type_;
       // when join with '<=>' in mysql mode, mark runtime filter with null equal condition,
@@ -2199,6 +2200,7 @@ public:
   void set_ret_code(const uint64_t val) { extra_.ret_code_ = val; }
   void set_aggr_type(const uint64_t val) { extra_.aggr_type_ = val; }
   void set_range_flag(const uint64_t val) { extra_.range_flag_ = val; }
+  void set_encryption_mode(const int64_t val) { extra_.encryption_mode_ = val; }
   uint64_t get_cast_mode() const { return extra_.cast_mode_; }
   uint64_t get_autoinc_nextval_extra() const { return extra_.autoinc_nextval_extra_; }
   uint64_t get_res_cs_type() const { return extra_.res_cs_type_; }
@@ -2213,6 +2215,7 @@ public:
   uint64_t get_ret_code() const { return extra_.ret_code_; }
   uint64_t get_aggr_type() const { return extra_.aggr_type_; }
   uint64_t get_range_flag() const { return extra_.range_flag_; }
+  int64_t get_encryption_mode() const { return extra_.encryption_mode_; }
   // extra accesstors end
   bool need_extra_calc_type() const;
   int set_extra_calc_type(const ObExprResType &res_type);

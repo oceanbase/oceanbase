@@ -2180,6 +2180,12 @@ case OB_ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_TID:
 case OB_ALL_VIRTUAL_SECURITY_AUDIT_TID:
 case OB_ALL_VIRTUAL_SECURITY_AUDIT_HISTORY_TID:
 case OB_ALL_VIRTUAL_SECURITY_AUDIT_RECORD_TID:
+case OB_ALL_VIRTUAL_SENSITIVE_COLUMN_TID:
+case OB_ALL_VIRTUAL_SENSITIVE_COLUMN_HISTORY_TID:
+case OB_ALL_VIRTUAL_SENSITIVE_RULE_TID:
+case OB_ALL_VIRTUAL_SENSITIVE_RULE_HISTORY_TID:
+case OB_ALL_VIRTUAL_SENSITIVE_RULE_PRIVILEGE_TID:
+case OB_ALL_VIRTUAL_SENSITIVE_RULE_PRIVILEGE_HISTORY_TID:
 case OB_ALL_VIRTUAL_SEQUENCE_OBJECT_TID:
 case OB_ALL_VIRTUAL_SEQUENCE_OBJECT_HISTORY_TID:
 case OB_ALL_VIRTUAL_SEQUENCE_VALUE_TID:
@@ -4132,6 +4138,96 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       break;
     }
 
+    case OB_ALL_VIRTUAL_SENSITIVE_COLUMN_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_SENSITIVE_COLUMN_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_SENSITIVE_COLUMN_HISTORY_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_SENSITIVE_COLUMN_HISTORY_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_SENSITIVE_RULE_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_SENSITIVE_RULE_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_SENSITIVE_RULE_HISTORY_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_SENSITIVE_RULE_HISTORY_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_SENSITIVE_RULE_PRIVILEGE_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_SENSITIVE_RULE_PRIVILEGE_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_SENSITIVE_RULE_PRIVILEGE_HISTORY_TID: {
+      ObIterateVirtualTable *iter = NULL;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_TID, index_schema, params))) {
+        SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+        iter->~ObIterateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
     case OB_ALL_VIRTUAL_SEQUENCE_OBJECT_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4281,7 +4377,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_SYS_VARIABLE_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4371,9 +4469,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TABLE_PRIVILEGE_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4583,7 +4679,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TENANT_KEYSTORE_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4673,9 +4771,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TENANT_OLS_POLICY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4885,7 +4981,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TENANT_TABLESPACE_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -4975,9 +5073,7 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TRANSFER_PARTITION_TASK_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -5187,7 +5283,9 @@ case OB_ALL_VIRTUAL_VECTOR_INDEX_TASK_HISTORY_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
       ObIterateVirtualTable *iter = NULL;
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIterateVirtualTable, iter))) {
@@ -7948,6 +8046,12 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VECTOR_INDEX_TASK_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VECTOR_INDEX_TASK_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_CCL_RULE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CCL_RULE_SCHEMA_VERSION); break;
     case OB_ALL_CCL_RULE_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CCL_RULE_HISTORY_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_RULE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_RULE_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_RULE_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_RULE_HISTORY_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_COLUMN_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_COLUMN_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_COLUMN_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_COLUMN_HISTORY_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_RULE_PRIVILEGE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_RULE_PRIVILEGE_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_SCHEMA_VERSION); break;
     case OB_TENANT_VIRTUAL_ALL_TABLE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_TENANT_VIRTUAL_ALL_TABLE_SCHEMA_VERSION); break;
     case OB_TENANT_VIRTUAL_TABLE_COLUMN_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_TENANT_VIRTUAL_TABLE_COLUMN_SCHEMA_VERSION); break;
     case OB_TENANT_VIRTUAL_TABLE_INDEX_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_TENANT_VIRTUAL_TABLE_INDEX_SCHEMA_VERSION); break;
@@ -8468,6 +8572,12 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_DYNAMIC_PARTITION_TABLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_CCL_RULE_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_CCL_RULE_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TENANT_VECTOR_MEM_INFO_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_TENANT_VECTOR_MEM_INFO_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_SENSITIVE_RULE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SENSITIVE_RULE_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_SENSITIVE_RULE_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SENSITIVE_RULE_HISTORY_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_SENSITIVE_COLUMN_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SENSITIVE_COLUMN_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_SENSITIVE_COLUMN_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SENSITIVE_COLUMN_HISTORY_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_SENSITIVE_RULE_PRIVILEGE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SENSITIVE_RULE_PRIVILEGE_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_SENSITIVE_RULE_PRIVILEGE_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SENSITIVE_RULE_PRIVILEGE_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SQL_AUDIT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_IDX_15009_ALL_VIRTUAL_SQL_AUDIT_I1_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_PLAN_STAT_ORACLE_SCHEMA_VERSION); break;
@@ -9340,6 +9450,12 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_V_OB_DYNAMIC_PARTITION_TABLES_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_V_OB_DYNAMIC_PARTITION_TABLES_SCHEMA_VERSION); break;
     case OB_GV_OB_VECTOR_MEMORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_GV_OB_VECTOR_MEMORY_SCHEMA_VERSION); break;
     case OB_V_OB_VECTOR_MEMORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_V_OB_VECTOR_MEMORY_SCHEMA_VERSION); break;
+    case OB_DBA_OB_SENSITIVE_RULES_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OB_SENSITIVE_RULES_SCHEMA_VERSION); break;
+    case OB_CDB_OB_SENSITIVE_RULES_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_CDB_OB_SENSITIVE_RULES_SCHEMA_VERSION); break;
+    case OB_DBA_OB_SENSITIVE_COLUMNS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OB_SENSITIVE_COLUMNS_SCHEMA_VERSION); break;
+    case OB_CDB_OB_SENSITIVE_COLUMNS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_CDB_OB_SENSITIVE_COLUMNS_SCHEMA_VERSION); break;
+    case OB_DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS_SCHEMA_VERSION); break;
+    case OB_CDB_OB_SENSITIVE_RULE_PLAINACCESS_USERS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_CDB_OB_SENSITIVE_RULE_PLAINACCESS_USERS_SCHEMA_VERSION); break;
     case OB_DBA_SYNONYMS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_SYNONYMS_ORACLE_SCHEMA_VERSION); break;
     case OB_DBA_OBJECTS_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OBJECTS_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_OBJECTS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_OBJECTS_ORACLE_SCHEMA_VERSION); break;
@@ -10400,6 +10516,12 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_CCL_RULE_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CCL_RULE_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_CCL_RULE_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CCL_RULE_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_RULE_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_RULE_AUX_LOB_META_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_RULE_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_RULE_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_COLUMN_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_COLUMN_AUX_LOB_META_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_COLUMN_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_COLUMN_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_RULE_PRIVILEGE_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_RULE_PRIVILEGE_AUX_LOB_META_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_TABLE_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLE_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_COLUMN_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_COLUMN_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_SCHEMA_VERSION); break;
@@ -10735,5 +10857,11 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_CCL_RULE_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CCL_RULE_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_CCL_RULE_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CCL_RULE_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_RULE_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_RULE_AUX_LOB_PIECE_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_RULE_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_RULE_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_COLUMN_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_COLUMN_AUX_LOB_PIECE_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_COLUMN_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_COLUMN_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_RULE_PRIVILEGE_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_RULE_PRIVILEGE_AUX_LOB_PIECE_SCHEMA_VERSION); break;
+    case OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SENSITIVE_RULE_PRIVILEGE_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
 
 #endif // INNER_TABLE_HARD_CODE_SCHEMA_MAPPING_SWITCH

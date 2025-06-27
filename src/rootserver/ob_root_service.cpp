@@ -7038,6 +7038,25 @@ int ObRootService::revoke_catalog(const ObRevokeCatalogArg &arg)
   return ret;
 }
 
+int ObRootService::revoke_sensitive_rule(const ObRevokeSensitiveRuleArg &arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  ObSensitiveRuleDDLService sensitive_rule_ddl_service(&ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.exec_tenant_id_, data_version))) {
+    LOG_WARN("failed to get min data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_3_5_3) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "sensitive rule");
+  } else if (OB_FAIL(sensitive_rule_ddl_service.revoke_sensitive_rule(arg))) {
+    LOG_WARN("Revoke sensitive rule failed", K(arg), K(ret));
+  }
+  return ret;
+}
+
 int ObRootService::revoke_database(const ObRevokeDBArg &arg)
 {
   int ret = OB_SUCCESS;
@@ -12022,6 +12041,25 @@ int ObRootService::drop_ccl_rule_ddl(const obrpc::ObDropCCLRuleArg &arg)
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(ccl_ddl_service.drop_ccl_ddl(arg))) {
     LOG_WARN("handle ddl failed", K(arg), K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::handle_sensitive_rule_ddl(const obrpc::ObSensitiveRuleDDLArg &arg)
+{
+  int ret = OB_NOT_SUPPORTED;
+  uint64_t data_version = 0;
+  ObSensitiveRuleDDLService sensitive_rule_ddl_service(&ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.exec_tenant_id_, data_version))) {
+    LOG_WARN("failed to get min data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_3_5_3) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "sensitive rule");
+  } else if (OB_FAIL(sensitive_rule_ddl_service.handle_sensitive_rule_ddl(arg))) {
+    LOG_WARN("failed to handle sensitive rule ddl", K(ret), K(arg));
   }
   return ret;
 }

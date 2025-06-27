@@ -79,12 +79,14 @@ int ObShowGrants::add_priv_map_recursively(uint64_t user_id, PRIV_MAP &priv_map,
     ObArray<const ObTablePriv *> table_priv_array;
     ObArray<const ObColumnPriv *> column_priv_array;
     ObArray<const ObRoutinePriv *> routine_priv_array;
+    ObArray<const ObSensitiveRulePriv *> sensitive_rule_priv_array;
 
     OZ (schema_guard_->get_catalog_priv_with_user_id(tenant_id_, user_id, catalog_priv_array));
     OZ (schema_guard_->get_db_priv_with_user_id(tenant_id_, user_id, db_priv_array));
     OZ (schema_guard_->get_table_priv_with_user_id(tenant_id_, user_id, table_priv_array));
     OZ (schema_guard_->get_column_priv_with_user_id(tenant_id_, user_id, column_priv_array));
     OZ (schema_guard_->get_routine_priv_with_user_id(tenant_id_, user_id, routine_priv_array));
+    OZ (schema_guard_->get_sensitive_rule_priv_with_user_id(tenant_id_, user_id, sensitive_rule_priv_array));
 
     //user_level
     if (OB_SUCC(ret)) {
@@ -134,6 +136,13 @@ int ObShowGrants::add_priv_map_recursively(uint64_t user_id, PRIV_MAP &priv_map,
                                               ObObjectType::PROCEDURE : ObObjectType::FUNCTION;
       OZ (add_priv_map(priv_map, priv_key, routine_priv_array.at(i)->get_priv_set()));
     }
+    // sensitive rule
+    for (int i = 0; OB_SUCC(ret) && i < sensitive_rule_priv_array.count(); i++) {
+      PrivKey priv_key;
+      priv_key.sensitive_rule_name_ = sensitive_rule_priv_array.at(i)->get_sensitive_rule_name_str();
+      OZ (add_priv_map(priv_map, priv_key, sensitive_rule_priv_array.at(i)->get_priv_set()));
+    }
+
 
     if (OB_SUCC(ret) && expand_roles) {
       for (int i = 0; OB_SUCC(ret) && i < user_info->get_role_id_array().count(); i++) {
@@ -187,7 +196,7 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
         ObArray<const ObColumnPriv *> column_priv_array;
         ObArray<const ObObjPriv *>obj_priv_array;
         PRIV_MAP priv_map;
-        const int64_t PRIV_BUF_LENGTH = 512;
+        const int64_t PRIV_BUF_LENGTH = 1024;
         char buf[PRIV_BUF_LENGTH] = {};
         int64_t pos = 0;
         ObString user_name;
@@ -238,7 +247,9 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
           for (PRIV_MAP::const_iterator iter = priv_map.begin(); OB_SUCC(ret) && iter != priv_map.end(); ++iter) {
             const PrivKey &priv_key = iter->first;
             const ObPrivSet &privs = iter->second;
-            if (priv_key.catalog_name_.empty() && priv_key.db_name_.empty()) {
+            if (priv_key.catalog_name_.empty()
+                && priv_key.db_name_.empty()
+                && priv_key.sensitive_rule_name_.empty()) {
               pos = 0;
               have_priv.priv_level_ = OB_PRIV_USER_LEVEL;
               have_priv.priv_set_ = privs;
@@ -249,10 +260,11 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
               OZ (scanner_.add_row(cur_row_));
 
 #ifdef OB_BUILD_TDE_SECURITY
-              // print encrypt / decrypt privs
               if (OB_SUCC(ret)
                   && OB_PRIV_ALL == (privs & OB_PRIV_ALL)
-                  && 0 != (privs & (OB_PRIV_ENCRYPT | OB_PRIV_DECRYPT))) {
+                  && 0 != (privs & (OB_PRIV_ENCRYPT
+                                    | OB_PRIV_DECRYPT
+                                    | OB_PRIV_PLAINACCESS))) {
                 pos = 0;
                 have_priv.priv_set_ = (privs & ~OB_PRIV_ALL);
                 OZ (get_grants_string(buf, PRIV_BUF_LENGTH, pos, have_priv, user_name, host_name));
@@ -361,6 +373,23 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
               have_priv.db_ = priv_key.db_name_;
               have_priv.table_ = priv_key.table_name_;
               have_priv.obj_type_ = priv_key.obj_type_;
+
+              OZ (get_grants_string(buf, PRIV_BUF_LENGTH, pos, have_priv, user_name, host_name));
+              OX (result.assign_ptr(buf, static_cast<int32_t>(pos)));
+              OZ (fill_row_cells(show_user_id, result));
+              OZ (scanner_.add_row(cur_row_));
+            }
+          }
+
+          // sensitive rule level
+          for (PRIV_MAP::const_iterator iter = priv_map.begin(); OB_SUCC(ret) && iter != priv_map.end(); ++iter) {
+            const PrivKey &priv_key = iter->first;
+            const ObPrivSet &privs = iter->second;
+            if (!priv_key.sensitive_rule_name_.empty()) {
+              pos = 0;
+              have_priv.priv_level_ = OB_PRIV_SENSITIVE_RULE_LEVEL;
+              have_priv.priv_set_ = privs;
+              have_priv.sensitive_rule_ = priv_key.sensitive_rule_name_;
 
               OZ (get_grants_string(buf, PRIV_BUF_LENGTH, pos, have_priv, user_name, host_name));
               OX (result.assign_ptr(buf, static_cast<int32_t>(pos)));
@@ -792,6 +821,8 @@ int ObShowGrants::print_privs_to_buff(
   } else if (OB_PRIV_ROUTINE_LEVEL == priv_level) {
     priv_all = OB_PRIV_ALL;
   } else if (OB_PRIV_OBJ_ORACLE_LEVEL == priv_level) {
+  } else if (OB_PRIV_SENSITIVE_RULE_LEVEL == priv_level) {
+    priv_all = OB_PRIV_SENSITIVE_RULE_ACC;
   } else {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "Invalid priv level", K(ret));
@@ -803,7 +834,7 @@ int ObShowGrants::print_privs_to_buff(
          SERVER_LOG(WARN, "print obj privs failed", K(ret));
       }
     } else {
-      if (0 == (priv_set & (priv_all | OB_PRIV_ENCRYPT | OB_PRIV_DECRYPT))
+      if (0 == (priv_set & (priv_all | OB_PRIV_ENCRYPT | OB_PRIV_DECRYPT | OB_PRIV_PLAINACCESS))
           && (priv_key_array == NULL || priv_key_array->empty())) {
         ret = databuff_printf(buf, buf_len, pos, " USAGE");
       } else if (priv_all == (priv_set & priv_all)) {
@@ -961,7 +992,13 @@ int ObShowGrants::print_privs_to_buff(
         if ((priv_set & OB_PRIV_DECRYPT) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" DECRYPT,");
         }
+        if ((priv_set & OB_PRIV_PLAINACCESS) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" PLAINACCESS,");
+        }
 #endif
+        if ((priv_set & OB_PRIV_CREATE_SENSITIVE_RULE) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" CREATE SENSITIVE RULE,");
+        }
         if ((priv_set & OB_PRIV_EVENT) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" EVENT,");
         }
@@ -1063,6 +1100,12 @@ int ObShowGrants::priv_level_printf(
                                                                         " ON FUNCTION `%.*s`.`%.*s`",
                                 have_priv.db_.length(), have_priv.db_.ptr(),
                                 have_priv.table_.length(), have_priv.table_.ptr()))) {
+      SERVER_LOG(WARN, "Fill privs to buffer failed", K(ret));
+    }
+  } else if (OB_PRIV_SENSITIVE_RULE_LEVEL == have_priv.priv_level_) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                                " ON SENSITIVE RULE `%.*s`",
+                                have_priv.sensitive_rule_.length(), have_priv.sensitive_rule_.ptr()))) {
       SERVER_LOG(WARN, "Fill privs to buffer failed", K(ret));
     }
   }

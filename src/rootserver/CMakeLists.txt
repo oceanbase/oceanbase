@@ -117,6 +117,8 @@ ob_set_subtarget(ob_rootserver common
   ob_alter_table_constraint_checker.cpp
   ob_ccl_ddl_service.cpp
   ob_ccl_ddl_operator.cpp
+  ob_sensitive_rule_ddl_operator.cpp
+  ob_sensitive_rule_ddl_service.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance

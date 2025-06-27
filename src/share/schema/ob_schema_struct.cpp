@@ -8583,6 +8583,13 @@ DEF_TO_STRING(ObPrintPrivSet)
   if ((priv_set_ & OB_PRIV_USE_CATALOG) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" USE CATALOG,");
   }
+  if ((priv_set_ & OB_PRIV_CREATE_SENSITIVE_RULE) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" CREATE SENSITIVE RULE,");
+  }
+  if ((priv_set_ & OB_PRIV_PLAINACCESS) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" PLAINACCESS,");
+  }
+
   if (OB_SUCCESS == ret && pos > 1) {
     pos--; //Delete last ','
   }
@@ -9880,6 +9887,8 @@ int ObNeedPriv::deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocat
     LOG_WARN("Fail to deep copy db", K_(db), K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, other.table_, table_))) {
     LOG_WARN("Fail to deep copy table", K_(table), K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.sensitive_rule_, sensitive_rule_))) {
+    LOG_WARN("Fail to deep copy sensitive rule", K_(sensitive_rule), K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < other.columns_.count(); i++) {
       ObString tmp_column;
@@ -13568,7 +13577,9 @@ const char *OB_OBJECT_TYPE_STR[] =
   "SYS_PACKAGE",
   "SYS_PACKAGE_ONLY_OBJ_PRIV",
   "CONTEXT",
-  "CATALOG"
+  "CATALOG",
+  "LOCATION",
+  "SENSITIVE_RULE"
 };
 static_assert(ARRAYSIZEOF(OB_OBJECT_TYPE_STR) == static_cast<int64_t>(ObObjectType::MAX_TYPE),
               "array size mismatch");

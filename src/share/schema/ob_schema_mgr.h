@@ -42,6 +42,7 @@
 #include "share/schema/ob_rls_mgr.h"
 #include "share/schema/ob_catalog_mgr.h"
 #include "share/schema/ob_ccl_rule_mgr.h"
+#include "share/schema/ob_sensitive_rule_mgr.h"
 
 namespace oceanbase
 {
@@ -983,6 +984,7 @@ private:
   ObRlsContextMgr rls_context_mgr_;
   ObCatalogMgr catalog_mgr_;
   ObCCLRuleMgr ccl_rule_mgr_;
+  ObSensitiveRuleMgr sensitive_rule_mgr_;
   int64_t timestamp_in_slot_; // when schema mgr put in slot, we will set the timestamp
   int64_t allocator_idx_;
   TableInfos mlog_infos_;

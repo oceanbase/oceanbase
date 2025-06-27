@@ -335,6 +335,12 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 546	__all_vector_index_task_history	0	201001	1
 547	__all_ccl_rule	0	201001	1
 548	__all_ccl_rule_history	0	201001	1
+556	__all_sensitive_rule	0	201001	1
+557	__all_sensitive_rule_history	0	201001	1
+558	__all_sensitive_column	0	201001	1
+559	__all_sensitive_column_history	0	201001	1
+560	__all_sensitive_rule_privilege	0	201001	1
+561	__all_sensitive_rule_privilege_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -844,6 +850,12 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12536	__all_virtual_dynamic_partition_table	2	201001	1
 12549	__all_virtual_ccl_rule_history	2	201001	1
 12550	__all_virtual_tenant_vector_mem_info	2	201001	1
+12555	__all_virtual_sensitive_rule	2	201001	1
+12556	__all_virtual_sensitive_rule_history	2	201001	1
+12557	__all_virtual_sensitive_column	2	201001	1
+12558	__all_virtual_sensitive_column_history	2	201001	1
+12559	__all_virtual_sensitive_rule_privilege	2	201001	1
+12560	__all_virtual_sensitive_rule_privilege_history	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1392,6 +1404,12 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21657	V$OB_DYNAMIC_PARTITION_TABLES	1	201001	1
 21661	GV$OB_VECTOR_MEMORY	1	201001	1
 21662	V$OB_VECTOR_MEMORY	1	201001	1
+21663	DBA_OB_SENSITIVE_RULES	1	201001	1
+21664	CDB_OB_SENSITIVE_RULES	1	201001	1
+21665	DBA_OB_SENSITIVE_COLUMNS	1	201001	1
+21666	CDB_OB_SENSITIVE_COLUMNS	1	201001	1
+21667	DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS	1	201001	1
+21668	CDB_OB_SENSITIVE_RULE_PLAINACCESS_USERS	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

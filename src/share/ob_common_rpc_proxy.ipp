@@ -81,6 +81,7 @@
   RPC_S(PRD revoke_table, obrpc::OB_REVOKE_TABLE, (ObRevokeTableArg));
   RPC_S(PRD revoke_routine, obrpc::OB_REVOKE_ROUTINE, (ObRevokeRoutineArg));
   RPC_S(PRD revoke_sys_priv, obrpc::OB_REVOKE_SYSPRIV, (ObRevokeSysPrivArg));
+  RPC_S(PRD revoke_sensitive_rule, obrpc::OB_REVOKE_SENSITIVE_RULE, (ObRevokeSensitiveRuleArg));
   RPC_S(PRD alter_user_profile, obrpc::OB_ALTER_USER_PROFILE, (ObAlterUserProfileArg));
   RPC_S(PRD handle_security_audit, obrpc::OB_SECURITY_AUDIT, (ObSecurityAuditArg));
   //----End of definitions for managing privileges----
@@ -315,3 +316,7 @@
   RPC_S(PRD parallel_htable_ddl, obrpc::OB_PARALLEL_HTABLE_DDL, (ObHTableDDLArg), ObHTableDDLRes);
   RPC_S(PRD create_ccl_rule, obrpc::OB_CREATE_CCL_RULE, (ObCreateCCLRuleArg));
   RPC_S(PRD drop_ccl_rule, obrpc::OB_DROP_CCL_RULE, (ObDropCCLRuleArg));
+
+  //----Definitions for sensitive rule----
+  RPC_S(PRD handle_sensitive_rule_ddl, obrpc::OB_HANDLE_SENSITIVE_RULE_DDL, (ObSensitiveRuleDDLArg));
+  //----End of definitions for sensitive rule----

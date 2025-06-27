@@ -395,6 +395,15 @@
 # 547: __all_ccl_rule
 # 548: __all_ccl_rule_history
 # 548: __all_ccl_rule  # BASE_TABLE_NAME
+# 556: __all_sensitive_rule
+# 557: __all_sensitive_rule_history
+# 557: __all_sensitive_rule  # BASE_TABLE_NAME
+# 558: __all_sensitive_column
+# 559: __all_sensitive_column_history
+# 559: __all_sensitive_column  # BASE_TABLE_NAME
+# 560: __all_sensitive_rule_privilege
+# 561: __all_sensitive_rule_privilege_history
+# 561: __all_sensitive_rule_privilege  # BASE_TABLE_NAME
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1252,6 +1261,21 @@
 # 12549: __all_ccl_rule  # BASE_TABLE_NAME
 # 12549: __all_ccl_rule_history  # BASE_TABLE_NAME1
 # 12550: __all_virtual_tenant_vector_mem_info
+# 12555: __all_virtual_sensitive_rule
+# 12555: __all_sensitive_rule  # BASE_TABLE_NAME
+# 12556: __all_virtual_sensitive_rule_history
+# 12556: __all_sensitive_rule  # BASE_TABLE_NAME
+# 12556: __all_sensitive_rule_history  # BASE_TABLE_NAME1
+# 12557: __all_virtual_sensitive_column
+# 12557: __all_sensitive_column  # BASE_TABLE_NAME
+# 12558: __all_virtual_sensitive_column_history
+# 12558: __all_sensitive_column  # BASE_TABLE_NAME
+# 12558: __all_sensitive_column_history  # BASE_TABLE_NAME1
+# 12559: __all_virtual_sensitive_rule_privilege
+# 12559: __all_sensitive_rule_privilege  # BASE_TABLE_NAME
+# 12560: __all_virtual_sensitive_rule_privilege_history
+# 12560: __all_sensitive_rule_privilege  # BASE_TABLE_NAME
+# 12560: __all_sensitive_rule_privilege_history  # BASE_TABLE_NAME1
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -2498,6 +2522,12 @@
 # 21657: V$OB_DYNAMIC_PARTITION_TABLES
 # 21661: GV$OB_VECTOR_MEMORY
 # 21662: V$OB_VECTOR_MEMORY
+# 21663: DBA_OB_SENSITIVE_RULES
+# 21664: CDB_OB_SENSITIVE_RULES
+# 21665: DBA_OB_SENSITIVE_COLUMNS
+# 21666: CDB_OB_SENSITIVE_COLUMNS
+# 21667: DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS
+# 21668: CDB_OB_SENSITIVE_RULE_PLAINACCESS_USERS
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS

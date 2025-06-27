@@ -2868,6 +2868,12 @@ DEFINE_ERROR_EXT(OB_CCL_RULE_EXIST, -11085, -1, "HY000", "CCL rule already exist
 DEFINE_ERROR_EXT(OB_CCL_RULE_NOT_EXIST, -11086, -1, "HY000", "CCL rule not exist", "CCL rule '%.*s' doesn\'t exist");
 DEFINE_ERROR_EXT(OB_REACH_MAX_CCL_CONCURRENT_NUM, -11087, -1, "HY000", "SQL reach max ccl concurrent num", "SQL reach max ccl rule %s, concurrent num %ld");
 DEFINE_ERROR_EXT(OB_REACH_DIAGNOSIS_ERROR_LIMIT, -11088, -1, "HY000", "reject limit reached", "reject limit %ld reached");
+DEFINE_ERROR_EXT(OB_SENSITIVE_RULE_EXIST, -11094, -1, "HY000", "Sensitive rule exists", "Sensitive rule '%.*s' exists");
+DEFINE_ERROR_EXT(OB_SENSITIVE_RULE_NOT_EXIST, -11095, -1, "HY000", "Sensitive rule does not exists", "Sensitive rule '%.*s' does not exist");
+DEFINE_ERROR_EXT(OB_SENSITIVE_COLUMN_EXIST, -11096, -1, "HY000", "Sensitive column exists", "Sensitive column %.*s(%.*s) exists");
+DEFINE_ERROR_EXT(OB_SENSITIVE_COLUMN_NOT_EXIST, -11097, -1, "HY000", "Sensitive column does not exists", "Sensitive column %.*s(%.*s) does not exist");
+DEFINE_ERROR_EXT(OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE, -11098, -1, "HY000", "No privilege to access sensitive field", "Access sensitive field protected by sensitive rule '%.*s' denied to user '%.*s'@'%.*s'");
+DEFINE_ERROR_EXT(OB_WRONG_SENSITIVE_RULE_NAME, -11099, -1, "HY000", "Invalid sensitive rule name", "Invalid sensitive rule name '%.*s'");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)

@@ -36,6 +36,7 @@ public:
     ObString db_name_;
     ObString table_name_;
     ObString column_name_;
+    ObString sensitive_rule_name_;
     share::schema::ObObjectType obj_type_;
     uint64_t hash() const {
       uint64_t hash_val = 0;
@@ -43,6 +44,7 @@ public:
       hash_val = db_name_.hash(hash_val);
       hash_val = table_name_.hash(hash_val);
       hash_val = column_name_.hash(hash_val);
+      hash_val = sensitive_rule_name_.hash(hash_val);
       hash_val = murmurhash(&obj_type_, sizeof(obj_type_), hash_val);
       return hash_val;
     }
@@ -54,7 +56,13 @@ public:
         if (left.db_name_ == right.db_name_) {
           if (left.table_name_ == right.table_name_) {
             if (left.column_name_ == right.column_name_) {
-              ret = left.obj_type_ < right.obj_type_;
+              if (left.sensitive_rule_name_ == right.sensitive_rule_name_) {
+                ret = left.obj_type_ < right.obj_type_;
+              } else if (left.sensitive_rule_name_ < right.sensitive_rule_name_) {
+                ret = true;
+              } else {
+                ret = false;
+              }
             } else if (left.column_name_ < right.column_name_) {
               ret = true;
             } else {
@@ -83,6 +91,7 @@ public:
           && db_name_ == other.db_name_
           && table_name_ == other.table_name_
           && column_name_ == other.column_name_
+          && sensitive_rule_name_ == other.sensitive_rule_name_
           && obj_type_ == other.obj_type_;
     }
 

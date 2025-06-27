@@ -6353,6 +6353,8 @@ PRIV_DECRYPT	varchar(3)	NO
 PRIV_EVENT	varchar(3)	NO			
 PRIV_CREATE_CATALOG	varchar(3)	NO			
 PRIV_USE_CATALOG	varchar(3)	NO			
+PRIV_CREATE_SENSITIVE_RULE	varchar(3)	NO			
+PRIV_PLAINACCESS	varchar(3)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_USERS limit 1);
 cnt
 1
@@ -6414,6 +6416,8 @@ PRIV_DECRYPT	varchar(3)	NO
 PRIV_EVENT	varchar(3)	NO			
 PRIV_CREATE_CATALOG	varchar(3)	NO			
 PRIV_USE_CATALOG	varchar(3)	NO			
+PRIV_CREATE_SENSITIVE_RULE	varchar(3)	NO			
+PRIV_PLAINACCESS	varchar(3)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_USERS limit 1);
 cnt
 1
@@ -11571,6 +11575,61 @@ VECTOR_MEM_LIMIT	bigint(20)	NO
 TX_SHARE_LIMIT	bigint(20)	NO			
 VECTOR_MEM_DETAIL_INFO	varchar(65535)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_VECTOR_MEMORY limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_SENSITIVE_RULES;
+Field	Type	Null	Key	Default	Extra
+RULE_NAME	varchar(256)	NO		NULL	
+PROTECTION_POLICY	varchar(10)	NO			
+METHOD	varchar(4096)	NO		NULL	
+ENABLED	varchar(3)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SENSITIVE_RULES limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_SENSITIVE_RULES;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+RULE_NAME	varchar(256)	NO		NULL	
+PROTECTION_POLICY	varchar(10)	NO			
+METHOD	varchar(4096)	NO		NULL	
+ENABLED	varchar(3)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_SENSITIVE_RULES limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_SENSITIVE_COLUMNS;
+Field	Type	Null	Key	Default	Extra
+RULE_NAME	varchar(256)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+COLUMN_NAME	varchar(128)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SENSITIVE_COLUMNS limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_SENSITIVE_COLUMNS;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+RULE_NAME	varchar(256)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+COLUMN_NAME	varchar(128)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_SENSITIVE_COLUMNS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS;
+Field	Type	Null	Key	Default	Extra
+RULE_NAME	varchar(64)	NO		NULL	
+USER_NAME	varchar(128)	NO		NULL	
+USER_TYPE	varchar(4)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_SENSITIVE_RULE_PLAINACCESS_USERS;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+RULE_NAME	varchar(64)	NO		NULL	
+USER_NAME	varchar(128)	NO		NULL	
+USER_TYPE	varchar(4)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_SENSITIVE_RULE_PLAINACCESS_USERS limit 1);
 cnt
 1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from

@@ -72,14 +72,12 @@ int ObExprEnhancedAes::eval_param(const ObExpr &expr,
   int ret = OB_SUCCESS;
   bool is_ecb = false;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  op_mode = static_cast<ObCipherOpMode>(expr.extra_);
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null session", K(ret));
-  } else if (OB_FAIL(ObEncryptionUtil::get_cipher_op_mode(op_mode, session))) {
+  } else if (op_mode == ob_invalid_mode && OB_FAIL(ObEncryptionUtil::get_cipher_op_mode(op_mode, session))) {
     LOG_WARN("failed to get cipher op mode", K(ret));
-  } else if (!ObEncryptionUtil::is_aes_encryption(op_mode)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "using aes_encrypt with non-aes block_encryption_mode");
   } else if (FALSE_IT(is_ecb = ObEncryptionUtil::is_ecb_mode(op_mode))) {
   } else if (OB_UNLIKELY(!is_ecb && 2 != expr.arg_cnt_)) {  // non-ecb mode requires iv param
     ret = OB_ERR_PARAM_SIZE;
@@ -182,7 +180,15 @@ int ObExprEnhancedAesEncrypt::calc_result_typeN(ObExprResType &type,
 {
   int ret = OB_SUCCESS;
   ObCipherOpMode mode = ob_invalid_mode;
-  if (OB_FAIL(ObEncryptionUtil::get_cipher_op_mode(mode, type_ctx.get_session()))) {
+  if (NULL != type_ctx.get_raw_expr()) {
+    // the encryption mode is specified by a sensitive rule
+    uint64_t encryption_mode = type_ctx.get_raw_expr()->get_encryption_mode();
+    if (encryption_mode > 0 && encryption_mode < ObCipherOpMode::ob_max_mode) {
+      mode = static_cast<ObCipherOpMode>(encryption_mode);
+    }
+  }
+  if (mode == ob_invalid_mode
+      && OB_FAIL(ObEncryptionUtil::get_cipher_op_mode(mode, type_ctx.get_session()))) {
     LOG_WARN("failed to get cipher op mode", K(ret));
   } else if (OB_FAIL(ObExprEnhancedAes::calc_result_typeN(type, types, param_num, type_ctx))) {
     LOG_WARN("failed to calc aes encryption result type", K(ret));
@@ -202,6 +208,9 @@ int ObExprEnhancedAesEncrypt::cg_expr(ObExprCGCtx &expr_cg_ctx,
   UNUSED(raw_expr);
   int ret = OB_SUCCESS;
   rt_expr.eval_func_ = eval_aes_encrypt;
+  // if the encryption mode is set, it means this ENHANCED_AES_ENCRYPT expr
+  // was implicitly added by a sensitive rule
+  rt_expr.extra_ = raw_expr.get_encryption_mode();
   return ret;
 }
 

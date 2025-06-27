@@ -1987,6 +1987,12 @@ constexpr int OB_CCL_RULE_EXIST = -11085;
 constexpr int OB_CCL_RULE_NOT_EXIST = -11086;
 constexpr int OB_REACH_MAX_CCL_CONCURRENT_NUM = -11087;
 constexpr int OB_REACH_DIAGNOSIS_ERROR_LIMIT = -11088;
+constexpr int OB_SENSITIVE_RULE_EXIST = -11094;
+constexpr int OB_SENSITIVE_RULE_NOT_EXIST = -11095;
+constexpr int OB_SENSITIVE_COLUMN_EXIST = -11096;
+constexpr int OB_SENSITIVE_COLUMN_NOT_EXIST = -11097;
+constexpr int OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE = -11098;
+constexpr int OB_WRONG_SENSITIVE_RULE_NAME = -11099;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -4419,6 +4425,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_CCL_RULE_NOT_EXIST__USER_ERROR_MSG "CCL rule '%.*s' doesn\'t exist"
 #define OB_REACH_MAX_CCL_CONCURRENT_NUM__USER_ERROR_MSG "SQL reach max ccl rule %s, concurrent num %ld"
 #define OB_REACH_DIAGNOSIS_ERROR_LIMIT__USER_ERROR_MSG "reject limit %ld reached"
+#define OB_SENSITIVE_RULE_EXIST__USER_ERROR_MSG "Sensitive rule '%.*s' exists"
+#define OB_SENSITIVE_RULE_NOT_EXIST__USER_ERROR_MSG "Sensitive rule '%.*s' does not exist"
+#define OB_SENSITIVE_COLUMN_EXIST__USER_ERROR_MSG "Sensitive column %.*s(%.*s) exists"
+#define OB_SENSITIVE_COLUMN_NOT_EXIST__USER_ERROR_MSG "Sensitive column %.*s(%.*s) does not exist"
+#define OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE__USER_ERROR_MSG "Access sensitive field protected by sensitive rule '%.*s' denied to user '%.*s'@'%.*s'"
+#define OB_WRONG_SENSITIVE_RULE_NAME__USER_ERROR_MSG "Invalid sensitive rule name '%.*s'"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -9272,6 +9284,18 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_REACH_MAX_CCL_CONCURRENT_NUM__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11087, SQL reach max ccl rule %s, concurrent num %ld"
 #define OB_REACH_DIAGNOSIS_ERROR_LIMIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11088, reject limit %ld reached"
 #define OB_REACH_DIAGNOSIS_ERROR_LIMIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11088, reject limit %ld reached"
+#define OB_SENSITIVE_RULE_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11094, Sensitive rule '%.*s' exists"
+#define OB_SENSITIVE_RULE_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11094, Sensitive rule '%.*s' exists"
+#define OB_SENSITIVE_RULE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11095, Sensitive rule '%.*s' does not exist"
+#define OB_SENSITIVE_RULE_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11095, Sensitive rule '%.*s' does not exist"
+#define OB_SENSITIVE_COLUMN_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11096, Sensitive column %.*s(%.*s) exists"
+#define OB_SENSITIVE_COLUMN_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11096, Sensitive column %.*s(%.*s) exists"
+#define OB_SENSITIVE_COLUMN_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11097, Sensitive column %.*s(%.*s) does not exist"
+#define OB_SENSITIVE_COLUMN_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11097, Sensitive column %.*s(%.*s) does not exist"
+#define OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11098, Access sensitive field protected by sensitive rule '%.*s' denied to user '%.*s'@'%.*s'"
+#define OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11098, Access sensitive field protected by sensitive rule '%.*s' denied to user '%.*s'@'%.*s'"
+#define OB_WRONG_SENSITIVE_RULE_NAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11099, Invalid sensitive rule name '%.*s'"
+#define OB_WRONG_SENSITIVE_RULE_NAME__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11099, Invalid sensitive rule name '%.*s'"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9291,7 +9315,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2428];
+extern int g_all_ob_errnos[2434];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
