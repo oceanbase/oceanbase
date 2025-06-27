@@ -14185,6 +14185,31 @@ enum class ObHTableDDLType : uint8_t
   MAX = 255
 };
 
+
+struct ObWakeupStorageHAServiceArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum ServiceType
+  {
+    RESTORE_SERVICE = 0,
+    MAX_TYPE
+  };
+  ObWakeupStorageHAServiceArg()
+    : tenant_id_(common::OB_INVALID_TENANT_ID), service_type_(ServiceType::MAX_TYPE) {}
+  ~ObWakeupStorageHAServiceArg() {}
+  bool is_valid() const;
+  int assign(const ObWakeupStorageHAServiceArg &other);
+  int init(const uint64_t tenant_id, const ServiceType service_type);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  ServiceType get_service_type() const { return service_type_; }
+  TO_STRING_KV(K_(tenant_id), K_(service_type));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObWakeupStorageHAServiceArg);
+private:
+  uint64_t tenant_id_;
+  ServiceType service_type_;
+};
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif

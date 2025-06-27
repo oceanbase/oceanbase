@@ -72,6 +72,7 @@
 #include "parallel_ddl/ob_update_index_status_helper.h" // ObUpdateIndexStatusHelper
 #include "pl_ddl/ob_pl_ddl_service.h"
 #include "storage/ddl/ob_tablet_split_util.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
 {
@@ -9277,8 +9278,6 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
 
       if (FAILEDx(ObRestoreUtil::record_physical_restore_job(trans, job_info))) {
         LOG_WARN("fail to record physical restore job", K(ret), K(job_id), K(arg));
-      } else {
-        //TODO wakeup restore scheduler
       }
 
       if (trans.is_started()) {
@@ -9286,6 +9285,12 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
         if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
           LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
           ret = (OB_SUCC(ret)) ? temp_ret : ret;
+        } else if (OB_SUCC(ret)) {
+          if (OB_SUCCESS != (temp_ret = storage::ObStorageHAUtils::wakeup_service(
+                          obrpc::ObWakeupStorageHAServiceArg::ServiceType::RESTORE_SERVICE,
+                          OB_SYS_TENANT_ID, ObLSID(ObLSID::SYS_LS_ID)))) {
+             LOG_WARN("fail to wake up restore service", K(temp_ret));
+          }
         }
       }
     }

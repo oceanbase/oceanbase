@@ -92,6 +92,8 @@ public:
 #ifdef ERRSIM
   static int is_errsim_transfer_server(bool &is_errsim_server);
 #endif
+  static int wakeup_service(const obrpc::ObWakeupStorageHAServiceArg::ServiceType service_type,
+                            const uint64_t tenant_id, const ObLSID &ls_id);
 private:
   struct TableKeySnapshotVersionComparator final
   {
