@@ -34,6 +34,20 @@ typedef common::ObCurTraceId::TraceId TraceId;
 const static int64_t VEC_ASYNC_TASK_DEFAULT_ERR_CODE = -1;
 class ObPluginVectorIndexMgr;
 
+
+#define CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_)  \
+  if (++loop_cnt > 20) { \
+    bool is_cancel = false; \
+    if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_task_is_cancel(ctx_, is_cancel))) { \
+      LOG_WARN("fail to check task is cancel", KPC(ctx_));  \
+    } else if (is_cancel) { \
+      ret = OB_CANCELED;  \
+      LOG_INFO("async task is cancel", KPC(ctx_));  \
+    } else {  \
+      loop_cnt = 0; \
+    } \
+  }
+
 enum ObVecIndexAsyncTaskTriggerType
 {
   OB_VEC_TRIGGER_AUTO = 0,
@@ -373,6 +387,7 @@ public:
   static int remove_sys_task(ObVecIndexAsyncTaskCtx *task);
   static int fetch_new_trace_id(const uint64_t basic_num, ObIAllocator *allocator, TraceId &new_trace_id);
   static int in_active_time(const uint64_t tenant_id, bool& is_active_time);
+  static int check_task_is_cancel(ObVecIndexAsyncTaskCtx *task, bool &is_cancel);
 
 private:
   static int construct_read_task_sql(
