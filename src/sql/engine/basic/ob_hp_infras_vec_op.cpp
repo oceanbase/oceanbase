@@ -167,6 +167,10 @@ void ObIHashPartInfrastructure::destroy()
     if (OB_NOT_NULL(alloc_)) {
       alloc_->free(my_skip_);
       my_skip_ = nullptr;
+      if (store_rows_ != nullptr) {
+        alloc_->free(store_rows_);
+        store_rows_ = nullptr;
+      }
     }
   }
 }
@@ -1117,7 +1121,10 @@ int ObIHashPartInfrastructure::get_left_next_batch(
 {
   int ret = OB_SUCCESS;
   if (store_rows_ == nullptr || store_rows_size_ < max_row_cnt) {
-    store_rows_ = nullptr;
+    if (store_rows_ != nullptr) {
+      alloc_->free(store_rows_);
+      store_rows_ = nullptr;
+    }
     if (OB_ISNULL(store_rows_ = static_cast<const ObCompactRow **>
         (alloc_->alloc(max_row_cnt * sizeof(ObCompactRow *))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
