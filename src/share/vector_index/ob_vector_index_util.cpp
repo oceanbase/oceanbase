@@ -324,7 +324,7 @@ int ObVectorIndexUtil::print_index_param(const ObTableSchema &table_schema, char
 }
 
 int ObVectorIndexUtil::construct_rebuild_index_param(
-    const ObString &old_index_params, ObString &new_index_params, ObIAllocator *allocator)
+  const ObTableSchema &data_table_schema, const ObString &old_index_params, ObString &new_index_params, ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   ObVectorIndexParam old_vec_param;
@@ -455,6 +455,40 @@ int ObVectorIndexUtil::construct_rebuild_index_param(
     } else if (OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", EF_CONSTRUCTION=%ld", old_vec_param.ef_construction_))) {
       LOG_WARN("fail to databuff printf", K(ret), K(pos), K(old_vec_param.ef_construction_));
     }
+    // verify extra_info_max_size and extra_info_actual_size
+    if (OB_FAIL(ret)) {
+    } else if (new_vec_param.extra_info_actual_size_ != 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unexpected setting of vector index param, extra_info_actual_size can not be set", K(ret),
+               K(new_vec_param), K(old_vec_param));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "not supproted change extra_info_actual_size param");
+    } else if (new_vec_param.extra_info_max_size_ != old_vec_param.extra_info_max_size_) {
+      // extra_info_max_size changed
+      if (new_vec_param.extra_info_max_size_ == 0) {
+        // skip, do nothing
+        LOG_DEBUG("extra_info_max_size set to 0, skip", K(new_vec_param), K(old_vec_param));
+      } else {
+        int64_t extra_info_actual_size = 0;
+        if (data_table_schema.get_index_type() != ObIndexType::INDEX_TYPE_IS_NOT) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("must not index table", K(ret), K(data_table_schema));
+        } else if (OB_FAIL(check_extra_info_size(data_table_schema, nullptr, true, new_vec_param.extra_info_max_size_,
+                                                 extra_info_actual_size))) {
+          LOG_WARN("fail to check extra info size", K(ret), K(new_vec_param), K(old_vec_param), K(data_table_schema));
+        } else if (OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos,
+                                           ", EXTRA_INFO_ACTUAL_SIZE=%ld", extra_info_actual_size))) {
+          LOG_WARN("fail to printf databuff", K(ret));
+        }
+      }
+    } else {
+      // extra_info_max_size not change
+      if (old_vec_param.extra_info_actual_size_ != 0) {
+        if (OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", EXTRA_INFO_ACTUAL_SIZE=%ld",
+                                    old_vec_param.extra_info_actual_size_))) {
+          LOG_WARN("fail to printf databuff", K(ret));
+        }
+      }
+    }
 
     if (OB_FAIL(ret)) {
     } else if (new_distance_is_set && new_type_is_set) {
@@ -482,7 +516,6 @@ int ObVectorIndexUtil::construct_rebuild_index_param(
   }
   return ret;
 }
-
 bool ObVectorIndexUtil::is_expr_type_and_distance_algorithm_match(
      const ObItemType expr_type, const ObVectorIndexDistAlgorithm algorithm)
 {
