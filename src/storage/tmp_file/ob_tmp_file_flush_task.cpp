@@ -34,9 +34,9 @@ void ObTmpFileWriteBlockTimerTask::runTimerTask()
 }
 
 ObTmpFileFlushTask::ObTmpFileFlushTask()
-  : is_send_(false),
-    is_finished_(false),
-    ret_code_(OB_SUCCESS),
+  : is_finished_(false),
+    is_written_(false),
+    ret_code_(-1),
     page_idx_(0),
     page_cnt_(0),
     size_(0),
@@ -68,9 +68,9 @@ void ObTmpFileFlushTask::reset()
     } else if (!page->is_full() && write_cache.unlock(page->get_page_key().fd_)) {
       LOG_ERROR("fail to unlock page", KR(ret), KPC(this));
     }
-  } // unlock bucket lock if task is canceled
+  } // unlock bucket lock when task destruct
 
-  // do not reset is_send_, is_finished_, ret_code_ and create_ts_ for debugging purpose
+  // do not reset is_written_, is_finished_, ret_code_ and create_ts_ for debugging purpose
   page_idx_ = 0;
   page_cnt_ = 0;
   io_handle_.reset();
@@ -136,7 +136,6 @@ int ObTmpFileFlushTask::memcpy_pages_()
       LOG_ERROR("fail to calculate and set meta page checksum", KR(ret), K(page), KPC(this));
     } else if(FALSE_IT(MEMCPY(buf_ + i * PAGE_SIZE, page.get_buffer(), PAGE_SIZE))) {
     } else {
-      // LOG_DEBUG("task memcpy page after collecting page", K(page));
       ObTmpPageCacheValue value(buf_ + i * PAGE_SIZE);
       if (PageType::DATA == page_key.type_) {
         ObTmpPageCacheKey key(page_key.fd_, page_key.virtual_page_id_, MTL_ID());
@@ -219,17 +218,11 @@ int ObTmpFileFlushTask::write()
     if (OB_FAIL(ObIOManager::get_instance().aio_write(io_info, io_handle_))) {
       LOG_WARN("fail to async write", KR(ret), K(io_info));
     } else {
-      set_is_send(true);
       LOG_DEBUG("flush task send io succ", KR(ret), K(page_idx_), K(page_cnt_), KPC(this));
     }
   }
-
-  if (OB_FAIL(ret)) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(cancel(ret))) {
-      LOG_ERROR("fail to exec flush_block_over", KR(tmp_ret), KPC(this));
-    }
-  }
+  set_write_ret(ret);
+  set_is_written(true);
   LOG_DEBUG("flush task write end", KR(ret), KPC(this));
   return ret;
 }
@@ -241,9 +234,9 @@ int ObTmpFileFlushTask::wait()
   if (OB_ISNULL(block)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tmp file block is null", KR(ret), KPC(this));
-  } else if (ATOMIC_LOAD(&is_finished_)) {
-    LOG_WARN("flush task already finished", KPC(this));
-  } else if (!is_send()) {
+  } else if (is_finished()) { // TODO: use local is_finished flag
+    LOG_ERROR("flush task already finished", KPC(this));
+  } else if (!is_written()) {
     ret = OB_EAGAIN;
   } else {
     if (OB_FAIL(io_handle_.wait())) {

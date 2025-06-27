@@ -825,9 +825,9 @@ int ObTmpFileWriteCache::add_flush_task_(ObTmpFileFlushTask *task)
     LOG_WARN("write cache is not init", KR(ret), KPC(task));
   } else if (OB_ISNULL(link)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("task ptr is null", KR(ret), KPC(task));
+    LOG_ERROR("task ptr is null", KR(ret), KPC(task));
   } else if (OB_FAIL(io_waiting_queue_.push(link))) {
-    LOG_WARN("fail to push flush task", KR(ret), KPC(task));
+    LOG_ERROR("fail to push flush task", KR(ret), KPC(task));
   } else {
     ATOMIC_INC(&io_waiting_queue_size_);
   }
@@ -1079,23 +1079,27 @@ int ObTmpFileWriteCache::exec_wait_()
 {
   int ret = OB_SUCCESS;
   int64_t task_cnt = ATOMIC_LOAD(&io_waiting_queue_size_);
-  while (OB_SUCC(ret) && task_cnt > 0) {
+  for (; OB_SUCC(ret) && task_cnt > 0; --task_cnt) {
     ObTmpFileFlushTask *task = nullptr;
     if (OB_FAIL(pop_flush_task_(task))) {
       LOG_WARN("fail to pop flush task", KR(ret));
+    } else if (!task->is_written()) {
+      add_flush_task_(task);
+      task = nullptr;
+    } else if (OB_SUCCESS != task->get_write_ret()) {
+      task->cancel(task->get_write_ret());
     } else if (OB_FAIL(task->wait())) {
       if (OB_EAGAIN == ret) { // add task into queue again
         ret = OB_SUCCESS;
-        if (OB_FAIL(add_flush_task_(task))) {
-          LOG_ERROR("fail to add task to continue waiting", KR(ret));
-        }
+        add_flush_task_(task);
+        task = nullptr;
       } else {
         LOG_WARN("fail to exec wait for tmp file flush io", KR(ret), KPC(task));
       }
     }
 
     // ignore ret
-    if (task->is_finished()) {
+    if (OB_NOT_NULL(task)) {
       LOG_DEBUG("task is finished, evict", KPC(task));
       set_flush_ret_code_(task->get_ret_code());
       if (OB_SUCCESS == task->get_ret_code()
@@ -1106,7 +1110,6 @@ int ObTmpFileWriteCache::exec_wait_()
         LOG_ERROR("fail to free flush task", KR(ret), K(io_waiting_queue_size_));
       }
     }
-    task_cnt -= 1;
   }
   LOG_DEBUG("exec wait", KR(ret), K(io_waiting_queue_size_), K(swap_queue_size_));
   return ret;
@@ -1562,7 +1565,7 @@ int ObTmpFileWriteCache::remove_pending_task_()
   for (int64_t i = io_waiting_queue_size_; i > 0; --i) {
     if (OB_FAIL(pop_flush_task_(task))) {
       LOG_WARN("fail to pop flush task", KR(ret));
-    } else if (OB_UNLIKELY(!task->is_send())) {
+    } else if (OB_UNLIKELY(!task->is_written())) {
       LOG_INFO("flush task is not sending IO after flush timer stop", KPC(task));
       free_flush_task_(task);
     } else if (OB_FAIL(add_flush_task_(task))) {
