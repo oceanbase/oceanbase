@@ -502,7 +502,7 @@ int ObDbmsStatsExecutor::split_gather_partition_stats(ObExecContext &ctx,
                                                    all_tstats,
                                                    all_cstats))) {
                   if (gather_param.sepcify_scn_ > 0 &&
-                      (ret == OB_TABLE_DEFINITION_CHANGED || ret == OB_SNAPSHOT_DISCARDED)) {
+                      (ret == OB_TABLE_DEFINITION_CHANGED || ret == OB_SNAPSHOT_DISCARDED || ret == OB_INVALID_QUERY_TIMESTAMP)) {
                     LOG_WARN("failed to specify snapshot to gather stats, try no specify snapshot to gather stats", K(ret));
                     gather_param.sepcify_scn_ = 0;
                     allocator.reuse();
@@ -753,7 +753,7 @@ int ObDbmsStatsExecutor::split_gather_global_stats(ObExecContext &ctx,
                                                all_tstats,
                                                all_cstats))) {
               if (gather_param.sepcify_scn_ > 0 &&
-                  (ret == OB_TABLE_DEFINITION_CHANGED || OB_SNAPSHOT_DISCARDED == ret)) {
+                  (ret == OB_TABLE_DEFINITION_CHANGED || OB_SNAPSHOT_DISCARDED == ret || OB_INVALID_QUERY_TIMESTAMP == ret)) {
                 LOG_WARN("failed to specify snapshot to gather stats, try no specify snapshot to gather stats", K(ret));
                 gather_param.sepcify_scn_ = 0;
                 allocator.reuse();
