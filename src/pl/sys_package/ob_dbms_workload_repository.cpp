@@ -636,14 +636,14 @@ int ObDbmsWorkloadRepository::get_ash_bound_sql_time(const AshReportParams &ash_
                              ash_begin_time,
                              ash_begin_time_buf,
                              time_buf_len,
-                             time_buf_pos))) {
+                             time_buf_pos, 6))) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(ret));
   } else if (FALSE_IT(time_buf_pos = 0)) {
   } else if (OB_FAIL(usec_to_string(ash_report_params.tz_info,
                                     ash_end_time,
                                     ash_end_time_buf,
                                     time_buf_len,
-                                    time_buf_pos))) {
+                                    time_buf_pos, 6))) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(ret));
   } else if (is_oracle_mode()) {
     snprintf(start_time_buf, start_buf_len, "TO_DATE('%s')", ash_begin_time_buf);
@@ -655,15 +655,16 @@ int ObDbmsWorkloadRepository::get_ash_bound_sql_time(const AshReportParams &ash_
   return ret;
 }
 
+/// scale 0 for user interface. scale 6 for query ash table.
 int ObDbmsWorkloadRepository::usec_to_string(const common::ObTimeZoneInfo *tz_info,
-    const int64_t usec, char *buf, int64_t buf_len, int64_t &pos)
+    const int64_t usec, char *buf, int64_t buf_len, int64_t &pos, int scale = 0)
 {
   int ret = OB_SUCCESS;
   ObTime time;
   if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(usec, tz_info, time))) {
     LOG_WARN("failed to usec to ob time", K(ret), K(usec));
   } else if (OB_FAIL(ObTimeConverter::ob_time_to_str(time,
-                 lib::is_oracle_mode() ? DT_TYPE_ORACLE_TIMESTAMP : DT_TYPE_DATETIME, 0 /*scale*/,
+                 lib::is_oracle_mode() ? DT_TYPE_ORACLE_TIMESTAMP : DT_TYPE_DATETIME, scale /*scale*/,
                  buf, buf_len, pos, true /*with_delim*/))) {
     LOG_WARN("fail to change time to string", K(ret), K(time), K(pos));
   }
@@ -1562,11 +1563,11 @@ int ObDbmsWorkloadRepository::append_fmt_ash_view_sql(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ash view ptr is nullptr", K(ret), K(ash_view_ptr));
   } else if (OB_FAIL(usec_to_string(ash_report_params.tz_info, ash_report_params.ash_begin_time,
-                 ash_begin_time_buf, time_buf_len, time_buf_pos))) {
+                 ash_begin_time_buf, time_buf_len, time_buf_pos, 6))) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(ret));
   } else if (FALSE_IT(time_buf_pos = 0)) {
   } else if (OB_FAIL(usec_to_string(ash_report_params.tz_info, ash_report_params.ash_end_time,
-                 ash_end_time_buf, time_buf_len, time_buf_pos))) {
+                 ash_end_time_buf, time_buf_len, time_buf_pos, 6))) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(ret));
   } else if (FALSE_IT(sprintf(port_buf, "%ld", ash_report_params.port))) {
   } else if (OB_FAIL(sql_string.append_fmt(ash_view_ptr,
@@ -1773,11 +1774,11 @@ int ObDbmsWorkloadRepository::append_fmt_wr_view_sql(
   if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
     LOG_WARN("get_min_data_version failed", K(ret), K(MTL_ID()));
   } else if (OB_FAIL(usec_to_string(ash_report_params.tz_info, ash_report_params.wr_begin_time,
-                 wr_begin_time_buf, time_buf_len, time_buf_pos))) {
+                 wr_begin_time_buf, time_buf_len, time_buf_pos, 6))) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(ret));
   } else if (FALSE_IT(time_buf_pos = 0)) {
   } else if (OB_FAIL(usec_to_string(ash_report_params.tz_info, ash_report_params.wr_end_time,
-                 wr_end_time_buf, time_buf_len, time_buf_pos))) {
+                 wr_end_time_buf, time_buf_len, time_buf_pos, 6))) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to print time as str", K(ret));
   } else if (FALSE_IT(sprintf(port_buf, "%ld", ash_report_params.port))) {
   } else if ((data_version < DATA_VERSION_4_2_2_0) &&

@@ -230,7 +230,7 @@ public:
     return a.second > b.second;  // Sort in descending order based on the value of int64_t.
   }
   static int usec_to_string(const common::ObTimeZoneInfo *tz_info,
-    const int64_t usec, char *buf, int64_t buf_len, int64_t &pos);
+    const int64_t usec, char *buf, int64_t buf_len, int64_t &pos, int scale);
   static int get_ash_bound_sql_time(const AshReportParams &ash_report_params,
                                     char *start_time_buf, int64_t start_buf_len,
                                     char *end_time_buf, int64_t end_buf_len);
