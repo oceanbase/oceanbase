@@ -65,7 +65,6 @@ private:
   io_wrpipefd_map_t io_wrpipefd_map_[MAX_PROTOCOL_TYPE_SIZE];
 };
 
-extern bool enable_pkt_nio(bool start_as_client);
 }; // end namespace obrpc
 }; // end namespace oceanbase
 

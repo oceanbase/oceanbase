@@ -388,17 +388,12 @@ int ObListener::do_one_event(int accept_fd) {
   io_threads_pipefd_pool_t *pipefd_pool = NULL;
 
   if (OB_TMP_FAIL(read_client_magic(accept_fd, client_magic, index))) {
-    if (enable_pkt_nio(false)) {
-      err = EAGAIN;
-      RPC_LOG(INFO, "not read a read negotiation msg, dispatch back to pkt-nio server", K(accept_fd));
-    } else {
-      index = compatible_balance_assign(pipefd_pool);
-      trace_connection_info(accept_fd);
-      if (OB_TMP_FAIL(connection_redispatch(accept_fd, pipefd_pool, index))) {
-        close(accept_fd);
-      }
-      pipefd_pool = NULL;
+    index = compatible_balance_assign(pipefd_pool);
+    trace_connection_info(accept_fd);
+    if (OB_TMP_FAIL(connection_redispatch(accept_fd, pipefd_pool, index))) {
+      close(accept_fd);
     }
+    pipefd_pool = NULL;
   } else {
     for (int i = 0; i < MAX_PROTOCOL_TYPE_SIZE; i++) {
       if (io_wrpipefd_map_[i].used && io_wrpipefd_map_[i].magic == client_magic) {

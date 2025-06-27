@@ -176,23 +176,6 @@ static int dispatch_fd_to(int fd, uint32_t gid, uint32_t tid)
   return err;
 }
 
-static int dispatch_fd_to(int fd, uint32_t gid)
-{
-  int err = 0;
-  pn_grp_t* grp = locate_grp(gid);
-  int thread_count = 0;
-  if (NULL == grp || (thread_count = LOAD(&grp->count)) == 0) {
-    err = -ENOENT;
-  } else {
-    static uint32_t tid = 0;
-    rk_info("dispatch pn by round-robin, fd=%d, gid=%u, tid=%u, thread_count=%d", fd, gid, tid, thread_count);
-    err = dispatch_fd_to(fd, gid, tid % thread_count);
-    tid ++;
-  }
-  return err;
-}
-
-
 static int pnl_dispatch_accept(int fd, const void* b, int sz)
 {
   int err = 0;
@@ -873,11 +856,6 @@ int dispatch_accept_fd_to_certain_group(int fd, uint64_t gid)
   if (UINT64_MAX == gid) {
     rk_info("dispatch fd to oblistener, fd:%d", fd);
     ret = DISPATCH_EXTERNAL(fd);
-    if (EAGAIN == ret) {
-      const int default_pn_group = 1;
-      rk_info("still dispatch to pkt-nio, fd:%d", fd);
-      ret = dispatch_fd_to(fd, default_pn_group);
-    }
   } else {
     uint32_t group_id = gid >> 32;
     uint32_t thread_idx = gid & ((1ULL<<32) - 1);
