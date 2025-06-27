@@ -67,7 +67,7 @@ int ObVecAsyncTaskExector::check_and_set_thread_pool()
     } else {
       common::ObSpinLockGuard init_guard(thread_pool_handle.lock_); // lock thread pool init to avoid init twice
       if (thread_pool_handle.get_tg_id() != INVALID_TG_ID) { // no need to init twice, skip
-      } else if (OB_FAIL(thread_pool_handle.init(allocator))) {
+      } else if (OB_FAIL(thread_pool_handle.init())) {
         LOG_WARN("fail to init vec async task handle", K(ret), K(tenant_id_));
       } else if (OB_FAIL(thread_pool_handle.start())) {
         LOG_WARN("fail to start thread pool", K(ret), K(tenant_id_));

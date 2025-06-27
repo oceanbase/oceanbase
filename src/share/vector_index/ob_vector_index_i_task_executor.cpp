@@ -115,7 +115,7 @@ int ObVecITaskExecutor::start_task()
             int tmp_ret = OB_SUCCESS;
             if (task_ctx->in_thread_pool_) {                // skip push task
               LOG_DEBUG("task is in thread pool already", KPC(task_ctx));
-            } else if (OB_FAIL(task_handle.push_task(tenant_id_, ls_->get_ls_id(), task_ctx))) {
+            } else if (OB_FAIL(task_handle.push_task(tenant_id_, ls_->get_ls_id(), task_ctx, task_opt.get_allocator()))) {
               LOG_WARN("fail to push task to thread pool", K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
             } else if (FALSE_IT(task_ctx->in_thread_pool_ = true)) {
             } else if (OB_FAIL(update_status_and_ret_code(task_ctx))) {

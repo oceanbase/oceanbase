@@ -314,7 +314,7 @@ int ObIvfAsyncTaskExector::check_and_set_thread_pool()
     } else if (OB_FAIL(check_has_ivf_index(has_ivf_index))) {
       LOG_WARN("fail to check has ivf index", K(ret));
     } else if (!has_ivf_index) {  // no vector index exist, skip
-    } else if (OB_FAIL(thread_pool_handle.init(allocator))) {
+    } else if (OB_FAIL(thread_pool_handle.init())) {
       LOG_WARN("fail to init vec async task handle", K(ret), K(tenant_id_));
     } else if (OB_FAIL(thread_pool_handle.start())) {
       LOG_WARN("fail to start thread pool", K(ret), K(tenant_id_));
