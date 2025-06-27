@@ -290,6 +290,7 @@ int ObTruncateInfoArray::deserialize(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("truncate info array is invalid", K(ret), KPC(this));
   } else {
+    lib::ob_sort(truncate_info_array_.begin(), truncate_info_array_.end(), compare);
     is_inited_ = true;
     pos = new_pos;
   }
