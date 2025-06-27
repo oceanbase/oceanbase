@@ -219,9 +219,7 @@ void ObTabletMiniMergeCtx::try_schedule_compaction_after_mini(ObTabletHandle &ta
   bool during_restore = false;
   // when restoring, some log stream may be not ready,
   // thus the inner sql in ObTenantFreezeInfoMgr::try_update_info may timeout
-  if (GCTX.is_shared_storage_mode()) {
-    // minor disabled in shared storage mode
-  } else if (OB_SUCCESS == ObBasicMergeScheduler::get_merge_scheduler()->during_restore(during_restore) && !during_restore) {
+  if (OB_SUCCESS == ObBasicMergeScheduler::get_merge_scheduler()->during_restore(during_restore) && !during_restore) {
     if (get_tablet_id().is_ls_inner_tablet() ||
         0 == get_merge_info().get_merge_history().get_macro_block_count()) {
       // do nothing
@@ -237,8 +235,9 @@ void ObTabletMiniMergeCtx::try_schedule_compaction_after_mini(ObTabletHandle &ta
                               create_dag))) {
       LOG_WARN_RET(tmp_ret, "failed to schedule meta merge", K(get_dag_param()), "tnode_stat", info_collector_.tnode_stat_);
     }
-
-    if (create_dag || 0 == get_merge_info().get_merge_history().get_macro_block_count()) {
+    if (GCTX.is_shared_storage_mode()) {
+      // disable minor merge in shared storage mode
+    } else if (create_dag || 0 == get_merge_info().get_merge_history().get_macro_block_count()) {
       // no need to schedule minor merge
     } else if (OB_TMP_FAIL(ObTenantTabletScheduler::schedule_tablet_minor_merge<ObTabletMergeExecuteDag>(
         static_param_.ls_handle_, tablet_handle))) {
