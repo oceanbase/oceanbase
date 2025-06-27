@@ -89,8 +89,7 @@ public:
       ctx_.next_epoch_ = iter->get_epoch();
     } else if (iter->get_epoch() < ctx_.epoch_from_) {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "found callback with epoch less than `from`", K(ret),
-                K(iter->get_epoch()), KPC(iter), K(ctx_));
+      TRANS_LOG(ERROR, "found callback with epoch less than `from`", K(ret), KPC(iter), K(ctx_));
 #ifdef ENABLE_DEBUG_LOG
       ob_abort();
 #endif
