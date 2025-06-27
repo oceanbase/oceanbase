@@ -74,6 +74,10 @@ ob_unittest(test_array_meta)
 ob_unittest(test_roaringbitmap)
 ob_unittest(test_map_meta)
 
+if (OB_BUILD_STANDALONE)
+  ob_unittest(test_license_mgr)
+endif()
+
 ob_unittest(test_json_base)
 ob_unittest(test_json_bin)
 ob_unittest(test_json_path)

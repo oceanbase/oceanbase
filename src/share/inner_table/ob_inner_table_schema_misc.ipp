@@ -7942,6 +7942,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_CATALOG_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_CATALOG_PRIVILEGE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_PRIVILEGE_SCHEMA_VERSION); break;
     case OB_ALL_CATALOG_PRIVILEGE_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_PRIVILEGE_HISTORY_SCHEMA_VERSION); break;
+    case OB_ALL_LICENSE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_LICENSE_SCHEMA_VERSION); break;
     case OB_ALL_PL_RECOMPILE_OBJINFO_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_PL_RECOMPILE_OBJINFO_SCHEMA_VERSION); break;
     case OB_ALL_VECTOR_INDEX_TASK_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VECTOR_INDEX_TASK_SCHEMA_VERSION); break;
     case OB_ALL_VECTOR_INDEX_TASK_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VECTOR_INDEX_TASK_HISTORY_SCHEMA_VERSION); break;
@@ -9318,6 +9319,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_CDB_OB_CS_REPLICA_STATS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_CDB_OB_CS_REPLICA_STATS_SCHEMA_VERSION); break;
     case OB_GV_OB_PLUGINS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_GV_OB_PLUGINS_SCHEMA_VERSION); break;
     case OB_V_OB_PLUGINS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_V_OB_PLUGINS_SCHEMA_VERSION); break;
+    case OB_DBA_OB_LICENSE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OB_LICENSE_SCHEMA_VERSION); break;
     case OB_DBA_OB_VECTOR_INDEX_TASKS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OB_VECTOR_INDEX_TASKS_SCHEMA_VERSION); break;
     case OB_CDB_OB_VECTOR_INDEX_TASKS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_CDB_OB_VECTOR_INDEX_TASKS_SCHEMA_VERSION); break;
     case OB_DBA_OB_VECTOR_INDEX_TASK_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OB_VECTOR_INDEX_TASK_HISTORY_SCHEMA_VERSION); break;
@@ -10392,6 +10394,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_CATALOG_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_CATALOG_PRIVILEGE_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_PRIVILEGE_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_CATALOG_PRIVILEGE_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_PRIVILEGE_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
+    case OB_ALL_LICENSE_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_LICENSE_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_VECTOR_INDEX_TASK_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VECTOR_INDEX_TASK_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
@@ -10726,6 +10729,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_CATALOG_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_CATALOG_PRIVILEGE_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_PRIVILEGE_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_CATALOG_PRIVILEGE_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_CATALOG_PRIVILEGE_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
+    case OB_ALL_LICENSE_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_LICENSE_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_VECTOR_INDEX_TASK_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VECTOR_INDEX_TASK_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VECTOR_INDEX_TASK_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;

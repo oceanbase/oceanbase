@@ -1178,6 +1178,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObSysDispatchCallStmt, ObSysDispatchCallExecutor);
         break;
       }
+      case stmt::T_LOAD_LICENSE: {
+        DEFINE_EXECUTE_CMD(ObLoadLicenseStmt, ObLoadLicenseExecutor);
+        break;
+      }
       case stmt::T_CREATE_CCL_RULE: {
         DEFINE_EXECUTE_CMD(ObCreateCCLRuleStmt, ObCreateCCLRuleExecutor);
         break;

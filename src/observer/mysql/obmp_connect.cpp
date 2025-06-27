@@ -25,6 +25,7 @@
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "rpc/obmysql/packet/ompk_auth_switch.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
+#include "share/ob_license_utils.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -418,6 +419,16 @@ int ObMPConnect::process()
       ObOKPParam ok_param;
       ok_param.is_on_connect_ = true;
       ok_param.affected_rows_ = 0;
+      const int login_warning_buf_len = 50;
+      char login_warning[login_warning_buf_len];
+      int tmp_ret = OB_SUCCESS;
+
+      if (OB_TMP_FAIL(ObLicenseUtils::get_login_message(login_warning, login_warning_buf_len))) {
+        LOG_WARN("fail to get login warning message", KR(ret));
+        login_warning[0] = '\0';
+      } else {
+        ok_param.message_ = login_warning;
+      }
       if (OB_FAIL(send_ok_packet(*session, ok_param))) {
         LOG_WARN("fail to send ok packet", K(ok_param), K(ret));
       }

@@ -388,6 +388,7 @@
 # 539: __all_catalog_privilege
 # 540: __all_catalog_privilege_history
 # 540: __all_catalog_privilege  # BASE_TABLE_NAME
+# 543: __all_license
 # 544: __all_pl_recompile_objinfo
 # 545: __all_vector_index_task
 # 546: __all_vector_index_task_history
@@ -2476,6 +2477,7 @@
 # 21634: CDB_OB_CS_REPLICA_STATS
 # 21635: GV$OB_PLUGINS
 # 21636: V$OB_PLUGINS
+# 21639: DBA_OB_LICENSE
 # 21640: DBA_OB_VECTOR_INDEX_TASKS
 # 21641: CDB_OB_VECTOR_INDEX_TASKS
 # 21642: DBA_OB_VECTOR_INDEX_TASK_HISTORY

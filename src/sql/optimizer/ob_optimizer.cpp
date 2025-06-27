@@ -18,6 +18,7 @@
 #include "sql/optimizer/ob_opt_cost_model_parameter.h"
 #include "src/share/stat/ob_opt_stat_manager.h"
 #include "src/sql/engine/px/ob_dfo_scheduler.h"
+#include "share/ob_license_utils.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -972,8 +973,8 @@ int ObOptimizer::init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &s
   } else if (ctx_.get_query_ctx()->get_query_hint().has_outline_data()) {
     ctx_.set_parallel_rule(PXParallelRule::MANUAL_HINT);
     ctx_.set_parallel(ObGlobalHint::DEFAULT_PARALLEL);
-  } else if (session.is_user_session() && !ctx_.get_global_hint().enable_manual_dop() &&
-             OB_FAIL(OB_E(EventTable::EN_ENABLE_AUTO_DOP_FORCE_PARALLEL_PLAN) OB_SUCCESS)) {
+  } else if (session.is_user_session() && !ctx_.get_global_hint().enable_manual_dop()
+             && OB_FAIL(OB_E(EventTable::EN_ENABLE_AUTO_DOP_FORCE_PARALLEL_PLAN) OB_SUCCESS)) {
     ret = OB_SUCCESS;
     ctx_.set_parallel_rule(PXParallelRule::AUTO_DOP);
   } else if (OB_FAIL(get_session_parallel_info(session_force_parallel_dop,
@@ -989,6 +990,20 @@ int ObOptimizer::init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &s
     ctx_.set_parallel_rule(PXParallelRule::MANUAL_TABLE_DOP);
   } else {
     ctx_.set_parallel_rule(PXParallelRule::USE_PX_DEFAULT);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (!ctx_.get_session_info()->is_user_session() || ctx_.force_disable_parallel()) {
+  } else if (OB_FAIL(ObLicenseUtils::check_olap_allowed(session.get_effective_tenant_id()))) {
+    ret = OB_SUCCESS;
+    if ((ctx_.get_parallel() > 1
+              && (ctx_.get_parallel_rule() == PXParallelRule::SESSION_FORCE_PARALLEL
+                  || ctx_.get_parallel_rule() == PXParallelRule::MANUAL_HINT))
+             || ctx_.get_parallel_rule() == PXParallelRule::AUTO_DOP) {
+      LOG_WARN("parallel dml is not allowed", KR(ret));
+      LOG_USER_WARN(OB_LICENSE_SCOPE_EXCEEDED, "parallel dml is not supported due to the absence of the OLAP module");
+    }
+    ctx_.set_parallel_rule(PXParallelRule::LICENSE_NOT_ALLOW_OLAP);
   }
 
   if (OB_FAIL(ret)) {

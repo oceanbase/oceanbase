@@ -11253,6 +11253,23 @@ DESCRIPTION	varchar(65535)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PLUGINS limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_LICENSE;
+Field	Type	Null	Key	Default	Extra
+END_USER	varchar(512)	NO		NULL	
+LICENSE_ID	varchar(128)	NO		NULL	
+LICENSE_CODE	varchar(128)	NO		NULL	
+LICENSE_TYPE	varchar(128)	NO		NULL	
+PRODUCT_TYPE	varchar(128)	NO		NULL	
+ISSUANCE_DATE	timestamp(6)	NO			
+ACTIVATION_TIME	timestamp(6)	NO			
+EXPIRED_TIME	timestamp(6)	NO			
+OPTIONS	varchar(1024)	NO		NULL	
+CORE_NUM	bigint(20)	NO		NULL	
+NODE_NUM	bigint(20)	NO		NULL	
+CLUSTER_ULID	varchar(30)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_LICENSE limit 1);
+cnt
+1
 desc oceanbase.DBA_OB_VECTOR_INDEX_TASKS;
 Field	Type	Null	Key	Default	Extra
 TABLE_ID	bigint(20)	NO		NULL	

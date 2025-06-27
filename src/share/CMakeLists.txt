@@ -765,6 +765,11 @@ ob_set_subtarget(ob_share domain_id
 ob_set_subtarget(ob_share semistruct
   semistruct/ob_sub_column_path.cpp
 )
+if (NOT OB_BUILD_STANDALONE)
+  ob_set_subtarget(ob_share dummy_license_mgr
+    ob_dummy_license_utils.cpp
+  )
+endif()
 
 ob_add_new_object_target(ob_share ob_share)
 ob_add_new_object_target(ob_share_extra ob_share_extra)
