@@ -524,6 +524,8 @@ int ObCDCTimeZoneInfoGetter::refresh_tenant_timezone_info_map_(
       ret = OB_NEED_RETRY;
     } else if (OB_FAIL(ObTimeZoneInfoManager::fill_tz_info_map(*result, tz_info_map))) {
       LOG_ERROR("fill_tz_info_map fail", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(ObTimeZoneInfoManager::calc_tz_info_offsets(tz_info_map))) {
+      LOG_WARN("calc_tz_info_offsets fail", KR(ret), K(tenant_id));
     } else if (OB_FAIL(export_timezone_info_(tz_info_map))) {
       LOG_ERROR("export_timezone_info failed", KR(ret), K(tenant_id));
     } else {

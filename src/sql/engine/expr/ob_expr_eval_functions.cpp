@@ -1808,7 +1808,12 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprMapValues::eval_map_values_vector,                               /* 218 */
   ObExprRbToArray::eval_rb_to_array_vector,                              /* 219 */
   ObExprRbContains::eval_rb_contains_vector,                             /* 220 */
-  NULL, // ObExprUDF::eval_udf_vector                                    /* 221 */
+  NULL, // ObExprUDF::eval_udf_vector                                             /* 221 */
+  NULL, // ObExprUDF::eval_external_udf_vector,                                   /* 222 */
+  NULL, // ObExprInstr::calc_mysql_instr_expr_vector,                             /* 223 */
+  NULL, // ObExprOracleInstr::calc_oracle_instr_expr_vector,                      /* 224 */
+  NULL, // ObLocationExprOperator::calc_location_expr_vector,                     /* 225 */
+  ObExprConvertTZ::calc_convert_tz_vector,                               /* 226 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

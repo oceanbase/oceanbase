@@ -136,6 +136,8 @@ ObTimeZoneInfoManager(common::ObMySQLProxy &sql_proxy,
   static const char *FETCH_TZ_INFO_SQL;
   static const char *FETCH_TENANT_TZ_INFO_SQL;
   static const char *FETCH_LATEST_TZ_VERSION_SQL;
+  // calculate the offset between any two time zones
+  static int calc_tz_info_offsets(ObTZInfoMap &tz_info_map);
   static int fill_tz_info_map(common::sqlclient::ObMySQLResult &result, ObTZInfoMap &tz_info_map,
                               uint64_t tenant_id = common::OB_SERVER_TENANT_ID);
   static int set_tz_info_map(
