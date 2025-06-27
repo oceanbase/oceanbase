@@ -9925,7 +9925,8 @@ int ObDMLResolver::try_add_padding_expr_for_column_conv(const ColumnItem *column
 int ObDMLResolver::add_additional_function_according_to_type(const ColumnItem *column,
                                                              ObRawExpr *&expr,
                                                              ObStmtScope scope,
-                                                             bool need_padding)
+                                                             bool need_padding,
+                                                             bool in_insert_value_list)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(column) || OB_ISNULL(expr)) {
@@ -10017,7 +10018,7 @@ int ObDMLResolver::add_additional_function_according_to_type(const ColumnItem *c
         if (OB_FAIL(check_insert_into_select_use_fast_column_convert(column->get_expr(), expr,
                                                                      fast_calc))) {
           LOG_WARN("fail to check insert into select need column conv expr", K(ret));
-        } else if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
+        } else if (!in_insert_value_list && OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
                                                                   *params_.allocator_,
                                                                   *column->get_expr(),
                                                                   expr,
