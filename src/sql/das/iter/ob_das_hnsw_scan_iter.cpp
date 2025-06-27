@@ -33,6 +33,7 @@ namespace sql
 int ObDASHNSWScanIter::do_table_scan()
 {
   int ret = OB_SUCCESS;
+  idx_iter_first_scan_ = false;
   if (!is_primary_pre_with_rowkey_with_filter_) {
     if (is_pre_filter() || is_in_filter()) {
       if (OB_ISNULL(inv_idx_scan_iter_)) {
@@ -43,7 +44,8 @@ int ObDASHNSWScanIter::do_table_scan()
       }
     }
   } else {
-    if (OB_ISNULL(rowkey_vid_iter_)) {
+    if (!is_pre_filter() && !is_in_filter()) {
+    } else if (OB_ISNULL(rowkey_vid_iter_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rowkey vid iter is null", K(ret));
     } else if (OB_FAIL(build_rowkey_vid_range())) {
@@ -611,6 +613,8 @@ int ObDASHNSWScanIter::reset_filter_path()
   } else if (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER) {
     vec_idx_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER;
   } else if (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER) {
+    double iter_selectivity = double(adaptive_ctx_.iter_res_row_cnt_) / double(adaptive_ctx_.iter_filter_row_cnt_);
+    adaptive_ctx_.selectivity_ = iter_selectivity;
     vec_idx_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER;
   }
 
@@ -622,6 +626,16 @@ int ObDASHNSWScanIter::reset_filter_path()
     go_brute_force_ = false;
     only_complete_data_ = false;
     can_retry_ = false;
+    if (OB_NOT_NULL(tmp_adaptor_vid_iter_)) {
+      tmp_adaptor_vid_iter_->reset();
+      tmp_adaptor_vid_iter_->~ObVectorQueryVidIterator();
+      tmp_adaptor_vid_iter_ = nullptr;
+    }
+    if (OB_NOT_NULL(adaptor_vid_iter_)) {
+      adaptor_vid_iter_->reset();
+      adaptor_vid_iter_->~ObVectorQueryVidIterator();
+      adaptor_vid_iter_ = nullptr;
+    }
   }
   return ret;
 }
@@ -672,8 +686,10 @@ int ObDASHNSWScanIter::process_adaptor_state(bool is_vectorized)
       LOG_INFO("hnsw change filter path", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
       if (OB_FAIL(reset_filter_path())) {
         LOG_WARN("failed to reset filter path", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_), K(ret));
-      } else if (OB_FAIL(do_table_scan())) {
+      } else if (idx_iter_first_scan_ && OB_FAIL(do_table_scan())) {
         LOG_WARN("failed to do table scan", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
+      } else if (!idx_iter_first_scan_ && OB_FAIL(rescan())) {
+        LOG_WARN("failed to do table rescan", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
       } else if (OB_FAIL(inner_process_adaptor_state(is_vectorized))) {
         LOG_WARN("failed to process adaptor state hnsw", K(extra_column_count_), K(is_primary_pre_with_rowkey_with_filter_),
                                                          K(data_filter_ctdef_), K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));

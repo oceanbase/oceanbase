@@ -226,13 +226,14 @@ struct ObVecIndexInfo
     adaptive_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
     is_multi_value_index_(false),
     is_spatial_index_(false),
-    can_extract_range_(false)
+    can_extract_range_(false),
+    vec_index_name_()
   { }
   ~ObVecIndexInfo() {}
 
   TO_STRING_KV(K_(sort_key), KPC_(topk_limit_expr), KPC_(topk_offset_expr), KPC_(target_vec_column),
               KPC_(vec_id_column), K_(aux_table_column), K_(aux_table_id), K_(main_table_tid),
-              K_(vec_type), K_(vector_index_param), K_(query_param));
+              K_(vec_type), K_(vector_index_param), K_(query_param), K_(vec_index_name));
   bool need_sort() const { return sort_key_.expr_ != nullptr; }
   inline void set_vec_algorithm_type(ObVectorIndexAlgorithmType type) { vector_index_param_.type_ = type; }
   inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
@@ -266,6 +267,7 @@ struct ObVecIndexInfo
   inline bool vec_index_post_filter() const { return vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
                                                   || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
   inline bool is_vec_adaptive_scan() const { return vec_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN; }
+  inline bool is_vec_adaptive_iter_scan() const { return is_vec_adaptive_scan() && adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER; }
   inline bool need_index_back() const { return is_ivf_vec_scan() || is_hnsw_vec_scan() || is_spiv_scan();}
   uint64_t get_aux_table_id(ObVectorAuxTableIdx idx) const { return idx < aux_table_id_.count() ? aux_table_id_[idx] : OB_INVALID_ID; }
   ObColumnRefRawExpr* get_aux_table_column(int idx) const { return idx < aux_table_column_.count() ? aux_table_column_[idx] : nullptr; }
@@ -275,6 +277,7 @@ struct ObVecIndexInfo
   int check_vec_aux_table_is_all_inited(bool& is_all_null) const;
   const ObVectorIndexQueryParam& get_query_param() const { return query_param_; }
   int set_query_param(const ObVectorIndexQueryParam &param) { return query_param_.assign(param); }
+  const ObString &get_vec_index_name() const { return vec_index_name_; }
   // topn infos
   OrderItem sort_key_;
   ObRawExpr *topk_limit_expr_;
@@ -298,6 +301,7 @@ struct ObVecIndexInfo
   bool is_multi_value_index_;
   bool is_spatial_index_;
   bool can_extract_range_;
+  ObString vec_index_name_;
 };
 
 class ObLogTableScan : public ObLogicalOperator
