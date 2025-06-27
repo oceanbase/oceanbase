@@ -2770,13 +2770,11 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
       if (OB_FAIL(analyze_filter(partition_columns, partition_expr, column_id, filter_exprs.at(idx),
                                  always_true, calc_node, cnt_func_expr, dtc_params, exec_ctx))) {
         LOG_WARN("Failed to analyze filter", K(ret));
-      } else if (!cnt_func_expr) {
+      } else if (!cnt_func_expr || NULL == calc_node) {
         if (OB_FAIL(normal_filters.push_back(filter_exprs.at(idx)))) {
           LOG_WARN("Failed to add filter", K(ret));
         }
       } else if (OB_FAIL(add_and_node(calc_node, func_node))) {
-        //这里好像用cnt_func_expr来确保calc_node不为NULL。但是真的有这种保证么
-        //如果是这种保证这个变量名就不太合适
         LOG_WARN("Failed to add and node", K(ret));
       } else {
         // 如果有有两个filter都贡献了calc node, 就不是precise get了。先保持原样
@@ -2792,7 +2790,7 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
       if (normal_filters.count() > 0) {
         column_always_true = false;
         if (use_new_query_range) {
-          if (OB_FAIL(get_pre_range_graph_node(part_level, partition_columns, filter_exprs,
+          if (OB_FAIL(get_pre_range_graph_node(part_level, partition_columns, normal_filters,
                                                column_always_true, column_node, exec_ctx))) {
             LOG_WARN("Failed to get query range node", K(ret));
           } else if (OB_NOT_NULL(column_node)) {
@@ -2800,7 +2798,7 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
             static_cast<ObPLPreRangeGraphNode*>(column_node)->pre_range_graph_.is_get(is_column_get);
           }
         } else {
-          if (OB_FAIL(get_query_range_node(part_level, partition_columns, filter_exprs, column_always_true,
+          if (OB_FAIL(get_query_range_node(part_level, partition_columns, normal_filters, column_always_true,
                                           column_node, dtc_params, exec_ctx, query_ctx, is_in_range_optimization_enabled))) {
             LOG_WARN("Failed to get query range node", K(ret));
           } else if (OB_NOT_NULL(column_node)) {
@@ -2940,13 +2938,14 @@ int ObTableLocation::analyze_filter(const ObIArray<ColumnItem> &partition_column
     for (int64_t idx = 0; OB_SUCC(ret) && idx < op_expr->get_param_count(); ++idx) {
       ObPartLocCalcNode *cur_node = NULL;
       bool f_always_true = false;
-      if (OB_FAIL(analyze_filter(partition_columns, partition_expr, column_id, op_expr->get_param_expr(idx),
-                                 f_always_true, cur_node, cnt_func_expr, dtc_params, exec_ctx))) {
+      if (OB_FAIL(SMART_CALL(analyze_filter(partition_columns, partition_expr, column_id, op_expr->get_param_expr(idx),
+                                            f_always_true, cur_node, cnt_func_expr, dtc_params, exec_ctx)))) {
         LOG_WARN("Failed to replace sub_expr bool filter", K(ret));
       } else if (T_OP_OR == filter->get_expr_type()) {
         if (f_always_true || NULL == cur_node) {
           always_true = true;
           calc_node = NULL;
+          break;
         } else if (OB_FAIL(add_or_node(cur_node, calc_node))) {
           LOG_WARN("Failed to add or node", K(ret));
         } else { }
@@ -2968,7 +2967,6 @@ int ObTableLocation::analyze_filter(const ObIArray<ColumnItem> &partition_column
       LOG_WARN("Failed to extract equal expr", K(ret));
     }
   } else { }
-
   return ret;
 }
 
