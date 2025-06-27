@@ -466,7 +466,9 @@ public:
   // ObLSMeta interface:
   int update_ls_meta(const bool update_restore_status,
                      const ObLSMeta &src_ls_meta);
-
+#ifdef OB_BUILD_SHARED_STORAGE
+  int update_ls_meta(const ObSSLSMeta &src_ss_meta);
+#endif
   int get_transfer_scn(share::SCN &scn);
   int update_id_meta(const int64_t service_type,
                      const int64_t limited_id,

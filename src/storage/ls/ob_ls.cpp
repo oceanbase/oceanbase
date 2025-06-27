@@ -59,6 +59,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_service.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_adapter.h"
+#include "close_modules/shared_storage/storage/incremental/share/ob_shared_ls_meta.h"
 #endif
 
 namespace oceanbase
@@ -2669,6 +2670,28 @@ int ObLS::update_ls_meta(const bool update_restore_status,
 
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObLS::update_ls_meta(const ObSSLSMeta &src_ss_meta)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret), K(ls_meta_));
+  } else if (OB_UNLIKELY(is_stopped())) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("ls stopped", K(ret), K_(ls_meta));
+  } else if (!src_ss_meta.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid src ss meta", K(ret), K(src_ss_meta));
+  } else if (OB_FAIL(update_ls_meta(true /*update restore status*/, src_ss_meta))) {
+    LOG_WARN("fail to update ls meta", K(ret), K(src_ss_meta));
+  } else if (OB_FAIL(ls_meta_.set_tablet_change_checkpoint_scn(src_ss_meta.get_ss_checkpoint_scn()))) {
+    LOG_WARN("fail to update tablet cchange checkpoint scn", K(src_ss_meta), K_(ls_meta));
+  }
+  return ret;
+}
+#endif
 
 int ObLS::diagnose(DiagnoseInfo &info) const
 {
