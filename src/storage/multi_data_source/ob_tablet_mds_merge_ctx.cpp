@@ -14,12 +14,6 @@
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/multi_data_source/ob_mds_minor_compaction_filter.h"
 
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/incremental/ob_ss_minor_compaction.h"
-#include "storage/incremental/ob_shared_meta_service.h"
-#include "share/compaction/ob_shared_storage_compaction_util.h"
-#endif
-
 #define USING_LOG_PREFIX MDS
 
 using namespace oceanbase::common;
@@ -138,17 +132,9 @@ int ObTabletCrossLSMdsMinorMergeCtx::get_merge_tables(ObGetMergeTablesResult &ge
     LOG_WARN("get invalid arguments", K(ret), "merge_type", merge_type_to_str(merge_type));
   } else if (OB_FAIL(prepare_compaction_filter())) {
     LOG_WARN("fail to prepare compaction filter", K(ret));
-  } else if (OB_FAIL(get_merge_table_result.handle_.assign(static_param_.tables_handle_))) {
-    LOG_WARN("failed to assign table handle array", K(ret), K(static_param_));
-  } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet should not be NULL", K(ret), K(tablet_handle_));
-  } else {
-    get_merge_table_result.scn_range_.start_scn_ = static_param_.tables_handle_.get_table(0)->get_start_scn();
-    get_merge_table_result.rec_scn_ = static_param_.tables_handle_.get_table(0)->get_rec_scn();
-    get_merge_table_result.scn_range_.end_scn_ = static_param_.tables_handle_.get_table(static_param_.tables_handle_.get_count() - 1)->get_end_scn();
-    get_merge_table_result.version_range_.snapshot_version_ = tablet->get_snapshot_version();
-    get_merge_table_result.transfer_seq_ = tablet->get_transfer_seq();
+  } else if (OB_FAIL(ObTabletCrossLSMdsMinorMergeCtxHelper::get_merge_tables(merge_type,
+      static_param_.tables_handle_, tablet_handle_, get_merge_table_result))) {
+    LOG_WARN("failed to get merge tables", K(ret), KPC(this));
   }
   return ret;
 }
@@ -231,13 +217,42 @@ int ObTabletMdsMinorMergeCtx::prepare_compaction_filter(ObIAllocator &allocator,
   return ret;
 }
 
+int ObTabletCrossLSMdsMinorMergeCtxHelper::get_merge_tables(
+    const ObMergeType merge_type,
+    const ObTablesHandleArray &tables_handle,
+    const ObTabletHandle &tablet_handle,
+    ObGetMergeTablesResult &get_merge_table_result)
+{
+  int ret = OB_SUCCESS;
+  get_merge_table_result.reset();
+  const ObTablet *tablet = nullptr;
+
+  if (!tablet_handle.is_valid() || tables_handle.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablet cross ls mds minor merge ctx get merge tables get invalid argument",
+        K(ret), K(merge_type), K(tables_handle), K(tablet_handle));
+  } else if (OB_UNLIKELY(!is_mds_minor_merge(merge_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arguments", K(ret), "merge_type", merge_type_to_str(merge_type));
+  } else if (OB_FAIL(get_merge_table_result.handle_.assign(tables_handle))) {
+    LOG_WARN("failed to assign table handle array", K(ret), K(tables_handle));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), K(tablet_handle));
+  } else {
+    get_merge_table_result.scn_range_.start_scn_ = tables_handle.get_table(0)->get_start_scn();
+    get_merge_table_result.rec_scn_ = tables_handle.get_table(0)->get_rec_scn();
+    get_merge_table_result.scn_range_.end_scn_ = tables_handle.get_table(tables_handle.get_count() - 1)->get_end_scn();
+    get_merge_table_result.version_range_.snapshot_version_ = tablet->get_snapshot_version();
+    get_merge_table_result.transfer_seq_ = tablet->get_transfer_seq();
+  }
+  return ret;
+}
+
 #ifdef OB_BUILD_SHARED_STORAGE
 ObSSTabletCrossLSMdsMinorMergeCtx::ObSSTabletCrossLSMdsMinorMergeCtx(
     compaction::ObTabletMergeDagParam &param, common::ObArenaAllocator &allocator)
-  : ObTabletCrossLSMdsMinorMergeCtx(param, allocator),
-    macro_seq_max_step_(0),
-    minor_sstable_list_handle_(),
-    add_minor_op_handle_()
+  : ObTabletSSMinorMergeCtx(param, allocator)
 {
 }
 
@@ -245,47 +260,69 @@ ObSSTabletCrossLSMdsMinorMergeCtx::~ObSSTabletCrossLSMdsMinorMergeCtx()
 {
 }
 
-int ObSSTabletCrossLSMdsMinorMergeCtx::init_tablet_merge_info()
+int ObSSTabletCrossLSMdsMinorMergeCtx::get_merge_tables(ObGetMergeTablesResult &get_merge_table_result)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTabletMergeCtx::init_tablet_merge_info())) {
-    LOG_WARN("failed to init tablet merge info", K(ret));
-  } else if (OB_FAIL(start_add_minor_op_())) {
-    LOG_WARN("start add minor op fail", K(ret));
+  get_merge_table_result.reset();
+  const ObMergeType merge_type = static_param_.get_merge_type();
+  ObTablet *tablet = nullptr;
+
+  if (!tablet_handle_.is_valid() || static_param_.tables_handle_.empty()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet cross ls mds minor merge ctx do not init", K(ret), K(static_param_));
+  } else if (OB_UNLIKELY(!is_mds_minor_merge(merge_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arguments", K(ret), "merge_type", merge_type_to_str(merge_type));
+  } else if (OB_FAIL(ObTabletCrossLSMdsMinorMergeCtxHelper::get_merge_tables(merge_type,
+      static_param_.tables_handle_, tablet_handle_, get_merge_table_result))) {
+    LOG_WARN("failed to get merge tables", K(ret), K(merge_type));
   }
   return ret;
 }
 
-int ObSSTabletCrossLSMdsMinorMergeCtx::generate_macro_seq_info(const int64_t task_idx, int64_t &macro_start_seq)
+int ObSSTabletCrossLSMdsMinorMergeCtx::update_tablet(ObTabletHandle &new_tablet_handle)
+{
+  int ret = OB_NOT_SUPPORTED;
+  // only called in finish merge task, such as ObTabletMergeFinishTask/ObCOMergeFinishTask
+  LOG_WARN("cross ls minor merge should not update tablet", K(ret), KPC(this));
+  return ret;
+}
+
+int ObSSTabletCrossLSMdsMinorMergeCtx::prepare_merge_tables(
+    const common::ObIArray<ObTableHandleV2> &table_handle_array)
 {
   int ret = OB_SUCCESS;
-  const uint64_t op_id = add_minor_op_handle_.get_atomic_op()->get_op_id();
-  const int64_t delta = task_idx * MACRO_STEP_SIZE;
-  if (delta >= UINT32_MAX) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("macro seq overflow", K(delta));
+  if (!static_param_.tables_handle_.empty()) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("tablet cross ls mds minor merge ctx init twice", K(ret), K(static_param_));
+  } else if (table_handle_array.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("prepare merge tables get invalid argument", K(ret), K(table_handle_array));
   } else {
-    macro_start_seq = (op_id << SS_MACRO_DATA_SEQ_BIT) + delta;
-    macro_seq_max_step_ = MAX(task_idx, macro_seq_max_step_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_handle_array.count(); ++i) {
+      const ObTableHandleV2 &table_handle = table_handle_array.at(i);
+      if (OB_FAIL(static_param_.tables_handle_.add_table(table_handle))) {
+        LOG_WARN("failed to add table into array", K(ret), K(table_handle));
+      }
+    }
   }
   return ret;
 }
 
-int ObSSTabletCrossLSMdsMinorMergeCtx::get_macro_seq_by_stage(
-    const compaction::ObGetMacroSeqStage stage,
-    int64_t &macro_start_seq) const
+int ObSSTabletCrossLSMdsMinorMergeCtx::prepare_compaction_filter()
 {
   int ret = OB_SUCCESS;
-  const uint64_t op_id = add_minor_op_handle_.get_atomic_op()->get_op_id();
-  const int64_t step = stage + get_concurrent_cnt();
-  const int64_t delta = step * MACRO_STEP_SIZE;
-  if (delta >= UINT32_MAX) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("macro seq overflow", K(delta));
+  void *buf = nullptr;
+
+  if (OB_ISNULL(buf = mem_ctx_.alloc(sizeof(ObCrossLSMdsMinorFilter)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", K(ret), "size", sizeof(ObCrossLSMdsMinorFilter));
   } else {
-    macro_start_seq = (op_id << SS_MACRO_DATA_SEQ_BIT) + delta;
-    macro_seq_max_step_ = MAX(step, macro_seq_max_step_);
+    ObCrossLSMdsMinorFilter *filter = new (buf) ObCrossLSMdsMinorFilter();
+    filter_ctx_.compaction_filter_ = filter;
+    FLOG_INFO("success to init mds compaction filter", K(ret));
   }
+
   return ret;
 }
 
@@ -302,7 +339,7 @@ int ObSSTabletCrossLSMdsMinorMergeCtx::build_sstable(
   } else if (OB_ISNULL(sstable)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("build sstable should not be NULL", K(ret), KPC(this));
-  } else if (OB_FAIL(add_minor_op_handle_.get_op_id(op_id))) {
+  } else if (OB_FAIL(get_minor_op_id_(op_id))) {
     LOG_WARN("failed to get op id", K(ret), KPC(this));
   } else {
     table_handle = merged_table_handle_;
@@ -319,70 +356,6 @@ int ObSSTabletCrossLSMdsMinorMergeCtx::build_sstable(
     LOG_WARN("finish add minor op fail", K(ret));
   }
   LOG_INFO("build sstable", K(ret), KPC(sstable), KPC(this), K(op_id));
-  return ret;
-}
-
-int ObSSTabletCrossLSMdsMinorMergeCtx::start_add_minor_op_()
-{
-  int ret = OB_SUCCESS;
-  const ObAtomicFileType file_type = ObAtomicFileType::MDS_MINOR_SSTABLE_LIST;
-  if (OB_FAIL(MTL(ObAtomicFileMgr*)->get_tablet_file_handle(
-               get_ls_id(),
-               get_tablet_id(),
-               file_type,
-               get_dag_param().reorganization_scn_,
-               minor_sstable_list_handle_))) {
-    LOG_WARN("get minor sstable list handle fail", K(ret));
-  } else if (OB_FAIL(minor_sstable_list_handle_.get_atomic_file()
-                     ->create_op(add_minor_op_handle_))) {
-    LOG_WARN("create add minor op fail", K(ret));
-  } else {
-    ObAtomicSSTableListAddOp *op = add_minor_op_handle_.get_atomic_op();
-    const share::ObScnRange &scn_range = static_param_.scn_range_;
-    ObSSTableTaskInfo task_info;
-    task_info.type_ = op->get_op_type();
-    task_info.ls_id_ = get_ls_id();
-    task_info.table_type_ = ObITable::MDS_MINOR_SSTABLE;
-    task_info.start_scn_ = scn_range.start_scn_;
-    task_info.end_scn_ = scn_range.end_scn_;
-    task_info.snapshot_version_ = get_tablet()->get_snapshot_version();
-    // gc info
-    task_info.parallel_ = get_concurrent_cnt() + ObGetMacroSeqStage::GET_NEW_ROOT_MACRO_SEQ;
-    task_info.seq_step_ = MACRO_STEP_SIZE;
-    task_info.start_data_seq_ = op->get_op_id() << SS_MACRO_DATA_SEQ_BIT;
-
-    task_info.output_.op_id_ = op->get_op_id();
-    task_info.output_.table_type_ = task_info.table_type_;
-    task_info.output_.start_scn_ = task_info.start_scn_;
-    task_info.output_.end_scn_ = task_info.end_scn_;
-    if (OB_FAIL(op->write_add_task_info(task_info))) {
-      LOG_WARN("write task info fail", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObSSTabletCrossLSMdsMinorMergeCtx::finish_add_minor_op_()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(minor_sstable_list_handle_.get_atomic_file()->finish_op(add_minor_op_handle_))) {
-    LOG_WARN("finish op fail", K(ret));
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(minor_sstable_list_handle_.get_atomic_file()->abort_op(add_minor_op_handle_))) {
-      LOG_WARN("abort op fail", K(tmp_ret));
-    }
-  }
-  add_minor_op_handle_.reset();
-  return ret;
-}
-
-int ObSSTabletCrossLSMdsMinorMergeCtx::fail_add_minor_op_()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(minor_sstable_list_handle_.get_atomic_file()->fail_op(add_minor_op_handle_))) {
-    LOG_WARN("fail op fail", K(ret));
-  }
-  add_minor_op_handle_.reset();
   return ret;
 }
 #endif
