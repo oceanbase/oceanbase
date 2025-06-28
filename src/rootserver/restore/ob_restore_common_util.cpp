@@ -387,7 +387,8 @@ int ObRestoreCommonUtil::rebuild_master_key_version(obrpc::ObCommonRpcProxy *rpc
     obrpc::ObReloadMasterKeyArg arg;
     obrpc::ObReloadMasterKeyResult result;
     arg.tenant_id_ = tenant_id;
-    //备库切成主库的逻辑值触发reload，不等master_key生效，交给后台线程
+    // standby switchover or failover to primary only do reload master key, no need
+    // wait master key active
     if (OB_FAIL(rpc_proxy->timeout(DEFAULT_TIMEOUT).reload_master_key(arg, result))) {
       LOG_WARN("fail to reload master key", KR(ret), K(arg), K(DEFAULT_TIMEOUT));
     } else if (result.master_key_id_ > 0  && need_wait) {

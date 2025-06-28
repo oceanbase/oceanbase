@@ -761,9 +761,13 @@ int ObReplaceLSReplicaTask::execute(
                        get_dst_member(),
                        get_config_version()))) {
     LOG_WARN("fail to init arg", KR(ret), KPC(this));
-  } else if (OB_FAIL(rpc_proxy.to(get_dst_server()).by(get_tenant_id()).timeout(rpc_timeout).ls_replace_replica(arg))) {
+  } else if (OB_FAIL(rpc_proxy.to(get_dst_server())
+                              .by(get_tenant_id())
+                              .group_id(share::OBCG_STORAGE)
+                              .timeout(rpc_timeout)
+                              .ls_replace_replica(arg))) {
     ret_comment = ObDRTaskRetComment::FAIL_TO_SEND_RPC;
-    LOG_WARN("fail to send ls replace replica rpc", KR(ret), K(arg));
+    LOG_WARN("fail to send ls replace replica rpc", KR(ret), K(rpc_timeout), K(arg));
   } else {
     FLOG_INFO("start to execute ls replace replica", K(arg), K(rpc_timeout), KPC(this));
   }
