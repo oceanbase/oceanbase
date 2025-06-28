@@ -179,26 +179,50 @@ TEST_F(TestSSMicroCacheCommonMeta, super_block)
 {
   const int64_t file_size = 1 << 30;
   const uint64_t tenant_id = 1;
-  ObSSMicroCacheSuperBlk super_blk(tenant_id, file_size);
+  const int64_t micro_ckpt_split_cnt = 2;
+  ObSSMicroCacheSuperBlk super_blk(tenant_id, file_size, micro_ckpt_split_cnt);
   super_blk.micro_ckpt_time_us_ = 10001;
   ASSERT_EQ(true, super_blk.is_valid());
+  ASSERT_EQ(false, super_blk.micro_ckpt_info_.check_init(micro_ckpt_split_cnt + 1));
+  ASSERT_EQ(true, super_blk.micro_ckpt_info_.check_init(micro_ckpt_split_cnt));
+  ASSERT_EQ(micro_ckpt_split_cnt, super_blk.get_ckpt_split_cnt());
+
   ASSERT_EQ(file_size, super_blk.cache_file_size_);
-  ASSERT_EQ(OB_SUCCESS, super_blk.blk_ckpt_entry_list_.push_back(5));
-  ASSERT_EQ(OB_SUCCESS, super_blk.blk_ckpt_entry_list_.push_back(15));
-  ASSERT_EQ(OB_SUCCESS, super_blk.blk_ckpt_entry_list_.push_back(25));
-  ASSERT_EQ(OB_SUCCESS, super_blk.micro_ckpt_entry_list_.push_back(35));
-  ASSERT_EQ(OB_SUCCESS, super_blk.micro_ckpt_entry_list_.push_back(45));
+  super_blk.blk_ckpt_info_.blk_ckpt_entry_ = 5;
+  ASSERT_EQ(OB_SUCCESS, super_blk.blk_ckpt_used_blk_list().push_back(5));
+  ASSERT_EQ(OB_SUCCESS, super_blk.blk_ckpt_used_blk_list().push_back(15));
+  ASSERT_EQ(OB_SUCCESS, super_blk.blk_ckpt_used_blk_list().push_back(25));
+  super_blk.micro_ckpt_entries().at(0).set_info(true, 100);
+  ASSERT_EQ(OB_SUCCESS, super_blk.micro_ckpt_used_blk_list_by_idx(0).push_back(100));
+  ASSERT_EQ(OB_SUCCESS, super_blk.micro_ckpt_used_blk_list_by_idx(0).push_back(101));
+  ASSERT_EQ(OB_SUCCESS, super_blk.micro_ckpt_used_blk_list_by_idx(0).push_back(102));
+  super_blk.micro_ckpt_entries().at(1).set_info(true, 200);
+  ASSERT_EQ(OB_SUCCESS, super_blk.micro_ckpt_used_blk_list_by_idx(1).push_back(200));
+  ASSERT_EQ(OB_SUCCESS, super_blk.micro_ckpt_used_blk_list_by_idx(1).push_back(201));
+  super_blk.micro_ckpt_entries().at(0).set_info(true, SS_INVALID_PHY_BLK_ID);
+  ASSERT_EQ(true, super_blk.exist_micro_checkpoint());
+  super_blk.micro_ckpt_entries().at(1).set_info(true, SS_INVALID_PHY_BLK_ID);
+  ASSERT_EQ(false, super_blk.exist_micro_checkpoint());
+  super_blk.micro_ckpt_entries().at(0).set_info(true, 100);
+  super_blk.micro_ckpt_entries().at(1).set_info(true, 200);
+  ASSERT_EQ(true, super_blk.exist_micro_checkpoint());
 
   ObSSMicroCacheSuperBlk tmp_super_blk;
-  ASSERT_EQ(OB_SUCCESS, tmp_super_blk.blk_ckpt_entry_list_.push_back(6));
-  ASSERT_EQ(OB_SUCCESS, tmp_super_blk.micro_ckpt_entry_list_.push_back(36));
+  ASSERT_EQ(false, tmp_super_blk.micro_ckpt_info_.check_init(micro_ckpt_split_cnt));
+  ASSERT_EQ(OB_SUCCESS, tmp_super_blk.blk_ckpt_used_blk_list().push_back(6));
+  ASSERT_EQ(OB_SUCCESS, tmp_super_blk.micro_ckpt_entries().push_back(ObSSMicroCkptEntryItem(true, 300)));
+  ObSEArray<int64_t, 32> tmp_blk_list;
+  ASSERT_EQ(OB_SUCCESS, tmp_blk_list.push_back(300));
+  ASSERT_EQ(OB_SUCCESS, tmp_super_blk.micro_ckpt_info_.micro_ckpt_used_blks_.push_back(tmp_blk_list));
 
   ASSERT_EQ(OB_SUCCESS, tmp_super_blk.assign(super_blk));
+  ASSERT_EQ(true, tmp_super_blk.micro_ckpt_info_.check_init(micro_ckpt_split_cnt));
   ASSERT_EQ(tenant_id, tmp_super_blk.tenant_id_);
-  ASSERT_EQ(3, tmp_super_blk.blk_ckpt_entry_list_.count());
-  ASSERT_EQ(2, tmp_super_blk.micro_ckpt_entry_list_.count());
+  ASSERT_EQ(3, tmp_super_blk.blk_ckpt_info_.get_total_used_blk_cnt());
+  ASSERT_EQ(5, tmp_super_blk.micro_ckpt_info_.get_total_used_blk_cnt());
   ASSERT_EQ(super_blk.micro_ckpt_time_us_, tmp_super_blk.micro_ckpt_time_us_);
   ASSERT_EQ(super_blk.cache_file_size_, tmp_super_blk.cache_file_size_);
+  ASSERT_EQ(super_blk.get_ckpt_split_cnt(), tmp_super_blk.get_ckpt_split_cnt());
 
   // serialize & deserialize
   const int64_t buf_len = 1024;
@@ -209,18 +233,22 @@ TEST_F(TestSSMicroCacheCommonMeta, super_block)
   ASSERT_NE(0, pos);
   const int64_t data_len = super_blk.get_serialize_size();
 
+  tmp_super_blk.reset();
   int64_t tmp_pos = 0;
   ASSERT_EQ(OB_SUCCESS, tmp_super_blk.deserialize(buf, data_len, tmp_pos));
   ASSERT_EQ(file_size, tmp_super_blk.cache_file_size_);
+  ASSERT_EQ(micro_ckpt_split_cnt, tmp_super_blk.get_ckpt_split_cnt());
   ASSERT_EQ(pos, tmp_pos);
-  ASSERT_EQ(3, tmp_super_blk.blk_ckpt_entry_list_.count());
-  ASSERT_EQ(25, tmp_super_blk.blk_ckpt_entry_list_.at(2));
-  ASSERT_EQ(2, tmp_super_blk.micro_ckpt_entry_list_.count());
-  ASSERT_EQ(45, tmp_super_blk.micro_ckpt_entry_list_.at(1));
+  ASSERT_EQ(5, tmp_super_blk.blk_ckpt_info_.blk_ckpt_entry_);
+  ASSERT_EQ(2, tmp_super_blk.micro_ckpt_info_.micro_ckpt_entries_.count());
+  ASSERT_EQ(true, tmp_super_blk.micro_ckpt_info_.micro_ckpt_entries_.at(0).exist_ckpt_);
+  ASSERT_EQ(100, tmp_super_blk.micro_ckpt_info_.micro_ckpt_entries_.at(0).entry_blk_idx_);
+  ASSERT_EQ(true, tmp_super_blk.micro_ckpt_info_.micro_ckpt_entries_.at(1).exist_ckpt_);
+  ASSERT_EQ(200, tmp_super_blk.micro_ckpt_info_.micro_ckpt_entries_.at(1).entry_blk_idx_);
 
   tmp_super_blk.reuse();
-  ASSERT_EQ(0, tmp_super_blk.blk_ckpt_entry_list_.count());
-  ASSERT_EQ(0, tmp_super_blk.micro_ckpt_entry_list_.count());
+  ASSERT_EQ(0, tmp_super_blk.blk_ckpt_info_.get_total_used_blk_cnt());
+  ASSERT_EQ(0, tmp_super_blk.micro_ckpt_info_.get_total_used_blk_cnt());
 }
 
 TEST_F(TestSSMicroCacheCommonMeta, ls_tablet_cache_info)

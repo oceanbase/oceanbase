@@ -1214,7 +1214,7 @@ TEST_F(TestSSMicroCache, test_clear_micro_cache)
   total_linked_micro_cnt = 0;
   ASSERT_EQ(OB_SUCCESS, micro_cache->micro_range_mgr_.get_total_range_micro_cnt(total_linked_micro_cnt));
   ASSERT_EQ(total_linked_micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
-  ASSERT_LT(0, cache_stat.task_stat().cur_micro_ckpt_item_cnt_);
+  ASSERT_LT(0, cache_stat.task_stat().micro_ckpt_item_cnt_);
 
   const int64_t ori_persist_micro_us = 200 * 1000L;
   task_runner.persist_meta_task_.cur_interval_us_ = ori_persist_micro_us;
@@ -1357,8 +1357,8 @@ TEST_F(TestSSMicroCache, test_parallel_clear_micro_cache)
   ASSERT_EQ(0, phy_blk_mgr.get_reusable_blocks_cnt());
   ASSERT_EQ(0, phy_blk_mgr.get_sparse_block_cnt());
   ASSERT_EQ(origin_super_blk.cache_file_size_, phy_blk_mgr.super_blk_.cache_file_size_);
-  ASSERT_EQ(0, phy_blk_mgr.super_blk_.micro_ckpt_entry_list_.count());
-  ASSERT_EQ(0, phy_blk_mgr.super_blk_.blk_ckpt_entry_list_.count());
+  ASSERT_EQ(0, phy_blk_mgr.super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
+  ASSERT_EQ(0, phy_blk_mgr.super_blk_.blk_ckpt_info_.get_total_used_blk_cnt());
   ASSERT_EQ(0, phy_blk_mgr.super_blk_.ls_info_list_.count());
 
   ASSERT_EQ(0, cache_stat.phy_blk_stat().reusable_blk_cnt_);

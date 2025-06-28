@@ -87,8 +87,7 @@ TEST_F(TestSSMicroCacheTaskRunner, test_disable_all_task)
 
   ASSERT_EQ(0, cache_stat.task_stat().blk_ckpt_cnt_);
   ObSSDoBlkCheckpointTask &blk_ckpt_task = task_runner.blk_ckpt_task_;
-  const int64_t blk_ckpt_round = blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.ckpt_round_;
-  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.exe_round_ = blk_ckpt_round - 2;
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_blk_ckpt_time_us();
   ob_usleep(3 * 1000 * 1000L);
   ASSERT_EQ(1, cache_stat.task_stat().blk_ckpt_cnt_);
 
@@ -105,16 +104,16 @@ TEST_F(TestSSMicroCacheTaskRunner, test_disable_all_task)
   } while (!is_closed && ObTimeUtility::current_time_s() - start_time_s < MAX_RETRY_TIME_S);
   ASSERT_EQ(true, is_closed);
 
-  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.exe_round_ = blk_ckpt_round - 2;
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_blk_ckpt_time_us();
   ob_usleep(3 * 1000 * 1000L);
   ASSERT_EQ(1, cache_stat.task_stat().blk_ckpt_cnt_);
-  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.exe_round_ = 0;
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_ckpt_us_ = ObTimeUtility::current_time_us();
 
   task_runner.enable_task();
   ob_usleep(3 * 1000 * 1000L);
   ASSERT_EQ(false, task_runner.is_task_closed());
 
-  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.exe_round_ = blk_ckpt_round - 2;
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_blk_ckpt_time_us();
   ob_usleep(3 * 1000 * 1000L);
   ASSERT_EQ(2, cache_stat.task_stat().blk_ckpt_cnt_);
 

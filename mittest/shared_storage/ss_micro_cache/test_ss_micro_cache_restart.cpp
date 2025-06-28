@@ -36,6 +36,9 @@ public:
   static void TearDownTestCase();
   virtual void SetUp();
   virtual void TearDown();
+
+public:
+  const int64_t DIFF_TIME_US = 200 * 1000;
 };
 
 void TestSSMicroCacheRestart::SetUpTestCase()
@@ -143,15 +146,15 @@ TEST_F(TestSSMicroCacheRestart, test_restart_without_file)
   }
   ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
 
-  const int64_t micro_ckpt_round = micro_cache->task_runner_.persist_meta_task_.persist_meta_op_.micro_ckpt_ctx_.ckpt_round_;
-  micro_cache->task_runner_.persist_meta_task_.persist_meta_op_.micro_ckpt_ctx_.exe_round_ = micro_ckpt_round - 2;
-  const int64_t blk_ckpt_round = micro_cache->task_runner_.blk_ckpt_task_.ckpt_op_.blk_ckpt_ctx_.ckpt_round_;
-  micro_cache->task_runner_.blk_ckpt_task_.ckpt_op_.blk_ckpt_ctx_.exe_round_ = blk_ckpt_round - 2;
+  ObSSPersistMicroMetaTask &micro_ckpt_task = micro_cache->task_runner_.persist_meta_task_;
+  ObSSDoBlkCheckpointTask &blk_ckpt_task = micro_cache->task_runner_.blk_ckpt_task_;
+  micro_ckpt_task.persist_meta_op_.micro_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_micro_ckpt_time_us();
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_blk_ckpt_time_us();
   usleep(10 * 1000 * 1000);
   ASSERT_EQ(1, cache_stat.task_stat().micro_ckpt_cnt_);
-  ASSERT_LT(0, cache_stat.task_stat().cur_micro_ckpt_item_cnt_);
+  ASSERT_LT(0, cache_stat.task_stat().micro_ckpt_item_cnt_);
   ASSERT_EQ(1, cache_stat.task_stat().blk_ckpt_cnt_);
-  ASSERT_LT(0, cache_stat.task_stat().cur_blk_ckpt_item_cnt_);
+  ASSERT_LT(0, cache_stat.task_stat().blk_ckpt_item_cnt_);
 
   tnt_file_mgr->stop();
   micro_cache->stop();
@@ -227,18 +230,16 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
 
   // 1. FIRST START
   // 1.1 trigger micro_meta and phy_info checkpoint(but there not exist any micro_meta), wait for it finish
-  const int64_t micro_ckpt_round = micro_cache->task_runner_.persist_meta_task_.persist_meta_op_.micro_ckpt_ctx_.ckpt_round_;
-  micro_ckpt_task.persist_meta_op_.micro_ckpt_ctx_.exe_round_ = micro_ckpt_round - 2;
-  const int64_t blk_ckpt_round = micro_cache->task_runner_.blk_ckpt_task_.ckpt_op_.blk_ckpt_ctx_.ckpt_round_;
-  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.exe_round_ = blk_ckpt_round - 2;
+  micro_ckpt_task.persist_meta_op_.micro_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_micro_ckpt_time_us();
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_blk_ckpt_time_us();
   usleep(5 * 1000 * 1000);
   ASSERT_EQ(1, cache_stat.task_stat().micro_ckpt_cnt_);
   ASSERT_EQ(1, cache_stat.task_stat().blk_ckpt_cnt_);
-  ASSERT_EQ(0, phy_blk_mgr.super_blk_.micro_ckpt_entry_list_.count());
-  ASSERT_LT(0, phy_blk_mgr.super_blk_.blk_ckpt_entry_list_.count());
-  ASSERT_LE(SS_SUPER_BLK_COUNT, phy_blk_mgr.super_blk_.blk_ckpt_entry_);
+  ASSERT_EQ(0, phy_blk_mgr.super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
+  ASSERT_LT(0, phy_blk_mgr.super_blk_.blk_ckpt_info_.get_total_used_blk_cnt());
+  ASSERT_LE(SS_SUPER_BLK_COUNT, phy_blk_mgr.super_blk_.blk_ckpt_info_.blk_ckpt_entry_);
   ASSERT_EQ(0, cache_stat.phy_blk_stat().meta_blk_used_cnt_);
-  ASSERT_EQ(phy_blk_mgr.super_blk_.blk_ckpt_entry_list_.count(), cache_stat.phy_blk_stat().phy_ckpt_blk_used_cnt_);
+  ASSERT_EQ(phy_blk_mgr.super_blk_.blk_ckpt_info_.get_total_used_blk_cnt(), cache_stat.phy_blk_stat().phy_ckpt_blk_used_cnt_);
 
   // 1.2 destroy micro_cache
   LOG_INFO("TEST: start 1st restart", "cost_s", ObTimeUtility::current_time_s() - TEST_START_TIME);
@@ -257,8 +258,8 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
     K(cache_stat.micro_stat()), K(cache_stat.task_stat()));
 
   ASSERT_EQ(cache_file_size, phy_blk_mgr.super_blk_.cache_file_size_);
-  ASSERT_EQ(0, phy_blk_mgr.super_blk_.micro_ckpt_entry_list_.count());
-  ASSERT_EQ(0, phy_blk_mgr.super_blk_.blk_ckpt_entry_list_.count()); // cuz only exist blk ckpt, will drop it
+  ASSERT_EQ(0, phy_blk_mgr.super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
+  ASSERT_EQ(0, phy_blk_mgr.super_blk_.blk_ckpt_info_.get_total_used_blk_cnt()); // cuz only exist blk ckpt, will drop it
   ASSERT_EQ(compress_type, micro_cache->admin_info_.get_micro_meta_compressor_type());
   ASSERT_EQ(compress_type, phy_blk_mgr.super_blk_.admin_info_.get_micro_meta_compressor_type());
 
@@ -314,8 +315,8 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   // 2.5 trigger micro_meta and phy_info checkpoint, wait for it finish
   int64_t ori_micro_ckpt_cnt = cache_stat.task_stat().micro_ckpt_cnt_;
   int64_t ori_blk_ckpt_cnt = cache_stat.task_stat().blk_ckpt_cnt_;
-  micro_ckpt_task.persist_meta_op_.micro_ckpt_ctx_.exe_round_ = micro_ckpt_round - 2;
-  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.exe_round_ = blk_ckpt_round - 2;
+  micro_ckpt_task.persist_meta_op_.micro_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_micro_ckpt_time_us();
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_blk_ckpt_time_us();
   int64_t EXE_CKPT_TIMEOUT_S = 120;
   start_time_s = ObTimeUtility::current_time_s();
   bool finish_ckpt = false;
@@ -330,16 +331,16 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
     }
   } while (!finish_ckpt && ObTimeUtility::current_time_s() - start_time_s < EXE_CKPT_TIMEOUT_S);
   ASSERT_EQ(true, finish_ckpt);
-  int64_t micro_ckpt_entry_cnt = phy_blk_mgr.super_blk_.micro_ckpt_entry_list_.count();
+  int64_t micro_ckpt_entry_cnt = phy_blk_mgr.super_blk_.micro_ckpt_info_.get_total_used_blk_cnt();
   ASSERT_LT(0, micro_ckpt_entry_cnt);
-  ASSERT_LE(SS_SUPER_BLK_COUNT, phy_blk_mgr.super_blk_.micro_ckpt_entry_);
-  int64_t blk_ckpt_entry_cnt = phy_blk_mgr.super_blk_.blk_ckpt_entry_list_.count();
+  ASSERT_LE(SS_SUPER_BLK_COUNT, phy_blk_mgr.super_blk_.micro_ckpt_info_.micro_ckpt_entries_.at(0).entry_blk_idx_);
+  int64_t blk_ckpt_entry_cnt = phy_blk_mgr.super_blk_.blk_ckpt_info_.get_total_used_blk_cnt();
   ASSERT_LT(0, blk_ckpt_entry_cnt);
-  ASSERT_LE(SS_SUPER_BLK_COUNT, phy_blk_mgr.super_blk_.blk_ckpt_entry_);
+  ASSERT_LE(SS_SUPER_BLK_COUNT, phy_blk_mgr.super_blk_.blk_ckpt_info_.blk_ckpt_entry_);
   ASSERT_EQ(micro_ckpt_entry_cnt, cache_stat.phy_blk_stat().meta_blk_used_cnt_);
   ASSERT_EQ(blk_ckpt_entry_cnt, cache_stat.phy_blk_stat().phy_ckpt_blk_used_cnt_);
 
-  total_ckpt_micro_cnt = cache_stat.task_stat().cur_micro_ckpt_item_cnt_;
+  total_ckpt_micro_cnt = cache_stat.task_stat().micro_ckpt_item_cnt_;
   ASSERT_EQ(persisted_micro_cnt, total_ckpt_micro_cnt);
   ASSERT_EQ(micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
   ASSERT_LE(micro_cnt * min_micro_size, cache_stat.micro_stat().total_micro_size_);
@@ -438,8 +439,8 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   // 3.6 execute checkpoint
   ori_micro_ckpt_cnt = cache_stat.task_stat().micro_ckpt_cnt_;
   ori_blk_ckpt_cnt = cache_stat.task_stat().blk_ckpt_cnt_;
-  micro_ckpt_task.persist_meta_op_.micro_ckpt_ctx_.exe_round_ = micro_ckpt_round - 2;
-  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.exe_round_ = blk_ckpt_round - 2;
+  micro_ckpt_task.persist_meta_op_.micro_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_micro_ckpt_time_us();
+  blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_blk_ckpt_time_us();
   start_time_s = ObTimeUtility::current_time_s();
   finish_ckpt = false;
   do {
@@ -457,7 +458,7 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   LOG_INFO("finish second round ckpt", K(tmp_total_micro_cnt), K(tmp_mark_expired_cnt), "ckpt_cost",
     ObTimeUtility::current_time_s() - start_time_s, K(cache_stat));
   ASSERT_EQ(total_ckpt_micro_cnt + micro_cnt - tmp_mark_expired_cnt, cache_stat.micro_stat().total_micro_cnt_);
-  ASSERT_EQ(tmp_persist_micro_cnt, cache_stat.task_stat().cur_micro_ckpt_item_cnt_);
+  ASSERT_EQ(tmp_persist_micro_cnt, cache_stat.task_stat().micro_ckpt_item_cnt_);
 
   int64_t total_sub_rng_cnt = 0;
   for (int64_t i = 0; i < init_rng_cnt; ++i) {
@@ -600,8 +601,8 @@ TEST_F(TestSSMicroCacheRestart, test_restart_micro_cache)
   // ASSERT_EQ(
   //     phy_blk_mgr.super_blk_.blk_ckpt_entry_list_.count(), cache_stat.phy_blk_stat().phy_ckpt_blk_used_cnt_);
 
-  // ASSERT_LT(0, cache_stat.task_stat().cur_micro_ckpt_item_cnt_);
-  // total_ckpt_micro_cnt = cache_stat.task_stat().cur_micro_ckpt_item_cnt_; // include 2 ghost micro_block
+  // ASSERT_LT(0, cache_stat.task_stat().micro_ckpt_item_cnt_);
+  // total_ckpt_micro_cnt = cache_stat.task_stat().micro_ckpt_item_cnt_; // include 2 ghost micro_block
 
   // if (mark_invalid) {
   //   ASSERT_EQ(total_ckpt_micro_cnt, persisted_micro_cnt - 1);

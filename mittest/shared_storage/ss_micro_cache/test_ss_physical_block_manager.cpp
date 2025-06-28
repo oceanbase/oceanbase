@@ -152,14 +152,8 @@ void TestSSPhysicalBlockManager::check_super_block_identical(
   ASSERT_EQ(super_blk1.micro_ckpt_time_us_, super_blk2.micro_ckpt_time_us_);
   ASSERT_EQ(super_blk1.cache_file_size_, super_blk2.cache_file_size_);
   ASSERT_EQ(super_blk1.modify_time_us_, super_blk2.modify_time_us_);
-  ASSERT_EQ(super_blk1.micro_ckpt_entry_list_.count(), super_blk2.micro_ckpt_entry_list_.count());
-  for (int64_t i = 0; i < super_blk2.micro_ckpt_entry_list_.count(); ++i) {
-    ASSERT_EQ(super_blk1.micro_ckpt_entry_list_[i], super_blk2.micro_ckpt_entry_list_[i]);
-  }
-  ASSERT_EQ(super_blk1.blk_ckpt_entry_list_.count(), super_blk2.blk_ckpt_entry_list_.count());
-  for (int64_t i = 0; i < super_blk2.blk_ckpt_entry_list_.count(); ++i) {
-    ASSERT_EQ(super_blk1.blk_ckpt_entry_list_[i], super_blk2.blk_ckpt_entry_list_[i]);
-  }
+  ASSERT_EQ(super_blk1.micro_ckpt_info_, super_blk2.micro_ckpt_info_);
+  ASSERT_EQ(super_blk1.blk_ckpt_info_, super_blk2.blk_ckpt_info_);
 }
 
 TEST_F(TestSSPhysicalBlockManager, super_block)
@@ -168,7 +162,7 @@ TEST_F(TestSSPhysicalBlockManager, super_block)
   ASSERT_EQ(true, phy_blk_mgr.is_inited_);
   phy_blk_mgr.super_blk_.reset();
   ASSERT_EQ(false, phy_blk_mgr.super_blk_.is_valid());
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block());
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block(SS_PERSIST_MICRO_CKPT_SPLIT_CNT));
   ASSERT_EQ(true, phy_blk_mgr.super_blk_.is_valid());
   ObSSMicroCacheSuperBlk super_blk;
   ASSERT_EQ(false, super_blk.is_valid());
@@ -494,7 +488,7 @@ TEST_F(TestSSPhysicalBlockManager, resize_file_size)
   const int64_t old_min_micro_blk_cnt = blk_cnt_info.meta_blk_.min_cnt_;
   const int64_t old_max_micro_blk_cnt = blk_cnt_info.meta_blk_.max_cnt_;
   const int64_t old_micro_blk_cnt = blk_cnt_info.meta_blk_.used_cnt_;
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block());
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block(SS_PERSIST_MICRO_CKPT_SPLIT_CNT));
   total_block_cnt += ObSSPhysicalBlockManager::PHY_BLOCK_SUB_ARR_SIZE / sizeof(ObSSPhysicalBlock);
   file_size = DEFAULT_BLOCK_SIZE * total_block_cnt;
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.resize_file_size(file_size, DEFAULT_BLOCK_SIZE));
@@ -776,7 +770,7 @@ TEST_F(TestSSPhysicalBlockManager, parallel_allocate_block_and_resize)
   ASSERT_EQ(OB_SUCCESS, allocator.init(DEFAULT_BLOCK_SIZE, ObMemAttr(MTL_ID(), "test"), 1L << 30));
   ObSSPhysicalBlockManager phy_blk_mgr(cache_stat, allocator);
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.init(MTL_ID(), FILE_SIZE, DEFAULT_BLOCK_SIZE));
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block());
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block(SS_PERSIST_MICRO_CKPT_SPLIT_CNT));
 
   const int64_t origin_file_size = phy_blk_mgr.cache_file_size_;
   const int64_t thread_num = 10;
@@ -853,7 +847,7 @@ TEST_F(TestSSPhysicalBlockManager, double_write_super_blk)
   ASSERT_EQ(OB_SUCCESS, allocator.init(DEFAULT_BLOCK_SIZE, ObMemAttr(MTL_ID(), "test"), 1L << 30));
   ObSSPhysicalBlockManager phy_blk_mgr(cache_stat, allocator);
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.init(MTL_ID(), FILE_SIZE, DEFAULT_BLOCK_SIZE));
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block());
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.format_ss_super_block(SS_PERSIST_MICRO_CKPT_SPLIT_CNT));
 
   const int64_t align_size = SS_MEM_BUF_ALIGNMENT;
   char *buf = static_cast<char *>(ob_malloc_align(SS_MEM_BUF_ALIGNMENT, align_size, ObMemAttr(MTL_ID(), "test")));
@@ -862,8 +856,8 @@ TEST_F(TestSSPhysicalBlockManager, double_write_super_blk)
   // Scenario 1
   const int64_t old_cache_file_size = phy_blk_mgr.cache_file_size_ * 2;
   const int64_t new_cache_file_size = phy_blk_mgr.cache_file_size_ * 4;
-  ObSSMicroCacheSuperBlk old_super_blk(tenant_id, old_cache_file_size);
-  ObSSMicroCacheSuperBlk new_super_blk(tenant_id, new_cache_file_size);
+  ObSSMicroCacheSuperBlk old_super_blk(tenant_id, old_cache_file_size, SS_PERSIST_MICRO_CKPT_SPLIT_CNT);
+  ObSSMicroCacheSuperBlk new_super_blk(tenant_id, new_cache_file_size, SS_PERSIST_MICRO_CKPT_SPLIT_CNT);
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.update_ss_super_block(old_super_blk));
 
   new_super_blk.modify_time_us_ = old_super_blk.modify_time_us_ + 888888;
@@ -878,7 +872,7 @@ TEST_F(TestSSPhysicalBlockManager, double_write_super_blk)
   // Scenario 2
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.update_ss_super_block(new_super_blk));
   const int64_t fake_cache_file_size = phy_blk_mgr.cache_file_size_ * 8;
-  ObSSMicroCacheSuperBlk fake_super_blk(tenant_id, new_cache_file_size);
+  ObSSMicroCacheSuperBlk fake_super_blk(tenant_id, new_cache_file_size, SS_PERSIST_MICRO_CKPT_SPLIT_CNT);
   fake_super_blk.modify_time_us_ = new_super_blk.modify_time_us_ + 888888;
 
   ASSERT_EQ(OB_SUCCESS, serialize_super_block(buf, align_size, fake_super_blk));
@@ -903,6 +897,7 @@ TEST_F(TestSSPhysicalBlockManager, alloc_all_phy_block)
   ObSSPhysicalBlockManager &phy_blk_mgr = MTL(ObSSMicroCache *)->phy_blk_mgr_;
   ObSSMicroCacheSuperBlk &super_blk = phy_blk_mgr.super_blk_;
   ObSSPhyBlockCountInfo &blk_cnt_info = phy_blk_mgr.blk_cnt_info_;
+  ASSERT_EQ(1, super_blk.get_ckpt_split_cnt());
   LOG_INFO("TEST: check blk_cnt_info", K(blk_cnt_info));
 
   ObArray<ObSSPhyBlockHandle> alloc_blk_handles;
@@ -953,9 +948,11 @@ TEST_F(TestSSPhysicalBlockManager, alloc_all_phy_block)
     ASSERT_NE(-1, blk_idx);
     ASSERT_EQ(true, phy_blk_handle.is_valid());
     ASSERT_EQ(OB_SUCCESS, alloc_blk_handles.push_back(phy_blk_handle));
-    ASSERT_EQ(OB_SUCCESS, super_blk.micro_ckpt_entry_list_.push_back(blk_idx));
+    ASSERT_EQ(OB_SUCCESS, super_blk.micro_ckpt_info_.micro_ckpt_used_blks_.at(0).push_back(blk_idx));
     phy_blk_handle.get_ptr()->valid_len_ = 0;
   }
+  int64_t first_micro_entry = super_blk.micro_ckpt_info_.micro_ckpt_used_blks_.at(0).at(0);
+  ASSERT_EQ(OB_SUCCESS, super_blk.micro_ckpt_info_.micro_ckpt_entries_.push_back(ObSSMicroCkptEntryItem(true, first_micro_entry)));
   ASSERT_EQ(meta_blk_cnt, blk_cnt_info.meta_blk_.used_cnt_);
 
   // 4. alloc all info_ckpt_blk
@@ -967,9 +964,10 @@ TEST_F(TestSSPhysicalBlockManager, alloc_all_phy_block)
     ASSERT_NE(-1, blk_idx);
     ASSERT_EQ(true, phy_blk_handle.is_valid());
     ASSERT_EQ(OB_SUCCESS, alloc_blk_handles.push_back(phy_blk_handle));
-    ASSERT_EQ(OB_SUCCESS, super_blk.blk_ckpt_entry_list_.push_back(blk_idx));
+    ASSERT_EQ(OB_SUCCESS, super_blk.blk_ckpt_info_.blk_ckpt_used_blks_.push_back(blk_idx));
     phy_blk_handle.get_ptr()->valid_len_ = 0;
   }
+  super_blk.blk_ckpt_info_.blk_ckpt_entry_ = super_blk.blk_ckpt_info_.blk_ckpt_used_blks_.at(0);
   ASSERT_EQ(info_blk_cnt, blk_cnt_info.phy_ckpt_blk_used_cnt_);
 
   // 5. mock after read checkpoint, we need to update blk_state

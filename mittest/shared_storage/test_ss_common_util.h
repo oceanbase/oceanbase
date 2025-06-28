@@ -32,6 +32,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
 
 static const int64_t DEFAULT_BLOCK_SIZE = 2 * 1024 * 1024; // 2MB
+static const int64_t DIFF_CKPT_TIME_US = 400 * 1000L;
 
 class TestSSCommonUtil
 {
@@ -75,6 +76,10 @@ public:
                                int64_t &range_micro_sum);
   static void stop_all_bg_task(ObSSMicroCache *micro_cache);
   static void resume_all_bg_task(ObSSMicroCache *micro_cache);
+  static int64_t get_prev_micro_ckpt_time_us() { return ObTimeUtility::current_time_us() - SS_PERSIST_META_INTERVAL_US + DIFF_CKPT_TIME_US; }
+  static int64_t get_prev_blk_ckpt_time_us() { return ObTimeUtility::current_time_us() - SS_DO_BLK_CKPT_INTERVAL_US + DIFF_CKPT_TIME_US; }
+  static int64_t get_prev_scan_reusable_blk_time_us() { return ObTimeUtility::current_time_us() - SS_SCAN_REUSABLE_BLK_INTERVAL_US + DIFF_CKPT_TIME_US; }
+  static int64_t get_prev_print_stat_time_us() { return ObTimeUtility::current_time_us() - SS_PRINT_CACHE_STAT_INTERVAL_US + DIFF_CKPT_TIME_US; }
 };
 
 MacroBlockId TestSSCommonUtil::gen_macro_block_id(const int64_t second_id)

@@ -151,14 +151,16 @@ TEST_F(TestSSMicroMetaManager, scan_and_operate_micro_meta)
   const uint64_t tenant_id = MTL_ID();
   ASSERT_EQ(OB_SUCCESS, tablet_info_map_.create(128, ObMemAttr(tenant_id, "SSTabletInfoMap")));
 
-  ObSSMicroMetaManager &micro_meta_mgr =  MTL(ObSSMicroCache *)->micro_meta_mgr_;
-  ObSSMicroRangeManager &micro_range_mgr = MTL(ObSSMicroCache *)->micro_range_mgr_;
-  ObSSMemBlockManager &mem_blk_mgr = MTL(ObSSMicroCache *)->mem_blk_mgr_;
-  ObSSMicroCacheStat &cache_stat = MTL(ObSSMicroCache *)->cache_stat_;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+  ObSSMicroRangeManager &micro_range_mgr = micro_cache->micro_range_mgr_;
+  ObSSMemBlockManager &mem_blk_mgr = micro_cache->mem_blk_mgr_;
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
   ObSSMemBlockPool &mem_blk_pool = mem_blk_mgr.mem_blk_pool_;
   ObSSMemBlock *mem_blk_ptr = nullptr;
   ASSERT_EQ(OB_SUCCESS, mem_blk_pool.alloc(mem_blk_ptr, true/*is_fg*/));
   ASSERT_NE(nullptr, mem_blk_ptr);
+  const int64_t init_range_cnt = micro_range_mgr.init_range_cnt_;
 
   ObSSMicroMetaManager::SSMicroMetaMap &micro_map = micro_meta_mgr.micro_meta_map_;
   const int64_t macro_cnt = 40;
@@ -201,17 +203,19 @@ TEST_F(TestSSMicroMetaManager, scan_and_operate_micro_meta)
 
   // scan all micro_meta
   int64_t start_range_idx1 = 0;
-  int64_t end_range_idx1 = -1;
+  int64_t end_range_idx1 = init_range_cnt - 1;
+  int64_t handled_range_idx1 = -1;
   bool is_empty_range = true;
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.scan_ranges_micro_block_meta(tablet_info_map_, ls_handles, start_range_idx1,
-      end_range_idx1, is_empty_range));
-  ASSERT_NE(-1, end_range_idx1);
-  int64_t start_range_idx2 = end_range_idx1 + 1;
-  int64_t end_range_idx2 = -1;
+      end_range_idx1, handled_range_idx1, is_empty_range));
+  ASSERT_NE(-1, handled_range_idx1);
+  int64_t start_range_idx2 = handled_range_idx1 + 1;
+  int64_t end_range_idx2 = init_range_cnt - 1;
+  int64_t handled_range_idx2 = -1;
   is_empty_range = true;
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.scan_ranges_micro_block_meta(tablet_info_map_, ls_handles, start_range_idx2,
-      end_range_idx2, is_empty_range));
-  ASSERT_LT(end_range_idx1, end_range_idx2);
+      end_range_idx2, handled_range_idx2, is_empty_range));
+  ASSERT_LT(handled_range_idx1, handled_range_idx2);
   ASSERT_EQ(macro_cnt * micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
 
   // mock micro_meta 'deleted'/'expired'/'abnormal'
@@ -262,20 +266,19 @@ TEST_F(TestSSMicroMetaManager, scan_and_operate_micro_meta)
   ASSERT_EQ(0, cache_stat.task_stat().expired_cnt_);
 
   int ret = OB_SUCCESS;
-  int64_t end_range_idx3 = -1;
-  bool finish_iter = false;
+  int64_t start_range_idx3 = 0;
+  int64_t end_range_idx3 = init_range_cnt - 1;
+  int64_t handled_range_idx3 = -1;
   do {
-    const int64_t start_range_idx3 = end_range_idx3 + 1;
     is_empty_range = true;
     if (OB_FAIL(micro_meta_mgr.scan_ranges_micro_block_meta(tablet_info_map_, ls_handles, start_range_idx3,
-        end_range_idx3, is_empty_range))) {
-      if (OB_ITER_END == ret) {
-        ret = OB_SUCCESS;
-        finish_iter = true;
-      }
+        end_range_idx3, handled_range_idx3, is_empty_range))) {
+      LOG_WARN("fail to scan ranges micro_block meta", KR(ret), K(start_range_idx3));
     }
     ASSERT_EQ(OB_SUCCESS, ret);
-  } while (OB_SUCC(ret) && !finish_iter);
+    start_range_idx3 = MAX(start_range_idx3, handled_range_idx3) + 1;
+    handled_range_idx3 = -1;
+  } while (start_range_idx3 < init_range_cnt);
 
   // erase invalid_micro count = macro_cnt / 2;
   // erase expired_micro count = macro_cnt - 1;
@@ -481,34 +484,30 @@ TEST_F(TestSSMicroMetaManager, test_scan_ranges_block_meta)
   LOG_INFO("TEST_CASE: start test_scan_ranges_block_meta");
   ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
   ASSERT_NE(nullptr, micro_cache);
-  ObSSMicroMetaManager &micro_meta_mgr = MTL(ObSSMicroCache *)->micro_meta_mgr_;
-  ASSERT_EQ(true, micro_meta_mgr.is_inited());
-  ObSSMicroCacheStat &cache_stat = MTL(ObSSMicroCache *)->cache_stat_;
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+  ObSSMicroRangeManager &micro_range_mgr = micro_cache->micro_range_mgr_;
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+  const int64_t init_range_cnt = micro_range_mgr.init_range_cnt_;
 
   ObSEArray<ObLSHandle, 16> ls_handles;
   ObSSMicroCacheUtil::get_ls_handles(ls_handles);
 
   ObSSMCTabletInfoMap tablet_cache_map;
   int64_t start_range_idx = 0;
-  int64_t end_range_idx = -1;
-  start_range_idx = -1;
+  int64_t end_range_idx = - 1;
+  int64_t handled_range_idx = -1;
   tablet_cache_map.clear();
   bool is_empty_range = true;
   ASSERT_EQ(OB_INVALID_ARGUMENT, micro_meta_mgr.scan_ranges_micro_block_meta(tablet_cache_map, ls_handles, start_range_idx,
-      end_range_idx, is_empty_range));
-  ASSERT_EQ(-1, end_range_idx);
-  start_range_idx = 100000;
-  tablet_cache_map.clear();
-  is_empty_range = true;
-  ASSERT_EQ(OB_ITER_END, micro_meta_mgr.scan_ranges_micro_block_meta(tablet_cache_map, ls_handles, start_range_idx,
-      end_range_idx, is_empty_range));
-  ASSERT_EQ(-1, end_range_idx);
-  start_range_idx = 0;
+      end_range_idx, handled_range_idx, is_empty_range));
+  ASSERT_EQ(-1, handled_range_idx);
+  end_range_idx = init_range_cnt - 1;
+  handled_range_idx = -1;
   tablet_cache_map.clear();
   is_empty_range = true;
   ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.scan_ranges_micro_block_meta(tablet_cache_map, ls_handles, start_range_idx,
-      end_range_idx, is_empty_range));
-  ASSERT_EQ(cache_stat.range_stat().init_range_cnt_ - 1, end_range_idx);
+      end_range_idx, handled_range_idx, is_empty_range));
+  ASSERT_EQ(end_range_idx, handled_range_idx);
 
   // add micro_meta
   ObSSMicroMetaManager::SSMicroMetaMap &micro_map = micro_meta_mgr.micro_meta_map_;
@@ -543,19 +542,18 @@ TEST_F(TestSSMicroMetaManager, test_scan_ranges_block_meta)
   ASSERT_LT(1, cache_stat.range_stat().init_range_cnt_);
 
   start_range_idx = 0;
-  end_range_idx = -1;
+  end_range_idx = init_range_cnt - 1;
+  handled_range_idx = -1;
   tablet_cache_map.clear();
   do {
     is_empty_range = true;
     ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.scan_ranges_micro_block_meta(tablet_cache_map, ls_handles, start_range_idx,
-        end_range_idx, is_empty_range));
-    ASSERT_GE(end_range_idx, start_range_idx);
-    start_range_idx = end_range_idx + 1;
+        end_range_idx, handled_range_idx, is_empty_range));
+    ASSERT_GE(handled_range_idx, start_range_idx);
+    start_range_idx = MAX(handled_range_idx, start_range_idx) + 1;
+    handled_range_idx = -1;
   } while (start_range_idx < cache_stat.range_stat().init_range_cnt_);
-  is_empty_range = true;
-  ASSERT_EQ(OB_ITER_END, micro_meta_mgr.scan_ranges_micro_block_meta(tablet_cache_map, ls_handles, start_range_idx,
-      end_range_idx, is_empty_range));
-  ASSERT_EQ(macro_cnt * micro_cnt - macro_cnt * micro_cnt /5 , cache_stat.micro_stat().total_micro_cnt_);
+  ASSERT_EQ(macro_cnt * micro_cnt - macro_cnt * micro_cnt / 5 , cache_stat.micro_stat().total_micro_cnt_);
   ASSERT_EQ(macro_cnt, tablet_cache_map.size());
 }
 
@@ -566,7 +564,8 @@ TEST_F(TestSSMicroMetaManager, test_micro_meta_manager_scan)
   ASSERT_NE(nullptr, micro_cache);
   ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
   ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
-  ObSSMicroRangeManager &range_manager = micro_cache->micro_range_mgr_;
+  ObSSMicroRangeManager &micro_range_mgr = micro_cache->micro_range_mgr_;
+  const int64_t init_range_cnt = micro_range_mgr.init_range_cnt_;
 
   ObSEArray<ObLSHandle, 16> ls_handles;
   ObSSMicroCacheUtil::get_ls_handles(ls_handles);
@@ -602,13 +601,17 @@ TEST_F(TestSSMicroMetaManager, test_micro_meta_manager_scan)
   ASSERT_EQ(0, tablet_cache_map.size());
 
   int64_t start_range_idx = 0;
-  int64_t end_range_idx = -1;
+  int64_t end_range_idx = init_range_cnt - 1;
+  int64_t handled_range_idx = -1;
+  bool is_empty_range = true;
   do {
-    bool is_empty_range = true;
-    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.scan_ranges_micro_block_meta(tablet_cache_map, ls_handles, start_range_idx, end_range_idx, is_empty_range));
-    ASSERT_GE(end_range_idx, start_range_idx);
-    start_range_idx = end_range_idx + 1;
-  } while(start_range_idx < cache_stat.range_stat().init_range_cnt_);
+    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.scan_ranges_micro_block_meta(tablet_cache_map, ls_handles, start_range_idx, end_range_idx,
+        handled_range_idx, is_empty_range));
+    ASSERT_GE(handled_range_idx, start_range_idx);
+    start_range_idx = MAX(start_range_idx, handled_range_idx) + 1;
+    handled_range_idx = -1;
+    is_empty_range = true;
+  } while(start_range_idx < init_range_cnt);
   ASSERT_EQ(macro_cnt * micro_cnt - macro_cnt * micro_cnt / 10, cache_stat.micro_stat().total_micro_cnt_);
   ASSERT_EQ(macro_cnt, tablet_cache_map.size());
 
@@ -623,7 +626,7 @@ TEST_F(TestSSMicroMetaManager, test_micro_meta_manager_scan)
   }
 
   int64_t total_meta_cnt = 0;
-  ObSSMicroInitRangeInfo **init_range_arr = range_manager.get_init_range_arr();
+  ObSSMicroInitRangeInfo **init_range_arr = micro_range_mgr.get_init_range_arr();
   for(int64_t i = 0; i < cache_stat.range_stat().init_range_cnt_; ++i) {
     // calculate the sum of meta range in each init range
     if(init_range_arr[i]->has_sub_ranges()) {
@@ -690,11 +693,9 @@ TEST_F(TestSSMicroMetaManager, test_persist_micro_parallel_with_clear)
   ob_usleep(2 * 1000 * 1000L);
 
   persist_meta_task->is_inited_ = true;
-  ASSERT_EQ(OB_SUCCESS, persist_meta_task->persist_meta_op_.check_state());
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task->persist_meta_op_.start_op());
   persist_meta_task->persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr->get_ss_super_block(persist_meta_task->persist_meta_op_.micro_ckpt_ctx_.prev_super_blk_));
-
-  ASSERT_EQ(OB_SUCCESS, persist_meta_task->persist_meta_op_.gen_micro_meta_checkpoint());
+  ASSERT_EQ(OB_SUCCESS, persist_meta_task->persist_meta_op_.gen_checkpoint());
   persist_meta_task->persist_meta_op_.is_closed_ = true;
 
   clear_thread.join();

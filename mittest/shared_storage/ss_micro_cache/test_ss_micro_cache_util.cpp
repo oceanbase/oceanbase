@@ -272,10 +272,10 @@ TEST_F(TestSSMicroCacheUtil, test_parse_micro_ckpt_block)
   // 2. execute micro_meta_ckpt
   ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
   ObSSPersistMicroMetaTask &persist_meta_task = micro_cache->task_runner_.persist_meta_task_;
-  persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.exe_round_ = persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.ckpt_round_ - 2;
+  persist_meta_task.persist_meta_op_.micro_ckpt_ctx_.prev_ckpt_us_ = TestSSCommonUtil::get_prev_micro_ckpt_time_us();
   usleep(5 * 1000 * 1000);
   ASSERT_EQ(1, cache_stat.task_stat().micro_ckpt_cnt_);
-  ASSERT_LT(0, phy_blk_mgr.super_blk_.micro_ckpt_entry_list_.count());
+  ASSERT_LT(0, phy_blk_mgr.super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
 
   // 3. dump micro_meta_ckpt block
   const int64_t block_size = phy_blk_mgr.get_block_size();
@@ -286,7 +286,8 @@ TEST_F(TestSSMicroCacheUtil, test_parse_micro_ckpt_block)
   ASSERT_NE(nullptr, src_buf);
   ASSERT_NE(nullptr, dest_buf);
 
-  const int64_t phy_blk_idx = phy_blk_mgr.super_blk_.micro_ckpt_entry_list_[0];
+  ASSERT_EQ(1, phy_blk_mgr.super_blk_.get_ckpt_split_cnt());
+  const int64_t phy_blk_idx = phy_blk_mgr.super_blk_.micro_ckpt_info_.micro_ckpt_entries_.at(0).entry_blk_idx_;
   const int64_t block_offset = phy_blk_mgr.get_block_size() * phy_blk_idx;
   int64_t read_size = 0;
   ASSERT_EQ(OB_SUCCESS, tnt_file_mgr->pread_cache_block(block_offset, block_size, src_buf, read_size));
