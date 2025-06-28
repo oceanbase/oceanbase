@@ -617,23 +617,12 @@ int ObTableLoadStoreCtx::init_write_ctx()
         const ObColumnSchemaV2 *col_schema = nullptr;
         write_ctx_.px_column_descs_.set_block_allocator(ModulePageAllocator(allocator_));
         write_ctx_.px_column_project_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
-        write_ctx_.null_column_idxs_.set_block_allocator(ModulePageAllocator(allocator_));
         int64_t project_idx = 0;
         for (int64_t i = 0; OB_SUCC(ret) && i < col_descs.count(); ++i) {
           const ObColDesc &col_desc = col_descs.at(i);
           if (OB_ISNULL(col_schema = table_schema->get_column_schema(col_desc.col_id_))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected col schema is null", KR(ret), K(col_desc));
-          }
-          // SQL执行计划不包含xmltype列, 存储层要写这一列, 需要补null
-          else if (col_schema->is_xmltype()) {
-            ObIVector *vector = nullptr;
-            if (OB_UNLIKELY(!col_schema->is_unused())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected xmltype column is not unused", KR(ret));
-            } else if (OB_FAIL(write_ctx_.null_column_idxs_.push_back(project_idx++))) {
-              LOG_WARN("fail to push back", KR(ret));
-            }
           }
           // SQL执行计划包含隐藏主键列、虚拟生成列以及其他普通列
           else if (OB_FAIL(write_ctx_.px_column_descs_.push_back(col_desc))) {

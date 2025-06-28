@@ -217,7 +217,6 @@ int ObTableLoadStoreTransPXWriter::init_batch_ctx(const bool is_vectorized,
       LOG_WARN("fail to create tablet id fixed vector", KR(ret));
    } else if (OB_FAIL(batch_ctx_->batch_rows_.init(store_ctx_->write_ctx_.px_column_descs_,
                                                    store_ctx_->write_ctx_.px_column_project_idxs_,
-                                                   store_ctx_->write_ctx_.null_column_idxs_,
                                                    store_ctx_->ctx_->schema_.column_descs_,
                                                    store_ctx_->ctx_->schema_.col_nullables_,
                                                    row_flag,

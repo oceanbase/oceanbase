@@ -43,7 +43,6 @@ void ObTableLoadPXBatchRows::reuse() { batch_rows_.reuse(); }
 
 int ObTableLoadPXBatchRows::init(const ObIArray<ObColDesc> &px_col_descs,
                                  const ObIArray<int64_t> &px_column_project_idxs,
-                                 const ObIArray<int64_t> &null_column_idxs,
                                  const ObIArray<ObColDesc> &col_descs,
                                  const ObBitVector *col_nullables,
                                  const ObDirectLoadRowFlag &row_flag, const int64_t max_batch_size)
@@ -57,7 +56,7 @@ int ObTableLoadPXBatchRows::init(const ObIArray<ObColDesc> &px_col_descs,
                          col_descs.empty() || nullptr == col_nullables || max_batch_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(px_col_descs), K(px_column_project_idxs),
-             K(null_column_idxs), K(col_descs), KP(col_nullables), K(row_flag), K(max_batch_size));
+             K(col_descs), KP(col_nullables), K(row_flag), K(max_batch_size));
   } else {
     if (OB_FAIL(vectors_.prepare_allocate(px_col_descs.count()))) {
       LOG_WARN("fail to prepare allocate", KR(ret), K(px_col_descs.count()));
@@ -76,21 +75,6 @@ int ObTableLoadPXBatchRows::init(const ObIArray<ObColDesc> &px_col_descs,
         } else {
           vectors_.at(i) = vectors.at(column_idx);
           ++column_count;
-        }
-      }
-      // 补null的列
-      for (int64_t i = 0; OB_SUCC(ret) && i < null_column_idxs.count(); ++i) {
-        const int64_t column_idx = null_column_idxs.at(i);
-        if (OB_UNLIKELY(column_idx >= vectors.count())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected ");
-        } else {
-          ObDirectLoadVector *vector = vectors.at(column_idx);
-          if (OB_FAIL(vector->set_all_null(max_batch_size))) {
-            LOG_WARN("fail to set all null", KR(ret), K(i), K(column_idx), KPC(vector));
-          } else {
-            ++column_count;
-          }
         }
       }
       if (OB_FAIL(ret)) {

@@ -27,7 +27,6 @@ public:
   void reuse();
   int init(const common::ObIArray<share::schema::ObColDesc> &px_col_descs,
            const common::ObIArray<int64_t> &px_column_project_idxs, // px列对应哪个store列
-           const common::ObIArray<int64_t> &null_column_idxs, // store中需要补null的列
            const common::ObIArray<share::schema::ObColDesc> &col_descs,
            const sql::ObBitVector *col_nullables, const ObDirectLoadRowFlag &row_flag,
            const int64_t max_batch_size);
