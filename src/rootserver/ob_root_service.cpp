@@ -5277,28 +5277,6 @@ int ObRootService::split_global_index_tablet(const obrpc::ObAlterTableArg &arg)
   return ret;
 }
 
-int ObRootService::register_split_info_mds(const obrpc::ObTabletSplitRegisterMdsArg &arg, obrpc::ObTabletSplitRegisterMdsResult &res)
-{
-  int ret = OB_SUCCESS;
-  uint64_t data_version = 0;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.tenant_id_, data_version))) {
-    LOG_WARN("failed to get min data version", KR(ret));
-  } else if (data_version < DATA_VERSION_4_4_0_0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("current data version doesn't support to register split info mds", K(ret), K(data_version));
-  } else if (!arg.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", KR(ret), K(arg));
-  } else if (OB_FAIL(ObTabletSplitUtil::register_split_info_mds(arg, ddl_service_, res))) {
-    LOG_WARN("ddl_service clean splitted tablet failed", KR(ret), K(arg));
-  }
-  return ret;
-}
-
-
 int ObRootService::clean_splitted_tablet(const obrpc::ObCleanSplittedTabletArg &arg)
 {
   int ret = OB_SUCCESS;

@@ -11023,43 +11023,6 @@ public:
   common::ObAddr server_addr_;
 };
 
-struct ObTabletSplitRegisterMdsArg final : public ObDDLArg
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObTabletSplitRegisterMdsArg()
-    : ObDDLArg(), is_no_logging_(false), tenant_id_(OB_INVALID_TENANT_ID), src_local_index_tablet_count_(0),
-      ls_id_(), task_type_(), lob_schema_versions_(), split_info_array_()
-    {}
-  virtual ~ObTabletSplitRegisterMdsArg() = default;
-  virtual bool is_valid() const;
-  virtual int assign(const ObTabletSplitRegisterMdsArg &other);
-  TO_STRING_KV(K_(parallelism), K_(is_no_logging), K_(tenant_id), K_(src_local_index_tablet_count),
-      K_(ls_id), K_(task_type), K_(lob_schema_versions), K_(split_info_array));
-public:
-  bool is_no_logging_;
-  uint64_t tenant_id_;
-  int64_t src_local_index_tablet_count_;
-  share::ObLSID ls_id_;
-  share::ObDDLType task_type_;
-  ObSArray<uint64_t> lob_schema_versions_;
-  common::ObSArray<ObTabletSplitArg> split_info_array_;
-};
-
-struct ObTabletSplitRegisterMdsResult final
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObTabletSplitRegisterMdsResult()
-    : ret_code_(OB_ERROR)
-  {}
-  ~ObTabletSplitRegisterMdsResult() = default;
-  int assign(const ObTabletSplitRegisterMdsResult &other);
-  TO_STRING_KV(K_(ret_code));
-public:
-  int ret_code_;
-};
-
 struct ObFreezeSplitSrcTabletArg final
 {
   OB_UNIS_VERSION(1);

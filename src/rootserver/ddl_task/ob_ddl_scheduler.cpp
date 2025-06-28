@@ -2965,6 +2965,7 @@ int ObDDLScheduler::create_partition_split_task(
                                       *partition_split_arg,
                                       table_schema->get_tablet_size(),
                                       tenant_data_version,
+                                      table_schema,
                                       parent_task_id))) {
       LOG_WARN("init global index task failed", K(ret), KPC(table_schema));
     } else if (OB_FAIL(split_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {

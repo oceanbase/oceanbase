@@ -43,6 +43,30 @@ enum class ObSplitTabletInfoStatus : uint8_t
   STATUS_TYPE_MAX
 };
 
+struct ObTabletSplitRegisterMdsArg final
+{
+public:
+  ObTabletSplitRegisterMdsArg()
+    : is_no_logging_(false), tenant_id_(OB_INVALID_TENANT_ID), src_local_index_tablet_count_(0),
+      ls_id_(), task_type_(), lob_schema_versions_(), split_info_array_()
+    {}
+  virtual ~ObTabletSplitRegisterMdsArg() = default;
+  virtual bool is_valid() const;
+  virtual int assign(const ObTabletSplitRegisterMdsArg &other);
+  TO_STRING_KV(K_(parallelism), K_(is_no_logging), K_(tenant_id), K_(src_local_index_tablet_count),
+      K_(ls_id), K_(task_type), K_(lob_schema_versions), K_(split_info_array), K_(table_schema));
+public:
+  int64_t parallelism_;
+  bool is_no_logging_;
+  uint64_t tenant_id_;
+  int64_t src_local_index_tablet_count_;
+  share::ObLSID ls_id_;
+  share::ObDDLType task_type_;
+  ObSArray<uint64_t> lob_schema_versions_;
+  common::ObSArray<ObTabletSplitArg> split_info_array_;
+  const ObTableSchema *table_schema_;
+};
+
 static bool is_valid_tablet_split_info_status(const ObSplitTabletInfoStatus &type)
 {
   return ObSplitTabletInfoStatus::CANT_EXEC_MINOR <= type
@@ -171,10 +195,7 @@ public:
       const ObTabletHandle &tablet_handle,
       ObStorageSchema *&storage_schema,
       ObIAllocator &allocator);
-  static int register_split_info_mds(
-      const obrpc::ObTabletSplitRegisterMdsArg &arg,
-      rootserver::ObDDLService &ddl_service,
-      obrpc::ObTabletSplitRegisterMdsResult &res);
+  static int register_split_info_mds(rootserver::ObDDLService &ddl_service, const ObTabletSplitRegisterMdsArg &arg);
   static int persist_tablet_mds_on_demand(
       ObLS *ls,
       const ObTabletHandle &local_tablet_handle,

@@ -35,6 +35,43 @@ using namespace oceanbase::share;
 using namespace oceanbase::storage;
 using namespace oceanbase::compaction;
 
+bool ObTabletSplitRegisterMdsArg::is_valid() const
+{
+  /*      exec_tenant_id_(common::OB_INVALID_TENANT_ID),*/
+  bool is_valid = !split_info_array_.empty() && OB_INVALID_TENANT_ID != tenant_id_
+      && parallelism_ > 0 && ls_id_.is_valid() && is_tablet_split(task_type_) && table_schema_ != nullptr;
+  for (int64_t i = 0; is_valid && i < lob_schema_versions_.count(); ++i) {
+    is_valid = is_valid && lob_schema_versions_.at(i);
+  }
+  for (int64_t i = 0; is_valid && i < split_info_array_.count(); i++) {
+    is_valid = is_valid && split_info_array_.at(i).is_valid();
+  }
+  return is_valid;
+}
+
+int ObTabletSplitRegisterMdsArg::assign(const ObTabletSplitRegisterMdsArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!other.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(other));
+  } else if (OB_FAIL(split_info_array_.assign(other.split_info_array_))) {
+    LOG_WARN("assign tablet split info failed", K(ret));
+  } else if (OB_FAIL(lob_schema_versions_.assign(other.lob_schema_versions_))) {
+    LOG_WARN("assign tablet lob_schema_versions_ failed", K(ret));
+  } else {
+    parallelism_ = other.parallelism_;
+    is_no_logging_ = other.is_no_logging_;
+    tenant_id_ = other.tenant_id_;
+    src_local_index_tablet_count_ = other.src_local_index_tablet_count_;
+    ls_id_ = other.ls_id_;
+    task_type_ = other.task_type_;
+    table_schema_ = other.table_schema_;
+  }
+  return ret;
+}
+
+
 int ObTabletSplitUtil::check_split_mds_can_be_accepted(
     const bool is_shared_storage_mode,
     const share::SCN &split_start_scn,
@@ -1019,23 +1056,25 @@ int ObTabletSplitUtil::get_storage_schema_from_mds(
   return ret;
 }
 
-int ObTabletSplitUtil::register_split_info_mds(const obrpc::ObTabletSplitRegisterMdsArg &arg,
-                                                      rootserver::ObDDLService &ddl_service,
-                                                      obrpc::ObTabletSplitRegisterMdsResult &res)
+int ObTabletSplitUtil::register_split_info_mds(rootserver::ObDDLService &ddl_service, const ObTabletSplitRegisterMdsArg &arg)
 {
   int ret = OB_SUCCESS;
   int64_t refreshed_schema_version = 0;
   ObSchemaGetterGuard schema_guard;
   ObTabletSplitInfoMdsArg split_info_arg;
-  rootserver::ObDDLSQLTransaction trans(GCTX.schema_service_);
   common::ObArenaAllocator allocator("regissplimds", OB_MALLOC_NORMAL_BLOCK_SIZE, common::OB_SERVER_TENANT_ID, ObCtxIds::DEFAULT_CTX_ID);
+  common::ObMySQLTransaction trans;
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.schema_service_));
   } else if (OB_FAIL(ddl_service.get_tenant_schema_guard_with_version_in_inner_table(arg.tenant_id_, schema_guard))) {
     LOG_WARN("get schema guard failed", K(ret));
-  } else if (OB_FAIL(schema_guard.get_schema_version(arg.tenant_id_, refreshed_schema_version))) {
-    LOG_WARN("failed to get tenant schema version", KR(ret), K(arg.tenant_id_));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
   } else {
     split_info_arg.ls_id_ = arg.ls_id_;
     split_info_arg.tenant_id_ = arg.tenant_id_;
@@ -1051,8 +1090,20 @@ int ObTabletSplitUtil::register_split_info_mds(const obrpc::ObTabletSplitRegiste
       split_info_mds_data.reset();
       const obrpc::ObTabletSplitArg &split_info = tmp_split_info_array.at(i);
       bool is_lob = i >= lob_tablet_start_idx;
-      bool is_index = i >= index_tablet_start_idx;
-      if (OB_FAIL((split_info_mds_data.assign_datum_rowkey_list(split_info.parallel_datum_rowkey_list_)))) {
+      bool is_index = (i >= index_tablet_start_idx) && (i < lob_tablet_start_idx);
+      bool is_data_table = i == 0;
+      if (is_data_table) {
+        table_schema = arg.table_schema_;
+      } else if ((is_lob && OB_FAIL(schema_guard.get_table_schema(arg.tenant_id_, split_info.lob_table_id_, table_schema)))) {
+        LOG_WARN("failed to get table schema", K(ret), K(arg.tenant_id_), K(split_info.lob_table_id_));
+      } else if (is_index && OB_FAIL(schema_guard.get_table_schema(arg.tenant_id_, split_info.table_id_, table_schema))) {
+        table_schema = arg.table_schema_;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", K(ret), K(arg.tenant_id_), K(split_info.table_id_));
+      } else if (OB_FAIL((split_info_mds_data.assign_datum_rowkey_list(split_info.parallel_datum_rowkey_list_)))) {
         LOG_WARN("failed to assign datum rowkey list", K(ret), K(split_info.parallel_datum_rowkey_list_));
       } else if (!is_lob && OB_FAIL(split_info_mds_data.dest_tablets_id_.assign(split_info.dest_tablets_id_))) {
         LOG_WARN("failed to assign dest_tablets_id_", K(ret), K(split_info.dest_tablets_id_));
@@ -1073,12 +1124,7 @@ int ObTabletSplitUtil::register_split_info_mds(const obrpc::ObTabletSplitRegiste
         split_info_mds_data.split_sstable_type_ = split_info.split_sstable_type_;
         split_info_mds_data.task_type_ = arg.task_type_;
         split_info_mds_data.parallelism_ = arg.parallelism_;
-        if (OB_FAIL(schema_guard.get_table_schema(arg.tenant_id_, is_lob ? split_info.lob_table_id_ : split_info.table_id_, table_schema))) {
-          LOG_WARN("get table schema failed", K(ret), K(arg.tenant_id_), K(is_lob), K(split_info));
-        } else if (OB_ISNULL(table_schema)) {
-          ret = OB_TABLE_NOT_EXIST;
-          LOG_WARN("unexpected nullptr of table_schema", K(ret), "table_id", is_lob ? split_info.lob_table_id_ : split_info.table_id_);
-        } else if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
+        if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
           LOG_WARN("failed to check oracle mode", KR(ret), K(arg.tenant_id_), KPC(table_schema));
         } else {
           compat_mode = is_oracle_mode ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
@@ -1092,10 +1138,9 @@ int ObTabletSplitUtil::register_split_info_mds(const obrpc::ObTabletSplitRegiste
         }
       }
     }
-    common::ObMySQLProxy &sql_proxy = ddl_service.get_sql_proxy();
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(trans.start(&sql_proxy, arg.tenant_id_, refreshed_schema_version))) {
-      LOG_WARN("start transaction failed", KR(ret), K(arg.tenant_id_), K(refreshed_schema_version));
+    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, arg.tenant_id_))) {
+      LOG_WARN("start transaction failed", K(ret));
     } else if (OB_FAIL(ObTabletSplitInfoMdsHelper::register_mds(split_info_arg, trans))) {
       LOG_WARN("failed to register mds", KR(ret), K(split_info_arg));
     }
@@ -1108,7 +1153,6 @@ int ObTabletSplitUtil::register_split_info_mds(const obrpc::ObTabletSplitRegiste
       }
     }
   }
-  res.ret_code_ = ret;
   return ret;
 }
 

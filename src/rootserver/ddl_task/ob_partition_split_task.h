@@ -91,6 +91,7 @@ public:
       const obrpc::ObPartitionSplitArg &partition_split_arg,
       const int64_t tablet_size,
       const uint64_t tenant_data_version,
+      const ObTableSchema *src_table_schema,
       const int64_t parent_task_id = 0,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE);
   int init(const ObDDLTaskRecord &task_record);
@@ -275,6 +276,7 @@ private:
   common::ObSEArray<common::ObSEArray<blocksstable::ObDatumRowkey, 8>, 8> index_tablet_parallel_rowkey_list_; // index table.
   share::SCN min_split_start_scn_;
   bool split_start_delayed_;
+  ObTableSchema src_table_schema_; // incomplete table schema, no partition schema included in it
 };
 
 }  // end namespace rootserver

@@ -371,6 +371,7 @@ int ObPartitionSplitTask::init(
     const obrpc::ObPartitionSplitArg &partition_split_arg,
     const int64_t tablet_size,
     const uint64_t tenant_data_version,
+    const ObTableSchema *src_table_schema,
     const int64_t parent_task_id,   /* = 0 */
     const int64_t task_status)     /* = TaskStatus::PREPARE */
 {
@@ -389,10 +390,10 @@ int ObPartitionSplitTask::init(
                            OB_INVALID_ID != table_id &&
                            (task_status >= ObDDLTaskStatus::PREPARE &&
                             task_status <= ObDDLTaskStatus::SUCCESS) &&
-                           task_id > 0))) {
+                           task_id > 0 && OB_NOT_NULL(src_table_schema)))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(schema_version), K(table_id),
-        K(task_status), K(task_id));
+        K(task_status), K(task_id), K(src_table_schema));
   } else if (OB_UNLIKELY(
         (partition_split_arg.local_index_table_ids_.count() !=
          partition_split_arg.src_local_index_tablet_ids_.count()) &&
@@ -423,7 +424,11 @@ int ObPartitionSplitTask::init(
     execution_id_ = 1L;
     data_format_version_ = tenant_data_version;
     split_start_delayed_ = false;
-    if (OB_FAIL(init_ddl_task_monitor_info(table_id))) {
+    if (OB_FAIL(src_table_schema_.assign(*src_table_schema))) {
+      LOG_WARN("failed to assign src table schema", K(ret), K(*src_table_schema));
+    } else if (OB_FALSE_IT(src_table_schema_.reset_partition_schema())) {
+      LOG_WARN("failed to reset partition schema", K(ret), K(*src_table_schema));
+    } else if (OB_FAIL(init_ddl_task_monitor_info(table_id))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
     } else {
       is_inited_ = true;
@@ -2048,7 +2053,7 @@ int ObPartitionSplitTask::serialize_params_to_message(
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE, all_src_tablet_ids_, data_tablet_compaction_scn_,
       index_tablet_compaction_scns_, lob_tablet_compaction_scns_, partition_split_arg_,
-      tablet_size_, data_tablet_parallel_rowkey_list_, index_tablet_parallel_rowkey_list_, min_split_start_scn_);
+      tablet_size_, data_tablet_parallel_rowkey_list_, index_tablet_parallel_rowkey_list_, min_split_start_scn_, src_table_schema_);
   }
   return ret;
 }
@@ -2090,6 +2095,10 @@ int ObPartitionSplitTask::deserialize_params_from_message(
     }
     if (OB_SUCC(ret)) {
       LST_DO_CODE(OB_UNIS_DECODE, min_split_start_scn_);
+      if (OB_FAIL(ret)) {
+      } else {
+        LST_DO_CODE(OB_UNIS_DECODE, src_table_schema_);
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -2111,7 +2120,7 @@ int64_t ObPartitionSplitTask::get_serialize_param_size() const
   int len = ObDDLTask::get_serialize_param_size();
   LST_DO_CODE(OB_UNIS_ADD_LEN, all_src_tablet_ids_, data_tablet_compaction_scn_,
       index_tablet_compaction_scns_, lob_tablet_compaction_scns_, partition_split_arg_,
-      tablet_size_, data_tablet_parallel_rowkey_list_, index_tablet_parallel_rowkey_list_, min_split_start_scn_);
+      tablet_size_, data_tablet_parallel_rowkey_list_, index_tablet_parallel_rowkey_list_, min_split_start_scn_, src_table_schema_);
   return len;
 }
 
@@ -2829,10 +2838,8 @@ int ObPartitionSplitTask::register_split_info_mds(const share::ObDDLTaskStatus n
   ObLSID ls_id;
   ObLocationService *location_service = nullptr;
   int64_t rpc_timeout = OB_INVALID_TIMESTAMP;
-  obrpc::ObTabletSplitRegisterMdsArg arg;
-  obrpc::ObTabletSplitRegisterMdsResult res;
+  ObTabletSplitRegisterMdsArg arg;
   common::ObSArray<ObTabletSplitArg> &split_info_array = arg.split_info_array_;
-  obrpc::ObCommonRpcProxy *rpc_proxy = GCTX.rs_rpc_proxy_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -2851,15 +2858,13 @@ int ObPartitionSplitTask::register_split_info_mds(const share::ObDDLTaskStatus n
     arg.src_local_index_tablet_count_ = partition_split_arg_.src_local_index_tablet_ids_.count();
     arg.ls_id_ = ls_id;
     arg.task_type_ = task_type_;
-    arg.exec_tenant_id_ = tenant_id_;
+    arg.table_schema_ = &src_table_schema_;
     if (OB_FAIL(arg.lob_schema_versions_.assign(partition_split_arg_.lob_schema_versions_))) {
       LOG_WARN("failed to assign lob_schema_versions", K(ret));
     } else if (OB_FAIL(prepare_tablet_split_infos(ls_id, leader_addr, split_info_array))) {
       LOG_WARN("prepare tablet split infos failed", K(ret));
-    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(obrpc::ObRpcProxy::myaddr_).timeout(rpc_timeout).register_split_info_mds(arg, res))) {
-            LOG_WARN("fail to execute ddl task", K(ret), K(obrpc::ObRpcProxy::myaddr_), K(rpc_timeout), K(arg));
-    } else if (OB_FAIL(res.ret_code_)) {
-      LOG_WARN("failed to register split info mds", K(ret));
+    } else if (OB_FAIL(ObTabletSplitUtil::register_split_info_mds(root_service_->get_ddl_service(), arg))) {
+      LOG_WARN("register split info mds failed", KR(ret), K(arg));
     } else if (OB_FAIL(switch_status(next_task_status, true/*enable_flt_tracing*/, ret))) {
       LOG_WARN("fail to switch task status", K(ret), K(next_task_status));
     }
