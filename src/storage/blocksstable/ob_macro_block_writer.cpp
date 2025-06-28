@@ -646,34 +646,8 @@ int ObMacroBlockWriter::inner_init(
 
 int ObMacroBlockWriter::append_row(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc)
 {
-  int ret = OB_SUCCESS;
   ObBlockWriterConcurrentGuard guard(concurrent_lock_);
-//TODO: zhanghuidong.zhd, remove the defensive code later
-#ifdef ENABLE_DEBUG_LOG
-  if (OB_FAIL(check_append_row_with_nop_col(row))) {
-    LOG_WARN("Fail to check append row with nop column", K(ret));
-  }
-#endif
-  if (FAILEDx(append_row_inner(row, curr_macro_desc))) {
-    LOG_WARN("Fail to append row", K(ret), KPC(curr_macro_desc));
-  }
-  return ret;
-}
-
-int ObMacroBlockWriter::check_append_row_with_nop_col(const ObDatumRow &row)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == data_store_desc_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("The ObMacroBlockWriter has not been opened", K(ret));
-  } else if (data_store_desc_->is_delete_insert_merge()
-             && !row.row_flag_.is_lock()
-             && !row.is_ghost_row()
-             && row.check_has_nop_col()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected nop column in delete_insert table", K(ret), K(row));
-  }
-  return ret;
+  return append_row_inner(row, curr_macro_desc);
 }
 
 int ObMacroBlockWriter::append_row_inner(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc)
