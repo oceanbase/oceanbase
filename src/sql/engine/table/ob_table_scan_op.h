@@ -205,6 +205,15 @@ public:
   ExprFixedArray global_index_rowkey_exprs_;
   // end for Global Index Lookup
   ObPreRangeGraph pre_range_graph_;
+  union {
+    uint64_t flags_;
+    struct {
+      uint64_t is_das_keep_order_            : 1; // whether das need keep ordering
+      uint64_t use_index_merge_              : 1; // whether use index merge
+      uint64_t ordering_used_by_parent_      : 1; // whether tsc ordering used by parent
+      uint64_t reserved_                     : 61;
+    };
+  };
 };
 
 struct ObTableScanRtDef
@@ -469,7 +478,7 @@ protected:
   int build_bnlj_params();
   int single_equal_scan_check_type(const ParamStore &param_store, bool& is_same_type);
   bool need_extract_range() const { return MY_SPEC.tsc_ctdef_.get_query_range_provider().has_range(); }
-  int prepare_single_scan_range(int64_t group_idx = 0);
+  int prepare_single_scan_range(int64_t group_idx = 0, bool need_sort = false);
 
   int reuse_table_rescan_allocator();
 

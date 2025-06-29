@@ -1715,6 +1715,8 @@ public:
 
   inline void set_is_order_by_plan_top(const bool is_top) { is_order_by_plan_top_ = is_top; }
   inline bool is_order_by_plan_top() const { return is_order_by_plan_top_; }
+  int check_op_orderding_used_by_parent(bool &used);
+
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
@@ -1754,7 +1756,6 @@ protected:
                                       const bool two_level, char *buf,
                                       int64_t &buf_len, int64_t &pos);
 
-  int check_op_orderding_used_by_parent(bool &used);
 protected:
 
   void add_dist_flag(uint64_t &flags, DistAlgo method) const {

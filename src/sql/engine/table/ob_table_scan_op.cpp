@@ -131,6 +131,7 @@ OB_DEF_SERIALIZE(ObTableScanCtDef)
   if (is_new_query_range) {
     OB_UNIS_ENCODE(pre_range_graph_);
   }
+  OB_UNIS_ENCODE(flags_);
   return ret;
 }
 
@@ -162,6 +163,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableScanCtDef)
   if (is_new_query_range) {
     OB_UNIS_ADD_LEN(pre_range_graph_);
   }
+  OB_UNIS_ADD_LEN(flags_);
   return len;
 }
 
@@ -210,6 +212,7 @@ OB_DEF_DESERIALIZE(ObTableScanCtDef)
   if (is_new_query_range) {
     OB_UNIS_DECODE(pre_range_graph_);
   }
+  OB_UNIS_DECODE(flags_);
   return ret;
 }
 
@@ -783,12 +786,16 @@ int ObTableScanOp::prepare_all_das_tasks()
       }
     } else {
       int64_t group_size = (output_ == iter_tree_) ?  1: tsc_rtdef_.group_size_;
+      bool need_sort = MY_CTDEF.ordering_used_by_parent_;
       GroupRescanParamGuard grp_guard(tsc_rtdef_, GET_PHY_PLAN_CTX(ctx_)->get_param_store_for_update());
       for (int64_t i = 0; OB_SUCC(ret) && i < group_size; ++i) {
         if (need_perform_real_batch_rescan()) {
           grp_guard.switch_group_rescan_param(i);
         }
-        if (OB_FAIL(prepare_single_scan_range(i))) {
+        // When using batch rescan, the actual scan order of storage must be KEEP_ORDER，thus the original ordering
+        // may be disrupted when dealing with multiple range segments.
+        // Therefore we need to sort the scan ranges when upper operator used the tsc ordering.
+        if (OB_FAIL(prepare_single_scan_range(i, need_sort))) {
           LOG_WARN("prepare single scan range failed", K(ret));
         } else if (OB_FAIL(prepare_das_task())) {
           LOG_WARN("prepare das task failed", K(ret));
@@ -1036,12 +1043,17 @@ int ObTableScanOp::prepare_batch_scan_range()
       LOG_WARN("batch nlj params is empry", K(ret));
     }
   }
+  bool need_sort = MY_CTDEF.ordering_used_by_parent_;
   GroupRescanParamGuard grp_guard(tsc_rtdef_, GET_PHY_PLAN_CTX(ctx_)->get_param_store_for_update());
   for (int64_t i = 0; OB_SUCC(ret) && i < tsc_rtdef_.group_size_; ++i) {
     //replace real param to param store to extract scan range
     grp_guard.switch_group_rescan_param(i);
     LOG_DEBUG("replace bnlj param to extract range", K(plan_ctx->get_param_store()));
-    if (OB_FAIL(prepare_single_scan_range(i))) {
+
+    // When using batch rescan, the actual scan order of storage must be KEEP_ORDER，thus the original ordering
+    // may be disrupted when dealing with multiple range segments.
+    // Therefore we need to sort the scan ranges when upper operator used the tsc ordering.
+    if (OB_FAIL(prepare_single_scan_range(i, need_sort))) {
       LOG_WARN("prepare single scan range failed", K(ret));
     }
   }
@@ -1088,7 +1100,7 @@ int ObTableScanOp::build_bnlj_params()
   return ret;
 }
 
-int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
+int ObTableScanOp::prepare_single_scan_range(int64_t group_idx, bool need_sort)
 {
   int ret = OB_SUCCESS;
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_extract_query_range);
@@ -1173,6 +1185,9 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
     whole_range.set_whole_range();
     whole_range.table_id_ = MY_CTDEF.scan_ctdef_.ref_table_id_;
     whole_range.group_idx_ = group_idx;
+    if (OB_UNLIKELY(need_sort) && key_ranges.count() > 1) {
+      lib::ob_sort(key_ranges.begin(), key_ranges.end(), ObNewRangeCmp());
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < key_ranges.count(); ++i) {
       key_range = key_ranges.at(i);
       key_range->table_id_ = MY_CTDEF.scan_ctdef_.ref_table_id_;
