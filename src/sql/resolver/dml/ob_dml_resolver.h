@@ -620,7 +620,8 @@ protected:
   int add_additional_function_according_to_type(const ColumnItem *column,
                                                 ObRawExpr *&expr,
                                                 ObStmtScope scope,
-                                                bool need_padding);
+                                                bool need_padding,
+                                                bool in_insert_value_list = false);
   int try_add_padding_expr_for_column_conv(const ColumnItem *column, ObRawExpr *&expr);
   int resolve_generated_column_expr_temp(TableItem *table_item);
   int find_generated_column_expr(ObRawExpr *&expr, bool &is_found);

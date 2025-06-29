@@ -380,13 +380,22 @@ int ObInsertResolver::replace_column_ref(ObArray<ObRawExpr*> *value_row,
         } else if (OB_FAIL(add_additional_function_according_to_type(column_item,
                                                                      value_expr,
                                                                      T_INSERT_SCOPE,
-                                                                     true))) {
+                                                                     true,
+                                                                     true/*in_insert_value_list*/))) {
           LOG_WARN("fail to build column conv expr", K(ret));
         }
         if (OB_SUCC(ret)) {
           expr = insert_stmt->get_values_desc().at(value_index);
-          insert_stmt->set_is_all_const_values(false);
-          SQL_RESV_LOG(DEBUG, "replace column ref to value", K(*expr), K(value_index));
+          if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
+                                                             *params_.allocator_,
+                                                             *column_item->get_expr(),
+                                                             expr,
+                                                             session_info_))) {
+            LOG_WARN("fail to add column_convert expr", K(ret), K(column_item));
+          } else {
+            insert_stmt->set_is_all_const_values(false);
+            SQL_RESV_LOG(DEBUG, "replace column ref to value", K(*expr), K(value_index));
+          }
         }
       }
     }
