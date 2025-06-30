@@ -6050,8 +6050,7 @@ int ObBasicSessionInfo::store_top_query_string(const ObString &stmt)
 int ObBasicSessionInfo::store_query_string_(const ObString &stmt, int64_t& buf_len, char *& query,  volatile int64_t& query_len)
 {
   int ret = OB_SUCCESS;
-  int64_t truncated_len = std::min(MAX_QUERY_STRING_LEN - 1,
-                                   static_cast<int64_t>(stmt.length()));
+  int64_t truncated_len = get_truncated_sql_len(stmt);
   if (truncated_len < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid str length", K(ret), K(truncated_len));
@@ -6083,8 +6082,7 @@ int ObBasicSessionInfo::store_query_string_(const ObString &stmt, int64_t& buf_l
 int ObBasicSessionInfo::store_query_string_(const ObString &stmt)
 {
   int ret = OB_SUCCESS;
-  int64_t truncated_len = std::min(MAX_QUERY_STRING_LEN - 1,
-                                   static_cast<int64_t>(stmt.length()));
+  int64_t truncated_len = get_truncated_sql_len(stmt);
   if (truncated_len < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid str length", K(ret), K(truncated_len));
@@ -6112,6 +6110,12 @@ int ObBasicSessionInfo::store_query_string_(const ObString &stmt)
     thread_data_.cur_query_len_ = truncated_len;
   }
   return ret;
+}
+
+int64_t ObBasicSessionInfo::get_truncated_sql_len(const ObString &stmt) const
+{
+  return get_local_ob_enable_sql_audit() ? static_cast<int64_t>(stmt.length()) :
+                                           std::min(MAX_QUERY_STRING_LEN - 1, static_cast<int64_t>(stmt.length()));
 }
 
 int ObBasicSessionInfo::get_opt_dynamic_sampling(uint64_t &v) const
