@@ -4963,7 +4963,9 @@ int ObTimeConverter::ob_time_to_str_by_dfm_elems(const ObTime &ob_time,
             break;
           }
           case ObDFMFlag::FF: {
-            if (0 == scale) {
+            if (lib::is_oracle_mode() && !(HAS_TYPE_ORACLE(ob_time.mode_))) {
+              ret = OB_INVALID_DATE_FORMAT;
+            } else if (0 == scale) {
               // print nothing
             } else {
               //  scn_to_str will use ob_time with TYPE_ORACLE in mysql mode
