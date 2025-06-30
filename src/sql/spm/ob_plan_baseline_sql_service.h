@@ -103,11 +103,7 @@ public:
                                       ObPlanCache &lib_cache,
                                       ObSpmCacheCtx &spm_ctx,
                                       ObBaselineKey &key,
-                                      sqlclient::ObMySQLResult &result,
-                                      bool &modified);
-  int classify_baseline_for_key(ObPlanCache &lib_cache,
-                                ObSpmCacheCtx &spm_ctx,
-                                ObBaselineKey &key);
+                                      sqlclient::ObMySQLResult &result);
   int get_need_sync_baseline_keys(ObIAllocator& allocator,
                                   const uint64_t tenant_id,
                                   const int64_t last_sync_time,

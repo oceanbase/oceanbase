@@ -37,6 +37,8 @@ enum PlanBaselineFlag
   PLAN_BASELINE_REPRODUCED = 16
 };
 
+#define OB_SPM_MAX_ORDERED_BASELINE_RETRY_TIMES 20
+
 struct ObBaselineKey : public ObILibCacheKey
 {
   ObBaselineKey()
@@ -215,6 +217,49 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanBaselineItem);
 };
 
+struct BaselineSortInfo
+{
+  BaselineSortInfo()
+  : plan_hash_(0),
+    last_verified_(0),
+    avg_cpu_time_(-1)
+  {}
+
+  BaselineSortInfo(const ObPlanBaselineItem &baseline)
+    : plan_hash_(baseline.get_plan_hash_value()),
+      last_verified_(baseline.get_last_verified()),
+      avg_cpu_time_(baseline.get_avg_cpu_time())
+  {}
+
+  TO_STRING_KV(K_(plan_hash), K_(last_verified), K_(avg_cpu_time));
+
+  uint64_t plan_hash_;
+  uint64_t last_verified_;
+  int64_t avg_cpu_time_;
+};
+
+struct BaselineLastVerifiedCmp
+{
+  inline bool operator()(const BaselineSortInfo left, const BaselineSortInfo right)
+  {
+    return left.last_verified_ > right.last_verified_;
+  }
+};
+
+struct BaselineCpuTimeCmp
+{
+  inline bool operator()(const BaselineSortInfo left, const BaselineSortInfo right)
+  {
+    bool bret = false;
+    if (left.avg_cpu_time_ < 0 || right.avg_cpu_time_ < 0) {
+      bret = left.avg_cpu_time_ >= 0;
+    } else {
+      bret = left.avg_cpu_time_ < right.avg_cpu_time_;
+    }
+    return bret;
+  }
+};
+
 class ObSpmSet : public ObILibCacheNode
 {
 
@@ -251,29 +296,20 @@ public:
                                ObPlanBaselineItem *baseline_item);
 
   TO_STRING_KV(K_(is_inited));
+
+private:
+  static ObPlanBaselineItem* get_target_baseline(const ObIArray<ObPlanBaselineItem*> &all_baselines,
+                                                 const uint64_t target_plan_hash);
+  static int append_baseline_hash(const ObIArray<BaselineSortInfo> &sort_infos,
+                                  const uint64_t max_append_size,
+                                  ObIArray<uint64_t> &ordered_plan_hash);
+  static int init_get_offset_mode(const ObIArray<ObPlanBaselineItem*> &all_baselines,
+                                  ObSpmCacheCtx& spm_ctx);
 private:
   bool is_inited_;
   ObBaselineKey baseline_key_; //used for manager key memory
   common::ObSEArray<ObPlanBaselineItem*, 4> baseline_array_;
   common::SpinRWLock ref_lock_;
-};
-
-struct BaselineCmp
-{
-  inline bool operator()(const ObPlanBaselineItem *left, const ObPlanBaselineItem *right)
-  {
-    bool bret = false;
-    if (left == nullptr || right == nullptr) {
-      bret = left != nullptr;
-    } else if (left->get_fixed() != right->get_fixed()) {
-      bret = left->get_fixed();
-    } else if (!left->get_accepted() || !right->get_accepted()) {
-      bret = left->get_accepted();
-    } else {
-      bret = left->get_last_verified() > right->get_last_verified();
-    }
-    return bret;
-  }
 };
 
 class ObEvoPlanGuard {
@@ -301,7 +337,7 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       bl_key_(),
       handle_cache_mode_(MODE_INVALID),
       plan_hash_value_(0),
-      offset_(-1),
+      offset_(OB_INVALID_INDEX),
       new_plan_hash_(0),
       baseline_guard_(PLAN_BASELINE_HANDLE),
       spm_stat_(STAT_INVALID),
@@ -320,7 +356,6 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
     MODE_GET_NORMAL,
     MODE_GET_OFFSET,
     MODE_GET_UNACCEPT_FOR_UPDATE,
-    MODE_CLASSIFY_BASELINE,
     MODE_MAX
   };
   enum SpmStat {
@@ -342,7 +377,6 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
   void set_get_normal_mode(uint64_t v) { plan_hash_value_ = v; handle_cache_mode_ = MODE_GET_NORMAL; }
   void set_get_offset_mode() { handle_cache_mode_ = MODE_GET_OFFSET; }
   void set_get_unaccept_for_update_mode() { handle_cache_mode_ = MODE_GET_UNACCEPT_FOR_UPDATE; }
-  void set_classify_baseline_mode() { handle_cache_mode_ = MODE_CLASSIFY_BASELINE; }
   bool force_get_evolution_plan()
   {
     return STAT_START_EVOLUTION == spm_stat_;
@@ -372,16 +406,16 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       uint64_t spm_force_disable_:              1;
       uint64_t need_spm_timeout_:               1;
       uint64_t evolution_task_in_two_plan_set_: 1;
-      uint64_t baseline_exists_:                1;
       uint64_t evo_plan_is_baseline_:           1;
       uint64_t evo_plan_is_fixed_baseline_:     1;
       uint64_t evo_plan_added_:                 1;
       uint64_t finish_start_evolution_:         1;
-      uint64_t reserved_:                      54;
+      uint64_t reserved_:                      55;
     };
   };
   int64_t spm_mode_;
   ObEvoPlanGuard evo_plan_guard_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> baseline_plan_hash_array_;
 };
 
 struct EvolutionTaskResult
