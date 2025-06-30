@@ -2663,7 +2663,14 @@ int ObPLCursorInfo::prepare_spi_result(ObPLExecCtx *ctx, ObSPIResultSet *&spi_re
   }
   OX (spi_result = new (spi_cursor_) ObSPIResultSet());
   OX (last_stream_cursor_ = true);
-  OZ (spi_result->init(*ctx->exec_ctx_->get_my_session()));
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(spi_result->init(*ctx->exec_ctx_->get_my_session()))) {
+    LOG_WARN("spi result init failed", K(ret));
+    if (is_ps_cursor()) {
+      spi_result->~ObSPIResultSet();
+      spi_result = NULL;
+    }
+  }
   return ret;
 }
 
