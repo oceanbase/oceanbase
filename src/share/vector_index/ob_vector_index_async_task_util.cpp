@@ -1485,8 +1485,12 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
   } else if (OB_FAIL(adaptor.renew_single_snap_index())) {
     LOG_WARN("fail to renew single snap index", K(ret));
   }
-  RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
+  /* Warning!!!
+  * In the process of loading data for a query, the query_lock is acquired first, followed by the adapter_map_lock.
+  * Therefore, the order of these two locks must not be reversed;
+  * otherwise, a deadlock could occur between the query and asynchronous tasks. */
   RWLock::WLockGuard query_lock_guard(old_adapter_->get_query_lock()); // lock for query before end trans
+  RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
   int tmp_ret = OB_SUCCESS;
   if (trans_start && OB_SUCCESS != (tmp_ret = ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, timeout_us))) {
     ret = tmp_ret;
