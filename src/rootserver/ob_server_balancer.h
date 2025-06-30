@@ -14,231 +14,12 @@
 #define _OB_SERVER_BALANCER_H 1
 #include "ob_unit_manager.h"
 #include "ob_unit_stat_manager.h"
+#include "share/ob_share_util.h" // for ObMatrix
 namespace oceanbase
 {
+using namespace share;
 namespace rootserver
 {
-template <typename T>
-class Matrix
-{
-public:
-  Matrix()
-    : inner_array_(),
-      row_count_(0),
-      column_count_(0),
-      is_inited_(false) {}
-  virtual ~Matrix() {}
-  int init(const int64_t row_count, const int64_t column_count);
-public:
-  int set(const int64_t row, const int64_t column, const T &element);
-  int get(const int64_t row, const int64_t column, T &element) const;
-  const T *get(const int64_t row, const int64_t column) const;
-  T *get(const int64_t row, const int64_t column);
-  int64_t get_row_count() const;
-  int64_t get_column_count() const;
-  int64_t get_element_count() const;
-  bool is_valid() const;
-  bool is_contain(const T &element) const;
-  template <typename Func>
-  int sort_column_group(
-      const int64_t start_column_idx,
-      const int64_t column_count,
-      Func &func);
-  TO_STRING_KV(K(is_inited_), K(row_count_), K(column_count_), K(inner_array_));
-private:
-  ObArray<T> inner_array_;
-  int64_t row_count_;
-  int64_t column_count_;
-  bool is_inited_;
-};
-
-template <typename T>
-int Matrix<T>::init(
-    const int64_t row_count,
-    const int64_t column_count)
-{
-  int ret = common::OB_SUCCESS;
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    RS_LOG(WARN, "matrix init twice", K(ret));
-  } else if (OB_UNLIKELY(row_count <= 0
-                         || column_count <= 0
-                         || row_count >= INT32_MAX
-                         || column_count >= INT32_MAX)) {
-    ret = common::OB_ERR_UNEXPECTED;
-    RS_LOG(WARN, "row or column count invalid", K(ret), K(row_count), K(column_count));
-  } else {
-    row_count_ = row_count;
-    column_count_ = column_count;
-    int64_t product = row_count_ * column_count_;
-    inner_array_.reset();
-    T pure_element;
-    for (int64_t i = 0; OB_SUCC(ret) && i < product; ++i) {
-      if (OB_FAIL(inner_array_.push_back(pure_element))) {
-        RS_LOG(WARN, "fail to push back", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      is_inited_ = true;
-    }
-  }
-  return ret;
-}
-
-template <typename T>
-int Matrix<T>::set(
-    const int64_t row,
-    const int64_t column,
-    const T &element)
-{
-  int ret = common::OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    RS_LOG(WARN, "matrix not init", K(ret));
-  } else if (OB_UNLIKELY(row < 0
-                         || column < 0
-                         || row >= row_count_
-                         || column >= column_count_)) {
-    ret = common::OB_INVALID_ARGUMENT;
-    RS_LOG(WARN, "invalid argument", K(ret), K(row), K(column), K(row_count_), K(column_count_));
-  } else {
-    const int64_t index = column + row * column_count_;
-    inner_array_.at(index) = element;
-  }
-  return ret;
-}
-
-template <typename T>
-int Matrix<T>::get(
-    const int64_t row,
-    const int64_t column,
-    T &element) const
-{
-  int ret = common::OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    RS_LOG(WARN, "matrix not init", K(ret));
-  } else if (OB_UNLIKELY(row < 0
-                         || column < 0
-                         || row >= row_count_
-                         || column >= column_count_)) {
-    ret = common::OB_INVALID_ARGUMENT;
-    RS_LOG(WARN, "invalid argument", K(ret), K(row), K(column), K(row_count_), K(column_count_));
-  } else {
-    const int64_t index = column + row * column_count_;
-    element = inner_array_.at(index);
-  }
-  return ret;
-}
-
-template <typename T>
-const T *Matrix<T>::get(const int64_t row, const int64_t column) const
-{
-  const T *ptr_ret = NULL;
-  int err = common::OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    err = common::OB_NOT_INIT;
-    RS_LOG_RET(WARN, err, "matrix not init", K(err));
-  } else if (OB_UNLIKELY(row < 0
-                         || column < 0
-                         || row >= row_count_
-                         || column >= column_count_)) {
-    err = common::OB_INVALID_ARGUMENT;
-    RS_LOG_RET(WARN, err, "invalid argument", K(err), K(row), K(column), K(row_count_), K(column_count_));
-  } else {
-    const int64_t index = column + row * column_count_;
-    ptr_ret = &inner_array_.at(index);
-  }
-  return ptr_ret;
-}
-
-template <typename T>
-T *Matrix<T>::get(const int64_t row, const int64_t column)
-{
-  T *ptr_ret = NULL;
-  int err = common::OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    err = common::OB_NOT_INIT;
-    RS_LOG_RET(WARN, err, "matrix not init", K(err));
-  } else if (OB_UNLIKELY(row < 0
-                         || column < 0
-                         || row >= row_count_
-                         || column >= column_count_)) {
-    err = common::OB_INVALID_ARGUMENT;
-    RS_LOG_RET(WARN, err, "invalid argument", K(err), K(row), K(column), K(row_count_), K(column_count_));
-  } else {
-    const int64_t index = column + row * column_count_;
-    ptr_ret = &inner_array_.at(index);
-  }
-  return ptr_ret;
-}
-
-template <typename T>
-int64_t Matrix<T>::get_row_count() const
-{
-  return row_count_;
-}
-
-template <typename T>
-int64_t Matrix<T>::get_column_count() const
-{
-  return column_count_;
-}
-
-template <typename T>
-int64_t Matrix<T>::get_element_count() const
-{
-  return inner_array_.count();
-}
-
-template <typename T>
-bool Matrix<T>::is_valid() const
-{
-  return is_inited_
-         && (row_count_ > 0 && row_count_ < INT32_MAX)
-         && (column_count_ > 0 && column_count_ < INT32_MAX)
-         && (inner_array_.count() == row_count_ * column_count_);
-}
-
-template <typename T>
-bool Matrix<T>::is_contain(const T &element) const
-{
-  return common::has_exist_in_array(inner_array_, element);
-}
-
-// Column_count elements starting from start_column_idx in each row,
-// Sort according to the rules specified by Func operator
-template <typename T>
-template <typename Func>
-int Matrix<T>::sort_column_group(
-    const int64_t start_column_idx,
-    const int64_t column_count,
-    Func &func)
-{
-  int ret = common::OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = common::OB_NOT_INIT;
-    RS_LOG(WARN, "not init", K(ret));
-  } else if (OB_UNLIKELY(start_column_idx < 0
-        || column_count <= 0
-        || start_column_idx + column_count > column_count_)) {
-    ret = common::OB_INVALID_ARGUMENT;
-    RS_LOG(WARN, "invalid argument", K(ret));
-  } else {
-    for (int64_t row = 0; OB_SUCC(ret) && row < row_count_; ++row) {
-      const int64_t end_column_idx = start_column_idx + column_count;
-      lib::ob_sort(inner_array_.begin() + row * column_count_ + start_column_idx,
-                inner_array_.begin() + row * column_count_ + end_column_idx,
-                func);
-      if (OB_FAIL(func.get_ret())) {
-        ret = common::OB_ERR_UNEXPECTED;
-        RS_LOG(WARN, "sort error", K(ret));
-      } else {} // good, go on to sort the next row
-    }
-  }
-  return ret;
-}
-
 class ObZoneManager;
 // To balance the load of servers by migrating units.
 class ObServerBalancer
@@ -598,8 +379,8 @@ private:
                  K(unitgroup_load_array_),
                  K(server_load_array_));
 
-    const Matrix<uint64_t> *tenant_id_matrix_;
-    Matrix<UnitMigrateStat> unit_migrate_stat_matrix_;
+    const ObMatrix<uint64_t> *tenant_id_matrix_;
+    ObMatrix<UnitMigrateStat> unit_migrate_stat_matrix_;
     common::ObArray<int64_t> column_unit_num_array_;
     common::ObArray<UnitGroupLoad> unitgroup_load_array_;
     common::ObArray<ServerLoad> server_load_array_;
@@ -730,7 +511,7 @@ private:
     virtual ~InnerTenantGroupBalanceStrategy() {}
     virtual int do_balance_row_units(
         TenantGroupBalanceInfo &balance_info,
-        Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+        ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
         common::ObIArray<UnitGroupLoad> &unitgroup_loads,
         common::ObIArray<ServerLoad> &server_loads) = 0;
     virtual int amend_ug_inter_ttg_server_load(
@@ -740,25 +521,25 @@ private:
         const double inter_ttg_upper_limit) = 0;
     int coordinate_all_column_unit_group(
         const common::ObIArray<int64_t> &column_unit_num_array,
-        Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+        ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
         const common::ObIArray<UnitGroupLoad> &unitgroup_loads);
   protected:
     int coordinate_single_column_unit_group(
         const int64_t start_column_idx,
         const int64_t column_count,
-        Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+        ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
         const common::ObIArray<UnitGroupLoad> &unitgroup_loads);
     int do_coordinate_single_column_unit_group(
         const int64_t start_column_idx,
         const int64_t column_count,
-        Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+        ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
         const common::ObIArray<common::ObAddr> &dest_servers);
     int do_coordinate_single_unit_row(
         const int64_t row,
         const int64_t start_column_idx,
         const int64_t column_count,
         const common::ObIArray<common::ObAddr> &candidate_servers,
-        Matrix<UnitMigrateStat> &unit_migrate_stat_matrix);
+        ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix);
     int arrange_unit_migrate_stat_pos(
         const common::ObIArray<common::ObAddr> &candidate_servers,
         UnitMigrateStat &unit_migrate_stat,
@@ -791,7 +572,7 @@ private:
     virtual ~CountBalanceStrategy() {}
     virtual int do_balance_row_units(
         TenantGroupBalanceInfo &balance_info,
-        Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+        ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
         common::ObIArray<UnitGroupLoad> &unitgroup_loads,
         common::ObIArray<ServerLoad> &server_loads) override;
     virtual int amend_ug_inter_ttg_server_load(
@@ -802,7 +583,7 @@ private:
   private:
     int make_count_balanced(
         TenantGroupBalanceInfo &balance_info,
-        Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+        ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
         common::ObIArray<UnitGroupLoad> &unitgroup_loads,
         common::ObIArray<ServerLoad> &server_loads);
     int do_make_count_balanced(
@@ -879,20 +660,20 @@ protected:
   int rebalance_servers_v2(
       const common::ObZone &zone);
   int generate_single_tenant_group(
-      Matrix<uint64_t> &tenant_id_matrix,
+      ObMatrix<uint64_t> &tenant_id_matrix,
       const ObTenantGroupParser::TenantNameGroup &tenant_name_group);
   int generate_group_tenant_array(
       const common::ObIArray<ObTenantGroupParser::TenantNameGroup> &tenant_groups,
-      common::ObIArray<Matrix<uint64_t> > &group_tenant_array);
+      common::ObIArray<ObMatrix<uint64_t> > &group_tenant_array);
   bool has_exist_in_group_tenant_array(
        const uint64_t tenant_id,
-       const common::ObIArray<Matrix<uint64_t> > &group_tenant_array);
+       const common::ObIArray<ObMatrix<uint64_t> > &group_tenant_array);
   int generate_standalone_tenant_array(
-      const common::ObIArray<Matrix<uint64_t> > &group_tenant_array,
+      const common::ObIArray<ObMatrix<uint64_t> > &group_tenant_array,
       common::ObIArray<uint64_t> &standalone_tenant_array);
   virtual int generate_tenant_array(
       const common::ObZone &zone,
-      common::ObIArray<Matrix<uint64_t> > &group_tenant_array,
+      common::ObIArray<ObMatrix<uint64_t> > &group_tenant_array,
       common::ObIArray<uint64_t> &standalone_tenant_array);
   virtual int generate_available_servers(
       const common::ObZone &zone,
@@ -911,20 +692,20 @@ protected:
       common::ObIArray<ObUnitManager::ObUnitLoad> &standalone_units);
   int generate_tenant_balance_info_array(
       const common::ObZone &zone,
-      const common::ObIArray<Matrix<uint64_t> > &group_tenant_array,
-      common::ObIArray<Matrix<uint64_t> > &degraded_tenant_group_array,
+      const common::ObIArray<ObMatrix<uint64_t> > &group_tenant_array,
+      common::ObIArray<ObMatrix<uint64_t> > &degraded_tenant_group_array,
       common::ObIArray<TenantGroupBalanceInfo> &balance_info_array);
   int try_generate_degraded_balance_info_array(
       const common::ObZone &zone,
-      const common::ObIArray<const Matrix<uint64_t> *> &unit_num_not_match_array,
-      common::ObIArray<Matrix<uint64_t> > &degraded_tenant_group_array,
+      const common::ObIArray<const ObMatrix<uint64_t> *> &unit_num_not_match_array,
+      common::ObIArray<ObMatrix<uint64_t> > &degraded_tenant_group_array,
       common::ObIArray<TenantGroupBalanceInfo> &balance_info_array);
   int do_degrade_tenant_group_matrix(
-      const Matrix<uint64_t> &source_tenant_group,
-      common::ObIArray<Matrix<uint64_t> > &degraded_tenant_group_array);
+      const ObMatrix<uint64_t> &source_tenant_group,
+      common::ObIArray<ObMatrix<uint64_t> > &degraded_tenant_group_array);
   int do_rebalance_servers_v2(
       const common::ObZone &zone,
-      const common::ObIArray<Matrix<uint64_t> > &group_tenant_array,
+      const common::ObIArray<ObMatrix<uint64_t> > &group_tenant_array,
       const common::ObIArray<ObUnitManager::ObUnitLoad> &standalone_units,
       const common::ObIArray<ObUnitManager::ObUnitLoad> &not_grant_units);
   int check_need_balance_sys_tenant_units(
@@ -936,7 +717,7 @@ protected:
       bool &do_execute);
   int try_balance_non_sys_tenant_units(
       const common::ObZone &zone,
-      const common::ObIArray<Matrix<uint64_t> > &group_tenant_array,
+      const common::ObIArray<ObMatrix<uint64_t> > &group_tenant_array,
       const common::ObIArray<ObUnitManager::ObUnitLoad> &standalone_units,
       const common::ObIArray<ObUnitManager::ObUnitLoad> &not_grant_units);
   int do_balance_sys_tenant_single_unit(
@@ -1106,13 +887,13 @@ protected:
       const UnitMigrateStat &unit_migrate_stat,
       common::ObIArray<ServerLoadSum> &server_load_sums);
   int try_generate_square_task_from_ttg_matrix(
-      Matrix<UnitMigrateStat> &unit_migrate_stat_task,
+      ObMatrix<UnitMigrateStat> &unit_migrate_stat_task,
       common::ObIArray<UnitMigrateStat *> &task_array);
   int try_generate_line_task_from_ttg_matrix(
-      Matrix<UnitMigrateStat> &unit_migrate_stat_task,
+      ObMatrix<UnitMigrateStat> &unit_migrate_stat_task,
       common::ObIArray<UnitMigrateStat *> &task_array);
   int try_generate_dot_task_from_ttg_matrix(
-      Matrix<UnitMigrateStat> &unit_migrate_stat_task,
+      ObMatrix<UnitMigrateStat> &unit_migrate_stat_task,
       common::ObIArray<UnitMigrateStat *> &task_array);
   int try_generate_dot_task_from_migrate_stat(
       UnitMigrateStat &unit_migrate_stat,
@@ -1161,7 +942,7 @@ protected:
       TenantGroupBalanceInfo &balance_info);
   int get_ug_exchange_excluded_dst_servers(
       const int64_t ug_idx,
-      const Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+      const ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
       common::ObIArray<common::ObAddr> &excluded_servers);
   int check_cm_resource_enough(
       const LoadSum &this_load,
@@ -1172,18 +953,18 @@ protected:
       const int64_t left_idx,
       const int64_t right_idx,
       common::ObIArray<SimpleUgLoad> &simple_ug_loads,
-      Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+      ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
       bool &do_make_sense);
   int coordinate_unit_migrate_stat_matrix(
       const int64_t left_idx,
       const int64_t right_idx,
       common::ObIArray<SimpleUgLoad> &simple_ug_loads,
-      Matrix<UnitMigrateStat> &unit_migrate_stat_matrix);
+      ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix);
   int generate_exchange_ug_migrate_task(
       const int64_t left_idx,
       const int64_t right_idx,
       common::ObIArray<SimpleUgLoad> &simple_ug_loads,
-      Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+      ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
       common::ObIArray<UnitMigrateStat> &task_array);
   int try_balance_server_disk_onebyone(
       common::ObIArray<ServerTotalLoad> &server_loads,
@@ -1321,7 +1102,7 @@ protected:
       double *const resource_weights,
       const int64_t weights_count);
   int check_and_get_tenant_matrix_unit_num(
-      const Matrix<uint64_t> &tenant_id_matrix,
+      const ObMatrix<uint64_t> &tenant_id_matrix,
       const common::ObZone &zone,
       bool &unit_num_match,
       ObIArray<int64_t> &column_unit_num_array);
@@ -1331,12 +1112,12 @@ protected:
       bool &unit_num_match,
       int64_t &unit_num);
   int generate_original_unit_matrix(
-      const Matrix<uint64_t> &tenant_id_matrix,
+      const ObMatrix<uint64_t> &tenant_id_matrix,
       const common::ObZone &zone,
       const ObIArray<int64_t> &column_unit_num_array,
-      Matrix<UnitMigrateStat> &unit_migrate_stat_matrix);
+      ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix);
   int fill_unit_migrate_stat_matrix(
-      Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+      ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
       const uint64_t tenant_id,
       const int64_t row,
       const int64_t start_column_id,
@@ -1347,23 +1128,23 @@ protected:
   int balance_row_units(
       TenantGroupBalanceInfo &balance_info,
       const common::ObIArray<int64_t> &column_unit_num_array,
-      Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+      ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
       common::ObIArray<UnitGroupLoad> &unitgroup_loads,
       common::ObIArray<ServerLoad> &server_loads,
       const common::ObIArray<common::ObAddr> &available_servers);
   int generate_unitgroup_and_server_load(
-      const Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+      const ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
       const common::ObIArray<int64_t> &column_unit_num_array,
       const common::ObIArray<common::ObAddr> &available_servers,
       common::ObIArray<UnitGroupLoad> &unitgroup_loads,
       common::ObIArray<ServerLoad> &server_loads);
   int generate_unitgroup_load(
-      const Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+      const ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
       const common::ObIArray<int64_t> &column_unit_num_array,
       common::ObIArray<UnitGroupLoad> &unitgroup_loads);
   int generate_column_unitgroup_load(
       const int64_t column,
-      const Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+      const ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
       const int64_t start_column_idx,
       const int64_t column_count,
       common::ObIArray<UnitGroupLoad> &unitgroup_loads);
@@ -1388,7 +1169,7 @@ protected:
       common::ObIArray<ServerLoad> &server_loads);
   int do_balance_row_units(
       TenantGroupBalanceInfo &balance_info,
-      Matrix<UnitMigrateStat> &unit_migrate_stat_matrix,
+      ObMatrix<UnitMigrateStat> &unit_migrate_stat_matrix,
       common::ObIArray<UnitGroupLoad> &unitgroup_loads,
       common::ObIArray<ServerLoad> &server_loads);
 

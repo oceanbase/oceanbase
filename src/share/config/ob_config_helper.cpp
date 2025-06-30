@@ -1508,5 +1508,11 @@ bool ObConfigServerFullSchemaRefreshParallelismChecker::check(const ObConfigItem
          || 0 == t.case_compare(SERVER_FULL_SCHEMA_REFRESH_PARALLELISM_OBJECT);
 }
 
+bool ObConfigZoneDeployModeChecker::check(const ObConfigItem &t) const
+{
+  common::ObString tmp_str(t.str());
+  return 0 == tmp_str.case_compare(HOMO_MODE_STR) || 0 == tmp_str.case_compare(HETERO_MODE_STR);
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

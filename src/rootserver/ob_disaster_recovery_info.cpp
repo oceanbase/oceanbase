@@ -372,6 +372,8 @@ void DRLSInfo::reset_last_disaster_recovery_ls()
   member_list_cnt_ = 0;
   paxos_replica_number_ = 0;
   has_leader_ = false;
+  unit_list_.reset();
+  gts_unit_ids_.reset();
 }
 
 int DRLSInfo::construct_filtered_ls_info_to_use_(
@@ -433,18 +435,20 @@ int DRLSInfo::construct_filtered_ls_info_to_use_(
 int DRLSInfo::build_disaster_ls_info(
     const share::ObLSInfo &ls_info,
     const share::ObLSStatusInfo &ls_status_info,
-    const bool &filter_readonly_replicas_with_flag)
+    const bool &filter_readonly_replicas_with_flag,
+    const common::ObIArray<uint64_t> &gts_unit_ids)
 {
   int ret = OB_SUCCESS;
 
   reset_last_disaster_recovery_ls();
   const share::schema::ObTenantSchema *tenant_schema = nullptr;
+  share::ObLSStatusOperator ls_status_operator;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("DRWorker not init", KR(ret));
-  } else if (OB_ISNULL(schema_service_)) {
+  } else if (OB_ISNULL(schema_service_) || OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema service ptr is null", KR(ret), KP(schema_service_));
+    LOG_WARN("schema service ptr is null", KR(ret), KP(schema_service_), KP(GCTX.sql_proxy_));
   } else if (resource_tenant_id_ != gen_user_tenant_id(ls_info.get_tenant_id())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant id not match", KR(ret), K(resource_tenant_id_),
@@ -454,6 +458,12 @@ int DRLSInfo::build_disaster_ls_info(
              KR(ret), K(ls_info), K(filter_readonly_replicas_with_flag));
   } else if (OB_FAIL(ls_status_info_.assign(ls_status_info))) {
     LOG_WARN("fail to assign ls_status_info", KR(ret));
+  } else if (OB_FAIL(ls_status_operator.get_ls_unit_array(
+                         ls_status_info, *GCTX.sql_proxy_, unit_list_))) {
+    LOG_WARN("fail to get unit array", KR(ret), K(ls_status_info));
+  } else if (gts_unit_ids.count() > 0
+             && OB_FAIL(gts_unit_ids_.assign(gts_unit_ids))) {
+    LOG_WARN("fail to assign gts unit ids", KR(ret), K(gts_unit_ids));
   } else if (OB_FAIL(sys_schema_guard_.get_tenant_info(
           inner_ls_info_.get_tenant_id(),
           tenant_schema))) {
@@ -476,38 +486,35 @@ int DRLSInfo::build_disaster_ls_info(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < inner_ls_info_.get_replicas().count(); ++i) {
       ServerStatInfoMap::Item *server = nullptr;
-      UnitStatInfoMap::Item *unit_in_map = nullptr;
+      UnitStatInfoMap::Item *current_unit = nullptr;
       UnitStatInfoMap::Item *unit_in_group = nullptr;
-      share::ObUnit unit;
+      uint64_t unit_id_in_group = 0;
       share::ObLSReplica &ls_replica = inner_ls_info_.get_replicas().at(i);
       if (!ls_replica.get_in_member_list() && !ls_replica.get_in_learner_list()) {
         LOG_INFO("replica is neither in member list nor in learner list", K(ls_replica));
+      // try construct server info
       } else if (OB_FAIL(server_stat_info_map_.locate(ls_replica.get_server(), server))) {
         LOG_WARN("fail to locate server", KR(ret), "server", ls_replica.get_server());
-      } else if (OB_FAIL(unit_stat_info_map_.locate(ls_replica.get_unit_id(), unit_in_map))) {
+      // try construct current unit info
+      } else if (OB_FAIL(unit_stat_info_map_.locate(ls_replica.get_unit_id(), current_unit))) {
         LOG_WARN("fail to locate unit", KR(ret), "unit_id", ls_replica.get_unit_id());
-      } else {
-        if (0 == ls_status_info.unit_group_id_) {
-          unit_in_group = unit_in_map;
-        } else if (OB_FAIL(unit_operator_.get_unit_in_group(
-                ls_status_info.unit_group_id_,
-                ls_replica.get_zone(),
-                unit))) {
-          LOG_WARN("fail to get unit in group", KR(ret), K(ls_replica));
-        } else if (OB_FAIL(unit_stat_info_map_.locate(unit.unit_id_, unit_in_group))) {
-          LOG_WARN("fail to locate unit", KR(ret), "unit_id", unit.unit_id_);
-        }
-
-        if (OB_SUCC(ret)) {
-          if (OB_ISNULL(server) || OB_ISNULL(unit_in_map) || OB_ISNULL(unit_in_group)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unit or server ptr is null", KR(ret), KP(server), KP(unit_in_map), K(ls_replica));
-          } else if (OB_FAIL(append_replica_server_unit_stat(
-                  &server->v_, &unit_in_map->v_, &unit_in_group->v_))) {
-            LOG_WARN("fail to append replica server/unit stat", KR(ret),
-                     "server_stat_info", server->v_, "unit_stat_info", unit_in_map->v_);
-          }
-        }
+      } else if (OB_ISNULL(server) || OB_ISNULL(current_unit)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unit or server ptr is null", KR(ret), KP(server), KP(current_unit), K(ls_replica));
+      // try construct expected unit info in group or unit_list
+      } else if (OB_FAIL(construct_unit_id_in_unit_list_or_group_(
+                             ls_status_info, ls_replica, unit_id_in_group))) {
+        LOG_WARN("fail to construct unit in group or list", KR(ret), K(ls_status_info), K(ls_replica));
+      } else if (OB_FAIL(unit_stat_info_map_.locate(unit_id_in_group, unit_in_group))) {
+        LOG_WARN("fail to locate unit", KR(ret), K(unit_id_in_group));
+      } else if (OB_ISNULL(unit_in_group)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unit_in_group ptr is null", KR(ret), KP(unit_in_group), K(ls_replica), K(ls_status_info));
+      } else if (OB_FAIL(append_replica_server_unit_stat(
+                             &server->v_, &current_unit->v_, &unit_in_group->v_))) {
+        LOG_WARN("fail to append replica server/unit stat", KR(ret),
+                 "server_stat_info", server->v_, "unit_stat_info", current_unit->v_,
+                 "unit_in_group_info", unit_in_group->v_);
       }
     }
     if (OB_SUCC(ret)) {
@@ -517,6 +524,60 @@ int DRLSInfo::build_disaster_ls_info(
         paxos_replica_number_ = leader_replica->get_paxos_replica_number();
         member_list_cnt_ = leader_replica->get_member_list().count();
         has_leader_ = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int DRLSInfo::construct_unit_id_in_unit_list_or_group_(
+    const share::ObLSStatusInfo &ls_status_info,
+    const share::ObLSReplica &ls_replica,
+    uint64_t &unit_id_in_group)
+{
+  int ret = OB_SUCCESS;
+  unit_id_in_group = 0;
+  share::ObLSStatusOperator ls_status_operator;
+  common::ObArray<share::ObUnit> unit_array;
+  if (OB_UNLIKELY(!ls_status_info.is_valid())
+      || OB_UNLIKELY(!ls_replica.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_status_info), K(ls_replica));
+  } else if (OB_UNLIKELY(0 == ls_status_info.get_unit_list().count()
+                         && 0 == ls_status_info.get_unit_group_id())) {
+    // unit_list or unit_group_id not given
+    // means this replica's location is not binding with specified unit in group,
+    // current unit's location is ok
+    unit_id_in_group = ls_replica.get_unit_id();
+  } else {
+    // unit_list or unit_group_id is given
+    // try fetch specified unit in group or list
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(ls_status_operator.get_ls_unit_array(
+                           ls_status_info, *GCTX.sql_proxy_, unit_array))) {
+      LOG_WARN("fail to get ls unit array", KR(ret), K(ls_status_info));
+    } else {
+      bool found_valid_unit_in_zone = false;
+      for (int64_t index = 0; OB_SUCC(ret) && index < unit_array.count(); ++index) {
+        const share::ObUnit unit = unit_array.at(index);
+        if (unit.zone_ != ls_replica.get_zone()) {
+          // by pass
+        } else if (OB_UNLIKELY(found_valid_unit_in_zone)) {
+          // unit_list should contain units in different zones
+          ret = OB_STATE_NOT_MATCH;
+          LOG_WARN("expect only one unit in this zone", KR(ret),
+                   K(ls_status_info), K(ls_replica), K(unit_array), K(unit));
+        } else {
+          unit_id_in_group = unit.unit_id_;
+          found_valid_unit_in_zone = true;
+        }
+      }
+      if (OB_SUCC(ret) && !found_valid_unit_in_zone) {
+        // can not find unit in specified unit_list
+        // maybe this zone not in locality, this replica's location does not matter
+        unit_id_in_group = ls_replica.get_unit_id();
       }
     }
   }

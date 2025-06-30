@@ -63,6 +63,12 @@ const char* ObBalanceStrategy::BALANCE_STRATEGY_STR_ARRAY[MAX_STRATEGY + 1] =
   "intergroup partition count balance",
   "partition disk balance",
   "LS balance by scale_out_factor",
+  "duplicate LS balance",
+  "reorganize unit group",
+  "alter LS group location",
+  "LS group count balance",
+  "unit list balance",
+  "LS count balance",
   "invalid", // MAX_STRATEGY
 };
 

@@ -28,6 +28,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "lib/thread/thread.h"
+#include "lib/worker.h"
 
 namespace oceanbase
 {
@@ -1458,6 +1459,7 @@ int ObHAFetchMacroBlockP::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     blocksstable::ObBufferReader data;
     char *buf = NULL;
     last_send_time_ = this->get_receive_timestamp();
@@ -1548,6 +1550,7 @@ int ObFetchTabletInfoP::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = nullptr;
     ObLS *ls = nullptr;
@@ -1659,6 +1662,7 @@ int ObFetchSSTableInfoP::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = nullptr;
     char * buf = NULL;
@@ -1790,6 +1794,7 @@ int ObFetchLSInfoP::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = nullptr;
     ObLS *ls = nullptr;
@@ -1873,6 +1878,7 @@ int ObFetchLSMetaInfoP::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = nullptr;
     ObLS *ls = nullptr;
@@ -1955,6 +1961,7 @@ int ObFetchLSMemberListP::process()
   const uint64_t tenant_id = arg_.tenant_id_;
   const share::ObLSID &ls_id = arg_.ls_id_;
   MTL_SWITCH(tenant_id) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSService *ls_svr = NULL;
     ObLSHandle ls_handle;
     ObLS *ls = NULL;
@@ -2009,6 +2016,7 @@ int ObFetchLSMemberAndLearnerListP::process()
   const uint64_t tenant_id = arg_.tenant_id_;
   const share::ObLSID &ls_id = arg_.ls_id_;
   MTL_SWITCH(tenant_id) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSService *ls_svr = NULL;
     ObLSHandle ls_handle;
     ObLS *ls = NULL;
@@ -2073,6 +2081,7 @@ int ObFetchSSTableMacroInfoP::process()
 
   last_send_time_ = this->get_receive_timestamp();
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
 
   if (OB_FAIL(guard.switch_to(arg_.tenant_id_))) {
     LOG_ERROR("switch tenant fail", K(ret), K(arg_));
@@ -2215,6 +2224,7 @@ int ObCheckStartTransferTabletsDelegate::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = nullptr;
     ObLS *ls = nullptr;
@@ -2396,6 +2406,7 @@ int ObNotifyRestoreTabletsP::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = nullptr;
     ObLS *ls = nullptr;
@@ -2466,6 +2477,7 @@ int ObInquireRestoreP::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = nullptr;
     ObLS *ls = nullptr;
@@ -2533,6 +2545,7 @@ int ObUpdateLSMetaP::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = nullptr;
     ObLS *ls = nullptr;
@@ -2716,6 +2729,7 @@ int ObGetLSActiveTransCountP::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = nullptr;
     ObLS *ls = nullptr;
@@ -2773,6 +2787,7 @@ int ObGetTransferStartScnP::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = nullptr;
     ObLS *ls = nullptr;
@@ -2875,6 +2890,7 @@ int OFetchLSReplayScnDelegate::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = NULL;
     ObLS *ls = NULL;
@@ -2938,6 +2954,7 @@ int ObCheckTransferTabletsBackfillDelegate::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = NULL;
     ObLS *ls = NULL;
@@ -3079,6 +3096,7 @@ int ObStorageGetConfigVersionAndTransferScnDelegate::process()
   }
 #endif
   MTL_SWITCH(tenant_id) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = NULL;
     ObLS *ls = NULL;
@@ -3115,6 +3133,7 @@ int ObStorageFetchLSViewP::process()
   int ret = OB_SUCCESS;
   LOG_INFO("receive fetch ls view request", K_(arg));
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = NULL;
     ObLS *ls = NULL;
@@ -3222,6 +3241,7 @@ int ObStorageSubmitTxLogP::process()
   const share::ObLSID &ls_id = arg_.ls_id_;
 
   MTL_SWITCH(tenant_id) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLS *ls = NULL;
     SCN scn;
@@ -3258,6 +3278,7 @@ int ObStorageGetTransferDestPrepareSCNP::process()
   const share::ObLSID &ls_id = arg_.ls_id_;
 
   MTL_SWITCH(tenant_id) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLS *ls = NULL;
     bool enable = false;
@@ -3297,6 +3318,7 @@ int ObStorageLockConfigChangeP::process()
   const int64_t lock_owner = arg_.lock_owner_;
   const int64_t lock_timeout = arg_.lock_timeout_;
   MTL_SWITCH(tenant_id) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = NULL;
     ObLS *ls = NULL;
@@ -3338,6 +3360,7 @@ int ObStorageUnlockConfigChangeP::process()
   const int64_t lock_owner = arg_.lock_owner_;
   const int64_t lock_timeout = arg_.lock_timeout_;
   MTL_SWITCH(tenant_id) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = NULL;
     ObLS *ls = NULL;
@@ -3377,6 +3400,7 @@ int ObStorageGetLogConfigStatP::process()
   const uint64_t tenant_id = arg_.tenant_id_;
   const share::ObLSID &ls_id = arg_.ls_id_;
   MTL_SWITCH(tenant_id) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = NULL;
     ObLS *ls = NULL;
@@ -3454,6 +3478,7 @@ int ObCheckTransferInTabletAbortDelegate::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = NULL;
     ObLS *ls = NULL;
@@ -3548,6 +3573,7 @@ int ObUpdateTransferMetaInfoDelegate::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = NULL;
     ObLS *ls = NULL;
@@ -3594,6 +3620,7 @@ int ObRebuildTabletSSTableInfoP::process()
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(arg_.tenant_id_) {
+    CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_HA_HIGH);
     ObLSHandle ls_handle;
     ObLSService *ls_service = nullptr;
     char * buf = NULL;

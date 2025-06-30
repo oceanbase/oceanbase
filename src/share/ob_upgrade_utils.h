@@ -223,6 +223,7 @@ public:
   virtual int pre_upgrade() override { return common::OB_SUCCESS; }
   virtual int post_upgrade() override;
   int flush_ncomp_dll_job();
+  int replace_unit_group_id_with_unit_list_();
 };
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 10)

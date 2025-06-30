@@ -82,18 +82,20 @@ void ObStandbyService::tenant_event_start_(
     const uint64_t switch_tenant_id, const obrpc::ObSwitchTenantArg &arg, int ret,
     int64_t begin_ts, const share::ObAllTenantInfo &tenant_info)
 {
+  char tenant_info_buf[MAX_TENANT_EVENT_VALUE_LENGTH] = "";
+  PRINT_OBJ_INFO(tenant_info, tenant_info_buf);
   switch (arg.get_op_type()) {
       case ObSwitchTenantArg::SWITCH_TO_PRIMARY :
         TENANT_EVENT(switch_tenant_id, TENANT_ROLE_CHANGE, SWITCHOVER_TO_PRIMARY_START, begin_ts,
-            ret, 0, arg.get_stmt_str(), tenant_info);
+            ret, 0, ObHexEscapeSqlStr(arg.get_stmt_str()), ObHexEscapeSqlStr(tenant_info_buf));
         break;
       case ObSwitchTenantArg::SWITCH_TO_STANDBY :
         TENANT_EVENT(switch_tenant_id, TENANT_ROLE_CHANGE, SWITCHOVER_TO_STANDBY_START, begin_ts,
-            ret, 0, arg.get_stmt_str(), tenant_info);
+            ret, 0, ObHexEscapeSqlStr(arg.get_stmt_str()), ObHexEscapeSqlStr(tenant_info_buf));
         break;
       case ObSwitchTenantArg::FAILOVER_TO_PRIMARY :
         TENANT_EVENT(switch_tenant_id, TENANT_ROLE_CHANGE, FAILOVER_TO_PRIMARY_START, begin_ts,
-            ret, 0, arg.get_stmt_str(), tenant_info);
+            ret, 0, ObHexEscapeSqlStr(arg.get_stmt_str()), ObHexEscapeSqlStr(tenant_info_buf));
         break;
       default :break;
     }
@@ -115,18 +117,20 @@ void ObStandbyService::tenant_event_end_(
       LOG_WARN("failed to load tenant info", KR(ret), K(switch_tenant_id));
     }
   }
+  char tenant_info_buf[MAX_TENANT_EVENT_VALUE_LENGTH] = "";
+  PRINT_OBJ_INFO(tenant_info, tenant_info_buf);
   switch (arg.get_op_type()) {
     case ObSwitchTenantArg::SWITCH_TO_PRIMARY :
       TENANT_EVENT(switch_tenant_id, TENANT_ROLE_CHANGE, SWITCHOVER_TO_PRIMARY_END, end_ts,
-          ret, cost, arg.get_stmt_str(), tenant_info, switch_scn.get_val_for_inner_table_field(), cost_detail, all_ls);
+          ret, cost, ObHexEscapeSqlStr(arg.get_stmt_str()), ObHexEscapeSqlStr(tenant_info_buf), switch_scn.get_val_for_inner_table_field(), cost_detail, all_ls);
       break;
     case ObSwitchTenantArg::SWITCH_TO_STANDBY :
       TENANT_EVENT(switch_tenant_id, TENANT_ROLE_CHANGE, SWITCHOVER_TO_STANDBY_END, end_ts,
-          ret, cost, arg.get_stmt_str(), tenant_info, switch_scn.get_val_for_inner_table_field(), cost_detail, all_ls);
+          ret, cost, ObHexEscapeSqlStr(arg.get_stmt_str()), ObHexEscapeSqlStr(tenant_info_buf), switch_scn.get_val_for_inner_table_field(), cost_detail, all_ls);
       break;
     case ObSwitchTenantArg::FAILOVER_TO_PRIMARY :
       TENANT_EVENT(switch_tenant_id, TENANT_ROLE_CHANGE, FAILOVER_TO_PRIMARY_END, end_ts,
-          ret, cost, arg.get_stmt_str(), tenant_info, switch_scn.get_val_for_inner_table_field(), cost_detail, all_ls);
+          ret, cost, ObHexEscapeSqlStr(arg.get_stmt_str()), ObHexEscapeSqlStr(tenant_info_buf), switch_scn.get_val_for_inner_table_field(), cost_detail, all_ls);
       break;
     default :break;
   }

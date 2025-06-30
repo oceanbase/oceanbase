@@ -1469,8 +1469,9 @@ int ObBootstrap::insert_sys_ls_(const share::schema::ObTenantSchema &tenant_sche
     const uint64_t unit_group_id = 0;
     const uint64_t ls_group_id = 0;
     share::ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
+    ObUnitIDList unit_list;
     if (OB_FAIL(status_info.init(OB_SYS_TENANT_ID, SYS_LS, ls_group_id,
-            share::OB_LS_NORMAL, unit_group_id, primary_zone, flag))) {
+            share::OB_LS_NORMAL, unit_group_id, primary_zone, flag, unit_list))) {
       LOG_WARN("failed to init ls info", KR(ret), K(primary_zone), K(flag));
     } else if (OB_FAIL(life_agent.create_new_ls(status_info, SCN::base_scn(), primary_zone_str.string(),
         ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH))) {
@@ -1554,7 +1555,7 @@ int ObBootstrap::gen_sys_resource_pool(
   pool.name_ = "sys_pool";
   pool.unit_count_ = 1;
   pool.unit_config_id_ = ObUnitConfig::SYS_UNIT_CONFIG_ID;
-  pool.tenant_id_ = OB_INVALID_ID;
+  pool.tenant_id_ = OB_SYS_TENANT_ID;
   if (OB_FAIL(gen_sys_zone_list(pool.zone_list_))) {
     LOG_WARN("fail to gen sys zone list", K(ret));
   }
@@ -1565,13 +1566,9 @@ int ObBootstrap::create_sys_resource_pool()
 {
   int ret = OB_SUCCESS;
   ObArray<ObUnit> sys_units;
-  ObArray<ObResourcePoolName> pool_names;
   share::ObResourcePool pool;
-  const bool is_bootstrap = true;
   const bool if_not_exist = false;
-  const bool check_data_version = false;
   common::ObMySQLTransaction trans;
-  common::ObArray<uint64_t> new_ug_id_array;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", K(ret));
   } else if (OB_FAIL(gen_sys_resource_pool(pool))) {
@@ -1584,28 +1581,8 @@ int ObBootstrap::create_sys_resource_pool()
     LOG_WARN("gen_sys_units failed", K(ret));
   } else if (OB_FAIL(unit_mgr_.create_sys_units(sys_units))) {
     LOG_WARN("create_sys_units failed", K(sys_units), K(ret));
-  } else if (OB_FAIL(pool_names.push_back(pool.name_))) {
-    LOG_WARN("push_back failed", K(ret));
-  } else if (OB_FAIL(trans.start(&unit_mgr_.get_sql_proxy(), OB_SYS_TENANT_ID))) {
-    LOG_WARN("start transaction failed", KR(ret));
-  } else if (OB_FAIL(unit_mgr_.grant_pools(
-          trans, new_ug_id_array,
-          lib::Worker::CompatMode::MYSQL, pool_names,
-          OB_SYS_TENANT_ID, is_bootstrap, check_data_version))) {
-    LOG_WARN("grant_pools_to_tenant failed", K(pool_names),
-        "tenant_id", static_cast<uint64_t>(OB_SYS_TENANT_ID), K(ret));
-  } else {
-    if (OB_FAIL(unit_mgr_.load())) {
-      LOG_WARN("unit_manager reload failed", K(ret));
-    }
-  }
-  if (trans.is_started()) {
-    const bool commit = (OB_SUCC(ret));
-    int temp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (temp_ret = trans.end(commit))) {
-      LOG_WARN("trans end failed", K(commit), K(temp_ret));
-      ret = (OB_SUCCESS == ret) ? temp_ret : ret;
-    }
+  } else if (OB_FAIL(unit_mgr_.load())) {
+    LOG_WARN("unit_manager reload failed", K(ret));
   }
   BOOTSTRAP_CHECK_SUCCESS();
   return ret;

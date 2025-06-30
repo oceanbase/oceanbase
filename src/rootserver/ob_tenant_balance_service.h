@@ -20,6 +20,8 @@
 #include "rootserver/ob_tenant_thread_helper.h"//ObTenantTheadHelper
 #include "share/ls/ob_ls_status_operator.h"//ObLSStatusInfoArray
 #include "share/ob_balance_define.h"
+#include "share/balance/ob_balance_job_table_operator.h"//ObBalanceJobDesc
+#include "share/ob_unit_table_operator.h" //ObUnitUGOp
 
 namespace oceanbase
 {
@@ -47,6 +49,7 @@ class ObTenantSchema;
 namespace rootserver
 {
 class ObPartitionBalance;
+class ObTenantLSBalanceInfo;
 
 /*description:
  * only one thread in threadpool
@@ -61,9 +64,9 @@ public:
       : inited_(false),
         loaded_(false),
         tenant_id_(OB_INVALID_TENANT_ID),
-        primary_zone_num_(OB_INVALID_COUNT),
+        job_desc_(),
         ls_array_(),
-        unit_group_array_() {}
+        unit_array_() {}
   virtual ~ObTenantBalanceService() {}
   int init();
   void destroy();
@@ -81,16 +84,20 @@ public:
     return OB_SUCCESS;
   }
   int trigger_partition_balance(const uint64_t tenant_id, const int64_t timeout);
-  static int gather_stat_primary_zone_num_and_units(
+  static int gather_tenant_balance_desc(
       const uint64_t &tenant_id,
-      int64_t &primary_zone_num,
-      ObIArray<share::ObSimpleUnitGroup> &unit_group_array);
-  static int gather_ls_status_stat(const uint64_t &tenant_id, share::ObLSStatusInfoArray &ls_array);
+      share::ObBalanceJobDesc &job_desc,
+      ObIArray<share::ObUnit> &unit_array);
+  //check_status_valid,主库开启enable_rebalance为true，否则都是false
+  static int gather_ls_status_stat(const uint64_t &tenant_id, share::ObLSStatusInfoArray &ls_array,
+      const bool check_status_valid);
+  static int check_ls_status_valid_balance(const uint64_t &tenant_id,
+      share::ObLSStatusInfoArray &ls_array);
   static int is_ls_balance_finished(const uint64_t &tenant_id, bool &is_finished);
 
 private:
-  static int is_primary_tenant_ls_balance_finished_(const uint64_t &tenant_id, bool &is_finished);
-  static int is_standby_tenant_ls_balance_finished_(const uint64_t &tenant_id, bool &is_finished);
+  static int is_tenant_ls_balance_finished_(const uint64_t &tenant_id,
+      const share::ObTenantRole::Role tenant_role, bool &is_finished);
   //load current unit group and primary zone
   int gather_stat_();
   //process current job
@@ -108,8 +115,11 @@ private:
                                 bool &need_cancel,
                                 common::ObSqlString &abort_comment);
   void reset();
-  int persist_job_and_task_(const share::ObBalanceJob &job,
-                            ObArray<share::ObBalanceTask> &tasks);
+  int persist_job_and_task_(
+      const share::ObLSStatusInfoArray &ls_array,
+      const share::ObBalanceJobDesc &job_desc,
+      const share::ObBalanceJob &job,
+      ObArray<share::ObBalanceTask> &tasks);
   int persist_job_and_task_in_trans_(
       const share::ObLSStatusInfoArray &ls_array,
       const share::ObBalanceJob &job,
@@ -132,6 +142,9 @@ private:
   int try_finish_doing_partition_balance_job_(
       const share::ObBalanceJob &job,
       bool &is_finished);
+  int try_finish_doing_ls_balance_job_(
+      const share::ObBalanceJob &job,
+      bool &is_finished);
   int update_job_and_insert_new_tasks_(
       const share::ObBalanceJob &old_job,
       const share::ObBalanceStrategy &new_strategy,
@@ -142,13 +155,18 @@ private:
       const uint64_t tenant_id,
       ObPartitionBalance &partition_balance);
   void wakeup_balance_task_execute_();
+  int check_if_need_cancel_by_job_desc_(
+      const share::ObBalanceJob &job,
+      bool &need_cancel,
+      common::ObSqlString &comment);
+
 private:
   bool inited_;
   bool loaded_;
   uint64_t tenant_id_;
-  int64_t primary_zone_num_;
+  share::ObBalanceJobDesc job_desc_;
   share::ObLSStatusInfoArray ls_array_;
-  ObArray<share::ObSimpleUnitGroup> unit_group_array_;
+  ObArray<share::ObUnit> unit_array_;
 };
 }
 }

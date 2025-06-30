@@ -2925,8 +2925,9 @@ int ObAdminUnlockMemberListP::process()
 int ObRpcAlterLSP::process()
 {
   int ret = OB_SUCCESS;
+  rootserver::ObAlterLSCommand command;
   LOG_INFO("receive admin alter ls", K(arg_));
-  if (OB_FAIL(rootserver::ObAlterLSCommand::process(arg_, result_))) {
+  if (OB_FAIL(command.process(arg_, result_))) {
     LOG_WARN("fail to process", KR(ret), K(arg_));
   }
   return ret;

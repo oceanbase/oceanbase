@@ -93,7 +93,7 @@ TEST_F(TestDupTablePartitionBalance, verify_need_transfer_part_map)
   ObTenantSwitchGuard guard;
   ASSERT_EQ(OB_SUCCESS, guard.switch_to(tenant_id));
   ObPartitionBalance part_balance;
-  ASSERT_EQ(OB_SUCCESS, part_balance.init(tenant_id, GCTX.schema_service_, &inner_proxy, 1, 1, ObPartitionBalance::GEN_TRANSFER_TASK));
+  ASSERT_EQ(OB_SUCCESS, part_balance.init(tenant_id, GCTX.schema_service_, &inner_proxy, ObPartitionBalance::GEN_TRANSFER_TASK));
   ASSERT_EQ(OB_SUCCESS, part_balance.process());
 
   // verify dup change part_map: 9 normal->dup, 9 dup->normal

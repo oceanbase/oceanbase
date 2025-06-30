@@ -637,13 +637,15 @@ private:
     UnitProvider()
       : inited_(false),
         tenant_id_(OB_INVALID_ID),
-        unit_set_() {}
+        unit_set_(),
+        gts_unit_ids_() {}
     int init(
         const uint64_t tenant_id,
         DRLSInfo &dr_ls_info);
     int allocate_unit(
         const common::ObZone &zone,
-        const uint64_t unit_group_id,
+        const share::ObLSStatusInfo &ls_status_info,
+        const bool is_locality_alignment,
         share::ObUnit &unit);
     int init_unit_set(
         DRLSInfo &dr_ls_info);
@@ -653,13 +655,22 @@ private:
         const common::ObZone &zone,
         const common::ObArray<share::ObUnit> &unit_array,
         share::ObUnit &output_unit,
-        const bool &force_get,
-        bool &found);
+        const bool &ignore_server_and_unit_status,
+        const bool &skip_gts_units);
+    int allocate_unit_from_specified_unit_array_(
+        const common::ObZone &zone,
+        const share::ObLSStatusInfo &ls_status_info,
+        share::ObUnit &unit);
+    int allocate_unit_from_all_unit_array_(
+        const common::ObZone &zone,
+        share::ObUnit &unit,
+        const bool &skip_gts_units);
   private:
     bool inited_;
     uint64_t tenant_id_;
     share::ObUnitTableOperator unit_operator_;
     common::hash::ObHashSet<int64_t> unit_set_;
+    common::ObArray<uint64_t> gts_unit_ids_;
   };
 
   typedef common::hash::ObHashMap<
@@ -758,6 +769,10 @@ private:
         LATask *my_task,
         const LATask *&output_task,
         bool &found);
+    int check_zone_exist_in_unit_list_(
+        const ObZone &zone,
+        bool &zone_exist_in_unit_list);
+    bool is_dup_ls_on_gts_unit_(const uint64_t unit_id);
   private:
     static const int64_t LOCALITY_MAP_BUCKET_NUM = 100;
     static const int64_t UNIT_SET_BUCKET_NUM = 5000;
@@ -1173,6 +1188,10 @@ private:
       const ObString &comment,
       int64_t &acc_dr_task);
 
+  // check unit_list has same zone with locality
+  static int check_unit_list_match_locality_(
+         DRLSInfo &dr_ls_info,
+         bool &locality_is_matched);
 private:
   volatile bool &stop_;
   bool inited_;

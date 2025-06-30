@@ -2665,7 +2665,7 @@ int ObRootService::alter_resource_pool(const obrpc::ObAlterResourcePoolArg &arg)
     if (OB_FAIL(pool.zone_list_.assign(arg.zone_list_))) {
       LOG_WARN("assign failed", K(ret));
     } else if (OB_FAIL(unit_manager_.alter_resource_pool(
-            pool, arg.unit_, arg.delete_unit_id_array_))) {
+            pool, arg.unit_, arg.delete_unit_id_array_, arg.ddl_stmt_str_))) {
       LOG_WARN("alter_resource_pool failed", K(pool), K(arg), "resource unit", arg.unit_, K(ret));
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(submit_reload_unit_manager_task())) {//ensure submit task all case
@@ -9495,6 +9495,10 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
       ret = check_data_disk_usage_limit_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), _TRANSFER_TASK_TABLET_COUNT_THRESHOLD)) {
       ret = check_transfer_task_tablet_count_threshold_(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), ZONE_DEPLOY_MODE)) {
+      ret = check_zone_deploy_mode_(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), ENABLE_GTS_STANDALONE)) {
+      ret = check_enable_gts_standalone_(*item);
     }
   }
   return ret;
@@ -10890,6 +10894,84 @@ int ObRootService::check_transfer_task_tablet_count_threshold_(obrpc::ObAdminSet
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("config invalid", KR(ret), K(value), K(item), K(tenant_id));
     }
+  }
+  return ret;
+}
+
+int ObRootService::check_zone_deploy_mode_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  ARRAY_FOREACH(item.tenant_ids_, i) {
+    const uint64_t tenant_id = item.tenant_ids_.at(i);
+    const bool is_seed_tenant = ObAdminSetConfig::OB_PARAMETER_SEED_ID == tenant_id;
+    const uint64_t meta_tenant_id = is_seed_tenant ? OB_SYS_TENANT_ID : gen_meta_tenant_id(tenant_id);
+    uint64_t meta_tenant_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(meta_tenant_id, meta_tenant_data_version))) {
+      LOG_WARN("fail to get min data version", KR(ret), K(meta_tenant_id));
+    } else if (DATA_VERSION_4_2_5_5 > meta_tenant_data_version) {
+      // zone_deploy_mode can not be set and keep default value HOMO before upgrade to 4255.
+      ret = OB_OP_NOT_ALLOW;
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "data_version lower than 4.2.5.5, set zone_deploy_mode");
+    } else if (!is_seed_tenant && 0 == STRCASECMP(item.value_.ptr(), ObConfigZoneDeployModeChecker::HOMO_MODE_STR)) {
+      bool is_hetero_mode = false;
+      if (OB_FAIL(rootserver::ObUnitManager::check_tenant_in_heterogeneous_deploy_mode(tenant_id, is_hetero_mode))) {
+        LOG_WARN("fail to check tenant in heterogeneous deploy mode", KR(ret), K(tenant_id));
+      } else if (is_hetero_mode) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant in 'hetero' mode, set zone_deploy_mode to 'homo'");
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRootService::check_enable_gts_standalone_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  bool enable_gts_standalone = ObConfigBoolParser::get(item.value_.ptr(), is_valid);
+  const uint64_t seed_tenant_id = ObAdminSetConfig::OB_PARAMETER_SEED_ID;
+  if (!is_valid) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(item));
+  } else if (has_exist_in_array(item.tenant_ids_, seed_tenant_id)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("not allow to set seed gts_standalone, initial value of tenant must be false", KR(ret), K(item));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set enable_gts_standalone for seed tenant");
+  } else if (enable_gts_standalone) {
+    // check min data-version over 4255
+    ARRAY_FOREACH(item.tenant_ids_, i) {
+      const uint64_t meta_tenant_id = gen_meta_tenant_id(item.tenant_ids_.at(i));
+      uint64_t meta_tenant_data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(meta_tenant_id, meta_tenant_data_version))) {
+        LOG_WARN("fail to get min data version", KR(ret), K(meta_tenant_id));
+      } else if (DATA_VERSION_4_2_5_5 > meta_tenant_data_version) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "data_version lower than 4.2.5.5, enable gts_standalone");
+      }
+    }
+    // check unit num enough
+    share::ObUnitTableTransaction unit_trans;
+    ObArray<share::ObResourcePool> pools;
+    ObUnitTableOperator ut_operator;
+    if (FAILEDx(unit_trans.start(&sql_proxy_, OB_SYS_TENANT_ID))) {
+      LOG_WARN("fail to start transaction", K(ret));
+    } else if (OB_FAIL(ut_operator.init(sql_proxy_))) {
+      LOG_WARN("fail to init ut_operator", KR(ret));
+    } else if (OB_FAIL(ut_operator.get_resource_pools(pools))) {
+      LOG_WARN("fail to get pools", KR(ret));
+    } else {
+      FOREACH_CNT_X(pool, pools, OB_SUCC(ret)) {
+        if (pool->is_granted_to_tenant() && pool->unit_count_ < 2
+            && has_exist_in_array(item.tenant_ids_, pool->tenant_id_)) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("pool unit num < 2, can not enable gts_standalone", KR(ret), KPC(pool), K(item));
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "unit_num of one of resource pool is less than 2, "
+              "enable GTS standalone");
+        }
+      }
+    }
+    END_TRANSACTION(unit_trans);
   }
   return ret;
 }

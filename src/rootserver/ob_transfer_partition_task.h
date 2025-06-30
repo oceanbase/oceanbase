@@ -96,8 +96,8 @@ public:
   //构造好每个任务所需要的源端日志流信息
   int build(bool &has_job);
   //加锁构造逻辑任务和物理任务并写入表中
-  int process_in_trans(const share::ObLSStatusInfoIArray &status_info_array,
-      int64_t unit_num, int64_t primary_zone_num,
+  int process_in_trans(
+      const share::ObLSStatusInfoIArray &status_info_array,
       ObMySQLTransaction &trans);
   /*
   * 从按table_id递增顺序数组（table_schema_array）中查找指定分区的tablet_id信息。该函数可以反复调用，用于查找一组分区的tablet_id信息。

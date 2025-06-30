@@ -977,6 +977,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigServerFullSchemaRefreshParallelismChecker);
 };
 
+class ObConfigZoneDeployModeChecker : public ObConfigChecker
+{
+public:
+  static constexpr const char *HETERO_MODE_STR = "HETERO";
+  static constexpr const char *HOMO_MODE_STR = "HOMO";
+  ObConfigZoneDeployModeChecker() {}
+  virtual ~ObConfigZoneDeployModeChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigZoneDeployModeChecker);
+};
 typedef __ObConfigContainer<ObConfigStringKey,
                             ObConfigItem, OB_MAX_CONFIG_NUMBER> ObConfigContainer;
 } // namespace common

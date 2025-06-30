@@ -31,7 +31,11 @@ private:
   int resolve_create_ls_(const ParseNode &parse_tree, ObAlterLSStmt *stmt);
   int resolve_modify_ls_(const ParseNode &parse_tree, ObAlterLSStmt *stmt);
   int resolve_drop_ls_(const ParseNode &parse_tree, ObAlterLSStmt *stmt);
-  int resolve_ls_attr_(const ParseNode &parse_tree, uint64_t &unit_group_id, ObZone &primary_zone);
+  int resolve_ls_attr_(
+      const ParseNode &parse_tree,
+      uint64_t &unit_group_id,
+      ObZone &primary_zone,
+      share::ObAlterLSArg::UnitListArg &unit_list);
 };
 }// namespace sql
 }// namespace oceanbase

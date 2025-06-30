@@ -2107,11 +2107,9 @@ private:
                                   common::ObIArray<uint64_t> &role_id_array,
                                   common::ObIArray<uint64_t> &disable_flag_array);
   int drop_resource_pool_pre(const uint64_t tenant_id,
-                             common::ObIArray<uint64_t> &drop_ug_id_array,
                              ObIArray<share::ObResourcePoolName> &pool_names,
                              ObMySQLTransaction &trans);
   int drop_resource_pool_final(const uint64_t tenant_id,
-                               common::ObIArray<uint64_t> &drop_ug_id_array,
                                ObIArray<share::ObResourcePoolName> &pool_names);
   // private funcs for drop column
   int get_all_dropped_udt_hidden_column_ids(const ObTableSchema &orig_table_schema,
@@ -2630,7 +2628,6 @@ private:
       const common::ObIArray<common::ObZone> &zone_list);
   int modify_and_cal_resource_pool_diff(
       common::ObMySQLTransaction &trans,
-      common::ObIArray<uint64_t> &new_ug_id_array,
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTenantSchema &new_tenant_schema,
       const common::ObIArray<common::ObString> &new_pool_list,

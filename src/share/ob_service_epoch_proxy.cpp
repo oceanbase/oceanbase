@@ -22,6 +22,7 @@
 #include "share/ob_force_print_log.h"
 #include "logservice/palf/log_define.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include "deps/oblib/src/lib/stat/ob_diagnostic_info_guard.h"
 
 namespace oceanbase
 {

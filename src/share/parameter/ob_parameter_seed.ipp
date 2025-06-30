@@ -792,6 +792,10 @@ DEF_INT(ls_scale_out_factor, OB_TENANT_PARAMETER, "1", "[1, 10]",
         "Default value 1. "
         "Range: [1, +∞)]",
         ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_gts_standalone, OB_TENANT_PARAMETER, "False",
+        "Parameters can allow sys LS occupy unit list standalone. "
+        "Value: True: turned on; False: turned off. ",
+        ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(balancer_tolerance_percentage, OB_CLUSTER_PARAMETER, "10", "[1, 100)",
         "specifies the tolerance (in percentage) of the unbalance of the disk space utilization "
         "among all units. The average disk space utilization is calculated by dividing "
@@ -2238,3 +2242,9 @@ DEF_BOOL(_enable_drop_column_instant, OB_TENANT_PARAMETER, "True", "Whether to e
 DEF_BOOL(_enable_routine_call_param_defend, OB_TENANT_PARAMETER, "True",
          "Enable or disable routine call parameter defend.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(zone_deploy_mode, OB_TENANT_PARAMETER, "homo",
+        common::ObConfigZoneDeployModeChecker,
+        "control the zone deploy mode. Can be 'homo' or 'hetero'. "
+        "homo: all zones of tenant resource pools must have the same unit count. "
+        "hetero: the unit count in each zone of tenant resource pools can be different.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

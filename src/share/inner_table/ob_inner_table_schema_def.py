@@ -3551,6 +3551,7 @@ def_table_schema(
     ('init_learner_list', 'longtext', 'true'),
     ('b_init_learner_list', 'longtext', 'true'),
     ('flag', 'varchar:OB_MAX_LS_FLAG_LENGTH', 'false', ''),
+    ('unit_list', 'varchar:MAX_UNIT_LIST_LENGTH','false',''),
     ],
 )
 
@@ -5460,6 +5461,7 @@ def_table_schema(
         ('job_id', 'int', 'false'),
         ('comment', 'longtext', 'true'),
         ('balance_strategy', 'varchar:OB_DEFAULT_STATUS_LENTH', 'true'),
+
     ],
 )
 
@@ -7409,6 +7411,28 @@ def_table_schema(
     ('NODE_NUM',	'bigint unsigned'),
     ('LTS_TIME', 'timestamp:6'),
     ('CLUSTER_ULID', 'varchar:30'),
+  ],
+)
+
+def_table_schema(
+  owner = 'wangzhennan.wzn',
+  table_id = '549',
+  table_name = '__all_balance_job_description',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('job_id',	'int'),
+  ],
+
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+    ('primary_zone_num', 'int', 'false'),
+    ('zone_unit_num_list', 'varchar:MAX_LOCALITY_LENGTH', 'false'),
+    ('parameter_list', 'longtext', 'false'),
   ],
 )
 
@@ -14859,6 +14883,13 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__all_tenant_flashback_log_scn']))
 
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12540',
+  table_name = '__all_virtual_balance_job_description',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_balance_job_description']))
+
+def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12554', all_def_keywords['__all_unit']))
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
 # End of Mysql Virtual Table (10000, 15000]
@@ -15339,6 +15370,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15489', all_def_keyword
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15490', all_def_keywords['__all_object_balance_weight'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15492', all_def_keywords['__all_virtual_wr_sql_plan_aux_key2snapshot'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15502', all_def_keywords['__all_virtual_tenant_flashback_log_scn'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15510', all_def_keywords['__all_virtual_balance_job_description'])))
+def_table_schema(**no_direct_access(gen_sys_agent_virtual_table_def('15524', all_def_keywords['__all_unit'])))
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -19816,7 +19849,7 @@ SELECT A.TENANT_ID,
             ELSE LOG_MODE
         END) AS LOG_MODE,
        ARBITRATION_SERVICE_STATUS,
-       UNIT_NUM,
+       UNIT_NUM, ZONE_UNIT_NUM_LIST,
        COMPATIBLE,
        (CASE
             WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1
@@ -19836,9 +19869,13 @@ LEFT JOIN
                  WHEN TENANT_ID != 1 THEN TENANT_ID - 1
                  ELSE NULL
              END) AS META_TENANT_ID,
-            MIN(UNIT_COUNT) AS UNIT_NUM
-     FROM OCEANBASE.__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT
-     GROUP BY TENANT_ID) AS C
+            MIN(UNIT_COUNT) AS UNIT_NUM,
+            GROUP_CONCAT(ZONE, ':', UNIT_COUNT ORDER BY ZONE SEPARATOR ',') AS ZONE_UNIT_NUM_LIST
+     FROM (SELECT TENANT_ID, ZONE, COUNT(*) UNIT_COUNT FROM (
+           SELECT F.TENANT_ID, G.ZONE FROM OCEANBASE.__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT AS F
+           JOIN OCEANBASE.__ALL_VIRTUAL_UNIT_MYSQL_SYS_AGENT AS G ON F.RESOURCE_POOL_ID = G.RESOURCE_POOL_ID
+           WHERE F.TENANT_ID > 0 AND G.STATUS != 'DELETING')
+           GROUP BY TENANT_ID, ZONE) GROUP BY TENANT_ID) AS C
     ON A.TENANT_ID = C.TENANT_ID OR A.TENANT_ID = C.META_TENANT_ID
 LEFT JOIN
     (SELECT TENANT_ID,
@@ -28531,7 +28568,8 @@ def_table_schema(
                 WHEN (A.TENANT_ID & 0x1) = 1 THEN NULL
                 ELSE B.READABLE_SCN
             END) AS READABLE_SCN,
-            FLAG
+            FLAG,
+            A.UNIT_LIST
     FROM OCEANBASE.__ALL_VIRTUAL_LS_STATUS AS A
          JOIN OCEANBASE.__ALL_VIRTUAL_LS_RECOVERY_STAT AS B
          JOIN OCEANBASE.__ALL_VIRTUAL_LS_ELECTION_REFERENCE_INFO AS C
@@ -28582,7 +28620,8 @@ def_table_schema(
                 WHEN (A.TENANT_ID & 0x1) = 1 THEN NULL
                 ELSE B.READABLE_SCN
             END) AS READABLE_SCN,
-            FLAG
+            FLAG,
+            A.UNIT_LIST
     FROM OCEANBASE.__ALL_VIRTUAL_LS_STATUS AS A
          JOIN OCEANBASE.__ALL_VIRTUAL_LS_RECOVERY_STAT AS B
          JOIN OCEANBASE.__ALL_VIRTUAL_LS_ELECTION_REFERENCE_INFO AS C
@@ -32002,17 +32041,27 @@ def_table_schema(
   in_tenant_space = True,
   view_definition =
   """
-  SELECT JOB_ID,
-         GMT_CREATE AS CREATE_TIME,
-         GMT_MODIFIED AS MODIFY_TIME,
-         BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,
-         JOB_TYPE,
-         TARGET_UNIT_NUM,
-         TARGET_PRIMARY_ZONE_NUM,
-         STATUS,
-         COMMENT,
-         MAX_END_TIME
-  FROM OCEANBASE.__ALL_BALANCE_JOB
+  SELECT A.JOB_ID,
+         A.GMT_CREATE AS CREATE_TIME,
+         A.GMT_MODIFIED AS MODIFY_TIME,
+         A.BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,
+         A.JOB_TYPE,
+         CASE WHEN A.TARGET_UNIT_NUM = -1
+              THEN NULL
+              ELSE A.TARGET_UNIT_NUM
+         END AS TARGET_UNIT_NUM,
+         CASE WHEN A.TARGET_PRIMARY_ZONE_NUM = -1
+              THEN B.PRIMARY_ZONE_NUM
+              ELSE A.TARGET_PRIMARY_ZONE_NUM
+         END AS TARGET_PRIMARY_ZONE_NUM,
+         A.STATUS,
+         A.COMMENT,
+         A.MAX_END_TIME,
+         B.ZONE_UNIT_NUM_LIST,
+         B.PARAMETER_LIST
+  FROM OCEANBASE.__ALL_BALANCE_JOB A
+  LEFT JOIN OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION B
+  ON A.JOB_ID = B.JOB_ID AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
   """.replace("\n", " "),
 )
 
@@ -32027,18 +32076,28 @@ def_table_schema(
   normal_columns  = [],
   view_definition =
   """
-  SELECT TENANT_ID,
-         JOB_ID,
-         GMT_CREATE AS CREATE_TIME,
-         GMT_MODIFIED AS MODIFY_TIME,
-         BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,
-         JOB_TYPE,
-         TARGET_UNIT_NUM,
-         TARGET_PRIMARY_ZONE_NUM,
-         STATUS,
-         COMMENT,
-         MAX_END_TIME
-  FROM OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB
+  SELECT A.TENANT_ID,
+         A.JOB_ID,
+         A.GMT_CREATE AS CREATE_TIME,
+         A.GMT_MODIFIED AS MODIFY_TIME,
+         A.BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,
+         A.JOB_TYPE,
+         CASE WHEN A.TARGET_UNIT_NUM = -1
+              THEN NULL
+              ELSE A.TARGET_UNIT_NUM
+         END AS TARGET_UNIT_NUM,
+         CASE WHEN A.TARGET_PRIMARY_ZONE_NUM = -1
+              THEN B.PRIMARY_ZONE_NUM
+              ELSE A.TARGET_PRIMARY_ZONE_NUM
+         END AS TARGET_PRIMARY_ZONE_NUM,
+         A.STATUS,
+         A.COMMENT,
+         A.MAX_END_TIME,
+         B.ZONE_UNIT_NUM_LIST,
+         B.PARAMETER_LIST
+  FROM OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB A
+  LEFT JOIN OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION B
+  ON A.TENANT_ID = B.TENANT_ID AND A.JOB_ID = B.JOB_ID
   """.replace("\n", " "),
 )
 # 21407: DBA_OB_BALANCE_JOB_HISTORY
@@ -32053,17 +32112,27 @@ def_table_schema(
   in_tenant_space = True,
   view_definition =
   """
-  SELECT JOB_ID,
-         CREATE_TIME,
-         FINISH_TIME,
-         BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,
-         JOB_TYPE,
-         TARGET_UNIT_NUM,
-         TARGET_PRIMARY_ZONE_NUM,
-         STATUS,
-         COMMENT,
-         MAX_END_TIME
-  FROM OCEANBASE.__ALL_BALANCE_JOB_HISTORY
+  SELECT A.JOB_ID,
+         A.CREATE_TIME,
+         A.FINISH_TIME,
+         A.BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,
+         A.JOB_TYPE,
+         CASE WHEN A.TARGET_UNIT_NUM = -1
+              THEN NULL
+              ELSE A.TARGET_UNIT_NUM
+         END AS TARGET_UNIT_NUM,
+         CASE WHEN A.TARGET_PRIMARY_ZONE_NUM = -1
+              THEN B.PRIMARY_ZONE_NUM
+              ELSE A.TARGET_PRIMARY_ZONE_NUM
+         END AS TARGET_PRIMARY_ZONE_NUM,
+         A.STATUS,
+         A.COMMENT,
+         A.MAX_END_TIME,
+         B.ZONE_UNIT_NUM_LIST,
+         B.PARAMETER_LIST
+  FROM OCEANBASE.__ALL_BALANCE_JOB_HISTORY A
+  LEFT JOIN OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION B
+  ON A.JOB_ID = B.JOB_ID AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
   """.replace("\n", " "),
 )
 # 21408: CDB_OB_BALANCE_JOB_HISTORY
@@ -32077,18 +32146,28 @@ def_table_schema(
   normal_columns  = [],
   view_definition =
   """
-  SELECT TENANT_ID,
-         JOB_ID,
-         CREATE_TIME,
-         FINISH_TIME,
-         BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,
-         JOB_TYPE,
-         TARGET_UNIT_NUM,
-         TARGET_PRIMARY_ZONE_NUM,
-         STATUS,
-         COMMENT,
-         MAX_END_TIME
-  FROM OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB_HISTORY
+  SELECT A.TENANT_ID,
+         A.JOB_ID,
+         A.CREATE_TIME,
+         A.FINISH_TIME,
+         A.BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,
+         A.JOB_TYPE,
+         CASE WHEN A.TARGET_UNIT_NUM = -1
+              THEN NULL
+              ELSE A.TARGET_UNIT_NUM
+         END AS TARGET_UNIT_NUM,
+         CASE WHEN A.TARGET_PRIMARY_ZONE_NUM = -1
+              THEN B.PRIMARY_ZONE_NUM
+              ELSE A.TARGET_PRIMARY_ZONE_NUM
+         END AS TARGET_PRIMARY_ZONE_NUM,
+         A.STATUS,
+         A.COMMENT,
+         A.MAX_END_TIME,
+         B.ZONE_UNIT_NUM_LIST,
+         B.PARAMETER_LIST
+  FROM OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB_HISTORY A
+  LEFT JOIN OCEANBASE.__ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION B
+  ON A.TENANT_ID = B.TENANT_ID AND A.JOB_ID = B.JOB_ID
   """.replace("\n", " "),
 )
 # 21409: DBA_OB_BALANCE_TASKS
@@ -54837,7 +54916,7 @@ SELECT A.TENANT_ID,
             ELSE LOG_MODE
         END) AS LOG_MODE,
        ARBITRATION_SERVICE_STATUS,
-       UNIT_NUM,
+       UNIT_NUM, ZONE_UNIT_NUM_LIST,
        COMPATIBLE,
        (CASE
             WHEN (MOD(A.TENANT_ID, 2)) = 1 THEN 1
@@ -54857,9 +54936,13 @@ LEFT JOIN
                  WHEN TENANT_ID != 1 THEN TENANT_ID - 1
                  ELSE NULL
              END) AS META_TENANT_ID,
-            MIN(UNIT_COUNT) AS UNIT_NUM
-     FROM SYS.ALL_VIRTUAL_RESOURCE_POOL_SYS_AGENT
-     GROUP BY TENANT_ID) C
+            MIN(UNIT_COUNT) AS UNIT_NUM,
+            LISTAGG(ZONE || ':' || UNIT_COUNT, ',') WITHIN GROUP (ORDER BY ZONE) AS ZONE_UNIT_NUM_LIST
+     FROM (SELECT TENANT_ID, ZONE, COUNT(*) UNIT_COUNT FROM (
+           SELECT F.TENANT_ID, G.ZONE FROM SYS.ALL_VIRTUAL_RESOURCE_POOL_SYS_AGENT F
+           JOIN SYS.ALL_VIRTUAL_UNIT_SYS_AGENT G ON F.RESOURCE_POOL_ID = G.RESOURCE_POOL_ID
+           WHERE F.TENANT_ID > 0 AND G.STATUS != 'DELETING')
+           GROUP BY TENANT_ID, ZONE) GROUP BY TENANT_ID) C
     ON A.TENANT_ID = C.TENANT_ID OR A.TENANT_ID = C.META_TENANT_ID
 LEFT JOIN
     (SELECT TENANT_ID,
@@ -55975,17 +56058,27 @@ def_table_schema(
   in_tenant_space = True,
   view_definition =
   """
-  SELECT JOB_ID,
-         GMT_CREATE AS CREATE_TIME,
-         GMT_MODIFIED AS MODIFY_TIME,
-         BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,
-         JOB_TYPE,
-         TARGET_UNIT_NUM,
-         TARGET_PRIMARY_ZONE_NUM,
-         STATUS,
-         "COMMENT",
-         MAX_END_TIME
-  FROM SYS.ALL_VIRTUAL_BALANCE_JOB_REAL_AGENT
+  SELECT A.JOB_ID,
+         A.GMT_CREATE AS CREATE_TIME,
+         A.GMT_MODIFIED AS MODIFY_TIME,
+         A.BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,
+         A.JOB_TYPE,
+         CASE WHEN A.TARGET_UNIT_NUM = -1
+              THEN NULL
+              ELSE A.TARGET_UNIT_NUM
+         END AS TARGET_UNIT_NUM,
+         CASE WHEN A.TARGET_PRIMARY_ZONE_NUM = -1
+              THEN B.PRIMARY_ZONE_NUM
+              ELSE A.TARGET_PRIMARY_ZONE_NUM
+         END AS TARGET_PRIMARY_ZONE_NUM,
+         A.STATUS,
+         A."COMMENT",
+         A.MAX_END_TIME,
+         B.ZONE_UNIT_NUM_LIST,
+         B.PARAMETER_LIST
+  FROM SYS.ALL_VIRTUAL_BALANCE_JOB_REAL_AGENT A
+  LEFT JOIN SYS.ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION B
+  ON A.JOB_ID = B.JOB_ID AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
   """.replace("\n", " "),
 )
 # 25238:  DBA_OB_BALANCE_JOB_HISTORY
@@ -56002,17 +56095,27 @@ def_table_schema(
   in_tenant_space = True,
   view_definition =
   """
-  SELECT JOB_ID,
-         CREATE_TIME,
-         FINISH_TIME,
-         BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,
-         JOB_TYPE,
-         TARGET_UNIT_NUM,
-         TARGET_PRIMARY_ZONE_NUM,
-         STATUS,
-         "COMMENT",
-         MAX_END_TIME
-  FROM SYS.ALL_VIRTUAL_BALANCE_JOB_HISTORY_REAL_AGENT
+  SELECT A.JOB_ID,
+         A.CREATE_TIME,
+         A.FINISH_TIME,
+         A.BALANCE_STRATEGY_NAME AS BALANCE_STRATEGY,
+         A.JOB_TYPE,
+         CASE WHEN A.TARGET_UNIT_NUM = -1
+              THEN NULL
+              ELSE A.TARGET_UNIT_NUM
+         END AS TARGET_UNIT_NUM,
+         CASE WHEN A.TARGET_PRIMARY_ZONE_NUM = -1
+              THEN B.PRIMARY_ZONE_NUM
+              ELSE A.TARGET_PRIMARY_ZONE_NUM
+         END AS TARGET_PRIMARY_ZONE_NUM,
+         A.STATUS,
+         A."COMMENT",
+         A.MAX_END_TIME,
+         B.ZONE_UNIT_NUM_LIST,
+         B.PARAMETER_LIST
+  FROM SYS.ALL_VIRTUAL_BALANCE_JOB_HISTORY_REAL_AGENT A
+  LEFT JOIN SYS.ALL_VIRTUAL_BALANCE_JOB_DESCRIPTION B
+  ON A.JOB_ID = B.JOB_ID AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
   """.replace("\n", " "),
 )
 # 25239:  DBA_OB_BALANCE_TASKS
@@ -63587,7 +63690,8 @@ def_table_schema(
                 WHEN BITAND(A.TENANT_ID, 1) = 1 THEN NULL
                 ELSE CAST(B.READABLE_SCN AS NUMBER)
             END) AS READABLE_SCN,
-            FLAG
+            A.FLAG,
+            A.UNIT_LIST
     FROM SYS.ALL_VIRTUAL_LS_STATUS A
          JOIN SYS.ALL_VIRTUAL_LS_RECOVERY_STAT B
               ON A.TENANT_ID = B.TENANT_ID AND A.LS_ID = B.LS_ID

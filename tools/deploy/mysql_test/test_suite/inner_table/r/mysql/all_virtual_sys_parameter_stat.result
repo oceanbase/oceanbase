@@ -95,6 +95,7 @@ enable_dblink
 enable_ddl
 enable_early_lock_release
 enable_global_background_resource_isolation
+enable_gts_standalone
 enable_kv_ttl
 enable_lock_priority
 enable_major_freeze
@@ -288,6 +289,7 @@ workers_per_cpu_quota
 writing_throttling_maximum_duration
 writing_throttling_trigger_percentage
 zone
+zone_deploy_mode
 _adaptive_join_enabled
 _advance_checkpoint_timeout
 _allow_skip_replay_redo_after_detete_tablet

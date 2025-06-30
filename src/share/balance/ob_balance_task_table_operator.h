@@ -47,6 +47,7 @@ namespace share
 class ObBalanceJobStatus;
 class ObBalanceStrategy;
 class ObDMLSqlSplicer;
+
 #define IS_BALANCE_TASK(BALANCE_TASK, BALANCE)\
   bool is_##BALANCE()const { return BALANCE_TASK == val_;}
 class ObBalanceTaskStatus
