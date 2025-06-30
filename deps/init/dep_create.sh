@@ -131,6 +131,10 @@ function get_os_release() {
         version_ge "8.0" && OS_RELEASE=8 && return
         version_ge "7.0" && OS_RELEASE=7 && return
         ;;
+      rocky)
+        version_ge "8.0" && OS_RELEASE=8 && return
+        version_ge "7.0" && OS_RELEASE=7 && return
+        ;;
       debian)
         version_ge "12" && compat_centos9 && return
         version_ge "9" && compat_centos7 && return
