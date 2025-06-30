@@ -108,6 +108,7 @@ install(FILES
   src/sql/fill_help_tables-ob.sql
   src/share/parameter/default_parameter.json
   src/share/system_variable/default_system_variable.json
+  src/share/system_variable/ob_system_variable_init.json
   tools/timezone_V1.log
   tools/timezone.data
   tools/timezone_name.data
