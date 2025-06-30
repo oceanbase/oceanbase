@@ -738,6 +738,8 @@ DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_PARALLEL_HTABLE_DDL, ObRpcParallelHTa
 
 // sensitive rule
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_SENSITIVE_RULE_DDL, ObRpcHandleSensitiveRuleDDLP, handle_sensitive_rule_ddl(arg_));
+// for ob_admin
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FORCE_DROP_LONELY_LOB_AUX_TABLE, ObForceDropLonelyLobAuxTableP, force_drop_lonely_lob_aux_table(arg_));
 
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR

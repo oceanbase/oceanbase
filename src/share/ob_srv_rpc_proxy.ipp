@@ -280,3 +280,4 @@
   RPC_S(PR5 estimate_skip_rate, OB_ESTIMATE_SKIP_RATE, (obrpc::ObEstSkipRateArg), ObEstSkipRateRes);
   RPC_S(PR5 check_nested_mview_mds, OB_CHECK_NESTED_MVIEW_MDS, (obrpc::ObCheckNestedMViewMdsArg), obrpc::ObCheckNestedMViewMdsRes);
   RPC_AP(PRZ load_tenant_table_schema, OB_LOAD_TENANT_TABLE_SCHEMA, (obrpc::ObLoadTenantTableSchemaArg));
+  RPC_S(PR5 force_drop_lonely_lob_aux_table, OB_ADMIN_FORCE_DROP_LONELY_LOB_AUX_TABLE, (obrpc::ObForceDropLonelyLobAuxTableArg));

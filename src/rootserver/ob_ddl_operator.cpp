@@ -5045,7 +5045,8 @@ int ObDDLOperator::drop_table(
     const bool is_truncate_table/*false*/,
     DropTableIdHashSet *drop_table_set/*=NULL*/,
     const bool is_drop_db/*false*/,
-    const bool delete_priv)
+    const bool delete_priv,
+    const bool is_force_drop_lonely_lob_aux_table /*false*/)
 {
   int ret = OB_SUCCESS;
   bool tmp = false;
@@ -5055,7 +5056,7 @@ int ObDDLOperator::drop_table(
     LOG_WARN("failed to modify obj status", K(ret));
   } else if (OB_FAIL(drop_table_for_not_dropped_schema(
               table_schema, trans, ddl_stmt_str, is_truncate_table,
-              drop_table_set, is_drop_db, delete_priv))) {
+              drop_table_set, is_drop_db, delete_priv, is_force_drop_lonely_lob_aux_table))) {
     LOG_WARN("drop table for not dropped shema failed", K(ret));
   } else if (table_schema.is_view_table()
             && OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(
@@ -5129,7 +5130,8 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
     const bool is_truncate_table/*false*/,
     DropTableIdHashSet *drop_table_set/*=NULL*/,
     const bool is_drop_db/*false*/,
-    const bool delete_priv)
+    const bool delete_priv,
+    const bool is_force_drop_lonely_lob_aux_table /*false*/)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
@@ -5170,6 +5172,7 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
                      ddl_stmt_str,
                      is_truncate_table,
                      is_drop_db,
+                     is_force_drop_lonely_lob_aux_table,
                      &schema_guard,
                      drop_table_set))) {
     LOG_WARN("schema_service_impl drop_table failed", K(table_schema), K(ret));

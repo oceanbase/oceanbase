@@ -815,6 +815,7 @@ int ObTableSqlService::drop_table(const ObTableSchema &table_schema,
                                   const ObString *ddl_stmt_str/*=NULL*/,
                                   bool is_truncate_table /*false*/,
                                   bool is_drop_db /*false*/,
+                                  bool is_force_drop_lonely_lob_aux_table /*false*/,
                                   ObSchemaGetterGuard *schema_guard /*=NULL*/,
                                   DropTableIdHashSet *drop_table_set/*=NULL*/)
 {
@@ -925,7 +926,27 @@ int ObTableSqlService::drop_table(const ObTableSchema &table_schema,
     if (OB_FAIL(log_operation_wrapper(opt, sql_client))) {
       LOG_WARN("log operation failed", K(opt), K(ret));
     } else {
-      if (table_schema.is_index_table()
+      if (is_force_drop_lonely_lob_aux_table) {
+        // Due to some bugs, the lob aux table was not deleted along with the main table。
+        // which would affect some features, such as load balancing.
+        // Therefore, a way needs to be provided to force the deletion of the lob aux table.
+        // However, since the main table corresponding to the lob aux table has already been deleted
+        // the schema_version of the main table cannot be updated. Thus, this step needs to be skipped.
+        // But for safety, we try to update it, but the expectation was to fail.
+        if (table_schema.is_aux_lob_table()) {
+          ret = update_data_table_schema_version(sql_client, tenant_id, table_schema.get_data_table_id(), table_schema.get_in_offline_ddl_white_list());
+          if (OB_TABLE_NOT_EXIST != ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("is_force_drop_lonely_lob_aux_table is true, but update_data_table_schema_version success ", K(table_schema));
+          } else {
+            ret = OB_SUCCESS;
+            LOG_ERROR("is_force_drop_lonely_lob_aux_table, skip update data table schema version", K(table_schema));
+          }
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_ERROR("is_force_drop_lonely_lob_aux_table is true, but not drop lob aux table", K(table_schema));
+        }
+      } else if (table_schema.is_index_table()
           || table_schema.is_aux_vp_table()
           || table_schema.is_aux_lob_table()
           || table_schema.is_mlog_table()) {

@@ -5,6 +5,7 @@ ob_set_subtarget(ob_rootserver ALONE
   ddl_task/ob_ddl_redefinition_task.cpp
   ob_unit_manager.cpp
   ob_heartbeat_service.cpp
+  ob_lonely_table_cleaner.cpp
 )
 
 ob_set_subtarget(ob_rootserver backup

@@ -301,4 +301,5 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
 
     // sensitive rule
     RPC_PROCESSOR(rootserver::ObRpcHandleSensitiveRuleDDLP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObForceDropLonelyLobAuxTableP, *gctx_.root_service_);
 }

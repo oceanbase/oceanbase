@@ -320,3 +320,4 @@
   //----Definitions for sensitive rule----
   RPC_S(PRD handle_sensitive_rule_ddl, obrpc::OB_HANDLE_SENSITIVE_RULE_DDL, (ObSensitiveRuleDDLArg));
   //----End of definitions for sensitive rule----
+  RPC_S(PRD force_drop_lonely_lob_aux_table, OB_FORCE_DROP_LONELY_LOB_AUX_TABLE, (obrpc::ObForceDropLonelyLobAuxTableArg));

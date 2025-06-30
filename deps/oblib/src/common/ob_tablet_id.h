@@ -89,6 +89,11 @@ public:
         || ((is_sys_tenant(tenant_id) || is_user_tenant(tenant_id)) && is_valid());
   }
 
+  bool belong_to_sys_ls(const uint64_t tenant_id) const
+  {
+    return is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id) || is_sys_tablet();
+  }
+
   bool is_user_normal_rowid_table_tablet() const
   {
     return MIN_USER_NORMAL_ROWID_TABLE_TABLET_ID < id_

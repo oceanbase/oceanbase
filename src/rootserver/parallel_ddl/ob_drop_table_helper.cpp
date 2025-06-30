@@ -1554,6 +1554,7 @@ int ObDropTableHelper::drop_table_(const ObTableSchema &table_schema, const ObSt
                        ddl_stmt_str,
                        false/*is_truncate_table*/,
                        false/*is_drop_db*/,
+                       false/*is_force_drop_lonely_lob_aux_table*/,
                        NULL/*schema_guard*/,
                        &drop_table_ids_))) {
       LOG_WARN("fail to drop table", KR(ret), K_(tenant_id), K(table_schema));
