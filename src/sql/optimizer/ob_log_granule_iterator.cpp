@@ -227,6 +227,7 @@ int ObLogGranuleIterator::check_adaptive_task_splitting(ObLogTableScan *tsc)
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   bool exist_deadlock_condition = false;
   if (!ENABLE_PX_TASK_REBALANCE) {
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_3) {
   } else if (!tenant_config.is_valid() || !tenant_config->_enable_px_task_rebalance) {
   } else if (!ObGranuleUtil::can_resplit_gi_task(gi_attri_flag_)) {
   } else if (is_rescanable()) {
@@ -246,7 +247,12 @@ int ObLogGranuleIterator::check_adaptive_task_splitting(ObLogTableScan *tsc)
     bool is_table_get = false;
     // pre_graph maybe null
     const ObQueryRangeProvider *pre_graph = tsc->get_pre_graph();
-    if (tsc->get_index_back()) {
+    if (tsc->get_scan_order() == common::ObQueryFlag::ScanOrder::NoOrder) {
+      // not support for delete insert noorder scan
+    } else if (!tsc->get_pushdown_aggr_exprs().empty()
+               || !tsc->get_pushdown_groupby_columns().empty()) {
+      // not support for aggregate/group by push down
+    } else if (tsc->get_index_back()) {
       // not support for index back
     } else if (tsc->use_das()) {
       // not support das split

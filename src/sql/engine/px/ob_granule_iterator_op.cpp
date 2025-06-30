@@ -1022,6 +1022,18 @@ int ObGranuleIteratorOp::try_get_rows(const int64_t max_row_cnt)
           if (brs->size_ > 0) {
             got_next_row = true;
           }
+          if (enable_adaptive_task_splitting() && OB_UNLIKELY(GIForcePauseInterval)) {
+            ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
+            batch_info_guard.set_batch_size(brs_.size_);
+            for (int64_t i = brs_.size_ - 1; i >= 0; --i) {
+              if (!brs_.skip_->at(i)) {
+                batch_info_guard.set_batch_idx(i);
+                LOG_INFO("[Adaptive Task Splitting] print last row before pause", K(i),
+                       K(ObToStringExprRow(eval_ctx_, spec_.output_)));
+                break;
+              }
+            }
+          }
           if (brs->end_) {
             brs_.end_ = false;
             state_ = GI_GET_NEXT_GRANULE_TASK;

@@ -2109,8 +2109,6 @@ int ObMultipleMerge::is_paused(bool& do_pause) const
   } else if (OB_UNLIKELY(!is_scan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get cannot be paused");
-  } else if (access_param_->iter_param_.enable_pd_group_by() || access_param_->iter_param_.enable_pd_aggregate()) {
-    // no need to pause
   } else if (ScanState::NONE == scan_state_) {
   } else if (ScanState::DI_BASE == scan_state_) {
     // not supported
