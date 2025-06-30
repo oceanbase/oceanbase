@@ -71,6 +71,7 @@
 #include "storage/shared_storage/prewarm/ob_replica_prewarm_struct.h"
 #endif
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
+#include "share/config/ob_common_config.h"
 #include "lib/roaringbitmap/ob_rb_memory_mgr.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/audit/ob_audit_log_mgr.h"
@@ -2385,29 +2386,10 @@ int ObServer::init_pre_setting()
 
   // oblog configuration
   if (OB_SUCC(ret)) {
-    const int max_log_cnt = static_cast<int32_t>(config_.max_syslog_file_count);
-    const bool record_old_log_file = config_.enable_syslog_recycle;
-    const bool log_warn = config_.enable_syslog_wf;
-    const bool enable_async_syslog = config_.enable_async_syslog;
-    const int64_t max_disk_size = config_.syslog_disk_size;
-    const int64_t min_uncompressed_count = config_.syslog_file_uncompressed_count;
-    const char *compress_func_ptr = config_.syslog_compress_func.str();
-    OB_LOGGER.set_max_file_index(max_log_cnt);
-    OB_LOGGER.set_record_old_log_file(record_old_log_file);
-    LOG_INFO("Whether record old log file", K(record_old_log_file));
-    OB_LOGGER.set_log_warn(log_warn);
-    LOG_INFO("Whether log warn", K(log_warn));
-    OB_LOGGER.set_enable_async_log(enable_async_syslog);
-    OB_LOG_COMPRESSOR.set_max_disk_size(max_disk_size);
-    LOG_INFO("Whether compress syslog file", K(compress_func_ptr));
-    OB_LOG_COMPRESSOR.set_compress_func(compress_func_ptr);
-    OB_LOG_COMPRESSOR.set_min_uncompressed_count(min_uncompressed_count);
-    LOG_INFO("init log config", K(record_old_log_file), K(log_warn), K(enable_async_syslog),
-             K(max_disk_size), K(compress_func_ptr), K(min_uncompressed_count));
-    if (0 == max_log_cnt) {
-      LOG_INFO("won't recycle log file");
+    if (OB_FAIL(ObConfigManager::ob_logger_config_update(config_))) {
+      LOG_WARN("ob_logger_config_update failed", KR(ret));
     } else {
-      LOG_INFO("recycle log file", "count", max_log_cnt);
+      LOG_INFO("oblog config update success");
     }
   }
 
