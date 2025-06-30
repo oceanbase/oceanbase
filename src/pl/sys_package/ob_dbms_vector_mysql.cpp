@@ -444,11 +444,11 @@ int ObDBMSVectorMySql::get_estimate_memory_str(ObVectorIndexParam index_param,
       if (OB_FAIL(ObVectorIndexUtil::estimate_hnsw_memory(num_vectors, index_param, estimate_mem))) {
         LOG_WARN("failed to estimate hnsw vector index memory", K(num_vectors), K(index_param));
       } else if (num_vectors == tablet_max_num_vectors) {
-        suggested_mem = estimate_mem + num_vectors * index_param.dim_ * sizeof(float);
+        suggested_mem = estimate_mem + num_vectors * index_param.dim_ * sizeof(float) * VEC_ESTIMATE_MEMORY_FACTOR;
       } else if (OB_FAIL(ObVectorIndexUtil::estimate_hnsw_memory(tablet_max_num_vectors, index_param, max_tablet_mem))) {
         LOG_WARN("failed to estimate hnsw vector index memory", K(num_vectors), K(index_param));
       } else {
-        suggested_mem = max_tablet_mem + tablet_max_num_vectors * index_param.dim_ * sizeof(float) + estimate_mem;
+        suggested_mem = max_tablet_mem + tablet_max_num_vectors * index_param.dim_ * sizeof(float) * VEC_ESTIMATE_MEMORY_FACTOR + estimate_mem;
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(res_buf.append(ObString("Suggested minimum vector memory is "), 0))) {
@@ -466,20 +466,18 @@ int ObDBMSVectorMySql::get_estimate_memory_str(ObVectorIndexParam index_param,
     case ObVectorIndexAlgorithmType::VIAT_IVF_SQ8:
     case ObVectorIndexAlgorithmType::VIAT_IVF_PQ: {
       uint64_t suggested_mem = 0;
-      uint64_t estimate_mem = 0;
-      uint64_t peak_mem = 0;
-      if (OB_FAIL(ObVectorIndexUtil::estimate_ivf_peak_memory(num_vectors, index_param, peak_mem))) {
-        LOG_WARN("failed to estimate ivf vector index peak memory", K(num_vectors), K(index_param));
-      } else if (OB_FAIL(ObVectorIndexUtil::estimate_ivf_memory(num_vectors, index_param, estimate_mem))) {
+      uint64_t buff_mem = 0;
+      uint64_t construct_mem = 0;
+      if (OB_FAIL(ObVectorIndexUtil::estimate_ivf_memory(num_vectors, index_param, construct_mem, buff_mem))) {
         LOG_WARN("failed to estimate ivf vector index memory", K(num_vectors), K(index_param));
-      } else if (OB_FALSE_IT(suggested_mem = peak_mem + estimate_mem)) {
+      } else if (OB_FALSE_IT(suggested_mem = construct_mem + buff_mem)) {
       } else if (OB_FAIL(res_buf.append(ObString("Suggested minimum vector memory is "), 0))) {
         LOG_WARN("failed to append to buffer", K(ret));
       } else if (OB_FAIL(print_mem_size(suggested_mem, res_buf))) {
         LOG_WARN("failed to append memory size", K(ret));
       } else if (OB_FAIL(res_buf.append(ObString(", memory consumption when providing search service is "), 0))) {
         LOG_WARN("failed to append to buffer", K(ret));
-      } else if (OB_FAIL(print_mem_size(estimate_mem, res_buf))) {
+      } else if (OB_FAIL(print_mem_size(buff_mem, res_buf))) {
         LOG_WARN("failed to append memory size", K(ret));
       }
       break;

@@ -4476,35 +4476,25 @@ int ObVectorIndexUtil::estimate_hnsw_memory(uint64_t num_vectors,
 
 int ObVectorIndexUtil::estimate_ivf_memory(uint64_t num_vectors,
                                            const ObVectorIndexParam &param,
-                                           uint64_t &est_mem)
+                                           uint64_t &construct_mem,
+                                           uint64_t &buff_mem)
 {
   int ret = OB_SUCCESS;
-  int64_t nlist = num_vectors < param.nlist_ ? num_vectors : param.nlist_;
+  int64_t nlist = MIN(num_vectors, param.nlist_);
+  uint64_t sample_cnt = MIN(num_vectors, param.sample_per_nlist_ * nlist);
   if (param.type_ == VIAT_IVF_SQ8 || param.type_ == VIAT_IVF_FLAT) {
-    est_mem = sizeof(float) * nlist * param.dim_;
+    buff_mem = sizeof(float) * nlist * param.dim_;
+    construct_mem = 4 * sample_cnt * (7 + nlist + param.dim_) + nlist * 4 * (5 + nlist + 2 * param.dim_);
   } else if (param.type_ == VIAT_IVF_PQ) {
-    est_mem = sizeof(float) * nlist * param.dim_ * 2;
+    uint64_t ksub = MIN(num_vectors, 1L << param.nbits_);
+    uint64_t pq_sample_cnt = MIN(num_vectors, ksub * param.sample_per_nlist_);
+    buff_mem = sizeof(float) * param.dim_ * (ksub + nlist) + sizeof(float) * nlist * ksub * param.m_;
+    uint64_t ivf_construct = 4 * sample_cnt * (7 + nlist + param.dim_) + nlist * 4 * (5 + nlist + 2 * param.dim_);
+    uint64_t pq_construct = sizeof(float) * pq_sample_cnt * (param.dim_ + 2) + pq_sample_cnt * 4 * (5 + ksub) + ksub * 4 * (5 + ksub);
+    construct_mem = MAX(ivf_construct, pq_construct);
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ivf algorithm type", K(ret), K(param));
-  }
-
-  return ret;
-}
-
-int ObVectorIndexUtil::estimate_ivf_peak_memory(uint64_t num_vectors,
-                                                const ObVectorIndexParam &param,
-                                                uint64_t &est_mem)
-{
-  int ret = OB_SUCCESS;
-  int64_t nlist = num_vectors < param.nlist_ ? num_vectors : param.nlist_;
-  if (param.type_ != VIAT_IVF_SQ8 &&
-      param.type_ != VIAT_IVF_FLAT &&
-      param.type_ != VIAT_IVF_PQ) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid ivf algorithm type", K(ret), K(param));
-  } else {
-    est_mem = sizeof(float) * nlist * param.sample_per_nlist_ * param.dim_;
   }
   return ret;
 }
