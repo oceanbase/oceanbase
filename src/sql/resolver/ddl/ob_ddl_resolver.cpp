@@ -6190,7 +6190,8 @@ int ObDDLResolver::resolve_part_func(ObResolverParams &params,
     bool is_h_t = false;
     if (OB_FAIL(table_schema.is_hbase_table(is_h_t))) {
       LOG_WARN("failed to check is hbase table", K(ret));
-    } else if (is_h_t && OB_FAIL(verify_hbase_table_part_keys(partition_keys))) {
+    } else if (is_h_t && (PARTITION_LEVEL_ONE == table_schema.get_part_level() || PARTITION_LEVEL_ZERO == table_schema.get_part_level())
+        && OB_FAIL(verify_hbase_table_part_keys(partition_keys))) {
       LOG_WARN("failed to verify hbase table part keys", K(ret), K(table_schema.get_partition_key_info()));
     }
   }
