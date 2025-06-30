@@ -21,6 +21,7 @@
 #include "storage/blocksstable/ob_storage_object_rw_info.h"
 #include "storage/shared_storage/ob_ss_reader_writer.h"
 #include "storage/shared_storage/ob_ss_micro_cache.h"
+#include "storage/shared_storage/ob_file_manager.h"
 #include "lib/random/ob_random.h"
 #include "lib/compress/ob_compress_util.h"
 
@@ -69,11 +70,15 @@ public:
   static int prepare_micro_blocks(const int64_t macro_block_cnt, const int64_t block_size,
       ObArray<MicroBlockInfo> &micro_block_arr, const int64_t start_macro_id = 1, const bool random_micro_size = true,
       const int32_t min_micro_size = 16 * 1024, const int32_t max_micro_size = 16 * 1024);
+  static int add_micro_blocks(const int64_t macro_block_cnt, const int64_t block_size,
+      ObArray<MicroBlockInfo> &micro_block_arr, const int64_t start_macro_id = 1, const bool random_micro_size = true,
+      const int32_t min_micro_size = 16 * 1024, const int32_t max_micro_size = 16 * 1024);
   static int get_micro_block(const MicroBlockInfo &micro_info, char *read_buf);
   static int init_io_info(ObIOInfo &io_info, const ObSSMicroBlockCacheKey &micro_key, const int32_t size, char *read_buf);
   static int clear_micro_cache(ObSSMicroMetaManager *micro_meta_mgr, ObSSPhysicalBlockManager *phy_blk_mgr,
                                ObSSMicroRangeManager *micro_range_mgr, int64_t &micro_data_blk_cnt,
                                int64_t &range_micro_sum);
+  static int restart_micro_cache(ObSSMicroCache *micro_cache, const uint64_t tenant_id, const int64_t cache_file_size, const uint32_t ckpt_split_cnt);
   static void stop_all_bg_task(ObSSMicroCache *micro_cache);
   static void resume_all_bg_task(ObSSMicroCache *micro_cache);
   static int64_t get_prev_micro_ckpt_time_us() { return ObTimeUtility::current_time_us() - SS_PERSIST_META_INTERVAL_US + DIFF_CKPT_TIME_US; }
@@ -229,19 +234,19 @@ int TestSSCommonUtil::prepare_micro_blocks(
     const int32_t max_micro_size)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(macro_block_cnt <= 0 || block_size <= 0)) {
+  if (OB_UNLIKELY(macro_block_cnt <= 0 || block_size <= 0 || start_macro_id < 0 || max_micro_size <= 0 ||
+      min_micro_size > max_micro_size)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(macro_block_cnt), K(block_size));
+    LOG_WARN("invalid argument", KR(ret), K(macro_block_cnt), K(block_size), K(start_macro_id), K(min_micro_size),
+      K(max_micro_size));
   } else {
     int64_t alignment = 4096;
     ObMemAttr attr(MTL_ID(), "test");
     char *buf = nullptr;
     if (OB_ISNULL(buf = static_cast<char *>(ob_malloc_align(alignment, block_size, attr)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate memory", KR(ret));
+      LOG_WARN("fail to allocate memory", KR(ret), K(block_size));
     } else {
-      const int64_t random_min_micro_size = 200;
-      const int64_t random_max_micro_size = 16 * 1024;
       const int64_t start_offset = ObSSMemBlock::get_reserved_size();
       for (int64_t i = start_macro_id; OB_SUCC(ret) && i < (macro_block_cnt + start_macro_id); ++i) {
         MacroBlockId macro_id = gen_macro_block_id(i);
@@ -293,6 +298,83 @@ int TestSSCommonUtil::prepare_micro_blocks(
       ob_free_align(buf);
     }
   }
+  return ret;
+}
+
+int TestSSCommonUtil::add_micro_blocks(
+    const int64_t macro_block_cnt,
+    const int64_t block_size,
+    ObArray<MicroBlockInfo> &micro_block_arr,
+    const int64_t start_macro_id,
+    const bool random_micro_size,
+    const int32_t min_micro_size,
+    const int32_t max_micro_size)
+{
+  int ret = OB_SUCCESS;
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  if (OB_UNLIKELY(macro_block_cnt <= 0 || block_size <= 0 || start_macro_id < 0 || max_micro_size <= 0 ||
+      min_micro_size > max_micro_size)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(macro_block_cnt), K(block_size), K(start_macro_id), K(min_micro_size),
+      K(max_micro_size));
+  } else if (OB_ISNULL(micro_cache)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("micro_cache should be valid", KR(ret));
+  } else {
+    const int32_t micro_size = (min_micro_size + max_micro_size) / 2;
+    ObSSPhyBlockCommonHeader common_header;
+    ObSSMicroDataBlockHeader data_blk_header;
+    const int64_t payload_offset = common_header.get_serialize_size() + data_blk_header.get_serialize_size();
+    ObSSMicroBlockIndex empty_micro_idx;
+    const int32_t empty_idx_ser_size = empty_micro_idx.get_serialize_size();
+
+    ObMemAttr attr(MTL_ID(), "TestBuf");
+    char *buf = nullptr;
+    if (OB_ISNULL(buf = static_cast<char *>(ob_malloc(max_micro_size, attr)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", KR(ret), K(max_micro_size));
+    } else {
+      MEMSET(buf, 'a', max_micro_size);
+      int64_t offset = payload_offset;
+      for (int64_t i = start_macro_id; OB_SUCC(ret) && (i < start_macro_id + macro_block_cnt + 1); ++i) {
+        int64_t remain_blk_size = block_size - payload_offset;
+        MacroBlockId macro_id = gen_macro_block_id(i);
+        bool finish_cur_blk = false;
+        do {
+          int32_t cur_micro_size = random_micro_size ? ObRandom::rand(min_micro_size, MIN(remain_blk_size, max_micro_size)) : micro_size;
+          ObSSMicroBlockCacheKey micro_key = gen_phy_micro_key(macro_id, offset, cur_micro_size);
+          const uint64_t effective_tablet_id = micro_key.get_macro_tablet_id().id();
+          ObSSMicroBlockIndex micro_idx(micro_key, cur_micro_size);
+          int32_t ser_size = micro_idx.get_serialize_size();
+          int32_t delta_size = cur_micro_size + ser_size;
+          if (remain_blk_size >= delta_size) {
+            if (OB_FAIL(micro_cache->add_micro_block_cache(micro_key, buf, cur_micro_size, effective_tablet_id,
+                ObSSMicroCacheAccessType::COMMON_IO_TYPE))) {
+              LOG_WARN("fail to add micro_block cache", KR(ret), K(i), K(micro_key));
+            } else {
+              MicroBlockInfo micro_info(macro_id, offset, cur_micro_size);
+              if (OB_FAIL(micro_block_arr.push_back(micro_info))) {
+                LOG_WARN("fail to push back", KR(ret), K(micro_info));
+              } else {
+                offset += cur_micro_size;
+                remain_blk_size -= delta_size;
+                if (remain_blk_size <= min_micro_size) {
+                  finish_cur_blk = true;
+                }
+              }
+            }
+          } else {
+            finish_cur_blk = true;
+          }
+        } while (OB_SUCC(ret) && !finish_cur_blk);
+
+        if (FAILEDx(wait_for_persist_task())) {
+          LOG_WARN("fail to wait for persist task", KR(ret));
+        }
+      }
+    }
+  }
+  LOG_INFO("finish add micro_blocks", KR(ret), K(micro_block_arr.count()));
   return ret;
 }
 
@@ -373,6 +455,52 @@ int TestSSCommonUtil::clear_micro_cache(
       for (int64_t i = 0; i < init_range_cnt; ++i) {
         range_micro_sum += init_range_arr[i]->get_total_micro_cnt();
         init_range_arr[i]->try_free_sub_ranges();
+      }
+    }
+  }
+  return ret;
+}
+
+int TestSSCommonUtil::restart_micro_cache(
+    ObSSMicroCache *micro_cache,
+    const uint64_t tenant_id,
+    const int64_t cache_file_size,
+    const uint32_t ckpt_split_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(micro_cache) || OB_UNLIKELY(cache_file_size <= 0 || ckpt_split_cnt <= 0 ||
+      !is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(micro_cache), K(tenant_id), K(cache_file_size), K(ckpt_split_cnt));
+  } else {
+    micro_cache->stop();
+    micro_cache->wait();
+    micro_cache->destroy();
+    LOG_INFO("finish prev micro_cache destroy");
+
+    if (OB_FAIL(micro_cache->init(tenant_id, cache_file_size, ckpt_split_cnt))) {
+      LOG_WARN("fail to init", KR(ret), K(tenant_id), K(cache_file_size), K(ckpt_split_cnt));
+    } else {
+      MTL(ObTenantFileManager *)->is_cache_file_exist_ = true;
+
+      if (OB_FAIL(micro_cache->start())) {
+        LOG_WARN("fail to start", KR(ret), K(tenant_id), K(cache_file_size), K(ckpt_split_cnt));
+      } else {
+        int64_t REPLAY_CKPT_TIMEOUT_S = 120;
+        int64_t start_time_s = ObTimeUtility::current_time_s();
+        bool is_cache_enabled = false;
+        do {
+          is_cache_enabled = micro_cache->is_enabled_;
+          if (!is_cache_enabled) {
+            LOG_INFO("ss_micro_cache is still disabled, waiting for replay ckpt");
+            ob_usleep(1000 * 1000);
+          }
+        } while (!is_cache_enabled && ObTimeUtility::current_time_s() - start_time_s < REPLAY_CKPT_TIMEOUT_S);
+
+        if (!is_cache_enabled) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("may fail to replay ckpt", KR(ret));
+        }
       }
     }
   }

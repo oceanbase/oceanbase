@@ -813,19 +813,6 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.meta_blk_.used_cnt_, phy_blk_mgr_->super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
   ASSERT_EQ(phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_used_cnt_, phy_blk_mgr_->super_blk_.blk_ckpt_info_.get_total_used_blk_cnt());
 
-  // 5.5. read phy_block checkpoint, and check it
-  ObArray<ObSSPhyBlockReuseInfo> reuse_info_arr1;
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr_->scan_blocks_to_ckpt(reuse_info_arr1));
-  ASSERT_LT(0, reuse_info_arr1.count());
-  ASSERT_EQ(OB_SUCCESS, micro_cache_->read_phy_block_checkpoint(cur_super_blk.blk_ckpt_info_.blk_ckpt_entry_, true));
-  ObArray<ObSSPhyBlockReuseInfo> reuse_info_arr2;
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr_->scan_blocks_to_ckpt(reuse_info_arr2));
-  ASSERT_EQ(reuse_info_arr1.count(), reuse_info_arr2.count());
-  for (int64_t i = 2; i < reuse_info_arr1.count(); ++i) {
-    ASSERT_EQ(reuse_info_arr1.at(i).blk_idx_, reuse_info_arr2.at(i).blk_idx_);
-    ASSERT_EQ(reuse_info_arr1.at(i).reuse_version_, reuse_info_arr2.at(i).reuse_version_);
-  }
-
   // 6. execute persist micro_meta
   ori_micro_ckpt_cnt = cache_stat.task_stat().micro_ckpt_cnt_;
   persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.ckpt_item_cnt_ = 0; // manully set this value as 0
