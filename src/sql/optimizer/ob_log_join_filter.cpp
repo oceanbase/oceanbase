@@ -79,6 +79,9 @@ int ObLogJoinFilter::inner_replace_op_exprs(ObRawExprReplacer &replacer)
     LOG_WARN("failed to replace all_join_key_left_exprs_", K(ret));
   } else if (!is_create_ && OB_FAIL(replace_exprs_action(replacer, join_filter_exprs_))) {
     LOG_WARN("failed to replace join_filter_exprs_", K(ret));
+  } else if (!is_create_ && (&replacer != &get_plan()->gen_col_replacer())
+             && OB_FAIL(replace_exprs_action(get_plan()->gen_col_replacer(), join_filter_exprs_))) {
+    LOG_WARN("failed to replace join_filter_exprs_", K(ret));
   }
   return ret;
 }

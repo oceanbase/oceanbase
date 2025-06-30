@@ -241,6 +241,10 @@ int ObLogSort::inner_replace_op_exprs(ObRawExprReplacer &replacer)
   if (OB_SUCC(ret) && OB_NOT_NULL(topn_filter_info_.pushdown_topn_filter_expr_)) {
     if (OB_FAIL(replace_expr_action(replacer, topn_filter_info_.pushdown_topn_filter_expr_))) {
       LOG_WARN("failed to replace pushdown topn filter expr");
+    } else if ((&get_plan()->gen_col_replacer() != &replacer)
+               && OB_FAIL(replace_expr_action(get_plan()->gen_col_replacer(),
+                                              topn_filter_info_.pushdown_topn_filter_expr_))) {
+      LOG_WARN("failed to replace pushdown topn filter expr");
     }
   }
   return ret;
