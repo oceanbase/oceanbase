@@ -14,6 +14,8 @@
 #include "sql/resolver/dml/ob_sequence_namespace_checker.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/ob_stmt_resolver.h"
+#include "share/schema/ob_dblink_sql_service.h"
+
 
 namespace oceanbase
 {
@@ -79,6 +81,9 @@ int ObSequenceNamespaceChecker::check_sequence_namespace(const ObQualifiedName &
       ret = OB_ERR_BAD_FIELD_ERROR;
     }
   } else {
+    ObString nls_seq_name;
+    ObString nls_db_name;
+    common::ObArenaAllocator allocator;
     bool exist = false;
     bool has_currval = false;
     uint64_t tenant_id = session_info->get_effective_tenant_id();
@@ -87,6 +92,7 @@ int ObSequenceNamespaceChecker::check_sequence_namespace(const ObQualifiedName &
     number::ObNumber currval;
     ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo*>(session_info);
     const ObSequenceSchema* seq_schema = NULL;
+    ObString database_name;
     if (OB_FAIL(const_cast<ObSchemaChecker*>(schema_checker)->get_dblink_schema(tenant_id,
                                                                                 q_name.dblink_name_,
                                                                                 dblink_schema))) {
@@ -94,15 +100,27 @@ int ObSequenceNamespaceChecker::check_sequence_namespace(const ObQualifiedName &
     } else if (OB_ISNULL(dblink_schema)) {
       ret = OB_DBLINK_NOT_EXIST_TO_ACCESS;
       LOG_WARN("cat not find dblink", K(q_name.dblink_name_), K(ret));
+    } else {
+      database_name = !q_name.database_name_.empty() ? q_name.database_name_ :
+                        (is_mysql_mode() ? dblink_schema->get_database_name() :
+                          dblink_schema->get_user_name());
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FALSE_IT(dblink_id = dblink_schema->get_dblink_id())) {
-    } else if (OB_FAIL(session_info->get_dblink_sequence_id(sequence_name,
+    } else if (OB_FAIL(ObDbLinkSqlService::convert_idenfitier_charset(allocator, sequence_name,
+                        session_info, nls_seq_name))) {
+      LOG_WARN("convert charset of sequence name failed", K(ret));
+    } else if (OB_FAIL(ObDbLinkSqlService::convert_idenfitier_charset(allocator, database_name,
+                        session_info, nls_db_name))) {
+      LOG_WARN("convert charset of database name failed", K(ret));
+    } else if (OB_FAIL(session_info->get_dblink_sequence_id(nls_seq_name,
                                                             dblink_id,
                                                             sequence_id))) {
       LOG_WARN("failed to get dblink sequence id", K(ret));
     } else if (OB_FAIL(check_link_sequence_exists(dblink_schema,
                                                   session,
-                                                  q_name.database_name_,
-                                                  sequence_name,
+                                                  nls_db_name,
+                                                  nls_seq_name,
                                                   exist,
                                                   has_currval,
                                                   currval))) {
@@ -121,9 +139,10 @@ int ObSequenceNamespaceChecker::check_sequence_namespace(const ObQualifiedName &
                OB_FAIL(fetch_dblink_sequence_schema(tenant_id,
                                                     session_info->get_database_id(),
                                                     dblink_id,
-                                                    sequence_name,
+                                                    nls_seq_name,
                                                     session,
-                                                    sequence_id))) {
+                                                    sequence_id,
+                                                    q_name.database_name_.empty() ? ObString() : nls_db_name))) {
       LOG_WARN("fail to add dblink sequence", K(q_name), K(ret));
     } else if (NULL != dblink_id_ptr) {
       *dblink_id_ptr = dblink_id;
@@ -145,7 +164,8 @@ int ObSequenceNamespaceChecker::fetch_dblink_sequence_schema(const uint64_t tena
                                                             const uint64_t dblink_id,
                                                             const common::ObString &sequence_name,
                                                             ObSQLSessionInfo *session_info,
-                                                            uint64_t &sequence_id)
+                                                            uint64_t &sequence_id,
+                                                            ObString remote_db_name)
 {
   int ret = OB_SUCCESS;
   sequence_id = OB_INVALID_ID;
@@ -169,13 +189,16 @@ int ObSequenceNamespaceChecker::fetch_dblink_sequence_schema(const uint64_t tena
     seq_schema.set_tenant_id(tenant_id);
     seq_schema.set_database_id(db_id);
     seq_schema.set_dblink_id(dblink_id);
-    seq_schema.set_sequence_name(sequence_name);
     seq_schema.set_sequence_id(sequence_id);
     seq_schema.set_schema_version(OB_INVALID_VERSION);
-    if (OB_FAIL(session_info->add_dblink_sequence_schema(&seq_schema))) {
+    if (OB_FAIL(seq_schema.set_sequence_name(sequence_name))) {
+      LOG_WARN("failed to set sequence name", K(ret));
+    } else if (!remote_db_name.empty() && OB_FAIL(seq_schema.set_remote_database_name(remote_db_name))) {
+      LOG_WARN("failed to set remote db name", K(ret));
+    } else if (OB_FAIL(session_info->add_dblink_sequence_schema(&seq_schema))) {
       LOG_WARN("failed to add sequence", K(ret));
     } else {
-      LOG_TRACE("allocate new sequence schema", K(sequence_id));
+      LOG_TRACE("allocate new sequence schema", K(sequence_id), K(seq_schema));
     }
   }
   return ret;
@@ -292,7 +315,7 @@ int ObSequenceNamespaceChecker::check_link_sequence_exists(const ObDbLinkSchema 
                                                     dblink_schema->get_tenant_name(),
                                                     dblink_schema->get_user_name(),
                                                     dblink_schema->get_plain_password(),
-                                                    database_name,
+                                                    dblink_schema->get_database_name(),
                                                     dblink_schema->get_conn_string(),
                                                     dblink_schema->get_cluster_name()))) {
         LOG_WARN("create dblink pool failed", K(ret), K(param_ctx));

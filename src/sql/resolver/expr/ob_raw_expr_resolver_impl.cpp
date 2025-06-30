@@ -1849,11 +1849,6 @@ int ObRawExprResolverImpl::process_remote_sequence_node(const ParseNode *node, O
       LOG_WARN("column ref expr is null");
     } else {
       column_ref.ref_expr_ = b_expr;
-      if (lib::is_mysql_mode()) {
-        column_ref.database_name_ = dblink_schema->get_database_name();
-      } else {
-        column_ref.database_name_ = dblink_schema->get_user_name();
-      }
       if (OB_FAIL(ctx_.columns_->push_back(column_ref))) {
         LOG_WARN("Add column failed", K(ret));
       } else {
