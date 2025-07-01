@@ -91,8 +91,8 @@ public:
   WinFuncColExpr(WinFuncInfo &wf_info, ObWindowFunctionVecOp &op, const int64_t wf_idx) :
     wf_info_(wf_info), op_(op), wf_idx_(wf_idx), part_first_row_idx_(-1), wf_expr_(nullptr),
     res_(nullptr), pby_row_mapped_idxes_(nullptr), reordered_pby_row_idx_(nullptr), wf_res_row_meta_(),
-    res_rows_(nullptr), agg_ctx_(nullptr), aggr_rows_(nullptr), non_aggr_results_(nullptr),
-    null_nonaggr_results_(nullptr)
+    res_rows_(nullptr), agg_ctx_(nullptr), aggr_rows_(nullptr), middle_result_(ObArray<char *>()),
+    middle_result_len_(ObArray<int32_t>()), non_aggr_results_(nullptr), null_nonaggr_results_(nullptr)
   {}
   void destroy() { reset(); }
   void reset();
@@ -120,6 +120,8 @@ public:
   // only valid for aggregate functions
   aggregate::RuntimeContext *agg_ctx_;
   aggregate::AggrRowPtr *aggr_rows_;
+  ObArray<char *> middle_result_;
+  ObArray<int32_t> middle_result_len_;
   // only valid for non-aggregate functions
   char *non_aggr_results_;
   ObBitVector *null_nonaggr_results_;
@@ -319,13 +321,17 @@ private:
 
   int final_next_batch(const int64_t max_row_cnt);
 
-  int get_next_partition(int64_t &check_times);
+  int get_next_partition(int64_t &check_times, int64_t &output_row_cnt);
+
+  int streaming_output_batch_rows(const int64_t output_row_cnt);
 
   int output_batch_rows(const int64_t output_row_cnt);
 
   int add_aggr_res_row_for_participator(WinFuncColExpr *end, winfunc::RowStore &store);
 
   int compute_wf_values(WinFuncColExpr *end, int64_t &check_times);
+
+  int streaming_compute_wf_values(WinFuncColExpr *end, int64_t &row_idx);
 
   int set_null_results_of_wf(WinFuncColExpr &wf, const int64_t batch_size,
                              const ObBitVector &nullres_skip);

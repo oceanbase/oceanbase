@@ -22,16 +22,16 @@ alter system set __min_full_resource_pool_memory=1073741824;
 use oceanbase;
 
 -- 1C1G 规格
-create resource unit if not exists 1c1g max_cpu 1, memory_size '1G';
+-- create resource unit if not exists 1c1g max_cpu 1, memory_size '1G';
 
 -- 1C2G 规格
-create resource unit if not exists 1c2g max_cpu 1, memory_size '2G';
+-- create resource unit if not exists 1c2g max_cpu 1, memory_size '2G';
 
 -- 2C2G 规格
 create resource unit if not exists 2c2g max_cpu 2, memory_size '2G';
 
 -- 2C4G 规格
-create resource unit if not exists 2c4g max_cpu 2, memory_size '4G';
+-- create resource unit if not exists 2c4g max_cpu 2, memory_size '4G';
 
 -- =================================== create_tenant 模板 ===================================
 -- create_tenant: 指定规格创建租户

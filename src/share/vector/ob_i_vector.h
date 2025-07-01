@@ -520,7 +520,7 @@ public:
   virtual int default_hash(BATCH_EVAL_HASH_ARGS) const = 0;
   virtual int murmur_hash(BATCH_EVAL_HASH_ARGS) const = 0;
   // In vectorization 1.0, hash value (calculated by murmur_hash_v2) of null is inconsistent for different types.
-  // For example, null hash value of ObFixedDouble is equal to `seed`, null hash vlaue of int to equal to `murmur_hash_v2(nullptr, 0, seed)`
+  // For example, null hash value of ObFixedDouble is equal to `seed`, null hash value of int to equal to `murmur_hash_v2(nullptr, 0, seed)`
   // In vectorization 2.0, null hash value (calculated by `murmur_hash_v3`)to equal to `seed` for all types (including null type)
   // We use different interface names (v3 in 2.0, v2 in 1.0) to distinguish hash function behaviors.
   virtual int murmur_hash_v3(BATCH_EVAL_HASH_ARGS) const = 0;

@@ -1452,24 +1452,34 @@ int ObWindowFunctionVecOp::do_partial_next_batch(const int64_t max_row_cnt, bool
     // step.1 vec compute
     WinFuncColExpr *first = wf_list_.get_first();
     WinFuncColExpr *end = wf_list_.get_header();
+    bool enable_streaming_process = first->wf_info_.enable_streaming_process_;
     int64_t rows_output_cnt = input_stores_.cur_->to_output_rows() + input_stores_.processed_->to_output_rows();
-    while (OB_SUCC(ret) && rows_output_cnt < output_row_cnt) {
-      // reset to `row_cnt_` to  `stored_row_cnt_`
-      // we may get extra rows of different big partition in one batch, those rows are added to `current` store but are not computed.
-      // Hence, in the beginning of next partition iteration, resetting is necessary for computing next partition values.
-      input_stores_.cur_->row_cnt_ = input_stores_.cur_->stored_row_cnt_;
-      if (OB_FAIL(get_next_partition(check_times))) {
-        LOG_WARN("get next partition failed", K(ret));
-      } else {
-        rows_output_cnt =
-          input_stores_.processed_->to_output_rows() + input_stores_.cur_->to_output_rows();
-      }
-      if (OB_SUCC(ret) && child_iter_end_) {
-        break;
+    if (enable_streaming_process) {
+      int64_t output_cnt = 0;
+      ret = get_next_partition(check_times, output_cnt);
+      rows_output_cnt = output_cnt;
+    }
+    else {
+      while (OB_SUCC(ret) && rows_output_cnt < output_row_cnt) {
+        // reset to `row_cnt_` to  `stored_row_cnt_`
+        // we may get extra rows of different big partition in one batch, those rows are added to `current` store but are not computed.
+        // Hence, in the beginning of next partition iteration, resetting is necessary for computing next partition values.
+        int64_t temp_int = 0;
+        input_stores_.cur_->row_cnt_ = input_stores_.cur_->stored_row_cnt_;
+        if (OB_FAIL(get_next_partition(check_times, temp_int))) {
+          LOG_WARN("get next partition failed", K(ret));
+        } else {
+          rows_output_cnt =
+            input_stores_.processed_->to_output_rows() + input_stores_.cur_->to_output_rows();
+        }
+        if (OB_SUCC(ret) && child_iter_end_) {
+          break;
+        }
       }
     }
+
     // step.2 vec output
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !enable_streaming_process) {
       if (MY_SPEC.single_part_parallel_) {
         brs_.end_ = true;
         brs_.size_ = 0;
@@ -1510,11 +1520,19 @@ int ObWindowFunctionVecOp::do_partial_next_batch(const int64_t max_row_cnt, bool
         }
       }
     }
+    else if (OB_SUCC(ret)) {
+      ret = streaming_output_batch_rows(rows_output_cnt);
+      do_output = true;
+      if (child_iter_end_ || rows_output_cnt == 0) {
+        brs_.size_ = 0;
+        brs_.end_ = true;
+      }
+    }
   }
   return ret;
 }
 
-int ObWindowFunctionVecOp::get_next_partition(int64_t &check_times)
+int ObWindowFunctionVecOp::get_next_partition(int64_t &check_times, int64_t &output_cnt)
 {
   int ret = OB_SUCCESS;
   int64_t batch_size = MY_SPEC.max_batch_size_;
@@ -1554,6 +1572,7 @@ int ObWindowFunctionVecOp::get_next_partition(int64_t &check_times)
     if (child_brs->end_) {
       child_iter_end_ = true;
     }
+    output_cnt = child_brs->size_;
     ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
     int64_t part_start_idx = row_idx;
     if (first_batch && child_brs->size_ > 0) {
@@ -1601,59 +1620,120 @@ int ObWindowFunctionVecOp::process_child_batch(const int64_t batch_idx,
       winfunc::RowStore &current = *input_stores_.cur_;
       winfunc::RowStore &processed = *input_stores_.processed_;
       // winfunc::RowStore &remain = processed.is_empty() ? processed : current;
-      bool need_swap_store = processed.is_empty();
+      bool enable_streaming_process = (!wf_list_.is_empty() && wf_list_.get_first()->wf_info_.enable_streaming_process_);
+      bool need_swap_store = processed.is_empty() && !enable_streaming_process;
       int64_t part_start_idx = row_idx;
-      while (OB_SUCC(ret) && row_idx < child_brs->size_ && !found_next_part) {
-        bool same_part = true;
-        guard.set_batch_idx(row_idx);
-        if (child_brs->skip_->at(row_idx)) {
-          row_idx++;
-          continue;
+      if (enable_streaming_process) {
+        // streaming process
+        // input
+        // get_next_batch_from_child
+        found_next_part = true; // avoid dead loop
+        ObCompactRow *row = nullptr;
+        const char *data = nullptr;
+        int32_t data_len = 0;
+        int32_t col_id = 0;
+        ObExprPtrIArray &exprs = get_all_expr();
+        ObExpr *in_expr = nullptr;
+        ObIVector *in_vec = nullptr;
+        ObExpr *out_expr = nullptr;
+        ObIVector *out_vec = nullptr;
+        WinFuncColExpr *wf_col = wf_list_.get_first();
+
+        const RowMeta input_row_meta = get_input_row_meta();
+        in_expr = exprs.at(col_id);
+        if (OB_FAIL(in_expr->eval_vector(eval_ctx_, *child_brs->skip_,
+                    EvalBound(child_brs->size_, part_start_idx, row_idx, false)))) {
+          LOG_WARN("eval vector failed", K(ret));
+        } else {
+          in_vec = in_expr->get_vector(eval_ctx_);
         }
-        if (OB_FAIL(check_same_partition(*first, same_part))) {
-          LOG_WARN("check same partition failed", K(ret));
-        } else if (OB_UNLIKELY(!same_part)) {
-          // find same partition of any other window function
-          if (OB_FAIL(find_same_partition_of_wf(end))) {
-            LOG_WARN("find same partition of wf failed", K(ret));
-          } else {
-            // new big partition or not
-            found_next_part = (end == wf_list_.get_header());
-            // 1. save pby row
-            // 2. set values for aggr status expr if possible
-            // 3. detect and report aggr status
-            // 4. add batch rows into current store
-            // 5. add aggr res row into current store
-            // update part first row idx after computing wf values
+        out_expr = wf_col->wf_info_.expr_;
+        out_expr->init_vector_for_write(eval_ctx_, out_expr->get_default_res_format(), child_brs->size_);
+        out_vec = out_expr->get_vector(eval_ctx_);
+        if (OB_ISNULL(out_vec)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("output vector is null", K(ret));
+        }
+        char *middle_result = wf_col->middle_result_.at(0);
+        int32_t middle_result_len = wf_col->middle_result_len_.at(0);
+        while (OB_SUCC(ret) && row_idx < child_brs->size_) {
+          guard.set_batch_idx(row_idx);
+          if (child_brs->skip_->at(row_idx)) {
+            row_idx++;
+            continue;
+          }
+          bool same_part = true;
+          in_vec->get_payload(row_idx, data, data_len);
+          if (OB_FAIL(check_same_partition(*first, same_part))) {
+            LOG_WARN("check same partition failed", K(ret));
+          } else if (OB_UNLIKELY(!same_part)) {
             if (OB_FAIL(save_pby_row_for_wf(end, eval_ctx_.get_batch_idx()))) {
               LOG_WARN("save partition groupby row failed", K(ret));
-            } else if (OB_FAIL(detect_and_report_aggr_status(*child_brs, part_start_idx, row_idx))) {
-              LOG_WARN("detect and report aggr status failed", K(ret));
-            } else if (OB_FAIL(current.add_batch_rows(
-                         get_all_expr(), input_row_meta_, eval_ctx_,
-                         EvalBound(child_brs->size_, part_start_idx, row_idx, false),
-                         *child_brs->skip_, true, nullptr, true))) {
-              LOG_WARN("add batch rows failed", K(ret));
-            } else if (OB_FAIL(add_aggr_res_row_for_participator(end, *input_stores_.cur_))) {
-              // new partition found, add aggr result row
-              LOG_WARN("add aggregate result row for participator failed", K(ret));
-            } else {
-              LOG_TRACE("found new partition", K(found_next_part), K(part_start_idx), K(row_idx),
-                        K(*child_brs), K(need_swap_store));
             }
+            MEMSET(middle_result, 0, middle_result_len);
           }
-          if (OB_FAIL(ret)) {
-            // do nothing
-          } else if (OB_FAIL(compute_wf_values(end, check_times))) {
-            LOG_WARN("compute wf values failed", K(ret));
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(((int128_t *)middle_result)->add<false>(*(int64_t*)data, *(int128_t *)middle_result))) {
+              LOG_WARN("add middle_result failed", K(ret));
+            }
+            // output
+            out_vec->set_payload(row_idx, middle_result, middle_result_len);
+            row_idx++;
+          }
+        }
+      } else {
+        while (OB_SUCC(ret) && row_idx < child_brs->size_ && !found_next_part) {
+          bool same_part = true;
+          guard.set_batch_idx(row_idx);
+          if (child_brs->skip_->at(row_idx)) {
+            row_idx++;
+            continue;
+          }
+          if (OB_FAIL(check_same_partition(*first, same_part))) {
+            LOG_WARN("check same partition failed", K(ret));
+          } else if (OB_UNLIKELY(!same_part)) {
+            // find same partition of any other window function
+            if (OB_FAIL(find_same_partition_of_wf(end))) {
+              LOG_WARN("find same partition of wf failed", K(ret));
+            } else {
+              // new big partition or not
+              found_next_part = (end == wf_list_.get_header());
+              // 1. save pby row
+              // 2. set values for aggr status expr if possible
+              // 3. detect and report aggr status
+              // 4. add batch rows into current store
+              // 5. add aggr res row into current store
+              // update part first row idx after computing wf values
+              if (OB_FAIL(save_pby_row_for_wf(end, eval_ctx_.get_batch_idx()))) {
+                LOG_WARN("save partition groupby row failed", K(ret));
+              } else if (OB_FAIL(detect_and_report_aggr_status(*child_brs, part_start_idx, row_idx))) {
+                LOG_WARN("detect and report aggr status failed", K(ret));
+              } else if (OB_FAIL(current.add_batch_rows(
+                          get_all_expr(), input_row_meta_, eval_ctx_,
+                          EvalBound(child_brs->size_, part_start_idx, row_idx, false),
+                          *child_brs->skip_, true, nullptr, true))) {
+                LOG_WARN("add batch rows failed", K(ret));
+              } else if (OB_FAIL(add_aggr_res_row_for_participator(end, *input_stores_.cur_))) {
+                // new partition found, add aggr result row
+                LOG_WARN("add aggregate result row for participator failed", K(ret));
+              } else {
+                LOG_TRACE("found new partition", K(found_next_part), K(part_start_idx), K(row_idx),
+                          K(*child_brs), K(need_swap_store));
+              }
+            }
+            if (OB_FAIL(ret)) {
+              // do nothing
+            } else if (OB_FAIL(compute_wf_values(end, check_times))) {
+              LOG_WARN("compute wf values failed", K(ret));
+            } else {
+              part_start_idx = row_idx;
+            }
           } else {
-            part_start_idx = row_idx;
+            row_idx++;
           }
-        } else {
-          row_idx++;
         }
       }
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && !enable_streaming_process) {
         if (found_next_part) {
           if (need_swap_store) {
             // switch %cur_ and %processed_ row store if necessary
@@ -1870,6 +1950,35 @@ int ObWindowFunctionVecOp::final_next_batch(const int64_t max_row_cnt)
       LOG_WARN("output batch rows failed", K(ret));
     }
   }
+  return ret;
+}
+
+int ObWindowFunctionVecOp::streaming_output_batch_rows(const int64_t output_row_cnt)
+{
+  int ret = OB_SUCCESS;
+  int64_t rows_cnt_processed = output_row_cnt;
+  int64_t rows_cnt_current = 0;
+  int64_t word_cnt = ObBitVector::word_count(rows_cnt_processed + rows_cnt_current);
+
+  MEMSET(brs_.skip_, 0, word_cnt * ObBitVector::BYTES_PER_WORD);
+  brs_.all_rows_active_ = true;
+
+  int64_t outputed_cnt = output_row_cnt, outputed_wf_res_cnt = 0;
+  // `output_stored_rows` gets batch rows from row store and write row into exprs
+  // if rows of current batch are distributed in different blocks, all blocks are loaded must be valid
+  if (outputed_cnt > 0) {
+    FOREACH_WINCOL(END_WF)
+    {
+      it->wf_info_.expr_->get_eval_info(eval_ctx_).cnt_ = eval_ctx_.get_batch_idx();
+      it->wf_info_.expr_->set_evaluated_projected(eval_ctx_);
+    }
+    ObIArray<ObExpr *> &all_exprs = get_all_expr();
+    for (int i = 0; i < all_exprs.count(); i++) { // aggr status is the last expr
+      all_exprs.at(i)->get_eval_info(eval_ctx_).cnt_ = eval_ctx_.get_batch_idx();
+      all_exprs.at(i)->set_evaluated_projected(eval_ctx_);
+    }
+  }
+  brs_.size_ = outputed_cnt;
   return ret;
 }
 
@@ -2282,6 +2391,158 @@ int ObWindowFunctionVecOp::compute_wf_values(WinFuncColExpr *end, int64_t &check
   }
   // Row project flag is set when read row from RAStore, but the remain rows in batch
   // are not evaluated, need reset the flag here.
+  clear_evaluated_flag();
+  return ret;
+}
+
+int ObWindowFunctionVecOp::streaming_compute_wf_values(WinFuncColExpr *end, int64_t &row_idx) {
+  int ret = OB_SUCCESS;
+  // streaming process window function
+  // input data: param_vec
+  // output data: eval_ctx --> vector
+  // FOREACH_WINCOL(end) {
+  //   int64_t part_start = it->part_first_row_idx_;
+  //   int64_t part_end = input_stores_.cur_->count();
+  //   if (it == wf_list_.get_last()) {
+  //     const int v = part_end - part_start;
+  //     if (v > 0) {
+  //       last_computed_part_rows_ = v;
+  //     }
+  //   }
+  //   ObIVector *param_vec = nullptr;
+  //   ObExpr *param_expr = nullptr;
+  //   aggregate::RuntimeContext *agg_ctx = it->agg_ctx_;
+  //   ObIArray<ObExpr *> &param_exprs = agg_ctx->aggr_infos_.at(0).param_exprs_;
+  //   if (agg_ctx->aggr_infos_.at(0).is_implicit_first_aggr()) {
+  //     param_expr = agg_ctx->aggr_infos_.at(0).expr_;
+  //   } else {
+  //     param_expr = param_exprs.at(0);
+  //   }
+  //   param_vec = param_expr->get_vector(eval_ctx_);
+  //   for (int row_idx = part_start; OB_SUCC(ret) && row_idx < part_end; row_idx++) {
+  //     const ObCompactRow *row = nullptr;
+  //     ObExpr *agg_expr = agg_ctx->aggr_infos_.at(0).expr_;
+  //     input_stores_.cur_->get_row(row_idx, row);
+  //     LOG_DEBUG("streaming_compute_wf_values", K(row));
+  //     aggregate::fixlen_fmt<common::VEC_TC_DEC_INT128> *res_vec = static_cast<aggregate::fixlen_fmt<common::VEC_TC_DEC_INT128> *>(agg_expr->get_vector(eval_ctx_));
+  //     int32_t output_idx = 0;
+  //     const char *data = new char[8];
+  //     int32_t data_len = 8;
+  //     param_vec->get_payload(row_idx, data, data_len);
+  //     aggregate::CellWriter<aggregate::AggCalcType<common::VEC_TC_DEC_INT128>>::set(data, data_len, res_vec, output_idx, nullptr);
+  //   }
+  // }
+    
+
+  ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
+  char *tmp_buf = nullptr;
+  // Partition size maybe exceed MY_SPEC.batch_size_, if so, calculation is divided into several
+  // batches of size MY_SPEC.max_batch_size.
+  ObBitVector *nullres_skip  = batch_ctx_.nullres_skip_,
+              *pushdown_skip = batch_ctx_.pushdown_skip_,
+              *wf_skip       = batch_ctx_.calc_wf_skip_;
+  int64_t saved_batch_size = 0;
+  FOREACH_WINCOL(end) {
+    int64_t part_start = it->part_first_row_idx_;
+    int64_t part_end = input_stores_.cur_->count();
+    if (it == wf_list_.get_last()) {
+      const int v = part_end - part_start;
+      if (v > 0) {
+        last_computed_part_rows_ = v;
+      }
+    }
+    int64_t total_size = part_end - part_start;
+    int64_t start_idx = it->part_first_row_idx_;
+    winfunc::WinExprEvalCtx win_expr_ctx(*input_stores_.cur_, *it,
+                                         ctx_.get_my_session()->get_effective_tenant_id());
+    if (it->wf_expr_->is_aggregate_expr()) {
+      // if aggregate expr, reset last_valid_frame & last_valid_row before process partition
+      winfunc::AggrExpr *agg_expr = static_cast<winfunc::AggrExpr *>(it->wf_expr_);
+      agg_expr->last_valid_frame_.reset();
+      agg_expr->last_aggr_row_ = nullptr;
+    }
+    const ObCompactRow *iter_row = nullptr;
+    const RowMeta &input_row_meta = it->op_.get_input_row_meta();
+    const char *data = nullptr;
+    int32_t data_len = 0;
+    int32_t col_id = it->wf_idx_ - 1;
+    for (int i = part_start; i < part_end; i++) {
+      input_stores_.cur_->get_row(i, iter_row);
+      iter_row->get_cell_payload(input_row_meta_, col_id, data, data_len);
+      LOG_INFO("streaming debug", K(i), K(*(int64_t*)data), K(data_len));
+    }
+    while (OB_SUCC(ret) && total_size > 0) {
+      clear_evaluated_flag();
+      int64_t batch_size = std::min(total_size, MY_SPEC.max_batch_size_);
+      if OB_SUCC(ret) {
+        guard.set_batch_size(batch_size);
+        guard.set_batch_idx(0);
+        wf_skip->unset_all(0, batch_size);
+        // add store guard to make sure read blocks are valid
+        winfunc::StoreGuard store_guard(*this);
+        if (OB_FAIL(it->wf_info_.expr_->init_vector_for_write(
+              eval_ctx_, it->wf_info_.expr_->get_default_res_format(), batch_size))) {
+          LOG_WARN("init vector for write failed", K(ret));
+        } else if (OB_FAIL(input_stores_.cur_->attach_rows(get_all_expr(), input_row_meta_,
+                                                           eval_ctx_, start_idx,
+                                                           start_idx + batch_size, false))) {
+          // step.1: attach rows
+          LOG_WARN("attach rows failed", K(ret), K(start_idx), K(batch_size),
+                   K(*input_stores_.cur_));
+        } else if (OB_FAIL(it->reset_for_partition(batch_size, *wf_skip))) {
+          LOG_WARN("reset for partition failed", K(ret));
+        } else if (it->wf_info_.can_push_down_ && MY_SPEC.is_push_down()) {
+          if (OB_FAIL(
+                detect_nullres_or_pushdown_rows(*it, *nullres_skip, *pushdown_skip, *wf_skip))) {
+            // step.2 find nullres rows and bypass-pushdown rows
+            LOG_WARN("find null result rows or bypass-pushdown rows failed", K(ret));
+          } else if (OB_FAIL(calc_bypass_pushdown_rows_of_wf(*it, batch_size, *pushdown_skip))) {
+            // by pass collect will reset null bitmap by calling `init_vector_for_write`
+            // must be called before `set_null_results_of_wf`
+            // step.4 calculate bypass-pushdown rows
+            LOG_WARN("calculate pushdown rows failed", K(ret));
+          } else if (OB_FAIL(set_null_results_of_wf(*it, batch_size, *nullres_skip))) {
+            // step.3 set null results
+            LOG_WARN("set null results failed", K(ret));
+          } else {
+          }
+        }
+      }
+      if (OB_SUCC(ret) && it->wf_expr_->is_aggregate_expr()) {
+        // enable removal optimization
+        it->agg_ctx_->removal_info_.enable_removal_opt_ =
+          !(MY_SPEC.single_part_parallel_) && it->wf_info_.remove_type_ != common::REMOVE_INVALID
+          && !it->wf_info_.aggr_info_.has_distinct_;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(it->wf_expr_->streaming_process_partition(win_expr_ctx, it->part_first_row_idx_,
+                                                                   input_stores_.cur_->count(), start_idx,
+                                                                   start_idx + batch_size, *wf_skip))) {
+        //   step.5 calculate window function results for rest rows
+        LOG_WARN("process partition failed", K(ret));
+      } else {
+        ObSEArray<ObExpr *, 1> tmp_exprs;
+        // reset skip to add all rows
+        wf_skip->unset_all(0, batch_size);
+        if (OB_FAIL(tmp_exprs.push_back(it->wf_info_.expr_))) {
+          LOG_WARN("push back element failed", K(ret));
+        } else if (OB_FAIL(it->res_->cur_->add_batch_rows(
+                     tmp_exprs, it->wf_res_row_meta_, eval_ctx_,
+                     EvalBound(batch_size, 0, batch_size, true), *wf_skip, true))) {
+          LOG_WARN("add batch rows failed", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else {
+        start_idx += batch_size;
+        total_size -= batch_size;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(update_part_first_row_idx(end))) {
+    LOG_WARN("update part first row idx failed", K(ret));
+  }
   clear_evaluated_flag();
   return ret;
 }
@@ -3502,6 +3763,30 @@ int WinFuncColExpr::init_aggregate_ctx(const int64_t tenant_id)
         for (int i = 0; i < op_.spec_.max_batch_size_; i++, offset += step) {
           aggr_rows_[i] = (char *)aggr_row_buf + offset;
         }
+      }
+    }
+
+    if (wf_info_.enable_streaming_process_) {
+      for (int i = 0; OB_SUCC(ret) && i < agg_ctx_->aggr_infos_.count(); i++) {
+        char *middle_result_buf = nullptr;
+        int32_t middle_result_len = 0;
+        ObDatumMeta &out_meta = agg_ctx_->aggr_infos_.at(i).expr_->datum_meta_;
+        VecValueTypeClass out_tc = get_vec_value_tc(out_meta.type_, out_meta.scale_, out_meta.precision_);
+        switch (out_tc)
+        {
+        case common::VEC_TC_DEC_INT128:
+          middle_result_len = sizeof(aggregate::AggCalcType<common::VEC_TC_DEC_INT128>);
+          middle_result_buf = (char *)local_allocator.alloc(middle_result_len);
+        default:
+          break;
+        }
+        if (OB_ISNULL(middle_result_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret));
+        }
+        MEMSET(middle_result_buf, 0, middle_result_len);
+        middle_result_.ObArray<char *>::push_back(middle_result_buf);
+        middle_result_len_.ObArray<int32_t>::push_back(middle_result_len);
       }
     }
   }

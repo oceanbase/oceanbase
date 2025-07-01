@@ -192,6 +192,9 @@ public:
   virtual int process_partition(WinExprEvalCtx &ctx, const int64_t part_start,
                                 const int64_t part_end, const int64_t row_start,
                                 const int64_t row_end, const ObBitVector &skip) = 0;
+  virtual int streaming_process_partition(WinExprEvalCtx &ctx, const int64_t part_start,
+                                const int64_t part_end, const int64_t row_start,
+                                const int64_t row_end, const ObBitVector &skip) = 0;
   // used to generate extra ctx for expr evaluation
   virtual int generate_extra(ObIAllocator &allocator, void *&extra) = 0;
 
@@ -215,12 +218,19 @@ public:
   { // do nothing
     return;
   }
+  virtual int streaming_process_partition(WinExprEvalCtx &ctx, const int64_t part_start,
+                                const int64_t part_end, const int64_t row_start,
+                                const int64_t row_end, const ObBitVector &skip) override;
 protected:
   int copy_aggr_row(WinExprEvalCtx &ctx, const char *src_row, char *dst_row);
 private:
   int update_frame(WinExprEvalCtx &ctx, const Frame &prev_frame, Frame &new_frame,
                    const int64_t idx, const int64_t row_start, bool &whole_frame,
                    bool &valid_frame);
+  virtual int materializing_process_partition(WinExprEvalCtx &ctx, const int64_t part_start,
+                                const int64_t part_end, const int64_t row_start,
+                                const int64_t row_end, const ObBitVector &skip);
+  virtual aggregate::Processor* get_aggr_processor() { return nullptr; }
 };
 
 // TODO: adjust inheritance
@@ -333,6 +343,8 @@ public:
   static int set_result_for_invalid_frame(WinExprEvalCtx &ctx, char *agg_row);
 
   virtual void destroy() override;
+
+  virtual aggregate::Processor* get_aggr_processor() override { return aggr_processor_; }
 
 private:
   int calc_pushdown_skips(WinExprEvalCtx &ctx, const int64_t batch_size, sql::ObBitVector &skip, bool &all_active);

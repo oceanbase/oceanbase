@@ -2620,7 +2620,7 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortVecSpec &spec, const bo
       ObSEArray<OrderItem, 1> sk_keys;
       ObSEArray<OrderItem, 1> addon_keys;
       bool enable_encode_sortkey_opt = op.enable_encode_sortkey_opt();
-      if (op.get_part_cnt() > 0 || nullptr != op.get_topn_expr()
+      if (nullptr != op.get_topn_expr()
           || nullptr != op.get_topk_limit_expr()) {
         enable_encode_sortkey_opt = false;
       }
@@ -8649,6 +8649,18 @@ int ObStaticEngineCG::fill_wf_info(ObIArray<ObExpr *> &all_expr,
         LOG_WARN("failed to fil_sort_info", K(ret));
       }
     }
+
+    // set enable_streaming_process_ flag
+    if (OB_SUCC(ret)) {
+      wf_info.enable_streaming_process_ = false;
+      if (WINDOW_ROWS == wf_info.win_type_ && wf_info.upper_.is_preceding_
+          && wf_info.upper_.is_unbounded_ && !wf_info.lower_.is_unbounded_
+          && NULL == wf_info.lower_.between_value_expr_) {
+        // Mark set streaming process flag
+        wf_info.enable_streaming_process_ = true;
+      }
+    }
+
     LOG_DEBUG("finish fill_wf_info", K(win_expr), K(wf_info), K(ret));
   }
   return ret;

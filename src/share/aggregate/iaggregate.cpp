@@ -64,6 +64,7 @@ extern int init_group_concat_aggregate(RuntimeContext &agg_ctx, const int64_t ag
 int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
                     ObIArray<IAggregate *> &aggregates)
 {
+  // Mark
   int ret = OB_SUCCESS;
   ObEvalCtx &ctx= agg_ctx.eval_ctx_;
   if (OB_FAIL(agg_ctx.init_row_meta(agg_ctx.aggr_infos_, allocator))) {

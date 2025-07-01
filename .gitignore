@@ -380,3 +380,13 @@ deps/3rd
 ############# test #############
 test/tmp
 test/var
+
+
+perf_ob.sh
+perf_sr.sh
+perf.data
+perf.data.old
+Query43.sql
+windowFunction.sql
+tools/deploy/init_for_ce.sql
+tool/deploy/obd/observer.include.yaml

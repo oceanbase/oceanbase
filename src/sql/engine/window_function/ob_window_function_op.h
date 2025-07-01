@@ -65,6 +65,7 @@ public:
       func_type_(T_MAX),
       is_ignore_null_(false),
       is_from_first_(false),
+      enable_streaming_process_(false),
       remove_type_(common::REMOVE_INVALID),
       expr_(NULL),
       can_push_down_(false)
@@ -99,7 +100,7 @@ public:
     return ret;
   }
 
-  TO_STRING_KV(K_(win_type), K_(func_type), K_(is_ignore_null), K_(is_from_first), K_(remove_type),
+  TO_STRING_KV(K_(win_type), K_(func_type), K_(is_ignore_null), K_(is_from_first), K(enable_streaming_process_), K_(remove_type),
                KPC_(expr), K_(aggr_info), K_(upper), K_(lower), K_(param_exprs),
                K_(partition_exprs), K_(sort_exprs), K_(sort_collations), K_(sort_cmp_funcs),
                K_(can_push_down));
@@ -107,6 +108,7 @@ public:
   ObItemType func_type_;
   bool is_ignore_null_;
   bool is_from_first_;
+  bool enable_streaming_process_;
   uint64_t remove_type_;
 
   ObExpr *expr_;//same as aggr_info_.expr_
