@@ -50,6 +50,7 @@
 #include "sql/resolver/ddl/ob_trigger_stmt.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/resolver/ddl/ob_create_ccl_rule_stmt.h"
+#include "sql/resolver/dml/ob_insert_all_stmt.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "sql/resolver/dcl/ob_alter_user_profile_stmt.h"
 #include "sql/optimizer/ob_optimizer_util.h"
@@ -336,6 +337,40 @@ int add_col_id_array_to_need_priv(
         }
         if (need_priv.col_id_array_.count() > 0) {
           need_priv.obj_level_ = OBJ_LEVEL_FOR_COL_PRIV;
+        }
+        break;
+      }
+      case stmt::T_INSERT_ALL: {
+        if (lib::is_oracle_mode()) {
+          need_priv.col_id_array_.reset();
+          const ObInsertAllStmt *insert_all_stmt = NULL;
+          insert_all_stmt = dynamic_cast<const ObInsertAllStmt*>(basic_stmt);
+          if (OB_ISNULL(insert_all_stmt)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("insert_all_stmt is NULL", K(ret));
+          } else {
+            for (int i = 0; OB_SUCC(ret) && i < insert_all_stmt->get_insert_all_table_info().count(); ++i) {
+              ObInsertAllTableInfo* insert_all_table_info = insert_all_stmt->get_insert_all_table_info().at(i);
+              if (OB_ISNULL(insert_all_table_info)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get null table info", K(ret));
+              } else {
+                ObColumnRefRawExpr *value_desc = NULL;
+                for (int j = 0; OB_SUCC(ret) && j < insert_all_table_info->values_desc_.count(); ++j) {
+                  if (OB_ISNULL(value_desc = insert_all_table_info->values_desc_.at(j))) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("value_desc is null", K(ret));
+                  } else if (table_id == value_desc->get_table_id()) {
+                    OZ (need_priv.col_id_array_.push_back(value_desc->get_column_id()));
+                  }
+                }
+              }
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (need_priv.col_id_array_.count() > 0) {
+            need_priv.obj_level_ = OBJ_LEVEL_FOR_COL_PRIV;
+          }
         }
         break;
       }
@@ -1037,6 +1072,7 @@ int get_dml_stmt_ora_need_privs(
         }
       }//fall through for non-show select
       case stmt::T_INSERT :
+      case stmt::T_INSERT_ALL:
       case stmt::T_REPLACE :
       case stmt::T_DELETE :
       case stmt::T_UPDATE :
@@ -1060,6 +1096,9 @@ int get_dml_stmt_ora_need_privs(
             op_literal = ObString::make_string("INSERT, UPDATE");
           }
           op_literal = ObString::make_string("INSERT");
+        } else if (stmt::T_INSERT_ALL == stmt_type) {
+          OZ (ObPrivPacker::pack_raw_obj_priv(NO_OPTION, OBJ_PRIV_ID_INSERT, packed_privs));
+          op_literal = ObString::make_string("INSERT ALL");
         } else if (stmt::T_REPLACE == stmt_type) {
           OZ (ObPrivPacker::pack_raw_obj_priv(NO_OPTION, OBJ_PRIV_ID_DELETE, packed_privs));
           op_literal = ObString::make_string("INSERT, DELETE");
@@ -3758,6 +3797,7 @@ int ObPrivilegeCheck::get_stmt_ora_need_privs(
       } else if (sub_stmt->is_view_stmt()
                  && (stmt::T_SELECT == basic_stmt->get_stmt_type()
                    || stmt::T_INSERT == basic_stmt->get_stmt_type()
+                   || stmt::T_INSERT_ALL == basic_stmt->get_stmt_type()
                    || stmt::T_UPDATE == basic_stmt->get_stmt_type()
                    || stmt::T_DELETE == basic_stmt->get_stmt_type())) {
         //do not check privilege of view stmt, one level 已经递归处理了视图的情况
@@ -4228,6 +4268,7 @@ int ObPrivilegeCheck::one_level_stmt_ora_need_priv(
         case stmt::T_UPDATE:
         case stmt::T_MERGE:
         case stmt::T_INSERT:
+        case stmt::T_INSERT_ALL:
           OZ (get_dml_stmt_ora_need_privs(user_id, ctx, session_priv,
              basic_stmt, need_privs, check_flag));
           break;
