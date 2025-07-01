@@ -3788,7 +3788,6 @@ int ObLSGroupCountBalance::construct_ls_expand_task(const uint64_t ls_group_id,
         if (0 == i) {
           dest_ls_id = target_ls_id;
         }
-        LOG_INFO("testtest", K(dest_ls_id), K(i), K(target_ls_id));
         if (OB_FAIL(ObLSBalanceTaskHelper::add_ls_split_task(
                 GCTX.sql_proxy_, tenant_id, job_id, src_ls->ls_group_id_,
                 src_ls->ls_id_, part_list, balance_strategy, dest_ls_id,
@@ -3796,7 +3795,6 @@ int ObLSGroupCountBalance::construct_ls_expand_task(const uint64_t ls_group_id,
           LOG_WARN("failed to add ls split task failed", KR(ret), K(tenant_id), K(job_id),
               K(balance_strategy), KPC(src_ls), K(dest_ls_id), K(part_list));
         }
-        LOG_INFO("testtest", K(dest_ls_id), K(i), K(target_ls_id));
         last_lg_id = src_ls->ls_group_id_;
       } else {
         //先前的balance_ls_between_lgs_in_cell_算法保证了
