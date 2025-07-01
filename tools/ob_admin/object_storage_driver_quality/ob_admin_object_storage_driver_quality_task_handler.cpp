@@ -238,8 +238,8 @@ int OSDQTaskHandler::handle_multipart_write_task_helper_(const OSDQTask *task)
   for (int i = 0; i < PART_COUNTS && OB_SUCC(ret); i++) {
     const int64_t START_POS = i * PART_SIZE;
     const int64_t PART_LENGTH = min((i + 1) * PART_SIZE, task->buf_len_) - START_POS;
-    if (FAILEDx(adapter_.async_upload_data(*device_handle, fd, task->buf_, 0/*offset*/,
-          task->buf_len_, io_handles[i]))) {
+    if (FAILEDx(adapter_.async_upload_data(*device_handle, fd, task->buf_ + START_POS, 0/*offset*/,
+          PART_LENGTH, io_handles[i]))) {
       OB_LOG(WARN, "failed to start async upload task!", KR(ret), KPC(task));
     }
   }
