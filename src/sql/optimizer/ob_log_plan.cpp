@@ -12376,10 +12376,12 @@ int ObLogPlan::collect_table_location(ObLogicalOperator *op)
       } else { /*do nothing*/ }
     } else if (log_op_def::LOG_MERGE == op->get_type()
                && !static_cast<ObLogDelUpd*>(op)->has_instead_of_trigger()) {
-      ObLogDelUpd *dml_op = static_cast<ObLogDelUpd*>(op);
+      ObLogMerge *dml_op = static_cast<ObLogMerge*>(op);
       ObTablePartitionInfo *table_partition_info = dml_op->get_table_partition_info();
       const ObOptimizerContext &opt_ctx = get_optimizer_context();
-      if (OB_ISNULL(table_partition_info) || OB_ISNULL(opt_ctx.get_query_ctx())) {
+      if (NULL == table_partition_info) {
+        // merge into has no insert, do nothing
+      } else if (OB_ISNULL(opt_ctx.get_query_ctx())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(table_partition_info), K(opt_ctx.get_query_ctx()), K(ret));
       } else if (!dml_op->is_multi_part_dml()) {

@@ -91,9 +91,6 @@ protected:
   virtual int check_insert_plan_need_multi_partition_dml(ObTablePartitionInfo *insert_table_partition,
                                                         ObShardingInfo *insert_table_sharding,
                                                         bool &is_multi_part_dml);
-  int check_basic_sharding_for_insert_stmt(ObShardingInfo &target_sharding,
-                                           ObLogicalOperator &child,
-                                           bool &is_basic);
   int check_if_match_partition_wise_insert(ObShardingInfo &target_sharding,
                                            ObLogicalOperator &child,
                                            bool &is_partition_wise);
