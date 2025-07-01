@@ -1797,15 +1797,10 @@ int ObLSMigrationHandler::notify_switch_to_leader_and_wait_replace_complete(cons
     // wait replace complete
     const int64_t start_ts = ObTimeUtility::current_time();
     ObTimeoutCtx timeout_ctx;
-    int64_t timeout = 10_min;
+    int64_t timeout = 10_s;
     const ObLSID ls_id = ls_->get_ls_id();
     ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     const uint64_t CHECK_CONDITION_INTERVAL = 200_ms;
-
-    if (tenant_config.is_valid()) {
-      timeout = tenant_config->_ls_migration_wait_completing_timeout;
-    }
 
     if (OB_FAIL(timeout_ctx.set_timeout(timeout))) {
       LOG_WARN("failed to set timeout", K(ret), K(timeout));

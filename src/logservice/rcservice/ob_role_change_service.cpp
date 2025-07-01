@@ -1022,7 +1022,7 @@ bool ObRoleChangeService::is_raw_write_or_flashback_mode(const AccessMode &mode)
 bool ObRoleChangeService::need_retry_submit_role_change_event_(int ret) const
 {
   bool bool_ret = false;
-  if (OB_TIMEOUT == ret) {
+  if (OB_TIMEOUT == ret || OB_WAIT_LS_REPLACE_COMPLETE_TIMEOUT == ret) {
     bool_ret = true;
   }
   return bool_ret;

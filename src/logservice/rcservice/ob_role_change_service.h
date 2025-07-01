@@ -106,7 +106,8 @@ private:
     }
     bool need_retry() const
     {
-      return RetrySubmitRoleChangeEventReason::WAIT_REPLAY_DONE_TIMEOUT == reason_;
+      return RetrySubmitRoleChangeEventReason::WAIT_REPLAY_DONE_TIMEOUT == reason_
+             || RetrySubmitRoleChangeEventReason::WAIT_REPLACE_DONE_TIMEOUT == reason_;
     }
     void set_retry_reason(const RetrySubmitRoleChangeEventReason &reason)
     {
