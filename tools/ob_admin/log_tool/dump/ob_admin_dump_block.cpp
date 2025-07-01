@@ -416,7 +416,7 @@ int ObAdminDumpBlock::parse_single_group_entry_(const LogGroupEntry &group_entry
       str_arg_.log_stat_->total_log_entry_count_++;
       curr_lsn = curr_lsn + entry.get_serialize_size();
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = parse_single_log_entry_(entry, block_name, lsn))) {
+      if (OB_SUCCESS != (tmp_ret = parse_single_log_entry_(entry, block_name, curr_lsn))) {
         if (OB_ITER_END != tmp_ret) {
           LOG_ERROR("parse_single_log_entry_ failed", K(tmp_ret), K(entry));
           has_encount_error = true;
@@ -722,7 +722,7 @@ int ObAdminLogServiceDumpBlock::extract_log_entries_from_group_entry_(const LibP
         }
       }
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = parse_single_log_entry_(log_entry, block_name, lsn))) {
+      if (OB_SUCCESS != (tmp_ret = parse_single_log_entry_(log_entry, block_name, log_lsn))) {
         if (OB_ITER_END != tmp_ret) {
           LOG_ERROR("parse_single_log_entry_ failed", K(tmp_ret));
           has_encount_error = true;

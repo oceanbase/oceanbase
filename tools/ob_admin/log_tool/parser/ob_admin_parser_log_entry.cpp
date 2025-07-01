@@ -480,6 +480,17 @@ int ObAdminParserLogEntry::parse_ddl_log_()
         }
         break;
       }
+#ifdef OB_BUILD_SHARED_STORAGE
+      case ObDDLClogType::DDL_FINISH_LOG: {
+        ObDDLFinishLog log;
+        if (OB_FAIL(log.deserialize(buf_, buf_len_, pos_))) {
+          LOG_WARN("deserialize tablet freeze log failed", K(ret), KP(buf_), K(buf_len_), K(pos_));
+        } else {
+          fprintf(stdout, " ###<ObFinishLog>: %s\n", helper.convert(log));
+        }
+        break;
+      }
+#endif
       default: {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("Unknown log type", K(ret), K(type));
