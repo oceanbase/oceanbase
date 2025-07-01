@@ -479,21 +479,16 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   const int64_t block_size = micro_cache_->phy_blk_size_;
   ObSSMicroCacheStat &cache_stat = micro_cache_->cache_stat_;
 
-  persist_meta_task_->is_inited_ = false;
-  blk_ckpt_task_->is_inited_ = false;
-  release_cache_task_->is_inited_ = false;
-
   ObSSARCInfo &arc_info = micro_meta_mgr_->arc_info_;
   const int64_t ori_arc_limit = micro_meta_mgr_->get_arc_info().limit_;
   int64_t ori_blk_ckpt_cnt = 0;
   int64_t ori_micro_ckpt_cnt = 0;
 
   // 1. execute phy_block checkpoint
-  persist_meta_task_->is_inited_ = true;
+  release_cache_task_->is_inited_ = false;
   persist_meta_task_->cur_interval_us_ = 3600 * 1000 * 1000L;
-  blk_ckpt_task_->is_inited_ = true;
   blk_ckpt_task_->cur_interval_us_ = 3600 * 1000 * 1000L;
-  ob_usleep(1000 * 1000);
+  ob_usleep(2 * 1000 * 1000);
 
   ASSERT_EQ(0, phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_used_cnt_);
   ASSERT_EQ(0, phy_blk_mgr_->blk_cnt_info_.meta_blk_.used_cnt_);
@@ -716,6 +711,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
   ASSERT_EQ(false, persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.lack_phy_blk_);
   ASSERT_LT(0, persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.cur_super_blk_.micro_ckpt_time_us_);
   ASSERT_LT(0, persist_meta_task_->persist_meta_op_.tablet_info_map_.size());
+  ASSERT_LT(0, phy_blk_mgr_->super_blk_.micro_ckpt_time_us_);
   int64_t micro_ckpt_used_cnt = phy_blk_mgr_->super_blk_.micro_ckpt_info_.get_total_used_blk_cnt();
   ASSERT_LT(0, micro_ckpt_used_cnt);
   ASSERT_EQ((WRITE_BLK_CNT - 1) * micro_cnt, cache_stat.task_stat().micro_ckpt_item_cnt_);
@@ -757,6 +753,11 @@ TEST_F(TestSSExecuteCheckpointTask, test_execute_checkpoint_task)
     }
   } while (!is_cache_enabled && ObTimeUtility::current_time_s() - start_replay_time_s < REPLAY_CKPT_TIMEOUT_S);
   ASSERT_EQ(true, is_cache_enabled);
+
+  release_cache_task_->is_inited_ = false;
+  persist_meta_task_->cur_interval_us_ = 3600 * 1000 * 1000L;
+  blk_ckpt_task_->cur_interval_us_ = 3600 * 1000 * 1000L;
+  ob_usleep(2 * 1000 * 1000);
 
   // 4.7. check memory state
   int64_t micro_data_blk_cnt = 0;
