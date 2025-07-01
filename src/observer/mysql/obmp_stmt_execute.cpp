@@ -2865,6 +2865,9 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
           param.set_length_semantics(LS_CHAR);
         }
       }
+    } else if (type == MYSQL_TYPE_NEWDECIMAL && param.get_scale() == -1) {
+      // is number, and scale is -1 (-1 is the result after reset)
+      param.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
     }
   }
   return ret;
