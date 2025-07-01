@@ -2882,6 +2882,8 @@ typedef enum ObItemType
   T_ACCESS_INFO = 4882,
   T_WAREHOUSE = 4883,
 
+  T_SEQUENCE_NAME = 4884,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -2905,6 +2907,7 @@ typedef enum ObCacheType
   CACHE_TYPE_PS_OBJ,
   CACHE_TYPE_LIB_CACHE,
   CACHE_TYPE_RESULT,
+  CACHE_TYPE_SEQUENCE,
   CACHE_TYPE_MAX //Attention: add a new type before CACHE_TYPE_MAX
 } ObCacheType;
 

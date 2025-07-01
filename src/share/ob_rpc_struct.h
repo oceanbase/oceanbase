@@ -6986,6 +6986,7 @@ public:
   bool is_fine_grained_;
   sql::ObLibCacheNameSpace ns_type_;
   uint64_t schema_id_;
+  common::ObString sequence_name_;
 };
 
 struct ObAdminMigrateUnitArg
@@ -7620,6 +7621,7 @@ public:
   bool is_fine_grained_;
   sql::ObLibCacheNameSpace ns_type_;
   uint64_t schema_id_;
+  common::ObString sequence_name_;
 };
 
 struct ObGetAllSchemaArg
