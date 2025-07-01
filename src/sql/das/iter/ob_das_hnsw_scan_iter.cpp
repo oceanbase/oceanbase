@@ -104,13 +104,15 @@ int ObDASHNSWScanIter::rescan()
       }
     }
   } else {
-    if (OB_ISNULL(rowkey_vid_iter_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("rowkey vid iter is null", K(ret));
-    } else if (OB_FAIL(build_rowkey_vid_range())) {
-      LOG_WARN("fail to build rowkey vid range", K(ret));
-    } else if (OB_FAIL(do_rowkey_vid_table_scan())) {
-      LOG_WARN("fail to do rowkey vid table scan.", K(ret));
+    if (is_pre_filter() || is_in_filter()) {
+      if (OB_ISNULL(rowkey_vid_iter_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("rowkey vid iter is null", K(ret));
+      } else if (OB_FAIL(build_rowkey_vid_range())) {
+        LOG_WARN("fail to build rowkey vid range", K(ret));
+      } else if (OB_FAIL(do_rowkey_vid_table_scan())) {
+        LOG_WARN("fail to do rowkey vid table scan.", K(ret));
+      }
     }
   }
 
@@ -656,7 +658,7 @@ int ObDASHNSWScanIter::updata_vec_exec_ctx(ObPlanStat* plan_stat)
       } else if (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_IN_FILTER) {
         ATOMIC_INC(&(plan_stat->vec_index_exec_ctx_.in_filter_chosen_times_));
       }
-       ATOMIC_INC(&(plan_stat->vec_index_exec_ctx_.record_count_));
+      ATOMIC_INC(&(plan_stat->vec_index_exec_ctx_.record_count_));
     } else {
       double iter_time = plan_stat->vec_index_exec_ctx_.iter_filter_chosen_times_;
       double pre_time = plan_stat->vec_index_exec_ctx_.pre_filter_chosen_times_;
@@ -1173,6 +1175,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
               }
             }
           }
+          adaptive_ctx_.pre_scan_row_cnt_ += batch_row_count;
         } else {
           rowkey_vid_iter_->clear_evaluated_flag();
           int64_t scan_row_cnt = 0;
@@ -1185,6 +1188,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
 
           if (OB_FAIL(ret) && OB_ITER_END != ret) {
           } else if (scan_row_cnt > 0) {
+            adaptive_ctx_.pre_scan_row_cnt_ += scan_row_cnt;
             ret = OB_SUCCESS;
           }
 
@@ -1221,6 +1225,10 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
               }
             }
           }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (can_retry_ && !go_brute_force_ && OB_FAIL(check_pre_filter_need_retry())) {
+          LOG_WARN("ret of check iter filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
         }
       } // end while
     }
@@ -1364,8 +1372,8 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_idx_filter(
           }
           if (OB_FAIL(ret)) {
             LOG_WARN("failed to get next row.", K(ret));
-          } else if (can_retry_ && !go_brute_force_&& OB_FAIL(check_pre_filter_need_retry())) {
-            LOG_WARN("ret of check iter filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
+          } else if (can_retry_ && !go_brute_force_ && OB_FAIL(check_pre_filter_need_retry())) {
+            LOG_WARN("ret of check pre filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
           } else {
             ObEvalCtx::BatchInfoScopeGuard guard(*vec_aux_rtdef_->eval_ctx_);
             guard.set_batch_size(scan_row_cnt);
@@ -1779,7 +1787,7 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
         adaptive_ctx_.iter_res_row_cnt_ += added_cnt;
         adaptive_ctx_.iter_filter_row_cnt_ += unfiltered_vid_cnt;
         if (can_retry_ && OB_FAIL(check_iter_filter_need_retry())) {
-          LOG_WARN("ret of check pre filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
+          LOG_WARN("ret of check iter filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
         } else if (need_cnt_next > 0) {
           float need_ratio = static_cast<float>(need_cnt_next) / static_cast<float>(added_cnt);
           float select_ratio = static_cast<float>(added_cnt) / static_cast<float>(unfiltered_vid_cnt);
