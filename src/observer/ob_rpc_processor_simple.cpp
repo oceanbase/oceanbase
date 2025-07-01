@@ -4109,6 +4109,7 @@ int ObCalibrateSSDiskSpaceP::process()
       if (OB_ISNULL(file_mgr = MTL(ObTenantFileManager *))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObTenantFileManager is null", KR(ret), K_(arg_.tenant_id));
+      } else if (FALSE_IT(file_mgr->set_mandatory_calibrate())){
       } else if (OB_FAIL(file_mgr->calibrate_disk_space())) {
         LOG_WARN("fail to calibrate_ss_disk_space", KR(ret));
       }
