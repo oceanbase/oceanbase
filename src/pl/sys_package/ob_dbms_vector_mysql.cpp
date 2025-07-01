@@ -440,15 +440,10 @@ int ObDBMSVectorMySql::get_estimate_memory_str(ObVectorIndexParam index_param,
     case ObVectorIndexAlgorithmType::VIAT_HNSW_BQ: {
       uint64_t estimate_mem = 0;
       uint64_t suggested_mem = 0;
-      uint64_t max_tablet_mem = 0;
-      if (OB_FAIL(ObVectorIndexUtil::estimate_hnsw_memory(num_vectors, index_param, estimate_mem))) {
+      if (OB_FAIL(ObVectorIndexUtil::estimate_hnsw_memory(num_vectors, index_param, estimate_mem, false/*+is_build*/))) {
         LOG_WARN("failed to estimate hnsw vector index memory", K(num_vectors), K(index_param));
-      } else if (num_vectors == tablet_max_num_vectors) {
-        suggested_mem = estimate_mem + num_vectors * index_param.dim_ * sizeof(float) * VEC_ESTIMATE_MEMORY_FACTOR;
-      } else if (OB_FAIL(ObVectorIndexUtil::estimate_hnsw_memory(tablet_max_num_vectors, index_param, max_tablet_mem))) {
+      } else if (OB_FAIL(ObVectorIndexUtil::estimate_hnsw_memory(tablet_max_num_vectors, index_param, suggested_mem, true/*+is_build*/))) {
         LOG_WARN("failed to estimate hnsw vector index memory", K(num_vectors), K(index_param));
-      } else {
-        suggested_mem = max_tablet_mem + tablet_max_num_vectors * index_param.dim_ * sizeof(float) * VEC_ESTIMATE_MEMORY_FACTOR + estimate_mem;
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(res_buf.append(ObString("Suggested minimum vector memory is "), 0))) {

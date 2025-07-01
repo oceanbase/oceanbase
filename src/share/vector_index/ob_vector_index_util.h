@@ -638,7 +638,8 @@ public:
   static int estimate_hnsw_memory(
       uint64_t num_vectors,
       const ObVectorIndexParam &param,
-      uint64_t &est_mem
+      uint64_t &est_mem,
+      bool is_build = false
   );
   static int estimate_ivf_memory(uint64_t num_vectors,
                                  const ObVectorIndexParam &param,
