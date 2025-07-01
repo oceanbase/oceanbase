@@ -129,15 +129,9 @@ int ObKmeansAlgo::init(ObKmeansCtx &kmeans_ctx)
     SHARE_LOG(WARN, "invalid argument", K(ret), K(lists), K(tenant_id), K(dim));
   } else {
     allocator_ = &kmeans_ctx.allocator_;
-    if (OB_FAIL(centers_[0].init(dim, lists, *allocator_))) {
-      SHARE_LOG(WARN, "failed to init center buffer", K(ret));
-    } else if (OB_FAIL(centers_[1].init(dim, lists, *allocator_))) {
-      SHARE_LOG(WARN, "failed to init center buffer", K(ret));
-    } else {
-      kmeans_ctx_ = &kmeans_ctx;
-      tmp_allocator_.set_attr(ObMemAttr(tenant_id, "KmeansCtxTmp"));
-      is_inited_ = true;
-    }
+    kmeans_ctx_ = &kmeans_ctx;
+    tmp_allocator_.set_attr(ObMemAttr(tenant_id, "KmeansCtxTmp"));
+    is_inited_ = true;
   }
   return ret;
 }
@@ -171,6 +165,8 @@ int ObKmeansAlgo::quick_centers(const ObIArray<float*> &input_vectors)
   } else if (PREPARE_CENTERS != status_) {
     ret = OB_STATE_NOT_MATCH;
     SHARE_LOG(WARN, "status not match", K(ret), K(status_));
+  } else if (OB_FAIL(centers_[cur_idx_].init(kmeans_ctx_->dim_, input_vectors.count(), *allocator_))) {
+    SHARE_LOG(WARN, "failed to init center buffer", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < input_vectors.count(); ++i) {
       if (OB_FAIL(centers_[cur_idx_].push_back(kmeans_ctx_->dim_, input_vectors.at(i)))) {
@@ -615,6 +611,10 @@ int ObElkanKmeansAlgo::init_first_center(const ObIArray<float*> &input_vectors)
   if (PREPARE_CENTERS != status_) {
     ret = OB_STATE_NOT_MATCH;
     SHARE_LOG(WARN, "status not match", K(ret), K(status_));
+  } else if (OB_FAIL(centers_[0].init(kmeans_ctx_->dim_, kmeans_ctx_->lists_, *allocator_))) {
+    SHARE_LOG(WARN, "failed to init center buffer", K(ret));
+  } else if (OB_FAIL(centers_[1].init(kmeans_ctx_->dim_, kmeans_ctx_->lists_, *allocator_))) {
+    SHARE_LOG(WARN, "failed to init center buffer", K(ret));
   } else {
     const int64_t sample_cnt = input_vectors.count();
     int64_t random = 0;

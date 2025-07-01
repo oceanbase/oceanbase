@@ -118,6 +118,7 @@ public:
   virtual void reuse();
 
   int64_t get_actual_memory_used() { return get_allocator().used(); }
+  virtual int64_t get_expect_memory_used(const IvfCacheKey &key, const ObVectorIndexParam &param) = 0;
   virtual ObIAllocator &get_allocator() { return sub_mem_ctx_->get_safe_arena_allocator(); }
   lib::MemoryContext &get_mem_ctx() { return sub_mem_ctx_; }
   RWLock &get_lock() { return rwlock_; }
@@ -173,6 +174,7 @@ public:
   OB_INLINE bool is_full_cache() { return count_ == capacity_; }
   OB_INLINE float* get_centroids() { return centroids_; }
   void reuse() override;
+  int64_t get_expect_memory_used(const IvfCacheKey &key, const ObVectorIndexParam &param) override;
   int write_centroid_with_real_idx(const int64_t real_idx, const float *centroid,
                                    const int64_t length);
 
@@ -208,12 +210,13 @@ public:
         tenant_id_(tenant_id),
         cache_mgr_key_(ObTabletID::INVALID_TABLET_ID),
         vec_param_(),
-        table_id_(OB_INVALID_ID)
+        table_id_(OB_INVALID_ID),
+        all_vsag_use_mem_(nullptr)
   {}
   ~ObIvfCacheMgr();
   void reset();
   int init(lib::MemoryContext &parent_mem_ctx, const ObVectorIndexParam &vec_index_param,
-           const ObIvfCacheMgrKey &key, int64_t dim, int64_t table_id);
+           const ObIvfCacheMgrKey &key, int64_t dim, int64_t table_id, uint64_t* all_vsag_use_mem);
   void inc_ref();
   bool dec_ref_and_check_release();
   // only used to alloc/free ObIvfCacheMgr self
@@ -229,7 +232,7 @@ public:
 
   int get_centroid_cache_size(const IvfCacheKey &);
   int write_pq_centroid_cache(const IvfCacheKey &key, float *centroid_vec, int64_t length);
-  int check_memory_limit();
+  int check_memory_limit(int64_t base);
   int fill_cache_info(ObVectorIndexInfo &info);
   OB_INLINE int64_t get_tenant_id() const { return tenant_id_; }
   OB_INLINE ObIvfCacheMgrKey get_cache_mgr_key() const { return cache_mgr_key_; }
@@ -242,6 +245,7 @@ private:
   static const int64_t DEFAULT_IVF_CACHE_HASH_SIZE = 10;
 
   int create_cache_obj(const IvfCacheKey &key, ObIvfICache *&cache_obj);
+  void release_cache_obj(ObIvfICache *&cache_obj);
 
   int64_t ref_cnt_;
   lib::MemoryContext mem_ctx_;
@@ -254,6 +258,7 @@ private:
   ObIvfCacheMgrKey cache_mgr_key_;  // equal to index tablet id currently
   ObVectorIndexParam vec_param_;
   int64_t table_id_;
+  uint64_t *all_vsag_use_mem_;
 };
 
 class ObIvfCacheMgrGuard
@@ -283,7 +288,7 @@ int ObIvfCacheMgr::get_or_create_cache_node(const IvfCacheKey &key, CacheType *&
       if (OB_FAIL(create_cache_obj(key, icache))) {
         OB_LOG(WARN, "fail to create cache obj", K(ret), K(key));
       } else if (OB_FAIL(cache_objs_.set_refactored(key, icache))) {
-        OB_DELETEx(ObIvfICache, &get_arena_allocator(), icache);
+        release_cache_obj(icache);
         if (ret == OB_HASH_EXIST) {
           // other thread may already created, try get again.
           if (OB_FAIL(cache_objs_.get_refactored(key, icache))) {

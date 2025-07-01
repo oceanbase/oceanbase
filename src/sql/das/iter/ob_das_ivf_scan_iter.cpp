@@ -808,6 +808,10 @@ int ObDASIvfBaseScanIter::get_centers_cache(bool is_vectorized,
   } else if (OB_FAIL(cache_mgr->get_or_create_cache_node(
       is_pq_centers ? IvfCacheType::IVF_PQ_CENTROID_CACHE : IvfCacheType::IVF_CENTROID_CACHE, cent_cache))) {
     LOG_WARN("fail to get or create cache node", K(ret), K(is_pq_centers));
+    if (ret == OB_ALLOCATE_MEMORY_FAILED) {
+      is_cache_usable = false;
+      ret = OB_SUCCESS;
+    }
   } else if (!cent_cache->is_completed()) {
     if (cent_cache->set_writing_if_idle()) {
       // write cache
@@ -2988,6 +2992,10 @@ int ObDASIvfPQScanIter::get_pq_precomputetable_cache(
     LOG_WARN("invalid null cache mgr", K(ret));
   } else if (OB_FAIL(cache_mgr->get_or_create_cache_node(IvfCacheType::IVF_PQ_PRECOMPUTE_TABLE_CACHE, cent_cache))) {
     LOG_WARN("fail to get or create cache node", K(ret));
+    if (ret == OB_ALLOCATE_MEMORY_FAILED) {
+      is_cache_usable = false;
+      ret = OB_SUCCESS;
+    }
   } else if (!cent_cache->is_completed()) {
     if (cent_cache->set_writing_if_idle()) {
       int tmp_ret = try_write_pq_precompute_table_cache(*cent_cache, is_vectorized);

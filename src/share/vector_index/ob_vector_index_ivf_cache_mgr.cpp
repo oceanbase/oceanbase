@@ -65,7 +65,7 @@ void ObIvfCacheMgr::reset()
   cache_mgr_key_.reset();
   vec_param_.reset();
 
-  FOREACH(iter, cache_objs_) { OB_DELETEx(ObIvfICache, &get_arena_allocator(), iter->second); }
+  FOREACH(iter, cache_objs_) { release_cache_obj(iter->second); }
   DESTROY_CONTEXT(mem_ctx_);
 }
 
@@ -76,7 +76,7 @@ ObIvfCacheMgr::~ObIvfCacheMgr()
 
 int ObIvfCacheMgr::init(lib::MemoryContext &parent_mem_ctx,
                         const ObVectorIndexParam &vec_index_param, const ObIvfCacheMgrKey &key,
-                        int64_t dim, int64_t table_id)
+                        int64_t dim, int64_t table_id, uint64_t* all_vsag_use_mem)
 {
   int ret = OB_SUCCESS;
   lib::ContextParam param;
@@ -86,9 +86,9 @@ int ObIvfCacheMgr::init(lib::MemoryContext &parent_mem_ctx,
       .set_properties(lib::ADD_CHILD_THREAD_SAFE | lib::ALLOC_THREAD_SAFE)
       .set_page_size(OB_MALLOC_MIDDLE_BLOCK_SIZE)
       .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
-  if (!key.is_valid() || dim <= 0) {
+  if (!key.is_valid() || dim <= 0 || OB_ISNULL(all_vsag_use_mem)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tablet id or dim", K(ret), K(key), K(dim));
+    LOG_WARN("invalid tablet id or dim", K(ret), K(key), K(dim), KP(all_vsag_use_mem));
   } else if (OB_FAIL(parent_mem_ctx->CREATE_CONTEXT(mem_ctx_, param))) {
     LOG_WARN("create memory entity failed", K(ret));
   } else if (OB_FAIL(cache_objs_.create(DEFAULT_IVF_CACHE_HASH_SIZE, attr, attr))) {
@@ -98,6 +98,7 @@ int ObIvfCacheMgr::init(lib::MemoryContext &parent_mem_ctx,
     vec_param_.dim_ = dim;
     cache_mgr_key_ = key;
     table_id_ = table_id;
+    all_vsag_use_mem_ = all_vsag_use_mem;
     is_inited_ = true;
   }
   return ret;
@@ -140,10 +141,11 @@ int ObIvfCacheMgr::estimate_total_memory_used(uint64_t num_vectors, const ObVect
   return ret;
 }
 
-int ObIvfCacheMgr::check_memory_limit()
+int ObIvfCacheMgr::check_memory_limit(int64_t base)
 {
   int ret = OB_SUCCESS;
   int64_t tenant_mem_size = 0;
+  int64_t curr_used = ATOMIC_LOAD(all_vsag_use_mem_);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObIvfCacheMgr not init", K(ret));
@@ -154,13 +156,8 @@ int ObIvfCacheMgr::check_memory_limit()
     if (OB_FAIL(
             ObPluginVectorIndexHelper::get_vector_memory_limit_size(tenant_id_, tenant_mem_size))) {
       LOG_WARN("failed to get vector mem limit size.", K(ret), K(tenant_id_));
-    } else if (get_actual_memory_used() > tenant_mem_size) {
+    } else if (curr_used + base > tenant_mem_size) {
       is_reach_limit_ = true;
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("Memory usage exceeds user limit.",
-               K(ret),
-               K(tenant_mem_size),
-               K(get_actual_memory_used()));
     }
   } else if (reach_limit_cnt_ >= 10) {
     // check is memory limit changed
@@ -168,13 +165,29 @@ int ObIvfCacheMgr::check_memory_limit()
     if (OB_FAIL(
             ObPluginVectorIndexHelper::get_vector_memory_limit_size(tenant_id_, tenant_mem_size))) {
       LOG_WARN("failed to get vector mem limit size.", K(ret), K(tenant_id_));
-    } else if (get_actual_memory_used() < tenant_mem_size) {
+    } else if (curr_used + base < tenant_mem_size) {
       is_reach_limit_ = false;
     }
   } else {
     ++reach_limit_cnt_;
   }
+  if (OB_SUCC(ret) && is_reach_limit_) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("Memory usage exceeds user limit.",
+              K(ret),
+              K(tenant_mem_size),
+              K(curr_used),
+              K(base));
+  }
   return ret;
+}
+
+void ObIvfCacheMgr::release_cache_obj(ObIvfICache *&cache_obj)
+{
+  if (cache_obj->is_inited_) {
+    ATOMIC_SAF(all_vsag_use_mem_, cache_obj->get_actual_memory_used());
+  }
+  OB_DELETEx(ObIvfICache, &get_fifo_allocator(), cache_obj);
 }
 
 int ObIvfCacheMgr::create_cache_obj(const IvfCacheKey &key, ObIvfICache *&cache_obj)
@@ -185,7 +198,7 @@ int ObIvfCacheMgr::create_cache_obj(const IvfCacheKey &key, ObIvfICache *&cache_
   case IvfCacheType::IVF_CENTROID_CACHE:
   case IvfCacheType::IVF_PQ_PRECOMPUTE_TABLE_CACHE: {
     ObIvfCentCache *tmp_cent_cache = nullptr;
-    if (OB_ISNULL(tmp_cent_cache = OB_NEWx(ObIvfCentCache, &get_arena_allocator()))) {
+    if (OB_ISNULL(tmp_cent_cache = OB_NEWx(ObIvfCentCache, &get_fifo_allocator()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", K(ret), K(sizeof(ObIvfCentCache)));
     } else {
@@ -200,10 +213,19 @@ int ObIvfCacheMgr::create_cache_obj(const IvfCacheKey &key, ObIvfICache *&cache_
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_memory_limit(cache_obj->get_expect_memory_used(key, vec_param_)))) {
+    LOG_WARN("fail to check memory limit", K(ret));
   } else if (OB_FAIL(cache_obj->init(mem_ctx_, key, vec_param_))) {
     LOG_WARN("fail to init cache obj", K(ret));
-  } else if (OB_FAIL(check_memory_limit())) {
-    LOG_WARN("fail to check memory limit", K(ret));
+  } else {
+    ATOMIC_AAF(all_vsag_use_mem_, cache_obj->get_actual_memory_used());
+    if (OB_FAIL(check_memory_limit(0))) {
+      LOG_WARN("fail to check memory limit", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(cache_obj)) {
+    release_cache_obj(cache_obj);
   }
 
   return ret;
@@ -492,6 +514,33 @@ int ObIvfCentCache::read_centroid(int64_t centroid_idx, float *&centroid_vec,
                                   ObIAllocator *allocator /* = nullptr*/)
 {
   return inner_read_centroid(centroid_idx - 1, centroid_vec, deep_copy, allocator);
+}
+
+int64_t ObIvfCentCache::get_expect_memory_used(
+    const IvfCacheKey &key,
+    const ObVectorIndexParam &param)
+{
+  int64_t usage = 0;
+  switch (key.type_) {
+    case IvfCacheType::IVF_CENTROID_CACHE: {
+      usage = sizeof(float) * param.nlist_ * param.dim_;
+      break;
+    }
+    case IvfCacheType::IVF_PQ_CENTROID_CACHE: {
+      int64_t pqnlist = 1L << param.nbits_;
+      usage = sizeof(float) * pqnlist * param.dim_;
+      break;
+    }
+    case IvfCacheType::IVF_PQ_PRECOMPUTE_TABLE_CACHE: {
+      int64_t ksub = 1L << param.nbits_;
+      usage = sizeof(float) * param.nlist_ * param.m_ * ksub;
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+  return usage;
 }
 
 ///////////////////////

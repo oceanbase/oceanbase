@@ -1535,7 +1535,7 @@ int ObPluginVectorIndexMgr::create_ivf_cache_mgr(ObIAllocator &allocator,
     LOG_WARN("failed to allocate memory for vector index ivf cache mgr", KR(ret));
   } else {
     tmp_ivf_cache_mgr = new(mgr_buff)ObIvfCacheMgr(allocator, tenant_id_);
-    if (OB_FAIL(tmp_ivf_cache_mgr->init(memory_context_, vec_index_param, key, dim, table_id))) {
+    if (OB_FAIL(tmp_ivf_cache_mgr->init(memory_context_, vec_index_param, key, dim, table_id, all_vsag_use_mem_))) {
       LOG_WARN("failed to init cache mgr.", K(ret));
     } else {
       if (OB_FAIL(set_ivf_cache_mgr(key, tmp_ivf_cache_mgr))) {
