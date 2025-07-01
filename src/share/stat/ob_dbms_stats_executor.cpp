@@ -144,18 +144,20 @@ int ObDbmsStatsExecutor::gather_partition_stats(ObExecContext &ctx,
             LOG_WARN("failed to assign", K(ret));
           } else {
             derive_param.global_stat_param_.need_modify_ = taskInfo.gather_global_;
+            if (ERRSIM_FAILED_ANALYZE_TABLE_STATS) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("ERRSIM: failed to ANALYZE table stats", K(ret));
+            }
           }
-          if (OB_SUCC(ret) && ERRSIM_FAILED_ANALYZE_TABLE_STATS) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("ERRSIM: failed to ANALYZE table stats", K(ret));
-          } else if (OB_FAIL(do_split_gather_stats(ctx,
-                                                   gather_trans,
-                                                   taskInfo,
-                                                   batch_task_col_infos,
-                                                   derive_param,
-                                                   partition_id_block_map,
-                                                   partition_id_skip_rate_map,
-                                                   gather_helper))) {
+
+          if (OB_SUCC(ret) && OB_FAIL(do_split_gather_stats(ctx,
+                                                            gather_trans,
+                                                            taskInfo,
+                                                            batch_task_col_infos,
+                                                            derive_param,
+                                                            partition_id_block_map,
+                                                            partition_id_skip_rate_map,
+                                                            gather_helper))) {
             LOG_WARN("failed to gather statts", K(ret));
           } else if (share::schema::ObTableType::EXTERNAL_TABLE != param.ref_table_type_ &&
                      OB_FAIL(update_dml_modified_info(gather_trans.get_connection(), derive_param))) {
