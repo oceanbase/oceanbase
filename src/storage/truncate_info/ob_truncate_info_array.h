@@ -69,11 +69,11 @@ public:
       int64_t &pos);
   int64_t get_serialize_size() const;
   void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
+  static bool compare(const ObTruncateInfo *lhs, const ObTruncateInfo *rhs);
   TO_STRING_KV(K_(is_inited), "array_cnt", count(), K_(src), K_(truncate_info_array));
 private:
   bool inner_is_valid() const { return 0 == count() || (count() >= 0 && allocator_ != nullptr); }
   void reset_list();
-  static bool compare(const ObTruncateInfo *lhs, const ObTruncateInfo *rhs);
   int inner_append_and_sort(ObTruncateInfo &info);
   ObSEArray<ObTruncateInfo *, 1> truncate_info_array_;
   common::ObIAllocator *allocator_;

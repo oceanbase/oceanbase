@@ -160,6 +160,7 @@ int ObMdsInfoDistinctMgr::build_distinct_array(
     }
   } // for
   if (OB_SUCC(ret)) {
+    lib::ob_sort(distinct_array_.begin(), distinct_array_.end(), ObTruncateInfoArray::compare);
     LOG_INFO("[TRUNCATE INFO] success to build distinct array", KR(ret), "distinct_array_cnt", distinct_array_.count(),
       K_(distinct_array), K(input_array));
   }

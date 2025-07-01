@@ -475,6 +475,57 @@ TEST_F(TestTruncateInfoReader, test_put_truncate_info_into_cache)
   }
 }
 
+TEST_F(TestTruncateInfoReader, test_random_key_with_same_part_def)
+{
+  int ret = OB_SUCCESS;
+  // create tablet
+  const common::ObTabletID tablet_id(ObTimeUtility::fast_current_time() % 10000000000000);
+  ObTabletHandle tablet_handle;
+  ret = create_tablet(tablet_id, tablet_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  tablet_handle.reset();
+  const char *key_data =
+    "tx_id    commit_ver    schema_ver    lower_bound    upper_bound\n"
+    "100      1000         10100         100            200        \n"
+    "2        2000         10200         200            300        \n"
+    "30       3000         10300         100            200        \n"
+    "4        4000         10400         200            300        \n";
+  ObTruncateInfoArray mock_array;
+  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::batch_mock_truncate_info(allocator_, key_data, mock_array));
+  const int64_t max_cnt = 4;
+  int64_t idx = 0;
+  ASSERT_EQ(max_cnt, mock_array.count());
+  /*
+  * insert 5 truncate info of same range part
+  */
+  for (; idx < max_cnt; ++idx) {
+    ASSERT_EQ(OB_SUCCESS, insert_truncate_info(*mock_array.at(idx)));
+  } // for
+  ASSERT_EQ(OB_SUCCESS, wait_mds_mini_finish(tablet_id, mock_array.at(max_cnt - 1)->commit_version_));
+  ret = MediumInfoCommon::get_tablet(tablet_id, tablet_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObMdsInfoDistinctMgr distinct_mgr;
+#define READ_DISTINC_ARRAY(version_range)                                              \
+  distinct_mgr.reset(); \
+  ASSERT_EQ(OB_SUCCESS, distinct_mgr.init(allocator_, *tablet_handle.get_obj(), nullptr, version_range, false/*access*/));
+  // read all truncate info, should get 2 distinct info
+  READ_DISTINC_ARRAY(ObVersionRange(1, EXIST_READ_SNAPSHOT_VERSION));
+  LOG_INFO("read all truncate info", KR(ret), K(distinct_mgr));
+  ASSERT_EQ(2, distinct_mgr.get_distinct_truncate_info_array().count());
+  ASSERT_EQ(mock_array.at(2)->commit_version_, distinct_mgr.get_distinct_truncate_info_array().at(0)->commit_version_);
+  ASSERT_EQ(mock_array.at(3)->commit_version_, distinct_mgr.get_distinct_truncate_info_array().at(1)->commit_version_);
+
+  if (tablet_handle.is_valid()) {
+    ObTruncateInfoCache &truncate_info_cache = tablet_handle.get_obj()->truncate_info_cache_;
+    truncate_info_cache.reset();
+    READ_DISTINC_ARRAY(ObVersionRange(1000, EXIST_READ_SNAPSHOT_VERSION));
+    LOG_INFO("read all truncate info", KR(ret), K(distinct_mgr));
+    ASSERT_EQ(2, distinct_mgr.get_distinct_truncate_info_array().count());
+    ASSERT_EQ(mock_array.at(2)->commit_version_, distinct_mgr.get_distinct_truncate_info_array().at(0)->commit_version_);
+    ASSERT_EQ(mock_array.at(3)->commit_version_, distinct_mgr.get_distinct_truncate_info_array().at(1)->commit_version_);
+  }
+}
+
 } // namespace storage
 } // namespace oceanbase
 
