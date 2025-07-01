@@ -8,7 +8,7 @@ function(mit_unittest case)
     add_test(${case} ${case})
     set_tests_properties(${case} PROPERTIES TIMEOUT 300)
   endif()
-  target_link_libraries(${case} PRIVATE -Wl,--whole-archive mock_di -Wl,--no-whole-archive oceanbase gtest gmock ${HYPERSCAN_LIB})
+  target_link_libraries(${case} PRIVATE -Wl,--whole-archive mock_di -Wl,--no-whole-archive oceanbase gtest gmock)
   target_include_directories(${case}
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/deps/oblib/unittest ${CMAKE_SOURCE_DIR}/sensitive_test)
 endfunction()
