@@ -959,6 +959,8 @@ public:
   static int fill_ps_cursor(ObSQLSessionInfo &session,
                             pl::ObPsCursorInfo &ps_cursor,
                             int64_t pre_store_size = 0);
+  static int close_ps_cursor_result_set(ObSQLSessionInfo &session,
+                                        int64_t cursor_id);
 
 #ifdef OB_BUILD_ORACLE_PL
   static int spi_execute_dblink(ObExecContext &exec_ctx,

@@ -10029,6 +10029,40 @@ int ObSPIService::ps_cursor_fetch(ObPsCursorInfo &ps_cursor, ObSQLSessionInfo &s
   return ret;
 }
 
+int ObSPIService::close_ps_cursor_result_set(ObSQLSessionInfo &session,
+                                             int64_t cursor_id)
+{
+  int ret = OB_SUCCESS;
+  ObPLCursorInfo *pl_cursor = NULL;
+  ObPsCursorInfo *ps_cursor = NULL;
+  LOG_INFO("open ps cursor failed, close result set now", K(ret), K(cursor_id));
+  if (OB_NOT_NULL(pl_cursor = session.get_cursor(cursor_id))) {
+    if (OB_ISNULL(ps_cursor = dynamic_cast<ObPsCursorInfo *>(pl_cursor))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ps_cursor is NULL", K(ret), K(cursor_id), KPC(pl_cursor));
+    } else {
+      ObSpinLockGuard guard(ps_cursor->get_spin_lock());
+      ObSPIResultSet *spi_result = ps_cursor->get_cursor_handler();
+      if (OB_NOT_NULL(spi_result)) {
+        if (OB_NOT_NULL(spi_result->get_result_set())) {
+          int close_ret = spi_result->close_result_set();
+          if (OB_SUCCESS != close_ret) {
+            LOG_WARN("close mysql result failed", K(ret), K(close_ret));
+          }
+          ret = (OB_SUCCESS == ret ? close_ret : ret);
+          spi_result->destruct_exec_params(session);
+        }
+        spi_result->~ObSPIResultSet();
+        ps_cursor->set_spi_cursor(NULL);
+        if (ps_cursor->is_async()) {
+          ObPsCursorInfo::reduce_async_cursor_count();
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 ObPLSubPLSqlTimeGuard::ObPLSubPLSqlTimeGuard(pl::ObPLExecCtx *ctx) :
   old_sub_plsql_exec_time_(-1),
   execute_start_(ObTimeUtility::current_time()),

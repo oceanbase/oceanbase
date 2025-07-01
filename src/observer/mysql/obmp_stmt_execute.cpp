@@ -2133,6 +2133,7 @@ int ObMPStmtExecute::process()
   }
 
   // 如果已经异步回包，则这部分逻辑在cb中执行，这里跳过flush_buffer()
+  bool need_close_result_set = is_async_cursor;
   if (!THIS_WORKER.need_retry()) {
     if (async_resp_used) {
       async_resp_used_ = true;
@@ -2140,6 +2141,7 @@ int ObMPStmtExecute::process()
     } else {
       flush_ret = flush_buffer(true);
       if (OB_SUCC(ret) && (OB_SUCCESS == flush_ret) && is_async_cursor) {
+        need_close_result_set = false;
         if (OB_FAIL(ps_cursor_store_data(*sess, 0))) {
           LOG_WARN("async ps cursor store data failed", K(ret));
         }
@@ -2150,6 +2152,12 @@ int ObMPStmtExecute::process()
   }
   if (is_async_cursor) {
     int tmp_ret = OB_SUCCESS;
+    if (need_close_result_set) {
+      if (OB_SUCCESS != (tmp_ret = ObSPIService::close_ps_cursor_result_set(*sess, stmt_id_))) {
+        LOG_WARN("close ps cursor result set failed", K(ret), K(stmt_id_));
+      }
+      tmp_ret = OB_SUCCESS;
+    }
     if (OB_SUCCESS != (tmp_ret = sess->get_query_lock().unlock())) {
       LOG_WARN("unlock session failed", K(ret), K(tmp_ret));
     }
