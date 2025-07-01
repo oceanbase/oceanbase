@@ -101,7 +101,10 @@ struct ReuseAggCell<T_FUN_APPROX_COUNT_DISTINCT>
     char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
     int cell_len = agg_ctx.row_meta().get_cell_len(agg_col_id, agg_row);
     *reinterpret_cast<const char **>(agg_cell + cell_len) = store->bucket_buf_;
-    MEMSET(const_cast<char *>(store->bucket_buf_), 0, llc_num_buckets);
+    NotNullBitVector &not_nulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
+    if (not_nulls.at(agg_col_id) && store->bucket_buf_ != nullptr) {
+      MEMSET(const_cast<char *>(store->bucket_buf_), 0, llc_num_buckets);
+    }
     return ret;
   }
   static int64_t stored_size() { return sizeof(StoredValue); }
@@ -133,7 +136,10 @@ struct ReuseAggCell<T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS>
     char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
     StoredValue *store = reinterpret_cast<StoredValue *>(store_v);
     *reinterpret_cast<const char **>(agg_cell) = store->res_buf_;
-    MEMSET(const_cast<char *>(store->res_buf_), 0, llc_num_buckets);
+    NotNullBitVector &not_nulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
+    if (not_nulls.at(agg_col_id) && store->res_buf_ != nullptr) {
+      MEMSET(const_cast<char *>(store->res_buf_), 0, llc_num_buckets);
+    }
     return ret;
   }
 
