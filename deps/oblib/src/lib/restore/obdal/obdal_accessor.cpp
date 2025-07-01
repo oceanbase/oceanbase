@@ -322,8 +322,9 @@ public:
   using ObStorageIORetryStrategy<OutcomeType>::start_time_us_;
   using ObStorageIORetryStrategy<OutcomeType>::timeout_us_;
 
-  ObStorageObdalRetryStrategy(const int64_t timeout_us = ObObjectStorageTenantGuard::get_timeout_us())
-      : ObStorageIORetryStrategy<OutcomeType>(timeout_us)
+  ObStorageObdalRetryStrategy(const int64_t timeout_us = ObObjectStorageTenantGuard::get_timeout_us(), const int64_t errsim_enable = true)
+      : ObStorageIORetryStrategy<OutcomeType>(timeout_us),
+        errsim_enable_(errsim_enable)
   {}
   virtual ~ObStorageObdalRetryStrategy() {}
 
@@ -336,7 +337,7 @@ public:
       ObString message(outcome->message.len, (char *) outcome->message.data);
       OB_LOG(WARN, "ObDal log error", K(ret),
           K(start_time_us_), K(timeout_us_), K(attempted_retries),
-          K(outcome->code), K(message));
+          K(outcome->code), K(message), K(outcome->is_temporary));
       ObDalWrapper::obdal_error_free(outcome);
     }
   }
@@ -346,7 +347,7 @@ protected:
       const RetType &outcome, const int64_t attempted_retries) const override
   {
     bool bret = false;
-    if (OB_SUCCESS != EventTable::EN_OBJECT_STORAGE_IO_RETRY) {
+    if (errsim_enable_ && OB_SUCCESS != EventTable::EN_OBJECT_STORAGE_IO_RETRY) {
       bret = true;
       if (outcome == nullptr) {
         OB_LOG(INFO, "errsim object storage IO retry");
@@ -360,6 +361,8 @@ protected:
     }
     return bret;
   }
+private:
+  bool errsim_enable_;
 };
 
 // @brief ObDalRetryLayer is responsible for:
@@ -373,7 +376,7 @@ public:
     if (OB_NOT_NULL(error)) {
       convert_obdal_error(error, ob_errcode);
       ObString message(error->message.len, (char *) error->message.data);
-      OB_LOG_RET(WARN, ob_errcode, "obdal fail", K(error->code), K(message));
+      OB_LOG_RET(WARN, ob_errcode, "obdal fail", K(error->code), K(message), K(error->is_temporary));
       ObDalWrapper::obdal_error_free(error);
       error = nullptr;
     }
@@ -567,8 +570,12 @@ public:
   static int obdal_lister_next(opendal_lister *lister, struct opendal_entry *&entry)
   {
     int ret = OB_SUCCESS;
-    // The operation is not idempotent, so it is not retried
-    opendal_error *error = ObDalWrapper::obdal_lister_next(lister, entry);
+    // Each call to obdal_lister_next does not necessarily involve I/O operations.
+    // When I/O does not occur, ignoring the return value (is_temporary) and retrying is not idempotent.
+    // Therefore, it is important to disregard the errsim test in this context.
+    // As a result, the errsim retry tests in ob_admin will ignore the error injection for this function.
+    ObStorageObdalRetryStrategy<> strategy(ObObjectStorageTenantGuard::get_timeout_us(), false/* errsim_enable */);
+    opendal_error *error = execute_until_timeout(strategy, ObDalWrapper::obdal_lister_next, lister, std::ref(entry));
     if (OB_UNLIKELY(error != nullptr)) {
       handle_obdal_error_and_free(error, ret);
     }
@@ -821,7 +828,9 @@ void convert_obdal_error(const opendal_error *error, int &ob_errcode)
     } else if (error->code == OPENDAL_INVALID_OBJECT_STORAGE_ENDPOINT) {
       ob_errcode = OB_INVALID_OBJECT_STORAGE_ENDPOINT;
     } else if (error->code == OPENDAL_CHECKSUM_ERROR) {
-      ob_errcode = OB_OBJECT_STORAGE_CHECKSUM_ERROR;
+      // checksum error are offten caused by network issues, so we convert it to
+      // io error to make it easier for user to retry.
+      ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
     } else if (error->code == OPENDAL_REGION_MISMATCH) {
       ob_errcode = OB_S3_REGION_MISMATCH;
     } else if (error->code == OPENDAL_TIMED_OUT) {

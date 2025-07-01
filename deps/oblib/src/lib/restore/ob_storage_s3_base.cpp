@@ -820,7 +820,7 @@ static void convert_io_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
 }
 
 template<typename OutcomeType>
-static void log_s3_status(OutcomeType &outcome, const int ob_errcode)
+static void log_s3_status(OutcomeType &outcome, int &ob_errcode)
 {
   const char *request_id = outcome.GetResult().GetRequestId().c_str();
   if (outcome.GetResult().GetRequestId().empty()) {
@@ -839,6 +839,9 @@ static void log_s3_status(OutcomeType &outcome, const int ob_errcode)
   }
   if (OB_OBJECT_STORAGE_CHECKSUM_ERROR == ob_errcode) {
     OB_LOG_RET(ERROR, ob_errcode, "S3 info", K(request_id), K(code), K(exception), K(err_msg));
+    // checksum error are offten caused by network issues, so we convert it to
+    // io error to make it easier for user to retry.
+    ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
   } else {
     OB_LOG_RET(WARN, ob_errcode, "S3 info", K(request_id), K(code), K(exception), K(err_msg));
   }
