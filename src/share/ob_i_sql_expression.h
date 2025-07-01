@@ -153,7 +153,8 @@ public:
      udf_meta_(NULL),
      cast_mode_(CM_NONE),
      raw_expr_(NULL),
-     enable_mysql_compatible_dates_(false)
+     enable_mysql_compatible_dates_(false),
+     compat_version_(0)
   {}
 
   inline ObCollationType get_coll_type() const {
@@ -226,6 +227,10 @@ public:
   inline void set_enable_mysql_compatible_dates(const bool enable_mysql_compatible_dates) {
     enable_mysql_compatible_dates_ = enable_mysql_compatible_dates;
   }
+  inline uint64_t get_compat_version() const { return compat_version_; }
+  inline void set_compat_version(const uint64_t compat_version) {
+    compat_version_ = compat_version;
+  }
   TO_STRING_KV(K_(coll_type),
                K_(div_precision_increment),
                K_(ob_max_allowed_packet),
@@ -255,6 +260,7 @@ private:
    //used to switch params in subquery comparison operators
    int64_t cur_row_idx_;
    bool enable_mysql_compatible_dates_;
+   uint64_t compat_version_;
 };
 
 class ObISqlExpression

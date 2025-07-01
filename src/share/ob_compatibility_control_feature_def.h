@@ -42,4 +42,8 @@ DEF_COMPAT_CONTROL_FEATURE(OUT_ANONYMOUS_COLLECTION_IS_ALLOW,
     "The output parameter is returned according to the original input param \n"
     "type which is not empty for inout anonymous array which used in anonymous block",
     CLUSTER_VERSION_4_2_5_5)
+
+DEF_COMPAT_CONTROL_FEATURE(IMPLICIT_FIRST_CENTURY_YEAR,
+    "The result of cast('x-xx-xx', date) is different in ob and MySQL",
+    CLUSTER_VERSION_4_2_5_5)
 #endif
