@@ -25,6 +25,8 @@ namespace sql
 struct PlanText;
 struct TableItem;
 
+#define OB_OUTLINE_DATA_END_STR          " END_OUTLINE_DATA*/"
+
 enum ObHintMergePolicy
 {
   HINT_DOMINATED_EQUAL,
