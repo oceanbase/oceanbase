@@ -239,7 +239,7 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
 
     //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
     int tmp_ret = OB_SUCCESS;
-    tmp_ret = do_after_process(session, ctx, false); // 不是异步回包
+    tmp_ret = do_after_process(session, false); // 不是异步回包
     UNUSED(tmp_ret);
   }
   return ret;
