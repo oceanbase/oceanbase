@@ -829,7 +829,7 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     bool need_end_stmt = false;
     bool need_free_udt = false;
     stmt::StmtType parent_stmt = ctx.exec_ctx_.get_sql_ctx()->stmt_type_;
-    if (!session->has_start_stmt() && stmt::StmtType::T_SELECT == parent_stmt) {
+    if (!session->has_start_stmt()) {
       need_end_stmt = true;
       session->set_start_stmt();
     }
