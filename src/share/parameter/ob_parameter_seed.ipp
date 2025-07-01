@@ -2427,6 +2427,18 @@ DEF_MODE_WITH_PARSER(_ss_local_cache_control, OB_TENANT_PARAMETER, "",
         "switch for ss_local_cache in shared_storage mode",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(_ss_macro_cache_miss_threshold_for_prefetch, OB_TENANT_PARAMETER, "10", "[1, 10000]",
+        "the threshold for local cache miss times of one same macro block, which triggers"
+        " prefetching of the macro block to local macro cache in shared storage mode,"
+        "Range: [1, 10000]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_ss_micro_cache_arc_limit_percent, OB_TENANT_PARAMETER, "70", "[10, 90]",
+        "the percent of disk space occupied when trigger eviction based on the ARC algo"
+        " of ss_micro_cache in shared storage mode,"
+        "Range: [10, 90]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // obkv feature switch
 DEF_BOOL(_enable_kv_feature, OB_CLUSTER_PARAMETER, "True",
          "Enable or disable OBKV feature.",
