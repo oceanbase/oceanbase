@@ -51,9 +51,9 @@ public:
   void set_has_error() { mem_ctx_.has_error_ = true; }
   int get_table_store(ObDirectLoadTableStore &table_store);
 public:
-  int64_t inc_sort_chunk_task_cnt() { return ATOMIC_AAF(&sort_chunk_task_cnt_, 1); }
-  int64_t dec_sort_chunk_task_cnt() { return ATOMIC_AAF(&sort_chunk_task_cnt_, -1); }
-  int64_t get_sort_chunk_task_cnt() { return ATOMIC_LOAD(&sort_chunk_task_cnt_); }
+  OB_INLINE int64_t inc_sort_chunk_task_cnt() { return ATOMIC_AAF(&sort_chunk_task_cnt_, 1); }
+  OB_INLINE int64_t dec_sort_chunk_task_cnt() { return ATOMIC_AAF(&sort_chunk_task_cnt_, -1); }
+  OB_INLINE int64_t get_sort_chunk_task_cnt() { return ATOMIC_LOAD(&sort_chunk_task_cnt_); }
 private:
   int init_mem_ctx();
   int init_chunks_manager();
