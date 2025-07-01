@@ -95,7 +95,6 @@ protected:
                        const sql::ObMultiStmtItem &multi_stmt_item,
                        sql::ObSQLSessionInfo &session) const;
   int do_after_process(sql::ObSQLSessionInfo &session,
-                       sql::ObSqlCtx &ctx,
                        bool async_resp_used) const;
   int record_flt_trace(sql::ObSQLSessionInfo &session) const;
   // reset warning buffer err msg, for inner retry

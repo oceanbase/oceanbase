@@ -562,7 +562,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
   int tmp_ret = OB_SUCCESS;
   //清空WARNING BUFFER
-  tmp_ret = do_after_process(session, ctx_, async_resp_used);
+  tmp_ret = do_after_process(session, async_resp_used);
 
   // 设置上一条语句的结束时间，由于这里只用于实现事务内部的语句之间的执行超时，
   // 因此，首先，需要判断是否处于事务执行的过程中。然后对于事务提交的时候的异步回包,
