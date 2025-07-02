@@ -81,6 +81,12 @@ public:
 
     return opendal_operator_write(op, path, &bytes);
   }
+  static opendal_error *obdal_operator_write_with_if_not_exists(const opendal_operator *op, const char *path, const char *buf, const int64_t buf_size)
+  {
+    opendal_bytes bytes;
+    opendal_bytes_init(bytes, buf, buf_size, buf_size);
+    return opendal_operator_write_with_if_not_exists(op, path, &bytes);
+  }
   static opendal_error *obdal_operator_reader(const opendal_operator *op, const char *path, opendal_reader *&reader)
   {
     opendal_result_operator_reader result = opendal_operator_reader(op, path);
@@ -452,6 +458,18 @@ public:
     }
     return ret;
   }
+
+  static int obdal_operator_write_with_if_not_exists(const opendal_operator *op, const char *path, const char *buf, const int64_t buf_size)
+  {
+    int ret = OB_SUCCESS;
+    ObStorageObdalRetryStrategy<> strategy;
+    opendal_error *error = execute_until_timeout(strategy, ObDalWrapper::obdal_operator_write_with_if_not_exists, op, path, buf, buf_size);
+    if (OB_UNLIKELY(error != nullptr)) {
+      handle_obdal_error_and_free(error, ret);
+    }
+    return ret;
+  }
+
   static int obdal_operator_reader(const opendal_operator *op, const char *path, opendal_reader *&reader)
   {
     int ret = OB_SUCCESS;
@@ -829,7 +847,7 @@ void convert_obdal_error(const opendal_error *error, int &ob_errcode)
       ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
     } else if (error->code == OPENDAL_CONDITION_NOT_MATCH) {
       // The condition of this operation is not match.
-      ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
+      ob_errcode = OB_OBJECT_STORAGE_CONDITION_NOT_MATCH;
     } else if (error->code == OPENDAL_RANGE_NOT_SATISFIED) {
       // The range of the content is not satisfied.
       ob_errcode = OB_OBJECT_STORAGE_IO_ERROR;
@@ -1002,6 +1020,24 @@ int ObDalAccessor::obdal_operator_write(
   }
   return ret;
 }
+
+int ObDalAccessor::obdal_operator_write_with_if_not_exists(
+    const opendal_operator *op,
+    const char *path,
+    const char *buf,
+    const int64_t buf_size)
+{
+  ObDalLogSpanGuard obdal_span;
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op) || OB_ISNULL(path) || OB_ISNULL(buf) || OB_UNLIKELY(buf_size < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid argument", K(ret), KP(op), KP(path), KP(buf), K(buf_size));
+  } else if (OB_FAIL(do_safely(ObDalRetryLayer::obdal_operator_write_with_if_not_exists, op, path, buf, buf_size))) {
+    OB_LOG(WARN, "failed to exec operator write with if match", K(ret), K(path), K(buf_size));
+  }
+  return ret;
+}
+
 int ObDalAccessor::obdal_operator_reader(
     const opendal_operator *op,
     const char *path,

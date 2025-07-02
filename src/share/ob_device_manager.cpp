@@ -109,6 +109,11 @@ bool ObClusterStateMgr::is_shared_storage_mode() const
   return GCTX.is_shared_storage_mode();
 }
 
+bool ObClusterStateMgr::is_write_with_if_match() const
+{
+  return (0 == ObString(GCONF._object_storage_condition_put_mode).case_compare("if-match"));
+}
+
 bool ObClusterEnableObdalConfig::is_enable_obdal() const
 {
   return GCONF._enable_obdal;

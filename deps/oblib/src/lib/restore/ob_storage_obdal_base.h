@@ -112,6 +112,7 @@ public:
 
 protected:
   bool is_inited_;
+  bool is_write_with_if_match_;
   ObArenaAllocator allocator_;
   ObStorageType storage_type_;
   common::ObString bucket_;

@@ -888,6 +888,11 @@ int ObObjectStorageInfo::to_account(ObStorageAccount &account) const
   return ret;
 }
 
+bool ObObjectStorageInfo::is_write_with_if_match() const
+{
+  return cluster_state_mgr_ != nullptr && cluster_state_mgr_->is_write_with_if_match();
+}
+
 int ObObjectStorageInfo::get_device_map_key_str(char *key_str, const int64_t len) const
 {
   int ret = OB_SUCCESS;

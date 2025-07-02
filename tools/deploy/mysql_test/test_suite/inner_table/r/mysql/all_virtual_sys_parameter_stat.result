@@ -512,6 +512,7 @@ _ndv_runtime_bloom_filter_size
 _nested_loop_join_enabled
 _non_standard_comparison_level
 _no_logging
+_object_storage_condition_put_mode
 _object_storage_io_timeout
 _obkv_enable_distributed_execution
 _obkv_feature_mode

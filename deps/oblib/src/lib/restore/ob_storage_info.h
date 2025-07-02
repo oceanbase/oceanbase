@@ -193,6 +193,7 @@ public:
   {
     return false;
   }
+  virtual bool is_write_with_if_match() const { return false; }
   static ObClusterStateBaseMgr &get_instance()
   {
     static ObClusterStateBaseMgr mgr;
@@ -278,6 +279,7 @@ public:
 
   virtual int get_storage_info_str(char *storage_info, const int64_t info_len) const;
   virtual int to_account(ObStorageAccount &account) const;
+  bool is_write_with_if_match() const;
 
   TO_STRING_KV(K_(endpoint), K_(access_id), K_(extension), "type", get_type_str(),
       K_(checksum_type), K_(max_iops), K_(max_bandwidth), KP_(role_arn), KP_(external_id), K_(enable_worm));

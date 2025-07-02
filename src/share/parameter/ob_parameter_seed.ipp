@@ -2879,3 +2879,9 @@ DEF_BOOL(_enable_runtime_filter_adaptive_apply, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_update_all_columns_for_trigger, OB_TENANT_PARAMETER, "True",
          "control the switch determining whether the UPDATE statement always updates all columns when the table contains a row-level BEFORE UPDATE trigger.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_STR(_object_storage_condition_put_mode, OB_CLUSTER_PARAMETER, "none",
+        "Set the conditional put mode in object storage."
+        "\"none\": no conditional put."
+        "\"if-match\": conditional put with if-match.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE), "none, if-match");
