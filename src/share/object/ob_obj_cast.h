@@ -168,7 +168,8 @@ struct ObObjCastParams
       format_number_with_limit_(true),
       is_ignore_(false),
       exec_ctx_(NULL),
-      gen_query_range_(false)
+      gen_query_range_(false),
+      dest_max_length_(LENGTH_UNKNOWN_YET)
   {
     set_compatible_cast_mode();
   }
@@ -189,7 +190,8 @@ struct ObObjCastParams
       format_number_with_limit_(true),
       is_ignore_(false),
       exec_ctx_(NULL),
-      gen_query_range_(false)
+      gen_query_range_(false),
+      dest_max_length_(LENGTH_UNKNOWN_YET)
   {
     set_compatible_cast_mode();
     if (NULL != dtc_params) {
@@ -215,7 +217,8 @@ struct ObObjCastParams
       format_number_with_limit_(true),
       is_ignore_(false),
       exec_ctx_(NULL),
-      gen_query_range_(false)
+      gen_query_range_(false),
+      dest_max_length_(LENGTH_UNKNOWN_YET)
   {
     set_compatible_cast_mode();
     if (NULL != dtc_params) {
@@ -262,7 +265,8 @@ struct ObObjCastParams
                K(expect_obj_collation_),
                K(res_accuracy_),
                K(format_number_with_limit_),
-               K(is_ignore_));
+               K(is_ignore_),
+               K_(dest_max_length));
 
   IAllocator *allocator_;
   ObIAllocator *allocator_v2_;
@@ -278,6 +282,7 @@ struct ObObjCastParams
   bool is_ignore_;
   sql::ObExecContext *exec_ctx_;
   bool gen_query_range_;
+  int32_t dest_max_length_;
 };
 
 class ObExpectType

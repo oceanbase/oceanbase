@@ -2976,8 +2976,17 @@ static int double_string(const ObObjType expect_type, ObObjCastParams &params,
       if (0 <= scale) {
         length = ob_fcvt(in.get_double(), scale, sizeof(buf) - 1, buf, NULL);
       } else {
+        const int32_t buf_length = static_cast<int32_t>(sizeof(buf) - 1);
+        int32_t double_width = buf_length;
+        if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(cast_mode) && params.dest_max_length_ > 0) {
+          double_width = min(double_width, params.dest_max_length_);
+        }
         length = ob_gcvt_opt(in.get_double(), OB_GCVT_ARG_DOUBLE,
-                              static_cast<int32_t>(sizeof(buf) - 1), buf, NULL, lib::is_oracle_mode(), TRUE);
+                             double_width, buf, NULL, lib::is_oracle_mode(), TRUE);
+        if (length == 0 && double_width < buf_length) {
+          length = double_width;
+          buf[length] = '\0';
+        }
       }
     }
     ObString str(sizeof(buf), static_cast<int32_t>(length), buf);

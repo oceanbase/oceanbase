@@ -298,6 +298,9 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
         if (ob_is_user_defined_type(type.get_type())
             || ob_is_collection_sql_type(type.get_type())) { // if calc meta is udt, set calc udt id
           types[4].set_calc_accuracy(type.get_accuracy());
+        } else if (lib::is_mysql_mode() &&
+            ob_is_double_tc(types[4].get_type()) && ob_is_string_tc(type.get_type())) {
+          types[4].set_calc_accuracy(type.get_accuracy());
         }
       }
     }
