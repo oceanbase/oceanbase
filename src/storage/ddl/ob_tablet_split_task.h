@@ -207,7 +207,8 @@ protected:
     const ObTabletID &src_tablet_id,
     const ObIArray<ObTabletID> &dst_tablet_ids,
     const bool can_reuse_macro_block,
-    const share::SCN &dest_reorg_scn);
+    const share::SCN &dest_reorg_scn,
+    const share::SCN &split_start_scn);
 };
 
 class ObTabletSplitDag final: public ObIDataSplitDag
@@ -410,6 +411,7 @@ public:
 };
 
 // download sstable, prewarm, and update local table store.
+int check_test_block_downloading();
 class ObSplitDownloadSSTableTask final : public share::ObITask
 {
 public:
@@ -426,11 +428,14 @@ public:
       const ObTabletID &src_tablet_id,
       const ObIArray<ObTabletID> &dst_tablets_id,
       const bool can_reuse_macro_block,
-      const share::SCN &dest_reorg_scn);
-  int prewarm(ObLSHandle &ls_handle);
-  static int prewarm_for_split(const ObTabletHandle &dest_tablet_handle,
-                               ObSSTable &sstable);
-  static int is_split_dest_sstable(const ObSSTable &sstable, bool &is_split_dest_sstable);
+      const share::SCN &dest_reorg_scn,
+      const share::SCN &split_start_scn);
+  static int prewarm_for_split(
+      const ObTabletHandle &dest_tablet_handle,
+      ObSSTable &sstable);
+  static int is_split_dest_sstable(
+      const ObSSTable &sstable,
+      bool &is_split_dest_sstable);
   virtual int process() override;
 private:
   static int prewarm_split_point_macro_if_need(
@@ -446,16 +451,36 @@ private:
       const ObTabletID &dest_tablet_id,
       ObMicroBlockIndexIterator &micro_iter);
 private:
+  int get_shared_tablet_versions_iter(
+      const ObTabletID &dst_tablet_id,
+      const share::SCN &end_version,
+      ObSSMetaIterGuard<ObSSTabletIterator> &iter_guard,
+      ObSSTabletIterator *&tablet_version_iter);
+  int get_shared_tablet_for_split_major(
+      const ObTabletID &dst_tablet_id,
+      share::SCN &target_tablet_version);
+  int get_shared_tablet_for_split_mds(
+      const ObTabletID &dst_tablet_id,
+      const share::SCN &target_major_tablet_version,
+      share::SCN &target_tablet_version);
+  int get_shared_tablet_for_split_minor(
+      const ObTabletID &dst_tablet_id,
+      const share::SCN &target_major_tablet_version,
+      share::SCN &target_tablet_version);
+  int get_specified_shared_tablet_versions(
+      const ObTabletID &dst_tablet_id,
+      ObIArray<share::SCN> &target_tablet_versions); // order by minor, mds, major.
+  int prewarm(
+      const ObTabletHandle &ss_tablet_handle,
+      const ObTablesHandleArray &batch_sstables_handle);
   int collect_split_sstables(
       ObArenaAllocator &allocator,
       const share::ObSplitSSTableType &split_sstable_type,
       const ObTableStoreIterator &ss_table_store_iterator,
-      const ObTabletHandle &local_tablet_handle,
       ObTablesHandleArray &batch_sstables_handle);
   int download_sstables_and_update_local(
       ObLSHandle &new_ls_handle,
-      const ObTabletHandle &local_source_tablet_hdl,
-      const share::ObSplitSSTableType &split_sstable_type);
+      const ObTabletHandle &local_source_tablet_hdl);
 
 private:
   bool is_inited_;
@@ -465,6 +490,7 @@ private:
   ObArray<ObTabletID> dest_tablets_id_;
   bool can_reuse_macro_block_;
   share::SCN dest_reorg_scn_;
+  share::SCN split_start_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObSplitDownloadSSTableTask);
 };
 #endif

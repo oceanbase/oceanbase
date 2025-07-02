@@ -1557,7 +1557,7 @@ int ObSSDataSplitHelper::start_add_mds_op(
   if (OB_UNLIKELY(!ls_id.is_valid()
       || !split_scn.is_valid()
       || parallel_cnt_of_each_sstable < 1
-      || sstables_cnt_of_each_tablet < 1
+      || sstables_cnt_of_each_tablet != 1
       || !dst_tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(ls_id), K(split_scn), K(parallel_cnt_of_each_sstable),

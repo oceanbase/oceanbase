@@ -558,7 +558,8 @@ int ObTabletLobSplitDag::create_first_task()
         param_.ori_lob_meta_tablet_id_,
         context_.new_lob_tablet_ids_,
         false/*can_reuse_macro_block*/,
-        context_.reorg_scn_))) {
+        context_.reorg_scn_,
+        context_.split_scn_))) {
       LOG_WARN("alloc and add common task failed", K(ret));
     }
     // TODO YIREN, CHANGE TO TRACE LOG LATER.
@@ -603,7 +604,8 @@ int ObTabletLobSplitDag::create_first_task()
       param_.ori_lob_meta_tablet_id_,
       context_.new_lob_tablet_ids_,
       false/*can_reuse_macro_block*/,
-      context_.reorg_scn_))) {
+      context_.reorg_scn_,
+      context_.split_scn_))) {
     LOG_WARN("alloc and add common task failed", K(ret));
   }
   return ret;
@@ -1927,7 +1929,7 @@ int ObTabletLobWriteDataTask::check_and_create_mds_sstable(
       param_->ls_id_,
       ctx_->split_scn_,
       1/*parallel_cnt_of_each_sstable*/,
-      2/*sstables_cnt*/,
+      1/*sstables_cnt*/,
       dest_tablet_id))) {
     LOG_WARN("start op failed", K(ret));
   } else if (GCTX.is_shared_storage_mode()
