@@ -81,18 +81,15 @@ public:
     ObArenaAllocator allocator;
     SCN snapshot;
     SCN tenant_gc_scn;
-    ObSSMetaIterGuard<ObSSLSIDIterator> ls_id_iter_guard;
-    ObSSLSIDIterator *ls_id_iter = nullptr;
 
     ObArray<SSGCTask *> gc_task_info_list;
     ObArray<ObFunction<int(const ObLSID, const ObTabletID, const SCN)>> gc_task_execute_list;
+    ObArray<ObLSID> ls_id_list;
 
     if (OB_FAIL(MTL(ObSSMetaService *)->get_max_committed_meta_scn(snapshot))) {
       LOG_WARN("get max_committed_meta_scn from ss_meta_srv failed", KR(ret), K(snapshot));
-    } else if (OB_FAIL(get_ls_id_iter_(snapshot, ls_id_iter_guard))) {
-      LOG_WARN("get ls_id_iter_guard failed", KR(ret), K(snapshot));
-    } else if (OB_FAIL(ls_id_iter_guard.get_iter(ls_id_iter))) {
-      LOG_WARN("get ls_id_iter failed", KR(ret), K(snapshot));
+    } else if (OB_FAIL(get_ls_id_list_(snapshot, ls_id_list))) {
+      LOG_WARN("get ls_id_list failed", KR(ret), K(snapshot));
     } else if (OB_FAIL(build_gc_task_with_gc_start_and_end_scn_(snapshot,
                                                                 is_for_sslog_table,
                                                                 last_succ_scns,
@@ -103,7 +100,7 @@ public:
                                                                 gc_task_info_list,
                                                                 gc_task_execute_list))) {
       LOG_WARN("build gc_task with gc_start_scn and gc_end_scn failed", KR(ret), K(snapshot));
-    } else if (OB_FAIL(gc_log_streams_in_ss_(snapshot, ls_id_iter, gc_task_execute_list, tenant_gc_scn))) {
+    } else if (OB_FAIL(gc_log_streams_in_ss_(snapshot, ls_id_list, gc_task_execute_list, tenant_gc_scn))) {
       LOG_WARN("gc log_streams in ss failed", KR(ret), K(snapshot));
     }
 
@@ -117,10 +114,9 @@ public:
   {
     int ret = OB_SUCCESS;
     ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "SsGcTask"));
-    ObSSMetaIterGuard<ObSSLSIDIterator> ls_id_iter_guard;
-    ObSSLSIDIterator *ls_id_iter = nullptr;
     ObArray<SSGCTask *> gc_task_info_list;
     ObArray<ObFunction<int(const ObLSID, const ObTabletID, const SCN)>> gc_task_execute_list;
+    ObArray<ObLSID> ls_id_list;
     SCN tenant_gc_scn = SCN::max_scn();
 
     if (OB_FAIL(build_gc_task_into_list_(
@@ -134,11 +130,9 @@ public:
       } else if (OB_FAIL(gc_log_stream_in_ss_(snapshot, ls_id, gc_task_execute_list, tenant_gc_scn))) {
         LOG_WARN("gc sslog ls in sys tenant failed", KR(ret), K(snapshot), K(ls_id), K(last_succ_scns));
       }
-    } else if (OB_FAIL(get_ls_id_iter_(snapshot, ls_id_iter_guard))) {
-      LOG_WARN("read ls ids with snapshot failed", KR(ret), K(snapshot));
-    } else if (OB_FAIL(ls_id_iter_guard.get_iter(ls_id_iter))) {
-      LOG_WARN("get ls_id_iter from iter_guard failed", KR(ret), K(snapshot));
-    } else if (OB_FAIL(gc_log_streams_in_ss_(snapshot, ls_id_iter, gc_task_execute_list, tenant_gc_scn))) {
+    } else if (OB_FAIL(get_ls_id_list_(snapshot, ls_id_list))) {
+      LOG_WARN("get ls_id_list failed", KR(ret), K(snapshot));
+    } else if (OB_FAIL(gc_log_streams_in_ss_(snapshot, ls_id_list, gc_task_execute_list, tenant_gc_scn))) {
       LOG_WARN("gc ts in ss failed", KR(ret), K(snapshot), K(last_succ_scns));
     } else if (OB_FAIL(set_last_succ_scns_(tenant_gc_scn, gc_task_info_list, last_succ_scns))) {
       LOG_WARN("set last success scns failed", KR(ret), K(tenant_gc_scn), K(gc_task_info_list));
