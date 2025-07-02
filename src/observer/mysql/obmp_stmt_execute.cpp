@@ -1714,6 +1714,7 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
                                        bool &async_resp_used)
 {
   int ret = OB_SUCCESS;
+  ObReqTimeGuard req_timeinfo_guard;
   // 每次执行不同sql都需要更新
   ctx_.self_add_plan_ = false;
   oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
@@ -1758,6 +1759,7 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
     LOG_TRACE("sql retry",
               K(ret), "retry_times", retry_ctrl_.get_retry_times(), "sql", ctx_.cur_sql_);
   }
+  ctx_.spm_ctx_.reset();
   return ret;
 }
 
