@@ -138,13 +138,16 @@ int ObGetDiagnosticsExecutor::assign_condition_val(ObExecContext &ctx, ObGetDiag
           case MYSQL_ERRNO_TYPE:
             OZ(set_sql.assign_fmt("set %s%s=\"%d\";", "@", var.ptr(), ob_errpkt_errno(err_ret, lib::is_oracle_mode())));
             break;
-          case MESSAGE_TEXT_TYPE:
-            OZ(set_sql.assign_fmt("set %s%s=\"%s\";", "@", var.ptr(), err_msg_c.ptr()));
+          case MESSAGE_TEXT_TYPE: {
+            OZ(set_sql.assign_fmt("set %s%s=", "@", var.ptr()));
+            OZ(sql_append_hex_escape_str(err_msg_c, set_sql));
             break;
-          case RETURNED_SQLSTATE_TYPE:
-            OZ(set_sql.assign_fmt("set %s%s=\"%s\";", "@", var.ptr(),
-                                  err_ret > 0 ? sql_state_c.ptr() : ob_sqlstate(err_ret)));
+          }
+          case RETURNED_SQLSTATE_TYPE: {
+            OZ(set_sql.assign_fmt("set %s%s=", "@", var.ptr()));
+            OZ(sql_append_hex_escape_str(err_ret > 0 ? sql_state_c : ob_sqlstate(err_ret), set_sql));
             break;
+          }
           case CLASS_ORIGIN_TYPE:
           case SUBCLASS_ORIGIN_TYPE:
             OZ(set_sql.assign_fmt("set %s%s=\"%s\";", "@", var.ptr(), "ISO 9075"));
