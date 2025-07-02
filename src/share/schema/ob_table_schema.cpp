@@ -9179,11 +9179,8 @@ int ObTableSchema::is_hbase_table(bool &is_h_table) const
   int ret = OB_SUCCESS;
   const int64_t HBASE_TABLE_COLUMN_COUNT = 4;
   is_h_table = false;
-  ObKVAttr kv_attr;
-  if (OB_FAIL(ObTTLUtil::parse_kv_attributes(get_kv_attributes(), kv_attr))) {
-    LOG_WARN("fail to parse kv attributes", KR(ret), K(get_kv_attributes()));
-  } else if (kv_attr.type_ == common::ObKVAttr::ObTTLTableType::HBASE) {
-    is_h_table = true;
+  if (get_column_count() != HBASE_TABLE_COLUMN_COUNT) {
+      //do nothing
   } else {
     const char* K_COLULMN = "K";
     const char* Q_COLULMN = "Q";
