@@ -348,6 +348,7 @@ public:
   static int reset_trans_for_autocommit_lock_conflict(ObExecContext &exec_ctx);
   static transaction::ObTxCleanPolicy
   decide_stmt_rollback_tx_clean_policy_(const int error_code, const bool will_retry);
+  static int set_audit_tx_id_(ObSQLSessionInfo *session);
 };
 
 inline int ObSqlTransControl::get_trans_expire_ts(const ObSQLSessionInfo &my_session,

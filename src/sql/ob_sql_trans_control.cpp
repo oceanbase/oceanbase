@@ -178,7 +178,7 @@ int ObSqlTransControl::explicit_start_trans(ObSQLSessionInfo *session,
     txs->release_tx(*session->get_tx_desc());
     session->get_tx_desc() = NULL;
   }
-  OX (session->get_raw_audit_record().trans_id_ = session->get_tx_id());
+  OX (set_audit_tx_id_(session));
   OX (session->get_raw_audit_record().seq_num_ = ObSequence::get_max_seq_no());
   NG_TRACE_EXT(start_trans, OB_ID(ret), ret,
                OB_ID(trans_id), tx_id.get_id(),
@@ -284,7 +284,7 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
     }
   } else {
     // add tx id to AuditRecord
-    session->get_raw_audit_record().trans_id_ = session->get_tx_id();
+    set_audit_tx_id_(session);
     int64_t expire_ts = get_stmt_expire_ts(NULL, *session);
     if (OB_FAIL(do_end_trans_(session,
                               is_rollback,
@@ -653,8 +653,6 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   } else {
     OZ (stmt_setup_snapshot_(session, das_ctx, plan, plan_ctx, txs, exec_ctx), session_id, *tx_desc);
   }
-  // add tx id to AuditRecord
-  OX (session->get_raw_audit_record().trans_id_ = session->get_tx_id());
 
   // add snapshot info to AuditRecord
   if (OB_SUCC(ret)) {
@@ -1520,6 +1518,9 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback, co
     session->reset_reserved_snapshot_version();
   }
 
+  // add tx id to AuditRecord
+  set_audit_tx_id_(session);
+
   bool print_log = false;
 #ifndef NDEBUG
   print_log = true;
@@ -2050,6 +2051,15 @@ int ObSqlTransControl::stmt_setup_snapshot_for_sslog_(ObSQLSessionInfo *session,
       LOG_WARN("fail to get snapshot for sslog", K(ret), K(local_single_ls_plan),
           K(first_ls_id), KPC(session));
     }
+  }
+  return ret;
+}
+
+int ObSqlTransControl::set_audit_tx_id_(ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  if (session->is_in_transaction()) {
+    session->get_raw_audit_record().trans_id_ = session->get_tx_id();
   }
   return ret;
 }
