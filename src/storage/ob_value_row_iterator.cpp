@@ -181,6 +181,9 @@ int ObRowGetter::init_dml_access_ctx(
   query_flag.scan_order_ = ObQueryFlag::Forward;
   query_flag.set_not_use_bloomfilter_cache();
   query_flag.read_latest_ = ObQueryFlag::OBSF_MASK_READ_LATEST;
+  if (store_ctx.mvcc_acc_ctx_.write_flag_.is_plain_insert_gts_opt()) {
+    query_flag.set_plain_insert_gts_opt();
+  }
   if (skip_read_lob) {
     query_flag.skip_read_lob_ = ObQueryFlag::OBSF_MASK_SKIP_READ_LOB;
   }
