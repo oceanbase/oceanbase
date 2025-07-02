@@ -15021,10 +15021,12 @@ int ObLogPlan::allocate_material_for_recursive_cte_plan(ObLogicalOperator &op)
 int ObLogPlan::set_advisor_table_id(ObLogicalOperator *op)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(op) || OB_ISNULL(op->get_sharding())) {
+  if (OB_ISNULL(op)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("operator is null", K(ret), K(op));
-  } else if (op->get_sharding()->is_local() || op->get_sharding()->is_remote()) {
+  } else if (OB_NOT_NULL(op->get_sharding()) &&
+             OB_NOT_NULL(op->get_sharding()->get_phy_table_location_info()) &&
+             (op->get_sharding()->is_local() || op->get_sharding()->is_remote())) {
     if (OB_FAIL(negotiate_advisor_table_id(op))) {
       LOG_WARN("failed to negotiate advise table id", K(ret));
     }
@@ -15064,7 +15066,15 @@ int ObLogPlan::negotiate_advisor_table_id(ObLogicalOperator *op)
       }
     }
     for (int64_t j = 0; OB_SUCC(ret) && j < cur_op->get_num_of_child(); ++j) {
-      if (OB_FAIL(all_ops.push_back(cur_op->get_child(j)))) {
+      ObLogicalOperator * child = cur_op->get_child(j);
+      if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (log_op_def::LOG_EXCHANGE == child->get_type()) {
+        if (OB_FAIL(SMART_CALL(set_advisor_table_id(child)))) {
+          LOG_WARN("failed to update advise table id", K(ret));
+        }
+      } else if (OB_FAIL(all_ops.push_back(child))) {
         LOG_WARN("failed to push back child operator", K(ret));
       }
     }
