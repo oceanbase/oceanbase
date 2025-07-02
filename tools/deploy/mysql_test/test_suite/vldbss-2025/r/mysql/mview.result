@@ -1,0 +1,14 @@
+set ob_query_timeout = 240000000;
+alter system set writing_throttling_trigger_percentage=100;
+drop database if exists test_mview_refresh_perf;
+create database test_mview_refresh_perf;
+use test_mview_refresh_perf;
+create table t (i int auto_increment, k bigint, primary key(i));
+create materialized view log on t parallel 8 with(k) purge start with sysdate() next sysdate() + interval 60 second;
+create materialized view mv parallel 8 refresh fast as select i, k from t;
+insert /*+ parallel(8) enable_parallel_dml */ into t(k) select uniform(1,10,random()) from table(generator(2000000));
+call dbms_mview.refresh("mv","f");
+succeed
+2000000
+drop database test_mview_refresh_perf;
+purge recyclebin;

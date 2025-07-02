@@ -15,7 +15,7 @@ set @@session.ob_query_timeout = 200000000;
 source init_create_tenant_routines.sql;
 
 call adjust_sys_resource();
-call create_tenant_with_arg('mysql', 'mysql', '2c2g', '');
+call create_tenant_with_arg('mysql', 'mysql', '2c4g', '');
 
 /****************************** ATTENTION ******************************/
 /* The tenant=all will be deprecated. If you want all tenants to be    */
