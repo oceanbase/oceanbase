@@ -103,7 +103,7 @@ namespace common
 {
 uint64_t __attribute__((used)) lib_get_cpu_khz()
 {
-  return OBSERVER.get_cpu_frequency_khz();
+  return observer::ObServerFrequence::get_instance().get_cpu_frequency_khz();
 }
 } // namespace common
 
@@ -3771,11 +3771,11 @@ int ObServer::refresh_cpu_frequency()
 
   if (0 == cpu_frequency) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "get cpu frequency failed");
-    cpu_frequency = ObServer::DEFAULT_CPU_FREQUENCY;
+    cpu_frequency = ObServerFrequence::DEFAULT_CPU_FREQUENCY;
   }
   if (cpu_frequency != cpu_frequency_) {
     LOG_INFO("Cpu frequency changed", "from", cpu_frequency_, "to", cpu_frequency);
-    cpu_frequency_ = cpu_frequency;
+    ObServerFrequence::get_instance().get_cpu_frequency_khz() = cpu_frequency;
   }
 
   return ret;
@@ -4371,6 +4371,27 @@ bool ObServer::is_arbitration_mode() const
 #endif
 }
 
+ObServerFrequence::ObServerFrequence()
+  :cpu_frequency_(ObServerFrequence::DEFAULT_CPU_FREQUENCY)
+{
+  refresh_cpu_frequency();
+}
+
+int ObServerFrequence::refresh_cpu_frequency() {
+  int ret = OB_SUCCESS;
+  uint64_t cpu_frequency = get_cpufreq_khz();
+
+  if (0 == cpu_frequency) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "get cpu frequency failed");
+    cpu_frequency = ObServerFrequence::DEFAULT_CPU_FREQUENCY;
+  }
+  if (cpu_frequency != cpu_frequency_) {
+    LOG_INFO("Cpu frequency changed", "from", cpu_frequency_, "to", cpu_frequency);
+    cpu_frequency_ = cpu_frequency;
+  }
+
+  return ret;
+};
 
 // ------------------------------- arb server end -------------------------------------------
 } // end of namespace observer

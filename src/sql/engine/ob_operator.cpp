@@ -1210,7 +1210,7 @@ int ObOperator::setup_op_feedback_info()
     common::ObIArray<ObExecFeedbackNode> &nodes = fb_info.get_feedback_nodes();
     int64_t &total_db_time = fb_info.get_total_db_time();
     uint64_t db_time = op_monitor_info_.calc_db_time();
-    uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
+    uint64_t cpu_khz = OBSERVER_FREQUENCE.get_cpu_frequency_khz();
     db_time = db_time * 1000 / cpu_khz;
     total_db_time += db_time;
     if (fb_node_idx_ >= 0 && fb_node_idx_ < nodes.count()) {

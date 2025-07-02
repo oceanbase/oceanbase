@@ -1943,7 +1943,7 @@ int ObDbmsStatsExecutor::gather_system_stats(ObExecContext &ctx, int64_t tenant_
 {
   int ret = OB_SUCCESS;
   UNUSED(ctx);
-  int64_t cpu_mhz = OBSERVER.get_cpu_frequency_khz()/1000;
+  int64_t cpu_mhz = OBSERVER_FREQUENCE.get_cpu_frequency_khz()/1000;
   int64_t network_speed = OBSERVER.get_network_speed() / 1024.0 / 1024.0;
   int64_t disk_seq_read_speed = 0;
   int64_t disk_rnd_read_speed = 0;
