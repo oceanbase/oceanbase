@@ -1367,11 +1367,7 @@ int ObDDLFinishReplayExecutor::replay_ddl_finish(ObTabletHandle &tablet_handle)
                                                                              log_->get_table_key(),
                                                                              log_->get_data_format_version(),
                                                                              log_->get_data_buffer()))) {
-    if (OB_TASK_EXPIRED == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("update shared table store fail", K(ret));
-    }
+    LOG_WARN("update shared table store fail", K(ret));
   }
   if (need_replay && OB_SUCC(ret)) {
     ObTabletHandle new_tablet_handle;
