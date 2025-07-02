@@ -16,6 +16,7 @@
 #include <pthread.h>
 #include "lib/compress/ob_compressor_pool.h"
 #include "lib/container/ob_array_serialization.h"
+#include "lib/json_type/ob_json_tree.h"
 #include "share/config/ob_config_helper.h"
 #include "share/ob_encryption_util.h"
 #include "share/parameter/ob_parameter_attr.h"
@@ -59,6 +60,21 @@ enum ObConfigItemType{
   OB_CONF_ITEM_TYPE_VERSION = 11,
   OB_CONF_ITEM_TYPE_MODE = 12,
 };
+
+static const char *const DATA_TYPE_UNKNOWN = "UNKNOWN";
+static const char *const DATA_TYPE_BOOL = "BOOL";
+static const char *const DATA_TYPE_INT = "INT";
+static const char *const DATA_TYPE_DOUBLE = "DOUBLE";
+static const char *const DATA_TYPE_STRING = "STRING";
+static const char *const DATA_TYPE_INTEGRAL = "INTEGRAL";
+static const char *const DATA_TYPE_STRLIST = "STR_LIST";
+static const char *const DATA_TYPE_INTLIST = "INT_LIST";
+static const char *const DATA_TYPE_TIME = "TIME";
+static const char *const DATA_TYPE_MOMENT = "MOMENT";
+static const char *const DATA_TYPE_CAPACITY = "CAPACITY";
+static const char *const DATA_TYPE_LOGARCHIVEOPT = "LOGARCHIVEOPT";
+static const char *const DATA_TYPE_VERSION = "VERSION";
+static const char *const DATA_TYPE_MODE = "MODE";
 
 enum class ObConfigRangeOpts {
   OB_CONF_RANGE_NONE,
@@ -200,6 +216,7 @@ public:
   const char *scope() const { return attr_.get_scope(); }
   const char *source() const { return attr_.get_source(); }
   const char *edit_level() const { return attr_.get_edit_level(); }
+  const char *data_type() const;
   /*obs启动首次读库设置该值*/
   void initial_value_set() { initial_value_set_ = true; }
   bool is_initial_value_set() const { return initial_value_set_; }
@@ -231,6 +248,8 @@ public:
     return ObConfigItemType::OB_CONF_ITEM_TYPE_UNKNOWN;
   }
 
+  int to_json_obj(ObIAllocator &allocator, ObJsonObject &j_obj) const;
+  virtual const char *optional_configuration_values() const { return nullptr; }
 protected:
   //use current value to do input operation
   virtual bool set(const char *str) = 0;
@@ -919,7 +938,8 @@ public:
                      const char *name,
                      const char *def,
                      const char *info,
-                     const ObParameterAttr attr = ObParameterAttr());
+                     const ObParameterAttr attr = ObParameterAttr(),
+                     const char *optional_values = nullptr);
   virtual ~ObConfigStringItem() {}
 
   //need reboot value need set it once startup, otherwise it will output current value
@@ -956,6 +976,8 @@ public:
     return *this;
   }
 
+  virtual const char *optional_configuration_values() const { return optional_values_; }
+
 protected:
   //use current value to do input operation
   bool set(const char *str) { UNUSED(str); return true; }
@@ -981,6 +1003,7 @@ protected:
   char value_reboot_str_[VALUE_BUF_SIZE];
 
 private:
+  const char *optional_values_;
   DISALLOW_COPY_AND_ASSIGN(ObConfigStringItem);
 };
 

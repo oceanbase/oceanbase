@@ -120,6 +120,7 @@ install(FILES
   tools/upgrade/upgrade_health_checker.py
   tools/upgrade/oceanbase_upgrade_dep.yml
   ${INSTALL_EXTRA_FILES}
+  ${CMAKE_BINARY_DIR}/ob_all_available_parameters.json
   DESTINATION etc
   COMPONENT server)
 

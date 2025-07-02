@@ -422,6 +422,28 @@ int ObCommonConfig::add_extra_config_unsafe(const char *config_str,
   return ret;
 }
 
+int ObCommonConfig::to_json_array(ObIAllocator &allocator, ObJsonArray &j_arr) const
+{
+  int ret = OB_SUCCESS;
+  for (ObConfigContainer::const_iterator it = container_.begin();
+      OB_SUCC(ret) && it != container_.end(); ++it) {
+    ObConfigItem *item = it->second;
+    ObJsonObject *j_obj = nullptr;
+    if (nullptr == item) {
+      ret = OB_ERR_NULL_VALUE;
+      OB_LOG(WARN, "config item is null", "name", it->first.str(), K(ret));
+    } else if (nullptr == (j_obj = OB_NEW(ObJsonObject, g_config_mem_attr, &allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "create json object failed", K(ret));
+    } else if (OB_FAIL(item->to_json_obj(allocator, *j_obj))) {
+      OB_LOG(WARN, "convert config item to json object failed", "name", it->first.str(), K(ret));
+    } else if (OB_FAIL(j_arr.append(j_obj))) {
+      OB_LOG(WARN, "append json object to json array failed", "name", it->first.str(), K(ret));
+    } else {}
+  }
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObCommonConfig)
 {
   int ret = OB_SUCCESS;

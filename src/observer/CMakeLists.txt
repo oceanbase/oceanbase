@@ -622,3 +622,9 @@ else()
 endif()
 
 configure_file(../share/ob_version.cpp.in ob_version.cpp)
+
+message(STATUS "dump config item")
+add_custom_command(TARGET observer POST_BUILD
+COMMAND ${CMAKE_BINARY_DIR}/src/observer/observer -C
+WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
