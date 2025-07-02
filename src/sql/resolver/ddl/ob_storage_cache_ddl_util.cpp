@@ -868,11 +868,13 @@ int ObStorageCacheUtil::print_table_storage_cache_policy(const ObTableSchema &ta
     } else {
       ObString column_name(storage_cache_policy.get_column_name());
       const char *column_unit_str = nullptr;
-      if (OB_FAIL(ObBoundaryColumnUnit::safely_get_str(storage_cache_policy.get_column_unit(), column_unit_str))) {
-        LOG_WARN("failed to get column unit", K(ret), K(storage_cache_policy));
-      } else if (OB_ISNULL(column_unit_str)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column unit str is null", K(ret), K(storage_cache_policy));
+      if (ObBoundaryColumnUnit::is_valid(storage_cache_policy.get_column_unit())) {
+        if (OB_FAIL(ObBoundaryColumnUnit::safely_get_str(storage_cache_policy.get_column_unit(), column_unit_str))) {
+          LOG_WARN("failed to get column unit", K(ret), K(storage_cache_policy));
+        } else if (OB_ISNULL(column_unit_str)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column unit str is null", K(ret), K(storage_cache_policy));
+        }
       }
       ObString column_unit(column_unit_str);
       ObString hot_retention_unit(ob_date_unit_type_str_upper(storage_cache_policy.get_hot_retention_unit()));
@@ -883,7 +885,7 @@ int ObStorageCacheUtil::print_table_storage_cache_policy(const ObTableSchema &ta
         LOG_WARN("failed to print boudary column", K(ret), K(storage_cache_policy), K(pos));
       } else if (ObBoundaryColumnUnit::is_valid(storage_cache_policy.get_column_unit()) &&
                 OB_FAIL(databuff_printf(buf, buf_len, pos, "boundary_column_unit = \'%.*s\', ",
-                                                            column_unit.length(), column_unit.ptr()))) { //TODO @baonian.wcx wati to check is time unit necessary
+                                                            column_unit.length(), column_unit.ptr()))) {
         LOG_WARN("failed to pint column unit", K(ret), K(storage_cache_policy), K(pos));
       } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "hot_retention = %lu ",
                                                             storage_cache_policy.get_hot_retention_interval()))) {
