@@ -55788,6 +55788,8 @@ def_table_schema(
                 85, 'EXEMPT ACCESS POLICY',
                 86, 'CREATE CATALOG',
                 87, 'USE ANY CATALOG',
+                88, 'CREATE ANY CCL RULE',
+                89, 'DROP ANY CCL RULE',
                 'OTHER') AS VARCHAR(40)) AS PRIVILEGE,
         CASE PRIV_OPTION
           WHEN 0 THEN 'NO'
@@ -55901,6 +55903,8 @@ def_table_schema(
                 85, 'EXEMPT ACCESS POLICY',
                 86, 'CREATE CATALOG',
                 87, 'USE ANY CATALOG',
+                88, 'CREATE ANY CCL RULE',
+                89, 'DROP ANY CCL RULE',
                 'OTHER') AS VARCHAR(40)) AS PRIVILEGE,
         CASE PRIV_OPTION
           WHEN 0 THEN 'NO'
@@ -57176,6 +57180,8 @@ def_table_schema(
                 85, 'EXEMPT ACCESS POLICY',
                 86, 'CREATE CATALOG',
                 87, 'USE ANY CATALOG',
+                88, 'CREATE ANY CCL RULE',
+                89, 'DROP ANY CCL RULE',
                 'OTHER') AS VARCHAR(40)) AS PRIVILEGE ,
        	decode(auth.priv_option, 0, 'NO', 1, 'YES', '') as ADMIN_OPTION
       FROM
