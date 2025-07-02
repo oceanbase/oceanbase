@@ -856,6 +856,7 @@ int ObMViewInfo::update_mview_data_attr(ObISQLClient &sql_client,
                                         ObMViewInfo &mview_info)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   uint64_t data_version = 0;
   ObSEArray<ObMVDepInfo, 2> mv_dep_infos;
   ObSEArray<uint64_t, 2> dep_mview_ids;
@@ -868,14 +869,32 @@ int ObMViewInfo::update_mview_data_attr(ObISQLClient &sql_client,
   } else if (data_version < DATA_VERSION_4_3_5_2) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("data version below 4.3.5.2, not support data attr", K(ret), K(data_version));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
   } else if (OB_FAIL(ObMVDepUtils::get_mview_dep_infos(sql_client,
                      tenant_id, mview_info.get_mview_id(), mv_dep_infos))) {
     LOG_WARN("fail to get mv dep infos", K(ret), K(mview_info));
   } else if (mv_dep_infos.count() <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("mv dep infos is empty", K(ret), K(mview_info));
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
+    ret = OB_ERR_MVIEW_MISSING_DEPENDENCE;
+    const ObTableSchema *mview_table_schema = nullptr;
+    const ObDatabaseSchema *db_schema = nullptr;
+    uint64_t mview_table_id = mview_info.get_mview_id();
+    if (OB_TMP_FAIL(schema_guard.get_table_schema(tenant_id, mview_table_id, mview_table_schema))) {
+      LOG_WARN("fail to get table schema", KR(tmp_ret), K(tenant_id), K(mview_table_id));
+    } else if (OB_ISNULL(mview_table_schema)) {
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", KR(tmp_ret), K(tenant_id), K(mview_table_id));
+    } else if (OB_TMP_FAIL(schema_guard.get_database_schema(
+                           tenant_id, mview_table_schema->get_database_id(), db_schema))) {
+      LOG_WARN("fail to get db schema", KR(tmp_ret), K(tenant_id),
+               K(mview_table_schema->get_database_id()));
+    } else if (OB_ISNULL(db_schema)) {
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("database not exist", KR(tmp_ret));
+    } else {
+      LOG_ERROR("This materialized view has invalid dependency info, please perform a complete refresh to recover", K(ret), K(mview_info));
+      LOG_USER_ERROR(OB_ERR_MVIEW_MISSING_DEPENDENCE, db_schema->get_database_name_str().ptr(), mview_table_schema->get_table_name_str().ptr());
+    }
   } else {
     ARRAY_FOREACH(mv_dep_infos, idx) {
       ObMVDepInfo &dep_info = mv_dep_infos.at(idx);
