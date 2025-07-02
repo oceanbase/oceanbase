@@ -135,6 +135,8 @@ int TestSSMicroCacheRandomSize::parallel_add_and_get_micro_block(
           } else if (OB_FAIL(micro_cache->get_micro_block_cache(micro_key, ss_micro_block_id, ObSSMicroCacheGetType::FORCE_GET_DATA,
                      io_info, obj_handle, ObSSMicroCacheAccessType::COMMON_IO_TYPE, is_hit))) {
             LOG_WARN("fail to get_micro_block_cache", KR(ret), K(ss_micro_block_id));
+          } else if (OB_FAIL(obj_handle.wait())) {
+            LOG_WARN("fail to wait until get micro block data", KR(ret), K(micro_key));
           } else {
             for (int64_t j = 0; OB_SUCC(ret) && j < micro_size; ++j) {
               if (OB_ISNULL(obj_handle.get_buffer())) {
