@@ -64,7 +64,7 @@ public:
       K_(is_cs_replica), K_(read_base_version), K_(merge_scn), K_(need_parallel_minor_merge),
       KP_(schema), "multi_version_column_descs_cnt", multi_version_column_descs_.count(),
       K_(ls_handle), K_(snapshot_info), K_(is_backfill), K_(tablet_schema_guard), K_(tablet_transfer_seq), K_(co_base_snapshot_version), K_(for_unittest),
-      K_(is_cs_replica_force_full_merge), K_(is_delete_insert_merge));
+      K_(is_cs_replica_force_full_merge), K_(is_delete_insert_merge), K_(is_ha_compeleted));
 
   ObTabletMergeDagParam &dag_param_;
   bool is_full_merge_; // full merge or increment merge
@@ -75,6 +75,7 @@ public:
   bool is_cs_replica_;
   bool is_backfill_;
   bool is_delete_insert_merge_;
+  bool is_ha_compeleted_; // only used for delete insert minor merge to control multi version row recycle logic, inited from tablet meta
   bool for_unittest_;
   bool is_cs_replica_force_full_merge_;
   ObMergeLevel merge_level_;

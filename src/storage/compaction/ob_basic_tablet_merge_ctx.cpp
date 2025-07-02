@@ -42,6 +42,8 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     is_tenant_major_merge_(false),
     is_cs_replica_(false),
     is_backfill_(false),
+    is_delete_insert_merge_(false),
+    is_ha_compeleted_(true),
     for_unittest_(false),
     is_cs_replica_force_full_merge_(false),
     merge_level_(MICRO_BLOCK_MERGE_LEVEL),
@@ -96,6 +98,8 @@ void ObStaticMergeParam::reset()
   rec_scn_.reset();
   for_unittest_ = false;
   is_cs_replica_force_full_merge_ = false;
+  is_delete_insert_merge_ = false;
+  is_ha_compeleted_ = true;
 }
 
 bool ObStaticMergeParam::is_valid() const
@@ -701,11 +705,16 @@ int ObBasicTabletMergeCtx::get_storage_schema()
 {
   int ret  = OB_SUCCESS;
   ObStorageSchema *schema_on_tablet = nullptr;
+  ObTabletHAStatus ha_status = get_tablet()->get_tablet_meta().ha_status_;
   if (OB_FAIL(get_tablet()->load_storage_schema(mem_ctx_.get_allocator(), schema_on_tablet))) {
     LOG_WARN("failed to load storage schema", K(ret), K_(tablet_handle));
+  } else if (OB_UNLIKELY(!ha_status.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid ha status", K(ret), K(ha_status));
   } else {
     static_param_.schema_ = schema_on_tablet;
     static_param_.is_delete_insert_merge_ = schema_on_tablet->is_delete_insert_merge_engine();
+    static_param_.is_ha_compeleted_ = ha_status.is_none();
   }
   return ret;
 }
