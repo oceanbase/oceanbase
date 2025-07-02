@@ -603,7 +603,13 @@ int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
   return ret;
 }
 
-// disable pdml insert on duplicate when exists unique index or update unique key.
+// disable pdml insert on duplicate in following scenario:
+/*
+ * 1. insert into heap table.
+ * 2. exist gis/string/lob/array/generated column.
+ * 3. exist unique or global or fulltext/spatial/vector/multivalue index
+ * 4. update unique key when conflict
+*/
 int ObOptimizer::check_pdml_insert_up_enabled(const ObDelUpdStmt &pdml_stmt,
                                               const ObSQLSessionInfo &session,
                                               bool &is_use_pdml)
@@ -612,15 +618,15 @@ int ObOptimizer::check_pdml_insert_up_enabled(const ObDelUpdStmt &pdml_stmt,
   ObQueryCtx *query_ctx = NULL;
   if (stmt::T_INSERT == pdml_stmt.get_stmt_type() &&
              static_cast<const ObInsertStmt &>(pdml_stmt).is_insert_up()) {
-    is_use_pdml = false;
-    bool enable_pdml_insert_up = false;
+    is_use_pdml = true;
+    bool opt_param_enable_pdml_insertup = false;
     if (OB_ISNULL(query_ctx = ctx_.get_query_ctx())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("query ctx is null", K(ret));
     } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(
-                ObOptParamHint::ENABLE_PDML_INSERT_UP, enable_pdml_insert_up))) {
+                ObOptParamHint::ENABLE_PDML_INSERT_UP, opt_param_enable_pdml_insertup))) {
       LOG_WARN("fail to get bool opt param", K(ret));
-    } else if (!enable_pdml_insert_up) {
+    } else if (!opt_param_enable_pdml_insertup) {
       is_use_pdml = false;
       LOG_TRACE("disable pdml insert up");
     } else {
@@ -633,41 +639,67 @@ int ObOptimizer::check_pdml_insert_up_enabled(const ObDelUpdStmt &pdml_stmt,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema guard is null", K(ret));
       } else if (OB_INVALID_ID == ref_table_id) {
+        is_use_pdml = false;
         // do nothing.
+      } else if (OB_FAIL(schema_guard->get_table_schema(session.get_effective_tenant_id(),
+                  ref_table_id, table_schema))) {
+        LOG_WARN("get table schema failed", K(ret));
+      } else if (table_schema->is_heap_organized_table()) {
+        // 1. insert into heap table.
+        is_use_pdml = false;
+      } else {
+        // 2. exist gis/lob/json/array/roaringbitmap/generated column.
+        for (ObTableSchema::const_column_iterator col_iter = table_schema->column_begin();
+             NULL != col_iter && col_iter != table_schema->column_end();
+             col_iter++) {
+          ObObjType data_type = (*col_iter)->get_data_type();
+          if (ob_is_geometry(data_type)
+              || ob_is_lob_locator(data_type)
+              || ob_is_json(data_type)
+              || ob_is_collection_sql_type(data_type)
+              || ob_is_roaringbitmap(data_type)
+              || (*col_iter)->is_generated_column()) {
+            is_use_pdml = false;
+            break;
+          }
+        }
+      }
+      if (OB_FAIL(ret) || !is_use_pdml) {
       } else if (OB_FAIL(schema_guard->get_index_schemas_with_data_table_id(session.get_effective_tenant_id(),
                                                       ref_table_id, index_schema))) {
         LOG_WARN("get unique index ids failed", K(ret), K(ref_table_id));;
       } else {
-        bool has_unique_or_global_idx = false;
-        for (int64_t i = 0; i < index_schema.count() && !has_unique_or_global_idx && OB_SUCC(ret); i++) {
+        // 3. exist unique or global or fulltext/spatial/vector/multivalue index
+        for (int64_t i = 0; i < index_schema.count() && OB_SUCC(ret); i++) {
           const ObSimpleTableSchemaV2 *index = NULL;
           if (OB_ISNULL(index = index_schema.at(i))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("schema is null", K(ret));
-          } else if ((index->is_unique_index() || index->is_global_index_table())
-                     && index->get_index_type() != INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY) {
-            has_unique_or_global_idx = true;
+          } else if (index->is_unique_index()
+                     || index->is_global_index_table()
+                     || index->is_domain_index()) {
+            is_use_pdml = false;
+            break;
           }
         }
-        if (OB_SUCC(ret) && !has_unique_or_global_idx) {
+        if (OB_FAIL(ret) || !is_use_pdml) {
+        } else {
+          // 4. update unique key when conflict
           const ObIArray<ObAssignment> &assignments = insert_stmt.get_table_assignments();
-          bool update_unique_key = false;
           for (int64_t i = 0; i < assignments.count() && OB_SUCC(ret); i++) {
             const ObColumnRefRawExpr *col_expr = assignments.at(i).column_expr_;
             if (OB_ISNULL(col_expr)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("column ref raw expr is null");
             } else if (col_expr->is_rowkey_column() || col_expr->is_unique_key_column()) {
-              update_unique_key = true;
+              is_use_pdml = false;
               break;
             }
           }
-          is_use_pdml = !update_unique_key;
         }
-        LOG_TRACE("check whether enable pdml insert on duplicate", K(ref_table_id),
-                  K(index_schema));
       }
     }
+    LOG_TRACE("check whether enable pdml insert on duplicate", K(is_use_pdml));
   }
   return ret;
 }
