@@ -2012,6 +2012,9 @@ int ObNumber::round_scale_v3_(const int64_t scale, const bool using_floating_sca
         // 因此在number to char转换出现前缀0时（decimal_prefix_zero_count > 0），保持与修改前一致
         valid_precision = OB_MAX_NUMBER_PRECISION_INNER - is_negative()
                            - (has_decimal() ? (decimal_prefix_zero_count > 0 ? 2 : 1) : 0);
+        if (decimal_prefix_zero_count >=2 && decimal_prefix_zero_count <= 4) {
+          valid_precision -= (decimal_prefix_zero_count - 1);
+        }
       } else {
         valid_precision = (OB_MAX_NUMBER_PRECISION_INNER - ((0 == integer_count ? decimal_prefix_zero_count : integer_count) % 2));
       }
