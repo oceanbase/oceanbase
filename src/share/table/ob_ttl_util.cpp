@@ -1671,8 +1671,8 @@ int ObTTLUtil::check_htable_ddl_supported(share::schema::ObSchemaGetterGuard &sc
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
         LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
       } else if (OB_ISNULL(table_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null table schema", K(ret), K(tenant_id), K(table_id));
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table schema is null, table not exists", K(ret), K(tenant_id), K(table_id));
       } else if (OB_FAIL(check_htable_ddl_supported(*table_schema, false))) {
         LOG_WARN("failed to check htable ddl supported", K(ret));
       }
