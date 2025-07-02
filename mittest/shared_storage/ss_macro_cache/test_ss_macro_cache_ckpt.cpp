@@ -975,7 +975,7 @@ TEST_F(TestSSMacroCacheCkpt, test_exists_in_lru)
 
     macro_cache_mgr->ckpt_task_.runTimerTask();
     uint64_t next_ckpt_version = UINT64_MAX;
-    ASSERT_EQ(OB_ERR_UNEXPECTED, macro_cache_mgr->replay_ckpt_(next_ckpt_version));
+    ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->replay_ckpt_(next_ckpt_version));
     lru_list.fifo_list_.clear();
     lru_list.lru_list_.clear();
   }
