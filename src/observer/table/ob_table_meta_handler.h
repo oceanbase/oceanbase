@@ -37,6 +37,19 @@ protected:
   // check _enable_kv_hbase_admin_ddl in ddl related handler's pre_check
   int check_hbase_ddl_enable();
   int parse_htable_name(common::ObIAllocator &allocator, const ObTableMetaRequest &request, ObString &htable_name);
+  int get_tablet_boundary_internal(common::ObIAllocator &allocator,
+                                   const schema::ObSimpleTableSchemaV2 &table_schema,
+                                   const common::ObIArray<ObTabletID> &tablet_ids,
+                                   ObIArray<common::ObString> &upperbound_trims);
+  int format_tablet_ids(common::ObIAllocator &allocator,
+                        const ObIArray<ObTabletID>& tablet_ids,
+                        int start_idx,
+                        int count,
+                        char *&result);
+private:
+  int check_upperbound_legality_and_trim(common::ObString &upperbound);
+protected:
+  const int64_t BATCH_SIZE = 100;
 };
 
 class ObHTableRegionLocatorHandler : public ObITableMetaHandler
@@ -45,6 +58,7 @@ public:
   ObHTableRegionLocatorHandler(ObIAllocator &allocator)
     : allocator_(allocator)
   {
+    table_schemas_.set_attr(ObMemAttr(MTL_ID(), "TbTableSchemas"));
     tablet_infos_.set_attr(ObMemAttr(MTL_ID(), "TbTabletInfos"));
   }
   virtual ~ObHTableRegionLocatorHandler();
@@ -55,6 +69,7 @@ public:
 private:
   int get_tablet_boundary(ObTableExecCtx &ctx);
   int get_tablet_location(ObTableExecCtx &ctx);
+  int binary_search_tablet_info_idx(const int64_t tablet_id, int64_t &index);
 
   int build_table_and_replica_dicts(ObIAllocator &allocator,
                                     ObIArray<int64_t> &table_id_dict,
@@ -76,12 +91,6 @@ private:
                        ObTableJsonArrayBuilder &replica_dict_builder,
                        ObTableJsonArrayBuilder &partitions_builder,
                        json::Value *&root);
-
-  int format_tablet_ids(ObIAllocator &allocator,
-                        const ObIArray<ObTabletID>& tablet_ids,
-                        int start_idx,
-                        int count,
-                        char *&result);
 
 private:
   struct TabletLocation {
@@ -112,19 +121,13 @@ private:
     ObSEArray<TabletLocation*, 16> replicas_;
   };
 private:
-  const int64_t BATCH_SIZE = 100;
-  const char *PARTITION_BOUNDARY_SQL = "SELECT table_id, tablet_id, high_bound_val AS upperbound \
-                                        FROM __all_virtual_part WHERE tenant_id = %d and table_id = %d and tablet_id in (%.*s) \
-                                        ORDER BY tablet_id;";
-  const char *PARTITION_BOUNDARY_SUBPART_SQL = "SELECT table_id, tablet_id, high_bound_val AS upperbound \
-                                        FROM __all_virtual_sub_part WHERE tenant_id = %d and table_id = %d and tablet_id in (%.*s) \
-                                        ORDER BY tablet_id;";
   const char *TABLET_LOCATION_SQL = "SELECT /*+READ_CONSISTENCY(WEAK)*/ A.tablet_id, A.svr_ip, B.svr_port, A.role \
                                     FROM oceanbase.__all_virtual_proxy_schema A JOIN oceanbase.__all_server B ON A.svr_ip = B.svr_ip AND A.sql_port = B.inner_port \
                                     WHERE A.tablet_id in (%.*s) AND A.tenant_name = '%s' AND A.database_name = '%s' AND A.table_name = '%s' \
                                     ORDER BY A.role DESC, A.svr_ip, B.svr_port;";
 private:
   ObString htable_name_;
+  ObSEArray<const schema::ObSimpleTableSchemaV2*, 3> table_schemas_;
   ObSEArray<TabletInfo*, 16> tablet_infos_;
   // used to allocate memory for json node
   common::ObIAllocator &allocator_;
@@ -132,6 +135,8 @@ private:
 
 class ObHTableRegionMetricsHandler : public ObITableMetaHandler
 {
+private:
+  static const uint64_t MOCK_SS_TABLET_SIZE = 8L * 1073741824; // 8 GB
 public:
   ObHTableRegionMetricsHandler(ObIAllocator &allocator)
     : htable_name_(),
@@ -148,35 +153,25 @@ private:
     : table_id_(OB_INVALID_ID),
       tablet_ids_(allocator),
       mem_tablet_sizes_(allocator),
-      ss_tablet_sizes_(allocator)
+      ss_tablet_sizes_(allocator),
+      boundarys_(allocator)
     {}
     ~ObTableRegionMetricsResult() = default;
     uint64_t table_id_;
     ObFixedArray<uint64_t, common::ObIAllocator> tablet_ids_;
     ObFixedArray<uint64_t, common::ObIAllocator> mem_tablet_sizes_;
     ObFixedArray<uint64_t, common::ObIAllocator> ss_tablet_sizes_;
-    int init(uint64_t tablet_num, uint64_t table_id);
+    ObFixedArray<common::ObString, common::ObIAllocator> boundarys_;
+    int init(const common::ObIArray<ObTabletID> &tablet_ids, uint64_t table_id);
     TO_STRING_KV(K_(table_id));
   };
   int check_metrics_legality(const ObTableRegionMetricsResult &table_metrics);
   int acquire_table_metric(ObTableExecCtx &ctx,
-                           const schema::ObSimpleTableSchemaV2 &table_schema,
+                           const ObIArray<const schema::ObSimpleTableSchemaV2*> &table_schemas,
                            ObTableRegionMetricsResult &table_metrics);
-  int acquire_memtable_metrics(const uint64_t tenant_id,
-                               const common::ObSqlString &sql,
-                               ObTableRegionMetricsResult &table_metrics);
-  int acquire_sstable_metrics(const uint64_t tenant_id,
-                              const common::ObSqlString &sql,
-                              ObTableRegionMetricsResult &table_metrics);
-  int construct_size_array_string(const ObIArray<ObTableRegionMetricsResult*> &table_metrics_results,
-                                  common::ObSqlString &tablet_ids_array,
-                                  common::ObSqlString &mem_size_array,
-                                  common::ObSqlString &ss_size_array);
-  int construct_response(const ObIArray<ObTableRegionMetricsResult*> &table_metrics_results, ObTableMetaResponse &response);
+  int construct_response(const ObTableRegionMetricsResult &table_metrics_result, ObTableMetaResponse &response);
 
 private:
-  const char* TABLET_MEMTABLE_STORAGE_SQL = "SELECT tablet_id, CAST(SUM(size) AS SIGNED) AS size FROM GV$OB_SSTABLES WHERE table_type = 'MEMTABLE' AND tablet_id IN (%s) GROUP BY tablet_id ORDER BY tablet_id";
-  const char* TABLET_SSTABLE_STORAGE_SQL = "SELECT tablet_id, CAST(SUM(size) AS SIGNED) AS total_size FROM GV$OB_SSTABLES WHERE (table_type = 'MAJOR' OR table_type = 'MINI' OR table_type = 'MINOR') AND tablet_id IN (%s) GROUP BY tablet_id ORDER BY tablet_id";
   ObString htable_name_;
   common::ObIAllocator &allocator_;
 };
