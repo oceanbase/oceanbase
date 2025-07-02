@@ -1649,6 +1649,7 @@ public:
   bool get_failover_mode() const { return failover_mode_; }
   void set_failover_mode(const bool failover_mode) { failover_mode_ = failover_mode; }
   void reset_service_name() { service_name_.reset(); }
+  bool has_ccl_rule() const { return has_ccl_rule_; }
   int set_service_name(const ObString& service_name);
   int check_service_name_and_failover_mode() const;
   int check_service_name_and_failover_mode(const uint64_t tenant_id) const;
