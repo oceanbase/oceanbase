@@ -15,7 +15,6 @@ create materialized view mv parallel 8 refresh fast as select i, k from t;
 insert /*+ parallel(8) enable_parallel_dml */ into t(k) select uniform(1,10,random()) from table(generator(2000000));
 call dbms_mview.refresh("mv","f");
 let $refresh_cost = query_get_value(select last_refresh_time as val from oceanbase.__all_mview, val, 1);
---echo $refresh_cost 
 if($refresh_cost<=5)
 {
 --echo succeed
