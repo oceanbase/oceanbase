@@ -13984,12 +13984,7 @@ public:
         ddl_param_(nullptr),
         deserialize_allocator_("HTleDDLArg", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {}
-  ~ObHTableDDLArg()
-  {
-    deserialize_allocator_.clear();
-    ddl_param_ = nullptr;
-    ddl_type_ = ObHTableDDLType::INVALID;
-  }
+  ~ObHTableDDLArg();
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const;
   int assign(const ObHTableDDLArg &other);

@@ -596,17 +596,17 @@ int ObHTableDDLHandlerGuard::get_handler(ObDDLService &ddl_service,
                                          ObHTableDDLHandler *&handler)
 {
   int ret = OB_SUCCESS;
-
+  handler = nullptr;
   switch (arg.ddl_type_) {
     case ObHTableDDLType::CREATE_TABLE: {
-      if (OB_ISNULL(handler = OB_NEWx(ObCreateHTableHandler, &allocator_, ddl_service, schema_service, arg, res))) {
+      if (OB_ISNULL(handler_ = OB_NEWx(ObCreateHTableHandler, &allocator_, ddl_service, schema_service, arg, res))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc ObCreateHTableHandler", KR(ret));
       }
       break;
     }
     case ObHTableDDLType::DROP_TABLE: {
-      if (OB_ISNULL(handler = OB_NEWx(ObDropHTableHandler, &allocator_, ddl_service, schema_service, arg, res))) {
+      if (OB_ISNULL(handler_ = OB_NEWx(ObDropHTableHandler, &allocator_, ddl_service, schema_service, arg, res))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc ObDropHTableHandler", KR(ret));
       }
@@ -614,7 +614,7 @@ int ObHTableDDLHandlerGuard::get_handler(ObDDLService &ddl_service,
     }
     case ObHTableDDLType::DISABLE_TABLE:
     case ObHTableDDLType::ENABLE_TABLE: {
-      if (OB_ISNULL(handler = OB_NEWx(ObHTableControlHandler, &allocator_, ddl_service, schema_service, arg, res))) {
+      if (OB_ISNULL(handler_ = OB_NEWx(ObHTableControlHandler, &allocator_, ddl_service, schema_service, arg, res))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc ObHTableControlHandler", KR(ret));
       }
@@ -624,6 +624,10 @@ int ObHTableDDLHandlerGuard::get_handler(ObDDLService &ddl_service,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid htable ddl type", KR(ret), K(arg.ddl_type_));
     }
+  }
+
+  if (OB_SUCC(ret)) {
+    handler = handler_;
   }
 
   return ret;

@@ -13712,6 +13712,14 @@ OB_SERIALIZE_MEMBER(ObFetchArbMemberArg, tenant_id_, ls_id_);
 OB_SERIALIZE_MEMBER(ObCheckNestedMViewMdsArg, tenant_id_, mview_id_, refresh_id_, target_data_sync_scn_);
 OB_SERIALIZE_MEMBER(ObCheckNestedMViewMdsRes, target_data_sync_scn_, ret_);
 
+ObHTableDDLArg::~ObHTableDDLArg()
+{
+  if (OB_NOT_NULL(ddl_param_)) {
+    ddl_param_->~ObHTableDDLParam();
+    ddl_param_ = nullptr;
+  }
+}
+
 bool ObHTableDDLArg::is_valid() const
 {
   bool is_valid = false;
