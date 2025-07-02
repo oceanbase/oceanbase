@@ -191,6 +191,11 @@ bool ObMergeParameter::is_delete_insert_merge() const
   return static_param_.is_delete_insert_merge_;
 }
 
+bool ObMergeParameter::is_ha_compeleted() const
+{
+  return static_param_.is_ha_compeleted_;
+}
+
 int64_t ObMergeParameter::to_string(char* buf, const int64_t buf_len) const
 {
   int64_t pos = 0;

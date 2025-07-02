@@ -2029,6 +2029,97 @@ TEST_F(TestDeleteInsertMerge, test_shadow_delete)
   merger.reset();
 }
 
+TEST_F(TestDeleteInsertMerge, test_recycle_by_ha_status)
+{
+  ObTabletMergeDagParam param;
+  ObTabletMergeCtx merge_context(param, allocator_);
+  merge_context.static_param_.is_ha_compeleted_ = false;
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
+
+  ObTableHandleV2 handle1;
+  const char *micro_data[1];
+  micro_data[0] =
+      "bigint   var   bigint  bigint     bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -30      MIN         1       1     INSERT    NORMAL        SCF\n"
+      "1        var1  -30      DI_VERSION  1       1     INSERT    NORMAL        C\n"
+      "1        var1  -30      0           1       1     DELETE    NORMAL        C\n"
+      "1        var1  -20      DI_VERSION  1       1     INSERT    NORMAL        C\n"
+      "1        var1  -20      0           1       1     DELETE    NORMAL        C\n"
+      "1        var1  -10      DI_VERSION  1       1     INSERT    NORMAL        C\n"
+      "1        var1  -10      0           1       1     DELETE    NORMAL        CL\n";
+
+  int schema_rowkey_cnt = 2;
+
+  int64_t snapshot_version = 30;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(30);
+  prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version, ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data, 1);
+  prepare_data_end(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  ObTableHandleV2 handle2;
+  const char *micro_data2[1];
+  micro_data2[0] =
+      "bigint   var   bigint  bigint      bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -40      0           1     1     DELETE    NORMAL  CLF\n";
+
+  snapshot_version = 50;
+  scn_range.start_scn_.convert_for_tx(30);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(micro_data2, 1);
+  prepare_data_end(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 30;
+  trans_version_range.base_version_ = 10;
+
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  // minor merge
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  const char *result1 =
+      "bigint   var   bigint  bigint      bigint bigint  flag     flag_type  multi_version_row_flag\n"
+      "1        var1  -40      MIN          1       1     DELETE    NORMAL        SCF\n"
+      "1        var1  -40      0          1       1     DELETE    NORMAL        C\n"
+      "1        var1  -30      DI_VERSION  1       1     INSERT    NORMAL        C\n"
+      "1        var1  -30      0          1       1     DELETE    NORMAL        C\n"
+      "1        var1  -20      DI_VERSION  1       1     INSERT    NORMAL        C\n"
+      "1        var1  -20      0          1       1     DELETE    NORMAL        C\n"
+      "1        var1  -10      DI_VERSION  1       1     INSERT    NORMAL        C\n"
+      "1        var1  -10      0           1       1     DELETE    NORMAL        CL\n";
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObDatumRange range;
+  res_iter.reset();
+  range.set_whole_range();
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+  ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(iter_param_, context_, range, scanner));
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  ObMockDirectReadIterator sstable_iter;
+  ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
+  bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/, false/*cmp dml row flag*/);
+  ASSERT_TRUE(is_equal);
+  scanner->~ObStoreRowIterator();
+  handle1.reset();
+  handle2.reset();
+  merger.reset();
+}
+
 }
 }
 
