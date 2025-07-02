@@ -295,6 +295,7 @@ public:
   int do_work() override;
 
 private:
+  static const int BATCH_CNT = 2000; // 8M / 4(sizeof(float)) / 1000(dim)
   int build_inc_index(ObPluginVectorIndexAdaptor &adaptor);
   int optimize_vector_index( ObPluginVectorIndexAdaptor &adaptor);
   int refresh_snapshot_index_data(ObPluginVectorIndexAdaptor &adaptor, transaction::ObTxDesc *tx_desc, transaction::ObTxReadSnapshot &snapshot);
@@ -310,6 +311,12 @@ private:
       ObSEArray<int64_t, 4> &extra_column_idxs,
       storage::ObTableScanIterator *table_scan_iter,
       storage::ObValueRowIterator &delete_row_iter);
+  int delete_tablet_data(
+      ObPluginVectorIndexAdaptor &adaptor,
+      storage::ObDMLBaseParam &dml_param,
+      transaction::ObTxDesc *tx_desc,
+      storage::ObTableScanIterator *table_scan_iter,
+      ObSEArray<uint64_t, 4> &dml_column_ids);
   int delete_incr_table_data(ObPluginVectorIndexAdaptor &adaptor, storage::ObDMLBaseParam &dml_param, transaction::ObTxDesc *tx_desc);
   bool check_task_satisfied_memory_limited(ObPluginVectorIndexAdaptor &adaptor);
 private:
