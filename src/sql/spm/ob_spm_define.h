@@ -382,11 +382,9 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
   {
     return STAT_START_EVOLUTION == spm_stat_;
   }
-  bool is_spm_in_process()
-  {
-    return is_retry_for_spm_ ||
-           (spm_stat_ > STAT_INVALID && spm_stat_ < STAT_MAX);
-  }
+  // query from ObMPQuery/ObMPStmtExecute is allowed. query from ObInnerSQLConnection is not supported
+  // TODO: supported spm for query from ObInnerSQLConnection
+  bool is_spm_supported() { return NULL != baseline_plan_hash_array_.get_allocator(); }
 
   ObBaselineKey bl_key_;
   SpmMode handle_cache_mode_;
