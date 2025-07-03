@@ -2017,6 +2017,60 @@ int ObLSTabletService::create_or_update_with_ss_tablet(
 
   return ret;
 }
+int ObLSTabletService::advance_notify_ss_change_version(
+    const ObTabletID &tablet_id,
+    const share::SCN &transfer_scn,
+    const share::SCN &change_version)
+{
+  int ret = OB_SUCCESS;
+  ObTimeGuard time_guard("advance_notify_ss_change_version", 10_ms);
+  const share::ObLSID ls_id = ls_->get_ls_id();
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(is_stopped_)) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("tablet service stopped", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_UNLIKELY(nullptr == t3m)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected t3m", K(ret), KP(t3m));
+  } else {
+    time_guard.click();
+    const ObTabletMapKey key(ls_id, tablet_id);
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
+    time_guard.click();
+    if (OB_FAIL(ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 0,
+            ObMDSGetTabletMode::READ_WITHOUT_CHECK,
+            ObTransVersion::MAX_TRANS_VERSION))) {
+      if (OB_TABLET_NOT_EXIST == ret) {
+        LOG_INFO("tablet not exist", K(ret), K(key));
+      } else {
+        LOG_WARN("check and get tablet failed", K(ret), K(key));
+      }
+    } else if (FALSE_IT(time_guard.click())) {
+    } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected tablet", K(ret), K(key), KP(tablet));
+    } else if (tablet->get_reorganization_scn() != transfer_scn) {
+      ret = OB_VERSION_NOT_MATCH;
+      LOG_WARN("transfer scn not match", K(ret), K(key), K(tablet->get_reorganization_scn()),
+          K(transfer_scn));
+    } else if (OB_FAIL(t3m->advance_notify_ss_change_version(key, change_version))) {
+      if (OB_NO_NEED_UPDATE != ret) {
+        LOG_WARN("advance notify ss change version failed", K(ret), K(key), K(change_version));
+      }
+    } else {
+      time_guard.click();
+    }
+  }
+  return ret;
+}
 #endif
 
 int ObLSTabletService::replay_deserialize_tablet(

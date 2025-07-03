@@ -130,7 +130,9 @@ public:
       const ObTabletID &tablet_id,
       mds::MdsTableHandle &handle,
       bool not_exist_create = false) override;
-  int advance_notify_ss_change_version(const share::SCN &scn);
+  int advance_notify_ss_change_version(
+      const ObTabletID &tablet_id,
+      const share::SCN &scn);
   bool need_remove_from_flying() const;
   bool get_initial_state() const;
   ObTabletResidentInfo get_tablet_resident_info(const ObTabletMapKey &key) const;

@@ -741,7 +741,9 @@ int ObTabletPointer::release_obj(ObTablet *&t)
   return ret;
 }
 
-int ObTabletPointer::advance_notify_ss_change_version(const share::SCN &scn)
+int ObTabletPointer::advance_notify_ss_change_version(
+    const ObTabletID &tablet_id,
+    const share::SCN &scn)
 {
   int ret = OB_SUCCESS;
   share::SCN old_scn;
@@ -751,6 +753,10 @@ int ObTabletPointer::advance_notify_ss_change_version(const share::SCN &scn)
       ret = OB_NO_NEED_UPDATE;
     }
   } while (OB_SUCC(ret) && !attr_.notify_ss_change_version_.atomic_bcas(old_scn, scn));
+  // for test
+  if (OB_SUCC(ret)) {
+    FLOG_INFO("advance notify ss change version", K(ret), K(tablet_id), K(old_scn), K(scn));
+  }
   return ret;
 }
 

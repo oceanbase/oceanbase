@@ -334,6 +334,9 @@ public:
       const ObTabletID &tablet_id,
       const ObTabletPointerHandle &tablet_ptr_handle,
       SCN &min_ss_change_version);
+  int advance_notify_ss_change_version(
+      const ObTabletMapKey &key,
+      const share::SCN &change_version);
 #endif
 public:
   class ObT3MResourceLimitCalculatorHandler final : public share::ObIResourceLimitCalculatorHandler

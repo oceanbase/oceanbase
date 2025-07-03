@@ -468,6 +468,15 @@ public:
                      const ObLSMeta &src_ls_meta);
 #ifdef OB_BUILD_SHARED_STORAGE
   int update_ls_meta(const ObSSLSMeta &src_ss_meta);
+  // advance notify ss change version
+  // @param [in] tablet_id
+  // @param [in] transfer_scn
+  // @param [in] change_version
+  // int advance_notify_ss_change_version(
+  //     const ObTabletID &tablet_id,
+  //     const share::SCN &transfer_scn,
+  //     const share::SCN &change_version);
+  DELEGATE_WITH_RET(ls_tablet_svr_, advance_notify_ss_change_version, int);
 #endif
   int get_transfer_scn(share::SCN &scn);
   int update_id_meta(const int64_t service_type,

@@ -3075,6 +3075,30 @@ int ObTenantMetaMemMgr::get_oldest_ss_change_version(
   }
   return ret;
 }
+
+int ObTenantMetaMemMgr::advance_notify_ss_change_version(
+    const ObTabletMapKey &key,
+    const share::SCN &change_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
+  } else if (OB_UNLIKELY(!key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(key));
+  } else {
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
+    if (OB_FAIL(tablet_map_.advance_notify_ss_change_version(key, change_version))) {
+      if (OB_NO_NEED_UPDATE != ret) {
+        LOG_WARN("advance notify ss change version failed", K(ret), K(key), K(change_version));
+      }
+    } else {
+      // do nothing
+    }
+  }
+  return ret;
+}
 #endif
 
 } // end namespace storage

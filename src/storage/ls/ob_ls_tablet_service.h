@@ -273,6 +273,10 @@ public:
   int create_or_update_with_ss_tablet(
       const ObTablet &ss_tablet,
       const SCN &meta_version);
+  int advance_notify_ss_change_version(
+      const ObTabletID &tablet_id,
+      const share::SCN &transfer_scn,
+      const share::SCN &change_version);
 #endif
   // Get tablet handle but ignore empty shell. Return OB_TABLET_NOT_EXIST if it is empty shell.
   int ha_get_tablet(
