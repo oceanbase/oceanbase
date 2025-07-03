@@ -3022,10 +3022,6 @@ int ObSplitDownloadSSTableTask::download_sstables_and_update_local(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(ls_handle), K(local_source_tablet_hdl));
   } else {
-    ObTabletHandle ss_tablet_handle;
-    ObTableStoreIterator table_store_iterator;
-    ObBatchUpdateTableStoreParam param;
-    ObTablesHandleArray batch_sstables_handle;
     ObSEArray<ObTabletID, 1> check_major_exist_tablets;
     const int64_t snapshot_version = local_source_tablet_hdl.get_obj()->get_snapshot_version();
     const int64_t mult_version_start = local_source_tablet_hdl.get_obj()->get_multi_version_start();
@@ -3057,6 +3053,10 @@ int ObSplitDownloadSSTableTask::download_sstables_and_update_local(
       } else if (OB_FAIL(get_specified_shared_tablet_versions(dst_tablet_id, target_tablet_versions))) {
         LOG_WARN("get specified shared tablet versions failed", K(ret), K(ls_id_), K(dst_tablet_id), K(dest_reorg_scn_));
       } else {
+        ObTabletHandle ss_tablet_handle;
+        ObTableStoreIterator table_store_iterator;
+        ObBatchUpdateTableStoreParam param;
+        ObTablesHandleArray batch_sstables_handle;
         for (int64_t j = 0; OB_SUCC(ret) && j < update_sstable_types.count(); j++) {
           batch_sstables_handle.reset();
           param.reset();
