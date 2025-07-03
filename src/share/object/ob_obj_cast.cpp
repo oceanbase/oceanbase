@@ -11277,7 +11277,6 @@ static int string_collection(const ObObjType expect_type, ObObjCastParams &param
       LOG_WARN("Failed to get subshcema_meta_info", K(ret), K(dst_subschema_id));
     } else {
       ObString in_str = in.get_string();
-      ObObjType in_type = in.meta_.get_type();
       ObCollationType cs_type = in.meta_.get_collation_type();
       ObIAllocator &temp_allocator = *params.allocator_v2_;
       ObIArrayType *arr_dst = NULL;
@@ -11287,15 +11286,21 @@ static int string_collection(const ObObjType expect_type, ObObjCastParams &param
       if (dst_coll_info->collection_meta_->type_id_ != ObNestedType::OB_VECTOR_TYPE && OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_arr_type, arr_dst))) {
         LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
       } else if (dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
-        bool is_binary = (in_type == ObHexStringType || cs_type == CS_TYPE_BINARY);
+        bool is_binary = cs_type == CS_TYPE_BINARY;
         if (OB_FAIL(ObArrayTypeObjFactory::construct(temp_allocator, *dst_arr_type, arr_dst, is_binary))) {
           LOG_WARN("construct array obj failed", K(ret), K(dst_coll_info));
         } else if (OB_FAIL(ObArrayCastUtils::string_cast_vector(temp_allocator, in_str, arr_dst, dst_arr_type, is_binary))) {
           LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
         }
       } else if (dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_ARRAY_TYPE) {
-        if (OB_FAIL(ObArrayCastUtils::string_cast(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_))) {
-          LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
+        if (cs_type != CS_TYPE_BINARY) {
+          if (OB_FAIL(ObArrayCastUtils::string_cast(temp_allocator, in_str, arr_dst, dst_arr_type->element_type_))) {
+            LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
+          }
+        } else {
+          if (OB_FAIL(ObArrayCastUtils::string_cast_array(in_str, arr_dst, dst_arr_type->element_type_))) {
+            LOG_WARN("array element cast failed", K(ret), K(dst_coll_info));
+          }
         }
       } else if (dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_MAP_TYPE
                  || dst_coll_info->collection_meta_->type_id_ == ObNestedType::OB_SPARSE_VECTOR_TYPE) {
