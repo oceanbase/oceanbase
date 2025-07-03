@@ -128,6 +128,7 @@ public:
   void set_ls_leader(const bool ls_leader) { ls_leader_ = ls_leader; }
 
   int get_adapter_inst_guard(ObTabletID tablet_id, ObPluginVectorIndexAdapterGuard &adpt_guard);
+  int get_adapter_inst_guard_in_lock(ObTabletID tablet_id, ObPluginVectorIndexAdapterGuard &adpt_guard);
   int get_build_helper_inst_guard(const ObIvfHelperKey &key, ObIvfBuildHelperGuard &helper_guard);
   int create_partial_adapter(ObTabletID idx_tablet_id,
                              ObTabletID data_tablet_id,
