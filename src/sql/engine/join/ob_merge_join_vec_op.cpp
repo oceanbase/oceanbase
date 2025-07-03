@@ -213,7 +213,9 @@ int ObMergeJoinVecOp::ObCommonJoinTracker::expand_match_flags_if_necessary(const
       allocator_->free(ori_vec);
     }
   }
-  rj_match_vec_->reset(rj_match_vec_size_);
+  if (OB_SUCC(ret)) {
+    rj_match_vec_->reset(rj_match_vec_size_);
+  }
   return ret;
 }
 
