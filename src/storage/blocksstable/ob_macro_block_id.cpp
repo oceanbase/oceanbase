@@ -313,6 +313,27 @@ bool MacroBlockId::is_meta() const
   );
 }
 
+bool MacroBlockId::is_tablet_local_cache_object() const
+{
+  return is_id_mode_share() &&
+  (
+    static_cast<uint64_t>(ObStorageObjectType::PRIVATE_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MINOR_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MDS_MINI_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MDS_MINOR_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_DATA_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::PRIVATE_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::PRIVATE_TABLET_META) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MINI_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MINOR_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MDS_MINI_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MDS_MINOR_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_MAJOR_META_MACRO) == storage_object_type_ ||
+    static_cast<uint64_t>(ObStorageObjectType::SHARED_TABLET_SUB_META) == storage_object_type_
+  );
+}
+
 bool MacroBlockId::is_private_macro() const
 {
   return is_id_mode_share() &&

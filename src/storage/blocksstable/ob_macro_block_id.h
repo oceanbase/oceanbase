@@ -116,6 +116,7 @@ public:
   bool is_private_data_or_meta() const; // private tablet macro block in ss mode
   bool is_data() const; // shared data or private data
   bool is_meta() const; // shared meta or private meta
+  bool is_tablet_local_cache_object() const; // shared data or private data or shared meta or private meta, which has tablet info
   bool is_private_macro() const; // private data/meta macro block in ss mode
   bool is_macro_write_cache_ctrl_obj_type() const; // macro write cache controlled by _ss_local_cache_control in ss mode
   void set_id_mode(const uint64_t id_mode) { id_mode_ = id_mode; }

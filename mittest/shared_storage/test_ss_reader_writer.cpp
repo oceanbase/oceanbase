@@ -352,13 +352,31 @@ TEST_F(TestSSReaderWriter, local_cache_reader_writer)
   read_object_handle.reset();
 }
 
+void check_local_cache_tablet_stat(const common::ObTabletID effective_tablet_id,
+                                   const int64_t access_size,
+                                   const int64_t access_cnt,
+                                   const int64_t hit_size,
+                                   const int64_t hit_cnt)
+{
+  ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
+  ObSSLocalCacheTabletStatEntry entry;
+  local_cache_service->get_local_cache_tablet_stat(effective_tablet_id, entry);
+  ASSERT_EQ(access_cnt, entry.access_cnt_);
+  ASSERT_EQ(access_size, entry.access_size_);
+  ASSERT_EQ(hit_cnt, entry.hit_cnt_);
+  ASSERT_EQ(hit_size, entry.hit_size_);
+}
+
 TEST_F(TestSSReaderWriter, private_macro_reader_writer)
 {
   int ret = OB_SUCCESS;
 
   uint64_t tablet_id = 100;
   uint64_t server_id = 1;
-
+  int64_t access_size = 0;
+  int64_t access_cnt = 0;
+  int64_t hit_size = 0;
+  int64_t hit_cnt = 0;
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tablet_data_tablet_id_transfer_seq_dir(MTL_ID(), MTL_EPOCH_ID(), tablet_id, 0/*trasfer_seq*/));
 
   // 1. write
@@ -390,6 +408,7 @@ TEST_F(TestSSReaderWriter, private_macro_reader_writer)
   read_info_.macro_block_id_ = macro_id;
   read_info_.offset_ = 1;
   read_info_.size_ = WRITE_IO_SIZE / 2;
+  read_info_.set_effective_tablet_id(ObTabletID(tablet_id));
   ObStorageObjectHandle read_object_handle;
   ObSSPrivateMacroReader private_macro_reader;
   ASSERT_EQ(OB_SUCCESS, private_macro_reader.aio_read(read_info_, read_object_handle));
@@ -397,6 +416,22 @@ TEST_F(TestSSReaderWriter, private_macro_reader_writer)
   ASSERT_NE(nullptr, read_object_handle.get_buffer());
   ASSERT_EQ(read_info_.size_, read_object_handle.get_data_size());
   ASSERT_EQ(0, memcmp(write_buf_ + read_info_.offset_, read_object_handle.get_buffer(), read_info_.size_));
+
+  // 4. check local cache tablet stat hit and first insert
+  access_size += read_info_.size_;
+  access_cnt++;
+  hit_size += read_info_.size_;
+  hit_cnt++;
+  check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
+
+  // 5. check local cache tablet stat hit and update
+  ASSERT_EQ(OB_SUCCESS, private_macro_reader.aio_read(read_info_, read_object_handle));
+  access_size += read_info_.size_;
+  access_cnt++;
+  hit_size += read_info_.size_;
+  hit_cnt++;
+  check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
+  ASSERT_EQ(OB_SUCCESS, private_macro_reader.aio_read(read_info_, read_object_handle));
   read_object_handle.reset();
 }
 
@@ -431,13 +466,17 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   ObLogicMicroBlockId logic_micro_id_2;
   logic_micro_id_2 = logic_micro_id_1;
   logic_micro_id_2.offset_ = 1;
-
-  // 2. read <1, WRITE_IO_SIZE / 2>, expect cache miss and load cache
+  int64_t access_size = 0;
+  int64_t access_cnt = 0;
+  int64_t hit_size = 0;
+  int64_t hit_cnt = 0;
+  // 2. read <1, WRITE_IO_SIZE / 2>, expect cache and load cache
   read_info_.macro_block_id_ = macro_id;
   read_info_.offset_ = 1;
   read_info_.size_ = WRITE_IO_SIZE / 2;
   read_info_.set_logic_micro_id(logic_micro_id_1);
   read_info_.set_micro_crc(100);
+  read_info_.set_effective_tablet_id(ObTabletID(tablet_id));
   ObStorageObjectHandle cache_miss_read_object_handle;
   ObSSShareMacroReader share_macro_reader;
   ASSERT_EQ(OB_SUCCESS, share_macro_reader.aio_read(read_info_, cache_miss_read_object_handle));
@@ -446,6 +485,10 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   ASSERT_EQ(read_info_.size_, cache_miss_read_object_handle.get_data_size());
   ASSERT_EQ(0, memcmp(write_buf_ + read_info_.offset_, cache_miss_read_object_handle.get_buffer(), read_info_.size_));
   cache_miss_read_object_handle.reset();
+  // check local cache tablet stat no hit and first insert
+  access_size += read_info_.size_;
+  access_cnt++;
+  check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
 
   // 3. read <1, WRITE_IO_SIZE / 2>, expect hit memory
   read_info_.macro_block_id_ = macro_id;
@@ -453,6 +496,7 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   read_info_.size_ = WRITE_IO_SIZE / 2;
   read_info_.set_logic_micro_id(logic_micro_id_1);
   read_info_.set_micro_crc(100);
+  read_info_.set_effective_tablet_id(ObTabletID(tablet_id));
   ObStorageObjectHandle hit_memory_read_object_handle;
   ASSERT_EQ(OB_SUCCESS, share_macro_reader.aio_read(read_info_, hit_memory_read_object_handle));
   ASSERT_EQ(OB_SUCCESS, hit_memory_read_object_handle.wait());
@@ -460,6 +504,12 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   ASSERT_EQ(read_info_.size_, hit_memory_read_object_handle.get_data_size());
   ASSERT_EQ(0, memcmp(write_buf_ + read_info_.offset_, hit_memory_read_object_handle.get_buffer(), read_info_.size_));
   hit_memory_read_object_handle.reset();
+  // check local cache tablet stat hit and update
+  access_size += read_info_.size_;
+  access_cnt++;
+  hit_size += read_info_.size_;
+  hit_cnt++;
+  check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
 
   // 4. read <WRITE_IO_SIZE / 2, WRITE_IO_SIZE>, expect cache miss and load cache
   read_info_.macro_block_id_ = macro_id;
@@ -467,12 +517,17 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   read_info_.size_ = WRITE_IO_SIZE / 2;
   read_info_.set_logic_micro_id(logic_micro_id_2);
   read_info_.set_micro_crc(200);
+  read_info_.set_effective_tablet_id(ObTabletID(tablet_id));
   ASSERT_EQ(OB_SUCCESS, share_macro_reader.aio_read(read_info_, cache_miss_read_object_handle));
   ASSERT_EQ(OB_SUCCESS, cache_miss_read_object_handle.wait());
   ASSERT_NE(nullptr, cache_miss_read_object_handle.get_buffer());
   ASSERT_EQ(read_info_.size_, cache_miss_read_object_handle.get_data_size());
   ASSERT_EQ(0, memcmp(write_buf_ + read_info_.offset_, cache_miss_read_object_handle.get_buffer(), read_info_.size_));
   cache_miss_read_object_handle.reset();
+  // check local cache tablet stat no hit and update
+  access_size += read_info_.size_;
+  access_cnt++;
+  check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
 
   // 5. wait <1, WRITE_IO_SIZE / 2> flush from memory to disk
   ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
@@ -483,6 +538,7 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   read_info_.size_ = WRITE_IO_SIZE / 2;
   read_info_.set_logic_micro_id(logic_micro_id_1);
   read_info_.set_micro_crc(100);
+  read_info_.set_effective_tablet_id(ObTabletID(tablet_id));
   ObStorageObjectHandle hit_disk_read_object_handle;
   ASSERT_EQ(OB_SUCCESS, share_macro_reader.aio_read(read_info_, hit_disk_read_object_handle));
   ASSERT_EQ(OB_SUCCESS, hit_disk_read_object_handle.wait());
@@ -490,6 +546,12 @@ TEST_F(TestSSReaderWriter, share_macro_reader_writer)
   ASSERT_EQ(read_info_.size_, hit_disk_read_object_handle.get_data_size());
   ASSERT_EQ(0, memcmp(write_buf_ + read_info_.offset_, hit_disk_read_object_handle.get_buffer(), read_info_.size_));
   hit_disk_read_object_handle.reset();
+  // check local cache tablet stat hit and update
+  access_size += read_info_.size_;
+  access_cnt++;
+  hit_size += read_info_.size_;
+  hit_cnt++;
+  check_local_cache_tablet_stat(read_info_.get_effective_tablet_id(), access_size, access_cnt, hit_size, hit_cnt);
 }
 
 TEST_F(TestSSReaderWriter, tmp_file_reader_writer)
