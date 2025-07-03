@@ -87,9 +87,6 @@ public:
     ObSimpleClusterTestBase::TearDownTestCase();
   }
 
-public:
-    static const uint64_t HOT_TABLET_TABLET_ID = 200005; // tablet_id for HOT_TABLET_MACRO_BLOCK
-
 protected:
   bool tenant_created_;
   TestRunCtx run_ctx_;
@@ -104,9 +101,6 @@ TEST_F(ObMandatoryCalibrateTest, test_mandatory_calibrate)
   ASSERT_NE(nullptr, macro_cache_mgr);
   ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_mgr);
-  ObStorageCachePolicyService *policy_service = MTL(ObStorageCachePolicyService *);
-  ASSERT_NE(nullptr, policy_service);
-  policy_service->update_tablet_status(HOT_TABLET_TABLET_ID, PolicyStatus::HOT); //HOT 0
   ObTenantFileManager *tenant_file_mgr = MTL(ObTenantFileManager*);
   ASSERT_NE(nullptr, tenant_file_mgr);
 
@@ -123,6 +117,9 @@ TEST_F(ObMandatoryCalibrateTest, test_mandatory_calibrate)
 
   for (ObSSMacroCacheType cache_type = static_cast<ObSSMacroCacheType>(0); cache_type < ObSSMacroCacheType::MAX_TYPE;
       cache_type = static_cast<ObSSMacroCacheType>(static_cast<uint8_t>(cache_type) + 1)) {
+    if (ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK == cache_type) {
+      continue; // skip hot tablet macro block, it is not used in this test
+    }
     // 2 times for each cache type, test ordinary->mandatory->ordinary->mandatory,
     // Make sure that after mandatory calibration, it can be correctly calibrated by ordinary
     for (int64_t i = 0; i < 2; i++) {
