@@ -27,6 +27,7 @@ enum ObTargetArch : uint32_t
   AVX      = (1 << 1),
   AVX2     = (1 << 2),
   AVX512    = (1 << 3),
+  NEON     = (1 << 4),
 };
 
 bool is_arch_supported(ObTargetArch arch);
