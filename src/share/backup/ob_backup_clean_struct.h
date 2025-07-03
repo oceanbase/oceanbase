@@ -72,6 +72,7 @@ struct ObBackupCleanTaskType final
   {
     BACKUP_SET = 0,
     BACKUP_PIECE = 1,
+    BACKUP_COMPLEMENT_LOG = 2,
     MAX,
   };
   static const char *get_str(const TYPE &type);
