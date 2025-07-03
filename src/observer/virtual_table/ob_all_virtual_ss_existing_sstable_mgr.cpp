@@ -277,6 +277,8 @@ int ObAllVirtualSSExistingSSTableMgr::get_next_tablet_()
     if (OB_FAIL(tablet_iter_->get_next(tablet_allocator_, tablet_hdl_, cur_row_scn_, update_meta_info, extra_info))) {
       if (OB_UNLIKELY(OB_ITER_END != ret && OB_INVALID_QUERY_TIMESTAMP != ret)) {
         SERVER_LOG(WARN, "get next tablet from tablet_iter failed", KR(ret));
+      } else {
+        ret = OB_ITER_END;
       }
     } else if (OB_UNLIKELY(!tablet_hdl_.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
@@ -302,7 +304,7 @@ int ObAllVirtualSSExistingSSTableMgr::get_next_table_(ObITable *&table)
       while (OB_SUCC(ret)) {
         table_store_iter_.reset();
         if (OB_FAIL(get_next_tablet_())) {
-          if (OB_ITER_END != ret && OB_INVALID_QUERY_TIMESTAMP != ret) {
+          if (OB_ITER_END != ret) {
             SERVER_LOG(WARN, "fail to get next tablet", K(ret));
           }
         } else if (OB_FAIL(tablet_->get_all_tables(table_store_iter_, true/*unpack_cg_table*/))) {
