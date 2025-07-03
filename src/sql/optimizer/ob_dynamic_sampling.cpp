@@ -226,8 +226,11 @@ int ObDynamicSampling::add_ds_stat_items_by_dml_info(const ObDSTableParam &param
     bool hit_cache = ds_result_items.at(i).stat_handle_.stat_ != NULL;
     bool is_basic_stat = ds_result_items.at(i).type_ == ObDSResultItemType::OB_DS_BASIC_STAT;
     bool need_process_col = is_basic_stat;
+    bool from_kvcache = !allow_cache_ds_result_to_sql_ctx() ||
+                        is_basic_stat ||
+                        ds_result_items.at(i).exprs_.empty();
     bool need_add = false;
-    if (hit_cache && is_basic_stat) {
+    if (hit_cache && from_kvcache) {
       int64_t origin_modified_count = ds_result_items.at(i).stat_handle_.stat_->get_dml_cnt();
       int64_t inc_modified_cnt = cur_modified_dml_cnt - origin_modified_count;
       origin_modified_count = origin_modified_count < 1 ? 1 : origin_modified_count;
