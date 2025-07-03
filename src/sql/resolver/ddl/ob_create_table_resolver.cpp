@@ -3536,6 +3536,20 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
               }
             }
           }
+          for (int32_t j = 0; OB_SUCC(ret) && j < option_node->num_child_; ++j) {
+            if (OB_NOT_NULL(option_node->children_[j])
+                && T_COLUMN_INDEX_TYPE == option_node->children_[j]->type_) {
+              if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node->children_[j], format, params_))) {
+                LOG_WARN("fail to resolve file format", K(ret));
+              } else {
+                if (format.format_type_ == ObExternalFileFormat::FormatType::ORC_FORMAT) {
+                  column_index_type_ = format.orc_format_.column_index_type_;
+                } else if (format.format_type_ == ObExternalFileFormat::FormatType::PARQUET_FORMAT) {
+                  column_index_type_ = format.parquet_format_.column_index_type_;
+                }
+              }
+            }
+          }
         }
       }
       if (OB_SUCC(ret) && have_external_file_format && have_external_properties) {

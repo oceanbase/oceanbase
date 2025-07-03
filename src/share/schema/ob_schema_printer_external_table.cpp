@@ -191,6 +191,22 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
           SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
         }
       }
+    } else if (OB_SUCC(ret) && ObExternalFileFormat::ORC_FORMAT == format.format_type_) {
+      const ObOrcGeneralFormat &orc = format.orc_format_;
+      const char *column_index_type = column_index_type_to_string(orc.column_index_type_);
+      if (sql::ColumnIndexType::NAME != orc.column_index_type_ &&
+        OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  COLUMN_INDEX_TYPE = '%.*s',",
+                                static_cast<int>(STRLEN(column_index_type)), column_index_type))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print column index type", K(ret));
+      }
+    } else if (OB_SUCC(ret) && ObExternalFileFormat::PARQUET_FORMAT == format.format_type_) {
+      const ObParquetGeneralFormat &parquet = format.parquet_format_;
+      const char *column_index_type = column_index_type_to_string(parquet.column_index_type_);
+      if (sql::ColumnIndexType::NAME != parquet.column_index_type_ &&
+        OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  COLUMN_INDEX_TYPE = '%.*s',",
+                                static_cast<int>(STRLEN(column_index_type)), column_index_type))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print column index type", K(ret));
+      }
     }
     if (OB_SUCC(ret)) {
       --pos;

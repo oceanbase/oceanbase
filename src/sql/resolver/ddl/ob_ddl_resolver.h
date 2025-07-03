@@ -1172,6 +1172,7 @@ protected:
   bool have_generate_vec_arg_;
   int64_t auto_increment_cache_size_;
   ObExternalFileFormat::FormatType external_table_format_type_;
+  sql::ColumnIndexType column_index_type_;
   common::ObBitSet<> mocked_external_table_column_ids_;
   common::ObString index_params_;
   ObTableOrganizationType table_organization_;

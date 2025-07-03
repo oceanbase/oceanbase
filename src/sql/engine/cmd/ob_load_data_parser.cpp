@@ -741,6 +741,11 @@ int ObParquetGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len, 
   OZ(databuff_printf(buf, buf_len, pos, "\"%s\":%ld", OPTION_NAMES[idx++], row_group_size_));
   OZ(J_COMMA());
   OZ(databuff_printf(buf, buf_len, pos, "\"%s\":%ld", OPTION_NAMES[idx++], compress_type_index_));
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_3) {
+    OZ(J_COMMA());
+    OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++],
+                      column_index_type_to_string(column_index_type_)));
+  }
   return ret;
 }
 
@@ -757,6 +762,14 @@ int ObParquetGeneralFormat::load_from_json_data(json::Pair *&node, common::ObIAl
       && json::JT_NUMBER == node->value_->get_type()) {
     compress_type_index_ = node->value_->get_number();
     node = node->get_next();
+  }
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+      && json::JT_STRING == node->value_->get_type()) {
+    if (OB_FAIL(column_index_type_from_string(node->value_->get_string(), column_index_type_))) {
+      LOG_WARN("failed to convert string to column index type", K(ret));
+    } else {
+      node = node->get_next();
+    }
   }
   return ret;
 }
@@ -785,6 +798,11 @@ int ObOrcGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len, int6
     OZ(databuff_printf(buf, buf_len, pos, "%ld", column_use_bloom_filter_.at(sz)));
   }
   OZ(J_ARRAY_END());
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_3) {
+    OZ(J_COMMA());
+    OZ(databuff_printf(buf, buf_len, pos, "\"%s\":\"%s\"", OPTION_NAMES[idx++],
+                      column_index_type_to_string(column_index_type_)));
+  }
   return ret;
 }
 
@@ -831,6 +849,15 @@ int ObOrcGeneralFormat::load_from_json_data(json::Pair *&node, common::ObIAlloca
           LOG_WARN("push back failed", K(ret));
         }
       }
+    }
+    node = node->get_next();
+  }
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[idx++])
+      && json::JT_STRING == node->value_->get_type()) {
+    if (OB_FAIL(column_index_type_from_string(node->value_->get_string(), column_index_type_))) {
+      LOG_WARN("failed to convert string to column index type", K(ret));
+    } else {
+      node = node->get_next();
     }
   }
   return ret;
@@ -952,6 +979,32 @@ const char *binary_format_to_string(const ObCSVGeneralFormat::ObCSVBinaryFormat 
     case ObCSVGeneralFormat::ObCSVBinaryFormat::BASE64:    return "BASE64";
     default: return "DEFAULT";
   }
+}
+
+const char *column_index_type_to_string(const sql::ColumnIndexType column_index_type)
+{
+  switch (column_index_type) {
+    case sql::ColumnIndexType::NAME:    return "NAME";
+    case sql::ColumnIndexType::POSITION:    return "POSITION";
+    case sql::ColumnIndexType::ID:    return "ID";
+    default: return "NAME";
+  }
+}
+
+int column_index_type_from_string(const ObString column_index_type_str,
+                                  sql::ColumnIndexType &column_index_type) {
+  int ret = OB_SUCCESS;
+
+  if (column_index_type_str.empty() || 0 == column_index_type_str.case_compare("NAME")) {
+    column_index_type = sql::ColumnIndexType::NAME;
+  } else if (0 == column_index_type_str.case_compare("POSITION")) {
+    column_index_type = sql::ColumnIndexType::POSITION;
+  } else if (0 == column_index_type_str.case_compare("ID")) {
+    column_index_type = sql::ColumnIndexType::ID;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+  }
+  return ret;
 }
 
 int binary_format_from_string(const ObString binary_format_str,
@@ -1130,20 +1183,40 @@ int ObExternalFileFormat::mock_gen_column_def(
       break;
     }
     case PARQUET_FORMAT: {
-      if (OB_FAIL(temp_str.append_fmt("get_path(%s, '%.*s')",
-                                      N_EXTERNAL_FILE_ROW,
-                                      column.get_column_name_str().length(),
-                                      column.get_column_name_str().ptr()))) {
-        LOG_WARN("fail to append sql str", K(ret));
+      if (parquet_format_.column_index_type_ == sql::ColumnIndexType::NAME) {
+        if (OB_FAIL(temp_str.append_fmt("get_path(%s, '%.*s')",
+                                        N_EXTERNAL_FILE_ROW,
+                                        column.get_column_name_str().length(),
+                                        column.get_column_name_str().ptr()))) {
+          LOG_WARN("fail to append sql str", K(ret));
+        }
+      } else if (parquet_format_.column_index_type_ == sql::ColumnIndexType::POSITION) {
+        uint64_t file_column_idx = column.get_column_id() - OB_APP_MIN_COLUMN_ID + 1;
+        if (OB_FAIL(temp_str.append_fmt("%s%lu", N_EXTERNAL_FILE_POS, file_column_idx))) {
+          LOG_WARN("fail to append sql str", K(ret));
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported column index type", K(ret), K(parquet_format_.column_index_type_));
       }
       break;
     }
     case ORC_FORMAT: {
-      if (OB_FAIL(temp_str.append_fmt("get_path(%s, '%.*s')",
-                                      N_EXTERNAL_FILE_ROW,
-                                      column.get_column_name_str().length(),
-                                      column.get_column_name_str().ptr()))) {
-        LOG_WARN("fail to append sql str", K(ret));
+      if (orc_format_.column_index_type_ == sql::ColumnIndexType::NAME) {
+        if (OB_FAIL(temp_str.append_fmt("get_path(%s, '%.*s')",
+                                        N_EXTERNAL_FILE_ROW,
+                                        column.get_column_name_str().length(),
+                                        column.get_column_name_str().ptr()))) {
+          LOG_WARN("fail to append sql str", K(ret));
+        }
+      } else if (orc_format_.column_index_type_ == sql::ColumnIndexType::POSITION) {
+        uint64_t file_column_idx = column.get_column_id() - OB_APP_MIN_COLUMN_ID + 1;
+        if (OB_FAIL(temp_str.append_fmt("%s%lu", N_EXTERNAL_FILE_POS, file_column_idx))) {
+          LOG_WARN("fail to append sql str", K(ret));
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported column index type", K(ret), K(orc_format_.column_index_type_));
       }
       break;
     }

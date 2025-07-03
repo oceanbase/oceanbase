@@ -71,6 +71,30 @@ int ObOrcTableRowIterator::build_type_name_id_map(const orc::Type* type, ObIArra
   return ret;
 }
 
+int ObOrcTableRowIterator::compute_column_id_by_index_type(int64_t index, int64_t &orc_col_id)
+{
+  int ret = OB_SUCCESS;
+  switch (scan_param_->external_file_format_.orc_format_.column_index_type_) {
+    case sql::ColumnIndexType::NAME: {
+      ObString col_name;
+      ObDataAccessPathExtraInfo *data_access_info =
+        static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(index)->extra_info_);
+      col_name = data_access_info->data_access_path_;
+      OZ (name_to_id_.get_refactored(col_name, orc_col_id));
+      break;
+    }
+    case sql::ColumnIndexType::POSITION: {
+      orc_col_id = file_column_exprs_.at(index)->extra_;
+      break;
+    }
+    default:
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unknown orc column_index_type", K(ret), K(scan_param_->external_file_format_.orc_format_.column_index_type_));
+      break;
+  }
+  return ret;
+}
+
 int ObOrcTableRowIterator::init(const storage::ObTableScanParam *scan_param)
 {
   int ret = OB_SUCCESS;
@@ -273,24 +297,41 @@ int ObOrcTableRowIterator::next_file()
                                               static_cast<int64_t>(first_row_of_stripe)});
           first_row_of_stripe += stripe->getNumberOfRows();
         }
-
-        std::list<std::string> include_names_list;
-        for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
-          ObDataAccessPathExtraInfo *data_access_info =
-              static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
-          if (OB_SUCC(ret) && (data_access_info == nullptr ||
-                              data_access_info->data_access_path_.ptr() == nullptr ||
-                              data_access_info->data_access_path_.length() == 0))
-          {
-            ret = OB_EXTERNAL_ACCESS_PATH_ERROR;
-          }
-          if (OB_SUCC(ret)) {
-            include_names_list.push_front(std::string(data_access_info->data_access_path_.ptr(),
-                                                      data_access_info->data_access_path_.length())); //x.y.z -> column_id
-          }
-        }
         orc::RowReaderOptions rowReaderOptions;
-        rowReaderOptions.include(include_names_list);
+        std::list<std::string> include_names_list;
+        std::list<uint64_t> include_ids_list;
+        switch (scan_param_->external_file_format_.orc_format_.column_index_type_) {
+          case sql::ColumnIndexType::NAME: {
+            for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
+              ObDataAccessPathExtraInfo *data_access_info =
+                  static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
+              if (OB_SUCC(ret) && (data_access_info == nullptr ||
+                                  data_access_info->data_access_path_.ptr() == nullptr ||
+                                  data_access_info->data_access_path_.length() == 0))
+              {
+                ret = OB_EXTERNAL_ACCESS_PATH_ERROR;
+              }
+              if (OB_SUCC(ret)) {
+                include_names_list.push_front(std::string(data_access_info->data_access_path_.ptr(),
+                                                    data_access_info->data_access_path_.length()));
+              }
+            }
+            rowReaderOptions.include(include_names_list);
+            break;
+          }
+          case sql::ColumnIndexType::POSITION: {
+            for (uint64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
+              include_ids_list.push_back(file_column_exprs_.at(i)->extra_ - 1);
+            }
+            rowReaderOptions.include(include_ids_list);
+            break;
+          }
+          default:
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("unknown orc column_index_type",
+                    K(ret), K(scan_param_->external_file_format_.orc_format_.column_index_type_));
+            break;
+        }
         try {
           row_reader_ = reader->createRowReader(rowReaderOptions);
         } catch(const std::exception& e) {
@@ -318,15 +359,9 @@ int ObOrcTableRowIterator::next_file()
           name_to_id_.reuse();
           OZ (SMART_CALL(build_type_name_id_map(&row_reader_->getSelectedType(), col_names)));
           for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
-            ObDataAccessPathExtraInfo *data_access_info =
-                static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
-            CK (data_access_info != nullptr);
-            CK (data_access_info->data_access_path_.ptr() != nullptr);
-            CK (data_access_info->data_access_path_.length() != 0);
             int64_t col_id = -1;
-            OZ (name_to_id_.get_refactored(ObString(data_access_info->data_access_path_.length(), data_access_info->data_access_path_.ptr()), col_id));
-            CK (col_id != -1);
             const orc::Type *type = nullptr;
+            OZ(compute_column_id_by_index_type(i, col_id));
             OZ (id_to_type_.get_refactored(col_id, type));
             CK (type != nullptr);
 
@@ -626,12 +661,7 @@ int ObOrcTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         int idx = -1;
         int64_t col_id = -1;
         const orc::Type *col_type = nullptr;
-        ObDataAccessPathExtraInfo *data_access_info =
-        static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
-        CK (data_access_info != nullptr);
-        CK (data_access_info->data_access_path_.ptr() != nullptr);
-        CK (data_access_info->data_access_path_.length() != 0);
-        OZ (name_to_id_.get_refactored(ObString(data_access_info->data_access_path_.length(), data_access_info->data_access_path_.ptr()), col_id));
+        OZ(compute_column_id_by_index_type(i, col_id));
 
         OZ (id_to_type_.get_refactored(col_id, col_type));
         ObArray<int> idxs;

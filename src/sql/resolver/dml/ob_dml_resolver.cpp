@@ -4119,7 +4119,9 @@ int ObDMLResolver::set_basic_column_properties(ObColumnSchemaV2 &column_schema,
 }
 
 // 构建column schema
-int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type, ObTableSchema& table_schema)
+int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type,
+                                                const ColumnIndexType column_index_type,
+                                                ObTableSchema& table_schema)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(type)) {
@@ -4253,6 +4255,7 @@ int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type, ObTableSc
         // 设置其他必要属性
         ObExternalFileFormat format;
         format.format_type_ = ObExternalFileFormat::ORC_FORMAT;
+        format.orc_format_.column_index_type_ = column_index_type;
         ObString mock_gen_column_str;
         if (OB_FAIL(format.mock_gen_column_def(column_schema, *allocator_, mock_gen_column_str))) {
           LOG_WARN("fail to mock gen column def", K(ret));
@@ -4270,6 +4273,7 @@ int ObDMLResolver::build_column_schemas_for_orc(const orc::Type* type, ObTableSc
 }
 
 int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescriptor* schema,
+                                                    const ColumnIndexType column_index_type,
                                                     ObTableSchema& table_schema)
 {
   int ret = OB_SUCCESS;
@@ -4421,6 +4425,7 @@ int ObDMLResolver::build_column_schemas_for_parquet(const parquet::SchemaDescrip
             // 设置其他必要属性
             ObExternalFileFormat format;
             format.format_type_ = ObExternalFileFormat::PARQUET_FORMAT;
+            format.parquet_format_.column_index_type_ = column_index_type;
             ObString mock_gen_column_str;
             if (OB_FAIL(format.mock_gen_column_def(column_schema, *allocator_, mock_gen_column_str))) {
               LOG_WARN("fail to mock gen column def", K(ret));
@@ -5122,8 +5127,10 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
             if (!file_reader_) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("create row reader failed", K(ret));
-            } else if (OB_FAIL(SMART_CALL(build_column_schemas_for_parquet(file_reader_->metadata()->schema(),
-                                                              table_schema)))) {
+            } else if (OB_FAIL(SMART_CALL(build_column_schemas_for_parquet(
+                                                          file_reader_->metadata()->schema(),
+                                                          format.parquet_format_.column_index_type_,
+                                                          table_schema)))) {
               LOG_WARN("failed to build column schemas for parquet", K(ret));
             }
           }
@@ -5202,6 +5209,7 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("create row reader failed", K(ret));
               } else if (OB_FAIL(SMART_CALL(build_column_schemas_for_orc(&row_reader_->getSelectedType(),
+                                                            format.orc_format_.column_index_type_,
                                                             table_schema)))) {
                 LOG_WARN("failed to build column schemas for orc", K(ret));
               }
@@ -10166,37 +10174,60 @@ int ObDMLResolver::resolve_external_table_generated_column(
       ObRawExpr *cast_expr = NULL;
       ObRawExpr *get_path_expr = NULL;
       ObRawExpr *cast_type_expr = NULL;
-      if (T_FUN_SYS_GET_PATH == ref_expr->get_expr_type()) {
-        // GET_PATH(N_EXTERNAL_FILE_ROW, 'xxx')
-        if (ref_expr->get_param_count() > 0 && ref_expr->get_param_expr(0) == col.ref_expr_) {
-          get_path_expr = ref_expr;
-          cast_type_expr = NULL; //using column type as result type
+      bool is_index_by_pos = (format.format_type_ == ObExternalFileFormat::PARQUET_FORMAT &&
+    format.parquet_format_.column_index_type_ == sql::ColumnIndexType::POSITION) ||
+    (format.format_type_ == ObExternalFileFormat::ORC_FORMAT &&
+    format.orc_format_.column_index_type_ == sql::ColumnIndexType::POSITION);
+      if (is_index_by_pos) {
+        if (OB_FAIL(ObResolverUtils::calc_file_column_idx(col.col_name_, file_column_idx))) {
+          LOG_WARN("fail to calc file column idx", K(ret));
+        } else {
+          if (OB_FAIL(search_parquet_expr(ref_expr, col.ref_expr_, cast_expr))) {
+            LOG_WARN("fail to serach parquet path expr", K(ret));
+          } else if (OB_NOT_NULL(cast_expr)) {
+            if (cast_expr->get_param_count() != 2
+                || OB_ISNULL(get_path_expr = cast_expr->get_param_expr(0))
+                || OB_ISNULL(cast_type_expr = cast_expr->get_param_expr(1))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected cast expr", K(ret));
+            }
+          }
         }
       } else {
-        // search pattern: cast(GET_PATH(N_EXTERNAL_FILE_ROW, 'xxx') as xxx)
-        if (OB_FAIL(search_parquet_expr(ref_expr, col.ref_expr_, cast_expr))) {
-          LOG_WARN("fail to serach parquet path expr", K(ret));
-        } else if (OB_NOT_NULL(cast_expr)) {
-          if (cast_expr->get_param_count() != 2
-              || OB_ISNULL(get_path_expr = cast_expr->get_param_expr(0))
-              || OB_ISNULL(cast_type_expr = cast_expr->get_param_expr(1))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected cast expr", K(ret));
+        if (T_FUN_SYS_GET_PATH == ref_expr->get_expr_type()) {
+          // GET_PATH(N_EXTERNAL_FILE_ROW, 'xxx')
+          if (ref_expr->get_param_count() > 0 && ref_expr->get_param_expr(0) == col.ref_expr_) {
+            get_path_expr = ref_expr;
+            cast_type_expr = NULL; //using column type as result type
+          }
+        } else {
+          // search pattern: cast(GET_PATH(N_EXTERNAL_FILE_ROW, 'xxx') as xxx)
+          if (OB_FAIL(search_parquet_expr(ref_expr, col.ref_expr_, cast_expr))) {
+            LOG_WARN("fail to serach parquet path expr", K(ret));
+          } else if (OB_NOT_NULL(cast_expr)) {
+            if (cast_expr->get_param_count() != 2
+                || OB_ISNULL(get_path_expr = cast_expr->get_param_expr(0))
+                || OB_ISNULL(cast_type_expr = cast_expr->get_param_expr(1))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected cast expr", K(ret));
+            }
           }
         }
       }
+
       if (OB_SUCC(ret)) {
         ObRawExpr *pattern_expr = OB_NOT_NULL(cast_expr) ? cast_expr : get_path_expr;
-        if (OB_ISNULL(pattern_expr)) {
+        if (!is_index_by_pos && OB_ISNULL(pattern_expr)) {
           ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
           LOG_WARN("invalid generated column define for external table", K(ret));
         } else if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_parquet(
                              *params_.expr_factory_, *params_.session_info_,
                              table_item.table_id_, table_item.table_name_,
                              col.col_name_, get_path_expr,
-                             cast_expr, column_schema, real_ref_expr))) {
+                             cast_expr, column_schema, is_index_by_pos, file_column_idx, real_ref_expr))) {
           LOG_WARN("fail to build file column expr", K(ret));
-        } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(ref_expr, pattern_expr, real_ref_expr))) {
+        } else if ((!is_index_by_pos || OB_NOT_NULL(cast_expr)) &&
+              OB_FAIL(ObRawExprUtils::replace_ref_column(ref_expr, pattern_expr, real_ref_expr))) {
           LOG_WARN("replace column reference expr failed", K(ret));
         }
       }

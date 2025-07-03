@@ -5039,11 +5039,16 @@ int ObResolverUtils::calc_file_column_idx(const ObString &column_name, uint64_t 
   if (column_name.case_compare(N_EXTERNAL_FILE_URL) == 0) {
     file_column_idx = UINT64_MAX;
   } else {
-    int32_t PREFIX_LEN = column_name.prefix_match_ci(N_PARTITION_LIST_COL) ?
-                            str_length(N_PARTITION_LIST_COL) :
-                              column_name.prefix_match_ci(N_EXTERNAL_FILE_COLUMN_PREFIX)?
-                                str_length(N_EXTERNAL_FILE_COLUMN_PREFIX) : column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_PREFIX) ?
-                                                                              str_length(N_EXTERNAL_TABLE_COLUMN_PREFIX) : -1;
+    int32_t PREFIX_LEN = -1;
+    if (column_name.prefix_match_ci(N_PARTITION_LIST_COL)) {
+      PREFIX_LEN = str_length(N_PARTITION_LIST_COL);
+    } else if (column_name.prefix_match_ci(N_EXTERNAL_FILE_COLUMN_PREFIX)) {
+      PREFIX_LEN = str_length(N_EXTERNAL_FILE_COLUMN_PREFIX);
+    } else if (column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_PREFIX)) {
+      PREFIX_LEN = str_length(N_EXTERNAL_TABLE_COLUMN_PREFIX);
+    } else if (column_name.prefix_match_ci(N_EXTERNAL_FILE_POS)) {
+      PREFIX_LEN = str_length(N_EXTERNAL_FILE_POS);
+    }
     if (column_name.length() <= PREFIX_LEN) {
       ret = OB_ERR_UNEXPECTED;
     } else {
@@ -5176,7 +5181,7 @@ ObExternalFileFormat::FormatType ObResolverUtils::resolve_external_file_column_t
     type = ObExternalFileFormat::CSV_FORMAT;
   } else if (name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_PREFIX)) {
     type = ObExternalFileFormat::ODPS_FORMAT;
-  } else if (0 == name.case_compare(N_EXTERNAL_FILE_ROW)) {
+  } else if (0 == name.case_compare(N_EXTERNAL_FILE_ROW) || name.prefix_match_ci(N_EXTERNAL_FILE_POS)) {
     type = ObExternalFileFormat::PARQUET_FORMAT;
   }
   return type;
@@ -5191,6 +5196,8 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
     ObRawExpr *get_path_expr,
     ObRawExpr *cast_expr,
     const ObColumnSchemaV2 *generated_column,
+    bool is_index_by_pos,
+    uint64_t column_idx,
     ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
@@ -5208,7 +5215,8 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
     file_column_expr->set_table_id(table_id);
     file_column_expr->set_explicited_reference();
 
-    if (OB_ISNULL(get_path_expr) || OB_ISNULL(path_expr = get_path_expr->get_param_expr(1))) {
+    if (!is_index_by_pos &&
+        (OB_ISNULL(get_path_expr) || OB_ISNULL(path_expr = get_path_expr->get_param_expr(1)))) {
       ret = OB_ERR_UNEXPECTED;
     }
     if (OB_SUCC(ret)) {
@@ -5275,18 +5283,22 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
     }
 
     if (OB_SUCC(ret)) {
-      //get path
-      if (OB_FAIL(path_expr->formalize(&session_info))) {
-        LOG_WARN("fail to formalize expr", K(ret));
-      } else if (!path_expr->is_static_const_expr()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support non-const expr", K(ret), KPC(path_expr));
+      if (is_index_by_pos) {
+        file_column_expr->set_column_idx(column_idx);
       } else {
-        ObConstRawExpr *const_path_expr = static_cast<ObConstRawExpr *>(path_expr);
-        if (!const_path_expr->get_value().is_string_type()) {
+        //get path
+        if (OB_FAIL(path_expr->formalize(&session_info))) {
+          LOG_WARN("fail to formalize expr", K(ret));
+        } else if (!path_expr->is_static_const_expr()) {
           ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support non-const expr", K(ret), KPC(path_expr));
         } else {
-          file_column_expr->set_data_access_path(const_path_expr->get_value().get_string());
+          ObConstRawExpr *const_path_expr = static_cast<ObConstRawExpr *>(path_expr);
+          if (!const_path_expr->get_value().is_string_type()) {
+            ret = OB_NOT_SUPPORTED;
+          } else {
+            file_column_expr->set_data_access_path(const_path_expr->get_value().get_string());
+          }
         }
       }
     }
@@ -9858,6 +9870,57 @@ int ObResolverUtils::resolve_binary_format(const ParseNode* node, ObExternalFile
   return ret;
 }
 
+int ObResolverUtils::resolve_column_index_type(const ParseNode* node, ObExternalFileFormat& format) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node", K(ret));
+  } else {
+    const ObString string_v = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim();
+
+    switch (format.format_type_) {
+      case ObExternalFileFormat::PARQUET_FORMAT: {
+        if (0 == string_v.case_compare("NAME")) {
+          format.parquet_format_.column_index_type_ = sql::ColumnIndexType::NAME;
+        } else if (0 == string_v.case_compare("POSITION")) {
+          format.parquet_format_.column_index_type_ = sql::ColumnIndexType::POSITION;
+        } else if (0 == string_v.case_compare("ID")) {
+          format.parquet_format_.column_index_type_ = sql::ColumnIndexType::ID;
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          ObSqlString err_msg;
+          err_msg.append_fmt("%s -> column_index_type", string_v.ptr());
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+          LOG_WARN("not support this format type", K(format.format_type_));
+        }
+        break;
+      }
+      case ObExternalFileFormat::ORC_FORMAT: {
+        if (0 == string_v.case_compare("NAME")) {
+          format.orc_format_.column_index_type_ = sql::ColumnIndexType::NAME;
+        } else if (0 == string_v.case_compare("POSITION")) {
+          format.orc_format_.column_index_type_ = sql::ColumnIndexType::POSITION;
+        } else if (0 == string_v.case_compare("ID")) {
+          format.orc_format_.column_index_type_ = sql::ColumnIndexType::ID;
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          ObSqlString err_msg;
+          err_msg.append_fmt("%s -> column_index_type", string_v.ptr());
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+          LOG_WARN("not support this format type", K(format.format_type_));
+        }
+        break;
+      }
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "this format type");
+        LOG_WARN("not support this format type", K(format.format_type_));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFormat &format, ObResolverParams &params)
 {
   int ret = OB_SUCCESS;
@@ -10165,6 +10228,15 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.3.5.2, ignore_last_empty_column");
         } else {
           format.csv_format_.ignore_last_empty_col_ = node->children_[0]->value_;
+        }
+        break;
+      }
+      case T_COLUMN_INDEX_TYPE: {
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_3) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.3.5.3, column_index_type");
+        } else if (OB_FAIL(ObResolverUtils::resolve_column_index_type(node, format))) {
+          LOG_WARN("failed to resolve column index type", K(ret));
         }
         break;
       }

@@ -151,6 +151,7 @@ private:
   int next_row_group();
   int calc_pseudo_exprs(const int64_t read_count);
   int prefetch_parquet_row_group(std::unique_ptr<parquet::RowGroupMetaData> row_group_meta);
+  int compute_column_id_by_index_type(int index, int &file_col_id);
 private:
   ObParquetIteratorState state_;
   lib::ObMemAttr mem_attr_;
