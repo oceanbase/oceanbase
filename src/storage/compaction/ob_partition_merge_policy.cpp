@@ -513,9 +513,11 @@ int ObPartitionMergePolicy::get_minor_merge_tables(
     LOG_WARN("fail to calculate boundary version", K(ret));
   }
   if (OB_FAIL(ret)) {
+#ifdef ERRSIM
   } else if (ERRSIM_DISABLE_MINOR_MERGE && !is_sys_tenant(MTL_ID())) {
     ret = OB_NO_NEED_MERGE;
     LOG_INFO("Errsim: disable minor merge", K(ret), "tenant_id", MTL_ID(), "tablet_id", tablet.get_tablet_meta().tablet_id_);
+#endif
   } else if (OB_FAIL(find_minor_merge_tables(param,
                                              min_snapshot_version,
                                              max_snapshot_version,
@@ -2203,6 +2205,11 @@ int ObPartitionMergePolicy::get_ss_minor_merge_tables(
   if (OB_FAIL(ret)) {
   } else if (minor_merge_candidates.empty()) {
     ret = OB_NO_NEED_MERGE;
+#ifdef ERRSIM
+  } else if (ERRSIM_DISABLE_MINOR_MERGE && !is_sys_tenant(MTL_ID())) {
+    ret = OB_NO_NEED_MERGE;
+    LOG_INFO("Errsim: disable ss minor merge", K(ret), "tenant_id", MTL_ID(), "tablet_id", tablet.get_tablet_meta().tablet_id_);
+#endif
   } else if (OB_FAIL(refine_and_get_minor_merge_result(param, tablet, minor_compact_trigger, minor_merge_candidates, result))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("refine and get minor merge result fail", K(ret));
