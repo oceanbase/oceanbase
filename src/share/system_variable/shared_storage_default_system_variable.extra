@@ -20,6 +20,41 @@
     "comment": "for real-time data warehouse analytics scenarios.",
     "variables": {
       "tenant": [
+        {
+          "name": "collation_connection",
+          "value": "utf8mb4_bin",
+          "comment": "use binary collation can achieve 20% performance gain compared with other collations"
+        },
+        {
+          "name": "collation_server",
+          "value": "utf8mb4_bin",
+          "comment": "use binary collation can achieve 20% performance gain compared with other collations"
+        },
+        {
+          "name": "parallel_degree_policy",
+          "value": "AUTO",
+          "comment": "auto dop is enabled by default for OLAP"
+        },
+        {
+          "name": "ob_sql_work_area_percentage",
+          "value": 30,
+          "comment": "larger sql work area can save spill cost"
+        },
+        {
+          "name": "parallel_min_scan_time_threshold",
+          "value": 10,
+          "comment": "10ms. enable best parallel performance for query which require 100ms+ only"
+        },
+        {
+          "name": "ob_trx_timeout",
+          "value": 604800000000,
+          "comment": "transaction timeout for AP is 7 days"
+        },
+        {
+          "name": "ob_query_timeout",
+          "value": 604800000000,
+          "comment": "query timeout for AP is 7 days"
+        }
       ]
     }
   },
