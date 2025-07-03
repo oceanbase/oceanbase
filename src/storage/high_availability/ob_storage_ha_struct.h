@@ -122,7 +122,6 @@ public:
 private:
   static int check_ls_transfer_tablet_(
       const share::ObLSID &ls_id,
-      const ObMigrationStatus &migration_status,
       bool &allow_gc);
   static int check_transfer_dest_tablet_for_ls_gc(
       ObLS *ls,
@@ -147,9 +146,11 @@ private:
   static int check_ls_transfer_tablet_v1_(
       const share::ObLSID &ls_id,
       const ObMigrationStatus &migration_status,
+      const bool allow_gc_v2,
       bool &allow_gc);
   static int check_ls_with_transfer_task_v1_(
       ObLS &ls,
+      const bool allow_gc_v2,
       bool &need_check_allow_gc,
       bool &need_wait_dest_ls_replay);
   static int check_transfer_dest_ls_status_for_ls_gc_v1_(

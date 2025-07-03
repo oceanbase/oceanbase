@@ -145,7 +145,6 @@ public:
   int check_transfer_tablet_is_same(
       const common::ObIArray<ObTabletID> &tablet_id_array,
       bool &is_same);
-
 private:
   int update_trans_status_(
       const ObTransferInTransStatus::STATUS &trans_status,

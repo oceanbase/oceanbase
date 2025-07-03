@@ -414,7 +414,6 @@ int ObMigrationStatusHelper::set_ls_migrate_gc_status_(
 
 int ObMigrationStatusHelper::check_ls_transfer_tablet_(
     const share::ObLSID &ls_id,
-    const ObMigrationStatus &migration_status,
     bool &allow_gc)
 {
   int ret = OB_SUCCESS;
@@ -575,24 +574,27 @@ int ObMigrationStatusHelper::check_ls_allow_gc(
   int ret = OB_SUCCESS;
   allow_gc = false;
   const uint64_t tenant_id = MTL_ID();
-  bool for_compatible = false;
 
   if (!ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls_id is invalid", K(ret), K(ls_id));
   } else if (check_migration_status_is_fail_(cur_status)) {
     allow_gc = true;
-  } else if (OB_FAIL(check_transfer_meta_info_compatible_(for_compatible))) {
-    LOG_WARN("failed to check transfer meta info compatible", K(ret), K(ls_id));
+  // TODO(muwei.ym) check transfer meta info for compatible in 4.4.1
+  //} else if (OB_FAIL(check_transfer_meta_info_compatible_(for_compatible))) {
+  //  LOG_WARN("failed to check transfer meta info compatible", K(ret), K(ls_id));
   } else {
-    if (for_compatible) {
-      if (OB_FAIL(check_ls_transfer_tablet_v1_(ls_id, cur_status, allow_gc))) {
-        LOG_WARN("failed to check ls transfer tablet old", K(ret), K(ls_id));
-      }
+    bool allow_gc_v2 = false;
+    bool allow_gc_v1 = false;
+    if (OB_FAIL(check_ls_transfer_tablet_(ls_id, allow_gc_v2))) {
+      LOG_WARN("failed to check ls transfer tablet", K(ret), K(ls_id));
+    } else if (OB_FAIL(check_ls_transfer_tablet_v1_(ls_id, cur_status, allow_gc_v2, allow_gc_v1))) {
+      LOG_WARN("failed to check ls transfer tablet old", K(ret), K(ls_id));
+    } else if (allow_gc_v2 != allow_gc_v1) {
+      allow_gc = false;
+      FLOG_INFO("transfer check src ls allow gc result not same", K(allow_gc_v2), K(allow_gc_v1), K(ls_id));
     } else {
-      if (OB_FAIL(check_ls_transfer_tablet_(ls_id, cur_status, allow_gc))) {
-        LOG_WARN("failed to check ls transfer tablet", K(ret), K(ls_id));
-      }
+      allow_gc = allow_gc_v2;
     }
   }
   return ret;
@@ -927,6 +929,7 @@ int ObMigrationStatusHelper::check_migration_in_final_state(
 int ObMigrationStatusHelper::check_ls_transfer_tablet_v1_(
     const share::ObLSID &ls_id,
     const ObMigrationStatus &migration_status,
+    const bool allow_gc_v2,
     bool &allow_gc)
 {
   int ret = OB_SUCCESS;
@@ -962,7 +965,7 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_v1_(
   } else if (restore_status.is_in_restoring()) {
     allow_gc = true;
     LOG_INFO("ls ls in restore status, allow gc", K(ret), K(restore_status), K(ls_id));
-  } else if (OB_FAIL(check_ls_with_transfer_task_v1_(*ls, need_check_allow_gc, need_wait_dest_ls_replay))) {
+  } else if (OB_FAIL(check_ls_with_transfer_task_v1_(*ls, allow_gc_v2, need_check_allow_gc, need_wait_dest_ls_replay))) {
     LOG_WARN("failed to check ls with transfer task", K(ret), KPC(ls));
   } else if (!need_check_allow_gc) {
     allow_gc = false;
@@ -1023,6 +1026,7 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_v1_(
 
 int ObMigrationStatusHelper::check_ls_with_transfer_task_v1_(
     ObLS &ls,
+    const bool allow_gc_v2,
     bool &need_check_allow_gc,
     bool &need_wait_dest_ls_replay)
 {
@@ -1044,7 +1048,7 @@ int ObMigrationStatusHelper::check_ls_with_transfer_task_v1_(
     LOG_WARN("mysql proxy should not be NULL", K(ret), KP(sql_proxy));
   } else if (OB_FAIL(ObStorageHAUtils::check_tenant_will_be_deleted(is_tenant_deleted))) {
     LOG_WARN("failed to check tenant deleted", K(ret), K(ls));
-  } else if (is_tenant_deleted) {
+  } else if (is_tenant_deleted && allow_gc_v2) {
     need_check_allow_gc = true;
     need_wait_dest_ls_replay = false;
     FLOG_INFO("unit wait gc in observer, allow gc", K(tenant_id), K(src_ls_id));
