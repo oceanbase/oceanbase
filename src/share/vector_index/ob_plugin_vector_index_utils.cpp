@@ -721,6 +721,8 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
   if (OB_ISNULL(adapter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid adapter", K(ret), KPC(adapter));
+  } else if (adapter->get_create_type() != CreateTypeComplete) {
+    // skip not complete adapter.
   } else {
     common::ObNewRowIterator *delta_buf_iter = nullptr;
     ObAccessService *tsc_service = MTL(ObAccessService *);
