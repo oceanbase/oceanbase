@@ -688,6 +688,7 @@ public:
       const ObDDLMacroBlock &macro_block,
       const int64_t snapshot_version,
       const uint64_t data_format_version);
+  int check_tx_data_can_explain_user_data(const share::SCN &tx_data_table_filled_tx_scn);
 protected:// for MDS use
   virtual bool check_is_inited_() const override final { return is_inited_; }
   virtual const ObTabletMeta &get_tablet_meta_() const override final { return tablet_meta_; }

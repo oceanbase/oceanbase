@@ -9352,6 +9352,52 @@ int ObTablet::build_migration_shared_table_addr_(
   return ret;
 }
 
+int ObTablet::check_tx_data_can_explain_user_data(const share::SCN &tx_data_table_filled_tx_scn)
+{
+  int ret = OB_SUCCESS;
+  ObTableStoreIterator table_store_iter;
+  if (!tx_data_table_filled_tx_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tx_data_table_filled_tx_scn));
+  } else if (OB_FAIL(get_all_minor_sstables(table_store_iter))) {
+    LOG_WARN("fail to get all minor sstables iter", K(ret), KPC(this));
+  } else {
+    share::SCN min_filled_tx_scn = SCN::max_scn();
+    ObTableHandleV2 table_handle;
+    ObSSTable *sstable = nullptr;
+    ObSSTableMetaHandle sst_meta_hdl;
+    while (OB_SUCC(ret)) {
+      table_handle.reset();
+      sst_meta_hdl.reset();
+      if (OB_FAIL(table_store_iter.get_next(table_handle))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("failed to get sstable", K(ret));
+        }
+      } else if (OB_FAIL(table_handle.get_sstable(sstable))) {
+        LOG_WARN("failed to get sstable", K(ret), K(table_handle));
+      } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
+        LOG_WARN("fail to get sstable meta", K(ret), KPC(sstable));
+      } else if (!sst_meta_hdl.get_sstable_meta().contain_uncommitted_row()) { // just skip.
+      } else {
+        const share::SCN sstable_filled_tx_scn = std::max(sst_meta_hdl.get_sstable_meta().get_filled_tx_scn(), sstable->get_end_scn());
+        if (sstable_filled_tx_scn < tx_data_table_filled_tx_scn) {
+          ret = OB_TRANS_CTX_NOT_EXIST;
+          FLOG_WARN("tx data can't explain user data",
+                    K(ret),
+                    "tablet_id", get_tablet_id(),
+                    KPC(sstable),
+                    K(sstable_filled_tx_scn),
+                    K(tx_data_table_filled_tx_scn));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 
 } // namespace storage
 } // namespace oceanbase

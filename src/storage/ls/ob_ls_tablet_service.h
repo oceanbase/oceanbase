@@ -272,7 +272,9 @@ public:
   // Create or update local tablet with shared tablet.
   int create_or_update_with_ss_tablet(
       const ObTablet &ss_tablet,
-      const SCN &meta_version);
+      const SCN &meta_version,
+      const SCN &tx_data_table_filled_tx_scn);
+
   int advance_notify_ss_change_version(
       const ObTabletID &tablet_id,
       const share::SCN &transfer_scn,
@@ -685,11 +687,13 @@ private:
   int update_with_ss_tablet(
       const uint64_t data_version,
       const ObTablet &ss_tablet,
-      const SCN &meta_version);
+      const SCN &meta_version,
+      const SCN &tx_data_table_filled_tx_scn);
   int create_with_ss_tablet(
       const uint64_t data_version,
       const ObTablet &ss_tablet,
       const SCN &meta_version,
+      const SCN &tx_data_table_filled_tx_scn,
       ObTabletHandle &handle);
   int delete_all_tablets();
   int offline_build_tablet_without_memtable_();

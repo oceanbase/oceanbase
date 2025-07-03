@@ -1884,7 +1884,8 @@ int ObLSTabletService::write_tablet_id_set_to_pending_free()
 int ObLSTabletService::update_with_ss_tablet(
     const uint64_t data_version,
     const ObTablet &ss_tablet,
-    const SCN &meta_version)
+    const SCN &meta_version,
+    const SCN &tx_data_table_filled_tx_scn)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard time_guard("ObLSTabletService::update_with_ss_tablet", 1_s);
@@ -1920,6 +1921,8 @@ int ObLSTabletService::update_with_ss_tablet(
   } else if (OB_FAIL(new_tablet->init_with_ss_tablet(allocator, ss_tablet, meta_version, true/*is_update*/))) {
     LOG_WARN("failed to init tablet", K(ret), K(ss_tablet));
   } else if (FALSE_IT(time_guard.click("InitTablet"))) {
+  } else if (OB_FAIL(tmp_tablet_hdl.get_obj()->check_tx_data_can_explain_user_data(tx_data_table_filled_tx_scn))) {
+    LOG_WARN("fail to check tx data can explain user data", K(ret), K(tx_data_table_filled_tx_scn), K(tmp_tablet_hdl));
   } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *new_tablet, new_tablet_hdl))) {
     LOG_WARN("fail to persist and transform tablet", K(ret), KPC(new_tablet), K(new_tablet_hdl));
   } else if (FALSE_IT(time_guard.click("Persist"))) {
@@ -1939,6 +1942,7 @@ int ObLSTabletService::create_with_ss_tablet(
     const uint64_t data_version,
     const ObTablet &ss_tablet,
     const SCN &meta_version,
+    const SCN &tx_data_table_filled_tx_scn,
     ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
@@ -1957,6 +1961,8 @@ int ObLSTabletService::create_with_ss_tablet(
   } else if (OB_FAIL(tmp_tablet_hdl.get_obj()->init_with_ss_tablet(allocator, ss_tablet, meta_version, false/*is_update*/))) {
     LOG_WARN("fail to init tablet", K(ret), K(ss_tablet));
   } else if (FALSE_IT(time_guard.click("InitTablet"))) {
+  } else if (OB_FAIL(tmp_tablet_hdl.get_obj()->check_tx_data_can_explain_user_data(tx_data_table_filled_tx_scn))) {
+    LOG_WARN("fail to check tx data can explain user data", K(ret), K(tx_data_table_filled_tx_scn), K(tmp_tablet_hdl));
   } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *tmp_tablet_hdl.get_obj(), tablet_handle))) {
     LOG_WARN("fail to persist and transform tablet", K(ret), K(tmp_tablet_hdl), K(tablet_handle));
   } else if (FALSE_IT(time_guard.click("Persist"))) {
@@ -1984,7 +1990,8 @@ int ObLSTabletService::create_with_ss_tablet(
 
 int ObLSTabletService::create_or_update_with_ss_tablet(
     const ObTablet &ss_tablet,
-    const SCN &meta_version)
+    const SCN &meta_version,
+    const SCN &tx_data_table_filled_tx_scn)
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = ls_->get_ls_id();
@@ -2008,9 +2015,9 @@ int ObLSTabletService::create_or_update_with_ss_tablet(
     ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
     if (OB_FAIL(has_tablet(ls_id, tablet_id, b_exist))) {
       LOG_WARN("failed to check tablet existence", K(ls_id), K(tablet_id));
-    } else if (b_exist && OB_FAIL(update_with_ss_tablet(data_version, ss_tablet, meta_version))) {
+    } else if (b_exist && OB_FAIL(update_with_ss_tablet(data_version, ss_tablet, meta_version, tx_data_table_filled_tx_scn))) {
       LOG_WARN("failed to update ss tablet", K(ret), K(tablet_id), K(data_version), K(ss_tablet), K(meta_version));
-    } else if (!b_exist && OB_FAIL(create_with_ss_tablet(data_version, ss_tablet, meta_version, tablet_handle))) {
+    } else if (!b_exist && OB_FAIL(create_with_ss_tablet(data_version, ss_tablet, meta_version, tx_data_table_filled_tx_scn, tablet_handle))) {
       LOG_WARN("failed to create ss tablet", K(ret), K(data_version), K(ss_tablet), K(meta_version));
     }
   }
