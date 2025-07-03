@@ -211,11 +211,13 @@ public:
   static int schedule_tablet_ss_minor_merge(
       ObLSHandle &ls_handle,
       const ObTabletID &tablet_id,
+      ObTabletHandle &local_tablet_handle,
       const share::SCN &transfer_scn);
   static int schedule_tablet_ss_minor_merge(
       const ObMergeType &merge_type,
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle,
+      const ObSSTabletTableStoreMetaInfo &table_store_meta_info,
       bool &scheduled);
   static int schedule_task_if_split_src(ObTabletHandle &tablet_handle);
 #endif

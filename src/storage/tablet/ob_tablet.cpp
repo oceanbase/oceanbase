@@ -7487,6 +7487,42 @@ int ObTablet::try_update_min_ss_tablet_version(const ObUpdateTableStoreParam &pa
   }
   return ret;
 }
+
+int ObTablet::get_table_store_meta_info(ObSSTabletTableStoreMetaInfo &table_store_meta_info) const
+{
+  int ret = OB_SUCCESS;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  const ObTabletTableStore *table_store = nullptr;
+  bool minor_trans_state_determined = true;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("fetch table store failed", K(ret), KPC(this));
+  } else if (OB_FAIL(table_store_wrapper.get_member(table_store))) {
+    LOG_WARN("fail to get table store", K(ret), K(table_store_wrapper));
+  } else {
+    for (int64_t i = 0; i < table_store->get_minor_sstables().count(); i++) {
+      ObITable *table = table_store->get_minor_sstables().at(i);
+      if (!table->is_trans_state_deterministic()) {
+        minor_trans_state_determined = false;
+        break;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(table_store_meta_info.set(
+    table_store->get_major_sstables().count(),
+    table_store->get_minor_sstables().count(),
+    table_store->get_ddl_sstables().count(),
+    table_store->get_mds_sstables().count(),
+    table_store->get_meta_major_sstables().count(),
+    minor_trans_state_determined))) {
+    LOG_WARN("set table store meta info failed", K(ret), KPC(this));
+  }
+  return ret;
+}
+
 #endif // OB_BUILD_SHARED_STORAGE
 
 int ObTablet::check_medium_list() const

@@ -105,6 +105,7 @@ class ObMdsRowIterator;
 class ObMdsMiniMergeOperator;
 struct ObTabletDirectLoadInsertParam;
 struct ObTruncateInfoArray;
+class ObSSTabletTableStoreMetaInfo;
 
 struct ObTableStoreCache
 {
@@ -554,6 +555,7 @@ public:
   bool is_ss_tablet() const;
   int update_ss_tablet_meta(const ObTabletMeta &new_meta);
   share::SCN get_min_ss_tablet_version() const { return tablet_meta_.min_ss_tablet_version_; }
+  int get_table_store_meta_info(ObSSTabletTableStoreMetaInfo &table_store_meta_info) const;
 #endif // OB_BUILD_SHARED_STORAGE
   const ObMetaDiskAddr &get_tablet_addr() const { return tablet_addr_; }
   const ObTabletMeta &get_tablet_meta() const { return tablet_meta_; }

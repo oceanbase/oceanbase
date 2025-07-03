@@ -1325,7 +1325,7 @@ int ObTxDataTable::dump_tx_data_in_sstable_2_text_(const ObTransID tx_id, FILE *
 ERRSIM_POINT_DEF(EN_TX_DATA_MAX_FREEZE_INTERVAL_SECOND)
 bool ObTxDataTable::FreezeFrequencyController::need_re_freeze(const share::ObLSID ls_id)
 {
-  if (!is_user_tenant(MTL_ID())) {
+  if (!is_user_tenant(MTL_ID()) || ls_id.is_sys_ls()) {
     // Non-user Tenant no need refreeze
     return false;
   }

@@ -426,12 +426,16 @@ int ObTabletPersister::persist_ss_aggregated_meta(
     // persist new tablet
     ObTabletTaskFileInfo task_info;
     ObSSMetaUpdateMetaInfo meta_info;
+    ObSSTabletTableStoreMetaInfo table_store_meta_info;
     task_info.type_ = ObAtomicOpType::TABLET_META_WRITE_OP;
     task_info.set_tablet(param_.data_version_, &macro_info, new_tablet);
-    if (OB_FAIL(meta_info.set(param_.update_reason_,
-                              new_tablet->get_tablet_meta().get_acquire_scn(),
-                              param_.sstable_op_id_))) {
-      LOG_WARN("set meta info failed", K(ret), K_(param), KPC(new_tablet));
+    if (OB_FAIL(new_tablet->get_table_store_meta_info(table_store_meta_info))) {
+      LOG_WARN("get table store meta info failed", K(ret), KPC(new_tablet));
+    } else if (OB_FAIL(meta_info.set(param_.update_reason_,
+                                     new_tablet->get_tablet_meta().get_acquire_scn(),
+                                     param_.sstable_op_id_,
+                                     table_store_meta_info))) {
+      LOG_WARN("set meta info failed", K(ret), K_(param), K(table_store_meta_info), KPC(new_tablet));
     } else if (OB_FAIL(task_info.set_meta_info(meta_info))) {
       LOG_WARN("set meta info failed", K(ret), K(meta_info));
     } else if (OB_FAIL(op->write_task_info(task_info))) {

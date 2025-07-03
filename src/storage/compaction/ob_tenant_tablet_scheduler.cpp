@@ -1559,7 +1559,7 @@ int ObTenantTabletScheduler::schedule_tablet_minor(
   }
 #ifdef OB_BUILD_SHARED_STORAGE
   if (GCTX.is_shared_storage_mode()
-      && OB_TMP_FAIL(schedule_tablet_ss_minor_merge(ls_handle, tablet_id, tablet_handle.get_obj()->get_reorganization_scn()))) {
+      && OB_TMP_FAIL(schedule_tablet_ss_minor_merge(ls_handle, tablet_id, tablet_handle, tablet_handle.get_obj()->get_reorganization_scn()))) {
     if (OB_SIZE_OVERFLOW == tmp_ret) {
       schedule_minor_flag = false;
     } else if (OB_EAGAIN != tmp_ret) {
@@ -1836,9 +1836,34 @@ int ObTenantTabletScheduler::try_schedule_adaptive_merge(
 }
 
 #ifdef OB_BUILD_SHARED_STORAGE
+static bool fast_check_skip_ss_minor(ObTabletHandle &tablet_handle)
+{
+  bool bret = false;
+  int ret = OB_SUCCESS;
+  int64_t minor_compact_trigger = ObPartitionMergePolicy::DEFAULT_MINOR_COMPACT_TRIGGER;
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      minor_compact_trigger = tenant_config->minor_compact_trigger;
+    }
+  }
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  const ObTabletTableStore *table_store = nullptr;
+  if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("failed to get table store", K(ret));
+  } else if (OB_FAIL(table_store_wrapper.get_member(table_store))) {
+    LOG_WARN("failed to get table store", K(ret));
+  } else if (table_store->get_minor_sstables().count() <= minor_compact_trigger
+             && table_store->get_mds_sstables().count() <= minor_compact_trigger) {
+    bret = true;
+  }
+  return bret;
+}
+
 int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(
     ObLSHandle &ls_handle,
     const ObTabletID &tablet_id,
+    ObTabletHandle &local_tablet_handle,
     const share::SCN &transfer_scn)
 {
   int ret = OB_SUCCESS;
@@ -1848,13 +1873,17 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(
   ObTabletHandle tablet_handle;
   bool skip = false;
   bool can_exec_ss_minor = false;
+  ObSSMetaUpdateMetaInfo meta_info;
   if (!ObTabletSSMinorMergeHelper::can_schedule(ls_id, tablet_id)) {
+    skip = true;
+  } else if (fast_check_skip_ss_minor(local_tablet_handle)) {
     skip = true;
   } else if (OB_FAIL(MTL(ObSSMetaService*)->get_tablet(ls_id,
                                                        tablet_id,
                                                        transfer_scn,
                                                        allocator,
-                                                       tablet_handle))) {
+                                                       tablet_handle,
+                                                       meta_info))) {
     LOG_WARN("get ss tablet fail", K(ret));
   } else if (!tablet_handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
@@ -1865,10 +1894,11 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(
     skip = true;
     LOG_INFO("tablet can not exec ss minor compaction", K(ret), K(ls_id), K(tablet_id), K(transfer_scn));
   } else {
+    const ObSSTabletTableStoreMetaInfo &table_store_meta_info = meta_info.table_store_meta_info_;
     const ObMergeType merge_types[] = { MINOR_MERGE, MDS_MINOR_MERGE };
     for (int i = 0; OB_SUCC(ret) && i < sizeof(merge_types); i++) {
       bool scheduled = false;
-      if (OB_FAIL(schedule_tablet_ss_minor_merge(merge_types[i], ls_handle, tablet_handle, scheduled))) {
+      if (OB_FAIL(schedule_tablet_ss_minor_merge(merge_types[i], ls_handle, tablet_handle, table_store_meta_info, scheduled))) {
         LOG_WARN("schedule shared tablet minor fail", K(ret), K(merge_types[i]));
       }
       scheduled_dag |= scheduled;
@@ -1876,7 +1906,7 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(
   }
   if (OB_SUCC(ret) && !skip && !scheduled_dag && !tablet_id.is_special_merge_tablet()) {
     // try gc sstables for tablet
-    ObTabletSSMinorMergeHelper::try_gc_sstables(ls_handle, tablet_handle);
+    ObTabletSSMinorMergeHelper::try_gc_sstables(ls_handle, tablet_handle, meta_info.table_store_meta_info_);
   }
   if (!skip) {
     LOG_INFO("sched ss minor", K(ret), K(ls_id), K(tablet_id), K(scheduled_dag));
@@ -1887,6 +1917,7 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(
 int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(const ObMergeType &merge_type,
                                                             ObLSHandle &ls_handle,
                                                             ObTabletHandle &tablet_handle,
+                                                            const ObSSTabletTableStoreMetaInfo &table_store_meta_info,
                                                             bool &scheduled)
 {
   int ret = OB_SUCCESS;
@@ -1896,12 +1927,27 @@ int ObTenantTabletScheduler::schedule_tablet_ss_minor_merge(const ObMergeType &m
   const ObTabletID &tablet_id = tablet.get_tablet_id();
   scheduled = false;
   ObGetMergeTablesResult result;
+  int64_t minor_compact_trigger = ObPartitionMergePolicy::DEFAULT_MINOR_COMPACT_TRIGGER;
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      minor_compact_trigger = tenant_config->minor_compact_trigger;
+    }
+  }
   if (is_mds_minor_merge(merge_type)) {
     ObGetMergeTablesParam param;
     param.merge_type_ = merge_type;
-    ret = ObPartitionMergePolicy::get_mds_merge_tables(param, ls, tablet, result);
+    if (table_store_meta_info.mds_tables_cnt_ < minor_compact_trigger) {
+      ret = OB_NO_NEED_MERGE;
+    } else {
+      ret = ObPartitionMergePolicy::get_mds_merge_tables(param, ls, tablet, result);
+    }
   } else if (is_minor_merge(merge_type)) {
-    ret = ObPartitionMergePolicy::get_ss_minor_merge_tables(ls, tablet, result);
+    if (table_store_meta_info.minor_tables_cnt_ < minor_compact_trigger) {
+      ret = OB_NO_NEED_MERGE;
+    } else {
+      ret = ObPartitionMergePolicy::get_ss_minor_merge_tables(ls, tablet, result);
+    }
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support this type of merge", K(ret), K(merge_type));
