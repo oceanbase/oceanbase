@@ -62,7 +62,7 @@ int ObExprVecIVFPQCenterIds::cg_expr(
     ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(rt_expr.arg_cnt_ != 8 && rt_expr.arg_cnt_ != 1)) {
+  if (OB_UNLIKELY(rt_expr.arg_cnt_ != 8 && rt_expr.arg_cnt_ != 1 && rt_expr.arg_cnt_ != 4 && rt_expr.arg_cnt_ != 2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param count", K(rt_expr.arg_cnt_), K(rt_expr.args_), K(rt_expr.type_));
   } else if (OB_UNLIKELY(rt_expr.arg_cnt_ == 8 && OB_ISNULL(rt_expr.args_))) {
@@ -103,6 +103,26 @@ int ObExprVecIVFPQCenterIds::calc_pq_center_ids(
   if (expr.arg_cnt_ == 1) {
     expr_datum.set_null();
     LOG_DEBUG("[vec index debug]succeed to genearte empty pq scenter id", KP(&expr), K(expr), K(expr_datum), K(eval_ctx));
+  } else if (expr.arg_cnt_ == 2 || expr.arg_cnt_ == 4) {
+    char *vb_buf = nullptr;
+    int64_t res_len = 0;
+    uint64_t pq_m = 1;
+    uint64_t nbits = 1;
+    uint64_t pq_cent_tablet_id = 1;
+    if (FALSE_IT(res_len = ObVecIVFPQCenterIDS::get_total_size(pq_m, nbits))) {
+    } else if (OB_ISNULL(vb_buf = expr.get_str_res_mem(eval_ctx, res_len))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc res buf", K(ret), K(res_len), K(expr));
+    } else if (OB_FAIL(generate_empty_pq_ids(vb_buf, pq_m, nbits,
+                                             pq_cent_tablet_id))) {
+      LOG_WARN("fail to gen empty pq ids", K(ret), K(pq_m),
+               K(pq_cent_tablet_id));
+    }
+    if (OB_SUCC(ret)) {
+      ObString res_str;
+      res_str.assign_ptr(vb_buf, res_len);
+      expr_datum.set_string(res_str);
+    }
   } else if (OB_UNLIKELY(8 != expr.arg_cnt_) || OB_ISNULL(expr.args_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(expr), KP(expr.args_));

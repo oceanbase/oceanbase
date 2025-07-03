@@ -19525,6 +19525,7 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
   ObIndexType index_type = INDEX_TYPE_IS_NOT;
   ObSEArray<ObIndexType, 2> index_type_array;
   bool index_readable = true;
+  bool param_filled = false;
   if (OB_ISNULL(table_schema) || OB_ISNULL(column_schema) || OB_ISNULL(raw_expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(table_schema), KP(column_schema), KP(raw_expr));
@@ -19544,16 +19545,19 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
       schema_checker_->get_schema_guard(),
       *table_schema,
       column_id,
-      param))) {
-    LOG_WARN("failed to get vector index param", K(ret));
-  } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_type(
-      raw_expr,
       param,
-      index_type_array))) {
-    LOG_WARN("fail to get vector index type", K(ret), K(param));
-  } else if (index_type_array.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected index type", K(ret));
+      param_filled))) {
+    LOG_WARN("failed to get vector index param", K(ret));
+  } else if (param_filled) {
+    if (OB_FAIL(ObVectorIndexUtil::get_vector_index_type(raw_expr, param,
+                                                         index_type_array))) {
+      LOG_WARN("fail to get vector index type", K(ret), K(param));
+    } else if (index_type_array.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected index type", K(ret));
+    }
+  } else {
+    index_readable = false;
   }
 
   // add calc_table_id_expr & calc_tablet_id_expr

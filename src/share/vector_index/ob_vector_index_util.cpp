@@ -2118,20 +2118,21 @@ int ObVectorIndexUtil::get_vector_index_param(
     share::schema::ObSchemaGetterGuard *schema_guard,
     const ObTableSchema &data_table_schema,
     const int64_t col_id,
-    ObVectorIndexParam &param)
+    ObVectorIndexParam &param,
+    bool &param_filled)
 {
   int ret = OB_SUCCESS;
 
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
   const int64_t tenant_id = data_table_schema.get_tenant_id();
-  bool filled = false;
+  param_filled = false;
   if (OB_ISNULL(schema_guard) || !data_table_schema.is_user_table()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(schema_guard), K(data_table_schema));
   } else if (OB_FAIL(data_table_schema.get_simple_index_infos(simple_index_infos))) {
     LOG_WARN("fail to get simple index infos failed", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count() && !filled; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count() && !param_filled; ++i) {
       const ObTableSchema *index_table_schema = nullptr;
       if (OB_FAIL(schema_guard->get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_table_schema))) {
         LOG_WARN("fail to get index_table_schema", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
@@ -2143,7 +2144,7 @@ int ObVectorIndexUtil::get_vector_index_param(
       } else if (index_table_schema->is_built_in_vec_index()) {
         // skip built in vec index
       } else { // we should check cascaded_column by vec_vector col
-        for (int64_t j = 0; OB_SUCC(ret) && j < index_table_schema->get_column_count() && !filled; j++) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < index_table_schema->get_column_count() && !param_filled; j++) {
           const ObColumnSchemaV2 *col_schema = nullptr;
           if (OB_ISNULL(col_schema = index_table_schema->get_column_schema_by_idx(j))) {
             ret = OB_ERR_UNEXPECTED;
@@ -2164,7 +2165,7 @@ int ObVectorIndexUtil::get_vector_index_param(
             } else if (OB_FAIL(ori_col_schema->get_cascaded_column_ids(cascaded_column_ids))) {
               LOG_WARN("failed to get cascaded column ids", K(ret));
             } else {
-              for (int64_t k = 0; OB_SUCC(ret) && k < cascaded_column_ids.count() && !filled; ++k) {
+              for (int64_t k = 0; OB_SUCC(ret) && k < cascaded_column_ids.count() && !param_filled; ++k) {
                 const ObColumnSchemaV2 *cascaded_column = NULL;
                 ObString new_col_name;
                 if (OB_ISNULL(cascaded_column = data_table_schema.get_column_schema(cascaded_column_ids.at(k)))) {
@@ -2180,7 +2181,7 @@ int ObVectorIndexUtil::get_vector_index_param(
                   if (OB_FAIL(parser_params_from_string(index_table_schema->get_index_params(), index_type, param))) {
                     LOG_WARN("fail to parser params from string", K(ret), K(index_table_schema->get_index_params()));
                   } else {
-                    filled = true;
+                    param_filled = true;
                   }
                 }
               }
@@ -4715,6 +4716,7 @@ int ObVectorIndexUtil::estimate_vector_memory_used(
   const ObTableSchema *data_table_schema = nullptr;
   const uint64_t data_table_id = index_schema.get_data_table_id();
   bool need_estimate = true;
+  bool param_filled = false;
 
   // get index schema param
   if (!index_schema.is_vec_index_snapshot_data_type() || row_count <= 0) {
@@ -4736,11 +4738,12 @@ int ObVectorIndexUtil::estimate_vector_memory_used(
   } else if (col_ids.count() != 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid col id array", K(ret), K(col_ids));
-  } else if (OB_FAIL(get_vector_index_param(&schema_guard, *data_table_schema, col_ids.at(0), param))) {
+  } else if (OB_FAIL(get_vector_index_param(&schema_guard, *data_table_schema, col_ids.at(0), param, param_filled))) {
     LOG_WARN("failed to get vector index param", K(ret), K(col_ids.at(0)));
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) || !param_filled) {
+    LOG_INFO("skip esitmate memory", K(ret), K(param_filled));
   } else if (VIAT_HNSW == param.type_) {
     // vsag not support hnsw estimate now, skip for tmp
     LOG_INFO("skip esitmate hnsw memory, vsag not support");

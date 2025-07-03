@@ -480,7 +480,7 @@ public:
 
 public:
   // dynamic thread cnt, max cnt is THREAD_FACTOR * tenent_cpu_cnt
-  constexpr static const float THREAD_FACTOR = 0.8;
+  constexpr static const float THREAD_FACTOR = 0.6;
   // 1s
   const static int64_t WAIT_RETRY_PUSH_TASK_TIME = 1 * 1000 * 1000; // us
   // push task max wait time: 1s * 5 * 60 = 5 min

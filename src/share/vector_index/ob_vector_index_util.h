@@ -490,7 +490,8 @@ public:
       share::schema::ObSchemaGetterGuard *schema_guard,
       const ObTableSchema &data_table_schema,
       const int64_t col_id,
-      ObVectorIndexParam &param);
+      ObVectorIndexParam &param,
+      bool &param_filled);
   static int get_vector_index_param_with_dim(
       share::schema::ObSchemaGetterGuard &schema_guard,
       uint64_t tenant_id,
