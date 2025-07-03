@@ -5494,71 +5494,86 @@ int ObSPIService::spi_destruct_collection(ObPLExecCtx *ctx, int64_t idx)
   return ret;
 }
 
-int ObSPIService::spi_sub_nestedtable(ObPLExecCtx *ctx, int64_t src_idx, int64_t dst_idx, int32_t lower, int32_t upper)
+int ObSPIService::spi_sub_nestedtable(ObPLExecCtx *ctx,
+                                      int64_t src_expr_idx,
+                                      int64_t dst_coll_idx,
+                                      int64_t index_idx,
+                                      int32_t lower,
+                                      int32_t upper)
 {
   int ret = OB_SUCCESS;
 #ifndef OB_BUILD_ORACLE_PL
-  UNUSEDx(ctx, src_idx, dst_idx, lower, upper);
+  UNUSEDx(ctx, src_expr_idx, dst_coll_idx, index_idx, lower, upper);
 #else
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->params_));
-  CK (OB_LIKELY(src_idx >= 0 && src_idx < ctx->params_->count()));
-  CK (OB_LIKELY(dst_idx >= 0 && dst_idx < ctx->params_->count()));
+  CK (OB_NOT_NULL(ctx->func_));
+  CK (OB_LIKELY(src_expr_idx >= 0 && src_expr_idx < ctx->func_->get_expressions().count()));
+  CK (OB_LIKELY(dst_coll_idx >= 0 && dst_coll_idx < ctx->func_->get_variables().count()));
+  CK (OB_LIKELY(dst_coll_idx >= 0 && dst_coll_idx < ctx->params_->count()));
   CK (OB_LIKELY(lower <= upper));
+
   if (OB_SUCC(ret)) {
     ParamStore *params = ctx->params_;
-    ObObjParam& src_obj = params->at(src_idx);
-    ObObjParam& dst_obj = params->at(dst_idx);
-    ObPLCollection *src_coll = reinterpret_cast<ObPLCollection*>(src_obj.get_ext());
-    CK (OB_LIKELY(src_obj.is_ext()));
-    CK (OB_LIKELY(dst_obj.is_ext() || dst_obj.is_null()));
-    CK (OB_NOT_NULL(src_coll));
+    ObObjParam &dst_coll_obj = params->at(dst_coll_idx);
+    ObObjParam &index_obj = params->at(index_idx);
+    const ObSqlExpression *src_expr = ctx->func_->get_expressions().at(src_expr_idx);
+    const ObPLDataType &dst_type = ctx->func_->get_variables().at(dst_coll_idx);
+    const ObUserDefinedType *user_type = NULL;
+    const ObCollectionType *collection_type = NULL;
+
+    OZ (ctx->get_user_type(dst_type.get_user_type_id(), user_type));
+    CK (OB_LIKELY(dst_coll_obj.is_ext() || dst_coll_obj.is_null()));
+    CK (OB_LIKELY(index_obj.is_int32() || index_obj.is_null()));
     CK (OB_NOT_NULL(ctx->allocator_));
+    CK (OB_NOT_NULL(user_type));
+    CK (OB_NOT_NULL(collection_type = static_cast<const ObCollectionType*>(user_type)));
+
     if (OB_SUCC(ret)) {
       ObPLCollection *dst_coll = NULL;
-      ObObj *data_ptr = src_coll->get_data();
       ObPLAllocator1 *coll_alloc = nullptr;
-      CK (OB_NOT_NULL(data_ptr));
-      if (lower <= 0 // 检查是否越界, lower,upper从1开始
-          || lower > src_coll->get_count()) {
-        ret = OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST;
-        LOG_USER_ERROR(OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST, static_cast<int64_t>(lower));
-        LOG_WARN("ORA-22160: element at index does not exist",
-                 K(lower), K(upper), K(src_coll->get_count()), K(ret));
-      } else if (upper > src_coll->get_count()) {
-        ret = OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST;
-        LOG_USER_ERROR(OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST, src_coll->get_count() + 1);
-        LOG_WARN("OBE-22160: element at index does not exist",
-                 K(lower), K(upper), K(src_coll->get_count()), K(ret));
-      } else if (OB_ISNULL(dst_coll = static_cast<ObPLCollection*>(ctx->allocator_->alloc(sizeof(ObPLCollection))))) {
+      ObObj *dst_data = nullptr;
+      int64_t count = upper - lower + 1;
+      if (OB_ISNULL(dst_coll = static_cast<ObPLCollection*>(ctx->allocator_->alloc(sizeof(ObPLCollection))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc dst collection memory", K(ret));
-      } else if (FALSE_IT(dst_coll = new(dst_coll)ObPLNestedTable(src_coll->get_id()))) {
+      } else if (FALSE_IT(dst_coll = new(dst_coll)ObPLNestedTable(dst_type.get_user_type_id()))) {
       } else if (OB_FAIL(dst_coll->init_allocator(*ctx->allocator_, true))) {
         LOG_WARN("failed to init allocator", K(ret));
         ctx->allocator_->free(dst_coll);
       } else if (OB_ISNULL(coll_alloc = dynamic_cast<ObPLAllocator1 *>(dst_coll->get_allocator()))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected collection allocator", K(ret));
-      } else {
-        ObObj *dst_data = nullptr;
-        int64_t count = upper - lower + 1;
-        data_ptr = data_ptr + (lower - 1);
-        if (OB_ISNULL(dst_data = reinterpret_cast<ObObj *>(coll_alloc->alloc(count * sizeof(ObObj))))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to allocate memory for collection", K(ret), K(count));
-        }
+      } else if (OB_ISNULL(dst_data = reinterpret_cast<ObObj *>(coll_alloc->alloc(count * sizeof(ObObj))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for collection", K(ret), K(count));
+      }
+      if (OB_SUCC(ret)) {
         int64_t i = 0;
         for (; OB_SUCC(ret) && i < count; ++i) {
+          ObObjParam result;
+          index_obj.set_int32(i + lower);
+          OZ (spi_calc_expr(ctx, src_expr, OB_INVALID_INDEX, &result));
+          if (OB_ERR_SUBSCRIPT_OUTSIDE_LIMIT == ret) {
+            ret = OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST;
+            LOG_USER_ERROR(OB_ELEMENT_AT_GIVEN_INDEX_NOT_EXIST, static_cast<int64_t>(lower + i));
+            LOG_WARN("ORA-22160: element at index does not exist", K(lower), K(upper), K(i), K(ret));
+          }
           OX (dst_data[i].reset());
-          OZ (deep_copy_obj(*coll_alloc, data_ptr[i], dst_data[i]));
+          if (OB_FAIL(ret)) {
+          } else if (result.is_pl_extend()) {
+            OZ (ObUserDefinedType::deep_copy_obj(*coll_alloc, result, dst_data[i]));
+          } else {
+            OZ (deep_copy_obj(*coll_alloc, result, dst_data[i]));
+          }
         }
+
         if (OB_FAIL(ret)) {
           if (OB_NOT_NULL(dst_data)) {
             for (int j = 0; j < i - 1; ++j) {
               ObUserDefinedType::destruct_objparam(*coll_alloc,
-                                                  dst_data[j],
-                                                  ctx->exec_ctx_->get_my_session());
+                                                   dst_data[j],
+                                                   ctx->exec_ctx_->get_my_session());
             }
             coll_alloc->free(dst_data);
           }
@@ -5568,19 +5583,25 @@ int ObSPIService::spi_sub_nestedtable(ObPLExecCtx *ctx, int64_t src_idx, int64_t
         } else {
           dst_coll->set_data(dst_data, count);
           dst_coll->set_type(PL_NESTED_TABLE_TYPE);
-          dst_coll->set_element_type(src_coll->get_element_type());
-          dst_coll->set_column_count(src_coll->get_column_count());
+          if (OB_NOT_NULL(collection_type->get_element_type().get_data_type())) {
+            dst_coll->set_element_type(*collection_type->get_element_type().get_data_type());
+          } else {
+            ObDataType datatype;
+            datatype.set_obj_type(ObExtendType);
+            datatype.set_udt_id(collection_type->get_element_type().get_user_type_id());
+            dst_coll->set_element_type(datatype);
+          }
+          dst_coll->set_column_count(1);
           dst_coll->set_first(OB_INVALID_INDEX);
           dst_coll->set_last(OB_INVALID_INDEX);
           dst_coll->set_count(count);
-          dst_coll->set_element_type(src_coll->get_element_type());
-          if (dst_obj.get_ext() != 0) {
+          if (dst_coll_obj.get_ext() != 0) {
             ObUserDefinedType::destruct_objparam(*ctx->allocator_,
-                                                  dst_obj,
-                                                  ctx->exec_ctx_->get_my_session());
+                                                 dst_coll_obj,
+                                                 ctx->exec_ctx_->get_my_session());
           }
-          dst_obj.set_extend(reinterpret_cast<int64_t>(dst_coll), dst_coll->get_type());
-          dst_obj.set_param_meta();
+          dst_coll_obj.set_extend(reinterpret_cast<int64_t>(dst_coll), dst_coll->get_type());
+          dst_coll_obj.set_param_meta();
         }
       }
     }
