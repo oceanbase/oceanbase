@@ -1200,8 +1200,9 @@ TEST_F(TestSSExecuteCheckpointTask, test_estimate_micro_meta_persist_cost)
   ObSSCkptPhyBlockItemWriter item_writer;
   ASSERT_EQ(OB_SUCCESS, item_writer.init(tenant_id, *phy_blk_mgr_, ObSSPhyBlockType::SS_PHY_BLK_CKPT_BLK));
   const int64_t total_micro_cnt = 100000;
-  const int64_t seg_micro_cnt = ObRandom::rand(300, 500);
+  const int64_t seg_micro_cnt = 300;
   int64_t tmp_cnt = 0;
+  int64_t total_write_seg_cnt = 0;
   for (int64_t i = 0; i < total_micro_cnt; ++i) {
     ++tmp_cnt;
     ASSERT_EQ(OB_SUCCESS, item_writer.write_item(buf, avg_micro_size));
@@ -1211,6 +1212,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_estimate_micro_meta_persist_cost)
       int64_t seg_len = -1;
       ASSERT_EQ(OB_SUCCESS, item_writer.close_segment(is_persisted, seg_offset, seg_len));
       tmp_cnt = 0;
+      ++total_write_seg_cnt;
     }
   }
   ASSERT_EQ(OB_SUCCESS, item_writer.close());
@@ -1226,6 +1228,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_estimate_micro_meta_persist_cost)
   ASSERT_EQ(OB_SUCCESS, block_reader.init(entry_block_id, tenant_id, *phy_blk_mgr_));
   int64_t total_item_cnt = 0;
   int64_t total_blk_size = 0;
+  int64_t total_read_seg_cnt = 0;
   for (int64_t i = 0; i < block_id_list.count(); ++i) {
     const int64_t cur_block_id = block_id_list.at(i);
     int64_t payload_offset = 0;
@@ -1233,12 +1236,71 @@ TEST_F(TestSSExecuteCheckpointTask, test_estimate_micro_meta_persist_cost)
       ASSERT_EQ(OB_SUCCESS, block_reader.inner_read_block_(cur_block_id, payload_offset));
       total_item_cnt += block_reader.ckpt_blk_header_.item_count_;
       total_blk_size += blk_size;
+      total_read_seg_cnt += block_reader.ckpt_blk_header_.item_count_ / seg_micro_cnt;
       LOG_INFO("print block header", K(i), K(cur_block_id), K_(block_reader.common_header), K_(block_reader.ckpt_blk_header));
     }
   }
   double avg_cost = static_cast<double>(total_blk_size) / total_item_cnt;
+  double avg_seg_cnt = static_cast<double>(total_read_seg_cnt) / (block_id_list.count() - 1);
   std::cout << "micro_size: " << avg_micro_size << ", micro_item_size: " << avg_cost << std::endl;
-  LOG_INFO("TEST: finish test_estimate_micro_meta_persist_cost", K(total_item_cnt), K(total_blk_size), K(avg_cost));
+  LOG_INFO("TEST: finish test_estimate_micro_meta_persist_cost", K(total_item_cnt), K(total_blk_size), K(block_id_list.count()), K(total_write_seg_cnt), K(total_read_seg_cnt), K(avg_cost), K(avg_seg_cnt));
+}
+
+TEST_F(TestSSExecuteCheckpointTask, test_estimate_blk_info_persist_cost)
+{
+  LOG_INFO("TEST_CASE: start test_estimate_blk_info_persist_cost");
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  ObSSPhyBlockCountInfo &blk_cnt_info = phy_blk_mgr_->blk_cnt_info_;
+  blk_cnt_info.phy_ckpt_blk_cnt_ = 100; // ensure the blk_info_ckpt block count is enough
+  const int32_t blk_size = phy_blk_mgr_->get_block_size();
+  persist_meta_task_->cur_interval_us_ = 60 * 60 * 1000 * 1000L;
+  ob_usleep(1000 * 1000);
+
+  ObSSCkptPhyBlockItemWriter item_writer;
+  ASSERT_EQ(OB_SUCCESS, item_writer.init(tenant_id, *phy_blk_mgr_, ObSSPhyBlockType::SS_PHY_BLK_CKPT_BLK));
+  const int64_t BUF_SIZE = 4096;
+  char buf[BUF_SIZE];
+  int64_t total_blk_info_cnt = 800000;
+  int64_t avg_blk_info_size = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < total_blk_info_cnt; ++i){
+    const int64_t cur_block_id = i % 8;
+    int64_t pos = 0;
+    ObSSPhyBlockInfoCkptItem ckpt_item;
+    ckpt_item.blk_idx_ = cur_block_id;
+    ckpt_item.reuse_version_ = i + 1;
+    ASSERT_EQ(OB_SUCCESS, ckpt_item.serialize(buf, BUF_SIZE, pos));
+    avg_blk_info_size = ckpt_item.get_serialize_size();
+    ASSERT_EQ(pos, avg_blk_info_size);
+    ASSERT_EQ(OB_SUCCESS, item_writer.write_item(buf, avg_blk_info_size));
+  }
+  std::cout << "avg_blk_info_size = " << avg_blk_info_size << std::endl;
+  ASSERT_EQ(OB_SUCCESS, item_writer.close());
+
+  int64_t entry_block_id = -1;
+  ASSERT_EQ(OB_SUCCESS, item_writer.get_entry_block(entry_block_id));
+  ASSERT_NE(-1, entry_block_id);
+  ObArray<int64_t> block_id_list;
+  ASSERT_EQ(OB_SUCCESS, item_writer.get_block_id_list(block_id_list));
+  ASSERT_LT(1, block_id_list.count());
+
+  int64_t total_item_cnt_2 = 0;
+  int64_t total_blk_size_2 = 0;
+  ObSSCkptPhyBlockReader block_reader;
+  ASSERT_EQ(OB_SUCCESS, block_reader.init(entry_block_id, tenant_id, *phy_blk_mgr_));
+  for (int64_t i = 0; i < block_id_list.count(); ++i) {
+    const int64_t cur_block_id = block_id_list.at(i);
+    int64_t payload_offset = 0;
+    if (cur_block_id != entry_block_id) {
+      ASSERT_EQ(OB_SUCCESS, block_reader.inner_read_block_(cur_block_id, payload_offset));
+      total_item_cnt_2 += block_reader.ckpt_blk_header_.item_count_;
+      total_blk_size_2 += blk_size;
+      LOG_INFO("print block header", K(i), K(cur_block_id), K_(block_reader.common_header), K_(block_reader.ckpt_blk_header));
+    }
+  }
+  double blk_info_avg_cost = static_cast<double>(total_blk_size_2) / total_item_cnt_2;
+  std::cout << "blk_info_cost: " << blk_info_avg_cost << std::endl;
+  LOG_INFO("TEST: finish test_estimate_blk_info_persist_cost", K(total_item_cnt_2), K(total_blk_size_2), K(blk_info_avg_cost), K(block_id_list.count()));
 }
 
 }  // namespace storage
