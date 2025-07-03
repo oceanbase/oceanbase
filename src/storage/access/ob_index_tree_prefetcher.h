@@ -507,6 +507,7 @@ public:
   ObIndexTreeMultiPassPrefetcher() :
       is_prefetch_end_(false),
       is_row_lock_checked_(false),
+      multi_block_prefetch_batch_count_(0),
       cur_range_fetch_idx_(0),
       cur_range_prefetch_idx_(0),
       cur_micro_data_fetch_idx_(-1),
@@ -610,7 +611,8 @@ public:
     return DEFAULT_SCAN_MICRO_DATA_HANDLE_CNT;
   }
 
-  static const int16_t MIN_DATA_READ_BATCH_COUNT = 4;
+  static const int64_t MIN_MULTI_BLOCK_PREFETCH_BATCH_COUNT = 4;
+  static const int64_t MULTI_BLOCK_PREFETCH_FAKE_BLOCK_SIZE = 16 << 10; // 16KB
   static const int16_t MAX_INDEX_TREE_HEIGHT = 16;
   static const int32_t MAX_DATA_PREFETCH_DEPTH = 32;
   static const int32_t MAX_INDEX_PREFETCH_DEPTH = 3;
@@ -877,6 +879,9 @@ protected:
 public:
   bool is_prefetch_end_;
   bool is_row_lock_checked_;
+protected:
+  int16_t multi_block_prefetch_batch_count_;
+public:
   int64_t cur_range_fetch_idx_;
   int64_t cur_range_prefetch_idx_;
   int64_t cur_micro_data_fetch_idx_;
