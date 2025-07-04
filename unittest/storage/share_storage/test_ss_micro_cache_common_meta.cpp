@@ -285,13 +285,13 @@ TEST_F(TestSSMicroCacheCommonMeta, expired_micro_meta)
   ObSSMicroBlockMeta micro_meta;
   micro_meta.ref_cnt_ = 10;
 
-  micro_meta.update_newest_access_time();
+  micro_meta.update_newest_access_time_s();
   micro_meta.access_time_s_ -= 4 * 3600;
   ASSERT_EQ(false, micro_meta.is_expired(SS_DEF_CACHE_EXPIRATION_TIME_S));
   micro_meta.access_time_s_ -= 44 * 3600;
   ASSERT_EQ(true, micro_meta.is_expired(SS_DEF_CACHE_EXPIRATION_TIME_S));
-  micro_meta.update_newest_access_time();
-  micro_meta.update_access_time(120);
+  micro_meta.update_newest_access_time_s();
+  micro_meta.update_access_time_s(120);
   ASSERT_EQ(false, micro_meta.is_expired(SS_DEF_CACHE_EXPIRATION_TIME_S));
 }
 
