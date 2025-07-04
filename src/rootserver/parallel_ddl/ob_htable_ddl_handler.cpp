@@ -427,7 +427,7 @@ int ObDropHTableHandler::init()
         ret = OB_KV_HBASE_TABLE_NOT_FOUND;
         LOG_WARN("the table group for hbase table not found", KR(ret), K(tablegroup_name));
         LOG_USER_ERROR(OB_KV_HBASE_TABLE_NOT_FOUND, tablegroup_name.length(), tablegroup_name.ptr());
-      } else if (OB_FAIL(latest_schema_guard.get_table_schemas_in_tablegroup(allocator_, tablegroup_id, drop_schemas))) {
+      } else if (OB_FAIL(latest_schema_guard.get_table_schemas_in_tablegroup(tablegroup_id, drop_schemas))) {
         LOG_WARN("failed to get table schemas in tablegroup", KR(ret), K(tenant_id), K(tablegroup_id));
       } else if (drop_schemas.empty() || OB_ISNULL(drop_schemas.at(0))) {
         ret = OB_ERR_UNEXPECTED;
@@ -820,8 +820,8 @@ int ObHTableLockHelper::lock_htable_objects_by_id_()
     ObArray<ObString> latest_table_names;  // not used
     if (OB_FAIL(ori_table_ids.assign(table_ids_))) {
       LOG_WARN("fail to assign origin table ids", KR(ret));
-    } else if (OB_FAIL(latest_schema_guard_.get_table_id_and_table_name_in_tablegroup(allocator_,
-              tablegroup_id_, latest_table_names, latest_table_ids))) {
+    } else if (OB_FAIL(latest_schema_guard_.get_table_id_and_table_name_in_tablegroup(tablegroup_id_,
+        latest_table_names, latest_table_ids))) {
       LOG_WARN("failed to get table schemas in table group", KR(ret), K_(tablegroup_id));
     } else if (ori_table_ids.count() != latest_table_ids.count()) {
       ret = OB_ERR_PARALLEL_DDL_CONFLICT;

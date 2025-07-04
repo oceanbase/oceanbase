@@ -195,8 +195,8 @@ int ObSetKvAttributeHelper::lock_objects_by_name_()
     if (database_id_ == OB_INVALID_ID) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("database id is invalid", KR(ret));
-    } else if (OB_FAIL(latest_schema_guard_.get_table_id_and_table_name_in_tablegroup(allocator_,
-              tablegroup_id_, table_names_, table_ids_))) {
+    } else if (OB_FAIL(latest_schema_guard_.get_table_id_and_table_name_in_tablegroup(tablegroup_id_,
+        table_names_, table_ids_))) {
       LOG_WARN("failed to get table schemas in table group", KR(ret), K_(tablegroup_id));
     } else if (table_names_.count() != table_ids_.count()) {
       ret = OB_ERR_UNEXPECTED;
@@ -258,8 +258,8 @@ int ObSetKvAttributeHelper::lock_objects_by_id_()
     ObArray<ObString> latest_table_names;  // not used
     if (OB_FAIL(ori_table_ids.assign(table_ids_))) {
       LOG_WARN("fail to assign origin table ids", KR(ret));
-    } else if (OB_FAIL(latest_schema_guard_.get_table_id_and_table_name_in_tablegroup(allocator_,
-              tablegroup_id_, latest_table_names, latest_table_ids))) {
+    } else if (OB_FAIL(latest_schema_guard_.get_table_id_and_table_name_in_tablegroup(tablegroup_id_,
+        latest_table_names, latest_table_ids))) {
       LOG_WARN("failed to get table schemas in table group", KR(ret), K_(tablegroup_id));
     } else if (ori_table_ids.count() != latest_table_ids.count()) {
       ret = OB_ERR_PARALLEL_DDL_CONFLICT;

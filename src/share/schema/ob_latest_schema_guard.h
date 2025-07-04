@@ -348,7 +348,6 @@ public:
     ObIArray<ObSensitiveRuleSchema *> &schemas);
 
 int get_table_schemas_in_tablegroup(
-    common::ObIAllocator &allocator,
     const uint64_t tablegroup_id,
     common::ObIArray<const ObTableSchema *> &table_schemas);
 
@@ -357,7 +356,6 @@ int check_database_exists_in_tablegroup(
     bool &exists);
 
 int get_table_id_and_table_name_in_tablegroup(
-    common::ObIAllocator &allocator,
     const uint64_t tablegroup_id,
     common::ObIArray<ObString> &table_names,
     common::ObIArray<uint64_t> &table_ids);

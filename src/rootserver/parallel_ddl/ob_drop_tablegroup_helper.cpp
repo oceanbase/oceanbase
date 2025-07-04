@@ -106,7 +106,7 @@ int ObDropTablegroupHelper::generate_schemas_()
   // When tablegroup is dropped, there must not be table in tablegroup
   if (tablegroup_id_ == OB_INVALID_ID) {
     ret = OB_TABLEGROUP_NOT_EXIST;
-  } else if (OB_FAIL(latest_schema_guard_.get_table_schemas_in_tablegroup(allocator_, tablegroup_id_, tables))) {
+  } else if (OB_FAIL(latest_schema_guard_.get_table_schemas_in_tablegroup(tablegroup_id_, tables))) {
     LOG_WARN("failed to get table schemas in tablegroup", K(ret), K_(tenant_id), K_(tablegroup_id));
   } else if (tables.count() > 0) {
     ret = OB_TABLEGROUP_NOT_EMPTY;

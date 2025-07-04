@@ -2199,13 +2199,20 @@ int ObCreateTableHelper::create_tablets_()
                    tenant_id_,
                    frozen_scn,
                    get_trans_());
+
+    // use the external_trans as sql_proxy if not null,
+    // to ensure that changes in the current DDL transaction can be queried
+    common::ObISQLClient *sql_proxy = get_external_trans_();
+    if (sql_proxy == NULL) {
+      sql_proxy = sql_proxy_;
+    }
     // TODO:(yanmu.ztl)
     // schema_guard is used to get primary table in tablegroup or data table for local index.
     // - primary table may be incorrect when ddl execute concurrently.
     ObNewTableTabletAllocator new_table_tablet_allocator(
                               tenant_id_,
                               schema_guard,
-                              sql_proxy_,
+                              sql_proxy,
                               true /*use parallel ddl*/);
     const ObTablegroupSchema *data_tablegroup_schema = NULL; // keep NULL if no tablegroup
     int64_t last_schema_version = OB_INVALID_VERSION;
@@ -2269,7 +2276,11 @@ int ObCreateTableHelper::create_tablets_()
       if (OB_FAIL(ret)) {
       } else if (schemas.count() > 0) {
         const ObTableSchema &data_table = new_tables_.at(0);
-        if (OB_FAIL(new_table_tablet_allocator.prepare(get_trans_(), data_table, data_tablegroup_schema))) {
+        if (OB_FAIL(new_table_tablet_allocator.prepare(get_trans_(),
+                                                       data_table,
+                                                       data_tablegroup_schema,
+                                                       false,  /* is_add_partition */
+                                                       get_external_trans_() == NULL ? NULL : &latest_schema_guard_))) {
           LOG_WARN("fail to prepare ls for data table", KR(ret));
         } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
           LOG_WARN("fail to get ls id array", KR(ret));

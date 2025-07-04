@@ -1105,7 +1105,6 @@ int ObLatestSchemaGuard::get_trigger_info(const uint64_t trigger_id,
 }
 
 int ObLatestSchemaGuard::get_table_schemas_in_tablegroup(
-    ObIAllocator &allocator,
     const uint64_t tablegroup_id,
     ObIArray<const ObTableSchema *> &table_schemas)
 {
@@ -1114,7 +1113,7 @@ int ObLatestSchemaGuard::get_table_schemas_in_tablegroup(
   ObISQLClient *sql_client = NULL;
   if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
-  } else if (OB_FAIL(schema_service_impl->get_table_schemas_in_tablegroup(allocator,
+  } else if (OB_FAIL(schema_service_impl->get_table_schemas_in_tablegroup(local_allocator_,
       *sql_client, tenant_id_, tablegroup_id, table_schemas))) {
     LOG_WARN("failed to get table schemas in tablegroup", KR(ret), K_(tenant_id), K(tablegroup_id));
   }
@@ -1138,7 +1137,6 @@ int ObLatestSchemaGuard::check_database_exists_in_tablegroup(
 }
 
 int ObLatestSchemaGuard::get_table_id_and_table_name_in_tablegroup(
-    ObIAllocator &allocator,
     const uint64_t tablegroup_id,
     ObIArray<ObString> &table_names,
     ObIArray<uint64_t> &table_ids)
@@ -1148,7 +1146,7 @@ int ObLatestSchemaGuard::get_table_id_and_table_name_in_tablegroup(
   ObISQLClient *sql_client = NULL;
   if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to check and get service", KR(ret));
-  } else if (OB_FAIL(schema_service_impl->get_table_id_and_table_name_in_tablegroup(allocator, *sql_client,
+  } else if (OB_FAIL(schema_service_impl->get_table_id_and_table_name_in_tablegroup(local_allocator_, *sql_client,
       tenant_id_, tablegroup_id, table_names, table_ids))) {
     LOG_WARN("fail to get table names and ids in tablegroup", KR(ret), K_(tenant_id), K(tablegroup_id));
   }

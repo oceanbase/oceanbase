@@ -42,6 +42,7 @@ class ObSchemaGetterGuard;
 class ObPartitionSchema;
 class ObPartition;
 class ObTableSchema;
+class ObLatestSchemaGuard;
 }
 }
 namespace observer
@@ -105,7 +106,7 @@ public:
   ObBalanceGroupLSStatOperator();
   virtual ~ObBalanceGroupLSStatOperator();
   int init(
-      common::ObMySQLProxy *sql_proxy);
+      common::ObISQLClient *sql_proxy);
 public:
   int get_balance_group_ls_stat(
       const int64_t timeout,
@@ -148,7 +149,7 @@ private:
       common::ObSqlString &sql_string);
 private:
   bool inited_;
-  common::ObMySQLProxy *sql_proxy_;
+  common::ObISQLClient *sql_proxy_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBalanceGroupLSStatOperator);
 };
@@ -161,7 +162,7 @@ public:
   ObNewTableTabletAllocator(
       const uint64_t tenant_id,
       share::schema::ObSchemaGetterGuard &schema_guard,
-      common::ObMySQLProxy *sql_proxy,
+      common::ObISQLClient *sql_proxy,
       const bool use_parallel_ddl = false,
       const share::schema::ObTableSchema *data_table_schema = nullptr);
   virtual ~ObNewTableTabletAllocator();
@@ -172,7 +173,8 @@ public:
       ObMySQLTransaction &trans,
       const share::schema::ObTableSchema &table_schema,
       const share::schema::ObTablegroupSchema *tablegroup_schema,
-      bool is_add_partition = false);
+      bool is_add_partition = false,
+      share::schema::ObLatestSchemaGuard *latest_schema_guard = NULL);
   int prepare_like(
       const share::schema::ObTableSchema &table_schema);
   int get_ls_id_array(
@@ -187,7 +189,8 @@ private:
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_in_tablegroup_tablet(
       const share::schema::ObTableSchema &table_schema,
-      const share::schema::ObTablegroupSchema &tablegroup_schema);
+      const share::schema::ObTablegroupSchema &tablegroup_schema,
+      share::schema::ObLatestSchemaGuard *latest_schema_guard = NULL);
   int alloc_ls_for_normal_table_tablet(
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_duplicate_table_(
@@ -272,7 +275,7 @@ private:
 private:
   uint64_t tenant_id_;
   share::schema::ObSchemaGetterGuard &schema_guard_;
-  common::ObMySQLProxy *sql_proxy_;
+  common::ObISQLClient *sql_proxy_;
   ObBalanceGroupLSStatOperator bg_ls_stat_operator_;
   MyStatus status_;
   common::ObArray<share::ObLSID> ls_id_array_;
