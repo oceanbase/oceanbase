@@ -1673,7 +1673,7 @@ int ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_te
   return ret;
 }
 
-int ObTenantDDLCountGuard::try_inc_ddl_count()
+int ObTenantDDLCountGuard::try_inc_ddl_count(const int64_t cpu_quota_concurrency)
 {
   int ret = OB_SUCCESS;
   omt::ObMultiTenant *omt = GCTX.omt_;
@@ -1683,7 +1683,7 @@ int ObTenantDDLCountGuard::try_inc_ddl_count()
   } else if (OB_ISNULL(omt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("omt is null", KR(ret));
-  } else if (OB_FAIL(omt->inc_tenant_ddl_count(tenant_id_))) {
+  } else if (OB_FAIL(omt->inc_tenant_ddl_count(tenant_id_, cpu_quota_concurrency))) {
     LOG_WARN("fail to inc tenant ddl count", KR(ret), K_(tenant_id));
   } else {
     had_inc_ddl_ = true;
