@@ -1225,6 +1225,29 @@ bool ObMigrationStatusHelper::check_can_report_readable_scn(
   return can_report;
 }
 
+bool ObMigrationStatusHelper::is_in_rebuild(
+    const ObMigrationStatus &cur_status)
+{
+  bool in_rebuild = false;
+  if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD == cur_status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT == cur_status) {
+    in_rebuild = true;
+  }
+  return in_rebuild;
+}
+
+bool ObMigrationStatusHelper::is_in_replace(
+    const ObMigrationStatus &cur_status)
+{
+  bool in_replace = false;
+  if (ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE == cur_status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_HOLD == cur_status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE_WAIT == cur_status) {
+    in_replace = true;
+  }
+  return in_replace;
+}
+
 /******************ObMigrationOpArg*********************/
 ObMigrationOpArg::ObMigrationOpArg()
   : ls_id_(),

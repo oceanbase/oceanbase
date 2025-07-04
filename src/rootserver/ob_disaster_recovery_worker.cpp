@@ -1620,9 +1620,9 @@ int ObDRWorker::LocalityAlignment::get_next_locality_alignment_task(
     } else if (nullptr != task) {
       // got one
       LOG_INFO("success to get a normal task", KPC(task));
-    } else if (OB_FAIL(try_get_readonly_or_columnstore_all_server_locality_alignment_task(
-            unit_provider_,
-            task))) {
+    } else if (!is_tenant_sslog_ls(dr_ls_info_.get_tenant_id(), dr_ls_info_.get_ls_id())
+            && OB_FAIL(try_get_readonly_or_columnstore_all_server_locality_alignment_task(unit_provider_, task))) {
+      // The R replica of sslog is created by the sslog service.
       LOG_WARN("fail to get readonly all server locality alignment task", KR(ret));
     } else if (nullptr == task) {
       ret = OB_ITER_END;
@@ -2043,6 +2043,7 @@ int ObDRWorker::try_ls_disaster_recovery(
     // skip, ls is creating
     LOG_TRACE("ls is creating", K(ls_status_info), K(tenant_id));
   } else {
+    LOG_INFO("start try ls disaster recovery", K(tenant_id), K(ls_status_info));
     common::ObZone dest_zone; // not used
     ObServerInfoInTable source_server; // not used
     palf::LogConfigVersion config_version; // not used
@@ -2052,7 +2053,6 @@ int ObDRWorker::try_ls_disaster_recovery(
     DRLSInfo dr_ls_info_without_flag(gen_user_tenant_id(tenant_id), GCTX.schema_service_);
     // this structure is used to generate permanent offline tasks
     DRLSInfo dr_ls_info_with_flag(gen_user_tenant_id(tenant_id), GCTX.schema_service_);
-    LOG_INFO("start try ls disaster recovery", K(ls_status_info));
     if (OB_FAIL(GCTX.lst_operator_->get(GCONF.cluster_id,
                                         ls_status_info.tenant_id_,
                                         ls_status_info.ls_id_,
@@ -2082,7 +2082,7 @@ int ObDRWorker::try_ls_disaster_recovery(
     } else if (only_for_display || is_zero_row(dr_tasks_.count())) {
       // skip
       LOG_INFO("skip persist dr_task", K(only_for_display), "task_count", dr_tasks_.count());
-    } else if (OB_FAIL(persist_tasks_into_inner_table_(dr_tasks_, tenant_id, ls_status_info.ls_id_, false/*is_manual*/))) {
+    } else if (OB_FAIL(persist_tasks_into_inner_table(dr_tasks_, tenant_id, ls_status_info.ls_id_, false/*is_manual*/))) {
       LOG_WARN("fail to do end generated dr tasks", KR(ret), K(tenant_id), K(ls_status_info));
     }
   }
@@ -2104,6 +2104,14 @@ int ObDRWorker::check_ls_common_dr_tasks_(
   if (OB_SUCC(ret)
       && acc_dr_task_cnt <= 0) {
     if (OB_FAIL(try_remove_permanent_offline_replicas(
+            only_for_display, dr_ls_info_with_flag, acc_dr_task_cnt))) {
+      LOG_WARN("fail to try remove permanent offline replicas",
+               KR(ret), K(dr_ls_info_with_flag));
+    }
+  }
+  if (OB_SUCC(ret)
+      && acc_dr_task_cnt <= 0) {
+    if (OB_FAIL(try_remove_not_in_server_list_sslog_readonly_replica_(
             only_for_display, dr_ls_info_with_flag, acc_dr_task_cnt))) {
       LOG_WARN("fail to try remove permanent offline replicas",
                KR(ret), K(dr_ls_info_with_flag));
@@ -2232,7 +2240,7 @@ int ObDRWorker::try_tenant_single_replica_task(
           LOG_INFO("skip persist dr_task", K(only_for_display), "task_count", dr_tasks_.count());
         } else if (OB_UNLIKELY(ERRSIM_SKIP_PERSIST_REPLACE_REPLICA_TASK_INTO_INNER_TABLE)) {
           LOG_INFO("errsim skip persist replace replica task into inner table");
-        } else if (OB_TMP_FAIL(persist_tasks_into_inner_table_(dr_tasks_, tenant_id, ls_status_info.ls_id_, false/*is_manual*/))) {
+        } else if (OB_TMP_FAIL(persist_tasks_into_inner_table(dr_tasks_, tenant_id, ls_status_info.ls_id_, false/*is_manual*/))) {
           LOG_WARN("fail to do end generated dr tasks", KR(ret), K(tenant_id), K(ls_status_info));
         }
         acc_dr_task += ls_acc_dr_task;
@@ -2284,6 +2292,7 @@ int ObDRWorker::check_ls_single_replica_dr_tasks(
   found = false;
   common::ObAddr source_server_addr;
   common::ObMemberList member_list;
+  common::GlobalLearnerList learner_list; // not used
   bool pass_check = false;
   const common::ObIArray<share::ObZoneReplicaAttrSet> &cur_locality = dr_ls_info.get_locality();
   if (1 != cur_locality.count()) {
@@ -2291,10 +2300,12 @@ int ObDRWorker::check_ls_single_replica_dr_tasks(
   } else if (0 == cur_locality.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("locality count is 0", KR(ret), K(cur_locality));
-  } else if (OB_FAIL(DisasterRecoveryUtils::get_member_info(dr_ls_info.get_tenant_id(),
+  } else if (OB_FAIL(DisasterRecoveryUtils::get_member_info_from_log_service(
+                                                            dr_ls_info.get_tenant_id(),
                                                             dr_ls_info.get_ls_id(),
                                                             config_version,
-                                                            member_list))) {
+                                                            member_list,
+                                                            learner_list))) {
     LOG_WARN("failed to get member info", KR(ret), K(dr_ls_info));
   } else if (OB_FAIL(DisasterRecoveryUtils::check_member_list_for_single_replica(member_list, pass_check))) {
     LOG_WARN("failed to check member list", KR(ret), K(member_list));
@@ -2409,14 +2420,14 @@ int ObDRWorker::generate_single_replica_task_(
   } else if (can_generate) {
     if (OB_FAIL(replace_task.build(task_key, task_id, task_comment, dst_member, config_version))) {
       LOG_WARN("fail to build replace task", KR(ret), K(task_key), K(task_id), K(task_comment), K(dst_member), K(config_version));
-    } else if (OB_FAIL(add_task_(replace_task, acc_dr_task))) {
+    } else if (OB_FAIL(add_task_(replace_task, dr_ls_info, acc_dr_task))) {
       LOG_WARN("fail to add task", KR(ret), K(replace_task));
     }
   }
   return ret;
 }
 
-int ObDRWorker::persist_tasks_into_inner_table_(
+int ObDRWorker::persist_tasks_into_inner_table(
     const ObIArray<ObDRTask*> &dr_tasks,
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
@@ -2647,7 +2658,7 @@ int ObDRWorker::do_add_ls_replica_task(
       LOG_WARN("fail to build add replica task parameters", KR(ret), K(arg), K(dr_ls_info));
     } else if (OB_FAIL(dr_tasks.push_back(&add_replica_task))) {
       LOG_WARN("fail to build push back task", KR(ret), K(arg), K(add_replica_task));
-    } else if (OB_FAIL(persist_tasks_into_inner_table_(dr_tasks, arg.get_tenant_id(), arg.get_ls_id(), true/*is_manual*/))) {
+    } else if (OB_FAIL(persist_tasks_into_inner_table(dr_tasks, arg.get_tenant_id(), arg.get_ls_id(), true/*is_manual*/))) {
       LOG_WARN("fail to persist tasks into table", KR(ret), K(arg), K(add_replica_task));
     }
   }
@@ -2675,7 +2686,7 @@ int ObDRWorker::do_remove_ls_replica_task(
       LOG_WARN("fail to build remove replica task parameters", KR(ret), K(arg), K(dr_ls_info));
     } else if (OB_FAIL(dr_tasks.push_back(&remove_replica_task))) {
       LOG_WARN("fail to build push back task", KR(ret), K(arg), K(remove_replica_task));
-    } else if (OB_FAIL(persist_tasks_into_inner_table_(dr_tasks, arg.get_tenant_id(), arg.get_ls_id(), true/*is_manual*/))) {
+    } else if (OB_FAIL(persist_tasks_into_inner_table(dr_tasks, arg.get_tenant_id(), arg.get_ls_id(), true/*is_manual*/))) {
       LOG_WARN("fail to persist tasks into table", KR(ret), K(arg), K(remove_replica_task));
     }
   }
@@ -2703,7 +2714,7 @@ int ObDRWorker::do_modify_ls_replica_type_task(
       LOG_WARN("fail to build modify replica task parameters", KR(ret), K(arg), K(dr_ls_info));
     } else if (OB_FAIL(dr_tasks.push_back(&modify_replica_type_task))) {
       LOG_WARN("fail to build push back task", KR(ret), K(arg), K(modify_replica_type_task));
-    } else if (OB_FAIL(persist_tasks_into_inner_table_(dr_tasks, arg.get_tenant_id(), arg.get_ls_id(), true/*is_manual*/))) {
+    } else if (OB_FAIL(persist_tasks_into_inner_table(dr_tasks, arg.get_tenant_id(), arg.get_ls_id(), true/*is_manual*/))) {
       LOG_WARN("fail to persist tasks into table", KR(ret), K(arg), K(modify_replica_type_task));
     }
   }
@@ -2731,7 +2742,7 @@ int ObDRWorker::do_migrate_ls_replica_task(
       LOG_WARN("fail to build migrate replica task", KR(ret), K(arg), K(dr_ls_info));
     } else if (OB_FAIL(dr_tasks.push_back(&migrate_replica_task))) {
       LOG_WARN("fail to build push back task", KR(ret), K(arg), K(migrate_replica_task));
-    } else if (OB_FAIL(persist_tasks_into_inner_table_(dr_tasks, arg.get_tenant_id(), arg.get_ls_id(), true/*is_manual*/))) {
+    } else if (OB_FAIL(persist_tasks_into_inner_table(dr_tasks, arg.get_tenant_id(), arg.get_ls_id(), true/*is_manual*/))) {
       LOG_WARN("fail to persist tasks into table", KR(ret), K(arg), K(migrate_replica_task));
     }
   }
@@ -2759,7 +2770,7 @@ int ObDRWorker::do_modify_ls_paxos_replica_num_task(
       LOG_WARN("fail to build modify paxos_replica_num task parameters", KR(ret), K(arg), K(dr_ls_info));
     } else if (OB_FAIL(dr_tasks.push_back(&modify_paxos_replica_number_task))) {
       LOG_WARN("fail to build push back task", KR(ret), K(arg), K(modify_paxos_replica_number_task));
-    } else if (OB_FAIL(persist_tasks_into_inner_table_(dr_tasks, arg.get_tenant_id(), arg.get_ls_id(), true/*is_manual*/))) {
+    } else if (OB_FAIL(persist_tasks_into_inner_table(dr_tasks, arg.get_tenant_id(), arg.get_ls_id(), true/*is_manual*/))) {
       LOG_WARN("fail to persist tasks into table", KR(ret), K(arg), K(modify_paxos_replica_number_task));
     }
   }
@@ -2836,7 +2847,227 @@ int ObDRWorker::do_cancel_ls_replica_task(
   return ret;
 }
 
+/*
+  Ordinary replica strongly rely on the existence of local sslog LS. When replicas are migrated, if sslog is migrated first and there is no local sslog LS,
+  the ordinary LS cannot execute notify, which will cause a series of problems.
+  Ensure that the life cycle of the sslog LS on a machine is longer than that of other LS, and ensure this when creating and deleting sslog LS.
+    1. When creating a LS on the observer side, ensure that the sslog LS exists on the unit and the status is normal before creating other normal LS.
+    2. When deleting an sslog LS, need to ensure that there is no normal LS on the current machine, and need to consider the concurrently migrated LS,
+     Use the unit status to ensure that no more LS are migrated. The life cycle of the sslog lLS can be bound to the unit life cycle. Only when the unit needs GC,
+     the sslog LS is actually deleted. So the deletion logic of the sslog LS is controlled by the observer side, no longer by RS.
+  The modifications required by RS are as follows:
+    1. The timer sslog service is responsible for creating R replica on all units.
+    2. RS can only see the F type sslog replica, and the R replica is filtered out by ls_info.
+    3. The migration and add task of the sslog LS scheduled by RS needs to be converted into a type transfer task on the destination.
+    4. When RS schedules the remove task of the sslog LS, it needs to be replaced by a type transferm task. The F replica is converted to R, and the R replica no need to be processed.
+  When the unit is in WAITING GC or DELETING status, the learner's sslog replica is allowed to GC. Before GC, the sslog learner replica is kicked out of the learner list.
+*/
+
+#define ADD_TASK_TO_TASK_ARRAY(task)                                                       \
+if (FAILEDx(add_to_task_array_(task, acc_dr_task))) {                                      \
+  LOG_WARN("fail to add task to task array", KR(ret), K(task));                            \
+}                                                                                          \
+
 int ObDRWorker::add_task_(
+    ObDRTask &task,
+    DRLSInfo &dr_ls_info,
+    int64_t &acc_dr_task)
+{
+  int ret = OB_SUCCESS;
+  if (!task.is_sslog_dr_task()) {
+    ADD_TASK_TO_TASK_ARRAY(task)
+  } else {
+    ObLSTypeTransformTask type_transform_task;
+    // if the conversion fails, it cannot be added to the task queue.
+    if (task.is_remove_paxos_task() && OB_FAIL(trans_remove_to_type_transferm_for_sslog_(task, dr_ls_info, type_transform_task))) {
+      LOG_WARN("fail to trans remove to type transferm for sslog", KR(ret), K(task), K(dr_ls_info));
+    } else if (task.is_migrate_task() && OB_FAIL(trans_migrate_to_type_transferm_for_sslog_(task, dr_ls_info, type_transform_task))) {
+      LOG_WARN("fail to trans migrate to type transferm for sslog", KR(ret), K(task), K(dr_ls_info));
+    } else if (task.is_add_task() && OB_FAIL(trans_add_to_type_transferm_for_sslog_(task, dr_ls_info, type_transform_task))) {
+      LOG_WARN("fail to trans add to type transferm for sslog", KR(ret), K(task), K(dr_ls_info));
+    } else if (type_transform_task.is_valid()) {
+      ADD_TASK_TO_TASK_ARRAY(type_transform_task)
+    } else {
+      // 1. F->R.
+      // 2. remove non paxos not in __all_server.
+      // 3. modify paxos_replica_num.
+      ADD_TASK_TO_TASK_ARRAY(task)
+    }
+    LOG_INFO("trans add to type transferm for sslog", KR(ret), K(task), K(type_transform_task));
+  }
+  return ret;
+}
+
+int ObDRWorker::trans_remove_to_type_transferm_for_sslog_(
+    ObDRTask &task,
+    DRLSInfo &dr_ls_info,
+    ObLSTypeTransformTask &type_transform_task)
+{
+  int ret = OB_SUCCESS;
+  if (!task.is_sslog_dr_task() || !task.is_remove_paxos_task()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task));
+  } else {
+    ObDRTaskKey task_key;
+    const int64_t memstore_percent = 100;
+    int64_t data_size = 0; // not used
+    ObReplicaMember data_source;
+    ObRemoveLSReplicaTask *remove_task = static_cast<ObRemoveLSReplicaTask*>(&task);
+    if (OB_ISNULL(remove_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("remove_task is nullptr", KR(ret), K(task));
+    } else if (OB_FAIL(task_key.assign(task.get_task_key()))) {
+      LOG_WARN("fail to assign task key", KR(ret), K(task));
+    } else if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+      LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
+    } else {
+      task_key.set_task_type(ObDRTaskType::LS_TYPE_TRANSFORM);
+      ObReplicaMember dst_member(remove_task->get_remove_member().get_server(),
+                                 ObTimeUtility::current_time(),
+                                 REPLICA_TYPE_READONLY, // trans remove F task to type transform to R task.
+                                 memstore_percent);
+      if (OB_FAIL(type_transform_task.build(
+                            task_key,
+                            task.get_task_id(),
+                            ObString(drtask::TYPE_TRANSFORM_DUE_TO_REMOVE_SSLOG_PAXOS_REPLICA),
+                            remove_task->get_leader(),
+                            dst_member,
+                            remove_task->get_remove_member(), // src_member
+                            data_source, // not used
+                            remove_task->get_orig_paxos_replica_number(),
+                            remove_task->get_paxos_replica_number()))) {
+        LOG_WARN("fail to build remove task", KR(ret), K(task_key), K(dst_member), K(data_source), KPC(remove_task));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDRWorker::trans_migrate_to_type_transferm_for_sslog_(
+    ObDRTask &task,
+    DRLSInfo &dr_ls_info,
+    ObLSTypeTransformTask &type_transform_task)
+{
+  int ret = OB_SUCCESS;
+  if (!task.is_sslog_dr_task() || !task.is_migrate_task()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task));
+  } else {
+    common::ObAddr target_server;
+    ObMigrateLSReplicaTask *migrate_task = static_cast<ObMigrateLSReplicaTask*>(&task);
+    const char* task_comment = drtask::TYPE_TRANSFORM_DUE_TO_MIGRATE_SSLOG_REPLICA;
+    if (OB_ISNULL(migrate_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("migrate_task is nullptr", KR(ret), K(task));
+    } else if (OB_UNLIKELY(ObReplicaTypeCheck::is_non_paxos_replica(migrate_task->get_src_member().get_replica_type()))) {
+      // dr can not see non paxos sslog replica
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected non paxos sslog replica", KR(ret), K(task));
+    } else if (FALSE_IT(target_server = migrate_task->get_dst_member().get_server())) {
+    } else if (OB_FAIL(generate_type_transferm_for_sslog_(task,
+                                                          target_server,
+                                                          task_comment,
+                                                          dr_ls_info,
+                                                          type_transform_task))) {
+      LOG_WARN("fail to generate type transferm for sslog", KR(ret), K(task), K(target_server), K(dr_ls_info));
+    }
+  }
+  return ret;
+}
+
+int ObDRWorker::trans_add_to_type_transferm_for_sslog_(
+    ObDRTask &task,
+    DRLSInfo &dr_ls_info,
+    ObLSTypeTransformTask &type_transform_task)
+{
+  int ret = OB_SUCCESS;
+  if (!task.is_sslog_dr_task() || !task.is_add_task()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task));
+  } else {
+    common::ObAddr target_server;
+    ObAddLSReplicaTask *add_task = static_cast<ObAddLSReplicaTask*>(&task);
+    const char* task_comment = drtask::TYPE_TRANSFORM_DUE_TO_ADD_SSLOG_REPLICA;
+    if (OB_ISNULL(add_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("add_task is nullptr", KR(ret), K(task));
+    } else if (OB_UNLIKELY(ObReplicaTypeCheck::is_non_paxos_replica(add_task->get_dst_member().get_replica_type()))) {
+      // dr can not see non paxos sslog replica
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected non paxos sslog replica", KR(ret), K(task));
+    } else if (FALSE_IT(target_server = add_task->get_dst_member().get_server())) {
+    } else if (OB_FAIL(generate_type_transferm_for_sslog_(task,
+                                                          target_server,
+                                                          task_comment,
+                                                          dr_ls_info,
+                                                          type_transform_task))) {
+      LOG_WARN("fail to generate type transferm for sslog", KR(ret), K(task), K(target_server), K(dr_ls_info));
+    }
+  }
+  return ret;
+}
+
+int ObDRWorker::generate_type_transferm_for_sslog_(
+    const ObDRTask &task,
+    const common::ObAddr &target_server,
+    const char* task_comment,
+    DRLSInfo &dr_ls_info,
+    ObLSTypeTransformTask &type_transform_task)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!task.is_valid() || !target_server.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task), K(target_server));
+  } else {
+    ObDRTaskKey task_key;
+    ObReplicaMember data_source;
+    int64_t data_size = 0; // not used
+    common::ObAddr leader_addr;
+    ObReplicaMember target_sslog_r_member;
+    int64_t new_paxos_replica_number = -1;
+    bool found_new_paxos_replica_number = false;
+    ObReplicaMember dst_member(target_server,
+                               ObTimeUtility::current_time(),
+                               REPLICA_TYPE_FULL, // trans to Full replica.
+                               100 /*memstore_percent*/);
+    if (OB_FAIL(task_key.assign(task.get_task_key()))) {
+      LOG_WARN("fail to assign task key", KR(ret), K(task));
+    } else if (FALSE_IT(task_key.set_task_type(ObDRTaskType::LS_TYPE_TRANSFORM))) {
+    } else if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
+      LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
+    } else if (OB_FAIL(dr_ls_info.get_leader(leader_addr))) {
+      LOG_WARN("fail to get leader", KR(ret), K(dr_ls_info));
+    } else if (OB_FAIL(DisasterRecoveryUtils::find_sslog_readonly_member(dr_ls_info.get_tenant_id(),
+                                                                         dr_ls_info.get_ls_id(),
+                                                                         target_server,
+                                                                         target_sslog_r_member))) {
+      LOG_WARN("fail to find sslog readonly member", KR(ret), K(target_server));
+    } else if (OB_FAIL(generate_disaster_recovery_paxos_replica_number(dr_ls_info,
+                                                                       dr_ls_info.get_paxos_replica_number(),
+                                                                       dr_ls_info.get_schema_replica_cnt(),
+                                                                       MEMBER_CHANGE_ADD,
+                                                                       new_paxos_replica_number,
+                                                                       found_new_paxos_replica_number))) {
+        LOG_WARN("faild to generate new paxos_replica_num", KR(ret), K(dr_ls_info));
+    } else if (!found_new_paxos_replica_number) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("can't find new paxos_replica_num", K(dr_ls_info));
+    } else if (OB_FAIL(type_transform_task.build(task_key,
+                                                 task.get_task_id(),
+                                                 task_comment,
+                                                 leader_addr,
+                                                 dst_member,
+                                                 target_sslog_r_member, // src_member
+                                                 data_source, // not used, must be valid
+                                                 dr_ls_info.get_paxos_replica_number(),
+                                                 new_paxos_replica_number))) {
+      LOG_WARN("fail to build add replica task", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDRWorker::add_to_task_array_(
     const ObDRTask &task,
     int64_t &acc_dr_task)
 {
@@ -3133,33 +3364,26 @@ int ObDRWorker::build_remove_replica_task_(
   int ret = OB_SUCCESS;
   common::ObReplicaType replica_type = REPLICA_TYPE_INVALID;
   common::ObAddr leader_addr;
-  ObMember member_to_remove;
+  ObReplicaMember remove_member;
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(arg));
-  } else if (OB_FAIL(dr_ls_info.get_member_by_server(arg.get_server_addr(), member_to_remove))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "Target server does not have a replica of this LS");
-    }
-    LOG_WARN("server does not have a replica of this log stream", KR(ret), K(arg), K(dr_ls_info));
   } else if (OB_FAIL(dr_ls_info.get_leader(leader_addr))) {
     LOG_WARN("fail to get leader", KR(ret), K(dr_ls_info));
+  } else if (OB_FAIL(get_member_for_remove_task_in_manual_command_(arg, dr_ls_info, remove_member))) {
+    LOG_WARN("fail to get_replica_type_by_leader", KR(ret), K(arg), K(dr_ls_info));
   } else if (OB_FAIL(check_task_execute_server_status_(leader_addr, false/*need_check_can_migrate_in*/))) {
     LOG_WARN("fail to check server status", KR(ret), K(leader_addr), K(dr_ls_info));
-  } else if (OB_FAIL(get_replica_type_by_leader_(arg.get_server_addr(), dr_ls_info, replica_type))) {
-    LOG_WARN("fail to get_replica_type_by_leader", KR(ret), K(dr_ls_info), K(arg));
   } else {
     share::ObTaskId task_id;
     int64_t new_paxos_replica_number = 0;
     bool has_leader = false;
-    ObReplicaMember remove_member;
     ObDRTaskKey task_key;
     common::ObZone zone;
+    replica_type = remove_member.get_replica_type();
     ObDRTaskType task_type = ObReplicaTypeCheck::is_paxos_replica_V2(replica_type)
                            ? ObDRTaskType::LS_REMOVE_PAXOS_REPLICA : ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA;
     if (FALSE_IT(task_id.init(GCONF.self_addr_))) {
-    } else if (OB_FAIL(remove_member.init(member_to_remove, replica_type))) {
-      LOG_WARN("fail to init remove_member", KR(ret), K(member_to_remove), K(replica_type));
     } else if (OB_FAIL(check_and_generate_new_paxos_replica_num_(
                           arg, replica_type, dr_ls_info, new_paxos_replica_number))) {
       LOG_WARN("fail to check and generate new paxos replica num", KR(ret), K(arg), K(replica_type), K(dr_ls_info));
@@ -3185,6 +3409,60 @@ int ObDRWorker::build_remove_replica_task_(
       LOG_WARN("fail to build task", KR(ret), K(arg), K(task_id), K(leader_addr), K(remove_member),
                 K(dr_ls_info), K(new_paxos_replica_number), K(replica_type));
     }
+  }
+  return ret;
+}
+
+int ObDRWorker::get_member_for_remove_task_in_manual_command_(
+    const obrpc::ObAdminAlterLSReplicaArg &arg,
+    DRLSInfo &dr_ls_info,
+    ObReplicaMember &remove_member)
+{
+  // used for manual command, is different with auto dr remove replica, it need remove sslog replica truely.
+  int ret = OB_SUCCESS;
+  remove_member.reset();
+  const common::ObAddr &target_server = arg.get_server_addr();
+  palf::LogConfigVersion config_version; // not used
+  common::ObMemberList member_list;
+  common::GlobalLearnerList learner_list;
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (is_tenant_sslog_ls(arg.get_tenant_id(), arg.get_ls_id())) {
+    // here special treatment for sslog ls, get member_list and learner list from log_service
+    // ensure obtaining a complete member_list list and learner_list. (lst_operator has filtered out the R replica of SSLOG)
+    ObMember sslog_member;
+    if (OB_FAIL(DisasterRecoveryUtils::get_member_info_from_log_service(
+                                                 arg.get_tenant_id(),
+                                                 arg.get_ls_id(),
+                                                 config_version,
+                                                 member_list,
+                                                 learner_list))) {
+      LOG_WARN("fail to get member info from log service", KR(ret), K(arg));
+    } else if (member_list.contains(target_server)) {
+      if (OB_FAIL(member_list.get_member_by_addr(target_server, sslog_member))) {
+        LOG_WARN("fail to get member by addr", KR(ret), K(target_server), K(member_list));
+      } else if (OB_FAIL(remove_member.init(sslog_member, REPLICA_TYPE_FULL))) {
+        LOG_WARN("fail to init sslog member", KR(ret), K(sslog_member));
+      }
+    } else if (learner_list.contains(target_server)) {
+      if (OB_FAIL(learner_list.get_learner_by_addr(target_server, sslog_member))) {
+        LOG_WARN("fail to get member by addr", KR(ret), K(target_server), K(learner_list));
+      } else if (OB_FAIL(remove_member.init(sslog_member, REPLICA_TYPE_READONLY))) {
+        LOG_WARN("fail to init sslog member", KR(ret), K(sslog_member));
+      }
+    } else {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("fail to member in log service", KR(ret), K(target_server), K(learner_list), K(member_list));
+    }
+  } else if (OB_FAIL(DisasterRecoveryUtils::get_member_by_server(arg.get_tenant_id(),
+                                                                 arg.get_ls_id(),
+                                                                 target_server,
+                                                                 remove_member))) {
+    LOG_WARN("fail to get member by server", KR(ret), K(arg));
+  }
+  if (OB_ENTRY_NOT_EXIST == ret) {
+    LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "Target server does not have a replica of this LS");
   }
   return ret;
 }
@@ -3238,6 +3516,7 @@ int ObDRWorker::build_modify_replica_type_task_(
     int64_t data_size = 0;
     ObReplicaMember data_source;
     ObDRTaskKey task_key;
+    common::ObAddr leader_addr;
     ObReplicaMember src_member(ls_replica.get_server(),
                                ls_replica.get_member_time_us(),
                                replica_type,
@@ -3256,12 +3535,15 @@ int ObDRWorker::build_modify_replica_type_task_(
                 K(arg), K(dr_ls_info), K(new_paxos_replica_number));
     } else if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
       LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
+    } else if (OB_FAIL(dr_ls_info.get_leader(leader_addr))) {
+      LOG_WARN("fail to get leader", KR(ret), K(dr_ls_info));
     } else if (OB_FAIL(task_key.init(arg.get_tenant_id(), arg.get_ls_id(), ls_replica.get_zone(), ObDRTaskType::LS_TYPE_TRANSFORM))) {
       LOG_WARN("fail to init task key", KR(ret), K(arg), K(ls_replica));
     } else if (OB_FAIL(modify_replica_task.build(
                             task_key,
                             task_id,
                             ObString(drtask::ALTER_SYSTEM_COMMAND_MODIFY_REPLICA_TYPE),
+                            leader_addr,
                             dst_member,
                             src_member,
                             data_source,
@@ -3858,15 +4140,19 @@ int ObDRWorker::generate_remove_permanent_offline_replicas_task(
     const ObReplicaMember &remove_member,
     const int64_t &old_paxos_replica_number,
     const int64_t &new_paxos_replica_number,
-    int64_t &acc_dr_task,
-    const ObReplicaType &replica_type)
+    const ObReplicaType &replica_type,
+    DRLSInfo &dr_ls_info,
+    const bool server_not_exist,
+    int64_t &acc_dr_task)
 {
   int ret = OB_SUCCESS;
   ObRemoveLSReplicaTask remove_replica_task;
+  const char* task_comment = server_not_exist ? drtask::REMOVE_REPLICA_DUE_TO_SERVER_NOT_EXIST
+                                              : drtask::REMOVE_PERMANENT_OFFLINE_REPLICA;
   if (OB_FAIL(remove_replica_task.build(
                 task_key,
                 task_id,
-                ObString(drtask::REMOVE_PERMANENT_OFFLINE_REPLICA),
+                task_comment,
                 leader_addr,
                 remove_member,
                 old_paxos_replica_number,
@@ -3874,8 +4160,68 @@ int ObDRWorker::generate_remove_permanent_offline_replicas_task(
                 replica_type))) {
     LOG_WARN("fail to build remove member task", KR(ret), K(task_key), K(task_id), K(leader_addr),
              K(remove_member), K(old_paxos_replica_number), K(new_paxos_replica_number), K(replica_type));
-  } else if (OB_FAIL(add_task_(remove_replica_task, acc_dr_task))) {
+  } else if (OB_FAIL(add_task_(remove_replica_task, dr_ls_info, acc_dr_task))) {
     LOG_WARN("fail to add task", KR(ret), K(remove_replica_task));
+  }
+  return ret;
+}
+
+int ObDRWorker::try_remove_not_in_server_list_sslog_readonly_replica_(
+    const bool only_for_display,
+    DRLSInfo &dr_ls_info,
+    int64_t &acc_dr_task)
+{
+  int ret = OB_SUCCESS;
+  // only the R replica of sslog needs to be processed
+  // the F replica is processed by the permanent offline module.
+  palf::LogConfigVersion config_version; // not used
+  common::ObMemberList member_list; // not used
+  common::GlobalLearnerList learner_list;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  share::ObLSID ls_id;
+  if (OB_FAIL(dr_ls_info.get_ls_id(tenant_id, ls_id))) {
+    LOG_WARN("fail to get ls id", KR(ret), K(dr_ls_info));
+  } else if (!is_tenant_sslog_ls(tenant_id, ls_id)) {
+    // skip, only deal with sslog LS.
+  } else if (OB_FAIL(DisasterRecoveryUtils::get_member_info_from_log_service(tenant_id,
+                                                                             ls_id,
+                                                                             config_version,
+                                                                             member_list,
+                                                                             learner_list))) {
+    LOG_WARN("failed to get member info", KR(ret), K(dr_ls_info));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else {
+    // only check learner_list
+    for (int64_t index = 0; OB_SUCC(ret) && index < learner_list.get_member_number(); ++index) {
+      ObMember learner_to_remove;
+      bool server_not_exist = false;
+      ObServerInfoInTable server_info;
+      if (OB_FAIL(learner_list.get_member_by_index(index, learner_to_remove))) {
+        LOG_WARN("fail to get learner by index", KR(ret), K(index));
+      } else if (OB_FAIL(ObServerTableOperator::get(*GCTX.sql_proxy_, learner_to_remove.get_server(), server_info))) {
+        // remove the SSLOG member not in __all_server table
+        if (OB_SERVER_NOT_IN_WHITE_LIST == ret) {
+          server_not_exist = true;
+          ret = OB_SUCCESS;
+          LOG_INFO("found not in __all_server sslog readonly replica", K(tenant_id), K(ls_id), K(learner_to_remove));
+        } else {
+          LOG_WARN("fail to get server info", KR(ret), K(learner_to_remove));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (server_not_exist && OB_FAIL(do_single_replica_permanent_offline_(
+                                                        tenant_id,
+                                                        ls_id,
+                                                        dr_ls_info,
+                                                        only_for_display,
+                                                        REPLICA_TYPE_READONLY,
+                                                        learner_to_remove,
+                                                        acc_dr_task))) {
+        LOG_WARN("fail to do single replica permanent offline", KR(ret), K(dr_ls_info), K(learner_to_remove));
+      }
+    } // end for
   }
   return ret;
 }
@@ -3957,6 +4303,7 @@ int ObDRWorker::do_single_replica_permanent_offline_(
 {
   int ret = OB_SUCCESS;
   bool is_offline = false;
+  bool server_not_exist = false;
   ObServerInfoInTable server_info;
   if (OB_UNLIKELY(!member_to_remove.is_valid()
                || OB_INVALID_TENANT_ID == tenant_id
@@ -3967,9 +4314,9 @@ int ObDRWorker::do_single_replica_permanent_offline_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(ObServerTableOperator::get(*GCTX.sql_proxy_, member_to_remove.get_server(), server_info))) {
-    // remove the member not in __all_server table
+    // remove the member not in __all_server table, for sslog replica, remove it for real(remove from member_list or learner_list)
     if (OB_SERVER_NOT_IN_WHITE_LIST == ret) {
-      is_offline = true;
+      server_not_exist = true;
       ret = OB_SUCCESS;
       LOG_INFO("found not in __all_server replica", K(tenant_id), K(ls_id), K(member_to_remove));
     } else {
@@ -3979,7 +4326,7 @@ int ObDRWorker::do_single_replica_permanent_offline_(
     is_offline = server_info.is_permanent_offline();
   }
   if (OB_FAIL(ret)) {
-  } else if (is_offline) {
+  } else if (is_offline || server_not_exist) {
     FLOG_INFO("found ls replica need to permanent offline", K(tenant_id), K(ls_id), K(member_to_remove), K(replica_type), K(dr_ls_info));
     share::ObTaskId task_id;
     int64_t new_paxos_replica_number = 0;
@@ -4050,8 +4397,10 @@ int ObDRWorker::do_single_replica_permanent_offline_(
                           remove_member,
                           old_paxos_replica_number,
                           new_paxos_replica_number,
-                          acc_dr_task,
-                          replica_type))) {
+                          replica_type,
+                          dr_ls_info,
+                          server_not_exist,
+                          acc_dr_task))) {
         LOG_WARN("fail to generate remove permanent offline task", KR(ret), K(leader_addr),
                  K(remove_member), K(old_paxos_replica_number), K(new_paxos_replica_number), K(replica_type));
       }
@@ -4096,8 +4445,18 @@ int ObDRWorker::check_need_generate_replicate_to_unit(
              && unit_stat_info->get_unit().server_ != server_stat_info->get_server()
              && unit_stat_info->get_server_stat()->is_alive()
              && !unit_stat_info->get_server_stat()->is_block()) {
-    need_generate = true;
-    LOG_INFO("found replicate to unit replica", KPC(ls_replica));
+    share::ObLSReplica target_ls_replica;
+    // TODO: jinqian.zzy add case.
+    if (OB_FAIL(dr_ls_info.check_replica_exist_and_get_ls_replica(unit_stat_info->get_unit().server_,
+                                                                  target_ls_replica))) {
+      LOG_WARN("failed to check replica exist", KR(ret), KPC(unit_stat_info));
+    } else if (target_ls_replica.is_valid() && target_ls_replica.is_in_service()) {
+      // skip, need_generate = false
+      LOG_INFO("target server already has replica", K(target_ls_replica));
+    } else {
+      need_generate = true;
+      LOG_INFO("found replicate to unit replica", KPC(ls_replica));
+    }
   }
   return ret;
 }
@@ -4130,6 +4489,7 @@ int ObDRWorker::generate_replicate_to_unit_task(
     const ObReplicaMember &data_source,
     const int64_t &old_paxos_replica_number,
     const char* task_comment,
+    DRLSInfo &dr_ls_info,
     int64_t &acc_dr_task)
 {
   int ret = OB_SUCCESS;
@@ -4147,7 +4507,7 @@ int ObDRWorker::generate_replicate_to_unit_task(
                          ObReplicaMember()/*empty force_data_source*/,
                          old_paxos_replica_number))) {
     LOG_WARN("fail to build migrate task", KR(ret));
-  } else if (OB_FAIL(add_task_(migrate_task, acc_dr_task))) {
+  } else if (OB_FAIL(add_task_(migrate_task, dr_ls_info, acc_dr_task))) {
     LOG_WARN("fail to add task", KR(ret), K(migrate_task));
   }
   return ret;
@@ -4271,7 +4631,7 @@ int ObDRWorker::generate_migrate_ls_task(
     } else if (can_generate) {
       if (OB_FAIL(generate_replicate_to_unit_task(
               task_key, task_id, dst_member, src_member, data_source,
-              old_paxos_replica_number, task_comment, acc_dr_task))) {
+              old_paxos_replica_number, task_comment, dr_ls_info, acc_dr_task))) {
         LOG_WARN("fail to generate replicate to unit task", KR(ret));
       }
     }
@@ -4338,7 +4698,7 @@ int ObDRWorker::try_generate_remove_replica_locality_alignment_task(
             my_task->replica_type_))) {
       LOG_WARN("fail to build task", KR(ret), K(task_key), K(task_id),
                K(leader_addr), K(remove_member), KPC(my_task));
-    } else if (OB_FAIL(add_task_(remove_paxos_task, acc_dr_task))) {
+    } else if (OB_FAIL(add_task_(remove_paxos_task, dr_ls_info, acc_dr_task))) {
       LOG_WARN("fail to add task", KR(ret), K(remove_paxos_task));
     }
   }
@@ -4396,7 +4756,7 @@ int ObDRWorker::try_generate_add_replica_locality_alignment_task(
             my_task->orig_paxos_replica_number_,
             my_task->paxos_replica_number_))) {
       LOG_WARN("fail to build add replica task", KR(ret));
-    } else if (OB_FAIL(add_task_(add_replica_task, acc_dr_task))) {
+    } else if (OB_FAIL(add_task_(add_replica_task, dr_ls_info, acc_dr_task))) {
       LOG_WARN("fail to add task", KR(ret), K(add_replica_task));
     }
   }
@@ -4433,6 +4793,7 @@ int ObDRWorker::try_generate_type_transform_locality_alignment_task(
                                my_task->dst_replica_type_,
                                my_task->dst_memstore_percent_);
     ObLSTypeTransformTask type_transform_task;
+    common::ObAddr leader_addr;
     share::ObTaskId task_id;
     if (FALSE_IT(task_id.init(GCONF.self_addr_))) {
       //shall never be here
@@ -4445,19 +4806,22 @@ int ObDRWorker::try_generate_type_transform_locality_alignment_task(
       LOG_INFO("may has no leader while member change", K(dr_ls_info));
     } else if (OB_FAIL(dr_ls_info.get_default_data_source(data_source, data_size))) {
       LOG_WARN("fail to get data_size", KR(ret), K(dr_ls_info));
+    } else if (OB_FAIL(dr_ls_info.get_leader(leader_addr))) {
+      LOG_WARN("fail to get leader", KR(ret), K(dr_ls_info));
     } else if (OB_FAIL(generate_task_key(dr_ls_info, my_task->dst_server_, task->get_task_type(), task_key))) {
       LOG_WARN("fail to generate task key", KR(ret));
     } else if (OB_FAIL(type_transform_task.build(
             task_key,
             task_id,
             ObString(drtask::TRANSFORM_LOCALITY_REPLICA_TYPE),
+            leader_addr,
             dst_member,
             src_member,
             data_source,
             my_task->orig_paxos_replica_number_,
             my_task->paxos_replica_number_))) {
       LOG_WARN("fail to build type transform task", KR(ret));
-    } else if (OB_FAIL(add_task_(type_transform_task, acc_dr_task))) {
+    } else if (OB_FAIL(add_task_(type_transform_task, dr_ls_info, acc_dr_task))) {
       LOG_WARN("fail to add task", KR(ret), K(type_transform_task));
     }
   }
@@ -4505,7 +4869,7 @@ int ObDRWorker::try_generate_modify_paxos_replica_number_locality_alignment_task
             my_task->paxos_replica_number_,
             member_list))) {
       LOG_WARN("fail to build a modify paxos replica number task", KR(ret));
-    } else if (OB_FAIL(add_task_(modify_paxos_replica_number_task, acc_dr_task_cnt))) {
+    } else if (OB_FAIL(add_task_(modify_paxos_replica_number_task, dr_ls_info, acc_dr_task_cnt))) {
       LOG_WARN("fail to add task", KR(ret), K(modify_paxos_replica_number_task));
     }
   }
@@ -5002,7 +5366,7 @@ int ObDRWorker::try_remove_non_paxos_replica_for_deleting_unit_(
                       ls_replica.get_replica_type()))) {
         LOG_WARN("fail to build remove member task", KR(ret), K(task_key), K(leader_addr),
                  K(remove_learner), K(old_paxos_replica_number), K(new_paxos_replica_number));
-      } else if (OB_FAIL(add_task_(remove_replica_task, acc_dr_task))) {
+      } else if (OB_FAIL(add_task_(remove_replica_task, dr_ls_info, acc_dr_task))) {
         LOG_WARN("fail to add task", KR(ret), K(remove_replica_task));
       }
     }
@@ -5190,6 +5554,7 @@ int ObDRWorker::try_gen_type_transform_task_(
                            old_paxos_replica_number,
                            new_paxos_replica_number,
                            comment,
+                           dr_ls_info,
                            acc_dr_task))) {
       LOG_WARN("fail to generate type transform task", KR(ret), K(task_key), K(task_id), K(data_source), K(dst_member),
                K(src_member), K(old_paxos_replica_number), K(new_paxos_replica_number), K(acc_dr_task));
@@ -5340,22 +5705,28 @@ int ObDRWorker::generate_type_transform_task_(
     const int64_t old_paxos_replica_number,
     const int64_t new_paxos_replica_number,
     const ObString &comment,
+    DRLSInfo &dr_ls_info,
     int64_t &acc_dr_task)
 {
   int ret = OB_SUCCESS;
   ObLSTypeTransformTask type_transform_task;
-  if (OB_FAIL(type_transform_task.build(
+  common::ObAddr leader_addr;
+  if (OB_FAIL(dr_ls_info.get_leader(leader_addr))) {
+    LOG_WARN("fail to get leader", KR(ret), K(dr_ls_info));
+  } else if (OB_FAIL(type_transform_task.build(
                  task_key,
                  task_id,
                  comment,
+                 leader_addr,
                  dst_member,
                  src_member,
                  data_source,
                  old_paxos_replica_number,
                  new_paxos_replica_number))) {
-    LOG_WARN("fail to build type transform task", KR(ret), K(task_key), K(dst_member), K(src_member),
+    LOG_WARN("fail to build type transform task", KR(ret), K(task_key), K(leader_addr),
+            K(dst_member), K(src_member), K(task_id), K(comment),
             K(data_source), K(old_paxos_replica_number), K(new_paxos_replica_number));
-  } else if (OB_FAIL(add_task_(type_transform_task, acc_dr_task))) {
+  } else if (OB_FAIL(add_task_(type_transform_task, dr_ls_info, acc_dr_task))) {
     LOG_WARN("fail to add task", KR(ret), K(type_transform_task));
   }
   return ret;
@@ -5447,6 +5818,7 @@ int ObDRWorker::generate_cancel_unit_migration_task(
     const ObReplicaMember &remove_member,
     const int64_t &old_paxos_replica_number,
     const int64_t &new_paxos_replica_number,
+    DRLSInfo &dr_ls_info,
     int64_t &acc_dr_task)
 {
   int ret = OB_SUCCESS;
@@ -5470,7 +5842,7 @@ int ObDRWorker::generate_cancel_unit_migration_task(
                   new_paxos_replica_number,
                   replica_type))) {
     LOG_WARN("fail to build remove member task", KR(ret), K(task_key), K(task_id));
-  } else if (OB_FAIL(add_task_(remove_member_task, acc_dr_task))) {
+  } else if (OB_FAIL(add_task_(remove_member_task, dr_ls_info, acc_dr_task))) {
     LOG_WARN("fail to add task", KR(ret), K(remove_member_task));
   }
   return ret;
@@ -5599,6 +5971,7 @@ int ObDRWorker::try_cancel_unit_migration(
                           remove_member,
                           old_paxos_replica_number,
                           new_paxos_replica_number,
+                          dr_ls_info,
                           acc_dr_task))) {
             LOG_WARN("fail to build cancel unit migration task", KR(ret));
           }
@@ -5647,7 +6020,7 @@ int ObDRWorker::check_need_generate_migrate_to_unit_task(
   } else if ((REPLICA_TYPE_READONLY == ls_replica->get_replica_type()
       || REPLICA_TYPE_COLUMNSTORE == ls_replica->get_replica_type())
       && dr_ls_info.is_duplicate_ls()) {
-    // only process F replica for duplicate ls, ignore R/C replica
+    // TODO: jinqian.zzy add comment
     need_generate = false;
   } else if (REPLICA_STATUS_NORMAL == ls_replica->get_replica_status()
           && unit_stat_info->is_in_pool()
@@ -5695,6 +6068,7 @@ int ObDRWorker::generate_migrate_to_unit_task(
     const ObReplicaMember &data_source,
     const int64_t &old_paxos_replica_number,
     const bool is_unit_in_group_related,
+    DRLSInfo &dr_ls_info,
     int64_t &acc_dr_task)
 {
   int ret = OB_SUCCESS;
@@ -5718,7 +6092,7 @@ int ObDRWorker::generate_migrate_to_unit_task(
                          old_paxos_replica_number,
                          ObDRTaskPriority::LOW_PRI))) {
     LOG_WARN("fail to build migrate task", KR(ret));
-  } else if (OB_FAIL(add_task_(migrate_task, acc_dr_task))) {
+  } else if (OB_FAIL(add_task_(migrate_task, dr_ls_info, acc_dr_task))) {
     LOG_WARN("fail to add task", KR(ret), K(migrate_task));
   }
   return ret;
@@ -5898,6 +6272,7 @@ int ObDRWorker::try_migrate_replica_for_migrate_to_unit_(
                       data_source,
                       old_paxos_replica_number,
                       is_unit_in_group_related,
+                      dr_ls_info,
                       acc_dr_task))) {
         LOG_WARN("fail to generate migrate to unit task", KR(ret));
       }

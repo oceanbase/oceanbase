@@ -155,9 +155,11 @@ int ObRpcLSTable::do_detect_sslog_ls_(
             LOG_WARN("fail to assign replica", KR(ret), KPC(result));
           } else if (is_strong_leader(tmp_replica.get_role()) && OB_FAIL(leader_replicas.push_back(tmp_replica))) {
             LOG_WARN("fail to push back replica", KR(ret), K(tmp_replica));
-          } else if (is_follower(tmp_replica.get_role())
-                  && FALSE_IT(tmp_replica.update_to_follower_role())
-                  && OB_FAIL(ls_info.add_replica(tmp_replica))) {
+          } else if (is_follower(tmp_replica.get_role())) {
+            tmp_replica.update_to_follower_role();
+            if (OB_FAIL(ls_info.add_replica(tmp_replica))) {
+              LOG_WARN("fail to add replica", KR(ret), K(tmp_replica));
+            }
             // Here, we use update_to_follower_role() to set replica's proposal_id to 0 and role to follower.
             // In rpc mode, only get SSLOG LS info needs to do this , SYS LS does not need to.
             // For SYS LS, we record it's info in RS memory, when updating RS memory and meta table, the same treatment has been done for the follower.
@@ -176,15 +178,16 @@ int ObRpcLSTable::do_detect_sslog_ls_(
             //   Attention:
             //     In the above situation, RS cannot get a correct leader because the correct leader has not yet reported.
             //     Here it depends on the subsequent report of the new leader.
-            LOG_WARN("fail to add replica", KR(ret), K(tmp_replica));
           }
         }
       }
+      LOG_TRACE("before update_replica_status", KR(ret), K(leader_replicas), K(ls_info));
       if (FAILEDx(check_sslog_leader_replicas_(leader_replicas, ls_info))) {
         LOG_WARN("failed to check sslog leader replicas", KR(ret), K(leader_replicas), K(ls_info));
       } else if (OB_FAIL(ls_info.update_replica_status())) {
         LOG_WARN("update replica status failed", KR(ret), K(ls_info));
       }
+      LOG_TRACE("aftr update_replica_status", KR(ret), K(ls_info));
     }
   }
   return ret;

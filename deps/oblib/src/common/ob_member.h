@@ -30,7 +30,8 @@ class ObMember
 public:
   ObMember();
   ObMember(const common::ObAddr &server,
-           const int64_t timestamp);
+           const int64_t timestamp,
+           const int64_t flag = 0);
   virtual ~ObMember() = default;
 public:
   const common::ObAddr &get_server() const;
@@ -114,8 +115,9 @@ public:
   ObReplicaMember(const common::ObAddr &server,
                   const int64_t timestamp,
                   const common::ObReplicaType replica_type,
-                  const int64_t memstore_percent = 100)
-    : ObMember(ObMember(server, timestamp)),
+                  const int64_t memstore_percent = 100,
+                  const int64_t flag = 0)
+    : ObMember(ObMember(server, timestamp, flag)),
       replica_type_(replica_type),
       memstore_percent_(memstore_percent)
   {

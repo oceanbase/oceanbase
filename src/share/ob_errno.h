@@ -4038,6 +4038,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_DAG_TASK_IS_SUSPENDED__USER_ERROR_MSG "dag task is pending, need to wait for resources"
 #define OB_UNEXPECTED_MACRO_CACHE_FILE__USER_ERROR_MSG "unexpected macro cache file, which is not inner file"
 #define OB_OBJECT_STORAGE_CONDITION_NOT_MATCH__USER_ERROR_MSG "object storage condition not match"
+#define OB_SSLOG_LS_NOT_EXIST__USER_ERROR_MSG "sslog ls do not exist"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -8512,6 +8513,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_UNEXPECTED_MACRO_CACHE_FILE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9144, unexpected macro cache file, which is not inner file"
 #define OB_OBJECT_STORAGE_CONDITION_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9145, object storage condition not match"
 #define OB_OBJECT_STORAGE_CONDITION_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9145, object storage condition not match"
+#define OB_SSLOG_LS_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9146, sslog ls do not exist"
+#define OB_SSLOG_LS_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9146, sslog ls do not exist"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -9457,7 +9460,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2470];
+extern int g_all_ob_errnos[2471];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

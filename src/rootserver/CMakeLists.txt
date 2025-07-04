@@ -31,6 +31,7 @@ ob_set_subtarget(ob_rootserver common
   ob_admin_drtask_util.cpp
   ob_disaster_recovery_task_table_operator.cpp
   ob_balance_group_ls_stat_operator.cpp
+  ob_disaster_recovery_sslog_service.cpp
   ob_disaster_recovery_info.cpp
   ob_disaster_recovery_worker.cpp
   ob_disaster_recovery_service.cpp

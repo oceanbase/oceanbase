@@ -6435,6 +6435,8 @@ data_source_svr_port	bigint(20)	YES		NULL
 is_manual	tinyint(4)	YES		0	
 config_version	varchar(128)	YES			
 bconfig_version	varchar(1024)	YES			
+member_timestamp	bigint(20)	YES		-1	
+member_flag	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ls_replica_task;
 IF(count(*) >= 0, 1, 0)
 1
@@ -10407,6 +10409,8 @@ execute_result	varchar(2048)	YES		NULL
 comment	varchar(2048)	YES		NULL	
 config_version	varchar(128)	YES			
 bconfig_version	varchar(1024)	YES			
+member_timestamp	bigint(20)	YES		-1	
+member_flag	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ls_replica_task_history;
 IF(count(*) >= 0, 1, 0)
 1

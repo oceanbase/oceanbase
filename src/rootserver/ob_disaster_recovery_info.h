@@ -217,13 +217,6 @@ public:
       ObReplicaMember &data_source,
       int64_t &data_size) const;
 
-  // get member by server address in leader's learner list and member list
-  // @param [in] server_addr, which server the member in
-  // @param [out] member, target member
-  int get_member_by_server(
-      const common::ObAddr& server_addr,
-      ObMember &member) const;
-
   // check and get if there is a replica on the target server
   // @param [in] server_addr, which server the replica in
   // @param [out] ls_replica, target replic

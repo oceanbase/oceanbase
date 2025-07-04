@@ -167,6 +167,7 @@ public:
   inline int64_t get_required_size() const { return required_size_; }
   inline bool get_rebuild() const { return rebuild_; }
   inline const common::GlobalLearnerList &get_learner_list() const { return learner_list_; }
+  inline void reset_learner_list() { learner_list_.reset(); }
 
   // functions to set values
   // ATTENTION:we use set_x() in cases for special needs below
@@ -290,7 +291,7 @@ public:
 private:
   int find_idx_(const common::ObAddr &server, int64_t &idx) const;
   int find_idx_(const ObLSReplica &replica, int64_t &idx) const;
-
+  int filter_sslog_replica_();
   int rectify_in_member_or_learner_list_flag_and_timestamp_(
       ObLSReplica *&replica,
       const ObLSReplica::MemberList *member_list,

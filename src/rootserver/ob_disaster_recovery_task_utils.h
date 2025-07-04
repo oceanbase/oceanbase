@@ -101,6 +101,12 @@ public:
       const common::ObAddr &server_addr,
       common::ObReplicaMember &member);
 
+  static int get_member_before_execute_dr_task(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const common::ObReplicaMember &source_member,
+      common::ObReplicaMember &target_member);
+
   // check if the tenant row in service epoch table exists.
   // if not, insert a row with an initial value of 0.
   // @params[in]  tenant_id, target tenant id
@@ -165,16 +171,17 @@ public:
       const obrpc::ObDRTaskType &task_type,
       uint64_t &service_epoch_tenant,
       uint64_t &persistent_tenant);
-  static int check_dest_has_sslog(
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
-      const common::ObAddr& dest_server,
-      bool &has_sslog);
-  static int get_member_info(
+  static int get_member_info_from_log_service(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       palf::LogConfigVersion &config_version,
-      common::ObMemberList &member_list);
+      common::ObMemberList &member_list,
+      common::GlobalLearnerList &learner_list);
+  static int find_sslog_readonly_member(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const common::ObAddr &target_server,
+      ObReplicaMember &sslog_r_member);
 private:
 
   // get ObReplicaMember from leader member list in meta table

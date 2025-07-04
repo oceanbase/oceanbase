@@ -407,6 +407,35 @@ int DisasterRecoveryUtils::get_member_in_learner_list_(
   return ret;
 }
 
+int DisasterRecoveryUtils::get_member_before_execute_dr_task(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObReplicaMember &source_member,
+    common::ObReplicaMember &target_member)
+{
+  int ret = OB_SUCCESS;
+  target_member.reset();
+  uint64_t tenant_data_version = 0;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+               || !ls_id.is_valid_with_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), tenant_data_version))) {
+    LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
+  } else if (GCTX.is_shared_storage_mode() || tenant_data_version >= DATA_VERSION_4_4_0_0) {
+    if (OB_FAIL(target_member.init(common::ObMember(source_member.get_server(),
+                                                    source_member.get_timestamp(),
+                                                    source_member.get_flag()),
+                                   source_member.get_replica_type()))) {
+      LOG_WARN("fail to init target_member", KR(ret), K(source_member));
+    }
+  } else if (OB_FAIL(get_member_by_server(tenant_id, ls_id, source_member.get_server(), target_member))) {
+    // compatibility code, to be deleted later.
+    LOG_WARN("fail to get member by server", KR(ret), K(tenant_id), K(ls_id), K(source_member));
+  }
+  return ret;
+}
+
 int DisasterRecoveryUtils::get_member_by_server(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
@@ -891,66 +920,18 @@ int DisasterRecoveryUtils::get_service_epoch_and_persistent_tenant(
   return ret;
 }
 
-int DisasterRecoveryUtils::check_dest_has_sslog(
-    const uint64_t tenant_id,
-    const share::ObLSID &ls_id,
-    const common::ObAddr& dest_server,
-    bool &has_sslog)
-{
-  // check destination has sslog replica and sslog has leader.
-  int ret = OB_SUCCESS;
-  share::ObLSInfo ls_info;
-  const share::ObLSReplica *ls_replica_ptr = nullptr;
-  const share::ObLSReplica *leader_replica = nullptr;
-  has_sslog = false;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
-               || !ls_id.is_valid_with_tenant(tenant_id)
-               || !dest_server.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(dest_server));
-  } else if (OB_ISNULL(GCTX.lst_operator_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lst_operator_ is null", KR(ret), KP(GCTX.lst_operator_));
-  } else if (OB_FAIL(GCTX.lst_operator_->get(GCONF.cluster_id,
-                                             tenant_id,
-                                             ls_id,
-                                             share::ObLSTable::DEFAULT_MODE,
-                                             ls_info))) {
-    LOG_WARN("get ls info failed", KR(ret), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(ls_info.find(dest_server, ls_replica_ptr))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    }
-    LOG_WARN("fail to find replica by server", KR(ret), K(dest_server), K(ls_info));
-  } else if (OB_ISNULL(ls_replica_ptr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls_replica_ptr is null", KR(ret), K(dest_server), K(ls_info));
-  } else if (!ls_replica_ptr->is_in_service()) {
-    // upper layer process this scene
-    LOG_INFO("ls_replica not in service", KR(ret), K(tenant_id), K(ls_id), K(dest_server));
-  } else if (OB_FAIL(ls_info.find_leader(leader_replica))) {
-    LOG_WARN("fail to find leader", KR(ret), K(ls_info));
-  } else if (OB_ISNULL(leader_replica)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("leader replica ptr is null", KR(ret), K(tenant_id), K(ls_id));
-  } else {
-    has_sslog = true;
-    LOG_INFO("destination has sslog ls", KR(ret), K(tenant_id), K(ls_id), K(dest_server));
-  }
-  return ret;
-}
-
-int DisasterRecoveryUtils::get_member_info(
+int DisasterRecoveryUtils::get_member_info_from_log_service(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
     palf::LogConfigVersion &config_version,
-    common::ObMemberList &member_list)
+    common::ObMemberList &member_list,
+    common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
   #ifdef OB_BUILD_SHARED_LOG_SERVICE
-  common::GlobalLearnerList learner_list; // not used
   config_version.reset();
   member_list.reset();
+  learner_list.reset();
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid_with_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
@@ -961,6 +942,44 @@ int DisasterRecoveryUtils::get_member_info(
     }
   }
   #endif
+  return ret;
+}
+
+int DisasterRecoveryUtils::find_sslog_readonly_member(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObAddr &target_server,
+    ObReplicaMember &sslog_r_member)
+{
+  int ret = OB_SUCCESS;
+  sslog_r_member.reset();
+  ObMember sslog_member;
+  palf::LogConfigVersion config_version; // not used
+  common::ObMemberList member_list; // not used
+  common::GlobalLearnerList learner_list;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+               || !ls_id.is_valid_with_tenant(tenant_id)
+               || !target_server.is_valid())
+               || !is_tenant_sslog_ls(tenant_id, ls_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(target_server));
+  } else if (OB_FAIL(get_member_info_from_log_service(tenant_id, ls_id, config_version, member_list, learner_list))) {
+    LOG_WARN("failed to get member info", KR(ret), K(tenant_id), K(ls_id));
+  } else if (learner_list.contains(target_server)) {
+    if (OB_FAIL(learner_list.get_learner_by_addr(target_server, sslog_member))) {
+      LOG_WARN("fail to get member by addr", KR(ret), K(target_server), K(learner_list));
+    } else if (sslog_member.is_migrating()) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("replica in migrating", KR(ret), K(sslog_member), K(tenant_id), K(ls_id), K(target_server));
+    }
+  } else {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("fail to sslog readonly member in learner list",
+              KR(ret), K(target_server), K(learner_list), K(member_list));
+  }
+  if (FAILEDx(sslog_r_member.init(sslog_member, REPLICA_TYPE_READONLY))) {
+    LOG_WARN("fail to init sslog member", KR(ret), K(sslog_member));
+  }
   return ret;
 }
 

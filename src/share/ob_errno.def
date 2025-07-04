@@ -2374,6 +2374,7 @@ DEFINE_ERROR_DEP(OB_DAG_TASK_IS_SUSPENDED, -9143, -1, "HY000", "dag task is pend
 DEFINE_ERROR(OB_UNEXPECTED_MACRO_CACHE_FILE, -9144, -1, "HY000", "unexpected macro cache file, which is not inner file");
 
 DEFINE_ERROR(OB_OBJECT_STORAGE_CONDITION_NOT_MATCH, -9145, -1, "HY000", "object storage condition not match");
+DEFINE_ERROR_DEP(OB_SSLOG_LS_NOT_EXIST, -9146, -1, "HY000", "sslog ls do not exist");
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////

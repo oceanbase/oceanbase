@@ -1165,6 +1165,40 @@ int ObLSInfo::update_replica_status()
       }
     }
   }
+  if (FAILEDx(filter_sslog_replica_())) {
+    LOG_WARN("fail to filter sslog replica", KR(ret));
+  }
+  return ret;
+}
+
+int ObLSInfo::filter_sslog_replica_()
+{
+  /*
+    There must be an R replica(or F) of sslog on each tenant's unit, which responsible by sslog service timer.
+    disaster recovery, unit migration, unit num changes and empty server checker and other modules will ignore
+    the sslog R replica, only focus on the F replica. In disaster recovery, only handle tasks such as migration and add of F replicas,
+    not handle dr tasks for R replicas. In unit migration ends checker (also unit num changes finish checker and empty server checker)
+     will ignore sslog R replicas.
+
+    Here clear the leader's learner_list while clearing the R replica, the reason for doing this is: if only cleaning the R replica in the
+    replica array and keep the learner_list of the leader, disaster recovery will consider this as an abnormal situation(only in member or learner list).
+    Meanwhile, unit migration ends checker (also unit num changes finish checker and empty server checker) may also check the learner list,
+    we don't want to see such member.
+  */
+  int ret = OB_SUCCESS;
+  if (is_tenant_sslog_ls(tenant_id_, ls_id_)) {
+    ObSSLOGReplicaFilter sslog_filter;
+    if (OB_FAIL(filter(sslog_filter))) {
+      LOG_WARN("fail to filter sslog replica", KR(ret), "ls_info", *this);
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < replicas_.count(); ++i) {
+        if (replicas_.at(i).is_strong_leader()) {
+          replicas_.at(i).reset_learner_list();
+          break;
+        }
+      }
+    }
+  }
   return ret;
 }
 

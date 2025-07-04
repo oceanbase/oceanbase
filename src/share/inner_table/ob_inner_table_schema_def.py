@@ -4357,6 +4357,8 @@ def_table_schema(
     ('is_manual', 'bool', 'true', '0'),
     ('config_version', 'varchar:128', 'true', ""),
     ('bconfig_version', 'varchar:1024', 'true', ""),
+    ('member_timestamp', 'int', 'true', 'OB_INVALID_TIMESTAMP'),
+    ('member_flag', 'int', 'true', 0),
   ],
 )
 
@@ -7511,6 +7513,8 @@ def_table_schema(
     ('comment', 'varchar:MAX_COLUMN_COMMENT_LENGTH', 'true'),
     ('config_version', 'varchar:128', 'true', ""),
     ('bconfig_version', 'varchar:1024', 'true', ""),
+    ('member_timestamp', 'int', 'true', 'OB_INVALID_TIMESTAMP'),
+    ('member_flag', 'int', 'true', 0),
   ],
 )
 

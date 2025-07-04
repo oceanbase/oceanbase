@@ -119,6 +119,9 @@ public:
       const ObMigrationStatus &cur_status);
   static bool check_can_report_readable_scn(
       const ObMigrationStatus &cur_status);
+  static bool is_in_rebuild(
+      const ObMigrationStatus &cur_status);
+  static bool is_in_replace(const ObMigrationStatus &cur_status);
 private:
   static int check_ls_transfer_tablet_(
       const share::ObLSID &ls_id,

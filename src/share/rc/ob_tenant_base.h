@@ -204,6 +204,7 @@ namespace rootserver
   class ObPrimaryLSService;
   class ObCommonLSService;
   class ObDRService;
+  class ObDRSSLOGService;
   class ObRestoreService;
   class ObRecoveryLSService;
   class ObTenantTransferService;
@@ -401,6 +402,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       rootserver::ObBackupCleanService*,             \
       rootserver::ObArchiveSchedulerService*,        \
       rootserver::ObDRService*,                      \
+      rootserver::ObDRSSLOGService*,                 \
       storage::ObTenantSSTableMergeInfoMgr*,         \
       share::ObDagWarningHistoryManager*,            \
       compaction::ObScheduleSuspectInfoMgr*,         \

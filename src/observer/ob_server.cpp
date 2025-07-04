@@ -1041,6 +1041,15 @@ int ObServer::start()
       FLOG_INFO("success to update hidden sys tenant");
     }
 
+    // Before bootstrap create sslog ls, start location service related thread such as rpc refresh timer here.
+    // During the creation of the SYS tenant (before the SYS tenant full schema), we can rely on using rpc to refresh the location,
+    // and other modules can obtain the location of SSLOG LS and SYS LS normally.
+    if (FAILEDx(location_service_.start())) {
+      LOG_ERROR("fail to start location service", KR(ret));
+    } else {
+      FLOG_INFO("success to start location service");
+    }
+
     if (FAILEDx(weak_read_service_.start())) {
       LOG_ERROR("fail to start weak read service", KR(ret));
     } else {
@@ -1126,12 +1135,6 @@ int ObServer::start()
       LOG_ERROR("fail to init active session history task", KR(ret));
     } else {
       FLOG_INFO("success to init active session history task");
-    }
-
-    if (FAILEDx(location_service_.start())) {
-      LOG_ERROR("fail to start location service", KR(ret));
-    } else {
-      FLOG_INFO("success to start location service");
     }
 
 #ifdef OB_BUILD_ARBITRATION

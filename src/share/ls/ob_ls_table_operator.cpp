@@ -437,17 +437,16 @@ int ObLSTableOperator::batch_get(
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (is_sys_tenant(tenant_id)) {
-    ObLSInfo sys_info;
-    if (OB_FAIL(get(cluster_id, OB_SYS_TENANT_ID, SYS_LS, mode, sys_info))) {
-      LOG_WARN("fail to get sys_tenant ls", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(ls_infos.push_back(sys_info))) {
-      LOG_WARN("fail to assign", KR(ret), K(sys_info));
-    } else if (GCTX.is_shared_storage_mode()) {
-      ObLSInfo sslog_info;
-      if (OB_FAIL(get(cluster_id, OB_SYS_TENANT_ID, SSLOG_LS, mode, sslog_info))) {
-        LOG_WARN("fail to get sys_tenant ls", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(ls_infos.push_back(sslog_info))) {
-        LOG_WARN("fail to assign", KR(ret), K(sslog_info));
+    for (int i = 0; OB_SUCC(ret) && i < ls_ids.count(); i++) {
+      const share::ObLSID &ls_id = ls_ids.at(i);
+      ObLSInfo sys_info;
+      if (ls_id.is_sslog_ls() && !GCTX.is_shared_storage_mode()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected sslog ls in non-shared storage mode", KR(ret), K(tenant_id), K(ls_id));
+      } else if (OB_FAIL(get(cluster_id, OB_SYS_TENANT_ID, ls_id, mode, sys_info))) {
+        LOG_WARN("fail to get sys_tenant ls", KR(ret), K(tenant_id), K(ls_id));
+      } else if (OB_FAIL(ls_infos.push_back(sys_info))) {
+        LOG_WARN("fail to assign", KR(ret), K(sys_info));
       }
     }
   } else if (is_meta_tenant(tenant_id) || is_user_tenant(tenant_id)) {

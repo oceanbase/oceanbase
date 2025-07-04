@@ -177,6 +177,7 @@ TG_DEF(TenantTTLManager, TTLManager, TIMER)
 TG_DEF(TenantTabletTTLMgr, TTLTabletMgr, TIMER)
 TG_DEF(TntSharedTimer, TntSharedTimer, TIMER)
 TG_DEF(VectorAsyncTaskPool, VectorAsyncTask, QUEUE_THREAD, 1, 8)   // for tmp
+TG_DEF(DRCreateSSLOGTimer, DRCreateSSLOGTimer, TIMER)
 
 #ifdef OB_BUILD_SHARED_STORAGE
 TG_DEF(ReplicaPrewarmHdlr, RepPrewarmHdlr, QUEUE_THREAD, 1, storage::ObReplicaPrewarmHandler::MAX_TASK_NUM)
