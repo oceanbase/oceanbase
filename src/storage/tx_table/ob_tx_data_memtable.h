@@ -235,6 +235,7 @@ public:  // ObTxDataMemtable
                        K_(is_iterating),
                        K_(pre_process_done),
                        K_(construct_list_done),
+                       K(ls_id_),
                        "min_tx_scn", get_min_tx_scn(),
                        K_(max_tx_scn),
                        "min_start_scn", get_min_start_scn(),
