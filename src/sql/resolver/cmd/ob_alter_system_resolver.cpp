@@ -2168,7 +2168,7 @@ static int do_encrypt_logservice_access_point(ObAdminSetConfigItem &item)
     ))) {
       LOG_WARN("encrypt_logservice_access_point failed", KR(ret));
     } else {
-      LOG_INFO("encrypt logservice access point success", K(out_len), K(item.value_));
+      LOG_INFO("encrypt logservice access point success", K(out_len));
     }
   } else {} // do nothing
   return ret;

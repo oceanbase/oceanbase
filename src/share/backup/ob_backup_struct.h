@@ -923,8 +923,10 @@ public:
       const char *authorization,
       const char *extension);
   int set_endpoint(const common::ObStorageType device_type, const char *storage_info);
+  int get_authorization_info(char *authorization, const int64_t length, int64_t &out_len) const;
   int get_authorization_info(char *authorization, const int64_t length) const;
   int get_unencrypted_authorization_info(char *authorization, const int64_t length) const;
+  int get_unencrypted_authorization_info(char *authorization, const int64_t length, int64_t &out_len) const;
 
 protected:
 #ifdef OB_BUILD_TDE_SECURITY
