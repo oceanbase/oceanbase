@@ -2684,10 +2684,13 @@ int ObLS::update_ls_meta(const ObSSLSMeta &src_ss_meta)
   } else if (!src_ss_meta.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid src ss meta", K(ret), K(src_ss_meta));
-  } else if (OB_FAIL(update_ls_meta(true /*update restore status*/, src_ss_meta))) {
-    LOG_WARN("fail to update ls meta", K(ret), K(src_ss_meta));
-  } else if (OB_FAIL(ls_meta_.set_tablet_change_checkpoint_scn(src_ss_meta.get_ss_checkpoint_scn()))) {
-    LOG_WARN("fail to update tablet cchange checkpoint scn", K(src_ss_meta), K_(ls_meta));
+  } else {
+    ObSSLSMeta tmp_ss_meta(src_ss_meta);
+    if (OB_FAIL(tmp_ss_meta.convert_local_ls_meta())) {
+      LOG_WARN("fail to convert_sn_ls_meta", K(ret), K(tmp_ss_meta), K(src_ss_meta));
+    } else if (OB_FAIL(update_ls_meta(true /*update restore status*/, tmp_ss_meta))) {
+      LOG_WARN("fail to update ls meta", K(ret), K(tmp_ss_meta), K(src_ss_meta));
+    }
   }
   return ret;
 }

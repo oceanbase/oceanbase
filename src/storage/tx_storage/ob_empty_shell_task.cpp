@@ -388,7 +388,7 @@ int ObTabletEmptyShellHandler::check_tablet_from_deleted_tx_(
     } else if (OB_UNLIKELY(!ss_checkpoint_scn.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ss_checkpoint_scn is invalid", K(ret), K(tablet_id));
-    } else if (user_data.delete_commit_scn_ > ss_checkpoint_scn) {
+    } else if (user_data.delete_commit_scn_ >= ss_checkpoint_scn) {
       skip_for_ss_checkpoint = true;
       need_retry = true;
       STORAGE_LOG(INFO, "ss_checkpoint_scn is less than delete commit scn, skip", KR(ret), K(tablet_id), K(user_data), K(ss_checkpoint_scn));
