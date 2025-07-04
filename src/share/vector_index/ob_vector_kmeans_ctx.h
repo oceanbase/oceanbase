@@ -39,7 +39,8 @@ public:
       max_sample_count_(0),
       total_scan_count_(0),
       dist_algo_(VIDA_MAX),
-      allocator_(ObMemAttr(MTL_ID(), "KMeansCtx")),
+      not_safe_allocator_(ObMemAttr(MTL_ID(), "KMeansCtx")),
+      allocator_(not_safe_allocator_),
       norm_info_(nullptr),
       sample_vectors_()
   {}
@@ -77,7 +78,8 @@ public:
   int64_t max_sample_count_;
   int64_t total_scan_count_; // the number of rows scanned // for reservoir sampling
   ObVectorIndexDistAlgorithm dist_algo_; // TODO(@jingshui): use ObVecDisType ?
-  ObArenaAllocator allocator_;
+  ObArenaAllocator not_safe_allocator_;
+  ObSafeArenaAllocator allocator_;
   ObVectorNormalizeInfo *norm_info_;
   lib::ObMutex lock_; // for sample_vectors_
   ObSEArray<float*, 64> sample_vectors_;
