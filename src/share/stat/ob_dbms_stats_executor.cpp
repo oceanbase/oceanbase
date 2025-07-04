@@ -31,6 +31,7 @@ using namespace pl;
 namespace common {
 ERRSIM_POINT_DEF(ERRSIM_RANDOM_GATHER_STATS_OPTION);
 ERRSIM_POINT_DEF(ERRSIM_FAILED_ANALYZE_TABLE_STATS);
+ERRSIM_POINT_DEF(ERRSIM_FAILED_ANALYZE_TIMEOUT);
 
 /**
  * @brief ObDbmsStatsUtils::gather_table_stats
@@ -67,18 +68,19 @@ int ObDbmsStatsExecutor::gather_table_stats(ObExecContext &ctx,
                                             running_monitor.failed_part_ids_))) {
     LOG_WARN("failed to gather gather stats", K(ret));
     int tmp_ret = OB_SUCCESS;
+     ObSEArray<int64_t, 8> temp_failed_part_ids;
     if (OB_SUCCESS != (tmp_ret = collect_last_part_and_global_if_timeout(ctx,
                                                                          param,
                                                                          &partition_id_block_map,
                                                                          &partition_id_skip_rate_map,
                                                                          gather_helper,
-                                                                         running_monitor.failed_part_ids_))) {
-      LOG_WARN("fail to roll back transaction", K(tmp_ret));
+                                                                         temp_failed_part_ids))) {
+      LOG_WARN("fail to collect last part stats", K(tmp_ret));
     }
   }
 
   // end backup trans
-  if (OB_SUCC(ret) || OB_TIMEOUT == ret) {
+  if (OB_SUCC(ret)) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = OB_FAIL(backup_trans.end(true)))) {
       LOG_WARN("fail to commit transaction", K(tmp_ret));
@@ -147,17 +149,21 @@ int ObDbmsStatsExecutor::gather_partition_stats(ObExecContext &ctx,
             if (ERRSIM_FAILED_ANALYZE_TABLE_STATS) {
               ret = OB_ERR_UNEXPECTED;
               LOG_ERROR("ERRSIM: failed to ANALYZE table stats", K(ret));
+            } else if (i > 0 && ERRSIM_FAILED_ANALYZE_TIMEOUT) {
+              ret = OB_TIMEOUT;
+              THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + 10);
+              LOG_ERROR("ERRSIM: failed to ANALYZE timeout", K(ret));
             }
           }
-
-          if (OB_SUCC(ret) && OB_FAIL(do_split_gather_stats(ctx,
-                                                            gather_trans,
-                                                            taskInfo,
-                                                            batch_task_col_infos,
-                                                            derive_param,
-                                                            partition_id_block_map,
-                                                            partition_id_skip_rate_map,
-                                                            gather_helper))) {
+          if (!OB_SUCC(ret)) {
+          } else if (OB_FAIL(do_split_gather_stats(ctx,
+                                                   gather_trans,
+                                                   taskInfo,
+                                                   batch_task_col_infos,
+                                                   derive_param,
+                                                   partition_id_block_map,
+                                                   partition_id_skip_rate_map,
+                                                   gather_helper))) {
             LOG_WARN("failed to gather statts", K(ret));
           } else if (share::schema::ObTableType::EXTERNAL_TABLE != param.ref_table_type_ &&
                      OB_FAIL(update_dml_modified_info(gather_trans.get_connection(), derive_param))) {
@@ -263,15 +269,20 @@ int ObDbmsStatsExecutor::collect_last_part_and_global_if_timeout(
     temp_stat_param.duration_time_ = temp_stat_param.duration_time_ > 0
                                          ? std::min(temp_stat_param.duration_time_ / 100, 10000000L)
                                          : 10000000L;  // extra 10s
-
+    int64_t origin_duration_time = THIS_WORKER.get_timeout_ts();
+    sql::ObSQLSessionInfo *origin_session = THIS_WORKER.get_session();
+    THIS_WORKER.set_session(NULL);
+    THIS_WORKER.set_timeout_ts(temp_stat_param.duration_time_ + ObTimeUtility::current_time());
     if (OB_SUCC(ret) && OB_FAIL(gather_partition_stats(ctx,
-                                                          temp_stat_param,
-                                                          partition_id_block_map,
-                                                          partition_id_skip_rate_map,
-                                                          gather_helper,
-                                                          failed_part_ids))) {
+                                                       temp_stat_param,
+                                                       partition_id_block_map,
+                                                       partition_id_skip_rate_map,
+                                                       gather_helper,
+                                                       failed_part_ids))) {
       LOG_WARN("failed to collect global or part ", K(ret));
     }
+    THIS_WORKER.set_session(origin_session);
+    THIS_WORKER.set_timeout_ts(origin_duration_time);
   }
 
   return ret;
