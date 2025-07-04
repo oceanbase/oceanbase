@@ -256,7 +256,13 @@ int ObIMvccCtx::register_row_replay_cb(
       if (OB_FAIL(sslog::ObSSLogNotifyAdapter::generate_notify_task_on_trans_ctx(sslog::NotifyPath::MVCC_REPLAY,
                                                                                  node,
                                                                                  dynamic_cast<ObMemtableCtx *>(this)))) {
-        TRANS_LOG(ERROR, "register notify task failed", K(*this), K(ret));
+        if (OB_TENANT_NOT_IN_SERVER == ret) {
+          // if user tenant not exist, ignore it
+          TRANS_LOG(INFO, "user tenant not exist", K(ret));
+          ret = OB_SUCCESS;
+        } else {
+          TRANS_LOG(ERROR, "register notify task failed", K(*this), K(ret));
+        }
       }
     }
 #endif
