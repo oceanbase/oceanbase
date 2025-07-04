@@ -76,8 +76,8 @@ int ObDirectLoadInsertDataTabletContext::init(ObDirectLoadInsertDataTableContext
     origin_tablet_id_ = origin_tablet_id;
     tablet_id_ = tablet_id;
     pk_tablet_id_ = origin_tablet_id_; // 从原表取, ddl会帮忙同步到隐藏表
-    if (OB_FAIL(start_seq_.set_parallel_degree(param_->reserved_parallel_))) {
-      LOG_WARN("fail to set parallel degree", KR(ret), K(param_->reserved_parallel_));
+    if (OB_FAIL(ObDDLUtil::init_macro_block_seq(param_->reserved_parallel_, start_seq_))) {
+      LOG_WARN("fail to init macro block seq", KR(ret), K(param_->reserved_parallel_));
     } else {
       is_inited_ = true;
     }
