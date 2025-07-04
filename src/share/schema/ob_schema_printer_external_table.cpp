@@ -206,18 +206,36 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
         ObString str;
         if (odps.api_mode_ == ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
           str = ObODPSGeneralFormatParam::TUNNEL_API;
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], str.length(), str.ptr()))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
+          }
+          option_names_idx++;
         } else if (odps.api_mode_ == ObODPSGeneralFormat::ApiMode::BYTE) {
+          str = ObODPSGeneralFormatParam::STORAGE_API;
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], str.length(), str.ptr()))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
+          }
           str = ObODPSGeneralFormatParam::BYTE;
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], str.length(), str.ptr()))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
+          }
         } else if (odps.api_mode_ == ObODPSGeneralFormat::ApiMode::ROW) {
+          str = ObODPSGeneralFormatParam::STORAGE_API;
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], str.length(), str.ptr()))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
+          }
           str = ObODPSGeneralFormatParam::ROW;
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], str.length(), str.ptr()))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
+          }
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get right api mode", K(ret));
-        }
-        if (OB_FAIL(ret)) {
-
-        } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  %s = '%.*s',", ObODPSGeneralFormat::OPTION_NAMES[option_names_idx++], str.length(), str.ptr()))) {
-          SHARE_SCHEMA_LOG(WARN, "fail to print ODPS_INFO", K(ret));
         }
       }
     }

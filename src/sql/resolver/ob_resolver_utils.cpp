@@ -9867,7 +9867,7 @@ int ObResolverUtils::resolve_binary_format(const ParseNode* node, ObExternalFile
   return ret;
 }
 
-int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFormat &format, ObResolverParams &params)
+int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFormat &format, ObResolverParams &params, FileFormatContext &ff_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node) || node->num_child_ != 1 || OB_ISNULL(node->children_[0]) ||
@@ -10041,6 +10041,7 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
         format.odps_format_.collect_statistics_on_create_ = node->children_[0]->value_;
         break;
       }
+      case ObItemType::T_TABLE_MODE:
       case ObItemType::T_SPLIT_ACTION: {
         uint64_t data_version = 0;
         uint64_t tenant_id = OB_INVALID_ID;
@@ -10055,17 +10056,65 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
           LOG_WARN("not support odps external table storage api under CLUSTER_VERSION_4_3_5_3 or data version uner DATA_VERSION_4_3_5_3", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "odps external table");
         } else {
-          ObString temp_split_mode = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-          if (temp_split_mode.empty()) {
-            format.odps_format_.api_mode_ = ObODPSGeneralFormat::ApiMode::TUNNEL_API;
-          } else if (0 == temp_split_mode.case_compare(ObODPSGeneralFormatParam::TUNNEL_API)) {
-            format.odps_format_.api_mode_ = ObODPSGeneralFormat::ApiMode::TUNNEL_API;
-          } else if (0 == temp_split_mode.case_compare(ObODPSGeneralFormatParam::BYTE)) {
-            format.odps_format_.api_mode_ = ObODPSGeneralFormat::ApiMode::BYTE;
-          } else if (0 == temp_split_mode.case_compare(ObODPSGeneralFormatParam::ROW)) {
-            format.odps_format_.api_mode_ = ObODPSGeneralFormat::ApiMode::ROW;
-          } else {
-            ret = OB_INVALID_ARGUMENT;
+          if (node->type_ == T_TABLE_MODE) {
+            ObString temp_table_mode = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+            if (temp_table_mode.empty()) {
+              // do nothing
+            } else if (0 == temp_table_mode.case_compare(ObODPSGeneralFormatParam::TUNNEL_API)) {
+              if (format.odps_format_.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("already set the the storage api", K(ret));
+              } else {
+                ff_ctx.is_tunnel_set = true;
+              }
+            } else if (!GCONF._use_odps_jni_connector) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("must use storage api in jni connector", K(ret));
+            } else if (0 == temp_table_mode.case_compare(ObODPSGeneralFormatParam::STORAGE_API)) {
+              if (format.odps_format_.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+                // do nothing keep row or byte
+              } else {
+                format.odps_format_.api_mode_ = ObODPSGeneralFormat::ApiMode::ROW;
+              }
+            } else if (0 == temp_table_mode.case_compare(ObODPSGeneralFormatParam::ROW)) {
+              if (format.odps_format_.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("already set the the storage api", K(ret));
+              } else {
+                format.odps_format_.api_mode_ = ObODPSGeneralFormat::ApiMode::ROW;
+                ff_ctx.is_tunnel_set = true;
+              }
+            } else if (0 == temp_table_mode.case_compare(ObODPSGeneralFormatParam::BYTE)) {
+              if (format.odps_format_.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("already set the the storage api", K(ret));
+              } else {
+                format.odps_format_.api_mode_ = ObODPSGeneralFormat::ApiMode::BYTE;
+                ff_ctx.is_tunnel_set = true;
+              }
+            } else {
+              ret = OB_INVALID_ARGUMENT;
+            }
+
+          } else if (node->type_ == T_SPLIT_ACTION) {
+            if (!GCONF._use_odps_jni_connector) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("jni was not allow to use", K(ret));
+            } else if (ff_ctx.is_tunnel_set) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("already use tunnel api", K(ret));
+            } else {
+              ObString temp_split_mode = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+              if (temp_split_mode.empty()) {
+                // do nothing
+              } else if (0 == temp_split_mode.case_compare(ObODPSGeneralFormatParam::BYTE)) {
+                format.odps_format_.api_mode_ = ObODPSGeneralFormat::ApiMode::BYTE;
+              } else if (0 == temp_split_mode.case_compare(ObODPSGeneralFormatParam::ROW)) {
+                format.odps_format_.api_mode_ = ObODPSGeneralFormat::ApiMode::ROW;
+              } else {
+                ret = OB_INVALID_ARGUMENT;
+              }
+            }
           }
         }
         break;

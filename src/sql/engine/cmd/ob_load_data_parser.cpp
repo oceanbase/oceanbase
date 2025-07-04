@@ -28,6 +28,7 @@ namespace sql
 {
 
 const ObString ObODPSGeneralFormatParam::TUNNEL_API("tunnel_api");
+const ObString ObODPSGeneralFormatParam::STORAGE_API("storage_api");
 const ObString ObODPSGeneralFormatParam::BYTE("byte");
 const ObString ObODPSGeneralFormatParam::ROW("row");
 

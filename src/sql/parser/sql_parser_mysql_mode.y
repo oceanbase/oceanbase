@@ -9361,6 +9361,10 @@ TYPE COMP_EQ STRING_VALUE
 }
 | API_MODE COMP_EQ STRING_VALUE
 {
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_MODE, 1, $3);
+}
+| SPLIT COMP_EQ STRING_VALUE
+{
   malloc_non_terminal_node($$, result->malloc_pool_, T_SPLIT_ACTION, 1, $3);
 }
 ;

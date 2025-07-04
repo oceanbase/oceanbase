@@ -1760,27 +1760,6 @@ bool ObConfigJniTransDataParamsChecker::check(const ObConfigItem &t) const
 
   return bret;
 }
-bool ObConfigStorageAPIParamsChecker::check(const ObConfigItem &t) const
-{
-  bool bret = false;
-  common::ObString tmp_str(t.str());
-  // Only the ob_enable_java_env is true, then can pass to continue
-  if (GCONF.ob_enable_java_env) {
-    if (0 == tmp_str.case_compare("tunnel_api")
-      || 0 == tmp_str.case_compare("byte")
-      || 0 == tmp_str.case_compare("row")) {
-      bret = true;
-    } else {
-      int ret = OB_INVALID_ARGUMENT;
-      OB_LOG(WARN, "split mode is in three values");
-    }
-  } else {
-    int ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "enable java env is false");
-  }
-
-  return bret;
-}
 
 bool ObConfigEnableAutoSplitChecker::check(const ObConfigItem &t) const
 {
