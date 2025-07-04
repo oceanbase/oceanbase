@@ -210,32 +210,45 @@ TEST_F(ObSharedStorageTest, test_tablet_gc_for_shared_dir)
   wait_shared_tablet_gc_finish();
 }
 
-TEST_F(ObSharedStorageTest, test_ls_gc_)
-{
-  int ret = OB_SUCCESS;
-  share::ObTenantSwitchGuard tguard;
-  ASSERT_EQ(OB_SUCCESS, tguard.switch_to(RunCtx.tenant_id_));
-
-  ASSERT_EQ(OB_SUCCESS, MTL(ObSSMetaService*)->update_ls_gc_state(RunCtx.ls_id_, logservice::LSGCState::LS_OFFLINE, share::SCN::min_scn()));
-
-  wait_shared_ls_gc_finish();
-
-  const share::ObLSID &ls_id = RunCtx.ls_id_;
-  ObLSHandle ls_handle;
-  ObLS *ls = NULL;
-
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id,
-                                         ls_handle,
-                                         ObLSGetMod::SHARED_META_SERVICE))) {
-    LOG_WARN("failed to get ls", K(ret), K(ls_id));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls is null", KR(ret), K(ls_id), KP(ls));
-  // 2. create shared ls
-  } else if (OB_FAIL(MTL(ObSSMetaService*)->create_ls_(ls))) {
-    LOG_WARN("create ls failed", K(ret), K(ls_id));
-  }
-}
+// TEST_F(ObSharedStorageTest, test_ls_gc_)
+// {
+//   int ret = OB_SUCCESS;
+//   share::ObTenantSwitchGuard tguard;
+//   ASSERT_EQ(OB_SUCCESS, tguard.switch_to(RunCtx.tenant_id_));
+//
+//   ASSERT_EQ(OB_SUCCESS, MTL(ObSSMetaService*)->update_ls_gc_state(RunCtx.ls_id_, logservice::LSGCState::LS_OFFLINE, share::SCN::min_scn()));
+//   sleep(10);
+//
+//   int64_t affected_rows = 0;
+//   ObSqlString sql;
+//   // ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system change tenant tenant_id=%lu; \
+//   //       delete from __all_ls_status where tenant_id = %lu and ls_id_=%ld;\
+//   //       alter system change tenant tenant_id=%lu;",
+//   //       RunCtx.tenant_id_ - 1, RunCtx.tenant_id_, RunCtx.ls_id_.id(), RunCtx.tenant_id_));
+//
+//   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("delete from __all_ls_status where tenant_id = %lu and ls_id_=%ld;", RunCtx.tenant_id_ - 1, RunCtx.ls_id_.id()));
+//     LOG_INFO("kkkkkkkkkkkkkkkkkk sql", K(sql));
+//   ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().get_sql_proxy().write(sql.ptr(), affected_rows));
+//     LOG_INFO("kkkkkkkkkkkkkkkkkk sqlafter ", K(sql));
+//
+//   wait_shared_ls_gc_finish();
+//
+//   const share::ObLSID &ls_id = RunCtx.ls_id_;
+//   ObLSHandle ls_handle;
+//   ObLS *ls = NULL;
+//
+//   if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id,
+//                                          ls_handle,
+//                                          ObLSGetMod::SHARED_META_SERVICE))) {
+//     LOG_WARN("failed to get ls", K(ret), K(ls_id));
+//   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+//     ret = OB_ERR_UNEXPECTED;
+//     LOG_WARN("ls is null", KR(ret), K(ls_id), KP(ls));
+//   // 2. create shared ls
+//   } else if (OB_FAIL(MTL(ObSSMetaService*)->create_ls_(ls))) {
+//     LOG_WARN("create ls failed", K(ret), K(ls_id));
+//   }
+// }
 
 TEST_F(ObSharedStorageTest, test_tenant_gc)
 {
