@@ -29,6 +29,9 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview
     IN     nested_refresh_mode    VARCHAR(65535) DEFAULT NULL)
   BEGIN
     COMMIT;
+    SET @ob_dbmsmview_cno=null;
+    SET @ob_dbmsmview_errno=null;
+    SET @ob_dbmsmview_p4=null;
     CALL do_refresh(mv_name, method, refresh_parallel, nested, nested_refresh_mode);
     GET DIAGNOSTICS @ob_dbmsmview_cno = NUMBER;
     IF @ob_dbmsmview_cno >= 1 THEN

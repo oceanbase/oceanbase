@@ -463,45 +463,43 @@ int ObMViewRefresher::check_fast_refreshable_(
     LOG_WARN("dependency num not match", KR(ret), K(dependency_infos),
              K(previous_dependency_infos));
   } else {
-    // check mlog
-    for (int64_t i = 0; OB_SUCC(ret) && i < mlog_infos.count(); ++i) {
-      const ObMLogInfo &mlog_info = mlog_infos.at(i);
-      const ObDependencyInfo &dep = dependency_infos.at(i);
-      const ObTableSchema *based_table_schema = nullptr;
-      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, dep.get_ref_obj_id(),
-                                                based_table_schema))) {
-        LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(dep));
-      } else if (OB_ISNULL(based_table_schema)) {
-        ret = OB_TABLE_NOT_EXIST;
-        LOG_WARN("based table not exist", KR(ret), K(tenant_id), K(dep));
-      } else if (based_table_schema->get_mlog_tid() == OB_INVALID_ID) {
-        // skip check container table
-      } else if (!mlog_info.is_valid()) {
-        ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
-        LOG_WARN("table does not have mlog", KR(ret), K(i), K(dependency_infos), K(mlog_info));
-      } else if (OB_UNLIKELY(mlog_info.get_last_purge_scn() >
-                             refresh_ctx_->mview_info_.get_last_refresh_scn())) {
-        ret = OB_ERR_MLOG_IS_YOUNGER;
-        LOG_WARN("mlog is younger than last refresh", KR(ret), K(refresh_ctx_->mview_info_), K(i),
-                K(mlog_info));
-      }
-      // LOG_INFO("check fast refresh", K(ret), K(mlog_info), K(refresh_ctx_->mview_info_));
-    }
     // check dependency consistent
+    for (int64_t i = 0; OB_SUCC(ret) && i < dependency_infos.count(); ++i) {
+      const ObDependencyInfo &dep = dependency_infos.at(i);
+      const ObDependencyInfo &pre_dep = previous_dependency_infos.at(i);
+      if (dep.get_ref_obj_id() != pre_dep.get_ref_obj_id()) {
+        if (nested_consistent_refresh) {
+          ret = OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH;
+          LOG_WARN("can not consistent refresh", KR(ret), K(i), K(dependency_infos),
+                   K(previous_dependency_infos));
+        } else {
+          ret = OB_ERR_MVIEW_MISSING_DEPENDENCE;
+          LOG_WARN("dependency changed", KR(ret), K(i), K(dep), K(pre_dep));
+        }
+      }
+    }
     if (OB_SUCC(ret)) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < dependency_infos.count(); ++i) {
+      // check mlog
+      for (int64_t i = 0; OB_SUCC(ret) && i < mlog_infos.count(); ++i) {
+        const ObMLogInfo &mlog_info = mlog_infos.at(i);
         const ObDependencyInfo &dep = dependency_infos.at(i);
-        const ObDependencyInfo &pre_dep = previous_dependency_infos.at(i);
-        if (dep.get_ref_obj_id() != pre_dep.get_ref_obj_id()) {
-          if (nested_consistent_refresh) {
-            ret = OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH;
-            LOG_WARN("can not consistent refresh", KR(ret), K(i), K(dependency_infos),
-                     K(previous_dependency_infos));
-          } else {
-            ret = OB_ERR_MVIEW_MISSING_DEPENDENCE;
-            LOG_WARN("dependency changed", KR(ret), K(i), K(dep),
-                    K(pre_dep));
-          }
+        const ObTableSchema *based_table_schema = nullptr;
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id, dep.get_ref_obj_id(),
+                                                  based_table_schema))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(dep));
+        } else if (OB_ISNULL(based_table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("based table not exist", KR(ret), K(tenant_id), K(dep));
+        } else if (based_table_schema->get_mlog_tid() == OB_INVALID_ID) {
+          // skip check container table
+        } else if (!mlog_info.is_valid()) {
+          ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
+          LOG_WARN("table does not have mlog", KR(ret), K(i), K(dependency_infos), K(mlog_info));
+        } else if (OB_UNLIKELY(mlog_info.get_last_purge_scn() >
+                              refresh_ctx_->mview_info_.get_last_refresh_scn())) {
+          ret = OB_ERR_MLOG_IS_YOUNGER;
+          LOG_WARN("mlog is younger than last refresh", KR(ret), K(refresh_ctx_->mview_info_), K(i),
+                  K(mlog_info));
         }
       }
     }
