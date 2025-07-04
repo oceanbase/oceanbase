@@ -323,6 +323,36 @@ int ObIvfAsyncTaskExector::check_and_set_thread_pool()
   return ret;
 }
 
+int ObIvfAsyncTaskExector::get_tablet_ids_by_ls(const ObTableSchema &index_table_schema,
+                                                common::ObIArray<ObTabletID> &tablet_id_array)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObTabletID, 1> tmp_tablet_id_array;
+  if (OB_ISNULL(ls_) || OB_ISNULL(ls_->get_tablet_svr())) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("invalid null ls", K(ret));
+  } else if (OB_FAIL(index_table_schema.get_tablet_ids(tmp_tablet_id_array))) {
+    LOG_WARN("fail to get tablet ids", K(ret), K(tablet_id_array));
+  } else {
+    ObTabletHandle tablet_handle;
+    // check tablet if exist in self ls
+    for (int64_t i = 0; i < tmp_tablet_id_array.count(); ++i) {
+      ret = ls_->get_tablet_svr()->get_tablet(tmp_tablet_id_array.at(i), tablet_handle);
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(tablet_id_array.push_back(tmp_tablet_id_array.at(i)))) {
+          LOG_WARN("fail to push back tablet id", K(ret), K(tmp_tablet_id_array.at(i)));
+        }
+      } else if (ret == OB_TABLET_NOT_EXIST) {
+        // do nothing
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get tablet", K(ret), K(tmp_tablet_id_array.at(i)));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObIvfAsyncTaskExector::record_aux_table_info(ObSchemaGetterGuard &schema_guard,
                                                  const ObTableSchema &index_table_schema,
                                                  ObIvfAuxTableInfo &aux_table_info)
@@ -347,7 +377,7 @@ int ObIvfAsyncTaskExector::record_aux_table_info(ObSchemaGetterGuard &schema_gua
 
     if (OB_SUCC(ret) && need_record) {
       aux_table_info.pq_centroid_tablet_ids_.reset();
-      if (OB_FAIL(index_table_schema.get_tablet_ids(aux_table_info.pq_centroid_tablet_ids_))) {
+      if (OB_FAIL(get_tablet_ids_by_ls(index_table_schema, aux_table_info.pq_centroid_tablet_ids_))) {
         LOG_WARN("fail to get tablet ids", K(ret), K(aux_table_info));
       } else {
         aux_table_info.pq_centroid_table_id_ = index_table_schema.get_table_id();
@@ -370,7 +400,7 @@ int ObIvfAsyncTaskExector::record_aux_table_info(ObSchemaGetterGuard &schema_gua
 
     if (OB_SUCC(ret) && need_record) {
       aux_table_info.centroid_tablet_ids_.reset();
-      if (OB_FAIL(index_table_schema.get_tablet_ids(aux_table_info.centroid_tablet_ids_))) {
+      if (OB_FAIL(get_tablet_ids_by_ls(index_table_schema, aux_table_info.centroid_tablet_ids_))) {
         LOG_WARN("fail to get tablet ids", K(ret), K(aux_table_info));
       } else {
         aux_table_info.centroid_table_id_ = index_table_schema.get_table_id();

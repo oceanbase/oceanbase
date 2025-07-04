@@ -108,6 +108,8 @@ private:
   int record_aux_table_info(ObSchemaGetterGuard &schema_guard,
                             const ObTableSchema &index_table_schema,
                             ObIvfAuxTableInfo &aux_table_info);
+  int get_tablet_ids_by_ls(const ObTableSchema &index_table_schema,
+                           common::ObIArray<ObTabletID> &tablet_id_array);
 };
 
 }  // namespace share
