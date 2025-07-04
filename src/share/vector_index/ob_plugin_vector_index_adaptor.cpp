@@ -2958,7 +2958,7 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
           ctx->status_ = PVQ_REFRESH;
           LOG_INFO("query result need refresh adapter, ls leader",
               K(ret), K(ls_id), K(ctx->get_ls_leader()), K(get_snapshot_key_prefix()), K(row->storage_datums_[0].get_string()));
-        } else if (OB_FAIL(deserialize_snap_data(query_cond))) {
+        } else if (OB_FAIL(deserialize_snap_data(query_cond, row))) {
           LOG_WARN("failed to deserialize snap data", K(ret));
         }
       }
@@ -2984,16 +2984,18 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
   return ret;
 }
 
-int ObPluginVectorIndexAdaptor::deserialize_snap_data(ObVectorQueryConditions *query_cond)
+int ObPluginVectorIndexAdaptor::deserialize_snap_data(ObVectorQueryConditions *query_cond, blocksstable::ObDatumRow *row)
 {
   int ret = OB_SUCCESS;
   ObVectorIndexAlgorithmType index_type;
   ObString key_prefix;
-  blocksstable::ObDatumRow *row = nullptr;
   ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(query_cond->row_iter_);
-  if (OB_ISNULL(table_scan_iter)) {
+  if (OB_ISNULL(table_scan_iter) || OB_ISNULL(query_cond)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get snapshot table iter null.", K(ret));
+    LOG_WARN("get null pointer.", K(ret), K(table_scan_iter), K(query_cond));
+  } else if (OB_ISNULL(row) || row->get_column_count() < 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid row", K(ret), K(row));
   } else if (OB_FAIL(ob_write_string(*allocator_, row->storage_datums_[0].get_string(), key_prefix))) {
     LOG_WARN("failed to write string", K(ret), K(row->storage_datums_[0].get_string()));
   } else if (OB_FAIL(ObPluginVectorIndexUtils::iter_table_rescan(*query_cond->scan_param_, table_scan_iter))) {

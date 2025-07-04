@@ -638,7 +638,7 @@ public:
                    ObVectorQueryAdaptorResultContext *ctx,
                    ObVectorQueryConditions *query_cond,
                    ObVectorQueryVidIterator *&vids_iter);
-  int deserialize_snap_data(ObVectorQueryConditions *query_cond);
+  int deserialize_snap_data(ObVectorQueryConditions *query_cond, blocksstable::ObDatumRow *row);
   int query_next_result(ObVectorQueryAdaptorResultContext *ctx,
                         ObVectorQueryConditions *query_cond,
                         ObVectorQueryVidIterator *&vids_iter);
