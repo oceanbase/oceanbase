@@ -181,7 +181,14 @@ struct ObStorageIdMod
     storage_used_mod_ = ObStorageUsedMod::STORAGE_USED_MAX;
   }
 
-  ObStorageInfoType get_category() const { return __storage_table_mapper[static_cast<uint8_t>(storage_used_mod_)]; }
+  ObStorageInfoType get_category() const {
+    ObStorageInfoType res = __storage_table_mapper[static_cast<uint8_t>(ObStorageUsedMod::STORAGE_USED_OTHER)];
+    if (storage_used_mod_ == ObStorageUsedMod::STORAGE_USED_MAX) {
+    } else if (storage_used_mod_ < ObStorageUsedMod::STORAGE_USED_MAX) {
+      res = __storage_table_mapper[static_cast<uint8_t>(storage_used_mod_)];
+    }
+    return res;
+  }
 
   static const ObStorageIdMod get_default_id_mod()
   {

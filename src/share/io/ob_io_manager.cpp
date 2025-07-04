@@ -304,7 +304,7 @@ int ObTrafficControl::calc_clock(const int64_t current_ts, ObIORequest &req, int
   int ret = OB_SUCCESS;
   uint64_t storage_id = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().storage_id_;
   uint8_t mod_id = (uint8_t)((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().storage_used_mod_;
-  ObStorageInfoType table = __storage_table_mapper[mod_id];
+  ObStorageInfoType table = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().get_category();
   ObStorageKey key(storage_id, req.tenant_id_, table);
   if (req.fd_.device_handle_->is_object_device() != true) {
     ret = OB_ERR_UNEXPECTED;
@@ -604,8 +604,7 @@ int ObTrafficControl::register_bucket(ObIORequest &req, const int qid) {
   int ret = OB_SUCCESS;
   if (req.fd_.device_handle_->is_object_device()) {
     uint64_t storage_id = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().storage_id_;
-    uint8_t mod_id = (uint8_t)((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().storage_used_mod_;
-    ObStorageInfoType storage_type = __storage_table_mapper[mod_id];
+    ObStorageInfoType storage_type = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().get_category();
     ObTrafficControl::ObStorageKey key(storage_id, req.tenant_id_, storage_type);
     ObIOSSGrpKey grp_key(req.tenant_id_, req.get_group_key());
     ObSharedDeviceControlV2 *tc = nullptr;
