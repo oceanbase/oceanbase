@@ -806,13 +806,15 @@ int ObPluginVectorIndexLoadScheduler::check_task_state(ObPluginVectorIndexMgr *m
         task_ctx->task_status_ = OB_TTL_TASK_FINISH;
         LOG_INFO("current memdata sync task finish", KR(ret), KPC(task_ctx));
         // task success, schedule next
+      } else if (in_retry_list(task_ctx->err_code_)) {
+        task_ctx->task_status_ = OB_TTL_TASK_PREPARE; // reset ot prepare state, will rescheduler by timer or dag task
+        LOG_INFO("current memdata sync task failed, will retry", K(task_ctx->err_code_));
       } else if (OB_PARTITION_NOT_EXIST == task_ctx->err_code_
                  || OB_PARTITION_IS_BLOCKED == task_ctx->err_code_
                  || OB_TABLE_NOT_EXIST == task_ctx->err_code_
                  || OB_ERR_UNKNOWN_TABLE == task_ctx->err_code_
                  || OB_LS_NOT_EXIST == task_ctx->err_code_
-                 || OB_TABLET_NOT_EXIST == task_ctx->err_code_
-                 || OB_REPLICA_NOT_READABLE == task_ctx->err_code_) {
+                 || OB_TABLET_NOT_EXIST == task_ctx->err_code_) {
         LOG_INFO("cancel current memdata sync task since partition state change", KR(ret), KPC(task_ctx));
         task_ctx->task_status_ = OB_TTL_TASK_CANCEL;
         // canceled, schedule next
