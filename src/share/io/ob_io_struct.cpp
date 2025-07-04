@@ -821,7 +821,7 @@ int ObIOTuner::init()
   return ret;
 }
 
-int ObIOTuner::send_detect_task()
+int ObIOTuner::send_sn_detect_task()
 {
   int ret = OB_SUCCESS;
   ObArray<MacroBlockId> macro_ids;
@@ -840,6 +840,24 @@ int ObIOTuner::send_detect_task()
       LOG_WARN("fail to record timing task", K(ret), K(rand_id));
     }
   }
+  return ret;
+}
+
+int ObIOTuner::send_ss_detect_task()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (!OB_SERVER_FILE_MGR.is_started()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("server file manager has not been started", KR(ret));
+  } else {
+    const int64_t first_id = ObIOFd::NORMAL_FILE_ID;
+    const int64_t second_id = OB_SERVER_FILE_MGR.get_io_detect_file_fd();
+    if (OB_FAIL(OB_IO_MANAGER.get_device_health_detector().record_timing_task(first_id, second_id))) {
+      LOG_WARN("fail to record timing task", KR(ret), K(first_id), K(second_id));
+    }
+  }
+#endif
   return ret;
 }
 
@@ -872,8 +890,10 @@ void ObIOTuner::run1()
     // print interval must <= 1s, for ensuring real_iops >= 1 in gv$ob_io_quota.
     if (REACH_TIME_INTERVAL(1000L * 1000L * 1L)) {
       OB_IO_MANAGER.print_status();
-      if (!GCTX.is_shared_storage_mode() && OB_FAIL(send_detect_task())) {
-        LOG_WARN("fail to send detect task", K(ret));
+      if (GCTX.is_shared_storage_mode() && OB_FAIL(send_ss_detect_task())) {
+        LOG_WARN("fail to send detect task", KR(ret));
+      } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(send_sn_detect_task())) {
+        LOG_WARN("fail to send detect task", KR(ret));
       }
     }
     ob_usleep(100 * 1000, true/*is_idle_sleep*/); // 100ms
@@ -3390,6 +3410,16 @@ int ObIOFaultDetector::init()
   return ret;
 }
 
+void ObIOFaultDetector::stop()
+{
+  TG_STOP(TGDefIDs::IO_HEALTH);
+}
+
+void ObIOFaultDetector::wait()
+{
+  TG_WAIT(TGDefIDs::IO_HEALTH);
+}
+
 void ObIOFaultDetector::destroy()
 {
   TG_STOP(TGDefIDs::IO_HEALTH);
@@ -3595,9 +3625,21 @@ bool ObIOFaultDetector::is_supported_detect_read_(const uint64_t tenant_id, cons
     if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
       bret = false;
     } else if (is_virtual_tenant_id(tenant_id)) {
-      // In SS mode, server tenant does not have micro cache file,
-      // thus it's unnecessary to execute detect tasks
-      bret = false;
+      if (OB_SERVER_TENANT_ID == tenant_id) {
+        const int io_detect_fd = OB_SERVER_FILE_MGR.get_io_detect_file_fd();
+        if (io_detect_fd == OB_INVALID_FD) {
+          ret = OB_NOT_SUPPORTED;
+          bret = false;
+          LOG_WARN("io detect file not exist, no need to detect", KR(ret));
+        } else if (io_detect_fd != fd.second_id_) {
+          ret = OB_NOT_SUPPORTED;
+          bret = false;
+          LOG_INFO("in shared_storage mode, only io_detect_file reads are supported for detection",
+              KR(ret), K(tenant_id), K(fd), K(io_detect_fd));
+        }
+      } else {
+        bret = false;
+      }
     } else {
       MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
       if (OB_SUCC(guard.switch_to(tenant_id, false/*need_check_allow*/))) {

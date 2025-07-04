@@ -176,7 +176,8 @@ int ObSimpleServer::simple_init()
     for (auto &dir : dirs) {
       ret = mkdir(dir.c_str(), 0777);
       if (OB_FAIL(ret)) {
-        SERVER_LOG(ERROR, "ObSimpleServer mkdir", K(ret), K(dir.c_str()));
+        SERVER_LOG(ERROR, "ObSimpleServer mkdir", K(ret), K(errno), KERRMSG,
+                   K(run_dir_.c_str()), K(dir.c_str()));
         return ret;
       }
     }

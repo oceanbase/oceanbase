@@ -1084,6 +1084,9 @@ void MockTenantModuleEnv::destroy()
   OB_DEVICE_CONF_MGR.destroy();
 #endif
 
+  ObIOManager::get_instance().stop();
+  ObIOManager::get_instance().wait();
+
   destroyed_ = true;
 
   system(("rm -rf " + run_dir_).c_str());

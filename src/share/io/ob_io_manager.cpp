@@ -955,12 +955,14 @@ void ObIOManager::stop()
   if (OB_NOT_NULL(server_io_manager_)) {
     server_io_manager_->stop();
   }
+  fault_detector_.stop();
   io_scheduler_.stop();
   OB_IO_MANAGER_V2.stop();
 }
 
 void ObIOManager::wait()
 {
+  fault_detector_.wait();
   io_scheduler_.wait();
 }
 

@@ -284,7 +284,8 @@ public:
   void stop();
   void wait();
   void destroy();
-  int send_detect_task();
+  int send_sn_detect_task();
+  int send_ss_detect_task();
   virtual void run1() override;
 private:
   int try_release_thread();
@@ -672,6 +673,8 @@ public:
   ObIOFaultDetector(const ObIOConfig &io_config);
   virtual ~ObIOFaultDetector();
   int init();
+  void stop();
+  void wait();
   void destroy();
   int start();
   virtual void handle(void *task) override;
