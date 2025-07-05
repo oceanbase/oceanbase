@@ -760,7 +760,7 @@ OB_DECLARE_AVX2_SPECIFIC_CODE(
     }
 
     float result = 0;
-    constexpr size_t ksub = 1 << 8;
+    size_t ksub = 1 << nbits;
 
     size_t m = 0;
     const size_t pqM16 = M / 16;
@@ -888,7 +888,7 @@ OB_DECLARE_AVX2_SPECIFIC_CODE(
       result1 = 0;
       result2 = 0;
       result3 = 0;
-      constexpr size_t ksub = 1 << 8;
+      size_t ksub = 1 << nbits;
 
       size_t m = 0;
       const size_t pqM16 = M / 16;
