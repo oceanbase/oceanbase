@@ -285,7 +285,9 @@ int ObSSTableRowScanner<PrefetchType>::open_cur_data_block(ObSSTableReadHandle &
             LOG_WARN("Failed to increase row num in sample filter", KPC_(micro_scanner), KPC(sample_executor));
           }
         }
+        ++access_ctx_->table_store_stat_.pushdown_micro_access_cnt_;
         EVENT_INC(ObStatEventIds::BLOCKSCAN_BLOCK_CNT);
+        EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, micro_scanner_->get_access_cnt());
         LOG_TRACE("[PUSHDOWN] pushdown for block scan", K(prefetcher_.cur_micro_data_fetch_idx_), K(micro_info), KPC(block_row_store_));
       }
       if (OB_SUCC(ret)) {

@@ -392,11 +392,9 @@ int ObIMicroBlockRowScanner::apply_filter(const bool can_blockscan)
     } else {
       can_blockscan_ = can_blockscan;
       is_filter_applied_ = true;
-      ++context_->table_store_stat_.pushdown_micro_access_cnt_;
       if (param_->has_lob_column_out()) {
         context_->reuse_lob_locator_helper();
       }
-      EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, get_access_cnt());
     }
   }
 
@@ -940,8 +938,9 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilter
       }
     }
     if (OB_SUCC(ret)) {
+      int64_t bitmap_cnt = pd_filter_info.filter_->get_result()->size();
       int64_t select_cnt = pd_filter_info.filter_->get_result()->popcnt();
-      EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, select_cnt);
+      EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, bitmap_cnt - select_cnt);
     }
   }
   return ret;

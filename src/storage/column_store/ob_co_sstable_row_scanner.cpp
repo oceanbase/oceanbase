@@ -767,13 +767,11 @@ int ObCOSSTableRowScanner::inner_filter(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected result bitmap", K(ret), KPC(rows_filter_));
     } else {
-      EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, result_bitmap->popcnt());
+      EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, result_bitmap->size() - result_bitmap->popcnt());
+      EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, group_size);
     }
-  } else {
-    EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, group_size);
   }
   if (OB_SUCC(ret)) {
-    EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, group_size);
     access_ctx_->table_store_stat_.logical_read_cnt_ += group_size;
     access_ctx_->table_store_stat_.physical_read_cnt_ += group_size;
     LOG_TRACE("[COLUMNSTORE] COSSTableRowScanner inner filter", K(ret), "begin", begin, "count", group_size,
@@ -881,6 +879,9 @@ int ObCOSSTableRowScanner::fetch_output_rows()
       if (count > 0) {
         int64_t group_idx = 0;
         access_ctx_->out_cnt_ += count;
+        if (OB_ISNULL(rows_filter_)) {
+          EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, count);
+        }
         if (OB_FAIL(get_group_idx(group_idx))) {
           LOG_WARN("Fail to get group idx", K(ret));
         } else if (OB_FAIL(batched_row_store_->fill_rows(group_idx, count))) {
@@ -1043,14 +1044,13 @@ int ObCOSSTableRowScanner::filter_group_by_rows()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected result bitmap", K(ret), KPC(rows_filter_));
       } else {
-        EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, result_bitmap->popcnt());
+        EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, result_bitmap->size() - result_bitmap->popcnt());
+        EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, group_size_);
         if (result_bitmap->is_all_false()) {
           update_current(group_size_);
           continue;
         }
       }
-    } else {
-      EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, group_size_);
     }
     if (OB_SUCC(ret)) {
       break;
@@ -1062,7 +1062,6 @@ int ObCOSSTableRowScanner::filter_group_by_rows()
     LOG_WARN("Fail to locate", K(ret), K(current_), K(group_size_), KP(result_bitmap));
   } else {
     is_new_group_ = true;
-    EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, group_size_);
     access_ctx_->table_store_stat_.logical_read_cnt_ += group_size_;
     access_ctx_->table_store_stat_.physical_read_cnt_ += group_size_;
   }
@@ -1170,6 +1169,9 @@ int ObCOSSTableRowScanner::do_group_by()
             LOG_WARN("Failed to get next group by rows", K(ret), K(i));
           }
         }
+      }
+      if (OB_SUCC(ret) && OB_ISNULL(rows_filter_)) {
+        EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, group_by_cell_->get_ref_cnt());
       }
     }
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
