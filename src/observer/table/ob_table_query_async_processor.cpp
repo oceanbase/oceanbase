@@ -1138,6 +1138,8 @@ int ObTableQueryAsyncP::new_try_process()
   } else if (OB_FAIL(model->prepare(exec_ctx_, arg_, result_, ctx))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to prepare model", K(ret), K_(exec_ctx), K_(arg));
+    } else {
+      result_.is_end_ = true;
     }
   } else if (OB_ISNULL(ctx)) {
     ret = OB_ERR_UNEXPECTED;

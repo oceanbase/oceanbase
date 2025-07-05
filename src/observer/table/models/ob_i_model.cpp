@@ -824,6 +824,7 @@ int ObIModel::prepare(ObTableExecCtx &arg_ctx,
     LOG_WARN("query type is invalid", K(ret), K(query_type));
   } else if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->get_session_id(real_sessid, arg_sessid, query_type))) {
     LOG_WARN("fail to get query session id", K(ret), K(arg_sessid), K(query_type));
+  } else if (FALSE_IT(res.query_session_id_ = real_sessid)) {
   } else if (OB_FAIL(get_query_session(real_sessid, query_type, query_session_))) {
     LOG_WARN("fail to get query session", K(ret), K(real_sessid), K(query_type));
   } else if (ObQueryOperationType::QUERY_START == query_type) {
@@ -893,7 +894,6 @@ int ObIModel::work(ObTableExecCtx &ctx,
     LOG_WARN("fail to get or create async query iter", K(ret));
   } else {
     int64_t session_id = query_session_->get_session_id();
-    res.query_session_id_ = session_id;
     WITH_CONTEXT(query_session_->get_memory_ctx()) {
       if (ObQueryOperationType::QUERY_START == query_type) {
         lease_timeout_period_ = query_iter->get_lease_timeout_period();
