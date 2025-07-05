@@ -126,6 +126,7 @@ storage_unittest(test_backup_sync_io_mock_async_io backup/test_backup_sync_io_mo
 storage_unittest(test_backup_device_macro_block_id backup/test_backup_device_macro_block_id.cpp)
 storage_unittest(test_backup_compatible backup/test_backup_compatible.cpp)
 storage_unittest(test_backup_tmp_file_queue backup/test_backup_tmp_file_queue.cpp)
+storage_unittest(test_backup_clean_path backup/test_backup_clean_path.cpp)
 
 #storage_unittest(test_create_tablet_clog tx_storage/test_create_tablet_clog.cpp)
 storage_unittest(test_safe_destroy_handler tx_storage/test_safe_destroy_handler.cpp)
