@@ -742,7 +742,7 @@ ob_set_subtarget(ob_share vector_index
   vector_index/ob_vector_index_ivf_cache_util.cpp
 )
 
-ob_set_subtarget(ob_share_simd vector_type
+ob_set_subtarget(ob_share vector_type
   vector_type/ob_vector_add.cpp
   vector_type/ob_vector_div.cpp
   vector_type/ob_vector_l2_distance.cpp
@@ -753,15 +753,6 @@ ob_set_subtarget(ob_share_simd vector_type
   vector_type/ob_vector_common_util.cpp
   vector_type/ob_sparse_vector_ip_distance.cpp
 )
-
-ob_server_add_target(ob_share_simd)
-
-if (${ARCHITECTURE} STREQUAL "x86_64")
-  target_compile_options(ob_share_simd
-    PRIVATE
-      -mtune=core-avx2 -mavx2 -mfma -mbmi2 -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw
-  )
-endif()
 
 ob_set_subtarget(ob_share domain_id
   domain_id/ob_domain_id.cpp

@@ -100,13 +100,13 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(IvfCacheMgrEntry &entry)
       } else if (inc_new_task && OB_FAIL(task_status_array_.push_back(task_ctx))) {
         LOG_WARN("fail to push back task status", K(ret), K(task_ctx));
       }
-      // release memory when fail
-      if (OB_FAIL(ret)) {
-        if (OB_NOT_NULL(task_ctx)) {
-          task_ctx->~ObVecIndexAsyncTaskCtx();
-          allocator->free(task_ctx);  // arena need free
-          task_ctx = nullptr;
-        }
+    }
+    // release memory when fail
+    if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(task_ctx)) {
+        task_ctx->~ObVecIndexAsyncTaskCtx();
+        allocator->free(task_ctx);  // arena need free
+        task_ctx = nullptr;
       }
     }
   }
@@ -215,13 +215,13 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(ObIvfAuxTableInfoEntry &
       } else if (inc_new_task && OB_FAIL(task_status_array_.push_back(task_ctx))) {
         LOG_WARN("fail to push back task status", K(ret), K(task_ctx));
       }
-      // release memory when fail
-      if (OB_FAIL(ret)) {
-        if (OB_NOT_NULL(task_ctx)) {
-          task_ctx->~ObVecIndexAsyncTaskCtx();
-          allocator->free(task_ctx);  // arena need free
-          task_ctx = nullptr;
-        }
+    }
+    // release memory when fail
+    if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(task_ctx)) {
+        task_ctx->~ObVecIndexAsyncTaskCtx();
+        allocator->free(task_ctx);  // arena need free
+        task_ctx = nullptr;
       }
     }
   }
@@ -553,6 +553,12 @@ int ObIvfAsyncTaskExector::load_task()
       LOG_WARN("fail to do load task each entry", K(ret), K(load_task_func));
     } else if (OB_FAIL(insert_new_task(task_status_array))) {
       LOG_WARN("fail to insert new task", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
+    }
+    // clear on fail
+    if (OB_FAIL(ret) && !task_status_array.empty()) {
+      if (OB_FAIL(clear_task_ctxs(index_ls_mgr->get_async_task_opt(), task_status_array))) {
+        LOG_WARN("fail to clear task ctx", K(ret));
+      }
     }
   }
   return ret;
