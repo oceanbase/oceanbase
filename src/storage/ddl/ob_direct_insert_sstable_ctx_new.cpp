@@ -2695,6 +2695,14 @@ int ObTabletFullDirectLoadMgr::close(const int64_t execution_id, const SCN &star
   } else {
     uint32_t lock_tid = 0;
     ObDDLRedoLogWriter redo_writer;
+#ifdef ERRSIM
+    SERVER_EVENT_SYNC_ADD("storage_ddl", "before_ddl_close",
+                          "tenant_id", tenant_id,
+                          "ls_id", ls_id_.id(),
+                          "tablet_id", tablet_id_.id(),
+                          "execution_id", execution_id,
+                          "start_scn", start_scn);
+#endif
     DEBUG_SYNC(AFTER_REMOTE_WRITE_DDL_PREPARE_LOG);
     if (OB_FAIL(wrlock(TRY_LOCK_TIMEOUT, lock_tid))) {
       LOG_WARN("failed to wrlock", K(ret), KPC(this));
