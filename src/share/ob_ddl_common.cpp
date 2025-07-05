@@ -3705,7 +3705,7 @@ int ObDDLUtil::init_macro_block_seq(const int64_t parallel_idx, blocksstable::Ob
     LOG_WARN("invalid argument", K(ret), K(parallel_idx));
 #ifdef OB_BUILD_SHARED_STORAGE
   } else if (GCTX.is_shared_storage_mode()) {
-    start_seq.data_seq_ = parallel_idx * compaction::MACRO_STEP_SIZE;
+    start_seq.macro_data_seq_ = parallel_idx * compaction::MACRO_STEP_SIZE;
 #endif
   } else if (OB_FAIL(start_seq.set_parallel_degree(parallel_idx))) {
     LOG_WARN("set parallel index failed", K(ret), K(parallel_idx));
@@ -3718,7 +3718,7 @@ int64_t ObDDLUtil::get_parallel_idx(const blocksstable::ObMacroDataSeq &start_se
   int64_t parallel_idx = start_seq.get_parallel_idx();
 #ifdef OB_BUILD_SHARED_STORAGE
   if (GCTX.is_shared_storage_mode()) {
-    parallel_idx = start_seq.data_seq_ / compaction::MACRO_STEP_SIZE;
+    parallel_idx = start_seq.macro_data_seq_ / compaction::MACRO_STEP_SIZE;
   }
 #endif
   return parallel_idx;
