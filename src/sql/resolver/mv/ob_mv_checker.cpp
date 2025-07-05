@@ -241,6 +241,9 @@ int ObMVChecker::check_mv_table_type_valid(const ObSelectStmt &stmt, bool &is_va
       } else if (OB_UNLIKELY(!table->part_ids_.empty())) {
         is_valid = false;
         fast_refreshable_error_.assign_fmt("query with partition specification for table is not supported");
+      } else if (need_on_query_computation_ && table->table_type_ == ObTableType::MATERIALIZED_VIEW) {
+        is_valid = false;
+        fast_refreshable_error_.assign_fmt("query with enable on query computation for nested mview is not supported");
       }
     }
   }
