@@ -179,13 +179,15 @@ int ObDBMSVectorMySql::index_vector_memory_advisor(ObPLExecCtx &ctx, ParamStore 
   int ret = OB_SUCCESS;
   CK(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_3);
   CK(OB_LIKELY(5 == params.count()));
-  CK(OB_LIKELY(params.at(0).is_varchar()),
-      OB_LIKELY(params.at(1).is_uint64()),
-      OB_LIKELY(params.at(2).is_uint32()),
-      OB_LIKELY(params.at(3).is_varchar()),
-      OB_LIKELY(params.at(4).is_text() || params.at(4).is_null()));
-
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (!params.at(0).is_varchar()
+             || !params.at(1).is_uint64()
+             || !params.at(2).is_uint32()
+             || !params.at(3).is_varchar()
+             || (!params.at(4).is_text() && !params.at(4).is_null())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else {
     ObIAllocator *allocator = &ctx.exec_ctx_->get_allocator();
     ObString idx_type_str = params.at(0).get_varchar();
     uint64_t num_vectors = params.at(1).get_uint64();
@@ -230,12 +232,14 @@ int ObDBMSVectorMySql::index_vector_memory_estimate(ObPLExecCtx &ctx, ParamStore
   int ret = OB_SUCCESS;
   CK(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_3);
   CK(OB_LIKELY(4 == params.count()));
-  CK(OB_LIKELY(params.at(0).is_varchar()),
-      OB_LIKELY(params.at(1).is_varchar()),
-      OB_LIKELY(params.at(2).is_varchar()),
-      OB_LIKELY(params.at(3).is_text() || params.at(3).is_null()));
-
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (!params.at(0).is_varchar()
+             || !params.at(1).is_varchar()
+             || !params.at(2).is_varchar()
+             || (!params.at(3).is_text() && !params.at(4).is_null())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else {
     ObIAllocator *allocator = &ctx.exec_ctx_->get_allocator();
     sql::ObSQLSessionInfo *session_info;
     sql::ObExecContext *exec_ctx = NULL;
