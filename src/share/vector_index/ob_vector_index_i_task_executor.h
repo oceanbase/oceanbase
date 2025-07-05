@@ -35,7 +35,7 @@ public:
   int resume_task();
   int start_task();
   int clear_old_task_ctx_if_need();
-  virtual int load_task() = 0;
+  virtual int load_task(uint64_t &task_trace_base_num) = 0;
   virtual int check_and_set_thread_pool() = 0;
 
 protected:

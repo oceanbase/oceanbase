@@ -77,12 +77,11 @@ int ObVecAsyncTaskExector::check_and_set_thread_pool()
   return ret;
 }
 
-int ObVecAsyncTaskExector::load_task()
+int ObVecAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
   ObArray<ObVecIndexAsyncTaskCtx*> task_ctx_array;
-  uint64_t trace_base_num = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("vector async task not init", KR(ret));
@@ -120,10 +119,10 @@ int ObVecAsyncTaskExector::load_task()
           LOG_WARN("fail to get table id from adapter", K(ret), K(tablet_id));
         } else if (OB_INVALID_ID == index_table_id) {
           LOG_DEBUG("index table id is invalid, skip", K(ret)); // skip to next
-        } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(++trace_base_num, allocator, new_trace_id))) {
+        } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(++task_trace_base_num, allocator, new_trace_id))) {
           LOG_WARN("fail to fetch new trace id", K(ret), K(tablet_id));
         } else {
-          LOG_DEBUG("start load task", K(ret), K(tablet_id), K(tenant_id_), K(ls_->get_ls_id()));
+          LOG_DEBUG("start load task", K(ret), K(tablet_id), K(tenant_id_), K(task_trace_base_num), K(ls_->get_ls_id()));
           // 1. update task_ctx to async task map
           task_ctx->tenant_id_ = tenant_id_;
           task_ctx->ls_ = ls_;

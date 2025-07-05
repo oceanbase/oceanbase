@@ -79,7 +79,7 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(IvfCacheMgrEntry &entry)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table id should be invalid", K(ret));
     } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(
-                   ++trace_base_num_, allocator, new_trace_id))) {
+                   ++task_trace_base_num_, allocator, new_trace_id))) {
       LOG_WARN("fail to fetch new trace id", K(ret), K(tablet_id));
     } else {
       LOG_DEBUG("start load task", K(ret), K(tablet_id), K(new_task_id), K(index_table_id));
@@ -185,10 +185,10 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(ObIvfAuxTableInfoEntry &
     } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_task_id(tenant_id_, new_task_id))) {
       LOG_WARN("fail to fetch new task id", K(ret), K(tenant_id_));
     } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(
-                   ++trace_base_num_, allocator, new_trace_id))) {
-      LOG_WARN("fail to fetch new trace id", K(ret), K(trace_base_num_));
+                   ++task_trace_base_num_, allocator, new_trace_id))) {
+      LOG_WARN("fail to fetch new trace id", K(ret), K(task_trace_base_num_));
     } else {
-      LOG_DEBUG("start load task", K(ret), K(trace_base_num_), K(new_task_id), K(index_table_id));
+      LOG_DEBUG("start load task", K(ret), K(task_trace_base_num_), K(new_task_id), K(index_table_id));
       // 1. update task_ctx to async task map
       task_ctx->tenant_id_ = tenant_id_;
       task_ctx->ls_ = ls_;
@@ -521,7 +521,7 @@ int ObIvfAsyncTaskExector::generate_aux_table_info_map(ObIvfAuxTableInfoMap &aux
   return ret;
 }
 
-int ObIvfAsyncTaskExector::load_task()
+int ObIvfAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
@@ -541,7 +541,7 @@ int ObIvfAsyncTaskExector::load_task()
   } else {
     ObVecIndexTaskCtxArray task_status_array;
     LoadTaskCallback load_task_func(
-        index_ls_mgr->get_async_task_opt(), tenant_id_, *ls_, task_status_array, schema_guard);
+        index_ls_mgr->get_async_task_opt(), tenant_id_, *ls_, task_status_array, schema_guard, task_trace_base_num);
     ObIvfAuxTableInfoMap aux_table_info_map;
 
     if (OB_FAIL(index_ls_mgr->get_ivf_cache_mgr_map().foreach_refactored(

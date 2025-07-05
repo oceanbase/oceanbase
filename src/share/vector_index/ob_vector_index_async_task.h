@@ -30,7 +30,7 @@ public:
     : ObVecITaskExecutor()
   {}
   virtual ~ObVecAsyncTaskExector() {}
-  int load_task() override;
+  int load_task(uint64_t &task_trace_base_num) override;
   int check_and_set_thread_pool() override;
 private:
   bool check_operation_allow() override;

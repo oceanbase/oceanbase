@@ -26,7 +26,7 @@ class ObIvfAsyncTaskExector final : public ObVecITaskExecutor
 public:
   ObIvfAsyncTaskExector() : ObVecITaskExecutor() {}
   virtual ~ObIvfAsyncTaskExector() {}
-  int load_task() override;
+  int load_task(uint64_t &task_trace_base_num) override;
   int check_and_set_thread_pool() override;
 
 private:
@@ -75,13 +75,14 @@ private:
   public:
     LoadTaskCallback(ObVecIndexAsyncTaskOption &task_opt, int64_t tenant_id, storage::ObLS &ls,
                      ObVecIndexTaskCtxArray &task_status_array,
-                     ObSchemaGetterGuard &schema_guard)
+                     ObSchemaGetterGuard &schema_guard, uint64_t &task_trace_base_num)
         : task_opt_(task_opt),
           trace_base_num_(0),
           tenant_id_(tenant_id),
           ls_(&ls),
           task_status_array_(task_status_array),
-          schema_guard_(schema_guard)
+          schema_guard_(schema_guard),
+          task_trace_base_num_(task_trace_base_num)
     {}
 
     ~LoadTaskCallback() = default;
@@ -98,6 +99,7 @@ private:
     storage::ObLS *ls_;
     ObVecIndexTaskCtxArray &task_status_array_;
     ObSchemaGetterGuard &schema_guard_;
+    uint64_t &task_trace_base_num_;
   };
 
   bool check_operation_allow() override;
