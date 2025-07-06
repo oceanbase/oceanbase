@@ -3116,7 +3116,16 @@ int ObPartTransCtx::submit_parallel_redo_before_commit_() {
   do {
     if (get_pending_log_size() > GCONF._private_buffer_size) {
       CtxLockGuard guard(lock_, CtxLockGuard::MODE::CTX);
-      if (OB_FAIL(submit_parallel_redo_())) {
+      if (is_2pc_blocking()
+       || get_upstream_state() > ObTxState::PREPARE
+       || get_downstream_state() >= ObTxState::REDO_COMPLETE
+       || sub_state_.is_force_abort()
+       || sub_state_.is_state_log_submitted()
+       || sub_state_.is_state_log_submitting()) {
+        if (REACH_TIME_INTERVAL(1000 * 1000)) {
+          TRANS_LOG(INFO, "no need to submit redo before commit", KR(ret), K(*this));
+        }
+      } else if (OB_FAIL(submit_parallel_redo_())) {
         if (ret != OB_EAGAIN) {
           TRANS_LOG(WARN, "submit redo fail", KR(ret), K(*this));
         }
@@ -3126,7 +3135,7 @@ int ObPartTransCtx::submit_parallel_redo_before_commit_() {
       cnt++;
       ob_usleep(100 * 1000);
     }
-    if (REACH_TIME_INTERVAL(1000 * 1000)) {
+    if (OB_EAGAIN == ret && REACH_TIME_INTERVAL(1000 * 1000)) {
       TRANS_LOG(WARN, "submit redo before commit failed", KR(ret), K(*this));
     }
     if (cnt > SUBMIT_REDO_TIMEOUT) {
