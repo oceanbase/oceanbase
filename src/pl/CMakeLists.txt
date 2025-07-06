@@ -80,6 +80,14 @@ ob_set_subtarget(ob_pl dblink
 
 ob_server_add_target(ob_pl)
 
+find_program(PYTHON_EXECUTABLE 
+  NAMES python3 python
+  DOC "Python interpreter")
+
+if(NOT PYTHON_EXECUTABLE)
+  message(FATAL_ERROR "Python interpreter not found. Please install python or python3.")
+endif()
+
 set(SYS_PACK_SQL_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src/share/inner_table/sys_package)
 set(gen_syspack_src ${SYS_PACK_SQL_SOURCE_DIR}/syspack_source.cpp)
 set(SYS_PACK_RELEASE_DIR ${CMAKE_BINARY_DIR}/syspack_release CACHE PATH "The path to the system package release directory")
@@ -87,7 +95,7 @@ set(SYS_PACK_RELEASE_DIR ${CMAKE_BINARY_DIR}/syspack_release CACHE PATH "The pat
 if(OB_BUILD_ORACLE_PL)
   add_custom_command(
     OUTPUT ${gen_syspack_src}
-    COMMAND python ${SYS_PACK_SQL_SOURCE_DIR}/syspack_codegen.py -rd ${SYS_PACK_RELEASE_DIR} -wp $<TARGET_FILE:wrap>
+    COMMAND ${PYTHON_EXECUTABLE} ${SYS_PACK_SQL_SOURCE_DIR}/syspack_codegen.py -rd ${SYS_PACK_RELEASE_DIR} -wp $<TARGET_FILE:wrap>
     DEPENDS ${SYS_PACK_SQL_SOURCE_DIR}/*.sql ${SYS_PACK_SQL_SOURCE_DIR}/syspack_codegen.py wrap
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Generating wrapped syspack source files"
@@ -95,7 +103,7 @@ if(OB_BUILD_ORACLE_PL)
 else()
   add_custom_command(
     OUTPUT ${gen_syspack_src}
-    COMMAND python ${SYS_PACK_SQL_SOURCE_DIR}/syspack_codegen.py -rd ${SYS_PACK_RELEASE_DIR}
+    COMMAND ${PYTHON_EXECUTABLE} ${SYS_PACK_SQL_SOURCE_DIR}/syspack_codegen.py -rd ${SYS_PACK_RELEASE_DIR}
     DEPENDS ${SYS_PACK_SQL_SOURCE_DIR}/*.sql ${SYS_PACK_SQL_SOURCE_DIR}/syspack_codegen.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Generating wrapped syspack source files"
