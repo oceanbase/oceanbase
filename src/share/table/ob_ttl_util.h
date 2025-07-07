@@ -396,7 +396,10 @@ public:
                                  const share::schema::ObTableSchema &table_schema,
                                  ObPartitionLevel part_level,
                                  bool by_admin = false);
-  static int check_htable_ddl_supported(const share::schema::ObTableSchema &table_schema, bool by_admin);
+  static int check_htable_ddl_supported(const share::schema::ObTableSchema &table_schema,
+                                        bool by_admin,
+                                        obrpc::ObHTableDDLType ddl_type = obrpc::ObHTableDDLType::INVALID,
+                                        const ObString &table_name = ObString());
   static int check_htable_ddl_supported(share::schema::ObSchemaGetterGuard &schema_guard,
                                         const uint64_t tenant_id,
                                         const common::ObIArray<share::schema::ObDependencyInfo> &dep_infos);

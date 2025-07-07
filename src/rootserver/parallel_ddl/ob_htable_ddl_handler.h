@@ -41,7 +41,8 @@ public:
         ddl_service_(ddl_service),
         schema_service_(schema_service),
         arg_(arg),
-        res_(res)
+        res_(res),
+        ddl_type_(arg.ddl_type_)
   {}
   virtual ~ObHTableDDLHandler() = default;
 public:
@@ -99,6 +100,7 @@ protected:
     }
     return ret;
   }
+  obrpc::ObHTableDDLType get_ddl_type() const { return ddl_type_; }
 protected:
   bool is_inited_;
   common::ObArenaAllocator allocator_;
@@ -106,6 +108,7 @@ protected:
   share::schema::ObMultiVersionSchemaService &schema_service_;
   const obrpc::ObHTableDDLArg &arg_;
   obrpc::ObHTableDDLRes &res_;
+  const obrpc::ObHTableDDLType ddl_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObHTableDDLHandler);
 };

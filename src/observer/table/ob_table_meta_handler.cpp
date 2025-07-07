@@ -1246,7 +1246,7 @@ int ObHTableExistsHandler::handle(ObTableExecCtx &ctx, ObTableMetaResponse &resp
                                                     tablegroup_id))) {
     LOG_WARN("failed to get table group ID", K(ret), K(credential.tenant_id_), K(tablegroup_name));
   } else if (tablegroup_id == OB_INVALID_ID) {
-    ret = OB_TABLEGROUP_NOT_EXIST;
+    ret = OB_KV_HBASE_TABLE_NOT_FOUND;
     // log level does not have to be higher
     LOG_INFO("tablegroup not exist", K(ret), K(credential.tenant_id_), K(tablegroup_name));
   } else if (OB_FAIL(schema_guard.get_tablegroup_schema(credential.tenant_id_,
@@ -1254,12 +1254,12 @@ int ObHTableExistsHandler::handle(ObTableExecCtx &ctx, ObTableMetaResponse &resp
                                                         tablegroup_schema))) {
     LOG_WARN("failed to get tablegroup schema", K(ret), K(credential.tenant_id_), K(tablegroup_name));
   } else if (OB_ISNULL(tablegroup_schema) || !tablegroup_schema->is_valid()) {
-    ret = OB_TABLEGROUP_NOT_EXIST;
+    ret = OB_KV_HBASE_TABLE_NOT_FOUND;
     // log level does not have to be higher
     LOG_INFO("tablegroup not exist", K(ret), K(credential.tenant_id_), K(tablegroup_name));
   }
   // get response
-  if (OB_SUCC(ret) || ret == OB_TABLEGROUP_NOT_EXIST) {
+  if (OB_SUCC(ret) || ret == OB_KV_HBASE_TABLE_NOT_FOUND) {
     ObString res = OB_SUCC(ret) ? ObString::make_string("{\"exists\":true}")
                                   : ObString::make_string("{\"exists\":false}");
     ret = OB_SUCCESS;
@@ -1384,7 +1384,7 @@ int ObHTableGetDescHandler::get_cf_desc(ObTableExecCtx &ctx)
   } else if (OB_FAIL(schema_guard.get_tablegroup_id(credential.tenant_id_, htable_name_, tablegroup_id))) {
     LOG_WARN("Failed to get table group ID", K(ret), K(tablegroup_id), K_(htable_name));
   } else if (tablegroup_id == OB_INVALID_ID) {
-    ret = OB_TABLEGROUP_NOT_EXIST;
+    ret = OB_KV_HBASE_TABLE_NOT_FOUND;
     LOG_WARN("Tablegroup does not exist", K(ret), K(credential.tenant_id_), K(htable_name_));
   } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(credential.tenant_id_, tablegroup_id, table_schemas))) {
     LOG_WARN("Failed to get table schemas from table group", K(ret), K_(credential.tenant_id), K(tablegroup_id));

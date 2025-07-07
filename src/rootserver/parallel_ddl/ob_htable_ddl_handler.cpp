@@ -447,7 +447,7 @@ int ObDropHTableHandler::init()
           if (OB_ISNULL(schema)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("schema is null", KR(ret), K(i));
-          } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*schema, true/*by_admin*/))) {
+          } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*schema, true/*by_admin*/, get_ddl_type(), tablegroup_name))) {
             LOG_WARN("failed to check htable ddl supoprted", KR(ret));
           } else if (OB_FAIL(ob_write_string(allocator_, schema->get_table_name_str(), table_name))) {
             LOG_WARN("failed to copy table name", KR(ret), KPC(schema));

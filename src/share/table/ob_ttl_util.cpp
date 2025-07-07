@@ -1642,7 +1642,10 @@ int ObTTLUtil::check_htable_ddl_supported_(const ObKVAttr &attr, bool by_admin)
   return ret;
 }
 
-int ObTTLUtil::check_htable_ddl_supported(const schema::ObTableSchema &table_schema, bool by_admin)
+int ObTTLUtil::check_htable_ddl_supported(const schema::ObTableSchema &table_schema,
+                                          bool by_admin,
+                                          obrpc::ObHTableDDLType ddl_type,
+                                          const ObString &table_name)
 {
   int ret = OB_SUCCESS;
   const ObString &kv_attributes = table_schema.get_kv_attributes();
@@ -1651,6 +1654,14 @@ int ObTTLUtil::check_htable_ddl_supported(const schema::ObTableSchema &table_sch
     LOG_WARN("failed to parse kv attributes", K(ret));
   } else if (OB_FAIL(check_htable_ddl_supported_(attr, by_admin))) {
     LOG_WARN("failed to check htable ddl supported", K(ret));
+  } else {
+    if (ddl_type == obrpc::ObHTableDDLType::DROP_TABLE) {
+      if (!attr.is_disable_) {
+        ret = OB_KV_TABLE_NOT_DISABLED;
+        LOG_WARN("table is not disabled, can't drop", K(ret), K(attr));
+        LOG_USER_ERROR(OB_KV_TABLE_NOT_DISABLED,  table_name.length(), table_name.ptr());
+      }
+    }
   }
   return ret;
 }
