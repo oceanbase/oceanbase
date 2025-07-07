@@ -164,9 +164,11 @@ public:
   int init(const int64_t &min, const int64_t &max);
   int init(void *adaptor,
            double selectivity,
-           const ObIArray<const ObNewRange*> &range);
+           const ObIArray<const ObNewRange*> &range,
+           const sql::ExprFixedArray& res_exprs);
   bool is_valid() { return OB_NOT_NULL(bitmap_); }
   bool is_range_filter() { return type_ == FilterType::SIMPLE_RANGE; }
+  bool include_with_key(const ObRowkey &board_rowkey, ObRowkey &rowkey, bool is_start);
   bool test(int64_t id) override;
   bool test(const char* data) override;
   int add(int64_t id);
@@ -266,7 +268,7 @@ public:
   ~ObVectorQueryAdaptorResultContext();
   int init_bitmaps();
   int init_prefilter(const int64_t &min, const int64_t &max);
-  int init_prefilter( void *adaptor, double selectivity, const ObIArray<const ObNewRange*> &range);
+  int init_prefilter( void *adaptor, double selectivity, const ObIArray<const ObNewRange*> &range, const sql::ExprFixedArray& res_exprs);
   bool is_bitmaps_valid();
   bool is_prefilter_valid();
   bool is_range_prefilter();

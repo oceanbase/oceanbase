@@ -1101,7 +1101,7 @@ int ObDASHNSWScanIter::init_pre_filter(ObPluginVectorIndexAdaptor *adaptor, ObVe
   }
   if (OB_SUCC(ret)) {
     if (init_as_range) {
-      if (OB_FAIL(ada_ctx->init_prefilter(adaptor, adaptive_ctx_.selectivity_, rk_range))) {
+      if (OB_FAIL(ada_ctx->init_prefilter(adaptor, adaptive_ctx_.selectivity_, rk_range, vec_aux_ctdef_->result_output_))) {
         LOG_WARN("init bitmaps failed.", K(ret));
       }
     } else {

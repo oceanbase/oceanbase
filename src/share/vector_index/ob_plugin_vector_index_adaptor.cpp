@@ -216,7 +216,7 @@ int ObVectorQueryAdaptorResultContext::init_prefilter(const int64_t &min, const 
 }
 
 int ObVectorQueryAdaptorResultContext::init_prefilter(
-    void *adaptor, double selectivity, const ObIArray<const ObNewRange*> &range)
+    void *adaptor, double selectivity, const ObIArray<const ObNewRange*> &range, const sql::ExprFixedArray& res_exprs)
 {
   INIT_SUCC(ret);
   if (OB_ISNULL(tmp_allocator_)) {
@@ -227,7 +227,7 @@ int ObVectorQueryAdaptorResultContext::init_prefilter(
     if (OB_ISNULL(vsag_filter = OB_NEWx(ObHnswBitmapFilter, tmp_allocator_, tenant_id_, ObHnswBitmapFilter::FilterType::BYTE_ARRAY, 0, tmp_allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to create pre filter", K(ret));
-    } else if (OB_FAIL(vsag_filter->init(adaptor, selectivity, range))) {
+    } else if (OB_FAIL(vsag_filter->init(adaptor, selectivity, range, res_exprs))) {
       LOG_WARN("Fail to init pre_filter", K(ret));
     } else {
       pre_filter_ = vsag_filter;
@@ -3601,6 +3601,27 @@ bool ObHnswBitmapFilter::test(int64_t id)
   return bret;
 }
 
+bool ObHnswBitmapFilter::include_with_key(const ObRowkey &board_rowkey, ObRowkey &rowkey, bool is_start)
+{
+  bool bret = true;
+  if (is_start && board_rowkey.is_min_row()) {
+  } else if (!is_start && board_rowkey.is_max_row()) {
+  } else {
+    int64_t extra_column_cnt = rowkey.get_obj_cnt();
+    for (int64_t i = 0; i < extra_column_cnt && bret; i++) {
+      ObRowkey tmp_rk(&rowkey.get_obj_ptr()[i], 1);
+      ObRowkey board_rk(const_cast<ObObj*>(&board_rowkey.get_obj_ptr()[i]), 1);
+      if (is_start && board_rk.compare(tmp_rk) > 0) {
+        bret = false;
+      } else if (!is_start && board_rk.compare(tmp_rk) < 0){
+        bret = false;
+      }
+    }
+  }
+
+  return bret;
+}
+
 bool ObHnswBitmapFilter::test(const char* data)
 {
   bool bret = false;
@@ -3612,13 +3633,10 @@ bool ObHnswBitmapFilter::test(const char* data)
       LOG_WARN("failed to decode extra info array.", K(ret), K(extra_info_actual_size));
     } else {
       ObRowkey tmp_rk(tmp_objs_, extra_column_cnt);
-      ObNewRange tmp_range;
-      if (OB_FAIL(tmp_range.build_range(rk_range_.at(0)->table_id_, tmp_rk))) {
-        LOG_WARN("fail to build tmp range", K(ret));
-      }
       // do compare
       for (int64_t i = 0; i < rk_range_.count() && !bret && OB_SUCC(ret); i++) {
-        if (rk_range_.at(i)->compare_with_startkey2(tmp_range) <= 0 && rk_range_.at(i)->compare_with_endkey2(tmp_range) >= 0) {
+        if (include_with_key(rk_range_.at(i)->start_key_, tmp_rk, true) &&
+            include_with_key(rk_range_.at(i)->end_key_, tmp_rk, false)) {
           bret = true;
         }
       }
@@ -3666,7 +3684,7 @@ int ObHnswBitmapFilter::init(const int64_t &min, const int64_t &max)
 }
 
 int ObHnswBitmapFilter::init(
-    void *adaptor, double selectivity, const ObIArray<const ObNewRange*> &range)
+    void *adaptor, double selectivity, const ObIArray<const ObNewRange*> &range, const sql::ExprFixedArray& res_exprs)
 {
   int ret = OB_SUCCESS;
   if (rk_range_.count() != 0) {
@@ -3689,6 +3707,9 @@ int ObHnswBitmapFilter::init(
     } else if (extra_column_cnt == 0 || extra_info_actual_size == 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid extra column cnt or size", K(ret), K(extra_column_cnt), K(extra_info_actual_size));
+    } else if (res_exprs.count() != extra_column_cnt + 1) { // res_exprs: vid_column, extra_column...
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("res_exprs count is not equal to extra_column_count + 1", K(ret), K(res_exprs), K(extra_column_cnt));
     } else if (OB_ISNULL(extra_buffer_ = static_cast<char*>(tmp_alloc_.alloc(extra_info_actual_size * extra_column_cnt)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("falied to alloc extra buffer", K(ret));
@@ -3696,17 +3717,8 @@ int ObHnswBitmapFilter::init(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("falied to alloc extra obobj", K(ret));
     } else {
-      const ObRowkey &st_key = rk_range_.at(0)->get_start_key();
-      const ObRowkey &ed_key = rk_range_.at(0)->get_end_key();
       for (int64_t i = 0; i < extra_column_cnt; i++) {
-        if (!st_key.get_obj_ptr()[i].is_ext()) {
-          tmp_objs_[i] = st_key.get_obj_ptr()[i]; // set meta
-        } else if (!ed_key.get_obj_ptr()[i].is_ext()) {
-          tmp_objs_[i] = ed_key.get_obj_ptr()[i]; // set meta
-        } else {
-          // range is min~max? so is a true whole
-          tmp_objs_[i].set_year(0); // mock as 1byte?
-        }
+        tmp_objs_[i].set_meta_type(res_exprs.at(i + 1)->obj_meta_); // set meta
       }
       valid_cnt_ = extra_info_actual_size;
     }
