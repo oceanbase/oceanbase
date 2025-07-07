@@ -534,6 +534,43 @@ int ObLSStatusOperator::alter_ls_group_id(
     const ObLSID &ls_id,
     const uint64_t old_ls_group_id,
     const uint64_t new_ls_group_id,
+    ObISQLClient &client)
+{
+  int ret = OB_SUCCESS;
+  int64_t begin_ts = ObTimeUtility::current_time();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+                  || !ls_id.is_valid_with_tenant(tenant_id)
+                  || OB_INVALID_ID == old_ls_group_id
+                  || OB_INVALID_ID == new_ls_group_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid_argument", KR(ret), K(tenant_id), K(ls_id), K(old_ls_group_id), K(new_ls_group_id));
+  } else {
+    common::ObSqlString sql;
+    common::ObArenaAllocator allocator;
+    if (OB_FAIL(sql.assign_fmt(
+        "UPDATE %s set ls_group_id = %lu where tenant_id = %lu and ls_id = %ld and ls_group_id = %lu",
+        OB_ALL_LS_STATUS_TNAME,
+        new_ls_group_id,
+        tenant_id,
+        ls_id.id(),
+        old_ls_group_id))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(new_ls_group_id), K(tenant_id), K(old_ls_group_id), K(sql));
+    } else if (OB_FAIL(exec_write(tenant_id, sql, this, client))) {
+      LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(ls_id), K(sql));
+    }
+    int64_t cost = ObTimeUtility::current_time() - begin_ts;
+    TENANT_EVENT(tenant_id, LS_EVENT, ALTER_LS_GROUP, begin_ts, ret, cost,
+        ls_id.id(), new_ls_group_id, old_ls_group_id, "", "", ObHexEscapeSqlStr(sql.ptr()));
+    ALL_LS_EVENT_ADD(tenant_id, ls_id, "alter_ls_group", ret, sql);
+  }
+  return ret;
+}
+
+int ObLSStatusOperator::alter_ls_group_id(
+    const uint64_t tenant_id,
+    const ObLSID &ls_id,
+    const uint64_t old_ls_group_id,
+    const uint64_t new_ls_group_id,
     const ObUnitIDList &old_unit_list,
     const ObUnitIDList &new_unit_list,
     ObISQLClient &client)

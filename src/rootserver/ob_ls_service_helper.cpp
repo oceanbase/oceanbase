@@ -745,19 +745,33 @@ int ObLSServiceHelper::process_alter_ls(const share::ObLSID &ls_id,
           ls_info.unit_group_id_,
           unit_group_id,
           sql_proxy))) {
-        LOG_WARN("failed to update ls group id", KR(ret), K(new_ls_group_id),
+        LOG_WARN("failed to update ls group id and unit_group_id", KR(ret), K(new_ls_group_id),
                 K(unit_group_id), K(ls_info));
       }
-    } else if (OB_FAIL(status_op.alter_ls_group_id(
-        tenant_id,
-        ls_id,
-        ls_info.ls_group_id_,
-        new_ls_group_id,
-        ls_info.get_unit_list(),
-        unit_list,
-        sql_proxy))) {
-      LOG_WARN("fail to alter ls group", KR(ret), K(tenant_id), K(ls_id), K(new_ls_group_id),
-          K(ls_info), K(unit_list));
+    } else if (!unit_list.empty() || !ls_info.get_unit_list().empty()) {
+      if (OB_FAIL(status_op.alter_ls_group_id(
+          tenant_id,
+          ls_id,
+          ls_info.ls_group_id_,
+          new_ls_group_id,
+          ls_info.get_unit_list(),
+          unit_list,
+          sql_proxy))) {
+        LOG_WARN("fail to alter ls group id and unit_list", KR(ret), K(tenant_id), K(ls_id), K(new_ls_group_id),
+            K(ls_info), K(unit_list));
+      }
+    } else {
+      // if unit_group_id not changed, and both old and new unit_list are empty,
+      //  then the tenant might be during upgrade. Just update ls_group_id
+      if (OB_FAIL(status_op.alter_ls_group_id(
+          tenant_id,
+          ls_id,
+          ls_info.ls_group_id_,
+          new_ls_group_id,
+          sql_proxy))) {
+        LOG_WARN("fail to alter ls group id", KR(ret), K(tenant_id), K(ls_id), K(new_ls_group_id),
+            K(ls_info), K(unit_list));
+      }
     }
     LOG_INFO("[LS_MGR] alter ls group id", KR(ret), K(ls_info),
         K(new_ls_group_id), K(unit_group_id));

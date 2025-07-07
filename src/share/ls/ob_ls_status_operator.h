@@ -465,6 +465,19 @@ public:
                        const ObUnitIDList &old_unit_list,
                        const ObUnitIDList &new_unit_list,
                        ObISQLClient &client);
+  /*
+   * description: update ls's ls group id
+   * Think twice if unit_list or unit_group_id need to be update at the same time
+   *  before you use this function. If yes, use one of two other functions.
+   * @param[in] tenant_id
+   * @param[in] ls_id
+   * @param[in] old_ls_group_id
+   * @param[in] new_ls_group_id
+   * @param[in] client*/
+  int alter_ls_group_id(const uint64_t tenant_id, const ObLSID &ls_id,
+                       const uint64_t old_ls_group_id,
+                       const uint64_t new_ls_group_id,
+                       ObISQLClient &client);
    /*
    * description: update ls's unit group id
    * @param[in] tenant_id
