@@ -783,6 +783,8 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
           if (!expr->get_result_type().is_ext()
               && !expr->get_result_type().is_user_defined_sql_type()
               && !expr->get_result_type().is_collection_sql_type()
+              && !expr->get_result_type().is_enum_or_set()
+              && !expr->get_result_type().is_enumset_inner_type()
               && OB_FAIL(expr->get_length_for_meta_in_bytes(
                     field.length_, static_cast<ObCollationType>(field.charsetnr_)))) {
             LOG_WARN("get length failed", K(ret), KPC(expr));
