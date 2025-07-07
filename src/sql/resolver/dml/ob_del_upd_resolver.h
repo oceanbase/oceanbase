@@ -258,12 +258,15 @@ protected:
   int check_need_match_all_params(const common::ObIArray<ObColumnRefRawExpr*> &value_desc, bool &need_match);
   int add_select_item_func(ObSelectStmt &select_stmt, ColumnItem &col);
   int select_items_is_pk(const ObSelectStmt& select_stmt, bool &has_pk);
+  void set_is_insert_into_set(bool is_insert_into_set) { is_insert_into_set_ = is_insert_into_set; }
+  bool is_insert_into_set() const { return is_insert_into_set_; }
 
 private:
   common::hash::ObPlacementHashSet<uint64_t, 4229> insert_column_ids_;
   bool is_column_specify_;
   bool is_oracle_tmp_table_; //是否创建oracle的临时表
   int64_t oracle_tmp_table_type_;
+  bool is_insert_into_set_;
 };
 
 } /* namespace sql */

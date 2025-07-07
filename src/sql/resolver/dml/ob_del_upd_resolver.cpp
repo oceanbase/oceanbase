@@ -86,7 +86,8 @@ ObDelUpdResolver::ObDelUpdResolver(ObResolverParams &params)
     insert_column_ids_(),
     is_column_specify_(false),
     is_oracle_tmp_table_(false),
-    oracle_tmp_table_type_(0)
+    oracle_tmp_table_type_(0),
+    is_insert_into_set_(false)
 {
   // TODO Auto-generated constructor stub
 }
@@ -328,7 +329,7 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
             if (OB_FAIL(ret)) {
             } else if (col_expr->get_result_type().get_obj_meta().is_enum_or_set()
               || col_expr->get_result_type().get_obj_meta().is_urowid()
-              || params_.is_batch_stmt_) {
+              || (params_.is_batch_stmt_ && is_insert_into_set())) {
               // enum, set, rowid do not support cast
               int64_t param_idx = 0;
               OZ (c_expr->get_value().get_unknown(param_idx));
@@ -336,6 +337,12 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
               CK (param_idx < params_.param_list_->count());
               OX (const_cast<ObObjParam &>(
               params_.param_list_->at(param_idx)).set_need_to_check_type(true));
+            } else if (params_.is_batch_stmt_) {
+              int64_t param_idx = 0;
+              OZ (c_expr->get_value().get_unknown(param_idx));
+              ObObj val = c_expr->get_result_type().get_param();
+              OX (c_expr->set_result_type(col_expr->get_result_type()));
+              OX (c_expr->set_param(val));
             } else {
               OZ (c_expr->add_flag(IS_TABLE_ASSIGN));
               OX (c_expr->set_result_type(col_expr->get_result_type()));
