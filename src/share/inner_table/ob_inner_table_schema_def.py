@@ -41846,8 +41846,8 @@ def_table_schema(
       table_id as TABLE_ID,
       tablet_id as TABLET_ID,
       task_id as TASK_ID,
-      usec_to_time(gmt_create) as START_TIME,
-      usec_to_time(gmt_modified) as MODIFY_TIME,
+      gmt_create as START_TIME,
+      gmt_modified as MODIFY_TIME,
       case trigger_type
         when 0 then "USER"
         when 1 then "MANUAL"
@@ -41880,8 +41880,8 @@ def_table_schema(
       table_id as TABLE_ID,
       tablet_id as TABLET_ID,
       task_id as TASK_ID,
-      usec_to_time(gmt_create) as START_TIME,
-      usec_to_time(gmt_modified) as MODIFY_TIME,
+      gmt_create as START_TIME,
+      gmt_modified as MODIFY_TIME,
       case trigger_type
         when 0 then "USER"
         when 1 then "MANUAL"
@@ -41914,8 +41914,8 @@ def_table_schema(
       table_id as TABLE_ID,
       tablet_id as TABLET_ID,
       task_id as TASK_ID,
-      usec_to_time(gmt_create) as START_TIME,
-      usec_to_time(gmt_modified) as MODIFY_TIME,
+      gmt_create as START_TIME,
+      gmt_modified as MODIFY_TIME,
       case trigger_type
         when 0 then "AUTO"
         when 1 then "MANUAL"
@@ -41948,8 +41948,8 @@ def_table_schema(
       table_id as TABLE_ID,
       tablet_id as TABLET_ID,
       task_id as TASK_ID,
-      usec_to_time(gmt_create) as START_TIME,
-      usec_to_time(gmt_modified) as MODIFY_TIME,
+      gmt_create as START_TIME,
+      gmt_modified as MODIFY_TIME,
       case trigger_type
         when 0 then "AUTO"
         when 1 then "MANUAL"
