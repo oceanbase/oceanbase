@@ -1330,7 +1330,7 @@ int ObTxTable::get_ss_recycle_scn(share::SCN &ss_recycle_scn)
   } else if (OB_FAIL(resolve_shared_storage_upload_info_(ss_recycle_scn))) {
     TRANS_LOG(ERROR, "failed to resolve shared_storage_upload_info", KR(ret), K(ss_recycle_scn));
   }
-  FLOG_INFO("finish get ss_recycle_scn", K(ret), K(sn_recycle_scn), K(ss_recycle_scn));
+  FLOG_INFO("finish get ss_recycle_scn", K(ret), K(sn_recycle_scn), K(ss_recycle_scn), K(ls_id_));
   return ret;
 }
 
@@ -1436,7 +1436,15 @@ int ObTxTable::resolve_shared_storage_upload_info_(share::SCN &ss_recycle_scn)
       ss_recycle_scn = data_upload_min_end_scn;
     }
 
-    FLOG_INFO("resolve_shared_storage_upload_info_", K(ss_upload_scn_cache_), K(ss_recycle_scn));
+    if (!ss_checkpoint_scn.is_valid() &&
+        !tx_data_table_upload_scn.is_valid() &&
+        !data_upload_min_end_scn.is_valid()) {
+      ss_recycle_scn = share::SCN::min_scn();
+      LOG_INFO("resolve_shared_storage_upload_info_ find invalid tx data info",
+               K(ss_upload_scn_cache_), K(ss_recycle_scn));
+    }
+
+    FLOG_INFO("resolve_shared_storage_upload_info_", K(ss_upload_scn_cache_), K(ss_recycle_scn), K(ls_id_));
   }
 
   return ret;
