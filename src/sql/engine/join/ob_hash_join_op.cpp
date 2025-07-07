@@ -4466,7 +4466,8 @@ int ObHashJoinOp::calc_hash_value(
     if (skip_null) {
       skipped = true;
     } else {
-      hash_value = null_random_hash_value_++;
+      hash_value = common::murmurhash64A(&null_random_hash_value_, sizeof(int64_t), HASH_SEED);
+      null_random_hash_value_++;
     }
   }
   hash_value = hash_value & ObHashJoinStoredJoinRow::HASH_VAL_MASK;
@@ -4513,7 +4514,8 @@ int ObHashJoinOp::calc_hash_value_batch(const ObIArray<ObExpr*> &join_keys,
         if (need_null_random) {
           if (skip_null) {
           } else {
-            hash_vals[i] = null_random_hash_value_++;
+            hash_vals[i] = common::murmurhash64A(&null_random_hash_value_, sizeof(int64_t), HASH_SEED);
+            null_random_hash_value_++;
             right_selector_[selector_idx++] = i;
           }
         } else {
