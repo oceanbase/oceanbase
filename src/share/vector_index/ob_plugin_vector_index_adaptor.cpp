@@ -2957,7 +2957,7 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
         if (get_create_type() == CreateTypeComplete) {
           ctx->status_ = PVQ_REFRESH;
           LOG_INFO("query result need refresh adapter, ls leader",
-              K(ret), K(ls_id), K(ctx->get_ls_leader()), K(get_snapshot_key_prefix()), K(row->storage_datums_[0].get_string()));
+              K(ret), K(ls_id), K(ctx->get_ls_leader()), K(snapshot_tablet_id_), K(get_snapshot_key_prefix()), K(row->storage_datums_[0].get_string()));
         } else if (OB_FAIL(deserialize_snap_data(query_cond, row))) {
           LOG_WARN("failed to deserialize snap data", K(ret));
         }

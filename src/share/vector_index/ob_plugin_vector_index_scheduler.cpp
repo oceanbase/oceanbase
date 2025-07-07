@@ -1353,7 +1353,7 @@ int ObPluginVectorIndexLoadScheduler::switch_to_leader()
     ATOMIC_STORE(&is_leader_, true);
     ATOMIC_STORE(&need_do_for_switch_, true);
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && check_can_do_work()) {
     (void) ObPluginVectorIndexUtils::set_ls_leader_flag(ls_->get_ls_id(), is_leader_);
     refresh_adapter_rb_flag();
   }
