@@ -1846,6 +1846,7 @@ int ObTenantIOManager::alloc_req_and_result(const ObIOInfo &info, ObIOHandle &ha
     if (OB_NOT_NULL(io_request)) {
       //free io_request manually
       io_request->free();
+      io_request = nullptr;
     }
   } else {
     req_holder.hold(io_request);
