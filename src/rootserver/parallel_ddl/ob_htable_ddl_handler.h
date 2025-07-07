@@ -37,7 +37,7 @@ public:
                      const obrpc::ObHTableDDLArg &arg,
                      obrpc::ObHTableDDLRes &res)
       : is_inited_(false),
-        allocator_("HTbDDLH", OB_MALLOC_NORMAL_BLOCK_SIZE, arg.exec_tenant_id_),
+        allocator_("HTbDDLH"),
         ddl_service_(ddl_service),
         schema_service_(schema_service),
         arg_(arg),

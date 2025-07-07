@@ -13982,7 +13982,7 @@ public:
       : ObDDLArg(),
         ddl_type_(),
         ddl_param_(nullptr),
-        deserialize_allocator_("HTleDDLArg", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+        deserialize_allocator_("HTleDDLArg")
   {}
   ~ObHTableDDLArg();
   bool is_valid() const;

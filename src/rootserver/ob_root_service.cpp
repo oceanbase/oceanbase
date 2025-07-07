@@ -3249,8 +3249,7 @@ int ObRootService::parallel_htable_ddl(const ObHTableDDLArg &arg, ObHTableDDLRes
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema service is null", KR(ret));
   } else {
-    ObArenaAllocator tmp_allocator;
-    tmp_allocator.set_attr(ObMemAttr(tenant_id, "paralHtDDL", ObCtxIds::DEFAULT_CTX_ID));
+    ObArenaAllocator tmp_allocator(lib::ObLabel("paralHtDDL"));
     ObHTableDDLHandlerGuard guard(tmp_allocator);
     ObHTableDDLHandler *handler = nullptr;
     if (OB_FAIL(guard.get_handler(ddl_service_, *schema_service_, arg, res, handler))) {

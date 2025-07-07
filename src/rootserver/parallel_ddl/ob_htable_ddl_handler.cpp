@@ -192,8 +192,8 @@ int ObCreateHTableHandler::handle()
   ObCreateTableGroupRes *create_tablegroup_result = nullptr;
   ObSEArray<ObCreateTableHelper*, 4> create_table_helpers;
   ObSEArray<ObCreateTableRes*, 4> create_table_results;
-  create_table_helpers.set_attr(ObMemAttr(tenant_id, "TmpTbHelps"));
-  create_table_results.set_attr(ObMemAttr(tenant_id, "TmpTbRes"));
+  create_table_helpers.set_attr(ObMemAttr(OB_SERVER_TENANT_ID, "TmpTbHelps"));
+  create_table_results.set_attr(ObMemAttr(OB_SERVER_TENANT_ID, "TmpTbRes"));
   ObHTableLockHelper lock_helper(&schema_service_, tenant_id, &trans);
 
   if (OB_ISNULL(sql_proxy)) {
@@ -491,9 +491,9 @@ int ObDropHTableHandler::handle()
   ObSEArray<ObDropTableHelper*, 4> drop_table_helpers;
   ObSEArray<ObDropTableArg*, 4> drop_table_args;
   ObSEArray<ObDropTableRes*, 4> drop_table_results;
-  drop_table_helpers.set_attr(ObMemAttr(tenant_id, "DrpTmpTbHelps"));
-  drop_table_args.set_attr(ObMemAttr(tenant_id, "DrpTmpTbArg"));
-  drop_table_results.set_attr(ObMemAttr(tenant_id, "DrpTmpTbRes"));
+  drop_table_helpers.set_attr(ObMemAttr(OB_SERVER_TENANT_ID, "DrpTmpTbHelps"));
+  drop_table_args.set_attr(ObMemAttr(OB_SERVER_TENANT_ID, "DrpTmpTbArg"));
+  drop_table_results.set_attr(ObMemAttr(OB_SERVER_TENANT_ID, "DrpTmpTbRes"));
   ObHTableLockHelper lock_helper(&schema_service_, tenant_id, &trans);
 
   if (OB_ISNULL(sql_proxy) || OB_ISNULL(param_)) {

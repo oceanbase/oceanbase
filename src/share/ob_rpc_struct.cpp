@@ -13786,7 +13786,6 @@ OB_DEF_DESERIALIZE(ObHTableDDLArg)
   if (OB_FAIL(ObDDLArg::deserialize(buf, data_len, pos))) {
     RPC_WARN("fail to deserialize ObDDLArg", KR(ret));
   } else if (pos < data_len) {
-    deserialize_allocator_.set_attr(ObMemAttr(exec_tenant_id_, "HTleDDLArg"));
     LST_DO_CODE(OB_UNIS_DECODE, ddl_type_);
     if (OB_SUCC(ret)) {
       switch (ddl_type_) {
