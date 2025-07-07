@@ -4377,7 +4377,7 @@ int ObLSTabletService::check_old_row_legitimacy(
         const ObStorageDatum &sql_val = old_row.storage_datums_[i];
         const ObObjMeta &sql_meta = column_descs.at(i).col_type_;
         int cmp_ret = 0;
-        if (sql_meta.is_lob_storage()) {
+        if (sql_meta.is_lob_storage() || sql_meta.is_user_defined_sql_type()) {
           // skip all text and lob
         } else if (sql_meta.is_lob_locator()) {
           //skip check lob column type when do the normal sql write check
