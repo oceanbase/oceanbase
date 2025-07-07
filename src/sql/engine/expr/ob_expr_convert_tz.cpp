@@ -84,55 +84,53 @@ int ObExprConvertTZ::calc_convert_tz(int64_t timestamp_data,
   return ret;
 }
 
-int ObExprConvertTZ::calc_convert_tz_timestamp(
-    const ObExpr &expr,
-    ObEvalCtx &ctx,
-    int64_t &timestamp_data,
-    const ObString &tz_str_s,
-    const ObString &tz_str_d,
-    ObSQLSessionInfo *session)
-{
+int ObExprConvertTZ::calc_convert_tz_timestamp(const ObExpr &expr, ObEvalCtx &ctx, int64_t &timestamp_data, const ObString &tz_str_s, const ObString &tz_str_d, ObSQLSessionInfo *session) {
   int ret = OB_SUCCESS;
-  int32_t offset_s = 0;
-  int32_t offset_d = 0;
   ObExecContext *exec_ctx = &ctx.exec_ctx_;
-  ObExprConvertTZCtx *cvrt_ctx = NULL;
-  uint64_t cvrt_id = static_cast<uint64_t>(expr.expr_ctx_id_);
+  ObExprConvertTZCtx *cvrt_ctx = nullptr;
 
-  if (NULL == (cvrt_ctx = static_cast<ObExprConvertTZCtx *>(exec_ctx->get_expr_op_ctx(cvrt_id)))) {
-    if (OB_FAIL(exec_ctx->create_expr_op_ctx(cvrt_id, cvrt_ctx))) {
+  // for multi stmt, expr ctx may be shared, so we need get tz_info each time
+  if (!ctx.exec_ctx_.get_sql_ctx()->multi_stmt_item_.is_part_of_multi_stmt() &&
+        OB_ISNULL(cvrt_ctx = static_cast<ObExprConvertTZCtx*>(exec_ctx->get_expr_op_ctx(expr.expr_ctx_id_)))) {
+    if (OB_FAIL(exec_ctx->create_expr_op_ctx(expr.expr_ctx_id_, cvrt_ctx))) {
       LOG_WARN("create expr op ctx failed", K(ret));
-    } else if (OB_FAIL(get_cvrt_tz_info(tz_str_s, session, cvrt_ctx->tz_info_wrap_src_))) {
-      cvrt_ctx->find_tz_ret_ = ret;
-      LOG_WARN("get tz_st_pos failed", K(ret));
-    } else if (OB_FAIL(get_cvrt_tz_info(tz_str_d, session, cvrt_ctx->tz_info_wrap_dst_))) {
-      cvrt_ctx->find_tz_ret_ = ret;
-      LOG_WARN("get tz_dst_pos failed", K(ret));
     }
-  }
-
-  if (OB_FAIL(ret) || OB_FAIL(cvrt_ctx->find_tz_ret_)) {
-  } else if (cvrt_ctx->tz_info_wrap_src_.is_position_class()) {
-    if (OB_FAIL(calc(timestamp_data, cvrt_ctx->tz_info_wrap_src_.get_tz_info_pos(), false))) {
-      LOG_WARN("calc failed", K(ret), K(timestamp_data));
-    }
-  } else if (cvrt_ctx->tz_info_wrap_src_.is_offset_class()) {
-    offset_s = cvrt_ctx->tz_info_wrap_src_.get_tz_offset();
-    timestamp_data += (-1 * offset_s * USECS_PER_SEC);
-    LOG_DEBUG("str to offset succeed", K(tz_str_s), K(offset_s));
   }
 
   if (OB_FAIL(ret)) {
-  } else if (cvrt_ctx->tz_info_wrap_dst_.is_position_class()) {
-    if (OB_FAIL(calc(timestamp_data, cvrt_ctx->tz_info_wrap_dst_.get_tz_info_pos(), true))) {
-      LOG_WARN("calc failed", K(ret), K(timestamp_data));
-    }
-  } else if (cvrt_ctx->tz_info_wrap_dst_.is_offset_class()) {
-    offset_d = cvrt_ctx->tz_info_wrap_dst_.get_tz_offset();
-    timestamp_data += (offset_d * USECS_PER_SEC);
-    LOG_DEBUG("str to offset succeed", K(tz_str_d), K(offset_d));
+  } else if (OB_FAIL(get_cvrt_tz_info(tz_str_s, session, cvrt_ctx->tz_info_wrap_src_))) {
+    cvrt_ctx->find_tz_ret_ = ret;
+    LOG_WARN("get tz_st_pos failed", K(ret));
+  } else if (OB_FAIL(get_cvrt_tz_info(tz_str_d, session, cvrt_ctx->tz_info_wrap_dst_))) {
+    cvrt_ctx->find_tz_ret_ = ret;
+    LOG_WARN("get tz_dst_pos failed", K(ret));
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(handle_timezone_offset(timestamp_data, cvrt_ctx->tz_info_wrap_src_, false))) {
+    LOG_WARN("handle source timezone offset failed", K(ret));
+  } else if (OB_FAIL(handle_timezone_offset(timestamp_data, cvrt_ctx->tz_info_wrap_dst_, true))) {
+    LOG_WARN("handle destination timezone offset failed", K(ret));
+  }
+
+  return ret;
+}
+
+int ObExprConvertTZ::handle_timezone_offset(int64_t &timestamp_data, const ConvertTZInfoWrap &tz_info_wrap, bool is_destination) {
+  int ret = OB_SUCCESS;
+  if (tz_info_wrap.is_position_class()) {
+    if (OB_FAIL(calc(timestamp_data, tz_info_wrap.get_tz_info_pos(), is_destination))) {
+      LOG_WARN("calc failed", K(ret), K(timestamp_data));
+    }
+  } else if (tz_info_wrap.is_offset_class()) {
+    int32_t offset = tz_info_wrap.get_tz_offset();
+    if (is_destination) {
+      timestamp_data += (offset * USECS_PER_SEC);
+    } else {
+      timestamp_data -= (offset * USECS_PER_SEC);
+    }
+    LOG_DEBUG(is_destination ? "dst to offset succeed" : "src to offset succeed", K(offset));
+  }
   return ret;
 }
 
@@ -381,7 +379,7 @@ int ObExprConvertTZ::convert_tz_vector(const ObExpr &expr,
       IN_TYPE left_val = *reinterpret_cast<const IN_TYPE*>(arg_vec->get_payload(idx));
       int64_t res_val = left_val;
       int32_t offset_couple =0;
-      if (str_s_vec->is_null(idx) || str_s_vec->get_string(idx).empty() ||
+      if (arg_vec->is_null(idx) || str_s_vec->is_null(idx) || str_s_vec->get_string(idx).empty() ||
               str_d_vec->is_null(idx) || str_d_vec->get_string(idx).empty()) {
          res_vec->set_null(idx);
       } else {
@@ -448,6 +446,11 @@ int ObExprConvertTZ::convert_tz_vector_const(const ObExpr &expr,
     ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       if (skip.at(idx) || eval_flags.at(idx)) { continue; }
+      if (arg_vec->is_null(idx)) {
+        res_vec->set_null(idx);
+        eval_flags.set(idx);
+        continue;
+      }
       IN_TYPE left_val = *reinterpret_cast<const IN_TYPE*>(arg_vec->get_payload(idx));
       int64_t res_val = left_val;
       if (OB_FAIL(calc_convert_tz_timestamp(expr, ctx, res_val, tz_str_s, tz_str_d, session))) {

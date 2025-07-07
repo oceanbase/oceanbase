@@ -34,17 +34,17 @@ class ObExprConvertTZ : public ObFuncExprOperator{
         tz_offset_ = 0;
         class_ = NONE;
       }
-      ObTimeZoneInfoPos& get_tz_info_pos() { return tz_info_pos_; }
-      int32_t get_tz_offset() { return tz_offset_; }
-      bool is_offset_class() { return OFFSET == class_; }
-      bool is_position_class() { return POSITION == class_; }
+      ObTimeZoneInfoPos& get_tz_info_pos() const { return const_cast<ObTimeZoneInfoPos&>(tz_info_pos_); }
+      int32_t get_tz_offset() const { return tz_offset_; }
+      bool is_offset_class() const { return OFFSET == class_; }
+      bool is_position_class() const { return POSITION == class_; }
       void set_position_class() { class_ = POSITION; }
       void set_tz_offset(int32_t tz_offset) {
         tz_offset_ = tz_offset;
         class_ = OFFSET;
       }
       void set_info_class(ObTZInfoClass cls) { class_ = cls; }
-      ObTZInfoClass get_info_class() { return class_; }
+      ObTZInfoClass get_info_class() const { return class_; }
     private:
       ObTimeZoneInfoPos tz_info_pos_;
       int32_t tz_offset_;
@@ -94,6 +94,7 @@ public:
 private:
   // disallow copy
   static int get_cvrt_tz_info(const ObString &tz_str, ObSQLSessionInfo *session, ConvertTZInfoWrap &tz_info_wrap);
+  static int handle_timezone_offset(int64_t &timestamp_data, const ConvertTZInfoWrap &tz_info_wrap, bool is_destination);
   static int get_offset_by_couple_tz(int64_t timestamp_data, int32_t &off, const ObString &tz_str_s, const ObString &tz_str_d, ObSQLSessionInfo *session);
 
   static int calc_convert_tz_timestamp(const ObExpr &expr, ObEvalCtx &ctx, int64_t &timestamp_data, const ObString &tz_str_s,//source time zone (input2)
