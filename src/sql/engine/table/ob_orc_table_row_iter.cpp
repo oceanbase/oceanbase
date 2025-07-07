@@ -194,9 +194,11 @@ int ObOrcTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
       ObDataAccessPathExtraInfo *data_access_info =
         static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
-      CK (data_access_info != nullptr);
-      CK (data_access_info->data_access_path_.ptr() != nullptr);
-      CK (data_access_info->data_access_path_.length() != 0);
+      if (data_access_info == nullptr ||
+          data_access_info->data_access_path_.ptr() == nullptr ||
+          data_access_info->data_access_path_.length() == 0) {
+        ret = OB_EXTERNAL_ACCESS_PATH_ERROR;
+      }
     }
     OZ (file_meta_column_exprs_.assign(file_meta_column_exprs));
 
@@ -571,12 +573,6 @@ int ObOrcTableRowIterator::next_file()
         for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
           ObDataAccessPathExtraInfo *data_access_info =
               static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
-          if (OB_SUCC(ret) && (data_access_info == nullptr ||
-                              data_access_info->data_access_path_.ptr() == nullptr ||
-                              data_access_info->data_access_path_.length() == 0))
-          {
-            ret = OB_EXTERNAL_ACCESS_PATH_ERROR;
-          }
           if (OB_SUCC(ret)) {
             include_names_list.push_front(std::string(data_access_info->data_access_path_.ptr(),
                                                       data_access_info->data_access_path_.length())); //x.y.z -> column_id
@@ -585,7 +581,20 @@ int ObOrcTableRowIterator::next_file()
         orc::RowReaderOptions rowReaderOptions;
         rowReaderOptions.include(include_names_list);
         if (OB_SUCC(ret)) {
-          row_reader_ = reader_->createRowReader(rowReaderOptions);
+          try {
+            row_reader_ = reader_->createRowReader(rowReaderOptions);
+          } catch(const std::exception& e) {
+            if (OB_SUCC(ret)) {
+              ret = OB_ORC_READ_ERROR;
+              LOG_USER_ERROR(OB_ORC_READ_ERROR, e.what());
+              LOG_WARN("unexpected error", K(ret), "Info", e.what());
+            }
+          } catch(...) {
+            if (OB_SUCC(ret)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected error", K(ret));
+            }
+          }
         }
         if (OB_FAIL(ret)) {
         } else if (!row_reader_) {
