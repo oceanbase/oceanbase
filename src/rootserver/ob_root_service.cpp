@@ -10832,6 +10832,10 @@ int ObRootService::handle_archive_log(const obrpc::ObArchiveLogArg &arg)
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (GCTX.is_shared_storage_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("archivelog does not support shared storage mode for now", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "archivelog in SS mode is");
   } else if (OB_FAIL(ObBackupServiceProxy::handle_archive_log(arg))) {
     LOG_WARN("failed to handle archive log", K(ret));
   }
