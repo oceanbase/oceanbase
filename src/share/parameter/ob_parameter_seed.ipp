@@ -2750,3 +2750,7 @@ DEF_CAP(_storage_stream_rpc_buffer_size, OB_TENANT_PARAMETER, "2M", "[2M,128M]"
 DEF_BOOL(_enable_routine_call_param_defend, OB_TENANT_PARAMETER, "True",
          "Enable or disable routine call parameter defend.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT_WITH_CHECKER(_hnsw_max_scan_vectors, OB_TENANT_PARAMETER, "20000",
+                    common::ObHNSWIterFilterScanNumChecker,
+                    "The upper limit of hnsw iter-filter search nums. Range: [0,)",
+                    ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
