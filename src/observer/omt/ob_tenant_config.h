@@ -89,7 +89,7 @@ public:
   int64_t get_create_timestamp() const { return create_timestamp_; }
   int got_version(int64_t version, const bool remove_repeat);
   int update_local(int64_t expected_version, common::ObMySQLProxy::MySQLResult &result,
-                   bool save2file = true);
+                   bool save2file = true, bool publish_special_config = true);
 
   OB_UNIS_VERSION(1);
 private:
