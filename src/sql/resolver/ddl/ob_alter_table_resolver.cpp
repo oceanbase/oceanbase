@@ -6566,6 +6566,8 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode &node)
           LOG_WARN("can't set primary key nullable", K(ret));
         } else if (OB_FAIL(check_alter_geo_column_allowed(alter_column_schema, *origin_col_schema))) {
           LOG_WARN("modify geo column not allowed", K(ret));
+        } else if (OB_FAIL(check_alter_rb_column_allowed(alter_column_schema, *origin_col_schema))) {
+          LOG_WARN("modify roaringbitmap column not allowed", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
@@ -6745,6 +6747,27 @@ int ObAlterTableResolver::check_alter_geo_column_allowed(const share::schema::Al
   return ret;
 }
 
+int ObAlterTableResolver::check_alter_rb_column_allowed(const share::schema::AlterColumnSchema &alter_column_schema,
+                                                        const share::schema::ObColumnSchemaV2 &origin_col_schema)
+{
+  int ret = OB_SUCCESS;
+  if (origin_col_schema.get_data_type() == ObRoaringBitmapType
+      && alter_column_schema.get_data_type() != ObRoaringBitmapType
+      && !ob_is_string_type(alter_column_schema.get_data_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify roaringbitmap to other type except string");
+    LOG_WARN("can't not modify roaringbitmap type", K(ret),
+            K(origin_col_schema.get_data_type()), K(alter_column_schema.get_data_type()));
+  } else if (alter_column_schema.get_data_type() == ObRoaringBitmapType
+             && origin_col_schema.get_data_type() != ObRoaringBitmapType) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify other type to roaringbitmap");
+    LOG_WARN("can't not modify other type to roaringbitmap type", K(ret),
+            K(origin_col_schema.get_data_type()), K(alter_column_schema.get_data_type()));
+  }
+  return ret;
+}
+
 int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
                                                 bool &is_modify_column_visibility,
                                                 ObReducedVisibleColSet &reduced_visible_col_set)
@@ -6911,19 +6934,8 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify geometry srid");
             LOG_WARN("can't not modify geometry srid", K(ret),
                     K(origin_col_schema->get_srid()), K(alter_column_schema.get_srid()));
-          } else if (origin_col_schema->get_data_type() == ObRoaringBitmapType
-                     && alter_column_schema.get_data_type() != ObRoaringBitmapType
-                     && !ob_is_string_type(alter_column_schema.get_data_type())) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify roaringbitmap to other type except string");
-            LOG_WARN("can't not modify roaringbitmap type", K(ret),
-                    K(origin_col_schema->get_data_type()), K(alter_column_schema.get_data_type()));
-          } else if (alter_column_schema.get_data_type() == ObRoaringBitmapType
-                     && origin_col_schema->get_data_type() != ObRoaringBitmapType) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify other type to roaringbitmap");
-            LOG_WARN("can't not modify other type to roaringbitmap type", K(ret),
-                    K(origin_col_schema->get_data_type()), K(alter_column_schema.get_data_type()));
+          } else if (OB_FAIL(check_alter_rb_column_allowed(alter_column_schema, *origin_col_schema))) {
+            LOG_WARN("modify roaringbitmap column not allowed", K(ret));
           }
         }
       }
