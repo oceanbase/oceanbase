@@ -5156,9 +5156,7 @@ int ObVectorIndexUtil::set_adaptive_try_path(ObVecIdxExtraInfo& vc_info, const b
   int ret = OB_SUCCESS;
   double output_row_count = vc_info.row_count_ * vc_info.selectivity_;
   if (vc_info.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN) {
-    if (vc_info.with_extra_info_ && vc_info.can_use_vec_pri_opt_) {
-      vc_info.adaptive_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_IN_FILTER;
-    } else if (output_row_count <= ObVecIdxExtraInfo::MAX_HNSW_BRUTE_FORCE_SIZE) {
+    if (output_row_count <= ObVecIdxExtraInfo::MAX_HNSW_BRUTE_FORCE_SIZE) {
       vc_info.adaptive_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER;
     } else if (is_primary_idx) {
       vc_info.adaptive_try_path_ = (output_row_count < ObVecIdxExtraInfo::MAX_HNSW_PRE_ROW_CNT_WITH_ROWKEY

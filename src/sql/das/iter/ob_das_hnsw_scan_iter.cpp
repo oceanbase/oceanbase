@@ -33,7 +33,7 @@ namespace sql
 int ObDASHNSWScanIter::do_table_scan()
 {
   int ret = OB_SUCCESS;
-  idx_iter_first_scan_ = false;
+
   if (!is_primary_pre_with_rowkey_with_filter_) {
     if (is_pre_filter() || is_in_filter()) {
       if (OB_ISNULL(inv_idx_scan_iter_)) {
@@ -41,6 +41,8 @@ int ObDASHNSWScanIter::do_table_scan()
         LOG_WARN("inv idx scan iter is null", K(ret));
       } else if (OB_FAIL(inv_idx_scan_iter_->do_table_scan())) {
         LOG_WARN("failed to do inv idx table scan.", K(ret));
+      } else {
+        idx_iter_first_scan_ = false;
       }
     }
   } else {
@@ -200,9 +202,9 @@ int ObDASHNSWScanIter::inner_init(ObDASIterParam &param)
       ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(*exec_ctx_);
       ObVecIdxAdaTryPath cur_path = ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN;
       if (OB_ISNULL(plan_ctx->get_phy_plan())) {
-        ret = OB_ERR_UNEXPECTED;
+        // remote scan, phy plan is null, do nothing, just use try path in ctdef
         LOG_WARN("plan ctx is null", K(ret), KP(plan_ctx));
-      } else if (OB_FALSE_IT( cur_path = static_cast<ObVecIdxAdaTryPath>(plan_ctx->get_phy_plan()->stat_.vec_index_exec_ctx_.cur_path_))) {
+      } else if (OB_FALSE_IT(cur_path = static_cast<ObVecIdxAdaTryPath>(plan_ctx->get_phy_plan()->stat_.vec_index_exec_ctx_.cur_path_))) {
       } else if (cur_path != vec_idx_try_path_ &&
                  cur_path > ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN &&
                  cur_path < ObVecIdxAdaTryPath::VEC_PATH_MAX) {
@@ -609,7 +611,7 @@ int ObDASHNSWScanIter::reset_filter_path()
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(*exec_ctx_);
   ObPlanStat* plan_stat = nullptr;
   if (OB_ISNULL(plan_ctx->get_phy_plan())) {
-    ret = OB_ERR_UNEXPECTED;
+    // remote scan, phy plan is null, do nothing, just use try path in ctdef
     LOG_WARN("plan ctx is null", K(ret), KP(plan_ctx));
   } else if (OB_FALSE_IT(plan_stat = const_cast<ObPlanStat*>(&(plan_ctx->get_phy_plan()->stat_)))) {
   } else if (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER) {
@@ -620,7 +622,7 @@ int ObDASHNSWScanIter::reset_filter_path()
     vec_idx_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER;
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) || OB_ISNULL(plan_stat)) {
   } else if (OB_FAIL(updata_vec_exec_ctx(plan_stat))) {
     LOG_WARN("failed to updata vec exec ctx", K(ret), K(vec_idx_try_path_));
   } else {
@@ -666,7 +668,7 @@ int ObDASHNSWScanIter::updata_vec_exec_ctx(ObPlanStat* plan_stat)
       iter_time = std::log(iter_time) * DECAY_FACTOR;
       pre_time = std::log(pre_time) * DECAY_FACTOR;
       in_time = std::log(in_time) * DECAY_FACTOR;
-      LOG_INFO("begin to reset plan stat filter path", K(plan_stat->vec_index_exec_ctx_.record_count_),
+      FLOG_INFO("begin to reset plan stat filter path", K(plan_stat->vec_index_exec_ctx_.record_count_),
       K(plan_stat->vec_index_exec_ctx_.cur_path_), K(vec_idx_try_path_), K(adaptive_ctx_), K(ret));
       ATOMIC_STORE(&(plan_stat->vec_index_exec_ctx_.record_count_), 0);
       ATOMIC_STORE(&(plan_stat->vec_index_exec_ctx_.iter_filter_chosen_times_), static_cast<int64_t>(iter_time));
@@ -685,7 +687,7 @@ int ObDASHNSWScanIter::process_adaptor_state(bool is_vectorized)
   if (OB_FAIL(inner_process_adaptor_state(is_vectorized))) {
     if (ret == OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY && can_retry_) {
       ret = OB_SUCCESS;
-      LOG_INFO("hnsw change filter path", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
+      FLOG_INFO("hnsw change filter path", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
       if (OB_FAIL(reset_filter_path())) {
         LOG_WARN("failed to reset filter path", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_), K(ret));
       } else if (idx_iter_first_scan_ && OB_FAIL(do_table_scan())) {
