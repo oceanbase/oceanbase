@@ -254,8 +254,6 @@ int ObCGScanner::open_cur_data_block()
           current_ = MAX(cs_range.start_row_id_, query_index_range_.start_row_id_);
         }
         access_ctx_->inc_micro_access_cnt();
-        EVENT_INC(ObStatEventIds::BLOCKSCAN_BLOCK_CNT);
-        ++access_ctx_->table_store_stat_.pushdown_micro_access_cnt_;
         LOG_TRACE("[COLUMNSTORE] open data block", "row_range", cs_range);
         LOG_DEBUG("Success to open micro block", K(ret), K(prefetcher_.cur_micro_data_fetch_idx_),
                   K(micro_info), K(micro_handle), KPC(this), K(common::lbt()));
@@ -441,6 +439,9 @@ int ObCGScanner::inner_filter(
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("Fail to open cur data block", K(ret));
           }
+        } else {
+          ++access_ctx_->table_store_stat_.pushdown_micro_access_cnt_;
+          EVENT_INC(ObStatEventIds::BLOCKSCAN_BLOCK_CNT);
         }
       }
       if (OB_SUCC(ret)) {
@@ -664,6 +665,9 @@ int ObCGRowScanner::fetch_rows(const int64_t batch_size, uint64_t &count, const 
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("Fail to open data block", K(ret), K_(current));
       }
+    } else {
+      ++access_ctx_->table_store_stat_.pushdown_micro_access_cnt_;
+      EVENT_INC(ObStatEventIds::BLOCKSCAN_BLOCK_CNT);
     }
   }
 
@@ -683,6 +687,9 @@ int ObCGRowScanner::fetch_rows(const int64_t batch_size, uint64_t &count, const 
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Fail to open data block", K(ret), K_(current));
         }
+      } else {
+        ++access_ctx_->table_store_stat_.pushdown_micro_access_cnt_;
+        EVENT_INC(ObStatEventIds::BLOCKSCAN_BLOCK_CNT);
       }
     } else if (OB_FAIL(inner_fetch_rows(batch_size, count, datum_offset))) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {

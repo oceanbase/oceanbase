@@ -163,6 +163,10 @@ int ObCGGroupByScanner::decide_can_group_by(const int32_t group_by_col, bool &ca
                     row_cnt, read_cnt, distinct_cnt, filter_bitmap_, can_group_by))) {
           LOG_WARN("Failed to decide use group by", K(ret));
         }
+        if (OB_SUCC(ret)) {
+          ++access_ctx_->table_store_stat_.pushdown_micro_access_cnt_;
+          EVENT_INC(ObStatEventIds::BLOCKSCAN_BLOCK_CNT);
+        }
         break;
       }
     }
