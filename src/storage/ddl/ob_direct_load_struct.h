@@ -667,7 +667,7 @@ public:
 
   virtual ~ObIvfSliceStore() {}
   virtual void reset();
-  virtual int build_clusters() = 0;
+  virtual int build_clusters(ObInsertMonitor* insert_monitor) = 0;
   virtual int is_empty(bool &empty) = 0;
   OB_INLINE int64_t get_context_id() { return context_id_; }
   OB_INLINE void set_lob_inrow_threshold(int64_t lob_inrow_threshold) { lob_inrow_threshold_ = lob_inrow_threshold; }
@@ -716,7 +716,7 @@ public:
       const ObIArray<ObColumnSchemaItem> &col_array,
       const int64_t context_id) override;
   virtual void reset() override;
-  virtual int build_clusters() override;
+  virtual int build_clusters(ObInsertMonitor* insert_monitor) override;
   // for write: ObDirectLoadSliceWriter::fill_sstable_slice -> get_next_vector_data_row
   virtual int append_row(const blocksstable::ObDatumRow &datum_row) override;
   virtual int is_empty(bool &empty) override;
@@ -749,7 +749,7 @@ public:
       const ObIArray<ObColumnSchemaItem> &col_array,
       const int64_t context_id) override;
   virtual void reset() override;
-  virtual int build_clusters() override;
+  virtual int build_clusters(ObInsertMonitor* insert_monitor) override;
   virtual int append_row(const blocksstable::ObDatumRow &datum_row) override;
   virtual int get_next_vector_data_row(
     const int64_t rowkey_cnt,
@@ -781,7 +781,7 @@ public:
       const ObIArray<ObColumnSchemaItem> &col_array,
       const int64_t context_id) override;
   virtual void reset() override;
-  virtual int build_clusters() override;
+  virtual int build_clusters(ObInsertMonitor* insert_monitor) override;
   virtual int append_row(const blocksstable::ObDatumRow &datum_row) override;
   virtual int get_next_vector_data_row(
     const int64_t rowkey_cnt,
@@ -1183,17 +1183,24 @@ private:
 
 class ObTabletDirectLoadMgr;
 
-struct ObInsertMonitor final{
+struct ObInsertMonitor final {
 public:
   ObInsertMonitor(int64_t &tmp_scan_row, int64_t &tmp_insert_row, int64_t &cg_insert_row)
-    : scanned_row_cnt_(tmp_scan_row), inserted_row_cnt_(tmp_insert_row), inserted_cg_row_cnt_(cg_insert_row)
-  {};
+      : scanned_row_cnt_(tmp_scan_row),
+        inserted_row_cnt_(tmp_insert_row),
+        inserted_cg_row_cnt_(cg_insert_row),
+        vec_index_task_thread_pool_cnt_(nullptr),
+        vec_index_task_total_cnt_(nullptr),
+        vec_index_task_finish_cnt_(nullptr){};
   ~ObInsertMonitor();
 
 public:
   int64_t &scanned_row_cnt_;
   int64_t &inserted_row_cnt_;
   int64_t &inserted_cg_row_cnt_;
+  int64_t *vec_index_task_thread_pool_cnt_;
+  int64_t *vec_index_task_total_cnt_;
+  int64_t *vec_index_task_finish_cnt_;
 };
 
 class ObDirectLoadSliceWriter final

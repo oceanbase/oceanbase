@@ -69,6 +69,9 @@ SQL_MONITOR_STATNAME_DEF(COMPRESS_TYPE, sql_monitor_statname::INT, "COMPRESS_TYP
 // SSTABLE INSERT
 SQL_MONITOR_STATNAME_DEF(SSTABLE_INSERT_ROW_COUNT, sql_monitor_statname::INT, "sstable insert row count", "sstable insert row count")
 SQL_MONITOR_STATNAME_DEF(SSTABLE_INSERT_CG_ROW_COUNT, sql_monitor_statname::INT, "sstable insert cg_row count", "sstable insert cg row count")
+SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_THREAD_POOL_COUNT, sql_monitor_statname::INT, "vector index task thread pool count", "vector index task thread pool count")
+SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_TOTAL_COUNT, sql_monitor_statname::INT, "vector index task total count", "vector index task total count")
+SQL_MONITOR_STATNAME_DEF(VECTOR_INDEX_TASK_FINISH_COUNT, sql_monitor_statname::INT, "vector index task finish count", "vector index task finish count")
 // Table Scan stat
 SQL_MONITOR_STATNAME_DEF(IO_READ_BYTES, sql_monitor_statname::CAPACITY, "total io bytes read from disk", "total io bytes read from storage")
 SQL_MONITOR_STATNAME_DEF(SSSTORE_READ_BYTES, sql_monitor_statname::CAPACITY, "total bytes processed by ssstore", "total bytes processed by ssstore")

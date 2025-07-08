@@ -14,6 +14,7 @@
 #include "ob_vector_kmeans_ctx.h"
 #include "lib/container/ob_array_array.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
+#include "storage/ddl/ob_direct_load_struct.h"
 
 namespace oceanbase {
 using namespace common;
@@ -411,7 +412,39 @@ int ObMultiKmeansExecutor::init_build_handle(ObKmeansBuildTaskHandler &handle)
   return ret;
 }
 
-int ObMultiKmeansExecutor::build_parallel(const common::ObTableID &table_id, const common::ObTabletID &tablet_id)
+void ObMultiKmeansExecutor::wait_kmeans_task_finish(ObKmeansBuildTask *build_tasks, ObKmeansBuildTaskHandler &handle,
+                                                    ObInsertMonitor *insert_monitor)
+{
+  int ret = OB_SUCCESS;
+  int64_t last_finish_count = 0;
+  bool is_all_finish = false;
+  if (OB_NOT_NULL(build_tasks)) {
+    if (OB_NOT_NULL(insert_monitor) && OB_NOT_NULL(insert_monitor->vec_index_task_total_cnt_)) {
+      (void)ATOMIC_AAF(insert_monitor->vec_index_task_total_cnt_, pq_m_size_);
+    }
+    while (!is_all_finish && handle.get_task_ref() > 0) {
+      ob_usleep(ObKmeansBuildTaskHandler::WAIT_RETRY_PUSH_TASK_TIME);
+      is_all_finish = true;
+      int64_t now_finish_count = 0;
+      for (int i = 0; i < pq_m_size_; i++) {
+        if (build_tasks[i].is_finish()) {
+          now_finish_count++;
+        }
+      }
+      is_all_finish = pq_m_size_ == now_finish_count;
+      if (last_finish_count != now_finish_count && OB_NOT_NULL(insert_monitor) &&
+          OB_NOT_NULL(insert_monitor->vec_index_task_finish_cnt_)) {
+        (void)ATOMIC_AAF(insert_monitor->vec_index_task_finish_cnt_, now_finish_count - last_finish_count);
+      }
+      if (OB_NOT_NULL(insert_monitor) && OB_NOT_NULL(insert_monitor->vec_index_task_thread_pool_cnt_)) {
+        (void)ATOMIC_SET(insert_monitor->vec_index_task_thread_pool_cnt_, handle.get_thread_cnt());
+      }
+      last_finish_count = now_finish_count;
+    }
+  }
+}
+
+int ObMultiKmeansExecutor::build_parallel(const common::ObTableID &table_id, const common::ObTabletID &tablet_id, ObInsertMonitor* insert_monitor)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -465,14 +498,7 @@ int ObMultiKmeansExecutor::build_parallel(const common::ObTableID &table_id, con
           }
         }
         // 3. wait for all task finish
-        bool is_all_finish = false;
-        while (OB_NOT_NULL(build_tasks) && !is_all_finish && handle.get_task_ref() > 0) {
-          ob_usleep(ObKmeansBuildTaskHandler::WAIT_RETRY_PUSH_TASK_TIME);
-          is_all_finish = true;
-          for (int i = 0; i < pq_m_size_ && is_all_finish; i++) {
-            is_all_finish = build_tasks[i].is_finish();
-          }
-        }
+        wait_kmeans_task_finish(build_tasks, handle, insert_monitor);
 
         // 4. check task result
         for (int i = 0; i < pq_m_size_ && OB_SUCC(ret); i++) {

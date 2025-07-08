@@ -20,6 +20,10 @@
 #include "share/vector_type/ob_vector_common_util.h"
 
 namespace oceanbase {
+namespace storage
+{
+struct ObInsertMonitor;
+}
 namespace share {
 enum ObKMeansStatus
 {
@@ -225,6 +229,7 @@ private:
 };
 
 class ObKmeansBuildTaskHandler;
+class ObKmeansBuildTask;
 class ObMultiKmeansExecutor : public ObKmeansExecutor
 {
 public:
@@ -243,7 +248,8 @@ public:
           const int64_t pq_m_size = 1) override;
   virtual int build();
   int init_build_handle(ObKmeansBuildTaskHandler &handle);
-  int build_parallel(const common::ObTableID &table_id, const common::ObTabletID &tablet_id);
+  int build_parallel(const common::ObTableID &table_id, const common::ObTabletID &tablet_id,
+                     ObInsertMonitor *insert_monitor);
   int64_t get_total_centers_count() const;
   int64_t get_centers_count_per_kmeans() const;
   int64_t get_centers_dim() const;
@@ -255,6 +261,8 @@ public:
 private:
   int split_vector(float* vector, ObArrayArray<float*> &splited_arrs);
   int prepare_splited_arrs(ObArrayArray<float *> &splited_arrs);
+  void wait_kmeans_task_finish(ObKmeansBuildTask *build_tasks, ObKmeansBuildTaskHandler &handle,
+                               ObInsertMonitor *insert_monitor);
 
   int pq_m_size_;
   ObSEArray<ObKmeansAlgo *, 4> algos_;

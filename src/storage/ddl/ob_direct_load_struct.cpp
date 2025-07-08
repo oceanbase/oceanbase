@@ -3525,7 +3525,7 @@ int ObDirectLoadSliceWriter::inner_fill_ivf_vector_index_data(
   } else if (is_empty) {
     // do nothing
     LOG_INFO("[vec index debug] maybe no data for this tablet", K(tablet_direct_load_mgr_->get_tablet_id()));
-  } else if (OB_FAIL(vec_idx_slice_store.build_clusters())) {
+  } else if (OB_FAIL(vec_idx_slice_store.build_clusters(insert_monitor))) {
     LOG_WARN("fail to build clusters", K(ret));
   } else if (FALSE_IT(vec_idx_slice_store.set_lob_inrow_threshold(lob_inrow_threshold))) {
   } else if (OB_FAIL(inner_fill_vector_index_data(macro_block_slice_store, &vec_idx_slice_store, snapshot_version, storage_schema, start_scn, VIAT_MAX/*index_type*/, insert_monitor))) {
@@ -4433,7 +4433,7 @@ int ObIvfCenterSliceStore::append_row(const blocksstable::ObDatumRow &datum_row)
   return ret;
 }
 
-int ObIvfCenterSliceStore::build_clusters()
+int ObIvfCenterSliceStore::build_clusters(ObInsertMonitor* insert_monitor)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -4670,7 +4670,7 @@ int ObIvfSq8MetaSliceStore::append_row(const blocksstable::ObDatumRow &datum_row
   return ret;
 }
 
-int ObIvfSq8MetaSliceStore::build_clusters()
+int ObIvfSq8MetaSliceStore::build_clusters(ObInsertMonitor* insert_monitor)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -4870,7 +4870,7 @@ int ObIvfPqSliceStore::append_row(const blocksstable::ObDatumRow &datum_row)
   return ret;
 }
 
-int ObIvfPqSliceStore::build_clusters()
+int ObIvfPqSliceStore::build_clusters(ObInsertMonitor* insert_monitor)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -4884,7 +4884,7 @@ int ObIvfPqSliceStore::build_clusters()
     } else if (OB_ISNULL(executor = helper->get_kmeans_ctx())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr ctx", K(ret));
-    } else if (OB_FAIL(executor->build_parallel(table_id_, tablet_id_))) {
+    } else if (OB_FAIL(executor->build_parallel(table_id_, tablet_id_, insert_monitor))) {
       LOG_WARN("failed to build clusters", K(ret));
     }
   }
