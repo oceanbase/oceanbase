@@ -268,5 +268,58 @@ int ObVectorMemContext::init(lib::MemoryContext &mem_context, share::TxShareThro
   return ret;
 }
 
+int ObIvfMemContext::init(lib::MemoryContext &parent_mem_context,
+                          uint64_t *all_vsag_use_mem,
+                          uint64_t tenant_id)
+{
+  INIT_SUCC(ret);
+  lib::ContextParam param;
+  ObSharedMemAllocMgr *share_mem_alloc_mgr = MTL(ObSharedMemAllocMgr *);
+  ObMemAttr attr(tenant_id, "IvfCacheCtx", ObCtxIds::VECTOR_CTX_ID);
+  SET_IGNORE_MEM_VERSION(attr);
+  param.set_mem_attr(attr)
+    .set_page_size(OB_MALLOC_MIDDLE_BLOCK_SIZE)
+    .set_parallel(8)
+    .set_properties(lib::ALLOC_THREAD_SAFE | lib::RETURN_MALLOC_DEFAULT);
+  if (OB_FAIL(parent_mem_context->CREATE_CONTEXT(mem_context_, param))) {
+    OB_LOG(WARN, "create memory entity failed", K(ret));
+  } else if (OB_FAIL(ObVectorMemContext::init(mem_context_, &(share_mem_alloc_mgr->share_resource_throttle_tool())))) {
+    SHARE_LOG(WARN, "vector mem context init failed", K(ret));
+  } else {
+    all_vsag_use_mem_ = all_vsag_use_mem;
+  }
+
+  return ret;
+}
+
+void *ObIvfMemContext::Allocate(size_t size)
+{
+  void *ret_ptr = nullptr;
+  int ret = OB_SUCCESS;
+  if (size != 0) {
+    int64_t actual_size = MEM_PTR_HEAD_SIZE + size;
+    void *ptr = ObVectorMemContext::alloc(actual_size);
+    if (OB_NOT_NULL(ptr)) {
+      ATOMIC_AAF(all_vsag_use_mem_, actual_size);
+
+      *(int64_t*)ptr = actual_size;
+      ret_ptr = (char*)ptr + MEM_PTR_HEAD_SIZE;
+    }
+  }
+
+  return ret_ptr;
+}
+
+void ObIvfMemContext::Deallocate(void* p)
+{
+  if (OB_NOT_NULL(p)) {
+    void *size_ptr = (char*)p - MEM_PTR_HEAD_SIZE;
+    int64_t size = *(int64_t *)size_ptr;
+
+    ATOMIC_SAF(all_vsag_use_mem_, size);
+    ObVectorMemContext::free((char*)p - MEM_PTR_HEAD_SIZE);
+  }
+}
+
 }  // namespace share
 }  // namespace oceanbase

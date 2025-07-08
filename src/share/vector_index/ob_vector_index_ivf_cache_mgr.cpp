@@ -64,9 +64,14 @@ void ObIvfCacheMgr::reset()
   tenant_id_ = OB_INVALID_TENANT_ID;
   cache_mgr_key_.reset();
   vec_param_.reset();
+  ObIAllocator &allocator = get_self_allocator();
 
   FOREACH(iter, cache_objs_) { release_cache_obj(iter->second); }
-  DESTROY_CONTEXT(mem_ctx_);
+  if (OB_NOT_NULL(mem_ctx_)) {
+    mem_ctx_->~ObIvfMemContext();
+    allocator.free(mem_ctx_);
+    mem_ctx_ = nullptr;
+  }
 }
 
 ObIvfCacheMgr::~ObIvfCacheMgr()
@@ -79,20 +84,20 @@ int ObIvfCacheMgr::init(lib::MemoryContext &parent_mem_ctx,
                         int64_t dim, int64_t table_id, uint64_t* all_vsag_use_mem)
 {
   int ret = OB_SUCCESS;
-  lib::ContextParam param;
   ObMemAttr attr(tenant_id_, "IvfCacheCtx");
   SET_IGNORE_MEM_VERSION(attr);
-  param.set_mem_attr(attr)
-      .set_properties(lib::ADD_CHILD_THREAD_SAFE | lib::ALLOC_THREAD_SAFE)
-      .set_page_size(OB_MALLOC_MIDDLE_BLOCK_SIZE)
-      .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
   if (!key.is_valid() || dim <= 0 || OB_ISNULL(all_vsag_use_mem)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tablet id or dim", K(ret), K(key), K(dim), KP(all_vsag_use_mem));
-  } else if (OB_FAIL(parent_mem_ctx->CREATE_CONTEXT(mem_ctx_, param))) {
-    LOG_WARN("create memory entity failed", K(ret));
+  } else if (OB_ISNULL(mem_ctx_ = OB_NEWx(ObIvfMemContext, &get_self_allocator(), all_vsag_use_mem))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to create mem_ctx", K(ret));
+  } else if (OB_FAIL(mem_ctx_->init(parent_mem_ctx, all_vsag_use_mem, tenant_id_))) {
+    LOG_WARN("failed to init memory context", K(ret));
+    reset();
   } else if (OB_FAIL(cache_objs_.create(DEFAULT_IVF_CACHE_HASH_SIZE, attr, attr))) {
     LOG_WARN("fail to create full index adapter map", KR(ret), K(attr));
+    reset();
   } else {
     vec_param_ = vec_index_param;
     vec_param_.dim_ = dim;
@@ -115,30 +120,6 @@ bool ObIvfCacheMgr::dec_ref_and_check_release()
   int64_t ref_count = ATOMIC_SAF(&ref_cnt_, 1);
   // LOG_INFO("dec ref count", K(ref_count), KP(this), KPC(this), K(lbt()));
   return (ref_count == 0);
-}
-
-int ObIvfCacheMgr::estimate_total_memory_used(uint64_t num_vectors, const ObVectorIndexParam &param,
-                                              uint64_t &estimate_mem_used)
-{
-  int ret = OB_SUCCESS;
-  int64_t nlist = num_vectors < param.nlist_ ? num_vectors : param.nlist_;
-  switch (param.type_) {
-  case VIAT_IVF_SQ8:
-  case VIAT_IVF_FLAT: {
-    estimate_mem_used = sizeof(float) * nlist * param.dim_;
-    break;
-  }
-  case VIAT_IVF_PQ: {
-    estimate_mem_used = sizeof(float) * nlist * param.dim_ * 2;
-    break;
-  }
-  default: {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid ivf algorithm type", K(ret), K(param));
-  }
-  }
-
-  return ret;
 }
 
 int ObIvfCacheMgr::check_memory_limit(int64_t base)
@@ -184,10 +165,13 @@ int ObIvfCacheMgr::check_memory_limit(int64_t base)
 
 void ObIvfCacheMgr::release_cache_obj(ObIvfICache *&cache_obj)
 {
-  if (cache_obj->is_inited_) {
-    ATOMIC_SAF(all_vsag_use_mem_, cache_obj->get_actual_memory_used());
+  if (OB_NOT_NULL(cache_obj)) {
+    cache_obj->~ObIvfICache();
+    if (OB_NOT_NULL(mem_ctx_)) {
+      mem_ctx_->Deallocate(cache_obj);
+    }
+    cache_obj = nullptr;
   }
-  OB_DELETEx(ObIvfICache, &get_fifo_allocator(), cache_obj);
 }
 
 int ObIvfCacheMgr::create_cache_obj(const IvfCacheKey &key, ObIvfICache *&cache_obj)
@@ -198,10 +182,12 @@ int ObIvfCacheMgr::create_cache_obj(const IvfCacheKey &key, ObIvfICache *&cache_
   case IvfCacheType::IVF_CENTROID_CACHE:
   case IvfCacheType::IVF_PQ_PRECOMPUTE_TABLE_CACHE: {
     ObIvfCentCache *tmp_cent_cache = nullptr;
-    if (OB_ISNULL(tmp_cent_cache = OB_NEWx(ObIvfCentCache, &get_fifo_allocator()))) {
+    void *tmp_buf = nullptr;
+    if (OB_ISNULL(tmp_buf = mem_ctx_->Allocate(sizeof(ObIvfCentCache)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc memory", K(ret), K(sizeof(ObIvfCentCache)));
+      LOG_WARN("failed to alloc tmp_buf", K(ret));
     } else {
+      tmp_cent_cache = new(tmp_buf) ObIvfCentCache(get_self_allocator(), tenant_id_);
       cache_obj = tmp_cent_cache;
     }
     break;
@@ -215,13 +201,10 @@ int ObIvfCacheMgr::create_cache_obj(const IvfCacheKey &key, ObIvfICache *&cache_
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(check_memory_limit(cache_obj->get_expect_memory_used(key, vec_param_)))) {
     LOG_WARN("fail to check memory limit", K(ret));
-  } else if (OB_FAIL(cache_obj->init(mem_ctx_, key, vec_param_))) {
+  } else if (OB_FAIL(cache_obj->init(mem_ctx_, key, vec_param_, all_vsag_use_mem_))) {
     LOG_WARN("fail to init cache obj", K(ret));
-  } else {
-    ATOMIC_AAF(all_vsag_use_mem_, cache_obj->get_actual_memory_used());
-    if (OB_FAIL(check_memory_limit(0))) {
-      LOG_WARN("fail to check memory limit", K(ret));
-    }
+  } else if (OB_FAIL(check_memory_limit(0))) {
+    LOG_WARN("fail to check memory limit", K(ret));
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(cache_obj)) {
@@ -304,14 +287,14 @@ int ObIvfCacheMgr::fill_cache_info(ObVectorIndexInfo &info){
 
 int64_t ObIvfCacheMgr::get_actual_memory_used()
 {
-    int64_t used = 0;
-    FOREACH(iter, cache_objs_)
-    {
-      ObIvfICache *cache = dynamic_cast<ObIvfICache *>(iter->second);
-      used += cache->get_actual_memory_used();
-    }
-    used += get_arena_allocator().used();
-    return used;
+  int64_t used = 0;
+  FOREACH(iter, cache_objs_)
+  {
+    ObIvfICache *cache = dynamic_cast<ObIvfICache *>(iter->second);
+    used += cache->get_actual_memory_used();
+  }
+  used += mem_ctx_->used();
+  return used;
 }
 
 ///////////////////////////////
@@ -323,7 +306,12 @@ void ObIvfICache::reset()
   is_inited_ = false;
   key_ = IvfCacheType::IVF_CACHE_MAX;
   status_ = IvfCacheStatus::IVF_CACHE_IDLE;
-  DESTROY_CONTEXT(sub_mem_ctx_);
+  ObIAllocator &allocator = get_self_allocator();
+  if (OB_NOT_NULL(sub_mem_ctx_)) {
+    sub_mem_ctx_->~ObIvfMemContext();
+    allocator.free(sub_mem_ctx_);
+    sub_mem_ctx_ = nullptr;
+  }
 }
 
 void ObIvfICache::reuse()
@@ -336,16 +324,16 @@ ObIvfICache::~ObIvfICache()
   ObIvfICache::reset();
 }
 
-int ObIvfICache::inner_init(lib::MemoryContext &parent_mem_ctx)
+int ObIvfICache::inner_init(ObIvfMemContext *parent_mem_ctx, uint64_t* all_vsag_use_mem)
 {
   int ret = OB_SUCCESS;
-  lib::ContextParam param;
-  param.set_mem_attr(parent_mem_ctx->attr_)
-      .set_properties(lib::ADD_CHILD_THREAD_SAFE | lib::ALLOC_THREAD_SAFE)
-      .set_page_size(OB_MALLOC_MIDDLE_BLOCK_SIZE)
-      .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
-  if (OB_FAIL(parent_mem_ctx->CREATE_CONTEXT(sub_mem_ctx_, param))) {
-    LOG_WARN("create memory entity failed", K(ret));
+
+  if (OB_ISNULL(sub_mem_ctx_ = OB_NEWx(ObIvfMemContext, &get_self_allocator(), all_vsag_use_mem))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to create mem_ctx", K(ret));
+  } else if (OB_FAIL(sub_mem_ctx_->init(parent_mem_ctx->get_mem_context(), all_vsag_use_mem, tenant_id_))) {
+    LOG_WARN("failed to init memory context", K(ret));
+    reset();
   }
   return ret;
 }
@@ -363,8 +351,8 @@ void ObIvfCentCache::reuse()
 
 ObIvfCentCache::~ObIvfCentCache()
 {
-  if (OB_NOT_NULL(centroids_)) {
-    get_allocator().free(centroids_);
+  if (OB_NOT_NULL(centroids_) && OB_NOT_NULL(sub_mem_ctx_)) {
+    sub_mem_ctx_->Deallocate(centroids_);
     centroids_ = nullptr;
   }
   cent_vec_dim_ = 0;
@@ -372,17 +360,17 @@ ObIvfCentCache::~ObIvfCentCache()
   count_ = 0;
 }
 
-int ObIvfCentCache::init(lib::MemoryContext &parent_mem_ctx, const IvfCacheKey &key,
-                         const ObVectorIndexParam &param)
+int ObIvfCentCache::init(ObIvfMemContext *parent_mem_ctx, const IvfCacheKey &key,
+                         const ObVectorIndexParam &param, uint64_t* all_vsag_use_mem)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObIvfICache::inner_init(parent_mem_ctx))) {
+  if (OB_FAIL(ObIvfICache::inner_init(parent_mem_ctx, all_vsag_use_mem))) {
     LOG_WARN("fail to do ObIvfICache inner init", K(ret));
   } else {
     switch (key.type_) {
       case IvfCacheType::IVF_CENTROID_CACHE: {
         if (OB_ISNULL(centroids_ = static_cast<float *>(
-                          get_allocator().alloc(sizeof(float) * param.nlist_ * param.dim_)))) {
+                          sub_mem_ctx_->Allocate(sizeof(float) * param.nlist_ * param.dim_)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to init centroids", K(ret), K(param.nlist_), K(param.dim_), K(key));
         } else {
@@ -397,7 +385,7 @@ int ObIvfCentCache::init(lib::MemoryContext &parent_mem_ctx, const IvfCacheKey &
       case IvfCacheType::IVF_PQ_CENTROID_CACHE: {
         int64_t pqnlist = 1L << param.nbits_;
         if (OB_ISNULL(centroids_ = static_cast<float *>(
-                          get_allocator().alloc(sizeof(float) * pqnlist * param.dim_)))) {
+                          sub_mem_ctx_->Allocate(sizeof(float) * pqnlist * param.dim_)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to init centroids", K(ret), K(pqnlist), K(param.dim_), K(key));
         } else {
@@ -412,7 +400,7 @@ int ObIvfCentCache::init(lib::MemoryContext &parent_mem_ctx, const IvfCacheKey &
       case IvfCacheType::IVF_PQ_PRECOMPUTE_TABLE_CACHE: {
         int64_t ksub = 1L << param.nbits_;
         if (OB_ISNULL(centroids_ = static_cast<float *>(
-                          get_allocator().alloc(sizeof(float) * param.nlist_ * param.m_ * ksub)))) {
+                          sub_mem_ctx_->Allocate(sizeof(float) * param.nlist_ * param.m_ * ksub)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to init centroids", K(ret), K(param.nlist_), K(param.m_), K(ksub), K(key));
         } else {

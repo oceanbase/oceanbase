@@ -106,8 +106,10 @@ class ObIvfICache
 public:
   friend class ObIvfCacheMgr;
 
-  explicit ObIvfICache()
+  explicit ObIvfICache(ObIAllocator &allocator, int64_t tenant_id)
       : is_inited_(false),
+        self_allocator_(allocator),
+        tenant_id_(tenant_id),
         key_(IvfCacheType::IVF_CACHE_MAX),
         sub_mem_ctx_(nullptr),
         rwlock_(),
@@ -116,11 +118,10 @@ public:
   virtual ~ObIvfICache();
   virtual void reset();
   virtual void reuse();
+  ObIAllocator &get_self_allocator() { return self_allocator_; }
 
-  int64_t get_actual_memory_used() { return get_allocator().used(); }
+  int64_t get_actual_memory_used() { return sub_mem_ctx_->used(); }
   virtual int64_t get_expect_memory_used(const IvfCacheKey &key, const ObVectorIndexParam &param) = 0;
-  virtual ObIAllocator &get_allocator() { return sub_mem_ctx_->get_safe_arena_allocator(); }
-  lib::MemoryContext &get_mem_ctx() { return sub_mem_ctx_; }
   RWLock &get_lock() { return rwlock_; }
   OB_INLINE bool is_writing() { return ATOMIC_LOAD(&status_) == IvfCacheStatus::IVF_CACHE_WRITING; }
   OB_INLINE bool set_writing_if_idle()
@@ -141,13 +142,15 @@ protected:
   typedef RWLock::RLockGuard RLockGuard;
   typedef RWLock::WLockGuard WLockGuard;
 
-  int inner_init(lib::MemoryContext &parent_mem_ctx);
-  virtual int init(lib::MemoryContext &parent_mem_ctx, const IvfCacheKey &key,
-                   const ObVectorIndexParam &param) = 0;
+  int inner_init(ObIvfMemContext *parent_mem_ctx, uint64_t* all_vsag_use_mem);
+  virtual int init(ObIvfMemContext *parent_mem_ctx, const IvfCacheKey &key,
+                   const ObVectorIndexParam &param, uint64_t* all_vsag_use_mem) = 0;
 
   bool is_inited_;
+  ObIAllocator &self_allocator_;  // allocator for alloc ObIvfICache self
+  int64_t tenant_id_;
   IvfCacheKey key_;
-  lib::MemoryContext sub_mem_ctx_;
+  ObIvfMemContext *sub_mem_ctx_;
   RWLock rwlock_;
   IvfCacheStatus status_;  // atomic
 };
@@ -156,8 +159,8 @@ class ObIvfCentCache : public ObIvfICache
 {
 public:
   friend class ObIvfCacheMgr;
-  explicit ObIvfCentCache()
-      : ObIvfICache(), centroids_(nullptr), cent_vec_dim_(0), nlist_(0), capacity_(0), count_(0)
+  explicit ObIvfCentCache(ObIAllocator &allocator, int64_t tenant_id)
+      : ObIvfICache(allocator, tenant_id), centroids_(nullptr), cent_vec_dim_(0), nlist_(0), capacity_(0), count_(0)
   {}
   virtual ~ObIvfCentCache();
   // NOTE(liyao): attention! read_centroid and write_centroid are not thread-safe
@@ -183,8 +186,8 @@ public:
 protected:
   int inner_read_centroid(int64_t centroid_idx, float *&centroid_vec, bool deep_copy = false,
                           ObIAllocator *allocator = nullptr);
-  int init(lib::MemoryContext &parent_mem_ctx, const IvfCacheKey &key,
-           const ObVectorIndexParam &param) override;
+  int init(ObIvfMemContext *parent_mem_ctx, const IvfCacheKey &key,
+           const ObVectorIndexParam &param, uint64_t* all_vsag_use_mem) override;
   // NOTE(liyao): to avoid ObIArray using sizeof(float*) * capacity_ extra memory,
   //              we use float* to save centroids_
   float *centroids_;
@@ -221,11 +224,6 @@ public:
   bool dec_ref_and_check_release();
   // only used to alloc/free ObIvfCacheMgr self
   ObIAllocator &get_self_allocator() { return self_allocator_; }
-  // alloctor from mem_ctx, used to alloc cache obj of cache_objs_
-  ObIAllocator &get_arena_allocator() { return mem_ctx_->get_safe_arena_allocator(); }
-  ObIAllocator &get_fifo_allocator() { return mem_ctx_->get_malloc_allocator(); }
-  static int estimate_total_memory_used(uint64_t num_vectors, const ObVectorIndexParam &param,
-                                        uint64_t &estimate_mem_used);
   int64_t get_actual_memory_used();
   template<typename CacheType>
   int get_or_create_cache_node(const IvfCacheKey &key, CacheType *&cache);
@@ -248,7 +246,7 @@ private:
   void release_cache_obj(ObIvfICache *&cache_obj);
 
   int64_t ref_cnt_;
-  lib::MemoryContext mem_ctx_;
+  ObIvfMemContext *mem_ctx_;
   ObIvfCacheMap cache_objs_;
   bool is_reach_limit_;
   int reach_limit_cnt_;  // check memory every reach_limit_cnt_ % 10 after is_reach_limit_ = true
