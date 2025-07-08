@@ -530,6 +530,14 @@ struct ObVecIndexExecCtx {
   int32_t record_count_;            // window size
 };
 
+enum ObPlanExpiredStat  {
+  NOT_EXPIRED = 0,
+  EXPIRED_BY_OPT_STAT,    //  expired by statistics
+  EXPIRED_BY_EXEC_ERROR,  //  expired by query exec error in ObPhysicalPlan::check_if_is_expired_by_error
+  EXPIRED_BY_TABLE_ACCESS_ROW_COUNT,  //  expired by unstable query range access row count
+  EXPIRED_BY_EXEC_TIME,   //  expired by unstable execution time
+};
+
 struct ObPlanStat
 {
   enum PlanStatus
@@ -634,7 +642,7 @@ struct ObPlanStat
   /** 记录第一次计划执行时计划涉及的各个表的行数的数组，数组应该有access_table_num_个元素 */
   ObTableRowCount *table_row_count_first_exec_;
   int64_t access_table_num_;         //plan访问的表的个数，目前只统计whole range扫描的表
-  bool is_expired_; // 这个计划是否已经由于数据的表行数变化和执行时间变化而失效
+  ObPlanExpiredStat is_expired_; // 这个计划是否已经由于数据的表行数变化和执行时间变化而失效
 
   // check whether plan has stable performance
   bool enable_plan_expiration_;
@@ -732,7 +740,7 @@ struct ObPlanStat
       ps_stmt_id_(common::OB_INVALID_ID),
       table_row_count_first_exec_(NULL),
       access_table_num_(0),
-      is_expired_(false),
+      is_expired_(NOT_EXPIRED),
       enable_plan_expiration_(false),
       first_exec_row_count_(-1),
       first_exec_usec_(0),
@@ -815,7 +823,7 @@ struct ObPlanStat
       ps_stmt_id_(rhs.ps_stmt_id_),
       table_row_count_first_exec_(NULL),
       access_table_num_(0),
-      is_expired_(false),
+      is_expired_(NOT_EXPIRED),
       enable_plan_expiration_(rhs.enable_plan_expiration_),
       first_exec_row_count_(rhs.first_exec_row_count_),
       first_exec_usec_(rhs.first_exec_usec_),
