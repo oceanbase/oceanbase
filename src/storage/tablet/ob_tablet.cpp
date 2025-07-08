@@ -4488,7 +4488,7 @@ int ObTablet::get_split_src_read_table_if_need(
   int ret = OB_SUCCESS;
   const ObTabletID &split_src_tablet_id = tablet_meta_.split_info_.get_split_src_tablet_id();
   if (OB_UNLIKELY(split_src_tablet_id.is_valid())) {
-    if (OB_UNLIKELY(!tablet_meta_.table_store_flag_.with_major_sstable())) {
+    if (OB_UNLIKELY(tablet_meta_.split_info_.is_data_incomplete() && !tablet_meta_.table_store_flag_.with_major_sstable())) {
       const ObLSID &ls_id = tablet_meta_.ls_id_;
       ObLSService *ls_service = nullptr;
       ObLSHandle ls_handle;
