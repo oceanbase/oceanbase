@@ -754,6 +754,10 @@ int ObMultipleScanMerge::pause(bool& do_pause)
         if (OB_UNLIKELY(consumer_cnt_ != 1)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("Invalid argument", K(ret), K_(consumer_cnt));
+        } else if (tables_.count() > 1) {
+          // disable pause for batch scan with inc data
+          // TODO @cuiyuntian.cyt fix this
+          do_pause = false;
         } else if (OB_ISNULL(iter = iters_.at(consumers_[0]))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected null iter", K(ret), K(consumers_[0]));
