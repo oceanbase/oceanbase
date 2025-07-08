@@ -675,11 +675,30 @@ int ObRebuildIndexTask::purge_old_mlog(const ObDDLTaskStatus new_status)
 
       if (OB_FAIL(ret)) {
       } else {
+        ObString purge_table_name = base_table_schema->get_table_name_str();
         ObSqlString sql;
         int64_t affected_rows = 0;
-        if (OB_FAIL(sql.assign_fmt("CALL DBMS_MVIEW.purge_log('%s.%s') ",
-                                   db_schema->get_database_name_str().ptr(),
-                                   base_table_schema->get_table_name_str().ptr()))) {
+        if (base_table_schema->mv_container_table()) {
+          uint64_t mview_id = OB_INVALID_ID;
+          if (OB_FAIL(ObMViewInfo::get_mview_id_from_container_id(
+                  *GCTX.sql_proxy_, tenant_id_, base_table_schema->get_table_id(), mview_id))) {
+            LOG_WARN("failed to get mview_id", KR(ret), K(purge_table_name));
+          } else {
+            const ObTableSchema *mview_schema = nullptr;
+            if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, mview_id, mview_schema))) {
+              LOG_WARN("failed to get table schema", KR(ret), K(tenant_id_));
+            } else if (OB_ISNULL(mview_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null container table schema", KR(ret), KP(mview_schema));
+            } else {
+              purge_table_name = mview_schema->get_table_name();
+            }
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(sql.assign_fmt("CALL DBMS_MVIEW.purge_log('%s.%s') ",
+                                          db_schema->get_database_name_str().ptr(),
+                                          purge_table_name.ptr()))) {
           LOG_WARN("failed to assign sql", K(ret));
         } else if (OB_FAIL(mview_pl_proxy->write(tenant_id_, sql.ptr(), affected_rows))) {
           LOG_WARN("failed to write sql", K(ret), K(sql), K(affected_rows));
