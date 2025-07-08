@@ -3536,20 +3536,22 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
           ObExternalFileFormat format;
           have_external_file_format = T_EXTERNAL_FILE_FORMAT == option_node->type_;
           have_external_properties = T_EXTERNAL_PROPERTIES == option_node->type_;
+          ObResolverUtils::FileFormatContext ff_ctx;
           for (int32_t j = 0; OB_SUCC(ret) && j < option_node->num_child_; ++j) {
             if (OB_NOT_NULL(option_node->children_[j])
                 && T_EXTERNAL_FILE_FORMAT_TYPE == option_node->children_[j]->type_) {
-              if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node->children_[j], format, params_))) {
+              if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node->children_[j], format, params_, ff_ctx))) {
                 LOG_WARN("fail to resolve file format", K(ret));
               } else {
                 external_table_format_type_ = format.format_type_;
               }
             }
           }
+          ff_ctx.reset();
           for (int32_t j = 0; OB_SUCC(ret) && j < option_node->num_child_; ++j) {
             if (OB_NOT_NULL(option_node->children_[j])
                 && T_COLUMN_INDEX_TYPE == option_node->children_[j]->type_) {
-              if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node->children_[j], format, params_))) {
+              if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node->children_[j], format, params_, ff_ctx))) {
                 LOG_WARN("fail to resolve file format", K(ret));
               } else {
                 if (format.format_type_ == ObExternalFileFormat::FormatType::ORC_FORMAT) {

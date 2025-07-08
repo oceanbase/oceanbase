@@ -32,6 +32,7 @@ namespace sql
 class ObDataInFileStruct;
 struct ObODPSGeneralFormatParam {
   const static ObString TUNNEL_API;
+  const static ObString STORAGE_API;
   const static ObString BYTE;
   const static ObString ROW;
 };
@@ -88,6 +89,7 @@ struct ObODPSGeneralFormat {
     "COLLECT_STATISTICS_ON_CREATE",
     "REGION",
     "API_MODE",
+    "SPLIT"
   };
   common::ObString access_type_;
   common::ObString access_id_;

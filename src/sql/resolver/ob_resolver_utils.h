@@ -864,9 +864,18 @@ public:
   static ObExternalFileFormat::FormatType resolve_external_file_column_type(const common::ObString &name);
   static int resolve_file_size_node(const ParseNode *file_size_node, int64_t &parse_int_value);
   static int resolve_varchar_file_size(const ParseNode *child, int64_t &parse_int_value);
+
+  struct FileFormatContext {
+    bool is_tunnel_set;
+    FileFormatContext(): is_tunnel_set(false) {}
+    void reset() {
+      is_tunnel_set = false;
+    }
+  };
   static int resolve_file_format(const ParseNode *node,
                                  ObExternalFileFormat &format,
-                                 ObResolverParams &params);
+                                 ObResolverParams &params,
+                                 FileFormatContext &ff_ctx);
   static int resolve_file_compression_format(const ParseNode *node,
                                              ObExternalFileFormat &format,
                                              ObResolverParams &params);

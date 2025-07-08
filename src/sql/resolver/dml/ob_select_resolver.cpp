@@ -5538,13 +5538,14 @@ int ObSelectResolver::resolve_into_outfile_with_format(const ParseNode *node, Ob
   }
   if (OB_SUCC(ret) && node->num_child_ > 2 && NULL != (format_node = node->children_[2])) { // format
     // TODO(bitao): handle other parquet property
+    ObResolverUtils::FileFormatContext ff_ctx;
     for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
       if (OB_ISNULL(option_node = format_node->children_[i])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(format_node->num_child_));
       } else if (T_EXTERNAL_FILE_FORMAT_TYPE == option_node->type_
                  || T_CHARSET == option_node->type_) {
-        if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node, external_format, params_))) {
+        if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node, external_format, params_, ff_ctx))) {
           LOG_WARN("failed to resolve file format", K(ret), K(option_node->type_));
         }
         has_format_type |= (T_EXTERNAL_FILE_FORMAT_TYPE == option_node->type_);
@@ -5571,13 +5572,14 @@ int ObSelectResolver::resolve_into_outfile_with_format(const ParseNode *node, Ob
         LOG_WARN("failed to init csv format", K(ret));
       }
     }
+    ff_ctx.reset();
     for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
       if (OB_ISNULL(option_node = format_node->children_[i])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(format_node->num_child_));
       } else if (T_EXTERNAL_FILE_FORMAT_TYPE == option_node->type_
                  || T_CHARSET == option_node->type_) {
-      } else if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node, external_format, params_))) {
+      } else if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node, external_format, params_, ff_ctx))) {
         LOG_WARN("failed to resolve file format", K(ret), K(option_node->type_));
       }
     }

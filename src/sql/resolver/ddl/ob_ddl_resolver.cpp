@@ -1321,7 +1321,6 @@ int ObDDLResolver::resolve_file_prefix(ObString &url, ObSqlString &prefix_str, c
   }
   return ret;
 }
-
 int ObDDLResolver::resolve_external_file_format(const ParseNode *format_node,
                                                 ObResolverParams &params,
                                                 ObExternalFileFormat& format,
@@ -1341,14 +1340,14 @@ int ObDDLResolver::resolve_external_file_format(const ParseNode *format_node,
       LOG_WARN("unexpected format node", K(ret), K(format_node->type_));
     }
   }
-
+  ObResolverUtils::FileFormatContext ff_ctx;
   for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
     if (OB_ISNULL(format_node->children_[i])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(format_node->num_child_));
     } else if (T_EXTERNAL_FILE_FORMAT_TYPE == format_node->children_[i]->type_
                 || T_CHARSET == format_node->children_[i]->type_) {
-      if (OB_FAIL(ObResolverUtils::resolve_file_format(format_node->children_[i], format, params))) {
+      if (OB_FAIL(ObResolverUtils::resolve_file_format(format_node->children_[i], format, params, ff_ctx))) {
         LOG_WARN("fail to resolve file format", K(ret));
       }
       has_file_format |= (T_EXTERNAL_FILE_FORMAT_TYPE == format_node->children_[i]->type_);
@@ -1359,11 +1358,12 @@ int ObDDLResolver::resolve_external_file_format(const ParseNode *format_node,
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "format");
   }
   // resolve other format value
+  ff_ctx.reset();
   for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
     if (OB_ISNULL(format_node->children_[i])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(format_node->num_child_));
-    } else if (OB_FAIL(ObResolverUtils::resolve_file_format(format_node->children_[i], format, params))) {
+    } else if (OB_FAIL(ObResolverUtils::resolve_file_format(format_node->children_[i], format, params, ff_ctx))) {
       LOG_WARN("fail to resolve file format", K(ret));
     }
   }
