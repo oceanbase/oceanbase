@@ -322,15 +322,21 @@ int ObCreateCCLRuleResolver::merge_strings_with_escape(const ParseNode &ccl_filt
 
   ObSqlString ccl_keywords_sql;
   for (int i = 0; i < ccl_filter_option_node.num_child_ && OB_SUCC(ret); ++i) {
-    original_string.assign_ptr(ccl_filter_option_node.children_[i]->str_value_,
-                   ccl_filter_option_node.children_[i]->str_len_);
-    if (OB_FAIL(escape_string(original_string, separator, escape_char, after_escape_string))) {
-      LOG_WARN("fail to escape_string", K(ret), K(original_string));
-    } else if (OB_FAIL(ccl_keywords_sql.append(after_escape_string))) {
-      LOG_WARN("fail to append after_escape_string", K(ret), K(after_escape_string));
-    } else if (i < ccl_filter_option_node.num_child_ - 1) {
-      // not last string, need add separator
-      ccl_keywords_sql.append(&separator, 1);
+    if (0 == ccl_filter_option_node.children_[i]->str_len_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("ccl keyword is empty", K(ret), K(i), K(ccl_filter_option_node.children_[i]->str_value_));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ccl keyword (must all be not empty)");
+    } else {
+      original_string.assign_ptr(ccl_filter_option_node.children_[i]->str_value_,
+                     ccl_filter_option_node.children_[i]->str_len_);
+      if (OB_FAIL(escape_string(original_string, separator, escape_char, after_escape_string))) {
+        LOG_WARN("fail to escape_string", K(ret), K(original_string));
+      } else if (OB_FAIL(ccl_keywords_sql.append(after_escape_string))) {
+        LOG_WARN("fail to append after_escape_string", K(ret), K(after_escape_string));
+      } else if (i < ccl_filter_option_node.num_child_ - 1) {
+        // not last string, need add separator
+        ccl_keywords_sql.append(&separator, 1);
+      }
     }
   }
 
