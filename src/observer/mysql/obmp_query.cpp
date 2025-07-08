@@ -467,6 +467,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(mpquery_single_stmt);
+  ObReqTimeGuard req_timeinfo_guard;
   ctx_.spm_ctx_.reset();
   bool need_response_error = true;
   const bool enable_trace_log = lib::is_trace_log_enabled();
