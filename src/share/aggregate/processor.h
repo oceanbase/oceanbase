@@ -37,7 +37,8 @@ public:
     aggregates_(allocator_, aggr_infos.count()),
     fast_single_row_aggregates_(allocator_, aggr_infos.count()), extra_rt_info_buf_(nullptr),
     cur_extra_rt_info_idx_(0), add_one_row_fns_(allocator_, aggr_infos.count()),
-    row_selector_(nullptr), cur_batch_group_idx_(0), cur_batch_group_buf_(nullptr)
+    row_selector_(nullptr), cur_batch_group_idx_(0), cur_batch_group_buf_(nullptr),
+    reuse_aggrow_mgr_(allocator_, aggr_infos.count())
   {
     agg_ctx_.op_monitor_info_ = &monitor_info;
   }
@@ -280,6 +281,23 @@ private:
     }
   }
 private:
+  struct ReuseAggCellMgr
+  {
+    ReuseAggCellMgr(ObIAllocator &allocator, int32_t agg_cnt) :
+      tmp_store_vals_(allocator, agg_cnt), allocator_(allocator), extra_store_idx_(-1)
+    {}
+    int init(RuntimeContext &agg_ctx);
+    int save(RuntimeContext &agg_ctx, const char *agg_row);
+    int restore(RuntimeContext &agg_ctx, char *agg_row);
+  private:
+    int save_extra_stores(RuntimeContext &agg_ctx, const char *agg_row);
+    int restore_extra_stores(RuntimeContext &agg_ctx, char *agg_row);
+  private:
+    ObFixedArray<void *, ObIAllocator> tmp_store_vals_;
+    ObIAllocator &allocator_;
+    int32_t extra_store_idx_;
+  };
+private:
   static const int32_t MAX_SUPPORTED_AGG_CNT = 1000000;
   static const int64_t BATCH_GROUP_SIZE = 16;
   friend class ObScalarAggregateVecOp;
@@ -302,6 +320,7 @@ private:
   uint16_t *row_selector_;
   int64_t cur_batch_group_idx_;
   char *cur_batch_group_buf_;
+  ReuseAggCellMgr reuse_aggrow_mgr_;
   // ObFixedArray<typename T>
 };
 } // end aggregate
