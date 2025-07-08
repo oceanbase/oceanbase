@@ -915,6 +915,16 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
         }
       }
     }
+
+
+    /* fill some dependency param which could not be filled for the first time
+     * remember to control the dependency relationship between different options */
+    /* fill column group optional param */
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(set_column_group_options(create_table_stmt->get_create_table_arg().schema_))) {
+      LOG_WARN("failed to set column group options", KR(ret));
+    }
+
     // checking uk-pk and uk-uk duplicate in oracle mode
     if (OB_SUCC(ret) && lib::is_oracle_mode()) {
       const ObSArray<obrpc::ObCreateIndexArg> &index_arg_list = create_table_stmt->get_index_arg_list();

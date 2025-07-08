@@ -48,6 +48,7 @@ protected:
   uint64_t gen_column_group_id();
   virtual int resolve_column_group(const ParseNode *cg_node) final;
   int resolve_table_organization(omt::ObTenantConfigGuard &tenant_config, ParseNode *node);
+  int set_column_group_options(ObTableSchema &table_schema);
 protected:
   uint64_t cur_column_group_id_;
 };

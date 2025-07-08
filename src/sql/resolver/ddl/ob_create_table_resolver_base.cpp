@@ -459,6 +459,31 @@ int ObCreateTableResolverBase::resolve_column_group(const ParseNode *cg_node)
   return ret;
 }
 
+int ObCreateTableResolverBase::set_column_group_options(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  /* for column group, some opitons like block size & rowstore type and so on should follower table schema*/
+
+  int64_t block_size = table_schema.get_block_size();
+  common::ObCompressorType compressor_type = table_schema.get_compressor_type();
+  common::ObRowStoreType    row_store_type = table_schema.get_row_store_type();
+
+  ObTableSchema::const_column_group_iterator iter = table_schema.column_group_begin();
+  ObTableSchema::const_column_group_iterator iter_end = table_schema.column_group_end();
+  for (; OB_SUCC(ret) && iter != iter_end; ++iter) {
+    ObColumnGroupSchema *cg = *iter;
+    if (OB_ISNULL(cg)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column group is null", KR(ret));
+    } else {
+      cg->set_block_size(block_size);
+      cg->set_compressor_type(compressor_type);
+      cg->set_row_store_type(row_store_type);
+    }
+  }
+  return ret;
+}
+
 int ObCreateTableResolverBase::resolve_table_organization(omt::ObTenantConfigGuard &tenant_config, ParseNode *node)
 {
   int ret = OB_SUCCESS;
