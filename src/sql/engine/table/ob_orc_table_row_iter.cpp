@@ -340,7 +340,8 @@ int ObOrcTableRowIterator::select_row_ranges(const int64_t stripe_idx)
           state_.end_row_range_idx_ = 0;
         }
       }
-      if (state_.has_row_range() && options_.enable_prebuffer_ && file_column_exprs_.count() > 0) {
+      if (OB_SUCC(ret) && state_.has_row_range() && options_.enable_prebuffer_ &&
+          file_column_exprs_.count() > 0) {
         if (OB_FAIL(pre_buffer_data(*stripe))) {
           LOG_WARN("fail to pre buffer date", K(ret));
         }
