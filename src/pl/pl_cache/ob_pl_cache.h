@@ -252,8 +252,9 @@ struct ObPLObjectKey : public ObILibCacheKey
 
   enum class ObjectMode
   {
-    NORMAL,
-    PROFILE,
+    NORMAL = 0,
+    PROFILE = 1,
+    CODE_COVERAGE = 2,
   };
 
   uint64_t  db_id_;
