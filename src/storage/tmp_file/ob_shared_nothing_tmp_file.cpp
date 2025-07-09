@@ -596,11 +596,11 @@ int ObSharedNothingTmpFile::write(ObTmpFileIOWriteCtx &io_ctx, int64_t &cur_file
   } else if (OB_UNLIKELY(!io_ctx.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(fd_), K(io_ctx));
-  } else if (OB_UNLIKELY(is_deleting_)) {
+  } else if (OB_UNLIKELY(ATOMIC_LOAD(&is_deleting_))) {
     // this check is just a hint.
     // although is_deleting_ == false, it might be set as true in the processing of write().
     // we will check is_deleting_ again in the following steps
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_RESOURCE_RELEASED;
     LOG_WARN("attempt to write a deleting file", KR(ret), K(fd_));
   } else if (OB_FAIL(alloc_write_range_(io_ctx, start_write_offset, end_write_offset))) {
     LOG_WARN("fail to alloc write range", KR(ret), KPC(this), K(io_ctx));
@@ -633,7 +633,7 @@ int ObSharedNothingTmpFile::write(ObTmpFileIOWriteCtx &io_ctx, int64_t &cur_file
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("file size is not expected", KR(ret), KPC(this), K(start_write_offset), K(allocated_file_size_));
       } else if (OB_UNLIKELY(is_deleting_)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_RESOURCE_RELEASED;
         LOG_WARN("file is deleting", KR(ret), K(fd_));
       } else {
         bool is_unaligned_write = 0 != file_size_ % ObTmpFileGlobal::PAGE_SIZE ||
@@ -806,11 +806,11 @@ int ObSharedNothingTmpFile::inner_batch_write_(ObTmpFileIOWriteCtx &io_ctx,
     // this check is just a hint.
     // although is_deleting_ == false, it might be set as true in the processing of write().
     // we will check is_deleting_ again in the following steps
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_RESOURCE_RELEASED;
     LOG_WARN("attempt to write a deleting file", KR(ret), K(fd_));
   } else if (OB_UNLIKELY(batch_write_size <= 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("attempt to write a deleting file", KR(ret), K(fd_), K(start_write_offset), K(end_write_offset));
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid write offset", KR(ret), K(fd_), K(start_write_offset), K(end_write_offset));
   } else if (OB_FAIL(meta_tree_.search_data_items(start_write_offset, batch_write_size, io_ctx.get_io_timeout_ms(), data_items))) {
     LOG_WARN("fail to search data items", KR(ret), K(fd_), K(start_write_offset), K(batch_write_size), K(io_ctx));
   } else if (OB_FAIL(page_iterator.init(&data_items, begin_virtual_page_id))) {
