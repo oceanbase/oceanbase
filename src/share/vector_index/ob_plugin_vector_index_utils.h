@@ -138,6 +138,7 @@ public:
                                   SCN target_scn,
                                   ObIAllocator &allocator);
   static int erase_ivf_build_helper(ObLSID ls_id, const ObIvfHelperKey &key);
+  static int get_mem_context_detail_info(ObPluginVectorIndexService *service, char *buf, int64_t buf_len, int64_t &pos);
 
 private:
   static int init_common_scan_param(storage::ObTableScanParam& scan_param,
@@ -176,6 +177,8 @@ private:
                                       SCN &target_scn,
                                       ObIAllocator &allocator,
                                       ObVectorQueryAdaptorResultContext &ada_ctx);
+  static int fill_mem_context_detail_info(VectorIndexAdaptorMap& adaptor_map, char *buf, int64_t buf_len, int64_t &pos);
+
 };
 
 } // namespace share

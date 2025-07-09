@@ -13,6 +13,7 @@
 #include "ob_all_virtual_tenant_vector_mem_info.h"
 #include "lib/alloc/memory_dump.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
+#include "share/vector_index/ob_plugin_vector_index_utils.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 
 using namespace oceanbase::common;
@@ -104,7 +105,7 @@ int ObAllVirtualTenantVectorMemInfo::inner_get_next_row(ObNewRow *&row)
           MEMSET(vector_used_str_, 0, sizeof(vector_used_str_));
           if (OB_FAIL(databuff_printf(vector_used_str_, OB_MAX_MYSQL_VARCHAR_LENGTH, pos, "{\"rb_used\":%lu, ", rb_used))) {
             SERVER_LOG(WARN, "failed to print total vector mem usage", K(ret), K(vector_hold));
-          } else if (OB_FAIL(shared_mem_mgr->vector_allocator().get_mem_context()->print_tree_mem_hold_info(vector_used_str_, OB_MAX_MYSQL_VARCHAR_LENGTH, pos))) {
+          } else if (OB_FAIL(ObPluginVectorIndexUtils::get_mem_context_detail_info(service, vector_used_str_, OB_MAX_MYSQL_VARCHAR_LENGTH, pos))) {
             SERVER_LOG(WARN, "failed to print vector mem usage detail", K(ret), K(vector_hold));
           } else if (OB_FAIL(databuff_printf(vector_used_str_, OB_MAX_MYSQL_VARCHAR_LENGTH, pos, "}"))) {
             SERVER_LOG(WARN, "failed to print total vector mem usage", K(ret));

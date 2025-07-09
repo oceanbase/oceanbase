@@ -100,6 +100,7 @@ public:
   int64_t used() {
     return mem_context_->used();
   }
+  inline lib::MemoryContext &mem_ctx() { return mem_context_; }
 
 private:
   uint64_t *all_vsag_use_mem_;
