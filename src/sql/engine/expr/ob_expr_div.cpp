@@ -98,6 +98,10 @@ int ObExprDiv::calc_result_type2(ObExprResType &type,
         }
 
         // calc scale.
+        if (lib::is_mysql_mode()) {
+          scale1 = static_cast<ObScale>(MAX(type1.get_calc_scale(), scale1));
+          scale2 = static_cast<ObScale>(MAX(type2.get_calc_scale(), scale2));
+        }
         if (OB_UNLIKELY(SCALE_UNKNOWN_YET == type1.get_scale()) ||
             OB_UNLIKELY(SCALE_UNKNOWN_YET == type2.get_scale())) {
           type.set_scale(SCALE_UNKNOWN_YET);
