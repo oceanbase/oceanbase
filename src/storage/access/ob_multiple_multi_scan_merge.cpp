@@ -176,10 +176,10 @@ int ObMultipleMultiScanMerge::construct_iters()
   } else if (OB_UNLIKELY(iters_.count() > 0 && iters_.count() + di_base_iters_.count() != tables_.count())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "iter cnt is not equal to table cnt", K(ret), "iter cnt", iters_.count(),
-        "di_base_iter cnt", di_base_iters_.count(), "table cnt", tables_.count(), KP(this));
+                "di_base_iter cnt", di_base_iters_.count(), "table cnt", tables_.count(), KP(this));
   } else if (tables_.count() > 0) {
     STORAGE_LOG(TRACE, "construct iters begin", K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()),
-                K(access_param_->iter_param_.is_delete_insert_), KPC_(ranges), KPC_(di_base_ranges), K_(tables), KPC_(access_param));
+                K(access_param_->iter_param_.is_delete_insert_), KPC_(ranges), KPC_(di_base_ranges), K_(access_ctx_->trans_version_range), K_(tables), KPC_(access_param));
     ObITable *table = NULL;
     ObStoreRowIterator *iter = NULL;
     const ObTableIterParam *iter_param = NULL;
