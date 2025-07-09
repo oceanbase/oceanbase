@@ -302,6 +302,16 @@ TEST_F(TestMockObTxCtx, test_transfer_tx_ctx)
 }
 }
 
+namespace storage
+{
+
+void ObTxData::dec_ref()
+{
+  return;
+}
+
+} // namespace storage
+
 namespace transaction
 {
   void ObTransCtx::after_unlock(CtxLockArg &)

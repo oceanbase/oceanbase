@@ -337,6 +337,7 @@ public:
   {
     cache_index_ = 0;
     kv_tmp_cache_.reset();
+    sslog::ObUserKeyAllVersionBaseIterator::reset();
   }
 
   virtual int inner_get_next_kv_(ObString &key_buf, ObString &val_buf)

@@ -1596,9 +1596,8 @@ ob_set_subtarget(ob_sql udr
   udr/ob_udr_utils.cpp
 )
 
-if(CPP_STANDARD_20)
-  add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
-endif()
+add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
+
 ob_add_new_object_target(ob_sql ob_sql)
 ob_add_new_object_target(ob_sql_extra ob_sql_extra)
 

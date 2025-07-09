@@ -2567,6 +2567,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
           ObLLVMValue old_condition;
           OZ (generator_.get_helper().create_load(
                   ObString(""), old_exception_store, old_exception));
+          OX (old_exception.set_t(int8_type));
           OZ (generator_.get_helper().create_const_gep1_64(
                   ObString("extract_unwind_exception_header"),
                   old_exception,
@@ -2686,10 +2687,12 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
     ObLLVMValue condition;
     ObLLVMValue sql_state;
     ObLLVMValue error_code;
+    ObLLVMType int8_type;
     OZ (generator_.get_adt_service().get_unwind_exception(unwind_exception_type));
     OZ (unwind_exception_type.get_pointer_to(unwind_exception_pointer_type));
     OZ (generator_.get_adt_service().get_pl_condition_value(condition_type));
     OZ (condition_type.get_pointer_to(condition_pointer_type));
+    OZ (generator_.get_helper().get_llvm_type(ObTinyIntType, int8_type));
     if (OB_FAIL(ret)) {
     } else if (s.is_signal_null()) {
       ObLLVMValue status;
@@ -2701,6 +2704,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
       OZ (generator_.extract_status_from_context(generator_.get_vars().at(generator_.CTX_IDX), status));
       OZ (generator_.get_helper().create_store(ob_error_code, status));
       OZ (generator_.get_helper().create_load(ObString(""), exception_store, unwindException));
+      OX (unwindException.set_t(int8_type));
       OZ (generator_.get_helper().create_const_gep1_64(ObString("extract_unwind_exception_header"),
                                                        unwindException,
                                                        generator_.get_eh_service().pl_exception_base_offset_,
@@ -6494,13 +6498,9 @@ int ObPLCodeGenerator::generate_debug(const ObString &name, ObLLVMValue &value)
     }
   } else if (helper_.get_pointer_type_id() == value.get_type_id()) {
     ObLLVMType type;
-#ifdef CPP_STANDARD_20
     if (OB_FAIL(value.get_pointee_type(type))) {
       LOG_WARN("failed to get pointee type from a pointer", K(ret), K(value));
     }
-#else
-    type = value.get_type().get_child(0);
-#endif
 
     if (OB_FAIL(ret)) {
       // do nothing
@@ -8557,10 +8557,13 @@ int ObPLCodeGenerator::generate_get_attr_func(const ObIArray<ObObjAccessIdx> &id
     OZ (param_cnt.set_name(ObString("param_cnt")));
     OZ (func_.get_argument(1, params_ptr));
     OZ (params_ptr.set_name(ObString("param_array")));
+    OX (params_ptr.set_t(array_type));
     OZ (func_.get_argument(2, result_value_ptr));
     OZ (result_value_ptr.set_name(ObString("result_value_ptr")));
+    OX (result_value_ptr.set_t(int64_type));
     OZ (func_.get_argument(3, allocator_ptr));
     OZ (allocator_ptr.set_name(ObString("allocator_ptr")));
+    OX (allocator_ptr.set_t(int64_type));
     OZ (helper_.create_alloca(ObString("ret_value"), int32_type, ret_value_ptr));
 
     OZ (generate_get_attr(params_ptr, idents, for_write,
@@ -10242,9 +10245,25 @@ DEFINE_EXTRACT_VALUE_FROM_STRUCT(allocator, collection)
 DEFINE_EXTRACT_VALUE_FROM_STRUCT(count, collection)
 DEFINE_EXTRACT_VALUE_FROM_STRUCT(first, collection)
 DEFINE_EXTRACT_VALUE_FROM_STRUCT(last, collection)
-DEFINE_EXTRACT_VALUE_FROM_STRUCT(data, collection)
 
-int ObPLCodeGenerator ::extract_element_from_collection(jit::ObLLVMValue &p_struct,
+int ObPLCodeGenerator::extract_data_from_collection(jit::ObLLVMValue &p_struct,
+                                                        jit::ObLLVMValue &result)
+{
+  int ret = OB_SUCCESS;
+  ObLLVMValue p_result;
+  ObLLVMType obj_type;
+  ObLLVMType obj_arr_type;
+
+  OZ (extract_data_ptr_from_collection(p_struct, p_result));
+  OZ (helper_.create_load(ObString("load_element"), p_result, result));
+  OZ (adt_service_.get_obj(obj_type));
+  OZ (helper_.get_array_type(obj_type, 0, obj_arr_type));
+  OX (result.set_t(obj_arr_type));
+
+  return ret;
+}
+
+int ObPLCodeGenerator::extract_element_from_collection(jit::ObLLVMValue &p_struct,
                                                         jit::ObLLVMValue &result)
 {
   int ret = OB_SUCCESS;
@@ -10842,53 +10861,6 @@ int ObPLCodeGenerator::get_objparam_buffer(ObLLVMValue &result)
   return ret;
 }
 
-#ifndef CPP_STANDARD_20
-#define GENERATE_GET_ARRAY_BUFFER(buffer_name)                                 \
-  int ObPLCodeGenerator::get_##buffer_name##_buffer(int64_t size,              \
-                                                    ObLLVMValue &result)       \
-  {                                                                            \
-    int ret = OB_SUCCESS;                                                      \
-    ObLLVMValue buffer_ptr;                                                    \
-    ObLLVMType ptr_type;                                                       \
-    ObLLVMType elem_type;                                                      \
-    ObLLVMType buffer_type;                                                    \
-    ObLLVMType buffer_ptr_type;                                                \
-    CK(OB_NOT_NULL(buffer_name##_ptr_.get_v()));                               \
-    if (OB_FAIL(ret)) {                                                        \
-    } else if (FALSE_IT(buffer_name##_size_ =                                  \
-                            std::max(buffer_name##_size_, size))) {            \
-    } else if (OB_FAIL(helper_.create_load(ObString("load_"#buffer_name),      \
-                                           buffer_name##_ptr_,                 \
-                                           buffer_ptr))) {                     \
-      LOG_WARN("failed to create_load", K(ret), K(buffer_name##_ptr_));        \
-    } else if (OB_FAIL(buffer_ptr.get_type(ptr_type))) {                       \
-      LOG_WARN("failed to get_type", K(ret), K(buffer_ptr));                   \
-    } else if (OB_FAIL(ptr_type.get_pointee_type(elem_type))) {                \
-      LOG_WARN("failed to get_pointee_type", K(ret), K(ptr_type));             \
-    } else if (OB_FAIL(helper_.get_array_type(elem_type,                       \
-                                              size,                            \
-                                              buffer_type))) {                 \
-      LOG_WARN("failed to get_array_type",                                     \
-               K(elem_type), K(size), K(buffer_type));                         \
-    } else if (OB_FAIL(buffer_type.get_pointer_to(buffer_ptr_type))) {         \
-      LOG_WARN("failed to get_pointer_to", K(ret), K(buffer_type));            \
-    } else if (OB_FAIL(helper_.create_bit_cast(ObString("cast_"#buffer_name),  \
-                                               buffer_ptr,                     \
-                                               buffer_ptr_type,                \
-                                               result))) {                     \
-      LOG_WARN("failed to create_bit_cast",                                    \
-               K(buffer_ptr), K(buffer_ptr_type), K(result));                  \
-    }                                                                          \
-    return ret;                                                                \
-  }
-
-GENERATE_GET_ARRAY_BUFFER(into_type_array)
-GENERATE_GET_ARRAY_BUFFER(return_type_array)
-GENERATE_GET_ARRAY_BUFFER(argv_array)
-
-#undef GENERATE_GET_ARRAY_BUFFER
-
-#else
 #define GENERATE_GET_ARRAY_BUFFER(buffer_name, get_elem_type)                  \
   int ObPLCodeGenerator::get_##buffer_name##_buffer(int64_t size,              \
                                                     ObLLVMValue &result)       \
@@ -10923,7 +10895,7 @@ GENERATE_GET_ARRAY_BUFFER(argv_array,
                           helper_.get_llvm_type(ObUInt64Type, elem_type))
 
 #undef GENERATE_GET_ARRAY_BUFFER
-#endif // #undef GENERATE_GET_ARRAY_BUFFER
+// #undef GENERATE_GET_ARRAY_BUFFER
 
 int ObPLCGBufferGuard::get_objparam_buffer(ObLLVMValue &result)
 {

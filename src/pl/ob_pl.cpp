@@ -51,9 +51,9 @@ extern int sys_pkg_need_priv_check(uint64_t pkg_id, ObSchemaGetterGuard *schema_
 namespace pl
 {
 
-#if defined(__aarch64__) && defined(CPP_STANDARD_20)
+#if defined(__aarch64__)
 static void* DW_REF_ObPLEH_eh_personality = (void*)(&ObPLEH::eh_personality);
-#endif // defined(__aarch64__) && defined(CPP_STANDARD_20)
+#endif // defined(__aarch64__)
 
 #ifdef ERRSIM
 ERRSIM_POINT_DEF(OBPLCONTEXT_INIT);
@@ -176,10 +176,10 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
   jit::ObLLVMHelper::add_symbol(ObString("eh_adjust_call_stack"),
                                 WRAP_SPI_CALL(ObPLEH::eh_adjust_call_stack));
 #endif
-#if defined(__aarch64__) && defined(CPP_STANDARD_20)
+#if defined(__aarch64__)
   jit::ObLLVMHelper::add_symbol(ObString("DW.ref.eh_personality"),
                                 (void*)(&DW_REF_ObPLEH_eh_personality));
-#endif // defined(__aarch64__) && defined(CPP_STANDARD_20)
+#endif // defined(__aarch64__)
 
   jit::ObLLVMHelper::add_symbol(ObString("eh_convert_exception"),
                                 WRAP_SPI_CALL(ObPLEH::eh_convert_exception));

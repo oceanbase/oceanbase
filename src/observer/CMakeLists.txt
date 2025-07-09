@@ -618,6 +618,7 @@ else()
   target_link_libraries(oceanbase
     PUBLIC ob_base
     ${HYPERSCAN_SHARED_LIB}
+    INTERFACE
     ${STDC_SHARED_LIB}
     PRIVATE
     -Wl,-z,notext
@@ -632,6 +633,10 @@ else()
     -static-libgcc -static-libstdc++
     objit)
 endif()
+
+get_filename_component(STDC_SHARED_LIB_DIR ${STDC_SHARED_LIB} DIRECTORY)
+target_link_options(oceanbase INTERFACE
+    "-Wl,-rpath=${STDC_SHARED_LIB_DIR}")
 
 if (NOT OB_USE_ASAN)
   set(link_malloc_hook malloc_hook)

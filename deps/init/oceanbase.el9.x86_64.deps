@@ -55,10 +55,8 @@ obdevtools-bison-2.4.1-12022100413.el8.x86_64.rpm
 obdevtools-ccache-3.7.12-12022100417.el8.x86_64.rpm
 obdevtools-cmake-3.30.3-52024111819.el8.x86_64.rpm
 obdevtools-flex-2.5.35-12022100417.el8.x86_64.rpm
-obdevtools-gcc9-9.3.0-52022092914.el8.x86_64.rpm cpp_standard=11
-obdevtools-gcc-12.3.0-32024122017.el8.x86_64.rpm cpp_standard=20
-obdevtools-llvm-11.0.1-312022092921.el8.x86_64.rpm cpp_standard=11
-obdevtools-llvm-17.0.3-232024111415.el8.x86_64.rpm cpp_standard=20
+obdevtools-gcc-12.3.0-32024122017.el8.x86_64.rpm
+obdevtools-llvm-17.0.6-72025060300.el8.x86_64.rpm
 
 [tools-deps]
 devdeps-oblogmsg-1.1-52024052811.el8.x86_64.rpm
