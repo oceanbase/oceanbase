@@ -22,7 +22,10 @@ namespace share {
 // ------------------ ObKmeansCtx implement ------------------
 void ObKmeansCtx::destroy()
 {
-  allocator_.reset();
+  for (int i = 0; i < sample_vectors_.count(); ++i) {
+    ivf_build_mem_ctx_.Deallocate(sample_vectors_[i]);
+  }
+  sample_vectors_.reset();
 }
 
 int ObKmeansCtx::init(
@@ -97,9 +100,9 @@ int ObKmeansCtx::append_sample_vector(float* vector)
     lib::ObMutexGuard guard(lock_);
     if (max_sample_count_ > sample_vectors_.count()) {
       float* save_vector = nullptr;
-      if (OB_ISNULL(save_vector = static_cast<float*>(allocator_.alloc(sizeof(float) * sample_dim_)))) {
+      if (OB_ISNULL(save_vector = static_cast<float*>(ivf_build_mem_ctx_.Allocate(sizeof(float) * sample_dim_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        SHARE_LOG(WARN, "failed to alloc vector", K(ret));
+        SHARE_LOG(WARN, "failed to alloc vector", K(ret), K(ivf_build_mem_ctx_.get_all_vsag_use_mem_byte()));
       } else {
         MEMCPY(save_vector, vector, sizeof(float) * sample_dim_);
         if (OB_FAIL(sample_vectors_.push_back(save_vector))) {
@@ -119,6 +122,15 @@ int ObKmeansCtx::append_sample_vector(float* vector)
 }
 
 // ------------------ ObKmeansAlgo implement ------------------
+void ObKmeansAlgo::destroy()
+{
+  if (OB_NOT_NULL(weight_)) {
+    ivf_build_mem_ctx_.Deallocate(weight_);
+    weight_ = nullptr;
+  }
+  tmp_allocator_.reset();
+}
+
 int ObKmeansAlgo::init(ObKmeansCtx &kmeans_ctx)
 {
   int ret = OB_SUCCESS;
@@ -129,7 +141,6 @@ int ObKmeansAlgo::init(ObKmeansCtx &kmeans_ctx)
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), K(lists), K(tenant_id), K(dim));
   } else {
-    allocator_ = &kmeans_ctx.allocator_;
     kmeans_ctx_ = &kmeans_ctx;
     tmp_allocator_.set_attr(ObMemAttr(tenant_id, "KmeansCtxTmp"));
     is_inited_ = true;
@@ -166,7 +177,7 @@ int ObKmeansAlgo::quick_centers(const ObIArray<float*> &input_vectors)
   } else if (PREPARE_CENTERS != status_) {
     ret = OB_STATE_NOT_MATCH;
     SHARE_LOG(WARN, "status not match", K(ret), K(status_));
-  } else if (OB_FAIL(centers_[cur_idx_].init(kmeans_ctx_->dim_, input_vectors.count(), *allocator_))) {
+  } else if (OB_FAIL(centers_[cur_idx_].init(kmeans_ctx_->dim_, input_vectors.count(), ivf_build_mem_ctx_))) {
     SHARE_LOG(WARN, "failed to init center buffer", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < input_vectors.count(); ++i) {
@@ -218,9 +229,12 @@ int ObSingleKmeansExecutor::init(
     LOG_WARN("fail to init kmeans ctx", K(ret), K(tenant_id), K(lists), K(samples_per_nlist), K(dim), K(dist_algo));
   } else {
     if (algo_type == ObKmeansAlgoType::KAT_ELKAN) {
-      if (OB_ISNULL(algo_ = OB_NEWx(ObElkanKmeansAlgo, &ctx_.allocator_))) {
+      void *tmp_buf = nullptr;
+      if (OB_ISNULL(tmp_buf = ivf_build_mem_ctx_.Allocate(sizeof(ObElkanKmeansAlgo)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fial to alloc memory for ObElkanKmeansAlgo", K(ret));
+        LOG_WARN("failed to alloc tmp_buf", K(ret), K(ivf_build_mem_ctx_.get_all_vsag_use_mem_byte()));
+      } else {
+        algo_ = new (tmp_buf) ObElkanKmeansAlgo(ivf_build_mem_ctx_);
       }
     } else {
       ret = OB_INVALID_ARGUMENT;
@@ -301,9 +315,11 @@ ObMultiKmeansExecutor::~ObMultiKmeansExecutor()
   for (int i = 0; i < algos_.count(); ++i) {
     if (OB_NOT_NULL(algos_[i])) {
       algos_[i]->~ObKmeansAlgo();
+      ivf_build_mem_ctx_.Deallocate(algos_[i]);
       algos_[i] = nullptr;
     }
   }
+  algos_.reset();
 }
 
 int ObMultiKmeansExecutor::init(
@@ -327,9 +343,12 @@ int ObMultiKmeansExecutor::init(
 
     for (int i = 0; OB_SUCC(ret) && i < algos_.count(); ++i) {
       if (algo_type == ObKmeansAlgoType::KAT_ELKAN) {
-        if (OB_ISNULL(algos_[i] = OB_NEWx(ObElkanKmeansAlgo, &ctx_.allocator_))) {
+        void *tmp_buf = nullptr;
+        if (OB_ISNULL(tmp_buf = ivf_build_mem_ctx_.Allocate(sizeof(ObElkanKmeansAlgo)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fial to alloc memory for ObElkanKmeansAlgo", K(ret));
+          LOG_WARN("failed to alloc tmp_buf", K(ret), K(ivf_build_mem_ctx_.get_all_vsag_use_mem_byte()));
+        } else {
+          algos_[i] = new (tmp_buf) ObElkanKmeansAlgo(ivf_build_mem_ctx_);
         }
       } else {
         ret = OB_INVALID_ARGUMENT;
@@ -347,7 +366,7 @@ int ObMultiKmeansExecutor::init(
   return ret;
 }
 
-int ObMultiKmeansExecutor::build()
+int ObMultiKmeansExecutor::build(ObInsertMonitor *insert_monitor)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -359,6 +378,13 @@ int ObMultiKmeansExecutor::build()
     ObArrayArray<float*> splited_arrs(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(tmp_alloc, "MulKmeans"));
     if (OB_FAIL(prepare_splited_arrs(splited_arrs))) {
       LOG_WARN("fail to prepare splited_arrs", K(ret));
+    } else if (OB_NOT_NULL(insert_monitor)) {
+      if (OB_NOT_NULL(insert_monitor->vec_index_task_total_cnt_)) {
+        (void)ATOMIC_AAF(insert_monitor->vec_index_task_total_cnt_, pq_m_size_);
+      }
+      if (OB_NOT_NULL(insert_monitor->vec_index_task_thread_pool_cnt_)) {
+        (void)ATOMIC_SET(insert_monitor->vec_index_task_thread_pool_cnt_, 1);
+      }
     }
     for (int i = 0; OB_SUCC(ret) && i < pq_m_size_; ++i) {
       if (i >= algos_.count()) {
@@ -366,6 +392,8 @@ int ObMultiKmeansExecutor::build()
         LOG_WARN("size of algos_ should be pq_m_size_", K(ret), K(i), K(pq_m_size_), K(algos_.count()));
       } else if (OB_FAIL(algos_[i]->build(splited_arrs.at(i)))) {
         LOG_WARN("fail to build kmeans algo", K(ret), K(i), K(algos_[i]));
+      } else if (OB_NOT_NULL(insert_monitor) && OB_NOT_NULL(insert_monitor->vec_index_task_finish_cnt_)) {
+        (void)ATOMIC_AAF(insert_monitor->vec_index_task_finish_cnt_, 1);
       }
     }
   }
@@ -583,6 +611,24 @@ int ObMultiKmeansExecutor::get_center(const int64_t pos, float *&center_vector)
 }
 
 // ------------------ ObElkanKmeansAlgo implement ------------------
+void ObElkanKmeansAlgo::destroy()
+{
+  for (int64_t i = 0; i < lower_bounds_.count(); ++i) {
+    float *lower_bounds_i = lower_bounds_.at(i);
+    if (OB_NOT_NULL(lower_bounds_i)) {
+      ivf_build_mem_ctx_.Deallocate(lower_bounds_i);
+    }
+  }
+  lower_bounds_.reset();
+  if (OB_NOT_NULL(upper_bounds_)) {
+    ivf_build_mem_ctx_.Deallocate(upper_bounds_);
+    upper_bounds_ = nullptr;
+  }
+  if (OB_NOT_NULL(nearest_centers_)) {
+    ivf_build_mem_ctx_.Deallocate(nearest_centers_);
+    nearest_centers_ = nullptr;
+  }
+}
 
 int ObElkanKmeansAlgo::calc_kmeans_distance(const float* a, const float* b, const int64_t len, float &distance)
 {
@@ -637,9 +683,9 @@ int ObElkanKmeansAlgo::init_first_center(const ObIArray<float*> &input_vectors)
   if (PREPARE_CENTERS != status_) {
     ret = OB_STATE_NOT_MATCH;
     SHARE_LOG(WARN, "status not match", K(ret), K(status_));
-  } else if (OB_FAIL(centers_[0].init(kmeans_ctx_->dim_, kmeans_ctx_->lists_, *allocator_))) {
+  } else if (OB_FAIL(centers_[0].init(kmeans_ctx_->dim_, kmeans_ctx_->lists_, ivf_build_mem_ctx_))) {
     SHARE_LOG(WARN, "failed to init center buffer", K(ret));
-  } else if (OB_FAIL(centers_[1].init(kmeans_ctx_->dim_, kmeans_ctx_->lists_, *allocator_))) {
+  } else if (OB_FAIL(centers_[1].init(kmeans_ctx_->dim_, kmeans_ctx_->lists_, ivf_build_mem_ctx_))) {
     SHARE_LOG(WARN, "failed to init center buffer", K(ret));
   } else {
     const int64_t sample_cnt = input_vectors.count();
@@ -649,25 +695,26 @@ int ObElkanKmeansAlgo::init_first_center(const ObIArray<float*> &input_vectors)
     if (OB_FAIL(centers_[cur_idx_].push_back(kmeans_ctx_->dim_, input_vectors.at(random)))) {
       SHARE_LOG(WARN, "failed to push back center", K(ret));
     } else if (OB_ISNULL(nearest_centers_ = static_cast<int32_t *>(
-        tmp_allocator_.alloc(sizeof(int32_t) * sample_cnt)))) {
+        ivf_build_mem_ctx_.Allocate(sizeof(int32_t) * sample_cnt)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      SHARE_LOG(WARN, "failed to alloc memory", K(ret));
+      SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(ivf_build_mem_ctx_.get_all_vsag_use_mem_byte()));
     } else if (OB_ISNULL(upper_bounds_ = static_cast<float *>(
-        tmp_allocator_.alloc(sizeof(float) * sample_cnt)))) {
+        ivf_build_mem_ctx_.Allocate(sizeof(float) * sample_cnt)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      SHARE_LOG(WARN, "failed to alloc memory", K(ret));
+      SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(ivf_build_mem_ctx_.get_all_vsag_use_mem_byte()));
     } else if (OB_ISNULL(weight_ = static_cast<float *>(
-        tmp_allocator_.alloc(sizeof(float) * sample_cnt)))) {
+        ivf_build_mem_ctx_.Allocate(sizeof(float) * sample_cnt)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      SHARE_LOG(WARN, "failed to alloc memory", K(ret));
+      SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(ivf_build_mem_ctx_.get_all_vsag_use_mem_byte()));
     } else if (OB_FAIL(lower_bounds_.allocate_array(tmp_allocator_, sample_cnt))) {
       LOG_WARN("failed to allocate array", K(ret));
     } else {
+      MEMSET(lower_bounds_.get_data(), 0, sizeof(float *) * sample_cnt);
       for (int64_t i = 0; OB_SUCC(ret) && i < sample_cnt; ++i) {
         float *bound = nullptr;
-        if (OB_ISNULL(bound = static_cast<float *>(tmp_allocator_.alloc(sizeof(float) * kmeans_ctx_->lists_)))) {
+        if (OB_ISNULL(bound = static_cast<float *>(ivf_build_mem_ctx_.Allocate(sizeof(float) * kmeans_ctx_->lists_)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          SHARE_LOG(WARN, "failed to alloc memory", K(ret));
+          SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(ivf_build_mem_ctx_.get_all_vsag_use_mem_byte()));
         } else {
           MEMSET(bound, 0, sizeof(float) * kmeans_ctx_->lists_);
           lower_bounds_.at(i) = bound;
@@ -783,11 +830,12 @@ int ObElkanKmeansAlgo::do_kmeans(const ObIArray<float*> &input_vectors)
     if (OB_FAIL(half_centers_distance.allocate_array(tmp_allocator_, kmeans_ctx_->lists_))) {
       LOG_WARN("failed to allocate array", K(ret));
     } else {
+      MEMSET(half_centers_distance.get_data(), 0, sizeof(float *) * kmeans_ctx_->lists_);
       for (int64_t i = 0; OB_SUCC(ret) && i < kmeans_ctx_->lists_; ++i) {
         float *tmp = nullptr;
-        if (OB_ISNULL(tmp = static_cast<float*>(tmp_allocator_.alloc(sizeof(float) * kmeans_ctx_->lists_)))) {
+        if (OB_ISNULL(tmp = static_cast<float*>(ivf_build_mem_ctx_.Allocate(sizeof(float) * kmeans_ctx_->lists_)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          SHARE_LOG(WARN, "failed to alloc memory", K(ret));
+          SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(ivf_build_mem_ctx_.get_all_vsag_use_mem_byte()));
         } else {
           MEMSET(tmp, 0, sizeof(float) * kmeans_ctx_->lists_);
           half_centers_distance.at(i) = tmp;
@@ -796,17 +844,17 @@ int ObElkanKmeansAlgo::do_kmeans(const ObIArray<float*> &input_vectors)
     }
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(half_center_min_distance =
-        static_cast<float*>(tmp_allocator_.alloc(sizeof(float) * kmeans_ctx_->lists_)))) {
+        static_cast<float*>(ivf_build_mem_ctx_.Allocate(sizeof(float) * kmeans_ctx_->lists_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      SHARE_LOG(WARN, "failed to alloc memory", K(ret));
+      SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(ivf_build_mem_ctx_.get_all_vsag_use_mem_byte()));
     } else if (OB_ISNULL(center_distance_diff =
-        static_cast<float*>(tmp_allocator_.alloc(sizeof(float) * kmeans_ctx_->lists_)))) {
+        static_cast<float*>(ivf_build_mem_ctx_.Allocate(sizeof(float) * kmeans_ctx_->lists_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      SHARE_LOG(WARN, "failed to alloc memory", K(ret));
+      SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(ivf_build_mem_ctx_.get_all_vsag_use_mem_byte()));
     } else if (OB_ISNULL(data_cnt_in_cluster =
-        static_cast<int32_t*>(tmp_allocator_.alloc(sizeof(int32_t) * kmeans_ctx_->lists_)))) {
+        static_cast<int32_t*>(ivf_build_mem_ctx_.Allocate(sizeof(int32_t) * kmeans_ctx_->lists_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      SHARE_LOG(WARN, "failed to alloc memory", K(ret));
+      SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(ivf_build_mem_ctx_.get_all_vsag_use_mem_byte()));
     } else {
       MEMSET(half_center_min_distance, 0, sizeof(float) * kmeans_ctx_->lists_);
       MEMSET(center_distance_diff, 0, sizeof(float) * kmeans_ctx_->lists_);
@@ -959,7 +1007,25 @@ int ObElkanKmeansAlgo::do_kmeans(const ObIArray<float*> &input_vectors)
       }
     } // iter end for
     // free tmp memory
-    tmp_allocator_.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < half_centers_distance.count(); ++i) {
+      float *& half_centers_distance_i = half_centers_distance.at(i);
+      if (OB_NOT_NULL(half_centers_distance_i)) {
+        ivf_build_mem_ctx_.Deallocate(half_centers_distance_i);
+        half_centers_distance_i = nullptr;
+      }
+    }
+    if (OB_NOT_NULL(half_center_min_distance)) {
+      ivf_build_mem_ctx_.Deallocate(half_center_min_distance);
+      half_center_min_distance = nullptr;
+    }
+    if (OB_NOT_NULL(center_distance_diff)) {
+      ivf_build_mem_ctx_.Deallocate(center_distance_diff);
+      center_distance_diff = nullptr;
+    }
+    if (OB_NOT_NULL(data_cnt_in_cluster)) {
+      ivf_build_mem_ctx_.Deallocate(data_cnt_in_cluster);
+      data_cnt_in_cluster = nullptr;
+    }
     if (OB_SUCC(ret)) {
       status_ = FINISH;
     }
@@ -968,11 +1034,28 @@ int ObElkanKmeansAlgo::do_kmeans(const ObIArray<float*> &input_vectors)
 }
 
 // ------------------ ObIvfBuildHelper implement ------------------
-int ObIvfBuildHelper::init(ObString &init_str)
+void ObIvfBuildHelper::reset()
+{
+  ObIAllocator *allocator = get_allocator();
+  if (OB_NOT_NULL(allocator) && OB_NOT_NULL(ivf_build_mem_ctx_)) {
+    ivf_build_mem_ctx_->~ObIvfMemContext();
+    allocator->free(ivf_build_mem_ctx_);
+    ivf_build_mem_ctx_ = nullptr;
+  }
+}
+
+int ObIvfBuildHelper::init(ObString &init_str, lib::MemoryContext &parent_mem_ctx, uint64_t *all_vsag_use_mem)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(init_str, ObVectorIndexType::VIT_IVF_INDEX, param_))) {
     LOG_WARN("failed to parse params.", K(ret));
+  } else if (OB_ISNULL(ivf_build_mem_ctx_ = OB_NEWx(ObIvfMemContext, get_allocator(), all_vsag_use_mem))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to create ivf_build_mem_ctx", K(ret));
+  } else if (OB_FAIL(ivf_build_mem_ctx_->init(parent_mem_ctx, all_vsag_use_mem, tenant_id_, ObIvfMemContext::IVF_BUILD_LABEL))) {
+    LOG_WARN("failed to init memory context", K(ret));
+    get_allocator()->free(ivf_build_mem_ctx_);
+    ivf_build_mem_ctx_ = nullptr;
   }
   return ret;
 }
@@ -990,11 +1073,31 @@ bool ObIvfBuildHelper::dec_ref_and_check_release()
   return (ref_count == 0);
 }
 
+int64_t ObIvfBuildHelper::get_free_vector_mem_size()
+{
+  int ret = OB_SUCCESS;
+  int64_t free_vector_mem_size = 0;
+  int64_t tenant_mem_size = 0;
+  int64_t curr_used = 0;
+  if (OB_ISNULL(ivf_build_mem_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mem ctx is null", K(ret));
+  } else if (OB_FALSE_IT(curr_used = ATOMIC_LOAD(ivf_build_mem_ctx_->get_all_vsag_use_mem()))) {
+  } else if (OB_FAIL(ObPluginVectorIndexHelper::get_vector_memory_limit_size(tenant_id_, tenant_mem_size))) {
+    LOG_WARN("failed to get vector mem limit size.", K(ret), K(tenant_id_));
+  } else if (tenant_mem_size > curr_used) {
+    free_vector_mem_size = tenant_mem_size - curr_used;
+  }
+  LOG_INFO("free vector mem limit size.", K(ret), K(free_vector_mem_size), K(tenant_mem_size), K(curr_used));
+  return free_vector_mem_size;
+}
+
 // ------------------ ObIvfFlatBuildHelper implement ------------------
 ObIvfFlatBuildHelper::~ObIvfFlatBuildHelper()
 {
-  if (OB_NOT_NULL(executor_)) {
+  if (OB_NOT_NULL(executor_) && OB_NOT_NULL(ivf_build_mem_ctx_)) {
     executor_->~ObSingleKmeansExecutor();
+    ivf_build_mem_ctx_->Deallocate(executor_);
     executor_ = nullptr;
   }
 }
@@ -1015,19 +1118,21 @@ int ObIvfFlatBuildHelper::init_kmeans_ctx(const int64_t dim)
     SHARE_LOG(WARN, "invalid argument", K(ret), K(dim), K(param_));
   } else if ((VIDA_IP == param_.dist_algorithm_ || VIDA_COS == param_.dist_algorithm_) &&
               FALSE_IT(norm_info = &norm_info_)) { // IP和COS算法需要归一化
-  } else if (OB_ISNULL(executor_ = OB_NEWx(ObSingleKmeansExecutor, &inner_allocator_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected new ObElkanKmeansAlgo", K(ret));
-  } else if (OB_FAIL(executor_->init(ObKmeansAlgoType::KAT_ELKAN,
-                                tenant_id_,
-                                param_.nlist_,
-                                param_.sample_per_nlist_,
-                                dim,
-                                param_.dist_algorithm_,
-                                norm_info))) {
-    LOG_WARN("failed to init kmeans ctx", K(ret));
+  } else if (OB_ISNULL(ivf_build_mem_ctx_)) {
+    ret = OB_NOT_INIT;
+    SHARE_LOG(WARN, "ivf_build_mem_ctx_ is null", K(ret));
   } else {
-    is_inited_ = true;
+    void *tmp_buf = nullptr;
+    if (OB_ISNULL(tmp_buf = ivf_build_mem_ctx_->Allocate(sizeof(ObSingleKmeansExecutor)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc tmp_buf", K(ret), K(ivf_build_mem_ctx_->get_all_vsag_use_mem_byte()));
+    } else if (OB_FALSE_IT(executor_ = new (tmp_buf) ObSingleKmeansExecutor(*ivf_build_mem_ctx_))) {
+    } else if (OB_FAIL(executor_->init(ObKmeansAlgoType::KAT_ELKAN, tenant_id_, param_.nlist_,
+                                       param_.sample_per_nlist_, dim, param_.dist_algorithm_, norm_info))) {
+      LOG_WARN("failed to init kmeans ctx", K(ret));
+    } else {
+      is_inited_ = true;
+    }
   }
   first_ret_code_ = ret;
   return ret;
@@ -1036,9 +1141,20 @@ int ObIvfFlatBuildHelper::init_kmeans_ctx(const int64_t dim)
 // ------------------ ObIvfSq8BuildHelper implement ------------------
 ObIvfSq8BuildHelper::~ObIvfSq8BuildHelper()
 {
-  min_vector_ = nullptr;
-  max_vector_ = nullptr;
-  step_vector_ = nullptr;
+  if (OB_NOT_NULL(ivf_build_mem_ctx_)) {
+    if (OB_NOT_NULL(min_vector_)) {
+      ivf_build_mem_ctx_->Deallocate(min_vector_);
+      min_vector_ = nullptr;
+    }
+    if (OB_NOT_NULL(max_vector_)) {
+      ivf_build_mem_ctx_->Deallocate(max_vector_);
+      max_vector_ = nullptr;
+    }
+    if (OB_NOT_NULL(step_vector_)) {
+      ivf_build_mem_ctx_->Deallocate(step_vector_);
+      step_vector_ = nullptr;
+    }
+  }
 }
 
 int ObIvfSq8BuildHelper::update(const float *vector, int64_t dim)
@@ -1104,15 +1220,18 @@ int ObIvfSq8BuildHelper::get_result(int row_pos, float *&vector)
 int ObIvfSq8BuildHelper::init_result_vectors(int64_t vec_dim)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(min_vector_ = static_cast<float*>(inner_allocator_.alloc(vec_dim * sizeof(float))))) {
+  if (OB_ISNULL(ivf_build_mem_ctx_)) {
+    ret = OB_NOT_INIT;
+    SHARE_LOG(WARN, "ivf_build_mem_ctx_ is null", K(ret));
+  } else if (OB_ISNULL(min_vector_ = static_cast<float*>(ivf_build_mem_ctx_->Allocate(vec_dim * sizeof(float))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(vec_dim));
-  } else if (OB_ISNULL(max_vector_ = static_cast<float*>(inner_allocator_.alloc(vec_dim * sizeof(float))))) {
+    SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(vec_dim), K(ivf_build_mem_ctx_->get_all_vsag_use_mem_byte()));
+  } else if (OB_ISNULL(max_vector_ = static_cast<float*>(ivf_build_mem_ctx_->Allocate(vec_dim * sizeof(float))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(vec_dim));
-  } else if (OB_ISNULL(step_vector_ = static_cast<float*>(inner_allocator_.alloc(vec_dim * sizeof(float))))) {
+    SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(vec_dim), K(ivf_build_mem_ctx_->get_all_vsag_use_mem_byte()));
+  } else if (OB_ISNULL(step_vector_ = static_cast<float*>(ivf_build_mem_ctx_->Allocate(vec_dim * sizeof(float))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(vec_dim));
+    SHARE_LOG(WARN, "failed to alloc memory", K(ret), K(vec_dim), K(ivf_build_mem_ctx_->get_all_vsag_use_mem_byte()));
   } else {
     MEMSET(step_vector_, 0, sizeof(float) * vec_dim);
     for (int i = 0; i < vec_dim; ++i) {
@@ -1128,8 +1247,9 @@ int ObIvfSq8BuildHelper::init_result_vectors(int64_t vec_dim)
 // ------------------ ObIvfPqBuildHelper implement ------------------
 ObIvfPqBuildHelper::~ObIvfPqBuildHelper()
 {
-  if (OB_NOT_NULL(executor_)) {
+  if (OB_NOT_NULL(executor_) && OB_NOT_NULL(ivf_build_mem_ctx_)) {
     executor_->~ObMultiKmeansExecutor();
+    ivf_build_mem_ctx_->Deallocate(executor_);
     executor_ = nullptr;
   }
 }
@@ -1151,23 +1271,72 @@ int ObIvfPqBuildHelper::init_ctx(const int64_t dim)
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), K(dim), K(param_));
   } else if (FALSE_IT(pqnlist = 1L << param_.nbits_)) {
-  } else if (OB_ISNULL(executor_ = OB_NEWx(ObMultiKmeansExecutor, &inner_allocator_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected new ObElkanKmeansAlgo", K(ret));
-  } else if (OB_FAIL(executor_->init(ObKmeansAlgoType::KAT_ELKAN,
-                                tenant_id_,
-                                pqnlist,
-                                param_.sample_per_nlist_,
-                                dim,
-                                param_.dist_algorithm_,
-                                nullptr, // pq center kmenas no need normlize, Reference faiss
-                                param_.m_))) {
-    LOG_WARN("failed to init kmeans ctx", K(ret), K(param_), K(pqnlist));
+  } else if (OB_ISNULL(ivf_build_mem_ctx_)) {
+    ret = OB_NOT_INIT;
+    SHARE_LOG(WARN, "ivf_build_mem_ctx_ is null", K(ret));
   } else {
-    is_inited_ = true;
+    void *tmp_buf = nullptr;
+    if (OB_ISNULL(tmp_buf = ivf_build_mem_ctx_->Allocate(sizeof(ObMultiKmeansExecutor)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc tmp_buf", K(ret), K(ivf_build_mem_ctx_->get_all_vsag_use_mem_byte()));
+    } else if (OB_FALSE_IT(executor_ = new (tmp_buf) ObMultiKmeansExecutor(*ivf_build_mem_ctx_))) {
+    } else if (OB_FAIL(executor_->init(ObKmeansAlgoType::KAT_ELKAN,
+                                  tenant_id_,
+                                  pqnlist,
+                                  param_.sample_per_nlist_,
+                                  dim,
+                                  param_.dist_algorithm_,
+                                  nullptr, // pq center kmenas no need normlize, Reference faiss
+                                  param_.m_))) {
+      LOG_WARN("failed to init kmeans ctx", K(ret), K(param_), K(pqnlist));
+    } else {
+      is_inited_ = true;
+    }
   }
   first_ret_code_ = ret;
   return ret;
+}
+
+int ObIvfPqBuildHelper::build(const common::ObTableID &table_id, const common::ObTabletID &tablet_id, ObInsertMonitor* insert_monitor)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(executor_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr ctx", K(ret));
+  } else if (can_use_parallel()) {
+    if (OB_FAIL(executor_->build_parallel(table_id, tablet_id, insert_monitor))) {
+      LOG_WARN("failed to build clusters", K(ret));
+    }
+  } else if (OB_FAIL(executor_->build(insert_monitor))) {
+    LOG_WARN("failed to build clusters", K(ret));
+  }
+  return ret;
+}
+
+bool ObIvfPqBuildHelper::can_use_parallel()
+{
+  int ret = OB_SUCCESS;
+  bool res = false;
+  int64_t max_thread_cnt = MTL_CPU_COUNT() * ObKmeansBuildTaskHandler::THREAD_FACTOR;
+  max_thread_cnt = OB_MAX(max_thread_cnt, ObKmeansBuildTaskHandler::MIN_THREAD_COUNT);
+  uint64_t construct_mem = 0;
+  uint64_t buff_mem = 0;
+  int64_t parallel_need_max_mem = 0;
+  int64_t vector_free_mem = 0;
+  if (OB_ISNULL(executor_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("executor_ is null", KR(ret));
+  } else if (OB_FAIL(ObVectorIndexUtil::estimate_ivf_memory(executor_->get_max_sample_count(), param_, construct_mem, buff_mem))) {
+    LOG_WARN("estimate ivf memory failed", KR(ret), K(executor_->get_max_sample_count()), K(param_));
+  } else {
+    parallel_need_max_mem = max_thread_cnt * construct_mem;
+    vector_free_mem = get_free_vector_mem_size();
+    if (vector_free_mem > parallel_need_max_mem) {
+      res = true;
+    }
+  }
+  LOG_INFO("can use parallel", K(res), K(max_thread_cnt), K(construct_mem), K(parallel_need_max_mem), K(vector_free_mem));
+  return res;
 }
 
 /**************************** ObKmeansBuildTaskHandler ******************************/

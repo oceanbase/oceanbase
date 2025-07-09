@@ -4877,14 +4877,10 @@ int ObIvfPqSliceStore::build_clusters(ObInsertMonitor* insert_monitor)
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    ObMultiKmeansExecutor *executor = nullptr;
     ObIvfPqBuildHelper *helper = nullptr;
     if (OB_FAIL(get_spec_ivf_helper(helper))) {
       LOG_WARN("fail to get ivf flat helper", K(ret));
-    } else if (OB_ISNULL(executor = helper->get_kmeans_ctx())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected nullptr ctx", K(ret));
-    } else if (OB_FAIL(executor->build_parallel(table_id_, tablet_id_, insert_monitor))) {
+    } else if (OB_FAIL(helper->build(table_id_, tablet_id_, insert_monitor))) {
       LOG_WARN("failed to build clusters", K(ret));
     }
   }

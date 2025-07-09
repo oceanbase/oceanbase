@@ -268,14 +268,16 @@ int ObVectorMemContext::init(lib::MemoryContext &mem_context, share::TxShareThro
   return ret;
 }
 
-int ObIvfMemContext::init(lib::MemoryContext &parent_mem_context,
-                          uint64_t *all_vsag_use_mem,
-                          uint64_t tenant_id)
+const char* ObIvfMemContext::IVF_CACHE_LABEL = "IvfCacheCtx";
+const char* ObIvfMemContext::IVF_BUILD_LABEL = "IvfBuildCtx";
+
+int ObIvfMemContext::init(lib::MemoryContext &parent_mem_context, uint64_t *all_vsag_use_mem, uint64_t tenant_id,
+                          const char *label /*IVF_CACHE_LABEL*/)
 {
   INIT_SUCC(ret);
   lib::ContextParam param;
   ObSharedMemAllocMgr *share_mem_alloc_mgr = MTL(ObSharedMemAllocMgr *);
-  ObMemAttr attr(tenant_id, "IvfCacheCtx", ObCtxIds::VECTOR_CTX_ID);
+  ObMemAttr attr(tenant_id, label, ObCtxIds::VECTOR_CTX_ID);
   SET_IGNORE_MEM_VERSION(attr);
   param.set_mem_attr(attr)
     .set_page_size(OB_MALLOC_MIDDLE_BLOCK_SIZE)

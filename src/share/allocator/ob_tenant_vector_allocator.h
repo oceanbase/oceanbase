@@ -120,7 +120,7 @@ public:
       mem_context_ = nullptr;
     }
   }
-  int init(lib::MemoryContext &parent_mem_context, uint64_t *all_vsag_use_mem, uint64_t tenant_id);
+  int init(lib::MemoryContext &parent_mem_context, uint64_t *all_vsag_use_mem, uint64_t tenant_id, const char *label = IVF_CACHE_LABEL);
   bool is_inited() { return OB_NOT_NULL(mem_context_); }
   void* Allocate(size_t size);
   void Deallocate(void* p);
@@ -132,7 +132,11 @@ public:
     return mem_context_->used();
   }
   inline uint64_t * get_all_vsag_use_mem() { return all_vsag_use_mem_; }
-inline lib::MemoryContext &get_mem_context() { return mem_context_;}
+  inline uint64_t get_all_vsag_use_mem_byte() { return ATOMIC_LOAD(all_vsag_use_mem_); }
+  inline lib::MemoryContext &get_mem_context() { return mem_context_;}
+public:
+  static const char* IVF_CACHE_LABEL;
+  static const char* IVF_BUILD_LABEL;
 private:
   uint64_t *all_vsag_use_mem_;
   lib::MemoryContext mem_context_;

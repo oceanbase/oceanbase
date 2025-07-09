@@ -18,6 +18,7 @@
 #include "ob_vector_index_util.h"
 #include "share/vector_type/ob_vector_l2_distance.h"
 #include "share/vector_type/ob_vector_common_util.h"
+#include "share/allocator/ob_tenant_vector_allocator.h"
 
 namespace oceanbase {
 namespace storage
@@ -35,7 +36,7 @@ enum ObKMeansStatus
 
 class ObKmeansCtx {
 public:
-  ObKmeansCtx()
+  explicit ObKmeansCtx(ObIvfMemContext &ivf_build_mem_ctx)
     : is_inited_(false),
       tenant_id_(OB_INVALID_ID),
       dim_(0),
@@ -43,8 +44,7 @@ public:
       max_sample_count_(0),
       total_scan_count_(0),
       dist_algo_(VIDA_MAX),
-      not_safe_allocator_(ObMemAttr(MTL_ID(), "KMeansCtx")),
-      allocator_(not_safe_allocator_),
+      ivf_build_mem_ctx_(ivf_build_mem_ctx),
       norm_info_(nullptr),
       sample_vectors_()
   {}
@@ -82,8 +82,7 @@ public:
   int64_t max_sample_count_;
   int64_t total_scan_count_; // the number of rows scanned // for reservoir sampling
   ObVectorIndexDistAlgorithm dist_algo_; // TODO(@jingshui): use ObVecDisType ?
-  ObArenaAllocator not_safe_allocator_;
-  ObSafeArenaAllocator allocator_;
+  ObIvfMemContext &ivf_build_mem_ctx_; // from ObIvfBuildHelper, used for alloc memory for kmeans build process
   ObVectorNormalizeInfo *norm_info_;
   lib::ObMutex lock_; // for sample_vectors_
   ObSEArray<float*, 64> sample_vectors_;
@@ -93,18 +92,19 @@ public:
 // quantization and normalization are not of concern here
 class ObKmeansAlgo {
 public:
-  ObKmeansAlgo()
+  explicit ObKmeansAlgo(ObIvfMemContext &ivf_build_mem_ctx)
     : kmeans_ctx_(nullptr),
-      allocator_(nullptr),
       cur_idx_(0),
       weight_(nullptr),
       status_(PREPARE_CENTERS),
       force_stop_(false),
-      tmp_allocator_()
+      tmp_allocator_(),
+      ivf_build_mem_ctx_(ivf_build_mem_ctx)
   {}
   virtual ~ObKmeansAlgo() {
-    tmp_allocator_.reset();
+    destroy();
   }
+  void destroy();
   int init(ObKmeansCtx &kmeans_ctx);
   int build(const ObIArray<float*> &input_vectors);
   bool is_finish() const { return FINISH == status_; }
@@ -126,14 +126,14 @@ public:
 protected:
   bool is_inited_;
   const ObKmeansCtx *kmeans_ctx_;
-  ObIAllocator *allocator_; // from kmeans_ctx
   int64_t cur_idx_; // switch center buffer
   ObCentersBuffer<float> centers_[2]; // TODO(@jingshui): vector<FLOAT> may need float to avoids overflow
   float *weight_; // only for kmeans++ // each vector has a weight
   ObKMeansStatus status_;
   // When executing in parallel, tasks may be forcibly stopped.
   volatile bool force_stop_;
-  ObArenaAllocator tmp_allocator_;
+  ObArenaAllocator tmp_allocator_; // 这里也会有少量内存使用
+  ObIvfMemContext &ivf_build_mem_ctx_; // from ObIvfBuildHelper, used for alloc memory for kmeans build process
 };
 
 // elkan kmeans
@@ -143,12 +143,16 @@ protected:
 class ObElkanKmeansAlgo : public ObKmeansAlgo
 {
 public:
-  ObElkanKmeansAlgo()
-    : ObKmeansAlgo(),
+  ObElkanKmeansAlgo(ObIvfMemContext &ivf_build_mem_ctx)
+    : ObKmeansAlgo(ivf_build_mem_ctx),
       lower_bounds_(),
       upper_bounds_(nullptr),
       nearest_centers_(nullptr)
   {}
+  virtual ~ObElkanKmeansAlgo() {
+    destroy();
+  }
+  void destroy();
 
   TO_STRING_KV(KP(upper_bounds_),
                KP(nearest_centers_));
@@ -171,7 +175,7 @@ protected:
 class ObKmeansExecutor
 {
 public:
-  ObKmeansExecutor() : is_inited_(false) {}
+  explicit ObKmeansExecutor(ObIvfMemContext &ivf_build_mem_ctx) : is_inited_(false), ctx_(ivf_build_mem_ctx), ivf_build_mem_ctx_(ivf_build_mem_ctx) {}
   virtual ~ObKmeansExecutor() {
     is_inited_ = false;
   }
@@ -185,6 +189,7 @@ public:
            const int64_t pq_m_size = 1) = 0;
   virtual int get_center(const int64_t pos, float *&center_vector) = 0;
   virtual int append_sample_vector(float* vector);
+  OB_INLINE int64_t get_max_sample_count() { return ctx_.max_sample_count_; }
   bool is_empty() { return ctx_.is_empty(); }
 
   TO_STRING_KV(K(is_inited_),
@@ -193,16 +198,18 @@ public:
 protected:
   bool is_inited_;
   ObKmeansCtx ctx_;
+  ObIvfMemContext &ivf_build_mem_ctx_; // from ObIvfBuildHelper, used for alloc memory for kmeans build process
 };
 
 class ObSingleKmeansExecutor : public ObKmeansExecutor
 {
 public:
-  ObSingleKmeansExecutor() : ObKmeansExecutor(), algo_(nullptr) {}
+  ObSingleKmeansExecutor(ObIvfMemContext &ivf_build_mem_ctx) : ObKmeansExecutor(ivf_build_mem_ctx), algo_(nullptr) {}
   virtual ~ObSingleKmeansExecutor() {
     is_inited_ = false;
     if (OB_NOT_NULL(algo_)) {
       algo_->~ObKmeansAlgo();
+      ivf_build_mem_ctx_.Deallocate(algo_);
       algo_ = nullptr;
     }
   }
@@ -233,7 +240,7 @@ class ObKmeansBuildTask;
 class ObMultiKmeansExecutor : public ObKmeansExecutor
 {
 public:
-  ObMultiKmeansExecutor() : ObKmeansExecutor(), pq_m_size_(0) {
+  ObMultiKmeansExecutor(ObIvfMemContext &ivf_build_mem_ctx) : ObKmeansExecutor(ivf_build_mem_ctx), pq_m_size_(0) {
     algos_.set_attr(ObMemAttr(MTL_ID(), "MKmeansExu"));
   }
   virtual ~ObMultiKmeansExecutor();
@@ -246,7 +253,7 @@ public:
           ObVectorIndexDistAlgorithm dist_algo,
           ObVectorNormalizeInfo *norm_info = nullptr,
           const int64_t pq_m_size = 1) override;
-  virtual int build();
+  virtual int build(ObInsertMonitor *insert_monitor);
   int init_build_handle(ObKmeansBuildTaskHandler &handle);
   int build_parallel(const common::ObTableID &table_id, const common::ObTabletID &tablet_id,
                      ObInsertMonitor *insert_monitor);
@@ -277,16 +284,19 @@ public:
     ref_cnt_(0),
     allocator_(allocator),
     param_(),
-    inner_allocator_("IvfBuHel", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_),
-    first_ret_code_(OB_SUCCESS)
+    first_ret_code_(OB_SUCCESS),
+    ivf_build_mem_ctx_(nullptr)
   {}
-  virtual ~ObIvfBuildHelper() = default;
-  virtual int init(ObString &init_str);
+  virtual ~ObIvfBuildHelper() {
+    reset();
+  }
+  void reset();
+  virtual int init(ObString &init_str, lib::MemoryContext &parent_mem_ctx, uint64_t* all_vsag_use_mem);
   ObIAllocator *get_allocator() { return allocator_; }
-  ObIAllocator &get_inner_allocator() { return inner_allocator_; }
 
   void inc_ref();
   bool dec_ref_and_check_release();
+  int64_t get_free_vector_mem_size();
   OB_INLINE const ObVectorIndexParam &get_param() const { return param_; }
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(ref_cnt), KP_(allocator), K_(param), K_(first_ret_code));
 
@@ -297,8 +307,8 @@ protected:
   ObIAllocator *allocator_; // allocator for alloc helper self
   lib::ObMutex lock_;
   ObVectorIndexParam param_;
-  ObArenaAllocator inner_allocator_;
   int first_ret_code_;
+  ObIvfMemContext *ivf_build_mem_ctx_; // for mem alloc in ivf build process
 };
 
 
@@ -355,7 +365,9 @@ public:
   {}
   virtual ~ObIvfPqBuildHelper();
   virtual int init_ctx(const int64_t dim);
+  bool can_use_parallel();
   ObMultiKmeansExecutor *get_kmeans_ctx() { return executor_; }
+  int build(const common::ObTableID &table_id, const common::ObTabletID &tablet_id, ObInsertMonitor* insert_monitor);
 
   TO_STRING_KV(K_(tenant_id), K_(ref_cnt), KP_(allocator), KP_(executor), K_(param));
 private:

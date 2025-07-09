@@ -357,7 +357,7 @@ int ObPluginVectorIndexMgr::create_ivf_build_helper(
       LOG_WARN("failed to allocate memory for ivf index build helper", KR(ret));
     } else {
       tmp_ivf_build_helper = new(helper_buff)ObIvfFlatBuildHelper(&allocator, tenant_id_);
-      if (OB_FAIL(tmp_ivf_build_helper->init(vec_index_param))) {
+      if (OB_FAIL(tmp_ivf_build_helper->init(vec_index_param, memory_context_, all_vsag_use_mem_))) {
         LOG_WARN("failed to init ivf build helper", K(ret));
       }
     }
@@ -367,7 +367,7 @@ int ObPluginVectorIndexMgr::create_ivf_build_helper(
       LOG_WARN("failed to allocate memory for ivf index build helper", KR(ret));
     } else {
       tmp_ivf_build_helper = new(helper_buff)ObIvfSq8BuildHelper(&allocator, tenant_id_);
-      if (OB_FAIL(tmp_ivf_build_helper->init(vec_index_param))) {
+      if (OB_FAIL(tmp_ivf_build_helper->init(vec_index_param, memory_context_, all_vsag_use_mem_))) {
         LOG_WARN("failed to init ivf build helper", K(ret), K(vec_index_param));
       }
     }
@@ -377,7 +377,7 @@ int ObPluginVectorIndexMgr::create_ivf_build_helper(
       LOG_WARN("failed to allocate memory for ivf index build helper", KR(ret));
     } else {
       tmp_ivf_build_helper = new(helper_buff)ObIvfPqBuildHelper(&allocator, tenant_id_);
-      if (OB_FAIL(tmp_ivf_build_helper->init(vec_index_param))) {
+      if (OB_FAIL(tmp_ivf_build_helper->init(vec_index_param, memory_context_, all_vsag_use_mem_))) {
         LOG_WARN("failed to init ivf build helper", K(ret), K(vec_index_param));
       }
     }
