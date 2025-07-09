@@ -1903,6 +1903,7 @@ int ObVecIndexAsyncTask::get_old_snapshot_data(
 
 int ObVecIndexAsyncTask::delete_tablet_data(
     ObPluginVectorIndexAdaptor &adaptor,
+    ObTabletID& tablet_id,
     ObDMLBaseParam &dml_param,
     transaction::ObTxDesc *tx_desc,
     ObTableScanIterator *table_scan_iter,
@@ -1948,8 +1949,8 @@ int ObVecIndexAsyncTask::delete_tablet_data(
     if (OB_FAIL(ret)) {
     } else if (cur_row_count == 0) {
       delete_unfinish = false;
-    } else if (OB_FAIL(oas->delete_rows(ls_id_, adaptor.get_inc_tablet_id(), *tx_desc, dml_param, dml_column_ids, &row_iter, delta_table_affected_rows))) {
-      LOG_WARN("failed to delete rows from delta table", K(ret), K(adaptor.get_inc_tablet_id()));
+    } else if (OB_FAIL(oas->delete_rows(ls_id_, tablet_id, *tx_desc, dml_param, dml_column_ids, &row_iter, delta_table_affected_rows))) {
+      LOG_WARN("failed to delete rows from delta table", K(ret), K(tablet_id));
     } else if (delta_table_affected_rows != cur_row_count) {
       LOG_WARN("delete rows count unexpected", K(cur_row_count), K(delta_table_affected_rows));
     }
@@ -2036,13 +2037,13 @@ int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adap
         LOG_WARN("failed to convert table dml param.", K(ret));
       } else if (FALSE_IT(dml_param.schema_version_ = delta_table_schema->get_schema_version())) {
       } else if (FALSE_IT(dml_param.table_param_ = &table_dml_param)) {
-      } else if (OB_FAIL(delete_tablet_data(adaptor, dml_param, tx_desc, delta_scan_iter, delta_dml_column_ids ))) {
+      } else if (OB_FAIL(delete_tablet_data(adaptor, adaptor.get_inc_tablet_id(), dml_param, tx_desc, delta_scan_iter, delta_dml_column_ids ))) {
         LOG_WARN("failed to delete delta table data", K(ret));
       } else if (OB_FAIL(bitmap_table_dml_param.convert(index_table_schema, index_table_schema->get_schema_version(), index_dml_column_ids))) {
         LOG_WARN("failed to convert table dml param.", K(ret));
       } else if (FALSE_IT(dml_param.schema_version_ = index_table_schema->get_schema_version())) {
       } else if (FALSE_IT(dml_param.table_param_ = &bitmap_table_dml_param)) {
-      } else if (OB_FAIL(delete_tablet_data(adaptor, dml_param, tx_desc, index_scan_iter, index_dml_column_ids ))) {
+      } else if (OB_FAIL(delete_tablet_data(adaptor, adaptor.get_vbitmap_tablet_id(), dml_param, tx_desc, index_scan_iter, index_dml_column_ids ))) {
         LOG_WARN("failed to delete index table data", K(ret));
       }
     }

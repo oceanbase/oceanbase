@@ -313,6 +313,7 @@ private:
       storage::ObValueRowIterator &delete_row_iter);
   int delete_tablet_data(
       ObPluginVectorIndexAdaptor &adaptor,
+      ObTabletID& tablet_id,
       storage::ObDMLBaseParam &dml_param,
       transaction::ObTxDesc *tx_desc,
       storage::ObTableScanIterator *table_scan_iter,
