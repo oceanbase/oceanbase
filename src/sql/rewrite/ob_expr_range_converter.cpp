@@ -3542,7 +3542,7 @@ int ObExprRangeConverter::can_extract_implicit_cast_range(ObItemType cmp_type,
   } else if (column_expr.get_result_type().get_type() ==
               const_expr.get_result_type().get_type() &&
              column_expr.get_result_type().is_string_type()) {
-    if (OB_FAIL(is_implicit_collation_range_valid(cmp_type,
+    if (OB_FAIL(ObOptimizerUtil::is_implicit_collation_range_valid(cmp_type,
                                                   column_expr.get_result_type().get_collation_type(),
                                                   const_expr.get_result_type().get_collation_type(),
                                                   can_extract))) {
@@ -3824,7 +3824,7 @@ int ObExprRangeConverter::check_can_extract_implicit_collation_range(
       // do nothing
     } else if (OB_FAIL(collation_val.get_int(dest_collation))) {
       LOG_WARN("failed to get collation val", K(ret));
-    } else if (OB_FAIL(is_implicit_collation_range_valid(
+    } else if (OB_FAIL(ObOptimizerUtil::is_implicit_collation_range_valid(
                         cmp_type,
                         real_expr->get_result_type().get_obj_meta().get_collation_type(),
                         static_cast<ObCollationType>(dest_collation),
@@ -3839,7 +3839,7 @@ int ObExprRangeConverter::check_can_extract_implicit_collation_range(
                  l_expr->get_result_type().get_type() ||
                !real_expr->get_result_type().is_string_type()) {
       // do nothing
-    } else if (OB_FAIL(is_implicit_collation_range_valid(
+    } else if (OB_FAIL(ObOptimizerUtil::is_implicit_collation_range_valid(
                         cmp_type,
                         real_expr->get_result_type().get_obj_meta().get_collation_type(),
                         l_expr->get_result_type().get_obj_meta().get_collation_type(),
@@ -3885,38 +3885,6 @@ int ObExprRangeConverter::get_implicit_set_collation_in_range(
     LOG_WARN("failed to get single row in range node", K(ret));
   } else {
     ctx_.cur_is_precise_ = false;
-  }
-  return ret;
-}
-
-int ObExprRangeConverter::is_implicit_collation_range_valid(
-                          ObItemType cmp_type,
-                          ObCollationType l_collation,
-                          ObCollationType r_collation,
-                          bool &is_valid)
-{
-  int ret = OB_SUCCESS;
-  is_valid = false;
-  if (cmp_type != T_OP_EQ && cmp_type != T_OP_NSEQ &&
-      cmp_type != T_OP_IN) {
-    is_valid = false;
-  } else if (l_collation == CS_TYPE_UTF8MB4_GENERAL_CI &&
-      (r_collation == CS_TYPE_UTF8MB4_BIN ||
-       r_collation == CS_TYPE_BINARY)) {
-    is_valid = true;
-  } else if (l_collation == CS_TYPE_UTF16_GENERAL_CI &&
-             (r_collation == CS_TYPE_UTF16_BIN ||
-              r_collation == CS_TYPE_BINARY)) {
-    is_valid = true;
-  } else if (l_collation == CS_TYPE_UTF16LE_GENERAL_CI &&
-             (r_collation == CS_TYPE_UTF16LE_BIN ||
-              r_collation == CS_TYPE_BINARY)) {
-    is_valid = true;
-  } else if (l_collation == CS_TYPE_UTF8MB4_BIN &&
-             r_collation == CS_TYPE_BINARY) {
-    is_valid = true;
-  } else {
-    LOG_TRACE("unsupport implicit collation range", K(l_collation), K(r_collation));
   }
   return ret;
 }

@@ -78,10 +78,6 @@ public:
 
   int sort_range_exprs(const ObIArray<ObRawExpr*> &range_exprs,
                        ObIArray<ObRawExpr*> &out_range_exprs);
-  static int is_implicit_collation_range_valid(ObItemType cmp_type,
-                                               ObCollationType l_collation,
-                                               ObCollationType r_collation,
-                                               bool &is_valid);
 private:
   ObExprRangeConverter();
   int alloc_range_node(ObRangeNode *&range_node);

@@ -1627,10 +1627,22 @@ public:
                                                const ObIArray<ObRawExpr*> &range_exprs,
                                                ObIArray<ObRawExpr*> &out_range_exprs);
 
+  static int can_extract_implicit_cast_range(ObItemType cmp_type,
+                                            const ObColumnRefRawExpr &column_expr,
+                                            const ObRawExpr &const_expr,
+                                            bool &can_extract);
+
+  static int is_implicit_collation_range_valid(ObItemType cmp_type,
+                                              ObCollationType l_collation,
+                                              ObCollationType r_collation,
+                                              bool &is_valid);
+
   static int find_joined_table(ObDMLStmt *stmt,
                                const uint64_t table_id,
                                JoinedTable *&joined_table);
 
+  static int eliminate_implicit_cast_for_range(ObRawExpr *&left, ObRawExpr *&right, ObItemType cmp_type);
+  static bool is_type_for_extact_implicit_cast_range(const ObRawExprResType &res_type);
   template<typename T>
   static int choose_random_members(const uint64_t seed,
                                    const ObIArray<T> &input_array,
