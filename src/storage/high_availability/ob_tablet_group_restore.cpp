@@ -72,7 +72,7 @@ ObTabletGroupRestoreCtx::ObTabletGroupRestoreCtx()
     src_(),
     ha_table_info_mgr_(),
     tablet_id_array_(),
-    tablet_group_ctx_(),
+    tablet_group_ctx_(ObHATabletGroupCtx::TabletGroupCtxType::NORMAL_TYPE),
     need_check_seq_(false),
     ls_rebuild_seq_(-1)
 {

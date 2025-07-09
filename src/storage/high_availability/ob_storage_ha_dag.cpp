@@ -815,7 +815,7 @@ int ObHATabletGroupMgr::alloc_and_new_tablet_group_ctx(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret), KP(buf));
     } else {
-      tablet_group_ctx = new (buf) ObHATabletGroupCtx();
+      tablet_group_ctx = new (buf) ObHATabletGroupCtx(type);
     }
   } else if (ObHATabletGroupCtx::TabletGroupCtxType::CS_REPLICA_TYPE == type) {
     if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObHATabletGroupCOConvertCtx)))) {

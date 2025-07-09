@@ -46,7 +46,7 @@ ObRebuildTabletCtx::ObRebuildTabletCtx()
     finish_ts_(0),
     task_id_(),
     src_(),
-    tablet_group_ctx_(),
+    tablet_group_ctx_(ObHATabletGroupCtx::TabletGroupCtxType::NORMAL_TYPE),
     src_ls_rebuild_seq_(-1)
 {
 }

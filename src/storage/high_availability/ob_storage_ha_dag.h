@@ -166,7 +166,7 @@ public:
     MAX_TYPE
   };
 public:
-  ObHATabletGroupCtx(const TabletGroupCtxType type = TabletGroupCtxType::NORMAL_TYPE);
+  explicit ObHATabletGroupCtx(const TabletGroupCtxType type);
   virtual ~ObHATabletGroupCtx();
   int init(const common::ObIArray<ObLogicTabletID> &tablet_id_array);
   int get_next_tablet_id(ObLogicTabletID &logic_tablet_id);
