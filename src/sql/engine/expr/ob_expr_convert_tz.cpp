@@ -84,29 +84,39 @@ int ObExprConvertTZ::calc_convert_tz(int64_t timestamp_data,
   return ret;
 }
 
-int ObExprConvertTZ::calc_convert_tz_timestamp(const ObExpr &expr, ObEvalCtx &ctx, int64_t &timestamp_data, const ObString &tz_str_s, const ObString &tz_str_d, ObSQLSessionInfo *session) {
+int ObExprConvertTZ::calc_convert_tz_timestamp(const ObExpr &expr,
+                                               ObEvalCtx &ctx,
+                                               int64_t &timestamp_data,
+                                               const ObString &tz_str_s,
+                                               const ObString &tz_str_d,
+                                               ObSQLSessionInfo *session) {
   int ret = OB_SUCCESS;
   ObExecContext *exec_ctx = &ctx.exec_ctx_;
   ObExprConvertTZCtx *cvrt_ctx = nullptr;
 
-  // for multi stmt, expr ctx may be shared, so we need get tz_info each time
-  if (!ctx.exec_ctx_.get_sql_ctx()->multi_stmt_item_.is_part_of_multi_stmt() &&
-        OB_ISNULL(cvrt_ctx = static_cast<ObExprConvertTZCtx*>(exec_ctx->get_expr_op_ctx(expr.expr_ctx_id_)))) {
-    if (OB_FAIL(exec_ctx->create_expr_op_ctx(expr.expr_ctx_id_, cvrt_ctx))) {
+  bool is_batched_multi_stmt = true;
+  if (OB_NOT_NULL(ctx.exec_ctx_.get_sql_ctx())) {
+    is_batched_multi_stmt = ctx.exec_ctx_.get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt();
+  }
+
+  cvrt_ctx = static_cast<ObExprConvertTZCtx*>(exec_ctx->get_expr_op_ctx(expr.expr_ctx_id_));
+
+  // for batched_multi_stmt, expr_op_ctx may be shared, so we need get tz_info each time
+  if (!is_batched_multi_stmt && OB_NOT_NULL(cvrt_ctx)) {
+    // reuse existing expr_op_ctx
+  } else {
+    if (OB_ISNULL(cvrt_ctx) && OB_FAIL(exec_ctx->create_expr_op_ctx(expr.expr_ctx_id_, cvrt_ctx))) {
       LOG_WARN("create expr op ctx failed", K(ret));
+    } else if (OB_FAIL(get_cvrt_tz_info(tz_str_s, session, cvrt_ctx->tz_info_wrap_src_))) {
+      cvrt_ctx->find_tz_ret_ = ret;
+      LOG_WARN("get tz_st_pos failed", K(ret));
+    } else if (OB_FAIL(get_cvrt_tz_info(tz_str_d, session, cvrt_ctx->tz_info_wrap_dst_))) {
+      cvrt_ctx->find_tz_ret_ = ret;
+      LOG_WARN("get tz_dst_pos failed", K(ret));
     }
   }
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(get_cvrt_tz_info(tz_str_s, session, cvrt_ctx->tz_info_wrap_src_))) {
-    cvrt_ctx->find_tz_ret_ = ret;
-    LOG_WARN("get tz_st_pos failed", K(ret));
-  } else if (OB_FAIL(get_cvrt_tz_info(tz_str_d, session, cvrt_ctx->tz_info_wrap_dst_))) {
-    cvrt_ctx->find_tz_ret_ = ret;
-    LOG_WARN("get tz_dst_pos failed", K(ret));
-  }
-
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) || OB_FAIL(cvrt_ctx->find_tz_ret_)) {
   } else if (OB_FAIL(handle_timezone_offset(timestamp_data, cvrt_ctx->tz_info_wrap_src_, false))) {
     LOG_WARN("handle source timezone offset failed", K(ret));
   } else if (OB_FAIL(handle_timezone_offset(timestamp_data, cvrt_ctx->tz_info_wrap_dst_, true))) {
