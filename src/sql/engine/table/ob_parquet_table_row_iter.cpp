@@ -231,53 +231,68 @@ int ObParquetTableRowIterator::next_file()
 
         if (OB_SUCC(ret)) {
           const parquet::ColumnDescriptor *col_desc = NULL;
-          if (column_index < 0) {
-            ret = OB_INVALID_EXTERNAL_FILE_COLUMN_PATH;
-            LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE_COLUMN_PATH,
+          if (column_index < 0 || column_index >= file_meta_->schema()->num_columns()) {
+            if (scan_param_->external_file_format_.parquet_format_.column_index_type_ ==
+                                                                  sql::ColumnIndexType::POSITION) {
+              ret = OB_ERR_INVALID_COLUMN_ID;
+              LOG_WARN("invalid column index", K(ret), K(column_index),
+                      K(file_meta_->schema()->num_columns()));
+            } else {
+              ret = OB_INVALID_EXTERNAL_FILE_COLUMN_PATH;
+              LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE_COLUMN_PATH,
                           data_access_info->data_access_path_.length(),
                           data_access_info->data_access_path_.ptr());
+            }
           } else {
             col_desc = file_meta_->schema()->Column(column_index);
-            load_funcs_.at(i) = DataLoader::select_load_function(file_column_exprs_.at(i)->datum_meta_, col_desc);
-            if (OB_ISNULL(load_funcs_.at(i))
-                || col_desc->max_repetition_level() != 0) {
-              ret = OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH;
-              std::string p_type = col_desc->logical_type()->ToString();
-              int64_t pos = 0;
-              ObArrayWrap<char> buf;
-              ObDatumMeta &meta = file_column_exprs_.at(i)->datum_meta_;
-              const char *ob_type = ob_obj_type_str(file_column_exprs_.at(i)->datum_meta_.type_);
-              if (OB_SUCCESS == buf.allocate_array(allocator_, 100)) {
-                ObArray<ObString> extended_type_info;
-                if (ob_is_collection_sql_type(meta.type_)) {
-                  int tmp_ret = OB_SUCCESS;
-                  const ObSqlCollectionInfo *coll_info = NULL;
-                  uint16_t subschema_id = file_column_exprs_.at(i)->obj_meta_.get_subschema_id();
-                  ObSubSchemaValue value;
-                  if (OB_SUCCESS != (tmp_ret = eval_ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, value))) {
-                    LOG_WARN("failed to get subschema ctx", K(tmp_ret));
-                  } else if (FALSE_IT(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_))) {
-                  } else if (OB_SUCCESS != (tmp_ret = extended_type_info.push_back(coll_info->get_def_string()))) {
-                    LOG_WARN("failed to push back to array", K(tmp_ret), KPC(coll_info));
+            if (OB_ISNULL(col_desc)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("null column desc", K(ret), K(column_index));
+            } else {
+              load_funcs_.at(i) = DataLoader::select_load_function(
+                                                  file_column_exprs_.at(i)->datum_meta_, col_desc);
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_ISNULL(load_funcs_.at(i))
+                  || col_desc->max_repetition_level() != 0) {
+                ret = OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH;
+                std::string p_type = col_desc->logical_type()->ToString();
+                int64_t pos = 0;
+                ObArrayWrap<char> buf;
+                ObDatumMeta &meta = file_column_exprs_.at(i)->datum_meta_;
+                const char *ob_type = ob_obj_type_str(file_column_exprs_.at(i)->datum_meta_.type_);
+                if (OB_SUCCESS == buf.allocate_array(allocator_, 100)) {
+                  ObArray<ObString> extended_type_info;
+                  if (ob_is_collection_sql_type(meta.type_)) {
+                    int tmp_ret = OB_SUCCESS;
+                    const ObSqlCollectionInfo *coll_info = NULL;
+                    uint16_t subschema_id = file_column_exprs_.at(i)->obj_meta_.get_subschema_id();
+                    ObSubSchemaValue value;
+                    if (OB_SUCCESS != (tmp_ret = eval_ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, value))) {
+                      LOG_WARN("failed to get subschema ctx", K(tmp_ret));
+                    } else if (FALSE_IT(coll_info = reinterpret_cast<const ObSqlCollectionInfo *>(value.value_))) {
+                    } else if (OB_SUCCESS != (tmp_ret = extended_type_info.push_back(coll_info->get_def_string()))) {
+                      LOG_WARN("failed to push back to array", K(tmp_ret), KPC(coll_info));
+                    }
+                  }
+                  ob_sql_type_str(buf.get_data(), buf.count(), pos, meta.type_,
+                                  OB_MAX_VARCHAR_LENGTH, meta.precision_, meta.scale_, meta.cs_type_, extended_type_info);
+                  if (pos < buf.count()) {
+                    buf.at(pos++) = '\0';
+                    ob_type = buf.get_data();
                   }
                 }
-                ob_sql_type_str(buf.get_data(), buf.count(), pos, meta.type_,
-                                OB_MAX_VARCHAR_LENGTH, meta.precision_, meta.scale_, meta.cs_type_, extended_type_info);
-                if (pos < buf.count()) {
-                  buf.at(pos++) = '\0';
-                  ob_type = buf.get_data();
-                }
+                LOG_WARN("not supported type", K(ret), K(file_column_exprs_.at(i)->datum_meta_),
+                        K(ObString(p_type.length(), p_type.data())),
+                        K(col_desc->physical_type()),
+                        "rep_level", col_desc->max_repetition_level());
+                LOG_USER_ERROR(OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH, p_type.c_str(), ob_type);
+              } else {
+                column_indexs_.at(i) = column_index;
+                LOG_DEBUG("mapped ob type", K(column_index), "column type",
+                          file_meta_->schema()->Column(column_index)->physical_type(), "path",
+                          data_access_info->data_access_path_);
               }
-              LOG_WARN("not supported type", K(ret), K(file_column_exprs_.at(i)->datum_meta_),
-                      K(ObString(p_type.length(), p_type.data())),
-                      K(col_desc->physical_type()),
-                      "rep_level", col_desc->max_repetition_level());
-              LOG_USER_ERROR(OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH, p_type.c_str(), ob_type);
-            } else {
-              column_indexs_.at(i) = column_index;
-              LOG_DEBUG("mapped ob type", K(column_index), "column type",
-                        file_meta_->schema()->Column(column_index)->physical_type(), "path",
-                        data_access_info->data_access_path_);
             }
           }
         }
