@@ -56,7 +56,8 @@ ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session, bool is_inner_sess
       has_tenant_resource_(true),
       tenant_(nullptr),
       is_inner_session_(is_inner_session),
-      inner_sql_di_(di)
+      inner_sql_di_(di),
+      interrupt_checker_()
 
 {
   sql_ctx_.exec_type_ = InnerSql;
@@ -132,6 +133,7 @@ int ObInnerSQLResult::open()
   execute_start_ts_ = ObTimeUtility::current_time();
   MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
   ObInnerSqlWaitGuard guard(is_inner_session(), inner_sql_di_, &session_);
+  ObInterruptCheckerGuard interrupt_guard(interrupt_checker_);
 
   if (has_tenant_resource()) {
     result_set().get_exec_context().set_plan_start_time(execute_start_ts_);
@@ -212,6 +214,7 @@ int ObInnerSQLResult::inner_close()
   lib::CompatModeGuard g(compat_mode_);
   SQL_INFO_GUARD(session_.get_current_query_string(), session_.get_cur_sql_id());
   ObInnerSQLSessionGuard sess_guard(&session_);
+  ObInterruptCheckerGuard interrupt_guard(interrupt_checker_);
   LOG_DEBUG("compat_mode_", K(ret), K(compat_mode_), K(lbt()));
 
   MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
@@ -241,6 +244,7 @@ int ObInnerSQLResult::next()
   MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
   ObInnerSqlWaitGuard guard(is_inner_session(), inner_sql_di_, &session_);
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_sql_execution);
+  ObInterruptCheckerGuard interrupt_guard(interrupt_checker_);
   LOG_DEBUG("compat_mode_", K(ret), K(compat_mode_), K(lbt()));
   if (!opened_) {
     ret = OB_NOT_INIT;
