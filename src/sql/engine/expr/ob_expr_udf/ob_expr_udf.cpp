@@ -422,7 +422,7 @@ ObExprUDFEnvGuard::ObExprUDFEnvGuard(ObEvalCtx &ctx, ObExprUDFCtx &udf_ctx, int 
     tmp_result_(tmp_result)
 {
   stmt::StmtType parent_stmt = ctx.exec_ctx_.get_sql_ctx()->stmt_type_;
-  if (!udf_ctx_.get_session_info()->has_start_stmt() && stmt::StmtType::T_SELECT == parent_stmt) {
+  if (!udf_ctx_.get_session_info()->has_start_stmt()) {
     need_end_stmt_ = true;
     udf_ctx_.get_session_info()->set_start_stmt();
   }
