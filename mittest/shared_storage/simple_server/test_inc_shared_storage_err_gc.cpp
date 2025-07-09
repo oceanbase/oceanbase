@@ -425,12 +425,16 @@ TEST_F(ObSharedStorageTest, observer_start)
 }
 
 #define EXE_SQL(sql_str)                                            \
+  LOG_INFO("exe sql start", K(sql_str));      \
   ASSERT_EQ(OB_SUCCESS, sql.assign(sql_str));                       \
-  ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().get_sql_proxy2().write(sql.ptr(), affected_rows));
+  ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().get_sql_proxy2().write(sql.ptr(), affected_rows)); \
+  LOG_INFO("exe sql end", K(sql_str));
 
 #define SYS_EXE_SQL(sql_str)                                            \
+  LOG_INFO("sys exe sql start", K(sql_str)); \
   ASSERT_EQ(OB_SUCCESS, sql.assign(sql_str));                       \
-  ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().get_sql_proxy().write(sql.ptr(), affected_rows));
+  ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().get_sql_proxy().write(sql.ptr(), affected_rows));  \
+  LOG_INFO("sys exe sql end", K(sql_str));
 
 TEST_F(ObSharedStorageTest, add_tenant)
 {
