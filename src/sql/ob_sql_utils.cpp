@@ -5543,6 +5543,7 @@ int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, Param
           }
         }
         OZ (ObSql::add_param_to_param_store(*(data + actual_pos), obj_params));
+        OX (obj_params.at(obj_params.count() - 1).set_accuracy(coll->get_element_type().get_accuracy()));
       }
     }
   }
