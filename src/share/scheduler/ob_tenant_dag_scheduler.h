@@ -392,6 +392,7 @@ public:
   void set_dag_status(const ObDagStatus status) { dag_status_ = status; }
   ObDagStatus get_dag_status() const { return dag_status_; }
   bool is_dag_failed() const { return ObIDag::DAG_STATUS_NODE_FAILED == dag_status_; }
+  bool is_inactive_status() const { return is_stop_ || is_dag_failed() || is_finish_status(dag_status_); }
   void set_add_time() { add_time_ = ObTimeUtility::fast_current_time(); }
   int64_t get_add_time() const { return add_time_; }
   ObDagPrio::ObDagPrioEnum get_priority() const { return priority_; }
@@ -471,6 +472,7 @@ public:
     lib::ObMutexGuard guard(lock_);
     max_retry_times_ = max_retry_times;
   }
+  void reset_task_list_for_retry();
   virtual int inner_reset_status_for_retry()
   { // The internal state(clear all tasks) of Dag needs to be traced back to after init in this func
     return common::OB_NOT_SUPPORTED;
@@ -504,7 +506,7 @@ public:
   int add_child_without_inheritance(ObIDag &child);
   int add_child_without_inheritance(const common::ObIArray<ObINodeWithChild*> &child_array);
   int get_next_ready_task(ObITask *&task);
-  int finish_task(ObITask &task);
+  int finish_task(ObITask *&task);
   bool has_finished();
   virtual int report_result()
   {
@@ -565,7 +567,7 @@ private:
   void clear_task_list();
   void clear_running_info();
   // See ObIDag::finish_task, free_task must be called together with task_list_.remove, otherwise task will be double freed when ~ObIDag
-  void free_task(ObITask &task);
+  void free_task(ObITask *&task);
   int check_cycle();
   void inc_running_task_cnt() { ++running_task_cnt_; }
   void dec_running_task_cnt() { --running_task_cnt_; }
@@ -1023,7 +1025,7 @@ public:
   int get_complement_data_dag_progress(const ObIDag &dag,
     int64_t &row_scanned,
     int64_t &row_inserted);
-  int deal_with_finish_task(ObITask &task, ObTenantDagWorker &worker, int error_code);
+  int deal_with_finish_task(ObITask *&task, ObIDag *&dag, ObTenantDagWorker &worker, int error_code);
   // force_cancel: whether to cancel running dag
   int cancel_dag(const ObIDag &dag, const bool force_cancel = false);
   int check_dag_exist(const ObIDag &dag, bool &exist);
@@ -1086,12 +1088,12 @@ private:
   int add_dag_warning_info_into_dag_net_(ObIDag &dag, bool &need_add);
   int finish_dag_(
     const ObIDag::ObDagStatus status,
-    ObIDag &dag,
+    ObIDag *&dag,
     const bool try_move_child);
   int try_move_child_to_ready_list_(ObIDag &dag);
   int erase_dag_(ObIDag &dag);
-  int deal_with_fail_dag_(ObIDag &dag, const int errcode, bool &retry_flag);
-  int finish_task_in_dag_(ObITask &task, ObIDag &dag);
+  int deal_with_fail_dag_(ObIDag &dag, ObITask *&cur_task, const int errcode, bool &retry_flag);
+  int finish_task_in_dag_(ObITask *&task, ObIDag *&dag);
   void pause_worker_(ObTenantDagWorker &worker);
   bool check_need_load_shedding_(const bool for_schedule);
 
@@ -1249,7 +1251,7 @@ public:
   int check_dag_net_exist(
       const ObDagId &dag_id, bool &exist);
   int cancel_dag_net(const ObDagId &dag_id);
-  int deal_with_finish_task(ObITask &task, ObTenantDagWorker &worker, int error_code);
+  int deal_with_finish_task(ObITask *&task, ObTenantDagWorker &worker, int error_code);
   bool try_switch(ObTenantDagWorker &worker);
   int dispatch_task(ObITask &task, ObTenantDagWorker *&ret_worker, const int64_t priority);
   void finish_dag_net(ObIDagNet *dag_net);
@@ -1354,8 +1356,9 @@ int ObIDag::alloc_task(T *&task)
     ntask->set_dag(*this);
     {
       lib::ObMutexGuard guard(lock_);
-      if (is_stop_) {
+      if (is_inactive_status()) {
         ret = OB_CANCELED;
+        COMMON_LOG(WARN, "dag is inactive", K(ret), K_(is_stop), K_(dag_status));
       } else if (!task_list_.add_last(ntask)) {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "Failed to add task", K(task), K_(id));
