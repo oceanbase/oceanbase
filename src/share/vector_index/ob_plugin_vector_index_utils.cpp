@@ -844,14 +844,16 @@ int ObPluginVectorIndexUtils::refresh_memdata(ObLSID &ls_id,
         LOG_WARN("get invalid vector index ls mgr", KR(ret));
       } else if (OB_FAIL(refresh_adp_from_table(ls_id, new_adapter, true, target_scn, allocator))) {
         LOG_WARN("failed to refresh adapter from table", K(ret), KPC(adapter));
-      } else if (adapter != new_adapter && OB_NOT_NULL(new_adapter)) {
-        bool need_free_new_adp = false;
-        RWLock::WLockGuard lock_guard(vec_idx_mgr->get_adapter_map_lock());
-        if (OB_FAIL(vec_idx_mgr->replace_old_adapter(new_adapter))) {
-          need_free_new_adp = true;
-          LOG_WARN("failed to replace old adapter", K(ret));
+      }
+      if (adapter != new_adapter && OB_NOT_NULL(new_adapter)) {
+        if (OB_SUCC(ret)) {
+          RWLock::WLockGuard lock_guard(vec_idx_mgr->get_adapter_map_lock());
+          if (OB_FAIL(vec_idx_mgr->replace_old_adapter(new_adapter))) {
+            LOG_WARN("failed to replace old adapter", K(ret));
+          }
         }
-        if (need_free_new_adp) {
+        if (OB_FAIL(ret)) {
+          LOG_INFO("release new vector index adapter on failed", K(ret), K(new_adapter));
           new_adapter->~ObPluginVectorIndexAdaptor();
           void *adpt_buff  = reinterpret_cast<void*>(new_adapter);
           vector_index_service->get_allocator().free(adpt_buff);
