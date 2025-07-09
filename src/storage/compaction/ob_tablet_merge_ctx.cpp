@@ -260,7 +260,7 @@ int ObTabletMiniMergeCtx::try_report_tablet_stat_after_mini()
 
   if (tablet_id.is_special_merge_tablet()) {
     // no need report
-  } else if (ObTabletStat::MERGE_REPORT_MIN_ROW_CNT >= tnode_stat.get_dml_count()) {
+  } else if (ObTabletStat::MERGE_MIN_ROW_CNT >= tnode_stat.get_dml_count()) {
     // insufficient data, skip to report
   } else {
     ObTabletStat report_stat;

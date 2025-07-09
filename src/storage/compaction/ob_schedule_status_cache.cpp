@@ -127,6 +127,7 @@ const static char * ObTabletExecuteStateStr[] = {
     "NO_MAJOR_SSTABLE",
     "INVALID_LS_STATE",
     "TENANT_SKIP_MERGE",
+    "EXIST_UNFINISH_INC_MAJOR",
     "STATE_MAX"
 };
 

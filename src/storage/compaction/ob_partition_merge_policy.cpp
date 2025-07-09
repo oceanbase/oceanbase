@@ -1845,7 +1845,7 @@ int ObAdaptiveMergePolicy::check_ineffecient_read(
   if (OB_UNLIKELY(!analyzer.tablet_stat_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(analyzer));
-  } else if (analyzer.is_hot_tablet() && analyzer.has_slow_query()) {
+  } else if (analyzer.is_hot_tablet() && analyzer.has_frequent_slow_query()) {
     reason = AdaptiveMergeReason::INEFFICIENT_QUERY;
   }
   LOG_DEBUG("check_ineffecient_read", K(ret), K(reason), K(analyzer));

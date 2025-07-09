@@ -227,7 +227,7 @@ ObTablet::ObTablet(const bool is_external_tablet)
     is_external_tablet_(is_external_tablet)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  check_size<ObTablet, ObRowkeyReadInfo, 1496>();
+  check_size<ObTablet, ObRowkeyReadInfo, 1512>();
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
@@ -5819,6 +5819,7 @@ int ObTablet::build_migration_tablet_param(
     mig_tablet_param.split_info_ = tablet_meta_.split_info_;
     mig_tablet_param.has_truncate_info_ = tablet_meta_.has_truncate_info_;
     mig_tablet_param.min_ss_tablet_version_ = tablet_meta_.min_ss_tablet_version_;
+    mig_tablet_param.inc_major_snapshot_ = tablet_meta_.inc_major_snapshot_;
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(build_migration_tablet_param_storage_schema(mig_tablet_param))) {
