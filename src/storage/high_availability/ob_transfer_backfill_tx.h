@@ -248,6 +248,7 @@ private:
       const ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper);
   int get_transfer_sstables_info_(
       const ObTablesHandleArray &table_handle_array,
+      const share::SCN &tablet_clog_checkpoint_scn,
       share::SCN &max_minor_end_scn);
   int check_memtable_max_end_scn_(
       ObTablet &tablet);
