@@ -116,7 +116,7 @@ public:
       multivalue_idx_(-1),
       multivalue_type_(0),
       index_merge_idx_(OB_INVALID_ID),
-      pre_query_range_(),
+      pre_query_range_(alloc),
       flags_(0),
       domain_id_idxs_(alloc),
       domain_types_(alloc),
