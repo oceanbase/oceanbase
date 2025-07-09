@@ -690,10 +690,18 @@ int ObDASHNSWScanIter::process_adaptor_state(bool is_vectorized)
       FLOG_INFO("hnsw change filter path", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
       if (OB_FAIL(reset_filter_path())) {
         LOG_WARN("failed to reset filter path", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_), K(ret));
-      } else if (idx_iter_first_scan_ && OB_FAIL(do_table_scan())) {
-        LOG_WARN("failed to do table scan", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
-      } else if (!idx_iter_first_scan_ && OB_FAIL(rescan())) {
-        LOG_WARN("failed to do table rescan", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
+      } else if (!is_pre_filter() && !is_in_filter()) {
+        // do not need scan/rescan idx iter
+      } else if (idx_iter_first_scan_) {
+        if (OB_FAIL(do_table_scan())) {
+          LOG_WARN("failed to do table scan", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
+        }
+      } else if (!idx_iter_first_scan_) {
+        if (OB_FAIL(rescan())) {
+          LOG_WARN("failed to do table rescan", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(inner_process_adaptor_state(is_vectorized))) {
         LOG_WARN("failed to process adaptor state hnsw", K(extra_column_count_), K(is_primary_pre_with_rowkey_with_filter_),
                                                          K(data_filter_ctdef_), K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));

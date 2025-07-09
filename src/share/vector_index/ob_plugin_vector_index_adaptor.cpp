@@ -3811,7 +3811,7 @@ float ObHnswBitmapFilter::get_valid_ratio(int64_t total_cnt)
     if (total_cnt > 0) ratio = (float)valid_cnt / (float)total_cnt;
   } else if (type_ == FilterType::SIMPLE_RANGE) {
     //ratio = selectivity_;
-    ratio = 0.25f; // in-filter fixed valid ratio
+    ratio = 0.18f; // in-filter fixed valid ratio
   }
   return ratio;
 }
