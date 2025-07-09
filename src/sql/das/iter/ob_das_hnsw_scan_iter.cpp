@@ -36,9 +36,11 @@ int ObDASHNSWScanIter::do_table_scan()
 
   if (!is_primary_pre_with_rowkey_with_filter_) {
     if (is_pre_filter() || is_in_filter()) {
+      ObDASScanIter *idx_scan_iter = static_cast<ObDASScanIter *>(inv_idx_scan_iter_);
       if (OB_ISNULL(inv_idx_scan_iter_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("inv idx scan iter is null", K(ret));
+      } else if (OB_FALSE_IT(idx_scan_iter->get_scan_param().need_switch_param_ = false)) {
       } else if (OB_FAIL(inv_idx_scan_iter_->do_table_scan())) {
         LOG_WARN("failed to do inv idx table scan.", K(ret));
       } else {
@@ -687,7 +689,6 @@ int ObDASHNSWScanIter::process_adaptor_state(bool is_vectorized)
   if (OB_FAIL(inner_process_adaptor_state(is_vectorized))) {
     if (ret == OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY && can_retry_) {
       ret = OB_SUCCESS;
-      FLOG_INFO("hnsw change filter path", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
       if (OB_FAIL(reset_filter_path())) {
         LOG_WARN("failed to reset filter path", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_), K(ret));
       } else if (!is_pre_filter() && !is_in_filter()) {

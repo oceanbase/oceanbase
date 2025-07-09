@@ -1689,7 +1689,7 @@ int ObPluginVectorIndexUtils::get_ls_leader_flag(const ObLSID &ls_id, bool &is_l
     LOG_WARN("unexpected nullptr", K(ret));
   } else {
     is_leader = index_ls_mgr->get_ls_leader();
-    LOG_INFO("success to set ls leader", K(ls_id), K(is_leader));
+    LOG_TRACE("success to set ls leader", K(ls_id), K(is_leader));
   }
   return ret;
 }
