@@ -17979,7 +17979,8 @@ def_table_schema(
                     union all
                     (select 'def' as CONSTRAINT_CATALOG,
                     d.database_name collate utf8mb4_name_case as CONSTRAINT_SCHEMA,
-                    substr(a.table_name, 2 + length(substring_index(a.table_name,'_',4))) as CONSTRAINT_NAME,
+                    CASE WHEN a.index_type = 41 THEN 'PRIMARY'
+                    ELSE substr(a.table_name, 2 + length(substring_index(a.table_name,'_',4))) END as CONSTRAINT_NAME,
                     'def' as TABLE_CATALOG,
                     d.database_name collate utf8mb4_name_case as TABLE_SCHEMA,
                     c.table_name collate utf8mb4_name_case as TABLE_NAME,
@@ -33362,7 +33363,8 @@ def_table_schema(
     SELECT
            CAST('def' AS CHAR(64)) AS CONSTRAINT_CATALOG,
            CAST(d.database_name AS CHAR(128)) collate utf8mb4_name_case AS CONSTRAINT_SCHEMA,
-           CAST(SUBSTR(it.table_name, 7 + INSTR(SUBSTR(it.table_name, 7), '_')) AS CHAR(256)) AS CONSTRAINT_NAME,
+           CAST(CASE WHEN it.index_type = 41 THEN 'PRIMARY'
+                ELSE SUBSTR(it.table_name, 7 + INSTR(SUBSTR(it.table_name, 7), '_')) END AS CHAR(256)) AS CONSTRAINT_NAME,
            CAST(d.database_name AS CHAR(128)) collate utf8mb4_name_case AS TABLE_SCHEMA,
            CAST(ut.table_name AS CHAR(256)) collate utf8mb4_name_case AS TABLE_NAME,
            CAST(CASE WHEN it.index_type = 41 THEN 'PRIMARY KEY'
