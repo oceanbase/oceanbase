@@ -85,9 +85,9 @@ public:
     return candi_table_loc_;
   }
 
-  void set_table_location(const ObTableLocation &tbl)
+  int set_table_location(const ObTableLocation &tbl)
   {
-    table_location_ = tbl;
+    return table_location_.assign(tbl);
   }
 
   /*ObPhyTableLocation &get_phy_table_location()
