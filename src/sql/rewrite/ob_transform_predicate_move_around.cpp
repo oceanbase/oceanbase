@@ -2327,7 +2327,7 @@ int ObTransformPredicateMoveAround::check_pushdown_through_groupby_validity(ObSe
   } else {
     is_valid = true;
   }
-  if (OB_SUCC(ret) && !is_valid && query_ctx->check_opt_compat_version(COMPAT_VERSION_4_4_0)) {
+  if (OB_SUCC(ret) && !is_valid && query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP3)) {
     block_by_groupby = false;
     block_by_rollup = false;
     if (is_oracle_mode() && (having_expr->has_flag(IS_ROWID) || having_expr->has_flag(CNT_ROWID))) {
