@@ -201,6 +201,14 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
         coll = new(coll)pl::ObPLVArray(info->udt_id_);
         static_cast<pl::ObPLVArray*>(coll)->set_capacity(info->capacity_);
       }
+    } else if (pl::PL_ASSOCIATIVE_ARRAY_TYPE == info->type_) {
+       if (NULL == (coll =
+        static_cast<pl::ObPLAssocArray*>(alloc.alloc(sizeof(pl::ObPLAssocArray) + 8)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for pl collection", K(ret), K(coll));
+        } else {
+          coll = new(coll)pl::ObPLAssocArray(info->udt_id_);
+        }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected collection type to construct", K(info->type_), K(ret));
@@ -270,6 +278,10 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
                                          ns,
                                          *coll,
                                          expr.arg_cnt_));
+    if (OB_SUCC(ret) && coll->is_associative_array() && expr.arg_cnt_ > 0) {
+      OX (coll->set_first(1));
+      OX (coll->set_last(coll->get_count()));
+    }
     if (OB_SUCC(ret)) {
       if (info->elem_type_.get_meta_type().is_ext()) {
         for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
