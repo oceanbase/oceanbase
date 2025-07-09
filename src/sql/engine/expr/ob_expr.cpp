@@ -791,6 +791,9 @@ int eval_assign_question_mark_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         cast_mode |= CM_ENABLE_BLOB_CAST;
       }
       ObCastCtx cast_ctx(&allocator, &dtc_params, cast_mode, dst_meta.get_collation_type());
+      if (ob_is_string_tc(dst_meta.get_type())) {
+        cast_ctx.dest_max_length_ = expr.max_length_;
+      }
       if (OB_FAIL(ObObjCaster::to_type(dst_meta.get_type(), cast_ctx, v, dst_obj))) {
         LOG_WARN("failed to cast obj to dst type", K(ret), K(v), K(dst_meta));
       } else if (OB_FAIL(datum_param.alloc_datum_reserved_buff(dst_meta, allocator))) {

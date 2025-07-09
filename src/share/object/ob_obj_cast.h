@@ -159,7 +159,8 @@ struct ObObjCastParams
       res_accuracy_(NULL),
       dtc_params_(),
       format_number_with_limit_(true),
-      is_ignore_(false)
+      is_ignore_(false),
+      dest_max_length_(LENGTH_UNKNOWN_YET)
   {
     set_compatible_cast_mode();
   }
@@ -178,7 +179,8 @@ struct ObObjCastParams
       res_accuracy_(res_accuracy),
       dtc_params_(),
       format_number_with_limit_(true),
-      is_ignore_(false)
+      is_ignore_(false),
+      dest_max_length_(LENGTH_UNKNOWN_YET)
   {
     set_compatible_cast_mode();
     if (NULL != dtc_params) {
@@ -202,7 +204,8 @@ struct ObObjCastParams
       res_accuracy_(res_accuracy),
       dtc_params_(),
       format_number_with_limit_(true),
-      is_ignore_(false)
+      is_ignore_(false),
+      dest_max_length_(LENGTH_UNKNOWN_YET)
   {
     set_compatible_cast_mode();
     if (NULL != dtc_params) {
@@ -244,7 +247,8 @@ struct ObObjCastParams
                K(expect_obj_collation_),
                K(res_accuracy_),
                K(format_number_with_limit_),
-               K(is_ignore_));
+               K(is_ignore_),
+               K_(dest_max_length));
 
   IAllocator *allocator_;
   ObIAllocator *allocator_v2_;
@@ -258,6 +262,7 @@ struct ObObjCastParams
   ObDataTypeCastParams dtc_params_;
   bool format_number_with_limit_;
   bool is_ignore_;
+  int32_t dest_max_length_;
 };
 
 class ObExpectType

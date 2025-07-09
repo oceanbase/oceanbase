@@ -1931,8 +1931,17 @@ static int common_floating_string(const ObExpr &expr,
     if (0 <= scale) {
       length = ob_fcvt(in_val, scale, sizeof(buf) - 1, buf, NULL);
     } else {
-      length = ob_gcvt_opt(in_val, arg_type, static_cast<int32_t>(sizeof(buf) - 1),
-                           buf, NULL, lib::is_oracle_mode(), TRUE);
+      const int32_t buf_length = static_cast<int32_t>(sizeof(buf) - 1);
+      int32_t double_width = buf_length;
+      if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(expr.extra_) &&
+          ob_is_double_tc(expr.args_[0]->datum_meta_.type_) && expr.max_length_ > 0) {
+        double_width = min(double_width, expr.max_length_);
+      }
+      length = ob_gcvt_opt(in_val, arg_type, double_width, buf, NULL, lib::is_oracle_mode(), TRUE);
+      if (length == 0 && double_width < buf_length) {
+        length = double_width;
+        buf[length] = '\0';
+      }
     }
   }
   ObString in_str(sizeof(buf), static_cast<int32_t>(length), buf);
@@ -12694,7 +12703,8 @@ int ObDatumCaster::to_type(const ObDatumMeta &dst_type,
                            const ObExpr &src_expr,
                            const ObCastMode &cm,
                            ObDatum *&res,
-                           int64_t batch_idx)
+                           int64_t batch_idx,
+                           const int32_t max_length)
 {
   int ret = OB_SUCCESS;
   const ObDatumMeta &src_type = src_expr.datum_meta_;
@@ -12743,13 +12753,13 @@ int ObDatumCaster::to_type(const ObDatumMeta &dst_type,
     }
 
     if (need_extra_cast_for_src_type || need_extra_cast_for_dst_type) {
-      if (OB_FAIL(setup_cast_expr(extra_dst_type, src_expr, cm, *extra_cast_expr_))) {
+      if (OB_FAIL(setup_cast_expr(extra_dst_type, src_expr, cm, *extra_cast_expr_, max_length))) {
         LOG_WARN("setup_cast_expr failed", K(ret));
-      } else if (OB_FAIL(setup_cast_expr(dst_type, *extra_cast_expr_, cm, *cast_expr_))) {
+      } else if (OB_FAIL(setup_cast_expr(dst_type, *extra_cast_expr_, cm, *cast_expr_, max_length))) {
         LOG_WARN("setup_cast_expr failed", K(ret));
       }
     } else {
-      if (OB_FAIL(setup_cast_expr(dst_type, src_expr, cm, *cast_expr_))) {
+      if (OB_FAIL(setup_cast_expr(dst_type, src_expr, cm, *cast_expr_, max_length))) {
         LOG_WARN("setup_cast_expr failed", K(ret));
       }
     }
@@ -12845,7 +12855,8 @@ int ObDatumCaster::destroy()
 int ObDatumCaster::setup_cast_expr(const ObDatumMeta &dst_type,
                                    const ObExpr &src_expr,
                                    const ObCastMode cm,
-                                   ObExpr &cast_expr)
+                                   ObExpr &cast_expr,
+                                   const int32_t max_length)
 {
   int ret = OB_SUCCESS;
   const ObDatumMeta &src_type = src_expr.datum_meta_;
@@ -12884,6 +12895,10 @@ int ObDatumCaster::setup_cast_expr(const ObDatumMeta &dst_type,
     // implicit cast donot use these, so we set it all invalid.
     if (ob_is_user_defined_pl_type(src_expr.obj_meta_.get_type()) && dst_type.type_ == ObUserDefinedSQLType) {
       cast_expr.obj_meta_.set_sql_udt(ObXMLSqlType);
+    }
+    if (lib::is_mysql_mode() && ob_is_double_tc(src_expr.datum_meta_.type_) &&
+        ob_is_string_tc(dst_type.type_) && CM_IS_COLUMN_CONVERT(cm) && max_length > 0) {
+      cast_expr.max_length_ = max_length;
     }
     cast_expr.parents_ = NULL;
     cast_expr.parent_cnt_ = 0;
