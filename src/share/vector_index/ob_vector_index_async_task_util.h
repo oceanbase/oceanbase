@@ -36,7 +36,8 @@ class ObPluginVectorIndexMgr;
 
 
 #define CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_)  \
-  if (++loop_cnt > 20) { \
+  if (OB_FAIL(ret)) { \
+  } else if (++loop_cnt > 20) { \
     bool is_cancel = false; \
     if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_task_is_cancel(ctx_, is_cancel))) { \
       LOG_WARN("fail to check task is cancel", KPC(ctx_));  \

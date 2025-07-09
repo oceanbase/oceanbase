@@ -1480,7 +1480,8 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
   }
 
   // refresh snapshot table data.
-  if (OB_SUCC(ret) && OB_FAIL(refresh_snapshot_index_data(adaptor, tx_desc, snapshot))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(refresh_snapshot_index_data(adaptor, tx_desc, snapshot))) {
     LOG_WARN("failed to refresh snapshot index data", K(ret));
   } else if (OB_FAIL(adaptor.renew_single_snap_index())) {
     LOG_WARN("fail to renew single snap index", K(ret));
