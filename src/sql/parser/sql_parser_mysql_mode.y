@@ -17180,44 +17180,48 @@ SET PASSWORD opt_for_user COMP_EQ STRING_VALUE
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 0;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, $5, need_enc_node, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, $5, need_enc_node, NULL, NULL, NULL);
 }
 | SET PASSWORD opt_for_user COMP_EQ PASSWORD '(' password ')'
 {
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 1;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, $7, need_enc_node, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, $7, need_enc_node, NULL, NULL, NULL);
 }
 | alter_with_opt_hint USER user_with_host_name IDENTIFIED opt_auth_plugin BY password
 {
   (void)($1);
   ParseNode *need_enc_node = NULL;
+  ParseNode *from_alter = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
+  malloc_terminal_node(from_alter, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 1;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, $7, need_enc_node, NULL, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, $7, need_enc_node, NULL, $5, from_alter);
 }
 | alter_with_opt_hint USER user_with_host_name IDENTIFIED opt_auth_plugin AS password
 {
   (void)($1);
   ParseNode *need_enc_node = NULL;
+  ParseNode *from_alter = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
+  malloc_terminal_node(from_alter, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 0;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, $7, need_enc_node, NULL, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, $7, need_enc_node, NULL, $5, from_alter);
 }
 | alter_with_opt_hint USER user_with_host_name require_specification
 {
   (void)($1);
   ParseNode *require_node = NULL;
   merge_nodes(require_node, result, T_TLS_OPTIONS, $4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, NULL, NULL, require_node, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, NULL, NULL, require_node, NULL, NULL);
 }
 | alter_with_opt_hint USER user_with_host_name WITH resource_option_list
 {
   (void)($1);
   ParseNode *res_opt_node = NULL;
   merge_nodes(res_opt_node, result, T_USER_RESOURCE_OPTIONS, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, NULL, NULL, res_opt_node, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, NULL, NULL, res_opt_node, NULL, NULL);
 }
 ;
 
