@@ -230,15 +230,22 @@ int ObPXServerAddrUtil::get_external_table_loc(
     //   LOG_WARN("Has dynamic params in external table or empty range is not supported", K(ret),
     //            K(pre_query_range.has_exec_param()), K(pre_query_range.get_column_count()));
     ObSEArray<int64_t, 16> part_ids;
-    for (DASTabletLocListIter iter = table_loc->tablet_locs_begin(); OB_SUCC(ret)
-               && iter != table_loc->tablet_locs_end(); ++iter) {
-      ret = part_ids.push_back((*iter)->partition_id_);
+    for (DASTabletLocListIter iter = local_loc->tablet_locs_begin(); OB_SUCC(ret)
+               && iter != local_loc->tablet_locs_end(); ++iter) {
+      if ((*iter) != nullptr) {
+        ret = part_ids.push_back((*iter)->partition_id_);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("uninited table loc", K(ret));
+      }
     }
 
     OZ (ObSQLUtils::extract_pre_query_range(pre_query_range, ctx.get_allocator(), ctx, ranges,
                                     ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())));
 
-    if (is_external_object_id(ref_table_id)) {
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (is_external_object_id(ref_table_id)) {
       ObSEArray<const ObTableScanSpec *, 2> scan_ops;
       const ObOpSpec *root_op = NULL;
       dfo.get_root(root_op);
@@ -474,8 +481,13 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
     uint64_t ref_table_id = OB_INVALID_ID;
     if (scan_ops.count() > 0) {
       scan_op = scan_ops.at(0);
-      table_location_key = scan_op->get_table_loc_id();
-      ref_table_id = scan_op->get_loc_ref_table_id();
+      if (OB_ISNULL(scan_op)){
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("scan op is null in scan ops", K(ret));
+      } else {
+        table_location_key = scan_op->get_table_loc_id();
+        ref_table_id = scan_op->get_loc_ref_table_id();
+      }
     }
     if (OB_SUCC(ret)) {
       if (dml_ops.count() > 0) {
@@ -502,10 +514,13 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
     } else {
       // 通过TSC或者DML获得当前的DFO的partition对应的location信息
       // 后续利用location信息构建对应的SQC meta
-      if (OB_ISNULL(table_loc = DAS_CTX(ctx).get_table_loc_by_id(table_location_key, ref_table_id))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to get table loc", K(ret), K(table_location_key), K(ref_table_id), K(DAS_CTX(ctx).get_table_loc_list()));
-      } else if (OB_NOT_NULL(scan_op) && scan_op->is_external_table_) {
+      if (OB_ISNULL(scan_op) || !scan_op->is_external_table_) {
+        // scan_ops is empty
+        if (OB_ISNULL(table_loc = DAS_CTX(ctx).get_table_loc_by_id(table_location_key, ref_table_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get table loc", K(ret), K(table_location_key), K(ref_table_id), K(DAS_CTX(ctx).get_table_loc_list()));
+        }
+      } else {
         // create new table loc for a random dfo distribution for external table
         OZ (get_external_table_loc(ctx, table_location_key, ref_table_id, scan_op->get_query_range_provider(), dfo, table_loc));
       }
@@ -1308,20 +1323,27 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
       LOG_WARN("scan op can't be null", K(ret));
     } else if (FALSE_IT(table_location_key = scan_op->get_table_loc_id())) {
     } else if (FALSE_IT(ref_table_id = scan_op->get_loc_ref_table_id())) {
-    } else if (OB_ISNULL(table_loc = DAS_CTX(ctx).get_table_loc_by_id(table_location_key, ref_table_id))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get phy table location", K(ret));
-    } else if (scan_op->is_external_table_
-               && OB_FAIL(get_external_table_loc(ctx, table_location_key, ref_table_id,
-                                                 scan_op->get_query_range_provider(), dfo, table_loc))) {
-      LOG_WARN("fail to get external table loc", K(ret));
-    } else if (OB_FAIL(set_sqcs_accessed_location(ctx,
-          // dml op has already set sqc.get_location information,
-          // table scan does not need to be set again
-          OB_ISNULL(dml_op) ? base_table_location_key : OB_INVALID_ID,
-          dfo, base_order_map, table_loc, scan_op, locations_order))) {
-      LOG_WARN("failed to set sqc accessed location", K(ret), K(table_location_key),
-               K(ref_table_id), KPC(table_loc));
+    } else {
+      if (!scan_op->is_external_table_) {
+        if (OB_ISNULL(table_loc = DAS_CTX(ctx).get_table_loc_by_id(table_location_key, ref_table_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get phy table location", K(ret));
+        }
+      } else {
+        if (OB_FAIL(get_external_table_loc(ctx, table_location_key, ref_table_id,
+                                          scan_op->get_query_range_provider(), dfo, table_loc))) {
+          LOG_WARN("fail to get external table loc", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(set_sqcs_accessed_location(ctx,
+            // dml op has already set sqc.get_location information,
+            // table scan does not need to be set again
+            OB_ISNULL(dml_op) ? base_table_location_key : OB_INVALID_ID,
+            dfo, base_order_map, table_loc, scan_op, locations_order))) {
+        LOG_WARN("failed to set sqc accessed location", K(ret), K(table_location_key),
+                K(ref_table_id), KPC(table_loc));
+      }
     }
   } // end for
   if (OB_FAIL(ret)) {
