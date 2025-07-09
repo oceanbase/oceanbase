@@ -658,12 +658,13 @@ int ObRebuildIndexTask::purge_old_mlog(const ObDDLTaskStatus new_status)
         } else if (!mview_info.is_valid()) {
           // ignore
         } else if (ObMVRefreshMethod::FAST != mview_info.get_refresh_method() &&
+                   ObMVRefreshMethod::FORCE != mview_info.get_refresh_method() &&
                    !mv_schema->mv_on_query_computation()) {
           // ignore
         } else {
           ObSqlString sql;
           int64_t affected_rows = 0;
-          if (OB_FAIL(sql.assign_fmt("CALL DBMS_MVIEW.refresh('%s.%s', 'f') ",
+          if (OB_FAIL(sql.assign_fmt("CALL DBMS_MVIEW.refresh('%s.%s')",
                                      db_schema->get_database_name_str().ptr(),
                                      mv_schema->get_table_name_str().ptr()))) {
             LOG_WARN("failed to assign sql", K(ret));
