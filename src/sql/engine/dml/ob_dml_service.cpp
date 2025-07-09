@@ -1609,7 +1609,8 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
                                  const int16_t write_branch_id,
                                  ObIAllocator &das_alloc,
                                  storage::ObStoreCtxGuard &store_ctx_gurad,
-                                 storage::ObDMLBaseParam &dml_param)
+                                 storage::ObDMLBaseParam &dml_param,
+                                 bool is_insert_up_gts_opt)
 {
   int ret = OB_SUCCESS;
   dml_param.timeout_ = base_rtdef.timeout_ts_;
@@ -1628,13 +1629,14 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   }
   dml_param.branch_id_ = write_branch_id;
   dml_param.store_ctx_guard_ = &store_ctx_gurad;
-  init_dml_write_flag(base_ctdef, base_rtdef, dml_param.write_flag_);
+  init_dml_write_flag(base_ctdef, base_rtdef, dml_param.write_flag_, is_insert_up_gts_opt);
   return ret;
 }
 
 void ObDMLService::init_dml_write_flag(const ObDASDMLBaseCtDef &base_ctdef,
                                        ObDASDMLBaseRtDef &base_rtdef,
-                                       concurrent_control::ObWriteFlag &write_flag)
+                                       concurrent_control::ObWriteFlag &write_flag,
+                                       bool is_insert_up_gts_opt)
 {
   if (base_ctdef.is_batch_stmt_) {
     write_flag.set_is_dml_batch_opt();
@@ -1663,6 +1665,9 @@ void ObDMLService::init_dml_write_flag(const ObDASDMLBaseCtDef &base_ctdef,
   }
   if (base_rtdef.is_immediate_row_conflict_check_ && base_ctdef.is_update_pk_) {
     write_flag.set_immediate_row_check();
+  }
+  if (is_insert_up_gts_opt) {
+    write_flag.set_plain_insert_gts_opt();
   }
 }
 
