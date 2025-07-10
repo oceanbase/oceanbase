@@ -28989,6 +28989,46 @@ int ObDDLService::rebuild_vec_index(const ObRebuildIndexArg &arg, obrpc::ObAlter
       } else if (tenant_data_version < DATA_VERSION_4_3_3_0) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "rebuild vec index before 4.3.3 is");
+      } else if (tenant_data_version >= DATA_VERSION_4_4_1_0 && arg.rebuild_index_online_) {
+        // when only change search params in rebuild task, we only update the index table schema
+        ObSchemaService *schema_service = schema_service_->get_schema_service();
+        ObDDLSQLTransaction trans(schema_service_);
+        ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+        HEAP_VAR(ObTableSchema, new_index_table_schema) {
+          if (OB_FAIL(new_index_table_schema.assign(*index_table_schema))) {
+            // do nothing
+            LOG_WARN("fail to assign schema", K(ret));
+          } else if (OB_SUCC(ret)) {
+            new_index_table_schema.set_index_params(arg.vidx_refresh_info_.index_params_);
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+              LOG_WARN("failed to start trans, ", KR(ret), K(tenant_id), K(refreshed_schema_version));
+            } else if (OB_FAIL(ddl_operator.update_table_attribute(new_index_table_schema,
+                                                                   trans,
+                                                                   OB_DDL_ALTER_TABLE/*operation_type*/,
+                                                                   nullptr/*ddl_stmt_str*/))) {
+              LOG_WARN("failed to update data table schema attribute", K(ret));
+            } else if (OB_FAIL(schema_service->get_table_sql_service().update_data_table_schema_version(trans,
+                                                                                                        tenant_id,
+                                                                                                        table_id,
+                                                                                                        table_schema->get_in_offline_ddl_white_list()))) {
+              LOG_WARN("fail to update schema version", K(ret));
+            }
+          }
+        }
+        if (trans.is_started()) {
+          int temp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+            LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+            ret = (OB_SUCC(ret)) ? temp_ret : ret;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(publish_schema(tenant_id))) {
+            LOG_WARN("failed to publish schema", KR(ret));
+          }
+        }
       } else {
         ObDDLTaskRecord task_record;
         ObDDLSQLTransaction trans(schema_service_);

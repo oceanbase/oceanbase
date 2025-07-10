@@ -1522,6 +1522,7 @@ public:
     index_action_type_ = REBUILD_INDEX;
     index_table_id_ = common::OB_INVALID_ID;
     rebuild_index_type_ = REBUILD_INDEX_TYPE_VEC;
+    rebuild_index_online_ = false;
   }
   virtual ~ObRebuildIndexArg() {}
 
@@ -1535,6 +1536,7 @@ public:
       index_table_id_ = other.index_table_id_;
       vidx_refresh_info_ = other.vidx_refresh_info_;
       rebuild_index_type_ = other.rebuild_index_type_;
+      rebuild_index_online_ = other.rebuild_index_online_;
     }
     return ret;
   }
@@ -1546,12 +1548,14 @@ public:
     vidx_refresh_info_.reset();
     rebuild_index_type_ = REBUILD_INDEX_TYPE_VEC;
     create_mlog_arg_.reset();
+    rebuild_index_online_ = false;
   }
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
   share::schema::ObVectorIndexRefreshInfo vidx_refresh_info_;
   RebuildIndexType rebuild_index_type_;
   ObCreateMLogArg create_mlog_arg_;
+  bool rebuild_index_online_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };

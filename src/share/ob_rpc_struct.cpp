@@ -3345,7 +3345,8 @@ DEF_TO_STRING(ObRebuildIndexArg) {
        K_(index_table_id),
        K_(vidx_refresh_info),
        K_(rebuild_index_type),
-       K_(create_mlog_arg));
+       K_(create_mlog_arg),
+       K_(rebuild_index_online));
   J_OBJ_END();
   return pos;
 }
@@ -3353,7 +3354,8 @@ OB_SERIALIZE_MEMBER((ObRebuildIndexArg, ObIndexArg),
                     index_table_id_,
                     vidx_refresh_info_,
                     rebuild_index_type_,
-                    create_mlog_arg_);
+                    create_mlog_arg_,
+                    rebuild_index_online_);
 
 bool ObRenameIndexArg::is_valid() const
 {

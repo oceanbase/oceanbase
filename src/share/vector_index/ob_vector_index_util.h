@@ -551,6 +551,10 @@ public:
   static int alter_vec_aux_column_schema(const ObTableSchema &aux_table_schema,
                                          const ObColumnSchemaV2 &new_column_schema,
                                          ObColumnSchemaV2 &new_aux_column_schema);
+  static int check_only_change_search_params(const ObString &old_idx_params,
+                                             const ObString &new_idx_params,
+                                             const ObTableSchema &index_table_schema,
+                                             bool &only_change_search_params);
 
 private:
   static void save_column_schema(
