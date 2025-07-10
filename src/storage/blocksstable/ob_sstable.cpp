@@ -1019,6 +1019,9 @@ int ObSSTable::serialize_full_table(const uint64_t data_version, char *buf, cons
       && SSTABLE_WRITE_BUILDING != meta_handle.get_sstable_meta().get_status())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("non-ready sstable for read can't be serialized.", K(ret), K_(valid_for_reading), K(meta_handle));
+  } else if (OB_UNLIKELY(is_co_sstable() && typeid(*this) != typeid(ObCOSSTableV2))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("co sstable serialization should use ObCOSSTableV2 class", K(ret), KPC(this));
   } else if (FALSE_IT(status.set_with_meta())) {
   } else if (OB_FAIL(ObITable::serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize table key", K(ret), K(buf_len), K(pos));
@@ -1075,6 +1078,9 @@ int ObSSTable::serialize(const uint64_t data_version, char *buf, const int64_t b
   } else if (OB_UNLIKELY(!addr_.is_valid() || (!addr_.is_memory() && !addr_.is_block()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable's addr_ is invalid", K(ret), K(addr_));
+  } else if (OB_UNLIKELY(is_co_sstable() && typeid(*this) != typeid(ObCOSSTableV2))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("co sstable serialization should use ObCOSSTableV2 class", K(ret), KPC(this));
   } else if (OB_FAIL(ObITable::serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize table key", K(ret), K(buf_len), K(pos));
   } else {

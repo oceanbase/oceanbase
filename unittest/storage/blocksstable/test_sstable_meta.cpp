@@ -827,6 +827,23 @@ TEST_F(TestSSTableMeta, test_empty_sstable_serialize_and_deserialize)
   free(buf);
 }
 
+TEST_F(TestSSTableMeta, test_cosstable_illegal_serialize)
+{
+  ObTabletID tablet_id(99999);
+  blocksstable::ObSSTable sstable;
+  construct_sstable(tablet_id, sstable, allocator_,
+      1 /*data_block_count*/,
+      1 /*other_block_count*/);
+  sstable.key_.table_type_ = ObITable::COLUMN_ORIENTED_SSTABLE;
+  const int64_t buf_len = sstable.get_serialize_size(DATA_CURRENT_VERSION);
+  char *buf = static_cast<char *>(allocator_.alloc(buf_len));
+  ASSERT_TRUE(nullptr != buf);
+  int64_t pos = 0;
+  ASSERT_EQ(OB_ERR_UNEXPECTED, sstable.serialize(DATA_CURRENT_VERSION, buf, buf_len, pos));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, sstable.serialize_full_table(DATA_CURRENT_VERSION, buf, buf_len, pos));
+  allocator_.reset();
+}
+
 TEST_F(TestSSTableMeta, test_sstable_deep_copy)
 {
   ObSSTable full_sstable;
