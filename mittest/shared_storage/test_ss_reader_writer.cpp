@@ -711,13 +711,31 @@ TEST_F(TestSSReaderWriter, tmp_file_reader_writer)
   check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
 
   // 15. concurrent append and calibration
+  // (a) disk space enough, write local, unsealed, [0, 8KB);
+  // (b) pause tmp file gc;
+  // (c) append sealed segment, [0, 2MB], write remote; expect delete tmp_file_seg_meta
+  release_tmp_file_disk_size(avail_size);
+  check_tmp_file_disk_size_enough(8192);
+  macro_id.set_third_id(70); // segment_id
+  write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, false/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/);
+  check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192/*valid_length*/);
+
+  file_manager->set_tmp_file_cache_pause_gc();
+
+  write_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*valid_length*/, true/*is_sealed*/, write_buf_);
+  read_and_compare_tmp_file_data(macro_id, 0/*offset*/, OB_DEFAULT_MACRO_BLOCK_SIZE/*size*/);
+  check_tmp_file_seg_meta(macro_id, false/*is_meta_exist*/);
+
+  file_manager->set_tmp_file_cache_allow_gc();
+
+  // 16. concurrent append and calibration
   // (a) disk space enough, write local, unsealed;
   // (b) pause tmp file gc;
   // (c) disk space not enough, write remote, append unsealed segment
   // (d) rm_logical_deleted_file
-  release_tmp_file_disk_size(avail_size);
   check_tmp_file_disk_size_enough(8192);
-  macro_id.set_third_id(50); // segment_id
+  macro_id.set_third_id(80); // segment_id
   write_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/, 8192/*valid_length*/, false/*is_sealed*/, write_buf_);
   read_and_compare_tmp_file_data(macro_id, 0/*offset*/, 8192/*size*/);
   check_tmp_file_seg_meta(macro_id, true/*is_meta_exist*/, true/*is_in_local*/, 8192/*valid_length*/);

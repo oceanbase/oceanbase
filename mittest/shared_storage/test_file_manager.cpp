@@ -1515,7 +1515,7 @@ TEST_F(TestFileManager, test_deleted_file_operator)
   ASSERT_EQ(tmp_file_used_size - write_io_size, tmp_file_cache_stat.used_);
 
   // step 4: test rename not exist file
-  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->logical_delete_local_file(tmp_file, 0/*ls_epoch_id*/));
+  ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->logical_delete_local_tmp_file(tmp_file, true/*is_del_seg_meta*/));
 }
 
 TEST_F(TestFileManager, test_user_tenant_slog_io_operator)
