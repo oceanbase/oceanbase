@@ -151,6 +151,7 @@ public:
    * calculate aggregate on this column group
    * is_group_by_col: current column is group by column?
    */
+  virtual int fill_group_by_col_lob_locator() = 0;
   virtual int calc_aggregate(const bool is_group_by_col) = 0;
 
   virtual int locate_micro_index(const ObCSRange &range) = 0;

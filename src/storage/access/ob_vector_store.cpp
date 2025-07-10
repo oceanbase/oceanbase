@@ -502,6 +502,20 @@ int ObVectorStore::check_can_group_by(
   return ret;
 }
 
+int ObVectorStore::fill_group_by_col_lob_locator(const bool has_lob_out_row)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObColumnParam *col_param = group_by_cell_->get_group_by_col_param();
+  if (iter_param_->has_lob_column_out() && has_lob_out_row
+    && nullptr != col_param && col_param->get_meta_type().is_lob_storage()) {
+    if (OB_FAIL(fill_datums_lob_locator(*iter_param_, context_, *col_param,
+          group_by_cell_->get_distinct_cnt(), group_by_cell_->get_group_by_col_datums_to_fill(), false))) {
+      LOG_WARN("Failed to fill lob locator", K(ret), K(has_lob_out_row), K(col_param), KPC(group_by_cell_), KPC(iter_param_));
+    }
+  }
+  return ret;
+}
+
 int ObVectorStore::do_group_by(
     const int64_t group_idx,
     blocksstable::ObIMicroBlockReader *reader,
@@ -514,9 +528,14 @@ int ObVectorStore::do_group_by(
   blocksstable::ObIMicroBlockDecoder *decoder = static_cast<blocksstable::ObIMicroBlockDecoder*>(reader);
   const int32_t group_by_col_offset = group_by_cell_->get_group_by_col_offset();
   const char **cell_data = group_by_cell_->get_cell_datas();
+  if (nullptr != context_.lob_locator_helper_) {
+    context_.lob_locator_helper_->reuse();
+  }
   if (OB_FAIL(decoder->read_distinct(group_by_col_offset, nullptr == cell_data ? cell_data_ptrs_ : cell_data,
       is_pad_char_to_full_length(context_.sql_mode_), *group_by_cell_))) {
     LOG_WARN("Failed to read distinct", K(ret));
+  } else if (OB_FAIL(fill_group_by_col_lob_locator(reader->has_lob_out_row()))) {
+    LOG_WARN("Failed to fill lob locator", K(ret));
   } else if (group_by_cell_->need_read_reference()) {
     const bool need_extract_distinct = group_by_cell_->need_extract_distinct();
     const bool need_do_aggregate = group_by_cell_->need_do_aggregate();
@@ -537,11 +556,11 @@ int ObVectorStore::do_group_by(
         if (OB_FAIL(group_by_cell_->check_distinct_and_ref_valid())) {
           LOG_WARN("Failed to check valid", K(ret));
         } else if (iter_param_->use_new_format()) {
-          if (OB_FAIL(decoder->get_group_by_aggregate_result(row_ids_, cell_data_ptrs_, row_capacity,
+          if (OB_FAIL(decoder->get_group_by_aggregate_result(*iter_param_, context_, row_ids_, cell_data_ptrs_, row_capacity,
                           0, default_datums_, len_array_, eval_ctx_, *static_cast<ObGroupByCellVec *>(group_by_cell_)))) {
             LOG_WARN("Failed to get aggregate result", K(ret));
           }
-        } else if (OB_FAIL(decoder->get_group_by_aggregate_result(row_ids_, cell_data_ptrs_, row_capacity,
+        } else if (OB_FAIL(decoder->get_group_by_aggregate_result(*iter_param_, context_, row_ids_, cell_data_ptrs_, row_capacity,
                                *static_cast<ObGroupByCell *>(group_by_cell_)))) {
           LOG_WARN("Failed to get aggregate result", K(ret));
         }

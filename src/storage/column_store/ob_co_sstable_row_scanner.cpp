@@ -1144,8 +1144,13 @@ int ObCOSSTableRowScanner::do_group_by()
   int ret = OB_SUCCESS;
   const int32_t group_by_col_offset = 0; // TODO(yht146439) multiple columns in cg
   ObICGGroupByProcessor *group_by_processor = group_by_iters_.at(0);
+  if (nullptr !=access_ctx_->lob_locator_helper_) {
+    access_ctx_->lob_locator_helper_->reuse();
+  }
   if (OB_FAIL(group_by_processor->read_distinct(group_by_col_offset))) {
     LOG_WARN("Failed to read distinct", K(ret));
+  } else if (OB_FAIL(group_by_processor->fill_group_by_col_lob_locator())) {
+    LOG_WARN("Failed to fill lob locator", K(ret));
   } else if (group_by_cell_->need_read_reference()) {
     const bool need_extract_distinct = group_by_cell_->need_extract_distinct();
     const bool need_do_aggregate = group_by_cell_->need_do_aggregate();

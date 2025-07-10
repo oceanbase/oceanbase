@@ -401,15 +401,19 @@ public:
     return OB_NOT_SUPPORTED;
   }
   virtual int get_group_by_aggregate_result(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell)
   {
-    UNUSEDx(row_ids, cell_datas, row_cap, group_by_cell);
+    UNUSEDx(iter_param, context, row_ids, cell_datas, row_cap, group_by_cell);
     return OB_NOT_SUPPORTED;
   }
   virtual int get_group_by_aggregate_result(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,

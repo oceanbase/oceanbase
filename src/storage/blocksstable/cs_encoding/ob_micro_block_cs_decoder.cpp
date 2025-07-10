@@ -1926,6 +1926,8 @@ int ObMicroBlockCSDecoder::read_reference(
 }
 
 int ObMicroBlockCSDecoder::get_group_by_aggregate_result(
+    const ObTableIterParam &iter_param,
+    const ObTableAccessContext &context,
     const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
@@ -1944,14 +1946,23 @@ int ObMicroBlockCSDecoder::get_group_by_aggregate_result(
       const int32_t agg_col_offset = agg_cell->get_col_offset();
       common::ObDatum *col_datums = agg_cell->get_col_datums();
       common::ObDatum *group_by_col_datums = group_by_cell.get_group_by_col_datums();
+      const share::schema::ObColumnParam *col_param = agg_cell->get_col_param();
       bool need_get_col_datum = (0 == i || agg_col_offset != last_agg_col_offset) && agg_cell->need_access_data();
       if (agg_col_offset == group_by_col) {
         // agg on group by column
         if (OB_FAIL(group_by_cell.eval_batch(group_by_col_datums, row_cap, i, true))) {
           LOG_WARN("Failed to eval batch", K(ret), K(i));
         }
-      } else if (need_get_col_datum && OB_FAIL(get_col_datums(agg_col_offset, row_ids, row_cap, col_datums))) {
-        LOG_WARN("Failed to get col datums", K(ret), K(i), K(agg_col_offset), K(row_cap));
+      } else if (need_get_col_datum) {
+        if (OB_FAIL(get_col_datums(agg_col_offset, row_ids, row_cap, col_datums))) {
+          LOG_WARN("Failed to get col datums", K(ret), K(i), K(agg_col_offset), K(row_cap));
+        } else if (iter_param.has_lob_column_out() && has_lob_out_row()
+                  && nullptr != col_param && col_param->get_meta_type().is_lob_storage()
+                  && OB_FAIL(fill_datums_lob_locator(iter_param, context, *col_param, row_cap, col_datums, false))) {
+          LOG_WARN("Failed to fill lob locator", K(ret), K(i), K(row_cap), K(has_lob_out_row()), KPC(col_param), K(iter_param), KPC(col_datums));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(group_by_cell.eval_batch(col_datums, row_cap, i))) {
         LOG_WARN("Failed to eval batch", K(ret), K(i));
       } else if (need_get_col_datum) {
@@ -1964,6 +1975,8 @@ int ObMicroBlockCSDecoder::get_group_by_aggregate_result(
 }
 
 int ObMicroBlockCSDecoder::get_group_by_aggregate_result(
+    const ObTableIterParam &iter_param,
+    const ObTableAccessContext &context,
     const int32_t *row_ids,
     const char **cell_datas,
     const int64_t row_cap,
@@ -2017,6 +2030,10 @@ int ObMicroBlockCSDecoder::get_group_by_aggregate_result(
                 expr,
                 eval_ctx))) {
               LOG_WARN("Failed pad on rich format columns", K(ret), K(expr));
+            } else if (iter_param.has_lob_column_out() && has_lob_out_row()
+                       && nullptr != col_param && col_param->get_meta_type().is_lob_storage()
+                       && OB_FAIL(fill_exprs_lob_locator(iter_param, context, *col_param, expr, eval_ctx, vec_offset, row_cap))) {
+              LOG_WARN("Failed to fill lob locator", K(ret), K(i), K(vec_offset), K(row_cap), K(has_lob_out_row()), KPC(col_param), K(iter_param));
             }
           }
         }

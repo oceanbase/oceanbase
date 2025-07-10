@@ -266,6 +266,7 @@ public:
   virtual int check_distinct_and_ref_valid();
   OB_INLINE int64_t get_batch_size() const { return batch_size_; }
   OB_INLINE int32_t get_group_by_col_offset() const { return group_by_col_offset_; }
+  OB_INLINE const share::schema::ObColumnParam *get_group_by_col_param() const { return group_by_col_param_; }
   OB_INLINE ObObjDatumMapType get_obj_datum_map_type() const {return group_by_col_expr_->obj_datum_map_; }
   OB_INLINE virtual bool is_exceed_sql_batch() const { return true; }
   virtual common::ObDatum *get_group_by_col_datums_to_fill() = 0;
