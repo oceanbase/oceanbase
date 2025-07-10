@@ -744,7 +744,7 @@ public:
 private:
   static bool &tl_enable()
   {
-    static __thread bool enable = false;
+    static __thread bool enable = true;
     return enable;
   }
 private:

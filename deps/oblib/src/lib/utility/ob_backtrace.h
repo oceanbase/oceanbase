@@ -28,11 +28,7 @@ int light_backtrace(void **buffer, int size, int64_t rbp);
   ({                                                              \
     int rv = 0;                                                   \
     if (OB_LIKELY(::oceanbase::common::g_enable_backtrace)) {     \
-      if (::oceanbase::lib::ObLightBacktraceGuard::is_enabled()) {\
-        rv = light_backtrace(buffer, size);                       \
-      } else {                                                    \
-        rv = backtrace(buffer, size);                             \
-      }                                                           \
+      rv = backtrace(buffer, size);                               \
     }                                                             \
     rv;                                                           \
   })

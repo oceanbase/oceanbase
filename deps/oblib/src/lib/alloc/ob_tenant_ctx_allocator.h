@@ -490,11 +490,10 @@ public:
         on_free(*obj, *block);
         inner_attr.use_malloc_v2_ = block->is_malloc_v2_;
       }
-      ObLightBacktraceGuard light_backtrace_guard(is_memleak_light_backtrace_enabled()
-          && ObCtxIds::GLIBC != attr.ctx_id_);
       BASIC_TIME_GUARD(time_guard, "ObMalloc");
       DEFER(ObMallocTimeMonitor::get_instance().record_malloc_time(time_guard, size, inner_attr));
-      bool sample_allowed = malloc_sample_allowed(size, inner_attr);
+      const bool light_backtrace_allowed = is_memleak_light_backtrace_enabled() && ObLightBacktraceGuard::is_enabled() && ObCtxIds::GLIBC != attr.ctx_id_;
+      bool sample_allowed = light_backtrace_allowed || malloc_sample_allowed(size, inner_attr);
       inner_attr.alloc_extra_info_ = sample_allowed;
       nobj = allocator.realloc_object(obj, size, inner_attr);
       if (OB_ISNULL(nobj)) {
@@ -514,7 +513,7 @@ public:
         SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
       }
       if (OB_NOT_NULL(nobj)) {
-        on_alloc(*nobj, inner_attr);
+        on_alloc(*nobj, inner_attr, light_backtrace_allowed);
         nptr = nobj->data_;
       }
     }
@@ -527,7 +526,7 @@ public:
   }
   static void common_free(void *ptr);
 private:
-  static void on_alloc(AObject& obj, const ObMemAttr& attr);
+  static void on_alloc(AObject& obj, const ObMemAttr& attr, const bool light_backtrace_allowed);
   static void on_free(AObject& obj, ABlock& block);
 
 private:
