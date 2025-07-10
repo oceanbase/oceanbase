@@ -655,7 +655,8 @@ int ObOptimizer::check_pdml_insert_up_enabled(const ObDelUpdStmt &pdml_stmt,
              col_iter++) {
           ObObjType data_type = (*col_iter)->get_data_type();
           if (ob_is_geometry(data_type)
-              || ob_is_lob_locator(data_type)
+              || (*col_iter)->is_string_lob()
+              || ob_is_text_tc(data_type)
               || ob_is_json(data_type)
               || ob_is_collection_sql_type(data_type)
               || ob_is_roaringbitmap(data_type)
