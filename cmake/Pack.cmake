@@ -104,11 +104,14 @@ if (NOT OB_BUILD_OPENSOURCE)
   endforeach()
 endif()
 
+file(READ "${CMAKE_SOURCE_DIR}/src/share/system_variable/ob_system_variable_init.json" SYS_VAR_INIT_JSON)
+string(REGEX REPLACE "\"ref_url\"[^\"]*\"[^\"]*\"" "\"ref_url\": \"\"" SYS_VAR_INIT_JSON "${SYS_VAR_INIT_JSON}")
+file(WRITE "${CMAKE_BINARY_DIR}/src/share/ob_system_variable_init.json" "${SYS_VAR_INIT_JSON}")
+
 install(FILES
   src/sql/fill_help_tables-ob.sql
   src/share/parameter/default_parameter.json
   src/share/system_variable/default_system_variable.json
-  src/share/system_variable/ob_system_variable_init.json
   tools/timezone_V1.log
   tools/timezone.data
   tools/timezone_name.data
@@ -122,6 +125,7 @@ install(FILES
   tools/upgrade/upgrade_health_checker.py
   tools/upgrade/oceanbase_upgrade_dep.yml
   tools/upgrade/deps_compat.yml
+  ${CMAKE_BINARY_DIR}/src/share/ob_system_variable_init.json
   ${INSTALL_EXTRA_FILES}
   ${CMAKE_BINARY_DIR}/ob_all_available_parameters.json
   DESTINATION etc
