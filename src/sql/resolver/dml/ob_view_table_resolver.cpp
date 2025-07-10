@@ -267,6 +267,10 @@ int ObViewTableResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &s
     subquery_resolver.set_parent_view_resolver(parent_view_resolver_);
     subquery_resolver.set_current_view_item(current_view_item);
     subquery_resolver.set_in_exists_subquery(info.parents_expr_info_.has_member(IS_EXISTS));
+    if (info.parents_expr_info_.has_member(IS_WITH_ANY)
+        || info.parents_expr_info_.has_member(IS_WITH_ALL)) {
+      subquery_resolver.set_is_right_child_of_sq_cmp(true);
+    }
     set_query_ref_exec_params(info.ref_expr_ == NULL ? NULL : &info.ref_expr_->get_exec_params());
     if (OB_FAIL(add_cte_table_to_children(subquery_resolver))) {
       LOG_WARN("add CTE table to children failed", K(ret));
