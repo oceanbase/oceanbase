@@ -353,6 +353,9 @@ int ObITenantTmpFileManager::pread(const uint64_t tenant_id,
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(io_handle.wait())) {
       LOG_WARN("fail to wait", KR(tmp_ret), K(io_info));
+      if (OB_TIMEOUT == tmp_ret) {
+        io_handle.reset();
+      }
     }
     ret = OB_SUCCESS == ret ? tmp_ret : ret;
   }
