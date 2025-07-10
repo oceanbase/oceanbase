@@ -42605,6 +42605,7 @@ def_table_schema(
     FROM oceanbase.__all_virtual_mview_running_job A,
          oceanbase.__all_virtual_table B
     WHERE A.table_id = B.table_id
+    AND A.tenant_id = B.tenant_id
 """.replace("\n", " ")
 )
 
