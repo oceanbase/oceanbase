@@ -4999,7 +4999,17 @@ int ObDMLResolver::sample_external_file_name(common::ObIAllocator &allocator,
       ret = OB_FILE_NOT_EXIST;
       LOG_WARN("missing file", K(ret));
     } else {
-      sampled_file_name = file_urls.at(0);
+      bool has_valid_file = false;
+      for (int64_t i = 0; !has_valid_file && i < file_urls.count(); i++) {
+        if (file_sizes.at(i) > 0) {
+          sampled_file_name = file_urls.at(i);
+          has_valid_file = true;
+        }
+      }
+      if (!has_valid_file) {
+        ret = OB_FILE_NOT_EXIST;
+        LOG_WARN("missing file", K(ret));
+      }
     }
   }
   return ret;
