@@ -3467,7 +3467,9 @@ void ObIOFaultDetector::handle(void *task)
     if ((is_device_warning_ || is_device_error_) && retry_task->io_info_.flag_.is_time_detect()) {
       //ignore
     } else if (!is_supported_detect_read_(retry_task->io_info_.tenant_id_, retry_task->io_info_.fd_)) {
-      //ignore
+      // Note: here is a defence
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected detect read", KR(ret), KPC(retry_task));
     } else {
       int64_t timeout_ms = retry_task->timeout_ms_;
       // remain 1s to avoid race condition for retry_black_list_interval
@@ -3673,7 +3675,8 @@ void ObIOFaultDetector::record_io_timeout(const ObIOResult &result, const ObIORe
     //ignore, do not retry
   } else if (req.get_flag().is_sync()) {
     LOG_INFO("ignore fault detect for sync io", K(req));
-  } else if (result.flag_.is_read() && !result.is_object_device_req_) {
+  } else if (result.flag_.is_read() && !result.is_object_device_req_ &&
+             is_supported_detect_read_(req.tenant_id_, req.fd_)) {
     RetryTask *retry_task = nullptr;
     if (OB_ISNULL(retry_task = op_alloc(RetryTask))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3709,7 +3712,8 @@ void ObIOFaultDetector::record_io_error(const ObIOResult &result, const ObIORequ
     //ignore, do not retry
   } else if (req.get_flag().is_sync()) {
     LOG_INFO("ignore fault detect for sync io", K(req));
-  } else if (result.flag_.is_read() && !result.is_object_device_req_) {
+  } else if (result.flag_.is_read() && !result.is_object_device_req_ &&
+             is_supported_detect_read_(req.tenant_id_, req.fd_)) {
     if (OB_FAIL(record_read_failure_(result, req))) {
       LOG_WARN("record read failure failed", K(ret), K(result), K(req));
     }
