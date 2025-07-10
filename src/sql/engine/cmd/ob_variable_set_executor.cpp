@@ -394,6 +394,9 @@ int ObVariableSetExecutor::calc_var_value_static_engine(
                                 param_store,
                                 &exec_ctx))) {
     LOG_WARN("calc const expr failed", K(ret));
+  } else if (value_obj.is_pl_extend()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("pl extend type is not supported in set stmt", K(ret), K(value_obj));
   }
   return ret;
 }
