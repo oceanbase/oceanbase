@@ -568,22 +568,26 @@ int ObTabletMemtableMgr::get_memtable_for_replay(const SCN &replay_scn,
     STORAGE_LOG(WARN, "ls is null", K(ret));
   } else {
     const share::ObLSID &ls_id = ls_->get_ls_id();
-    MemMgrRLockGuard lock_guard(lock_);
     int64_t i = 0;
-    for (i = memtable_tail_ - 1; OB_SUCC(ret) && i >= memtable_head_; --i) {
-      if (OB_FAIL(get_ith_memtable(i, handle))) {
-        STORAGE_LOG(WARN, "fail to get ith memtable", K(ret), K(i));
-      } else if (OB_FAIL(handle.get_data_memtable(memtable))) {
-        handle.reset();
-        LOG_WARN("fail to get data memtable", K(ret));
-      } else {
-        if (replay_scn > memtable->get_start_scn() && replay_scn <= memtable->get_end_scn()) {
-          break;
-        } else {
+    {
+      MemMgrRLockGuard lock_guard(lock_);
+      for (i = memtable_tail_ - 1; OB_SUCC(ret) && i >= memtable_head_; --i) {
+        if (OB_FAIL(get_ith_memtable(i, handle))) {
+          STORAGE_LOG(WARN, "fail to get ith memtable", K(ret), K(i));
+        } else if (OB_FAIL(handle.get_data_memtable(memtable))) {
           handle.reset();
+          LOG_WARN("fail to get data memtable", K(ret));
+        } else {
+          if (replay_scn > memtable->get_start_scn() && replay_scn <= memtable->get_end_scn()) {
+            break;
+          } else {
+            handle.reset();
+            LOG_WARN("fail to get data memtable", K(ret));
+          }
         }
       }
     }
+
     if (OB_SUCC(ret) && !handle.is_valid() && i < memtable_head_) {
       SCN clog_checkpoint_scn;
       if (OB_FAIL(get_newest_clog_checkpoint_scn(clog_checkpoint_scn))) {
