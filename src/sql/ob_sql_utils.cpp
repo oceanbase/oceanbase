@@ -5037,8 +5037,8 @@ int ObPreCalcExprConstraint::check_is_match(ObDatumObjParam &datum_param,
       case PRE_CALC_RESULT_TRUE:
         is_match = obj_param.get_bool() && !obj_param.is_null();
         break;
-      case PRE_CALC_RESULT_FALSE:
-        is_match = !obj_param.get_bool() && !obj_param.is_null();
+      case PRE_CALC_RESULT_FALSE: // this constraint actually means NOT TRUE (FALSE or NULL)
+        is_match = !obj_param.get_bool();
         break;
       case PRE_CALC_PRECISE:
       case PRE_CALC_NOT_PRECISE: {
