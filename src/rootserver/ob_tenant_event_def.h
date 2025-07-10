@@ -91,6 +91,12 @@
                 IS_SYS_LS_SYNCED,
                 IS_ALL_LS_SYNCED,
                 NON_SYNC_INFO);
+      DEF_EVENT(TENANT_ROLE_CHANGE, FLASHBACK_STANDBY_LOG, "FLASHBACK STANDBY LOG",
+                FLASHBACK_LOG_SCN,
+                OP_START_TENANT_INFO,
+                OP_END_TENANT_INFO,
+                ALL_FLASHBACK_LS,
+                COST_DETAIL);
   };
 
   class SERVICE_NAME {

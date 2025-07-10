@@ -5884,6 +5884,17 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_sswriter_lease_mgr runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_tenant_flashback_log_scn;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+switchover_epoch	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+op_type	varchar(64)	NO		NULL	
+flashback_log_scn	bigint(20) unsigned	NO		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_flashback_log_scn;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__tenant_virtual_show_create_catalog;
 Field	Type	Null	Key	Default	Extra
 catalog_id	bigint(20)	NO	PRI	NULL	

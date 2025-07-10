@@ -581,7 +581,7 @@ END_P SET_VAR DELIMITER
 %type <node_opt_parens> select_clause_set select_clause_set_body
 %type <node> dynamic_partition_option dynamic_partition_option_list sys_view_cast_opt
 %type <node> create_location_stmt alter_location_stmt drop_location_stmt location_name location_url opt_sub_path credential_option_list credential_option opt_credential location_utils_stmt
-
+%type <node> flashback_standby_log_stmt
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -767,6 +767,7 @@ stmt:
   | alter_location_stmt   { $$ = $1; check_question_mark($$, result); }
   | drop_location_stmt    { $$ = $1; check_question_mark($$, result); }
   | location_utils_stmt   { $$ = $1; check_question_mark($$, result); }
+  | flashback_standby_log_stmt { $$ = $1; check_question_mark($$, result); }
   ;
 
 /*****************************************************************************
@@ -24752,6 +24753,21 @@ CREATE
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 4;
+}
+;
+
+/*===========================================================
+ *
+ * 租户 FLASHBACK STANDBY LOG
+ *
+ *===========================================================*/
+
+flashback_standby_log_stmt:
+alter_with_opt_hint SYSTEM FLASHBACK STANDBY LOG TO SCN COMP_EQ INTNUM opt_tenant_name
+{
+  (void)($1);
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FLASHBACK_STANDBY_LOG, 2, $9, $10);
 }
 ;
 

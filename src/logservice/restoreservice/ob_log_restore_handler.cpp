@@ -415,9 +415,11 @@ int ObLogRestoreHandler::update_max_fetch_info(const int64_t proposal_id,
     context_.max_fetch_lsn_ = lsn;
     context_.max_fetch_scn_ = scn;
     context_.last_fetch_ts_ = ObTimeUtility::fast_current_time();
-    if (parent_->set_to_end(scn)) {
-      // To stop and clear all restore log tasks and restore context, reset context and advance issue version
-      CLOG_LOG(INFO, "restore log to_end succ", KPC(this), KPC(parent_));
+    if (OB_NOT_NULL(parent_)) {
+      if (parent_->set_to_end(scn)) {
+        // To stop and clear all restore log tasks and restore context, reset context and advance issue version
+        CLOG_LOG(INFO, "restore log to_end succ", KPC(this), KPC(parent_));
+      }
     }
   }
   return ret;

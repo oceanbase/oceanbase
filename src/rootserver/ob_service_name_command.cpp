@@ -13,7 +13,11 @@
 
 #include "ob_service_name_command.h"
 
-#include "share/ob_all_server_tracer.h"
+#include "lib/oblog/ob_log_module.h"
+#include "lib/string/ob_sql_string.h"
+#include "lib/mysqlclient/ob_mysql_transaction.h"
+#include "share/ob_server_check_utils.h"
+#include "observer/ob_server_struct.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
 #include "src/rootserver/ob_root_utils.h"
 #include "rootserver/ob_tenant_event_def.h"
@@ -76,8 +80,8 @@ int ObServiceNameCommand::create_service(
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !service_name_str.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(service_name_str));
-  } else if (OB_FAIL(check_and_get_tenants_servers_(tenant_id, true /* include_temp_offline */, target_servers))) {
-    LOG_WARN("fail to execute check_and_get_tenants_online_servers_", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObServerCheckUtils::check_offline_and_get_tenants_servers(tenant_id, true /* allow_temp_offline */, target_servers))) {
+    LOG_WARN("fail to execute check_offline_and_get_tenants_servers", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObServiceNameProxy::insert_service_name(tenant_id, service_name_str,
       epoch, all_service_names))) {
     // insert service_name into __all_service if the tenant's so_status is NORMAL
@@ -147,8 +151,8 @@ int ObServiceNameCommand::start_service(
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !service_name_str.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(service_name_str));
-  } else if (OB_FAIL(check_and_get_tenants_servers_(tenant_id, true /* include_temp_offline */, target_servers))) {
-    LOG_WARN("fail to execute check_and_get_tenants_servers_", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObServerCheckUtils::check_offline_and_get_tenants_servers(tenant_id, true /* allow_temp_offline */, target_servers))) {
+    LOG_WARN("fail to execute check_offline_and_get_tenants_servers", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObServiceNameProxy::select_all_service_names_with_epoch(tenant_id, epoch, all_service_names))) {
     LOG_WARN("fail to select service_name", KR(ret), K(tenant_id), K(service_name_str));
   } else if (OB_FAIL(extract_service_name_(all_service_names, service_name_str, service_name))) {
@@ -205,9 +209,9 @@ int ObServiceNameCommand::stop_service(
     LOG_WARN("fail to assign service_name_before", KR(ret), K(service_name));
   } else if (service_name.is_stopped()) {
     // status has been already stopped, do nothing
-  } else if (OB_FAIL(check_and_get_tenants_servers_(tenant_id, false /* include_temp_offline */, tenant_online_servers))) {
+  } else if (OB_FAIL(ObServerCheckUtils::check_offline_and_get_tenants_servers(tenant_id, false /* allow_temp_offline */, tenant_online_servers, "STOP SERVICE"))) {
     // also ensure the tenant has no units on temp. offline servers
-    LOG_WARN("fail to execute check_and_get_tenants_online_servers_", KR(ret), K(tenant_id));
+    LOG_WARN("fail to execute check_offline_and_get_tenants_servers", KR(ret), K(tenant_id));
   } else {
     if (service_name.is_started()) {
       if (OB_FAIL(ObServiceNameProxy::update_service_status(service_name, ObServiceName::STOPPING,
@@ -272,55 +276,30 @@ int ObServiceNameCommand::kill_local_connections(
   return ret;
 }
 
-int ObServiceNameCommand::check_and_get_tenants_servers_(
-    const uint64_t tenant_id,
-    const bool include_temp_offline,
-    common::ObIArray<common::ObAddr> &target_servers)
+int ObServiceNameCommand::clear_service_name(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObUnit> units;
-  target_servers.reset();
-  ObUnitTableOperator unit_operator;
-  if (OB_ISNULL(GCTX.sql_proxy_)) {
+  ObArray<ObServiceName> all_service_names;
+  int64_t epoch = 0;
+  if (OB_FAIL(ObServiceNameProxy::check_is_service_name_enabled(tenant_id))) {
+    if (OB_NOT_SUPPORTED == ret) {
+      ret = OB_SUCCESS;
+    }
+    LOG_WARN("service_name is not enabled, no need to execute clear_service_name", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
-  } else if (OB_FAIL(unit_operator.init(*GCTX.sql_proxy_))) {
-    LOG_WARN("failed to init unit operator", KR(ret));
-  } else if (OB_FAIL(unit_operator.get_units_by_tenant(tenant_id, units))) {
-    LOG_WARN("failed to get tenant unit", KR(ret), K(tenant_id));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < units.count(); i++) {
-    const ObUnit &unit = units.at(i);
-    if (OB_FAIL(server_check_and_push_back_(unit.server_, include_temp_offline, target_servers))) {
-      LOG_WARN("fail to execute server_check_and_push_back_", KR(ret), K(unit.server_));
-    } else if (unit.migrate_from_server_.is_valid() &&
-        OB_FAIL(server_check_and_push_back_(unit.migrate_from_server_, include_temp_offline, target_servers))) {
-      LOG_WARN("fail to execute server_check_and_push_back_", KR(ret), K(unit.migrate_from_server_));
+  } else if (OB_FAIL(ObServiceNameProxy::select_all_service_names_with_epoch(tenant_id, epoch, all_service_names))) {
+    LOG_WARN("fail to execute select_all_service_names_with_epoch", KR(ret), K(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_service_names.count(); i++) {
+      const ObServiceName &service_name = all_service_names.at(i);
+      if (OB_FAIL(ObServiceNameCommand::stop_service(tenant_id, service_name.get_service_name_str()))) {
+        LOG_WARN("fail to execute stop_service", KR(ret), K(tenant_id), K(service_name));
+      } else if (OB_FAIL(ObServiceNameCommand::delete_service(tenant_id, service_name.get_service_name_str()))) {
+        LOG_WARN("fail to execute delete_service", KR(ret), K(tenant_id), K(service_name));
+      }
     }
-  }
-  return ret;
-}
-
-int ObServiceNameCommand::server_check_and_push_back_(
-    const common::ObAddr &server,
-    const bool include_temp_offline,
-    common::ObIArray<common::ObAddr> &target_servers)
-{
-  int ret = OB_SUCCESS;
-  ObServerInfoInTable server_info;
-  if (OB_UNLIKELY(!server.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid server", KR(ret), K(server));
-  } else if (OB_FAIL(SVR_TRACER.get_server_info(server, server_info))) {
-    LOG_WARN("fail to execute get_server_info", KR(ret), K(server));
-  } else if (server_info.is_permanent_offline()) {
-    // skip
-  } else if (!include_temp_offline && server_info.is_temporary_offline()) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("the tenant has units on temporary offline servers", KR(ret), K(server_info));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "The tenant has units on temporary offline servers, STOP SERVICE is");
-  } else if (OB_FAIL(target_servers.push_back(server))) {
-    LOG_WARN("fail to push back", KR(ret), K(server), K(server_info));
   }
   return ret;
 }

@@ -388,6 +388,7 @@
 # 539: __all_catalog_privilege
 # 540: __all_catalog_privilege_history
 # 540: __all_catalog_privilege  # BASE_TABLE_NAME
+# 541: __all_tenant_flashback_log_scn
 # 544: __all_pl_recompile_objinfo
 # 545: __all_vector_index_task
 # 546: __all_vector_index_task_history
@@ -1246,6 +1247,8 @@
 # 12519: __all_catalog_privilege_history  # BASE_TABLE_NAME1
 # 12520: __all_virtual_sswriter_group_stat
 # 12521: __all_virtual_sswriter_lease_mgr
+# 12522: __all_virtual_tenant_flashback_log_scn
+# 12522: __all_tenant_flashback_log_scn  # BASE_TABLE_NAME
 # 12523: __all_virtual_pl_recompile_objinfo
 # 12523: __all_pl_recompile_objinfo  # BASE_TABLE_NAME
 # 12524: __all_virtual_vector_index_task
@@ -1969,6 +1972,9 @@
 # 15498: __all_virtual_sswriter_group_stat  # BASE_TABLE_NAME
 # 15499: ALL_VIRTUAL_SSWRITER_LEASE_MGR
 # 15499: __all_virtual_sswriter_lease_mgr  # BASE_TABLE_NAME
+# 15502: ALL_VIRTUAL_TENANT_FLASHBACK_LOG_SCN
+# 15502: __all_tenant_flashback_log_scn  # BASE_TABLE_NAME
+# 15502: __all_virtual_tenant_flashback_log_scn  # BASE_TABLE_NAME1
 # 15503: ALL_VIRTUAL_PL_RECOMPILE_OBJINFO_REAL_AGENT
 # 15503: __all_pl_recompile_objinfo  # BASE_TABLE_NAME
 # 15504: TENANT_VIRTUAL_SHOW_CREATE_CATALOG
@@ -2524,6 +2530,8 @@
 # 21634: CDB_OB_CS_REPLICA_STATS
 # 21635: GV$OB_PLUGINS
 # 21636: V$OB_PLUGINS
+# 21637: DBA_OB_TENANT_FLASHBACK_LOG_SCN
+# 21638: CDB_OB_TENANT_FLASHBACK_LOG_SCN
 # 21640: DBA_OB_VECTOR_INDEX_TASKS
 # 21641: CDB_OB_VECTOR_INDEX_TASKS
 # 21642: DBA_OB_VECTOR_INDEX_TASK_HISTORY
@@ -2827,6 +2835,7 @@
 # 25302: DBA_OB_SERVICES
 # 25303: DBA_OB_STORAGE_IO_USAGE
 # 25305: USER_SCHEDULER_JOBS
+# 25306: DBA_OB_TENANT_FLASHBACK_LOG_SCN
 # 25308: DBA_MVIEW_RUNNING_JOBS
 # 25309: DBA_MVIEW_DEPS
 # 25310: DBA_OB_DYNAMIC_PARTITION_TABLES

@@ -75,6 +75,7 @@
 #include "rootserver/backup/ob_archive_scheduler_service.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/ob_inner_tablet_access_service.h"
+#include "rootserver/standby/ob_flashback_standby_log_command.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "close_modules/arbitration/rootserver/ob_arbitration_service.h" // for ObArbitrationService
 #include "close_modules/arbitration/share/arbitration_service/ob_arbitration_service_utils.h" // for ObArbitrationServiceUtils
@@ -4511,6 +4512,15 @@ int ObAdminForceDropLonelyLobAuxTableP::process()
     LOG_ERROR("invalid argument", KR(ret), K(arg_));
   } else {
     ret = gctx_.rs_rpc_proxy_->force_drop_lonely_lob_aux_table(arg_);
+  }
+  return ret;
+}
+
+int ObClearFetchedLogCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(rootserver::ObFlashbackStandbyLogCommand::clear_local_fetched_log_cache(arg_, result_))) {
+    COMMON_LOG(WARN, "fail to clear_local_fetched_log_cache", KR(ret), K(arg_));
   }
   return ret;
 }

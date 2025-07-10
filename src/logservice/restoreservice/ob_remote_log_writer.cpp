@@ -83,6 +83,8 @@ void ObRemoteLogWriter::destroy()
   ls_svr_ = NULL;
   restore_service_ = NULL;
   worker_ = NULL;
+  share::ObThreadPool::destroy();
+  LOG_INFO("ObRemoteLogWriter destroy succ");
 }
 
 int ObRemoteLogWriter::start()

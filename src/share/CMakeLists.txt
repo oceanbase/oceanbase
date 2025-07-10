@@ -227,6 +227,7 @@ ob_set_subtarget(ob_share common
   ob_server_status.cpp
   ob_server_struct.cpp
   ob_server_table_operator.cpp
+  ob_server_check_utils.cpp
   ob_service_epoch_proxy.cpp
   ob_share_util.cpp
   ob_simple_batch.cpp
@@ -284,6 +285,8 @@ ob_set_subtarget(ob_share common
   ob_srs_importer.cpp
   ob_compute_property.cpp
   ob_perf_stat.cpp
+  ob_flashback_standby_log_struct.cpp
+  ob_flashback_log_scn_table_operator.cpp
 )
 
 ob_set_subtarget(ob_share common_mixed

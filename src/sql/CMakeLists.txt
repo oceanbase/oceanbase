@@ -313,6 +313,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_catalog_executor.cpp
   engine/cmd/ob_trigger_storage_cache_executor.cpp
   engine/cmd/ob_sys_dispatch_call_executor.cpp
+  engine/cmd/ob_flashback_standby_log_executor.cpp
 )
 
 ob_set_subtarget(ob_sql engine_connector
@@ -1325,6 +1326,7 @@ ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_event_stmt.cpp
   resolver/cmd/ob_trigger_storage_cache_resolver.cpp
   resolver/cmd/ob_sys_dispatch_call_resolver.cpp
+  resolver/cmd/ob_flashback_standby_log_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dcl

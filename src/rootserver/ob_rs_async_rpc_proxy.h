@@ -21,6 +21,7 @@
 #include "rpc/obrpc/ob_rpc_result_code.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "share/ob_heartbeat_struct.h"
+#include "share/ob_flashback_standby_log_struct.h"
 
 namespace oceanbase
 {
@@ -103,6 +104,7 @@ RPC_F(obrpc::OB_CAL_STANDBY_TENANT_PHY_RESOURCE, obrpc::ObGetTenantResArg, obrpc
 RPC_F(obrpc::OB_KILL_QUERY_CLIENT_SESSION, obrpc::ObKillQueryClientSessionArg, obrpc::Int64, ObKillQueryClientSessionProxy);
 RPC_RS(obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT, obrpc::ObParallelCreateNormalTenantArg, obrpc::ObRpcProxy::NoneT, ObParallelCreateNormalTenantProxy);
 RPC_F(obrpc::OB_ALL_SERVER_TRACER_BROADCAST, obrpc::ObRefreshTenantInfoArg, obrpc::Int64, ObAllServerTracerProxy);
+RPC_F(obrpc::OB_CLEAR_FETCHED_LOG_CACHE, share::ObClearFetchedLogCacheArg, share::ObClearFetchedLogCacheRes, ObClearFetchedLogCacheProxy);
 
 }//end namespace rootserver
 }//end namespace oceanbase

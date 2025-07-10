@@ -126,15 +126,12 @@ int ObLogFlashbackService::get_ls_list_(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   share::ObLSStatusOperator ls_status_op;
   ls_array.reset();
+
   if (!is_user_tenant(tenant_id)|| OB_ISNULL(sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("only support flashback user tenant", KR(ret), K(tenant_id), KP(sql_proxy_));
-  } else if (OB_FAIL(ls_status_op.get_all_ls_status_by_order_for_switch_tenant(
-                                  tenant_id,
-                                  false/* ignore_need_create_abort */,
-                                  ls_array,
-                                  *sql_proxy_))) {
-    LOG_WARN("fail to get_all_ls_status_by_order_for_switch_tenant", KR(ret), K(tenant_id), KP(sql_proxy_));
+  } else if (OB_FAIL(ls_status_op.get_all_ls_status_by_order_for_flashback_log(tenant_id, ls_array, *sql_proxy_))) {
+    LOG_WARN("fail to get_all_ls_status_by_order_for_flashback_log", KR(ret), K(tenant_id), KP(sql_proxy_));
   }
   return ret;
 }
