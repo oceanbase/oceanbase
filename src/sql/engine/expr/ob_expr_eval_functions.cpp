@@ -1816,6 +1816,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprOracleInstr::calc_oracle_instr_expr_vector,                      /* 224 */
   NULL, // ObLocationExprOperator::calc_location_expr_vector,                     /* 225 */
   NULL, // ObExprConvertTZ::calc_convert_tz_vector,                               /* 226 */
+  NULL, // ObExprMul::mul_decimalint64_int64_int64_vector,                        /* 227 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
@@ -1937,6 +1938,7 @@ static ObExpr::EvalFunc g_decimal_int_eval_functions[] = {
   ObExprDiv::decint_div_mysql_fn<int512_t, int128_t>,
   ObExprDiv::decint_div_mysql_fn<int512_t, int256_t>,
   ObExprDiv::decint_div_mysql_fn<int512_t, int512_t>,
+  NULL, // ObExprMul::mul_decimalint64_int64_int64
 };
 
 static ObExpr::EvalBatchFunc g_decimal_int_eval_batch_functions[] = {
@@ -2047,6 +2049,7 @@ static ObExpr::EvalBatchFunc g_decimal_int_eval_batch_functions[] = {
   ObExprDiv::decint_div_mysql_batch_fn<int512_t, int128_t>,
   ObExprDiv::decint_div_mysql_batch_fn<int512_t, int256_t>,
   ObExprDiv::decint_div_mysql_batch_fn<int512_t, int512_t>,
+  NULL, // ObExprMul::mul_decimalint64_int64_int64_batch
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_EXPR_EVAL,
