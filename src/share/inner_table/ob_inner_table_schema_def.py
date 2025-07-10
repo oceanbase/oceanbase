@@ -7574,7 +7574,7 @@ def_table_schema(**gen_history_table_def(515, all_user_proxy_role_info_def))
 # 515 : __all_user_proxy_role_info_history
 
 def_table_schema(
-  owner = 'linqiucen.lqc',
+  owner = 'shouju.zyp',
   table_name    = '__all_service',
   table_id = '516',
   table_type = 'SYSTEM_TABLE',
@@ -39181,7 +39181,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'linqiucen.lqc',
+  owner           = 'shouju.zyp',
   table_name      = 'DBA_OB_SERVICES',
   table_id        = '21548',
   table_type      = 'SYSTEM_VIEW',
@@ -39203,7 +39203,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'linqiucen.lqc',
+  owner           = 'shouju.zyp',
   table_name      = 'CDB_OB_SERVICES',
   table_id        = '21549',
   table_type      = 'SYSTEM_VIEW',
@@ -60590,7 +60590,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'linqiucen.lqc',
+  owner           = 'shouju.zyp',
   table_name      = 'DBA_OB_TENANTS',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -64348,7 +64348,7 @@ where U1.TENANT_ID = U2.TENANT_ID
 )
 
 def_table_schema(
-  owner           = 'linqiucen.lqc',
+  owner           = 'shouju.zyp',
   table_name      = 'DBA_OB_SERVICES',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
