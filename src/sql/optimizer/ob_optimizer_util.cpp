@@ -7374,7 +7374,8 @@ int ObOptimizerUtil::check_pushdown_filter_for_subquery(const ObDMLStmt &parent_
       } else {
         bool is_simple_expr = true;
         bool is_match = false;
-        ObSEArray<ObRawExpr *, 4> view_column_exprs;
+        bool can_push_through_winfunc_gby = true;
+        ObSEArray<ObRawExpr *, 4> pushed_select_exprs;
         for (int64_t j = 0; OB_SUCC(ret) && is_simple_expr && j < select_exprs.count(); ++j) {
           ObRawExpr *expr = select_exprs.at(j);
           if (OB_ISNULL(expr)) {
@@ -7393,23 +7394,35 @@ int ObOptimizerUtil::check_pushdown_filter_for_subquery(const ObDMLStmt &parent_
                                                                         static_cast<ObColumnRefRawExpr*>(column_exprs.at(j)),
                                                                         is_match))) {
             LOG_WARN("failed to check select expr is overlap index", K(ret));
-          } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, view_column_exprs))) {
+          } else if (OB_FAIL(pushed_select_exprs.push_back(expr))) {
             LOG_WARN("failed to extract column exprs", K(ret));
           }
         }
+
+        if (OB_SUCC(ret) && !common_exprs.empty() && !pushed_select_exprs.empty()) {
+          //When common_exprs is empty, it indicates that there are neither window functions nor group by clauses in view.
+          //When common_exprs is not empty, it is necessary to be able to compute the result of the pushdown predicate based on them,
+          //so that it can be further pushed down into the where clause.
+          bool is_calculable = false;
+          for (int64_t j = 0; OB_SUCC(ret) && can_push_through_winfunc_gby && j < pushed_select_exprs.count(); ++j) {
+            if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(pushed_select_exprs.at(j),
+                                                                  common_exprs, true, true,
+                                                                  is_calculable))) {
+              LOG_WARN("failed to check expr calculable", K(ret));
+            } else if (!is_calculable) {
+              can_push_through_winfunc_gby = false;
+            }
+          }
+        }
+
         if (OB_FAIL(ret)) {
-        } else if (!is_simple_expr) {
+        } else if (!is_simple_expr || !can_push_through_winfunc_gby) {
           //can not push down
-        } else if (!common_exprs.empty() &&
-                   !subset_exprs(view_column_exprs, common_exprs)) {
-          //common_exprs为空，说明既没有windown func，也没有group by
         } else if (OB_FAIL(candi_filters.push_back(pred))) {
           LOG_WARN("failed to push back predicate", K(ret));
         } else {
           pushed = true;
-          if (is_match) {
-            is_match_index = true;
-          }
+          is_match_index |= is_match;
         }
       }
       if (OB_SUCC(ret) && !pushed) {
@@ -10133,6 +10146,128 @@ int ObOptimizerUtil::get_rescan_path_index_id(const ObLogicalOperator *op,
     table_id = table_scan->get_table_id();
     index_id = table_scan->get_index_table_id();
     range_row_count = table_scan->get_query_range_row_count();
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::can_extract_implicit_cast_range(ObItemType cmp_type,
+                                                     const ObColumnRefRawExpr &column_expr,
+                                                     const ObRawExpr &target_expr,
+                                                     bool &can_extract)
+{
+  int ret = OB_SUCCESS;
+  ObObjTypeClass column_tc = column_expr.get_result_type().get_type_class();
+  ObObjTypeClass const_tc = target_expr.get_result_type().get_type_class();
+  can_extract = false;
+  if (lib::is_oracle_mode()) {
+    can_extract = false;
+  } else if (column_expr.get_result_type().get_type() ==
+             target_expr.get_result_type().get_type() &&
+             column_expr.get_result_type().is_string_type()) {
+    if (OB_FAIL(is_implicit_collation_range_valid(cmp_type,
+                                                  column_expr.get_result_type().get_collation_type(),
+                                                  target_expr.get_result_type().get_collation_type(),
+                                                  can_extract))) {
+      LOG_WARN("failed to check implicit collation range", K(ret));
+    }
+  } else if ((ObIntTC == column_tc || ObUIntTC == column_tc) &&
+             (const_tc == ObDoubleTC || const_tc == ObFloatTC)) {
+    can_extract = true;
+  } else if (ObNumberTC == column_tc &&
+             (const_tc == ObDoubleTC || const_tc == ObFloatTC)) {
+    can_extract = true;
+  } else if (ObYearTC == column_tc &&
+             (const_tc == ObNumberTC || const_tc == ObIntTC || const_tc == ObDecimalIntTC)) {
+    can_extract = true;
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::is_implicit_collation_range_valid(ObItemType cmp_type,
+                                                       ObCollationType l_collation,
+                                                       ObCollationType r_collation,
+                                                       bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  if (cmp_type != T_OP_EQ && cmp_type != T_OP_NSEQ &&
+      cmp_type != T_OP_IN) {
+    is_valid = false;
+  } else if (l_collation == CS_TYPE_UTF8MB4_GENERAL_CI &&
+      (r_collation == CS_TYPE_UTF8MB4_BIN ||
+       r_collation == CS_TYPE_BINARY)) {
+    is_valid = true;
+  } else if (l_collation == CS_TYPE_UTF16_GENERAL_CI &&
+             (r_collation == CS_TYPE_UTF16_BIN ||
+              r_collation == CS_TYPE_BINARY)) {
+    is_valid = true;
+  } else if (l_collation == CS_TYPE_UTF16LE_GENERAL_CI &&
+             (r_collation == CS_TYPE_UTF16LE_BIN ||
+              r_collation == CS_TYPE_BINARY)) {
+    is_valid = true;
+  } else if (l_collation == CS_TYPE_UTF8MB4_BIN &&
+             r_collation == CS_TYPE_BINARY) {
+    is_valid = true;
+  } else {
+    LOG_TRACE("unsupport implicit collation range", K(l_collation), K(r_collation));
+  }
+  return ret;
+}
+
+bool ObOptimizerUtil::is_type_for_extact_implicit_cast_range(const ObExprResType &res_type)
+{
+  return ObIntTC == res_type.get_type_class() ||
+         ObUIntTC == res_type.get_type_class() ||
+         ObNumberTC == res_type.get_type_class() ||
+         ObYearTC == res_type.get_type_class() ||
+         (res_type.is_string_type() &&
+          (CS_TYPE_UTF8MB4_GENERAL_CI == res_type.get_collation_type() ||
+           CS_TYPE_UTF16_GENERAL_CI == res_type.get_collation_type() ||
+           CS_TYPE_UTF16LE_GENERAL_CI == res_type.get_collation_type() ||
+           CS_TYPE_UTF8MB4_BIN == res_type.get_collation_type()
+          )
+         );
+}
+
+int ObOptimizerUtil::eliminate_implicit_cast_for_range(ObRawExpr *&left,
+                                                       ObRawExpr *&right,
+                                                       ObItemType cmp_type)
+{
+  int ret = OB_SUCCESS;
+  bool can_extract = false;
+  if (OB_ISNULL(left) || OB_ISNULL(right)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(left), K(right));
+  } else if (!IS_BASIC_CMP_OP(cmp_type)) {
+    // do nothing
+  } else if (T_FUN_SYS_CAST == left->get_expr_type()) {
+    if (OB_ISNULL(left->get_param_expr(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(left));
+    } else if (T_REF_COLUMN != left->get_param_expr(0)->get_expr_type()) {
+      // do nothing
+    } else if (OB_FAIL(can_extract_implicit_cast_range(cmp_type,
+                                                       *static_cast<ObColumnRefRawExpr*>(left->get_param_expr(0)),
+                                                       *right,
+                                                       can_extract))) {
+      LOG_WARN("failed to check implicit collation range", K(ret));
+    } else if (can_extract) {
+      left = left->get_param_expr(0);
+    }
+  } else if (T_OP_LIKE != cmp_type && T_FUN_SYS_CAST == right->get_expr_type()) {
+    if (OB_ISNULL(right->get_param_expr(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(right));
+    } else if (T_REF_COLUMN != right->get_param_expr(0)->get_expr_type()) {
+      // do nothing
+    } else if (OB_FAIL(can_extract_implicit_cast_range(get_opposite_compare_type(cmp_type),
+                                                       *static_cast<ObColumnRefRawExpr*>(right->get_param_expr(0)),
+                                                       *left,
+                                                       can_extract))) {
+      LOG_WARN("failed to check implicit collation range", K(ret));
+    } else if (can_extract) {
+      right = right->get_param_expr(0);
+    }
   }
   return ret;
 }

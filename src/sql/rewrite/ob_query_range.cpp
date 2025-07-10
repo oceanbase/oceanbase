@@ -1421,11 +1421,11 @@ bool ObQueryRange::can_be_extract_range(ObItemType cmp_type,
         bret = true;
       } else if (col_type.get_collation_type() == calc_type.get_collation_type()) {
         bret = true;
-      } else if (OB_FAIL(ObExprRangeConverter::is_implicit_collation_range_valid(
-                                               cmp_type,
-                                               col_type.get_collation_type(),
-                                               calc_type.get_collation_type(),
-                                               is_valid))) {
+      } else if (OB_FAIL(ObOptimizerUtil::is_implicit_collation_range_valid(
+                                          cmp_type,
+                                          col_type.get_collation_type(),
+                                          calc_type.get_collation_type(),
+                                          is_valid))) {
         LOG_WARN("failed to check is implicit collation range valid", K(ret));
       } else if (is_valid) {
         bret = true;

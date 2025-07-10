@@ -269,6 +269,14 @@ int ObTransformUtils::is_simple_correlated_pred(const ObIArray<ObExecParamRawExp
         OB_ISNULL(right = cond->get_param_expr(1))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", K(ret), K(left), K(right));
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(left, left, true, true)) ||
+                OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(right, right, true, true))) {
+      LOG_WARN("failed to get expr without lossless cast", K(ret));
+    } else if ((OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(left, left)) ||
+                OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(right, right)))) {
+      LOG_WARN("failed to get column expr without nvl", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::eliminate_implicit_cast_for_range(left, right, cond->get_expr_type()))) {
+      LOG_WARN("failed to eliminate implicit cast for range", K(ret));
     } else if (left->is_column_ref_expr() &&
                right->is_const_expr()) {
       col_expr = static_cast<ObColumnRefRawExpr *>(left);
@@ -3052,6 +3060,8 @@ int ObTransformUtils::get_simple_filter_column(const ObDMLStmt *stmt,
                    (OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(left, left)) ||
                     OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(right, right)))) {
           LOG_WARN("failed to get column expr without nvl", K(ret));
+        } else if (OB_FAIL(ObOptimizerUtil::eliminate_implicit_cast_for_range(left, right, expr->get_expr_type()))) {
+          LOG_WARN("failed to eliminate implicit cast for range", K(ret));
         } else if (left->is_column_ref_expr() &&
                    table_id == static_cast<ObColumnRefRawExpr*>(left)->get_table_id()) {
           if (right->get_relation_ids().has_member(stmt->get_table_bit_index(table_id))) {
@@ -3266,6 +3276,17 @@ int ObTransformUtils::get_simple_filter_column_in_parent_stmt(const ObDMLStmt *r
         if (OB_ISNULL(sel_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpect null expr", K(ret));
+        } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(sel_expr, sel_expr))) {
+          LOG_WARN("failed to get expr without lossless cast", K(ret));
+        } else if (OB_NOT_NULL(sel_expr) &&
+                  T_FUN_SYS_CAST == sel_expr->get_expr_type() &&
+                  OB_NOT_NULL(sel_expr->get_param_expr(0)) &&
+                  ObOptimizerUtil::is_type_for_extact_implicit_cast_range(sel_expr->get_param_expr(0)->get_result_type()) &&
+                  OB_FALSE_IT(sel_expr = sel_expr->get_param_expr(0))) {
+          // To handle cases where ranges can be extracted from implicit type conversions,
+          // we separate the upper-level cast here.
+          // Note: This may result in some false positives (col with cast that can't extract query range),
+          // since whether implicit cast range can be extracted also depends on the compare type and result type of other cmp expr.
         } else if (!sel_expr->is_column_ref_expr()) {
           //do nothing
         } else if (OB_FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr*>(sel_expr))) {
@@ -3399,6 +3420,17 @@ int ObTransformUtils::check_select_item_match_index(const ObDMLStmt *root_stmt,
       if (OB_ISNULL(sel_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(sel_expr, sel_expr))) {
+        LOG_WARN("failed to get expr without lossless cast", K(ret));
+      } else if (OB_NOT_NULL(sel_expr) &&
+                 T_FUN_SYS_CAST == sel_expr->get_expr_type() &&
+                 OB_NOT_NULL(sel_expr->get_param_expr(0)) &&
+                 ObOptimizerUtil::is_type_for_extact_implicit_cast_range(sel_expr->get_param_expr(0)->get_result_type()) &&
+                 OB_FALSE_IT(sel_expr = sel_expr->get_param_expr(0))) {
+        // To handle cases where ranges can be extracted from implicit type conversions,
+        // we separate the upper-level cast here.
+        // Note: This may result in some false positives (col with cast that can't extract query range),
+        // since whether implicit cast range can be extracted also depends on the compare type and result type of other cmp expr.
       } else if (!sel_expr->is_column_ref_expr()) {
         //do nothing
       } else if (OB_FALSE_IT(col = static_cast<ObColumnRefRawExpr*>(sel_expr))) {
