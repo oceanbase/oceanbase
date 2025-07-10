@@ -149,6 +149,7 @@ TEST_F(TestUpgradePath, last_lts) // 421x
     {DATA_VERSION_4_2_5_3, true},
     {DATA_VERSION_4_2_5_4, true},
     {DATA_VERSION_4_2_5_5, true},
+    {DATA_VERSION_4_2_5_6, true},
   });
   // 421 11
   versions.insert(DATA_VERSION_4_2_1_11);
@@ -165,6 +166,7 @@ TEST_F(TestUpgradePath, last_lts) // 421x
     {DATA_VERSION_4_2_5_3, true},
     {DATA_VERSION_4_2_5_4, true},
     {DATA_VERSION_4_2_5_5, true},
+    {DATA_VERSION_4_2_5_6, true},
   });
   ASSERT_EQ(versions.size(), ObUpgradeChecker::get_upgrade_path_last_size_());
 }
@@ -188,6 +190,7 @@ TEST_F(TestUpgradePath, current_lts) // 42x
     {DATA_VERSION_4_2_5_3, true},
     {DATA_VERSION_4_2_5_4, true},
     {DATA_VERSION_4_2_5_5, true},
+    {DATA_VERSION_4_2_5_6, true},
   });
   // 4221
   versions.insert(DATA_VERSION_4_2_2_1);
@@ -202,6 +205,7 @@ TEST_F(TestUpgradePath, current_lts) // 42x
     {DATA_VERSION_4_2_5_3, true},
     {DATA_VERSION_4_2_5_4, true},
     {DATA_VERSION_4_2_5_5, true},
+    {DATA_VERSION_4_2_5_6, true},
   });
   // 4230
   versions.insert(DATA_VERSION_4_2_3_0);
@@ -215,6 +219,7 @@ TEST_F(TestUpgradePath, current_lts) // 42x
     {DATA_VERSION_4_2_5_3, true},
     {DATA_VERSION_4_2_5_4, true},
     {DATA_VERSION_4_2_5_5, true},
+    {DATA_VERSION_4_2_5_6, true},
   });
   // 4231
   versions.insert(DATA_VERSION_4_2_3_1);
@@ -227,6 +232,7 @@ TEST_F(TestUpgradePath, current_lts) // 42x
     {DATA_VERSION_4_2_5_3, true},
     {DATA_VERSION_4_2_5_4, true},
     {DATA_VERSION_4_2_5_5, true},
+    {DATA_VERSION_4_2_5_6, true},
   });
   // 4240
   versions.insert(DATA_VERSION_4_2_4_0);
@@ -238,6 +244,7 @@ TEST_F(TestUpgradePath, current_lts) // 42x
     {DATA_VERSION_4_2_5_3, true},
     {DATA_VERSION_4_2_5_4, true},
     {DATA_VERSION_4_2_5_5, true},
+    {DATA_VERSION_4_2_5_6, true},
   });
   // 4250
   versions.insert(DATA_VERSION_4_2_5_0);
@@ -248,6 +255,7 @@ TEST_F(TestUpgradePath, current_lts) // 42x
     {DATA_VERSION_4_2_5_3, true},
     {DATA_VERSION_4_2_5_4, true},
     {DATA_VERSION_4_2_5_5, true},
+    {DATA_VERSION_4_2_5_6, true},
   });
   // 4251
   versions.insert(DATA_VERSION_4_2_5_1);
@@ -257,6 +265,7 @@ TEST_F(TestUpgradePath, current_lts) // 42x
     {DATA_VERSION_4_2_5_3, true},
     {DATA_VERSION_4_2_5_4, true},
     {DATA_VERSION_4_2_5_5, true},
+    {DATA_VERSION_4_2_5_6, true},
   });
   // 4252
   versions.insert(DATA_VERSION_4_2_5_2);
@@ -265,6 +274,7 @@ TEST_F(TestUpgradePath, current_lts) // 42x
     {DATA_VERSION_4_2_5_3, true},
     {DATA_VERSION_4_2_5_4, true},
     {DATA_VERSION_4_2_5_5, true},
+    {DATA_VERSION_4_2_5_6, true},
   });
   //4253
   versions.insert(DATA_VERSION_4_2_5_3);
@@ -272,16 +282,24 @@ TEST_F(TestUpgradePath, current_lts) // 42x
   check_upgrade_path(path, {
     {DATA_VERSION_4_2_5_4, true},
     {DATA_VERSION_4_2_5_5, true},
+    {DATA_VERSION_4_2_5_6, true},
   });
   //4254
   versions.insert(DATA_VERSION_4_2_5_4);
   ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(DATA_VERSION_4_2_5_4, path), OB_SUCCESS);
   check_upgrade_path(path, {
     {DATA_VERSION_4_2_5_5, true},
+    {DATA_VERSION_4_2_5_6, true},
   });
   //4255
   versions.insert(DATA_VERSION_4_2_5_5);
   ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(DATA_VERSION_4_2_5_5, path), OB_SUCCESS);
+  check_upgrade_path(path, {
+    {DATA_VERSION_4_2_5_6, true},
+  });
+  //4256
+  versions.insert(DATA_VERSION_4_2_5_6);
+  ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(DATA_VERSION_4_2_5_6, path), OB_SUCCESS);
   check_upgrade_path(path, {
   });
   ASSERT_EQ(versions.size(), ObUpgradeChecker::get_upgrade_path_current_size_());
