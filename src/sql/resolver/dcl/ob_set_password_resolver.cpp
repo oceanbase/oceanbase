@@ -177,9 +177,9 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
                      resolve_oracle_password_strength(user_name, host_name, password))) {
             LOG_WARN("fail to check password strength", K(ret));
           } else if (0 != password.length()) {//set password
-            const ParseNode *from_alter = node->children_[5];
-            if (OB_NOT_NULL(from_alter)) {
+            if (!lib::is_oracle_mode() && OB_NOT_NULL(node->children_[5])) {
               // alter user set xxx
+              const ParseNode *from_alter = node->children_[5];
               bool need_enc = (1 == node->children_[2]->value_) ? true : false;
               if (OB_UNLIKELY(!need_enc && (!is_valid_mysql41_passwd(password)))) {
                 ret = OB_ERR_PASSWORD_FORMAT;
