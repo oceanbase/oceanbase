@@ -22,130 +22,92 @@ using namespace common;
 
 namespace observer
 {
-ObAllLatch::ObAllLatch()
-    : ObVirtualTableIterator(),
-      addr_(NULL),
-      iter_(0),
-      latch_iter_(0),
-      tenant_dis_()
-{
-}
-
-ObAllLatch::~ObAllLatch()
-{
-  reset();
-}
 
 int ObAllLatch::inner_open()
 {
   int ret = OB_SUCCESS;
-  tenant_dis_.reset();
   return ret;
 }
 
 void ObAllLatch::reset()
 {
+  omt::ObMultiTenantOperator::reset();
   addr_ = NULL;
-  iter_ = 0;
   latch_iter_ = 0;
-  tenant_dis_.reset();
+  tenant_di_.reset();
+  ObVirtualTableScannerIterator::reset();
 }
 
-int ObAllLatch::get_all_diag_info()
-{
-  int ret = OB_SUCCESS;
-  if (is_sys_tenant(effective_tenant_id_)) {
-    common::ObVector<uint64_t> ids;
-    GCTX.omt_->get_tenant_ids(ids);
-    for (int64_t i = 0; OB_SUCC(ret) && i < ids.size(); ++i) {
-    uint64_t tenant_id = ids[i];
-    if (!is_virtual_tenant_id(tenant_id)) {
-      MTL_SWITCH(tenant_id)
-      {
-        if (OB_FAIL(get_the_diag_info(tenant_id))) {
-          SERVER_LOG(WARN, "Fail to get tenant latch stat", KR(ret), K(tenant_id));
-        }
-      }
-    }
-  }
-  } else if (OB_FAIL(get_the_diag_info(effective_tenant_id_))) {
-    SERVER_LOG(WARN, "Fail to get tenant latch stat", KR(ret), K_(effective_tenant_id));
-  }
-  return ret;
-}
 
 int ObAllLatch::get_the_diag_info(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  void *buf = NULL;
-  if (OB_ISNULL(allocator_)) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "allocator is null", KR(ret));
-  } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(common::ObDiagnoseTenantInfo)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    SERVER_LOG(WARN, "Fail to alloc buf", KR(ret));
-  } else {
-    std::pair<uint64_t, common::ObDiagnoseTenantInfo*> pair;
-    pair.first = tenant_id;
-    pair.second = new (buf) common::ObDiagnoseTenantInfo(allocator_);
-    if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(tenant_id, *(pair.second)))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        SERVER_LOG(WARN, "Fail to get tenant latch stat", KR(ret), K(tenant_id));
-      }
-    } else if (OB_FAIL(tenant_dis_.push_back(pair))) {
-      SERVER_LOG(WARN, "Fail to push diag info value to array", KR(ret), K(tenant_id));
+  if (OB_FAIL(share::ObDiagnosticInfoUtil::get_the_diag_info(tenant_id, tenant_di_))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      SERVER_LOG(WARN, "Fail to get tenant latch stat", KR(ret), K(tenant_id));
     }
   }
   return ret;
 }
 
+
 int ObAllLatch::inner_get_next_row(ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(execute(row))) {
+    SERVER_LOG(WARN, "execute fail", K(ret));
+  }
+  return ret;
+}
+
+int ObAllLatch::process_curr_tenant(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(allocator_) || OB_ISNULL(addr_)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "Some variable is null", K_(allocator), K_(addr), K(ret));
   } else {
-    if (0 == iter_ && 0 == latch_iter_) {
-      ret = get_all_diag_info();
-      if (OB_FAIL(ret)) {
+    if (0 == latch_iter_) {
+      if (OB_FAIL(get_the_diag_info(MTL_ID()))) {
         SERVER_LOG(WARN, "Fail to get tenant status", K(ret));
       }
     }
-    if (OB_SUCC(ret)) {
-      if (iter_ >= tenant_dis_.count()) {
-        ret = OB_ITER_END;
-      }
+    if (latch_iter_ >= ObLatchIds::LATCH_END) {
+      ret = OB_ITER_END;
     }
 
     if (OB_SUCC(ret)) {
       ObObj *cells = cur_row_.cells_;
-      std::pair<uint64_t, common::ObDiagnoseTenantInfo*> dipair;
       ObString ipstr;
       if (OB_ISNULL(cells)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "cur row cell is NULL", K(ret));
-      } else if (OB_FAIL(tenant_dis_.at(iter_, dipair))) {
-        SERVER_LOG(WARN, "Fail to get tenant dis", K_(iter), K(ret));
       } else if (latch_iter_ >= ObLatchIds::LATCH_END) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "The latch iter exceed", K_(latch_iter), K(ret));
       } else if (OB_FAIL(ObServerUtils::get_server_ip(allocator_, ipstr))) {
         SERVER_LOG(ERROR, "get server ip failed", K(ret));
       }
+      ObLatchStat *p_latch_stat = tenant_di_.get_latch_stats().get_item(latch_iter_);
+      while(OB_SUCC(ret) && OB_ISNULL(p_latch_stat)) {
+        latch_iter_++;
+        if (latch_iter_ >= ObLatchIds::LATCH_END) {
+          ret = OB_ITER_END;
+        } else {
+          p_latch_stat = tenant_di_.get_latch_stats().get_item(latch_iter_);
+        }
+      }
 
       for (int64_t cell_idx = 0;
-          OB_SUCC(ret) && cell_idx < output_column_ids_.count();
+          OB_SUCC(ret) &&  OB_NOT_NULL(p_latch_stat) && cell_idx < output_column_ids_.count();
           ++cell_idx) {
-        const uint64_t column_id = output_column_ids_.at(cell_idx);
-        ObLatchStat *p_latch_stat = dipair.second->get_latch_stats().get_item(latch_iter_);
-        if (OB_ISNULL(p_latch_stat)) continue;
         const ObLatchStat& latch_stat = *p_latch_stat;
+        const uint64_t column_id = output_column_ids_.at(cell_idx);
         switch(column_id) {
         case TENANT_ID: {
-            cells[cell_idx].set_int(dipair.first);
+            cells[cell_idx].set_int(MTL_ID());
             break;
           }
         case SVR_IP: {
@@ -218,10 +180,6 @@ int ObAllLatch::inner_get_next_row(ObNewRow *&row)
 
       if (OB_SUCC(ret)) {
         row = &cur_row_;
-        if (++latch_iter_ >= ObLatchIds::LATCH_END) {
-          latch_iter_ = 0;
-          iter_++;
-        }
       }
     }
   }

@@ -18,6 +18,7 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "common/row/ob_row.h"
 #include "sql/monitor/ob_sql_stat_record.h"
+#include "observer/omt/ob_multi_tenant_operator.h"
 
 namespace oceanbase
 {
@@ -35,42 +36,29 @@ public:
   common::ObIArray<uint64_t> *key_array_;
 };
 
-class ObAllVirtualSqlStatIter
+class ObAllVirtualSqlStat : public common::ObVirtualTableScannerIterator,
+                            public omt::ObMultiTenantOperator
 {
 public:
-  ObAllVirtualSqlStatIter();
-  ~ObAllVirtualSqlStatIter() { destroy(); }
-public:
-  void destroy();
-  void reset();
-  int init(ObIAllocator *allocator, const uint64_t effective_tenant_id);
-  int get_next_sql_stat(sql::ObExecutedSqlStatRecord &sql_stat_value,
-                        uint64_t &tenant_id);
-  bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo *sess_info);
-
-private:
-  int get_next_batch_sql_stat();
-private:
-  ObIAllocator *allocator_;
-  common::ObSEArray<uint64_t, 16> tenant_ids_;
-  int64_t cur_nth_tenant_;
-  uint64_t cur_tenant_id_;
-  TmpSqlStatMap tmp_sql_stat_map_;
-  common::ObSEArray<uint64_t, 1024> sql_stat_cache_id_array_;
-  int64_t sql_stat_cache_id_array_idx_;
-};
-
-class ObAllVirtualSqlStat : public common::ObVirtualTableScannerIterator
-{
-public:
-  ObAllVirtualSqlStat();
-  virtual ~ObAllVirtualSqlStat() { destroy(); }
+  ObAllVirtualSqlStat() :
+      ipstr_(), port_(0), last_sql_stat_record_(nullptr),
+      tmp_sql_stat_map_(),
+      sql_stat_cache_id_array_(),
+      sql_stat_cache_id_array_idx_(0),
+      first_enter_(true) {}
+  virtual ~ObAllVirtualSqlStat() { reset(); }
 
 public:
-  void destroy();
   void reset();
   int inner_get_next_row(common::ObNewRow *&row);
-
+  virtual void release_last_tenant() override;
+  bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo *sess_info);
+  virtual bool is_need_process(uint64_t tenant_id) override {
+    if (is_sys_tenant(effective_tenant_id_) || tenant_id == effective_tenant_id_) {
+      return true;
+    }
+    return false;
+  }
 private:
   enum STORAGE_COLUMN
   {
@@ -140,11 +128,17 @@ private:
                const ObExecutedSqlStatRecord *sql_stat_record,
                common::ObNewRow *&row);
   int get_server_ip_and_port();
+  virtual int process_curr_tenant(common::ObNewRow *&row) override;
+  int load_next_batch_sql_stat();
+  int get_next_sql_stat(sql::ObExecutedSqlStatRecord &sql_stat_value);
 private:
   common::ObString ipstr_;
   int32_t port_;
-  ObAllVirtualSqlStatIter iter_;
   ObExecutedSqlStatRecord *last_sql_stat_record_;
+  TmpSqlStatMap tmp_sql_stat_map_;
+  common::ObSEArray<uint64_t, 1024> sql_stat_cache_id_array_;
+  int64_t sql_stat_cache_id_array_idx_;
+  bool first_enter_;
 };
 
 
