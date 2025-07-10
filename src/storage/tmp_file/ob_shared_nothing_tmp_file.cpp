@@ -916,16 +916,21 @@ int ObSharedNothingTmpFile::write_partly_page_(ObTmpFileIOWriteCtx &io_ctx,
   } else if (FALSE_IT(block = block_handle.get())) {
   } else if (OB_FAIL(write_cache_->shared_lock(fd_))) {
     LOG_WARN("fail to shared lock", KR(ret), K(fd_));
-  } else if (alloc_partly_write_page_(io_ctx, virtual_page_id, page_id, block_handle, page_handle)) {
-    LOG_WARN("fail to alloc partly write page", KR(ret), K(fd_), K(virtual_page_id), K(page_id), K(block_handle));
-  } else if (OB_UNLIKELY(!page_handle.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("page handle is not valid", KR(ret), K(fd_), K(virtual_page_id), K(page_handle));
-  } else if (FALSE_IT(page = page_handle.get_page())) {
-  } else if (OB_FAIL(inner_write_page_(page_offset, write_size, write_buf, page_handle, block_handle))) {
-    LOG_WARN("fail to write page", KR(ret), K(fd_), K(virtual_page_id), KPC(page), KPC(block));
-  } else if (OB_FAIL(write_cache_->unlock(fd_))) {
-    LOG_ERROR("fail to unlock", KR(ret), K(fd_));
+  } else {
+    if (OB_FAIL(alloc_partly_write_page_(io_ctx, virtual_page_id, page_id, block_handle, page_handle))) {
+      LOG_WARN("fail to alloc partly write page", KR(ret), K(fd_), K(virtual_page_id), K(page_id), K(block_handle));
+    } else if (OB_UNLIKELY(!page_handle.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("page handle is not valid", KR(ret), K(fd_), K(virtual_page_id), K(page_handle));
+    } else if (FALSE_IT(page = page_handle.get_page())) {
+    } else if (OB_FAIL(inner_write_page_(page_offset, write_size, write_buf, page_handle, block_handle))) {
+      LOG_WARN("fail to write page", KR(ret), K(fd_), K(virtual_page_id), KPC(page), KPC(block));
+    }
+
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(write_cache_->unlock(fd_))) {
+      LOG_ERROR("fail to unlock", KR(tmp_ret), K(fd_), KPC(this));
+    }
   }
 
   return ret;
