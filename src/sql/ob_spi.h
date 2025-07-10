@@ -768,7 +768,12 @@ public:
 
   static int spi_destruct_collection(pl::ObPLExecCtx *ctx, int64_t idx);
 
-  static int spi_sub_nestedtable(pl::ObPLExecCtx *ctx, int64_t src_idx, int64_t dst_idx, int32_t lower, int32_t upper);
+  static int spi_sub_nestedtable(pl::ObPLExecCtx *ctx,
+                                 int64_t src_expr_idx,
+                                 int64_t dst_coll_idx,
+                                 int64_t index_idx,
+                                 int32_t lower,
+                                 int32_t upper);
 
 #ifdef OB_BUILD_ORACLE_PL
   static int spi_extend_assoc_array(int64_t tenant_id,

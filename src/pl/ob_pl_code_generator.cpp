@@ -4397,9 +4397,11 @@ int ObPLCodeGenerator::init_spi_service()
     arg_types.reset();
     if (OB_FAIL(arg_types.push_back(pl_exec_context_pointer_type))) { // 函数第一个参数必须是基础环境信息隐藏参数
       LOG_WARN("push_back error", K(ret));
-    } else if (OB_FAIL(arg_types.push_back(int64_type))) { //src index
+    } else if (OB_FAIL(arg_types.push_back(int64_type))) { //src expr index
       LOG_WARN("push_back error", K(ret));
-    } else if (OB_FAIL(arg_types.push_back(int64_type))) { //dest index
+    } else if (OB_FAIL(arg_types.push_back(int64_type))) { //dest coll index
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(int64_type))) { //index
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(int32_type))) { //subarray lower pos
       LOG_WARN("push_back error", K(ret));
@@ -5940,8 +5942,8 @@ int ObPLCodeGenerator::generate_bound_and_check(const ObPLForLoopStmt &s,
     if (OB_SUCC(ret) && is_forall) {
       const ObPLForAllStmt *forall_stmt = static_cast<const ObPLForAllStmt*>(&s);
       CK (OB_NOT_NULL(forall_stmt));
-      if (OB_SUCC(ret)) {
-        ObLLVMValue src_idx_value, dst_idx_value, ret_err;
+      if (OB_SUCC(ret) && OB_NOT_NULL(forall_stmt->get_sql_stmt()) && forall_stmt->get_sql_stmt()->is_forall_sql()) {
+        ObLLVMValue src_idx_value, dst_idx_value, index_value, ret_err;
         ObSEArray<ObLLVMValue, 5> args;
         const hash::ObHashMap<int64_t, int64_t> &sub_map = forall_stmt->get_tab_to_subtab_map();
         for (hash::ObHashMap<int64_t, int64_t>::const_iterator it = sub_map.begin();
@@ -5951,9 +5953,11 @@ int ObPLCodeGenerator::generate_bound_and_check(const ObPLForLoopStmt &s,
           int64_t dst_idx = (*it).second;
           OZ (get_helper().get_int64(src_idx, src_idx_value));
           OZ (get_helper().get_int64(dst_idx, dst_idx_value));
+          OZ (get_helper().get_int64(s.get_ident(), index_value));
           OZ (args.push_back(get_vars().at(CTX_IDX)));
           OZ (args.push_back(src_idx_value));
           OZ (args.push_back(dst_idx_value));
+          OZ (args.push_back(index_value));
           OZ (args.push_back(lower_value));
           OZ (args.push_back(upper_value));
           OZ (get_helper().create_call(ObString("spi_sub_nestedtable"),

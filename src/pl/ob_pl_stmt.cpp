@@ -961,7 +961,8 @@ int ObPLBlockNS::add_type(ObUserDefinedType *type)
   } else if (OB_ISNULL(get_type_table())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("symbol table is NULL", K(ret));
-  } else if (OB_FAIL(check_dup_type(type->get_name(), is_dup, dup_type))) {
+  } else if (!type->get_name().empty()
+             && OB_FAIL(check_dup_type(type->get_name(), is_dup, dup_type))) {
     LOG_WARN("failed to check dup", K(type->get_name()), K(ret));
   } else if (is_dup && !type->is_subtype()) {
     ret = OB_ERR_SP_DUP_TYPE;
