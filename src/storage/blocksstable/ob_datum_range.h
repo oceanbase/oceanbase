@@ -391,13 +391,13 @@ OB_INLINE int ObDatumRange::deep_copy(const ObDatumRange& src, ObIAllocator& all
 
   OB_INLINE int64_t ObDatumRange::get_group_idx() const
   {
-    return GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_3 ? group_idx_ :
+    return GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_0 ? group_idx_ :
     (static_cast<int64_t>(group_idx_) << 32) | (index_ordered_idx_ * 0xffffffff);
   }
 
   OB_INLINE void ObDatumRange::set_group_idx(const int64_t group_idx)
   {
-    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_3) {
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_0) {
       group_idx_ = group_idx;
     } else {
       group_idx_ = group_idx >> 32;
