@@ -2885,3 +2885,6 @@ DEF_STR(_object_storage_condition_put_mode, OB_CLUSTER_PARAMETER, "none",
         "\"none\": no conditional put."
         "\"if-match\": conditional put with if-match.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE), "none, if-match");
+DEF_BOOL(_prexec_prepare_with_params, OB_TENANT_PARAMETER, "False",
+         "Control the prexec protocol prepare with or without parameters during the prepare phase.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
