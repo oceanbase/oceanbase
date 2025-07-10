@@ -2961,7 +2961,7 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
         ObVectorIndexAlgorithmType index_type;
         ObString key_prefix;
         ObString target_prefix;
-        if (OB_FAIL(ob_write_string(*allocator_, row->storage_datums_[0].get_string(), key_prefix))) {
+        if (OB_FAIL(ob_write_string(tmp_allocator, row->storage_datums_[0].get_string(), key_prefix))) {
           LOG_WARN("failed to write string", K(ret), K(row->storage_datums_[0].get_string()));
         } else if (OB_FAIL(ObPluginVectorIndexUtils::iter_table_rescan(*query_cond->scan_param_, table_scan_iter))) {
           LOG_WARN("failed to rescan", K(ret));
