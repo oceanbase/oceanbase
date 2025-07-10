@@ -876,12 +876,17 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
         || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == alter_table_arg.alter_part_type_
         || obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
         || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_)) {
-      common::ObSArray<ObAlterTableResArg> &res_array = res.res_arg_array_;
-      for (int64_t i = 0; OB_SUCC(ret) && i < res_array.size(); ++i) {
+      const ObIArray<ObAlterTableResArg> &res_array = res.res_arg_array_;
+      const ObIArray<obrpc::ObDDLRes> &ddl_res_array = res.ddl_res_array_;
+      if (OB_UNLIKELY(res_array.count() != ddl_res_array.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("res_array and ddl_res_array count mismatch", K(ret), K(res_array.count()), K(ddl_res_array.count()));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < res_array.count(); ++i) {
         SMART_VAR(obrpc::ObCreateIndexArg, create_index_arg) {
           create_index_arg.index_schema_.set_table_id(res_array.at(i).schema_id_);
           create_index_arg.index_schema_.set_schema_version(res_array.at(i).schema_version_);
-          if (OB_FAIL(create_index_executor.sync_check_index_status(*my_session, *common_rpc_proxy, create_index_arg, res, allocator))) {
+          if (OB_FAIL(create_index_executor.sync_check_index_status(*my_session, *common_rpc_proxy, create_index_arg, ddl_res_array.at(i).task_id_, allocator))) {
             LOG_WARN("failed to sync_check_index_status", KR(ret), K(create_index_arg), K(i));
           }
         }
@@ -891,6 +896,8 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
     } else if (is_create_index(res.ddl_type_) || DDL_NORMAL_TYPE == res.ddl_type_) {
       // TODO(shuangcan): alter table create index returns DDL_NORMAL_TYPE now, check if we can fix this later
       // 同步等索引建成功
+      const ObIArray<ObAlterTableResArg> &res_array = res.res_arg_array_;
+      const ObIArray<obrpc::ObDDLRes> &ddl_res_array = res.ddl_res_array_;
       for (int64_t i = 0; OB_SUCC(ret) && i < add_index_arg_list.size(); ++i) {
         obrpc::ObIndexArg *index_arg = add_index_arg_list.at(i);
         obrpc::ObCreateIndexArg *create_index_arg = NULL;
@@ -910,7 +917,10 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
           create_index_arg->index_schema_.set_table_id(res.res_arg_array_.at(i).schema_id_);
           create_index_arg->index_schema_.set_schema_version(res.res_arg_array_.at(i).schema_version_);
           // 只考虑非备份恢复时的索引同步检查
-          if (OB_FAIL(create_index_executor.sync_check_index_status(*my_session, *common_rpc_proxy, *create_index_arg, res, allocator))) {
+          if (OB_UNLIKELY(i >= ddl_res_array.count())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("ddl_res_array count mismatch", K(ret), K(i), K(ddl_res_array.count()));
+          } else if (OB_FAIL(create_index_executor.sync_check_index_status(*my_session, *common_rpc_proxy, *create_index_arg, ddl_res_array.at(i).task_id_, allocator))) {
             failed_index_no = i;
             LOG_WARN("failed to sync_check_index_status", KR(ret), K(*create_index_arg), K(i));
           }

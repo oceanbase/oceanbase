@@ -2775,7 +2775,7 @@ private:
                                const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
                                obrpc::ObDropIndexArg *drop_index_arg,
                                ObDDLOperator &ddl_operator,
-                               obrpc::ObAlterTableRes &res,
+                               ObIArray<obrpc::ObDDLRes> &ddl_res_array,
                                ObIArray<ObDDLTaskRecord> &ddl_tasks);
   template <class TTableSchema>
   int get_tablets_with_table_id_(const ObArray<TTableSchema *> &table_schemas,

@@ -195,7 +195,7 @@ int ObCreateIndexExecutor::set_drop_index_stmt_str(
 int ObCreateIndexExecutor::sync_check_index_status(sql::ObSQLSessionInfo &my_session,
     obrpc::ObCommonRpcProxy &common_rpc_proxy,
     const obrpc::ObCreateIndexArg &create_index_arg,
-    const obrpc::ObAlterTableRes &res,
+    const int64_t ddl_task_id,
     common::ObIAllocator &allocator,
     bool is_update_global_indexes)
 {
@@ -291,8 +291,8 @@ int ObCreateIndexExecutor::sync_check_index_status(sql::ObSQLSessionInfo &my_ses
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObDDLExecutorUtil::wait_build_index_finish(tenant_id, res.task_id_, is_finish))) {
-      LOG_WARN("wait build index finish failed", K(ret), K(tenant_id), K(res.task_id_));
+    } else if (OB_FAIL(ObDDLExecutorUtil::wait_build_index_finish(tenant_id, ddl_task_id, is_finish))) {
+      LOG_WARN("wait build index finish failed", K(ret), K(tenant_id), K(ddl_task_id));
     } else if (!is_finish) {
       ob_usleep(CHECK_INTERVAL);
       LOG_INFO("index status is not final", K(index_table_id));

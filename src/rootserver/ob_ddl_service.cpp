@@ -5919,7 +5919,6 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
   ObIndexBuilder index_builder(*this);
   const ObSArray<ObIndexArg *> &index_arg_list = alter_table_arg.index_arg_list_;
   common::ObArray<const ObForeignKeyInfo *> drop_parent_table_mock_foreign_key_infos_array;
-  ObIArray<obrpc::ObDDLRes> &ddl_res_array = res.ddl_res_array_;
   // To many hashset will fill up the stack, construct them on heap instead
   HEAP_VAR(AddIndexNameHashSet, add_index_name_set) {
   HEAP_VAR(DropIndexNameHashSet, drop_index_name_set) {
@@ -6145,7 +6144,7 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
             } else if (drop_index_arg->is_add_to_scheduler_) {
               if (OB_FAIL(drop_index_to_scheduler_(trans, schema_guard, alter_table_arg.allocator_, origin_table_schema,
                           nullptr /*inc_tablet_ids*/, nullptr /*del_tablet_ids*/, drop_index_arg,
-                          ddl_operator, res, ddl_tasks))) {
+                          ddl_operator, res.ddl_res_array_, ddl_tasks))) {
                 LOG_WARN("fail to drop index to scheduler", KR(ret), K(drop_index_arg));
               }
             } else {
@@ -12744,13 +12743,16 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             // TODO @wenyu alter table drop index submit drop index task in alter_table_index() now.
             //             should be unified here
             } else if (ObIndexArg::DROP_INDEX == index_arg->index_action_type_ && !alter_table_arg.is_alter_indexs_) {
+              // Update global indexes op will generate background drop_index_ddl_tasks, but the table-executor does not need to perceive them.
+              // The table-executor only need to wait all rebuilt-indexes take effect, which is different to `alter table drop index…` op. @wenyu
+              ObArray<obrpc::ObDDLRes> unused_ddl_res_array;
               ObDropIndexArg *drop_index_arg = static_cast<ObDropIndexArg *>(index_arg);
               if (OB_ISNULL(drop_index_arg)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("drop index arg is null", KR(ret));
               } else if (OB_FAIL(drop_index_to_scheduler_(trans, schema_guard, alter_table_arg.allocator_ , *orig_table_schema,
                                                           &inc_tablet_ids, &del_tablet_ids, drop_index_arg,
-                                                          ddl_operator, res, ddl_tasks))) {
+                                                          ddl_operator, unused_ddl_res_array, ddl_tasks))) {
                 LOG_WARN("fail to drop index to scheduler", KR(ret), KPC(drop_index_arg));
               }
             }
@@ -40012,15 +40014,13 @@ int ObDDLService::drop_index_to_scheduler_(ObMySQLTransaction &trans,
                                            const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
                                            obrpc::ObDropIndexArg *drop_index_arg,
                                            ObDDLOperator &ddl_operator,
-                                           obrpc::ObAlterTableRes &res,
+                                           ObIArray<obrpc::ObDDLRes> &ddl_res_array,
                                            ObIArray<ObDDLTaskRecord> &ddl_tasks)
 {
   int ret = OB_SUCCESS;
-  ObDDLRes ddl_res;
   ObDDLTaskRecord task_record;
   const ObTableSchema *index_table_schema = nullptr;
   ObIndexBuilder index_builder(*this);
-  ObIArray<obrpc::ObDDLRes> &ddl_res_array = res.ddl_res_array_;
   if (OB_ISNULL(drop_index_arg)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("drop index arg is nullptr", KR(ret));
