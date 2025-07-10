@@ -12721,21 +12721,25 @@ NAME_OB
 ;
 
 optimize_hint:
-INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB opt_index_prefix ')'
+INDEX_HINT '(' qb_name_option relation_factor_in_hint opt_comma NAME_OB opt_index_prefix ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_HINT, 4, $3, $4, $5,$6);
+  (void)($5);               /* unused */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_HINT, 4, $3, $4, $6, $7);
 }
-| INDEX_ASC_HINT '(' qb_name_option relation_factor_in_hint NAME_OB opt_index_prefix ')'
+| INDEX_ASC_HINT '(' qb_name_option relation_factor_in_hint opt_comma NAME_OB opt_index_prefix ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ASC_HINT, 4, $3, $4, $5,$6);
+  (void)($5);               /* unused */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ASC_HINT, 4, $3, $4, $6, $7);
 }
-| INDEX_DESC_HINT '(' qb_name_option relation_factor_in_hint NAME_OB opt_index_prefix ')'
+| INDEX_DESC_HINT '(' qb_name_option relation_factor_in_hint opt_comma NAME_OB opt_index_prefix ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_DESC_HINT, 4, $3, $4, $5,$6);
+  (void)($5);               /* unused */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_DESC_HINT, 4, $3, $4, $6, $7);
 }
-| NO_INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
+| NO_INDEX_HINT '(' qb_name_option relation_factor_in_hint opt_comma NAME_OB ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_NO_INDEX_HINT, 3, $3, $4, $5);
+  (void)($5);               /* unused */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_NO_INDEX_HINT, 3, $3, $4, $6);
 }
 | UNION_MERGE_HINT '(' qb_name_option relation_factor_in_hint union_merge_list ')'
 {
