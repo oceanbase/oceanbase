@@ -7005,27 +7005,38 @@ int ObAlterTableResolver::resolve_drop_column(
       } else if (OB_FAIL(alter_column_schema.set_column_name(alter_column_schema.get_origin_column_name()))) {
       } else {
         ObString column_name = alter_column_schema.get_column_name();
-        if (GCONF._enable_pseudo_partition_id &&
-          ObResolverUtils::is_pseudo_partition_column_name(column_name)) {
-          // check table_schema has the partition column or not,
-          // if has drop normally, if not return OB_ERR_COLUMN_DUPLICATE
-          bool is_exist = false;
-          if (OB_ISNULL(params_.schema_checker_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("params_.schema_checker_ is null", K(ret));
-          } else if (OB_ISNULL(params_.session_info_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("params_.session_info_ is null", K(ret));
-          } else if (OB_FAIL(params_.schema_checker_->check_column_exists(
-                params_.session_info_->get_effective_tenant_id(), table_schema_->get_table_id(),
-                column_name, is_exist))) {
-            LOG_WARN("check column exists failed", K(ret), K(column_name));
-          } else if (!is_exist) {
-            ret = OB_ERR_BAD_FIELD_ERROR;
-            LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
-              table_schema_->get_table_name_str().length(),
-              table_schema_->get_table_name_str().ptr());
-            LOG_WARN("invalid partition pseudo column", K(ret), K(column_name));
+        const ObColumnSchemaV2 *origin_col_schema = nullptr;
+        if (nullptr == (origin_col_schema = table_schema_->get_column_schema(column_name))) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
+            table_schema_->get_table_name_str().length(),
+            table_schema_->get_table_name_str().ptr());
+          LOG_WARN("column does not exist", K(ret), K(column_name));
+        } else {
+          alter_column_schema.set_charset_type(origin_col_schema->get_charset_type());
+          alter_column_schema.set_collation_type(origin_col_schema->get_collation_type());
+          if (GCONF._enable_pseudo_partition_id &&
+            ObResolverUtils::is_pseudo_partition_column_name(column_name)) {
+            // check table_schema has the partition column or not,
+            // if has drop normally, if not return OB_ERR_COLUMN_DUPLICATE
+            bool is_exist = false;
+            if (OB_ISNULL(params_.schema_checker_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("params_.schema_checker_ is null", K(ret));
+            } else if (OB_ISNULL(params_.session_info_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("params_.session_info_ is null", K(ret));
+            } else if (OB_FAIL(params_.schema_checker_->check_column_exists(
+                  params_.session_info_->get_effective_tenant_id(), table_schema_->get_table_id(),
+                  column_name, is_exist))) {
+              LOG_WARN("check column exists failed", K(ret), K(column_name));
+            } else if (!is_exist) {
+              ret = OB_ERR_BAD_FIELD_ERROR;
+              LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
+                table_schema_->get_table_name_str().length(),
+                table_schema_->get_table_name_str().ptr());
+              LOG_WARN("invalid partition pseudo column", K(ret), K(column_name));
+            }
           }
         }
         if (OB_SUCC(ret)) {
