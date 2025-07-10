@@ -1234,6 +1234,7 @@ int ObTransformOrExpansion::has_valid_condition(ObDMLStmt &stmt,
 {
   int ret = OB_SUCCESS;
   has_valid = false;
+  bool has_lob = false;
   if (!conds.empty()) {
     ctx.hint_ = static_cast<const ObOrExpandHint*>(get_hint(stmt.get_stmt_hint()));
     bool is_topk = false;
@@ -1241,6 +1242,11 @@ int ObTransformOrExpansion::has_valid_condition(ObDMLStmt &stmt,
     OPT_TRACE("check conditions:", conds);
     if (NULL == expect_ordering) {
       /* do nothing */
+    } else if (OB_FAIL(ObTransformOrExpansion::check_select_expr_has_lob(stmt, has_lob))) {
+      LOG_WARN("failed to check select expr has lob", K(ret));
+    } else if (has_lob) {
+      /* do nothing */
+      OPT_TRACE("stmt has lob, will not try to expand as union distinct");
     } else if (OB_FAIL(StmtUniqueKeyProvider::check_can_set_stmt_unique(&stmt, can_set_distinct))) {
       LOG_WARN("failed to check can set stmt unique", K(ret));
     } else if (!can_set_distinct) {
@@ -3011,7 +3017,9 @@ int ObTransformOrExpansion::check_select_expr_has_lob(ObDMLStmt &stmt, bool &has
         LOG_WARN("unexpected null expr", K(ret), K(select_items.at(i)));
       } else {
         has_lob = ObLongTextType == select_expr->get_data_type() ||
-                  ObLobType == select_expr->get_data_type();
+                  ObLobType == select_expr->get_data_type() ||
+                  (is_oracle_mode() && ObJsonType == select_expr->get_data_type()) ||
+                  ObCollectionSQLType == select_expr->get_data_type();
       }
     }
   } else if (!stmt.is_update_stmt() && !stmt.is_delete_stmt()) {
@@ -3026,7 +3034,9 @@ int ObTransformOrExpansion::check_select_expr_has_lob(ObDMLStmt &stmt, bool &has
         LOG_WARN("unexpected null expr", K(ret), K(column_items.at(i)));
       } else {
         has_lob = ObLongTextType == column_expr->get_data_type() ||
-                  ObLobType == column_expr->get_data_type();
+                  ObLobType == column_expr->get_data_type() ||
+                  (is_oracle_mode() && ObJsonType == column_expr->get_data_type()) ||
+                  ObCollectionSQLType == column_expr->get_data_type();
       }
     }
   }
