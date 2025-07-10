@@ -289,7 +289,11 @@ public:
                K_(values_desc),
                K_(values_vector),
                K_(column_conv_exprs),
-               K_(assignments));
+               K_(assignments),
+               K_(match_condition_exprs),
+               K_(insert_condition_exprs),
+               K_(update_condition_exprs),
+               K_(delete_condition_exprs));
   uint64_t source_table_id_;
   uint64_t target_table_id_;
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> match_condition_exprs_;

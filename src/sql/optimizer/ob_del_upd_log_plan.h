@@ -176,11 +176,6 @@ public:
                                   ObTablePartitionInfo *table_location,
                                   IndexDMLInfo *index_dml_info);
 
-  int check_need_exchange_for_pdml_del_upd(ObLogicalOperator *top,
-                                           const ObExchangeInfo &exch_info,
-                                           uint64_t table_id,
-                                           bool &need_exchange);
-
   int create_index_dml_info(const IndexDMLInfo &orgi_dml_info,
                             IndexDMLInfo *&opt_dml_info);
   //split update index dml info with delete and insert
@@ -259,6 +254,9 @@ protected:
   int extract_assignment_subqueries(ObRawExpr *expr,
                                     ObIArray<ObRawExpr*> &normal_query_refs,
                                     ObIArray<ObRawExpr*> &alias_query_refs);
+  int check_basic_sharding_for_dml_stmt(ObShardingInfo &target_sharding,
+                                        ObLogicalOperator &child,
+                                        bool &is_basic);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDelUpdLogPlan);
 
