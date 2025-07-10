@@ -495,12 +495,17 @@ int ObMViewRefresher::check_fast_refreshable_(
         } else if (!mlog_info.is_valid()) {
           ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
           LOG_WARN("table does not have mlog", KR(ret), K(i), K(dependency_infos), K(mlog_info));
-        } else if (OB_UNLIKELY(mlog_info.get_last_purge_scn() >
-                              refresh_ctx_->mview_info_.get_last_refresh_scn())) {
-          ret = OB_ERR_MLOG_IS_YOUNGER;
-          LOG_WARN("mlog is younger than last refresh", KR(ret), K(refresh_ctx_->mview_info_), K(i),
-                  K(mlog_info));
+        } else {
+          uint64_t check_scn = refresh_ctx_->mview_info_.get_is_synced() ?
+                              refresh_ctx_->mview_info_.get_data_sync_scn():
+                              refresh_ctx_->mview_info_.get_last_refresh_scn();
+          if (OB_UNLIKELY(mlog_info.get_last_purge_scn() > check_scn)) {
+            ret = OB_ERR_MLOG_IS_YOUNGER;
+            LOG_WARN("mlog is younger than last refresh", KR(ret), K(refresh_ctx_->mview_info_), K(i),
+                    K(mlog_info), K(check_scn));
+          }
         }
+        LOG_DEBUG("check fast refresh", K(ret), K(mlog_info), K(refresh_ctx_->mview_info_));
       }
     }
   }
@@ -719,11 +724,15 @@ int ObMViewRefresher::fast_refresh()
             ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
             LOG_WARN("mlog may dropped during refreshing", KR(ret), K(mlog_info));
           }
-        } else if (OB_UNLIKELY(new_mlog_info.get_last_purge_scn() >
-                               mview_info.get_last_refresh_scn())) {
-          ret = OB_ERR_MLOG_IS_YOUNGER;
-          LOG_WARN("mlog is younger than last refresh", KR(ret), K(mview_info), K(i),
-                   K(new_mlog_info));
+        } else {
+          uint64_t check_scn = mview_info.get_is_synced() ?
+                              mview_info.get_data_sync_scn() :
+                              mview_info.get_last_refresh_scn();
+          if (OB_UNLIKELY(new_mlog_info.get_last_purge_scn() > check_scn)) {
+            ret = OB_ERR_MLOG_IS_YOUNGER;
+            LOG_WARN("mlog is younger than last refresh", KR(ret), K(mview_info), K(i),
+                    K(new_mlog_info), K(check_scn));
+          }
         }
       }
     }

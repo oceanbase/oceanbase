@@ -199,7 +199,11 @@ int ObMLogPurger::prepare_for_purge()
               || mview_info.get_refresh_method()== ObMVRefreshMethod::FORCE
               || table_schema->mv_on_query_computation()) {
             // for fast refresh mv or real-query mv
-            min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_last_refresh_scn());
+            if (mview_info.get_is_synced()) {
+              min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_data_sync_scn());
+            } else {
+              min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_last_refresh_scn());
+            }
           }
         }
       }
