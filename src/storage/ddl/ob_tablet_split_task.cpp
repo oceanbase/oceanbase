@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_tablet_split_task.h"
 #include "logservice/ob_log_service.h"
+#include "lib/ob_define.h"
+#include "share/ob_ddl_sim_point.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/access/ob_multiple_scan_merge.h"
 
@@ -912,14 +914,25 @@ int ObTabletSplitDag::report_replica_build_status() const
     } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).build_ddl_single_replica_response(arg))) {
       LOG_WARN("fail to send build ddl single replica response", K(ret), K(arg));
     }
+    bool is_split_executor = true;
+  #ifdef OB_BUILD_SHARED_STORAGE
+    is_split_executor = GCTX.is_shared_storage_mode() ? context_.is_data_split_executor_ : is_split_executor;
+  #endif
+    char split_basic_info[common::MAX_ROOTSERVICE_EVENT_VALUE_LENGTH/*512*/];
+    memset(split_basic_info, 0, sizeof(split_basic_info));
+    snprintf(split_basic_info, sizeof(split_basic_info),
+      "tenant_id: %ld, ls_id: %ld, src_tablet_id: %ld, dst_tablet_ids: %ld, %ld, can_reuse_macro: %d, is_split_executor: %d",
+      MTL_ID(), param_.ls_id_.id(), param_.source_tablet_id_.id(),
+      param_.dest_tablets_id_.empty() ? 0 : param_.dest_tablets_id_.at(0).id(),
+      param_.dest_tablets_id_.empty() ? 0 : param_.dest_tablets_id_.at(param_.dest_tablets_id_.count() - 1).id(),
+      param_.can_reuse_macro_block_,
+      is_split_executor);
     SERVER_EVENT_ADD("ddl", "split_resp",
         "result", context_.complement_data_ret_,
-        "tenant_id", param_.tenant_id_,
-        "source_tablet_id", param_.source_tablet_id_.id(),
-        "svr_addr", GCTX.self_addr(),
+        "split_basic_info", split_basic_info,
         "physical_row_count", context_.physical_row_count_,
         "split_total_rows", context_.row_inserted_,
-        *ObCurTraceId::get_trace_id());
+        "trace_id", *ObCurTraceId::get_trace_id());
   }
   FLOG_INFO("send tablet split response to RS", K(ret), K(context_), K(arg));
   return ret;
@@ -2245,6 +2258,12 @@ int ObTabletSplitMergeTask::update_table_store_with_batch_tables(
       param))) {
     LOG_WARN("build upd param failed", K(ret));
 #ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_mds_merge(merge_type) && OB_FAIL(DDL_SIM(MTL_ID(), 1/*ddl_task_id*/, SPLIT_UPDATE_MDS_FAILED))) {
+    LOG_WARN("ddl sim failed, update mds failed", K(ret));
+  } else if (is_minor_merge(merge_type) && OB_FAIL(DDL_SIM(MTL_ID(), 1/*ddl_task_id*/, SPLIT_UPDATE_MINOR_FAILED))) {
+    LOG_WARN("ddl sim failed, update minor failed", K(ret));
+  } else if (is_major_merge(merge_type) && OB_FAIL(DDL_SIM(MTL_ID(), 1/*ddl_task_id*/, SPLIT_UPDATE_MAJOR_FAILED))) {
+    LOG_WARN("ddl sim failed, update major failed", K(ret));
   } else if (GCTX.is_shared_storage_mode()) {
     ObArenaAllocator tmp_arena("SplitUpdTablet", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObTabletHandle local_tablet_handle;
@@ -2900,6 +2919,8 @@ int ObSplitDownloadSSTableTask::process()
   ObIDataSplitDag *data_split_dag = nullptr;
   ObLSHandle ls_handle;
   ObTabletHandle local_source_tablet_hdl;
+  int64_t epoch = 0;
+  bool is_sswriter = false;
   if (OB_FAIL(check_need_block_downloading())) {
     LOG_INFO("block downloading", K(ret));
   } else if (OB_UNLIKELY(!is_inited_)) {
@@ -2923,12 +2944,19 @@ int ObSplitDownloadSSTableTask::process()
   } else if (OB_UNLIKELY(!local_source_tablet_hdl.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected tablet", K(ret), K(source_tablet_id_), K(local_source_tablet_hdl));
+  } else if (OB_FAIL(ObSSDataSplitHelper::check_at_sswriter_lease(
+      ls_id_, source_tablet_id_, epoch, is_sswriter))) {
+    LOG_WARN("check executor failed", K(ret));
+  } else if (OB_FAIL(DDL_SIM_WHEN(!is_sswriter, MTL_ID(), 1/*ddl_task_id*/, SPLIT_DOWNLOAD_SSTABLE_SLOW))) {
+    LOG_WARN("ddl sim failed, download sstables slow", K(ret));
   } else if (OB_FAIL(download_sstables_and_update_local(
       ls_handle,
       local_source_tablet_hdl))) {
     LOG_WARN("download and prewarm sstables failed", K(ret));
   } else if (can_reuse_macro_block_) {
-    if (OB_FAIL(ObSSDataSplitHelper::set_source_tablet_split_status(
+    if (OB_FAIL(DDL_SIM(MTL_ID(), 1/*ddl_task_id*/, SPLIT_UPDATE_SOURCE_TABLET_FAILED))) {
+      LOG_WARN("ddl sim failed, update source tablet failed", K(ret), K(ls_id_), K(source_tablet_id_));
+    } else if (OB_FAIL(ObSSDataSplitHelper::set_source_tablet_split_status(
         ls_handle, local_source_tablet_hdl, ObSplitTabletInfoStatus::CANT_GC_MACROS))) {
       LOG_WARN("set can not gc data block failed", K(ret));
     }
@@ -3099,11 +3127,17 @@ int ObSplitDownloadSSTableTask::download_sstables_and_update_local(
                 ObArray<ObITable::TableKey>()/*skipped_split_major_keys*/,
                 param))) {
               LOG_WARN("build upd param failed", K(ret), K(param));
+            } else if (is_mds_merge(merge_type) && OB_FAIL(DDL_SIM(MTL_ID(), 1/*ddl_task_id*/, SPLIT_DOWNLOAD_MDS_FAILED))) {
+              LOG_WARN("ddl sim failed, download mds failed", K(ret), K(source_tablet_id_), K(dst_tablet_id));
+            } else if (is_minor_merge(merge_type) && OB_FAIL(DDL_SIM(MTL_ID(), 1/*ddl_task_id*/, SPLIT_DOWNLOAD_MINOR_FAILED))) {
+              LOG_WARN("ddl sim failed, download minor failed", K(ret), K(source_tablet_id_), K(dst_tablet_id));
+            } else if (is_major_merge(merge_type) && OB_FAIL(DDL_SIM(MTL_ID(), 1/*ddl_task_id*/, SPLIT_DOWNLOAD_MAJOR_FAILED))) {
+              LOG_WARN("ddl sim failed, download major failed", K(ret), K(source_tablet_id_), K(dst_tablet_id));
             } else if (OB_FAIL(ls_handle.get_ls()->build_tablet_with_batch_tables(dst_tablet_id, param))) {
               LOG_WARN("failed to update tablet table store", K(ret), K(dst_tablet_id), K(param));
             }
           }
-          FLOG_INFO("DEBUG CODE, CHANGE TO TRACE LATER", K(ret), K(dst_tablet_id), K(merge_type), K(param));
+          FLOG_INFO("DEBUG CODE, CHANGE TO TRACE LATER", K(ret), K(source_tablet_id_), K(dst_tablet_id), K(merge_type), K(param));
         }
       }
     }

@@ -14,7 +14,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
-#include "src/storage/ddl/ob_tablet_split_task.h"
+#include "storage/ddl/ob_tablet_split_task.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
@@ -656,14 +656,25 @@ int ObTabletLobSplitDag::report_replica_build_status() const
     } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(rs_addr).build_ddl_single_replica_response(arg))) {
       LOG_WARN("fail to send build split tablet data response", K(ret), K(arg));
     }
+    bool is_split_executor = true;
+  #ifdef OB_BUILD_SHARED_STORAGE
+    is_split_executor = GCTX.is_shared_storage_mode() ? context_.is_data_split_executor_ : is_split_executor;
+  #endif
+    char split_basic_info[common::MAX_ROOTSERVICE_EVENT_VALUE_LENGTH/*512*/];
+    memset(split_basic_info, 0, sizeof(split_basic_info));
+    snprintf(split_basic_info, sizeof(split_basic_info),
+      "tenant_id: %ld, ls_id: %ld, src_tablet_id: %ld, dst_tablet_ids: %ld, %ld, can_reuse_macro: %d, is_split_executor: %d",
+      MTL_ID(), param_.ls_id_.id(), param_.ori_lob_meta_tablet_id_.id(),
+      param_.new_lob_tablet_ids_.empty() ? 0 : param_.new_lob_tablet_ids_.at(0).id(),
+      param_.new_lob_tablet_ids_.empty() ? 0 : param_.new_lob_tablet_ids_.at(param_.new_lob_tablet_ids_.count() - 1).id(),
+      false/*param_.can_reuse_macro_block_*/,
+      is_split_executor);
     SERVER_EVENT_ADD("ddl", "replica_split_resp",
         "result", context_.data_ret_,
-        "tenant_id", param_.tenant_id_,
-        "source_tablet_id", param_.ori_lob_meta_tablet_id_.id(),
-        "svr_addr", GCTX.self_addr(),
+        "split_basic_info", split_basic_info,
         "physical_row_count", context_.physical_row_count_,
         "split_total_rows", context_.row_inserted_,
-        *ObCurTraceId::get_trace_id());
+        "trace_id", *ObCurTraceId::get_trace_id());
   }
   FLOG_INFO("lob tablet split finished", K(ret), K(context_.data_ret_));
   return ret;
