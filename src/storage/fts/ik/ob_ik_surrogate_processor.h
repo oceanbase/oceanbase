@@ -34,7 +34,7 @@ public:
 private:
   void reset()
   {
-    low_offset = -1;
+    low_offset_ = -1;
     high_offset_ = -1;
   }
 
@@ -42,7 +42,7 @@ private:
 
 private:
   int64_t high_offset_ = -1;
-  int64_t low_offset = -1;
+  int64_t low_offset_ = -1;
 };
 
 } //  namespace storage
