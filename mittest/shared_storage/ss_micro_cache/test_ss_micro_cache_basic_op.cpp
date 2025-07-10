@@ -478,7 +478,7 @@ TEST_F(TestSSMicroMetaBasicOp, erase_deleted_micro_func)
   ret = micro_map.erase_if(&micro_key, erase_func);
   ASSERT_EQ(OB_EAGAIN, ret);
   ret = ((OB_EAGAIN == ret) ? erase_func.ret_ : ret);
-  ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+  ASSERT_EQ(OB_SUCCESS, ret);
 
   micro_meta_->is_meta_deleted_ = true;
   SSMicroMapEraseDeletedMicroFunc erase_func1;

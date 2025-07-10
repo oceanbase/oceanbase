@@ -145,6 +145,74 @@ TEST_F(TestSSMicroMetaManager, basic_add_micro_meta)
   ASSERT_EQ(macro_cnt * micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
 }
 
+TEST_F(TestSSMicroMetaManager, delete_and_readd_micro_meta)
+{
+  LOG_INFO("TEST_CASE: start delete_and_readd_micro_meta");
+  ObSSMicroCache *micro_cache = MTL(ObSSMicroCache *);
+  ObSSMicroMetaManager &micro_meta_mgr = micro_cache->micro_meta_mgr_;
+  ObSSMicroCacheStat &cache_stat = micro_cache->cache_stat_;
+
+  MacroBlockId evict_macro_id;
+  ObSSMicroBlockCacheKey evict_micro_key;
+  const int64_t macro_cnt = 10;
+  const int64_t micro_cnt = 240;
+  const int64_t micro_size = 8 * 1024;
+
+  ObArenaAllocator allocator;
+  char *data_buf = static_cast<char *>(allocator.alloc(micro_size));
+  ASSERT_NE(nullptr, data_buf);
+  MEMSET(data_buf, 'a', micro_size);
+
+  // 1. add some micro_metas
+  for (int64_t i = 0; i < macro_cnt; ++i) {
+    MacroBlockId macro_id = TestSSCommonUtil::gen_macro_block_id(100 + i);
+    for (int64_t j = 0; j < micro_cnt; ++j) {
+      const int64_t offset = 1 + j * micro_size;
+      ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(macro_id, offset, micro_size);
+      if (0 == i && 0 == j) {
+        evict_macro_id = macro_id;
+        evict_micro_key = micro_key;
+      }
+      ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(micro_key, data_buf, micro_size,
+                macro_id.second_id()/*effective_tablet_id*/, ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+    }
+    ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::wait_for_persist_task());
+  }
+  ASSERT_EQ(macro_cnt * micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
+  ASSERT_EQ(macro_cnt * micro_cnt, cache_stat.micro_stat().valid_micro_cnt_);
+
+  // 2. get certain micro_meta info
+  ObSSMicroBlockMetaInfo cold_micro_info;
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_meta_info(evict_micro_key, cold_micro_info));
+  ASSERT_EQ(true, cold_micro_info.is_data_persisted_);
+
+  // 3. try evict micro_meta
+  ASSERT_EQ(false, cache_stat.task_stat().exist_arc_evict());
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.try_evict_micro_block_meta(cold_micro_info));
+  ASSERT_EQ(true, cache_stat.task_stat().exist_arc_evict());
+  ASSERT_EQ(macro_cnt * micro_cnt - 1, cache_stat.micro_stat().valid_micro_cnt_);
+
+  // 4. try delete ghost micro_meta
+  ASSERT_EQ(0, cache_stat.micro_stat().mark_del_micro_cnt_);
+  ASSERT_EQ(0, cache_stat.micro_stat().mark_del_ghost_micro_cnt_);
+  cold_micro_info.reset();
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_meta_info(evict_micro_key, cold_micro_info));
+  ASSERT_EQ(true, cold_micro_info.is_in_ghost_);
+  ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.try_delete_micro_block_meta(cold_micro_info));
+  ASSERT_EQ(1, cache_stat.micro_stat().mark_del_micro_cnt_);
+  ASSERT_EQ(1, cache_stat.micro_stat().mark_del_ghost_micro_cnt_);
+  ASSERT_EQ(macro_cnt * micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
+  ASSERT_EQ(macro_cnt * micro_cnt - 1, cache_stat.micro_stat().valid_micro_cnt_);
+
+  // 5. readd deleted micro_meta
+  ASSERT_EQ(OB_SUCCESS, micro_cache->add_micro_block_cache(evict_micro_key, data_buf, micro_size,
+            evict_macro_id.second_id()/*effective_tablet_id*/, ObSSMicroCacheAccessType::COMMON_IO_TYPE));
+  ASSERT_EQ(macro_cnt * micro_cnt, cache_stat.micro_stat().total_micro_cnt_);
+  ASSERT_EQ(macro_cnt * micro_cnt, cache_stat.micro_stat().valid_micro_cnt_);
+  ASSERT_EQ(0, cache_stat.micro_stat().mark_del_micro_cnt_);
+  ASSERT_EQ(0, cache_stat.micro_stat().mark_del_ghost_micro_cnt_);
+}
+
 TEST_F(TestSSMicroMetaManager, scan_and_operate_micro_meta)
 {
   LOG_INFO("TEST_CASE: start scan_and_operate_micro_meta");
