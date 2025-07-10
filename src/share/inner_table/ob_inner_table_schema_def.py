@@ -6457,7 +6457,7 @@ def_table_schema(
   ],
 )
 def_table_schema(
-  owner = 'linqiucen.lqc',
+  owner = 'shouju.zyp',
   table_name    = '__all_service',
   table_id = '516',
   table_type = 'SYSTEM_TABLE',
@@ -30535,7 +30535,7 @@ def_table_schema(
 
 
 def_table_schema(
-  owner           = 'linqiucen.lqc',
+  owner           = 'shouju.zyp',
   table_name      = 'DBA_OB_SERVICES',
   table_id        = '21548',
   table_type      = 'SYSTEM_VIEW',
@@ -30557,7 +30557,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'linqiucen.lqc',
+  owner           = 'shouju.zyp',
   table_name      = 'CDB_OB_SERVICES',
   table_id        = '21549',
   table_type      = 'SYSTEM_VIEW',
@@ -47619,7 +47619,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'linqiucen.lqc',
+  owner           = 'shouju.zyp',
   table_name      = 'DBA_OB_TENANTS',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -49909,7 +49909,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'linqiucen.lqc',
+  owner           = 'shouju.zyp',
   table_name      = 'DBA_OB_SERVICES',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
