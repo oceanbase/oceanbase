@@ -160,6 +160,27 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDirPrefixEntryNameFilter);
 };
 
+class ObDirPrefixLSIDFilter final : public ObBaseDirEntryOperator
+{
+  public:
+  ObDirPrefixLSIDFilter(common::ObIArray<share::ObLSID> &d_entrys)
+      : is_inited_(false),
+        d_entrys_(d_entrys)
+  {
+    filter_str_[0] = '\0';
+    format_buffer_[0] = '\0';
+  }
+  virtual ~ObDirPrefixLSIDFilter() = default;
+  int init(const char *filter_str, const int32_t filter_str_len);
+  virtual int func(const dirent *entry) override;
+private:
+  bool is_inited_;
+  char filter_str_[common::MAX_PATH_SIZE];
+  char format_buffer_[share::OB_BACKUP_LS_DIR_NAME_LENGTH];
+  common::ObIArray<share::ObLSID> &d_entrys_;
+  DISALLOW_COPY_AND_ASSIGN(ObDirPrefixLSIDFilter);
+};
+
 }
 }
 
