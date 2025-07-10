@@ -1761,15 +1761,10 @@ int get_create_outline_stmt_need_privs(
     LOG_WARN("failed to get priv need check", K(ret));
   } else if (lib::is_mysql_mode() && need_check) {
     const ObCreateOutlineStmt *stmt = static_cast<const ObCreateOutlineStmt*>(basic_stmt);
-    if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv,
-                                                         stmt->get_create_outline_arg().db_name_))) {
-      LOG_WARN("Can not create outline in current database", K(session_priv), K(ret));
-    } else {
-      need_priv.db_ = stmt->get_create_outline_arg().db_name_;
-      need_priv.priv_set_ = OB_PRIV_CREATE;
-      need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
-      ADD_NEED_PRIV(need_priv);
-    }
+    need_priv.db_ = stmt->get_create_outline_arg().db_name_;
+    need_priv.priv_set_ = OB_PRIV_CREATE;
+    need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+    ADD_NEED_PRIV(need_priv);
   }
   return ret;
 }
@@ -1793,15 +1788,10 @@ int get_alter_outline_stmt_need_privs(
     LOG_WARN("failed to get priv need check", K(ret));
   } else if (lib::is_mysql_mode() && need_check) {
     const ObAlterOutlineStmt *stmt = static_cast<const ObAlterOutlineStmt*>(basic_stmt);
-    if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv,
-                                                         stmt->get_alter_outline_arg().db_name_))) {
-      LOG_WARN("Can not alter outline in current database", K(session_priv), K(ret));
-    } else {
-      need_priv.db_ = stmt->get_alter_outline_arg().db_name_;
-      need_priv.priv_set_ = OB_PRIV_ALTER;
-      need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
-      ADD_NEED_PRIV(need_priv);
-    }
+    need_priv.db_ = stmt->get_alter_outline_arg().db_name_;
+    need_priv.priv_set_ = OB_PRIV_ALTER;
+    need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+    ADD_NEED_PRIV(need_priv);
   }
   return ret;
 }
@@ -1825,15 +1815,10 @@ int get_drop_outline_stmt_need_privs(
     LOG_WARN("failed to get priv need check", K(ret));
   } else if (lib::is_mysql_mode() && need_check) {
     const ObDropOutlineStmt *stmt = static_cast<const ObDropOutlineStmt*>(basic_stmt);
-    if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv,
-                                                         stmt->get_drop_outline_arg().db_name_))) {
-      LOG_WARN("Can not drop outline in current database", K(session_priv), K(ret));
-    } else {
-      need_priv.db_ = stmt->get_drop_outline_arg().db_name_;
-      need_priv.priv_set_ = OB_PRIV_DROP;
-      need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
-      ADD_NEED_PRIV(need_priv);
-    }
+    need_priv.db_ = stmt->get_drop_outline_arg().db_name_;
+    need_priv.priv_set_ = OB_PRIV_DROP;
+    need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+    ADD_NEED_PRIV(need_priv);
   }
   return ret;
 }
