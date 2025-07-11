@@ -1994,6 +1994,7 @@ public:
   static int check_contain_lost_deterministic_expr(const ObIArray<ObRawExpr*> &exprs,
                                                    bool &is_contain);
   static bool is_enable_values_table_rewrite(const uint64_t compat_version);
+  static bool is_enable_hybrid_inlist_rewrite(const uint64_t compat_version);
   // check whether the score calculated by match expr is actually utilized
   static int check_need_calc_match_score(ObExecContext *exec_ctx,
                                         const ObDMLStmt* stmt,
