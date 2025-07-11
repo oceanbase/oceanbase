@@ -8257,7 +8257,7 @@ def_table_schema(**gen_history_table_def(555, all_external_resource))
 # 559: __all_sensitive_column_history
 # 560: __all_sensitive_rule_privilege
 # 561: __all_sensitive_rule_privilege_history
-
+# 562: __wr_sql_histogram
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -9591,6 +9591,7 @@ def_table_schema(
     ('ccl_rule_id', 'int', 'true'),
     ('ccl_match_time', 'int', 'true'),
     ('insert_duplicate_row_count', 'int', 'true'),
+    ('commit_time', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -16818,6 +16819,8 @@ def_table_schema(
 # 12558: __all_virtual_sensitive_column_history
 # 12559: __all_virtual_sensitive_rule_privilege
 # 12560: __all_virtual_sensitive_rule_privilege_history
+# 12561: __all_virtual_sql_histogram_cache
+# 12562: __all_virtual_wr_sql_histogram
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -17382,6 +17385,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15520', all_def_keyword
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15522', all_def_keywords['__all_virtual_ss_existing_tablet_meta']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15523', all_def_keywords['__all_virtual_ss_existing_sstable_mgr']))
 # 15524: ALL_VIRTUAL_UNIT_SYS_AGENT
+# 15525: __all_virtual_sql_histogram_cache
+# 15526: __all_virtual_wr_sql_histogram
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -42874,6 +42879,10 @@ FROM
 # 21666: CDB_OB_SENSITIVE_COLUMNS
 # 21667: DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS
 # 21668: CDB_OB_SENSITIVE_RULE_PLAINACCESS_USERS
+# 21669: GV$OB_SQL_HISTOGRAM
+# 21670: V$OB_SQL_HISTOGRAM
+# 21671: CDB_WR_SQL_HISTOGRAM
+# 21672: DBA_WR_SQL_HISTOGRAM
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -76656,6 +76665,9 @@ def_table_schema(
   )
 """.replace("\n", " "),
 )
+# 28280: GV$OB_SQL_HISTOGRAM
+# 28281: V$OB_SQL_HISTOGRAM
+# 28282: DBA_WR_SQL_HISTOGRAM
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

@@ -400,7 +400,27 @@ public:
         fb_info_(),
         err_msg_(),
         sqc_memstore_row_read_count_(0),
-        sqc_ssstore_row_read_count_(0) {}
+        sqc_ssstore_row_read_count_(0),
+        sqc_wait_time_micro_(0),
+        sqc_waits_(0),
+        sqc_rpc_count_(0),
+        sqc_application_wait_time_(0),
+        sqc_concurrency_wait_time_(0),
+        sqc_user_io_wait_time_(0),
+        sqc_schedule_time_(0),
+        sqc_row_cache_hit_cnt_(0),
+        sqc_bloom_filter_cache_hit_cnt_(0),
+        sqc_block_cache_hit_cnt_(0),
+        sqc_disk_reads_(0),
+        sqc_data_block_read_cnt_(0),
+        sqc_data_block_cache_hit_cnt_(0),
+        sqc_index_block_read_cnt_(0),
+        sqc_index_block_cache_hit_cnt_(0),
+        sqc_blockscan_block_cnt_(0),
+        sqc_blockscan_row_cnt_(0),
+        sqc_pushdown_storage_filter_row_cnt_(0),
+        sqc_fuse_row_cache_hit_(0),
+        sqc_network_wait_time_(0) {}
   virtual ~ObPxFinishSqcResultMsg() = default;
   const transaction::ObTxExecResult &get_trans_result() const { return trans_result_; }
   transaction::ObTxExecResult &get_trans_result() { return trans_result_; }
@@ -418,6 +438,26 @@ public:
     err_msg_.reset();
     sqc_memstore_row_read_count_ = 0;
     sqc_ssstore_row_read_count_ = 0;
+    sqc_wait_time_micro_ = 0;
+    sqc_waits_ = 0;
+    sqc_rpc_count_ = 0;
+    sqc_application_wait_time_ = 0;
+    sqc_concurrency_wait_time_ = 0;
+    sqc_user_io_wait_time_ = 0;
+    sqc_schedule_time_ = 0;
+    sqc_row_cache_hit_cnt_ = 0;
+    sqc_bloom_filter_cache_hit_cnt_ = 0;
+    sqc_block_cache_hit_cnt_ = 0;
+    sqc_disk_reads_ = 0;
+    sqc_data_block_read_cnt_ = 0;
+    sqc_data_block_cache_hit_cnt_ = 0;
+    sqc_index_block_read_cnt_ = 0;
+    sqc_index_block_cache_hit_cnt_ = 0;
+    sqc_blockscan_block_cnt_ = 0;
+    sqc_blockscan_row_cnt_ = 0;
+    sqc_pushdown_storage_filter_row_cnt_ = 0;
+    sqc_fuse_row_cache_hit_ = 0;
+    sqc_network_wait_time_ = 0;
   }
   TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(das_retry_rc), K_(sqc_affected_rows), K_(sqc_memstore_row_read_count), K_(sqc_ssstore_row_read_count));
 public:
@@ -435,6 +475,26 @@ public:
   ObPxUserErrorMsg err_msg_; // for error msg & warning msg
   int64_t sqc_memstore_row_read_count_; // the total memstore read row count of this sqc
   int64_t sqc_ssstore_row_read_count_; // the total ssstore read row count of this sqc
+  int64_t sqc_wait_time_micro_;
+  int64_t sqc_waits_;
+  int64_t sqc_rpc_count_;
+  int64_t sqc_application_wait_time_;
+  int64_t sqc_concurrency_wait_time_;
+  int64_t sqc_user_io_wait_time_;
+  int64_t sqc_schedule_time_;
+  int64_t sqc_row_cache_hit_cnt_;
+  int64_t sqc_bloom_filter_cache_hit_cnt_;
+  int64_t sqc_block_cache_hit_cnt_;
+  int64_t sqc_disk_reads_;
+  int64_t sqc_data_block_read_cnt_;
+  int64_t sqc_data_block_cache_hit_cnt_;
+  int64_t sqc_index_block_read_cnt_;
+  int64_t sqc_index_block_cache_hit_cnt_;
+  int64_t sqc_blockscan_block_cnt_;
+  int64_t sqc_blockscan_row_cnt_;
+  int64_t sqc_pushdown_storage_filter_row_cnt_;
+  int64_t sqc_fuse_row_cache_hit_;
+  int64_t sqc_network_wait_time_;
 };
 
 class ObPxFinishTaskResultMsg

@@ -1158,6 +1158,9 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         case INSERT_DUPLICATE_ROW_COUNT: {
           cells[cell_idx].set_int(record.data_.insert_update_or_replace_duplicate_row_count_);
         } break;
+        case COMMIT_TIME: {
+          cells[cell_idx].set_int(0);
+        } break;
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(col_id));
