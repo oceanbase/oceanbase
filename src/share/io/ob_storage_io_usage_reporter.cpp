@@ -178,7 +178,7 @@ int ObStorageIOUsageRepoter::UpdateIOUsageFunctor::
                                                                       usages[i].total_))) {
                 LOG_WARN("update_storage_io_usage failed", K(ret), K(tenant_id_));
             }
-            usleep(100);
+            ob_usleep(100);
         }
     }
 

@@ -136,7 +136,7 @@ FuncRetType<FuncType, Args...> execute_until_timeout(
       // if should_retry, log the current error
       uint32_t sleep_time_us = retry_strategy.calc_delay_time_us(func_ret, retries);
       retry_strategy.log_error(func_ret, retries);
-      ::usleep(sleep_time_us);
+      ob_usleep(sleep_time_us);
     }
     retries++;
   } while (should_retry_flag);

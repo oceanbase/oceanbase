@@ -64,7 +64,7 @@ void ObTenantCloneService::wait()
 {
   int ret = OB_SUCCESS;
   while(OB_FAIL(wait_())) {
-    usleep(100000);
+    ob_usleep(100000);
   }
 }
 

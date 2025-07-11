@@ -716,7 +716,7 @@ int ObMallocAllocator::recycle_tenant_allocator(uint64_t tenant_id)
         }
       }
       if (waiting_cnt <= 0) break;
-      usleep(1 * 1000 * 1000L); // 1s
+      ob_usleep(1 * 1000 * 1000L); // 1s
     }
     for (int64_t ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ctx_id++) {
       ObTenantCtxAllocatorV2 *ctx_allocator = tas[ctx_id];

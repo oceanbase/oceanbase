@@ -1603,7 +1603,7 @@ int ObTmpFileWriteCache::cleanup_list_()
       }
       ret = OB_SUCCESS;
     }
-    usleep(10 * 1000);
+    ob_usleep(10 * 1000);
   }
 
   return ret;

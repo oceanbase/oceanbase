@@ -108,7 +108,7 @@ int ObAdminSlogExecutor::scan_periodically()
 
     if (OB_SUCC(ret)) {
       fprintf(stderr, "\nsuccessfully print all slogs");
-      usleep(300000000);
+      ob_usleep(300000000);
     } else {
       fprintf(stderr, "\nfail to print all slogs, ret=%d", ret);
       break;

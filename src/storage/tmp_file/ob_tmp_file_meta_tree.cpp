@@ -1865,7 +1865,7 @@ int ObSharedNothingTmpFileMetaTree::clear(
       } else {
         break;
       }
-      usleep(100 * 1000); // 100ms
+      ob_usleep(100 * 1000); // 100ms
       ret = OB_SUCCESS;
     }
     if (OB_FAIL(ret)) {
@@ -1951,7 +1951,7 @@ int ObSharedNothingTmpFileMetaTree::truncate(
       } else {
         break;
       }
-      usleep(100 * 1000); // 100ms
+      ob_usleep(100 * 1000); // 100ms
       ret = OB_SUCCESS;
     }
     if (OB_SUCC(ret)) {

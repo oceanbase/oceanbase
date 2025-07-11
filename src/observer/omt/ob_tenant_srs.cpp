@@ -206,7 +206,7 @@ int ObTenantSrs::try_get_last_snapshot(ObSrsCacheGuard &srs_guard)
       int8_t retry_cnt = RETRY_TIMES;
       int64_t start_time = ::oceanbase::common::ObTimeUtility::current_time();
       while (true) {
-        usleep(RETRY_INTERVAL_US);
+        ob_usleep(RETRY_INTERVAL_US);
         if (OB_SUCC(get_last_snapshot(srs_guard))) {
           break;
         } else if (ret != OB_ERR_EMPTY_QUERY || (--retry_cnt) <= 0) {

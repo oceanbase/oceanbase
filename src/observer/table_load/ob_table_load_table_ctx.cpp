@@ -181,7 +181,7 @@ void ObTableLoadTableCtx::unregister_job_stat()
       int64_t log_print_cnt = 0;
       int64_t ref_cnt = 0;
       while ((ref_cnt = job_stat->get_ref_cnt()) > 0) {
-        usleep(1L * 1000 * 1000);  // 1s
+        ob_usleep(1L * 1000 * 1000);  // 1s
         if ((log_print_cnt++) % 10 == 0) {
           LOG_WARN("LOAD DATA wait job handle release", KR(ret), "wait_seconds", log_print_cnt * 10,
                    K_(gid), K(ref_cnt));
