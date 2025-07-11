@@ -925,6 +925,7 @@ private:
   int set_enable_trace_log_();
   int disable_dbms_job();
   int disable_system_trigger();
+  int set_update_all_columns_for_trigger();
   int enable_mysql_compatible_dates_config_();
   int try_notify_switch_leader(const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
 

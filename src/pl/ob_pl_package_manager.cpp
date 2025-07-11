@@ -1873,5 +1873,73 @@ int ObPLPackageManager::notify_package_variable_deserialize(ObBasicSessionInfo *
   return ret;
 }
 
+int ObPLPackageManager::get_cached_package_body_for_trigger(uint64_t tenant_id,
+                                                            uint64_t trigger_id,
+                                                            pl::ObPLPackageGuard &package_guard,
+                                                            common::ObIAllocator &allocator,
+                                                            ObSchemaGetterGuard &schema_guard,
+                                                            ObSQLSessionInfo &session_info,
+                                                            common::ObMySQLProxy &sql_proxy,
+                                                            ObPLPackage *&package_body)
+{
+  int ret = OB_SUCCESS;
+  package_body = nullptr;
+  const ObTriggerInfo *trigger_info = nullptr;
+  if (OB_FAIL(schema_guard.get_trigger_info(tenant_id, trigger_id, trigger_info))) {
+    OB_LOG(WARN, "get trigger info failed", K(ret), K(trigger_id));
+  } else if (OB_ISNULL(trigger_info)) {
+    ret = OB_ERR_TRIGGER_NOT_EXIST;
+    LOG_WARN("trigger not exist", K(ret), K(tenant_id), K(trigger_id));
+  } else {
+    ObPLPackage *tmp_package_spec = nullptr;
+    ObPLPackage *tmp_package_body = nullptr;
+    pl::ObPL *pl_engine = GCTX.pl_engine_;
+    pl::ObPLResolveCtx resolve_ctx(allocator, session_info, schema_guard, package_guard, sql_proxy, false);
+    if (OB_ISNULL(pl_engine)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("pl engine is null", K(ret));
+    } else if (!package_guard.is_inited()
+               && OB_FAIL(package_guard.init())) {
+      LOG_WARN("failed to init package guard", K(ret));
+    } else if (OB_FAIL(pl_engine->get_package_manager().get_cached_package(resolve_ctx,
+                                                                   trigger_info->get_trigger_spec_package_id(trigger_id),
+                                                                   tmp_package_spec,
+                                                                   tmp_package_body))) {
+      LOG_WARN("get cached package failed", K(ret));
+    } else if (OB_ISNULL(tmp_package_spec) || OB_ISNULL(tmp_package_body)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("package spec or body is null", K(ret), K(tmp_package_spec), K(tmp_package_body));
+    } else {
+      package_body = tmp_package_body;
+    }
+    if (OB_FAIL(ret)) {
+      int tmp_ret = ret;
+      const ObDatabaseSchema *database_schema = NULL;
+      ret = OB_SUCCESS;
+      ObSqlString &err_msg = session_info.get_pl_exact_err_msg();
+      if (OB_FAIL(err_msg.append_fmt("\nerror during execution of trigger "))) {
+        LOG_WARN("failed to append error msg", K(ret));
+      } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id,
+                                                          trigger_info->get_database_id(),
+                                                          database_schema))) {
+        LOG_WARN("get database schema failed", K(ret), K(tenant_id), K(trigger_info->get_database_id()));
+      } else if (OB_ISNULL(database_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("database schema is null", K(ret));
+      } else if (OB_FAIL(err_msg.append_fmt("%.*s.", database_schema->get_database_name_str().length(),
+                                            database_schema->get_database_name_str().ptr()))) {
+        LOG_WARN("failed to append error msg", K(ret));
+      } else if (OB_FAIL(err_msg.append_fmt("%.*s", trigger_info->get_trigger_name().length(),
+                                                    trigger_info->get_trigger_name().ptr()))) {
+        LOG_WARN("failed to append error msg", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        ret = tmp_ret;
+      }
+    }
+  }
+  return ret;
+}
+
 } // end namespace pl
 } // end namespace oceanbase

@@ -41,6 +41,11 @@ int ObPLVar::deep_copy(const ObPLVar &var, ObIAllocator &allocator)
       is_formal_param_ = var.is_formal_param();
       is_referenced_ = var.is_referenced();
       is_default_expr_access_external_state_ = var.is_default_expr_access_external_state();
+      for (int64_t i = 0; OB_SUCC(ret) && i < var.get_trigger_ref_cols().count(); i++) {
+        ObString col;
+        OZ (ob_write_string(allocator, var.get_trigger_ref_cols().at(i).first, col));
+        OZ (trigger_ref_cols_.push_back(std::make_pair(col, var.get_trigger_ref_cols().at(i).second)));
+      }
     }
   }
   return ret;
@@ -2526,7 +2531,8 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
                                        ObObjAccessIdx &access_idx,
                                        ObPLDataType &data_type,
                                        uint64_t &package_id,
-                                       int64_t &var_idx) const
+                                       int64_t &var_idx,
+                                       ObIArray<ObObjAccessIdx> &access_idxs) const
 {
   int ret = OB_SUCCESS;
   const ObString attr_name = access_ident.access_name_;
@@ -2544,6 +2550,31 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
         new(&access_idx)ObObjAccessIdx(*record_type.get_record_member_type(member_index),
             ObObjAccessIdx::IS_CONST, attr_name, *record_type.get_record_member_type(member_index),
             member_index);
+        if (get_block_type() == BLOCK_ROUTINE && access_idxs.count() > 0) {
+          ObObjAccessIdx &parent_access_idx = access_idxs.at(access_idxs.count() - 1);
+          if ((0 == parent_access_idx.var_index_ || 1 == parent_access_idx.var_index_)
+              && ObTriggerInfo::is_trigger_body_package_id(package_id_)
+              && ((lib::is_oracle_mode() && parent_access_idx.var_name_.prefix_match(":"))
+                  || (lib::is_mysql_mode() && 0 == parent_access_idx.var_name_.case_compare("NEW")))) {
+            const ObPLVar *var = NULL;
+            const ObPLBlockNS *ns = (parent_access_idx.is_subprogram_var() ? parent_access_idx.var_ns_ : this);
+            if (OB_ISNULL(ns) || OB_ISNULL(ns->get_symbol_table())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("symbol table is NULL", K(ret));
+            } else if (OB_ISNULL(var = ns->get_symbol_table()->get_symbol(parent_access_idx.var_index_))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("failed to get var", K(ret), K(parent_access_idx), K(attr_name));
+            } else {
+              ObString copy_attr;
+              if (OB_FAIL(ob_write_string(ns->get_symbol_table()->get_allocator(), attr_name, copy_attr))) {
+                LOG_WARN("failed to write string", K(ret), K(attr_name));
+              } else if (OB_FAIL((const_cast<ObPLVar*>(var))->get_trigger_ref_cols().push_back(
+                         std::make_pair(copy_attr, false)))) {
+                LOG_WARN("failed to add attr_name", K(ret), K(copy_attr));
+              }
+            }
+          }
+        }
       }
     } else {
       ret = OB_ERR_SP_UNDECLARED_VAR;

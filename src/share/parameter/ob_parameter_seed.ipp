@@ -2283,3 +2283,6 @@ DEF_STR_WITH_CHECKER(zone_deploy_mode, OB_TENANT_PARAMETER, "homo",
         "hetero: the unit count in each zone of tenant resource pools can be different.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
         "homo, hetero");
+DEF_BOOL(_update_all_columns_for_trigger, OB_TENANT_PARAMETER, "True",
+         "control the switch determining whether the UPDATE statement always updates all columns when the table contains a row-level BEFORE UPDATE trigger.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

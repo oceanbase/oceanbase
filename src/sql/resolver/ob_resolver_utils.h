@@ -843,6 +843,11 @@ public:
                                        ObValuesTableDef *table_def);
 
   static int64_t get_mysql_max_partition_num(const uint64_t tenant_id);
+  static int check_whether_assigned_for_before_update_trigger(ObResolverParams &params,
+                                                              ObSchemaChecker *schema_checker,
+                                                              const ObColumnSchemaV2 &column,
+                                                              uint64_t table_id,
+                                                              bool &need);
 private:
   static int try_convert_to_unsiged(const ObExprResType restype,
                                     ObRawExpr& src_expr,
@@ -875,6 +880,14 @@ private:
                                     ObIAllocator &allocator,
                                     ParseNode *&node);
   static const common::ObString stmt_type_string[];
+  static int check_before_update_row_trigger_ref_cols(pl::ObPLPackageGuard &package_guard,
+                                                        common::ObIAllocator &allocator,
+                                                        share::schema::ObSchemaGetterGuard &schema_guard,
+                                                        ObSQLSessionInfo &session_info,
+                                                        common::ObMySQLProxy &sql_proxy,
+                                                        const ObIArray<uint64_t> &trigger_list,
+                                                        const ObString &column_name,
+                                                        bool &need);
 
   // disallow construct
   ObResolverUtils();

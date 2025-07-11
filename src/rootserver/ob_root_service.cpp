@@ -2013,6 +2013,8 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
       LOG_WARN("fail to update _enable_mysql_compatible_dates config", K(ret));
     } else if (OB_FAIL(disable_system_trigger())) {
       LOG_WARN("fail to update _system_trig_enabled config", K(ret));
+    } else if (OB_FAIL(set_update_all_columns_for_trigger())) {
+      LOG_WARN("fail to update _update_all_columns_for_trigger config", K(ret));
     }
 
     if (OB_SUCC(ret)) {
@@ -10659,6 +10661,18 @@ int ObRootService::disable_system_trigger()
   if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET _system_trig_enabled = false;", affected_rows))) {
     LOG_WARN("update _system_trig_enabled to false failed", K(ret));
   } else if (OB_FAIL(check_config_result("_system_trig_enabled", "false"))) {
+    LOG_WARN("failed to check config same", K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::set_update_all_columns_for_trigger()
+{
+  int64_t affected_rows = 0;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET _update_all_columns_for_trigger = false;", affected_rows))) {
+    LOG_WARN("update _update_all_columns_for_trigger to false failed", K(ret));
+  } else if (OB_FAIL(check_config_result("_update_all_columns_for_trigger", "false"))) {
     LOG_WARN("failed to check config same", K(ret));
   }
   return ret;
