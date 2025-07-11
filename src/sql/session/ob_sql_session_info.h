@@ -777,6 +777,7 @@ public:
                                  pc_adaptive_min_exec_time_threshold_(0),
                                  pc_adaptive_effectiveness_ratio_threshold_(0),
                                  enable_adaptive_plan_cache_(false),
+                                 enable_sql_ccl_rule_(true),
                                  session_(session)
     {
     }
@@ -824,6 +825,10 @@ public:
     {
       return enable_adaptive_plan_cache_;
     }
+    bool enable_sql_ccl_rule() const
+    {
+      return enable_sql_ccl_rule_;
+    }
 
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
@@ -860,6 +865,7 @@ public:
     int64_t pc_adaptive_min_exec_time_threshold_;
     int64_t pc_adaptive_effectiveness_ratio_threshold_;
     bool enable_adaptive_plan_cache_;
+    bool enable_sql_ccl_rule_;
     ObSQLSessionInfo *session_;
   };
 
@@ -1598,6 +1604,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_plan_cache_adaptive();
+  }
+  bool is_enable_sql_ccl_rule()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_sql_ccl_rule();
   }
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);

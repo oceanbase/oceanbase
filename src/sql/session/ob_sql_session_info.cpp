@@ -400,8 +400,6 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   service_name_.reset();
   executing_sql_stat_record_.reset();
   unit_gc_min_sup_proxy_version_ = 0;
-  has_ccl_rule_ = false;
-  last_update_ccl_cnt_time_ = -1;
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -695,7 +693,7 @@ bool ObSQLSessionInfo::is_sqlstat_enabled()
 // To avoid frequent ObSchemaMgr access in check_lazy_guard,
 // refresh ccl_cnt every 5s
 int ObSQLSessionInfo::has_ccl_rules(share::schema::ObSchemaGetterGuard *&schema_guard,
-                                    bool &has_ccl_rules)
+  bool &has_ccl_rules)
 {
   int ret = OB_SUCCESS;
   int64_t cur_time = ObTimeUtility::current_time();
@@ -3202,6 +3200,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&pc_adaptive_effectiveness_ratio_threshold_,
                    tenant_config->_pc_adaptive_effectiveness_ratio_threshold);
       ATOMIC_STORE(&enable_adaptive_plan_cache_, tenant_config->enable_adaptive_plan_cache);
+      ATOMIC_STORE(&enable_sql_ccl_rule_, tenant_config->_enable_sql_ccl_rule);
     }
     ATOMIC_STORE(&last_check_ec_ts_, cur_ts);
     session_->update_tenant_config_version(

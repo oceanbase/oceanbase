@@ -429,6 +429,7 @@ _enable_resource_limit_spec
 _enable_routine_call_param_defend
 _enable_skip_index
 _enable_spf_batch_rescan
+_enable_sql_ccl_rule
 _enable_ss_migration_prewarm
 _enable_ss_replica_prewarm
 _enable_system_tenant_memory_limit
