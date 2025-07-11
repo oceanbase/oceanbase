@@ -2046,7 +2046,7 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
       } else if (OB_ISNULL(index_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get table schema", K(index_tid[i]), K(ret));
-      } else if (index_schema->is_fts_index() && OB_FAIL(check_dml_table_write_dependency(
+      } else if ((index_schema->is_fts_index() || index_schema->is_multivalue_index())&& OB_FAIL(check_dml_table_write_dependency(
           table_info.ref_table_id_, *index_schema))) {
         LOG_WARN("failed to check dml table write dependency", K(ret));
       } else if (OB_ISNULL(ptr = get_optimizer_context().get_allocator().alloc(sizeof(IndexDMLInfo)))) {
@@ -2576,7 +2576,7 @@ int ObDelUpdLogPlan::check_dml_table_write_dependency(
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null table schema", K(ret));
-  } else if (index_schema.is_fts_index()) {
+  } else if (index_schema.is_fts_index() || index_schema.is_multivalue_index()) {
     uint64_t rowkey_doc_id_tid = OB_INVALID_ID;
     uint64_t doc_id_col_id = OB_INVALID_ID;
     if (OB_FAIL(table_schema->get_docid_col_id(doc_id_col_id))) {
@@ -2590,6 +2590,7 @@ int ObDelUpdLogPlan::check_dml_table_write_dependency(
     }
     const bool need_check_rowkey_doc = (rowkey_doc_id_tid != OB_INVALID_ID)
         && (index_schema.is_fts_index_aux()
+          || index_schema.is_multivalue_index_aux()
           || index_schema.is_fts_doc_word_aux()
           || index_schema.is_doc_id_rowkey());
 
