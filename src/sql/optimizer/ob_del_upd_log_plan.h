@@ -264,6 +264,7 @@ protected:
                                         bool &is_basic);
 private:
   int get_parallel_info_from_direct_load(int64_t &dml_parallel) const;
+  int check_dml_table_write_dependency(const uint64_t table_id, const ObTableSchema &index_schema) const;
   DISALLOW_COPY_AND_ASSIGN(ObDelUpdLogPlan);
 
 protected:

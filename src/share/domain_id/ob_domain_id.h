@@ -59,6 +59,7 @@ public:
       const ObDomainIDType type,
       const void *col_expr,
       const ObIndexType index_type,
+      sql::ObSqlSchemaGuard &schema_guard,
       bool &res);
   static int get_domain_tid_table_by_type(ObDomainIDType type, const void *data_table_schema, uint64_t &domain_id_table_id);
   static int get_domain_tid_table_by_cid(

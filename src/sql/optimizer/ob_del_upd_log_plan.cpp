@@ -2046,6 +2046,9 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
       } else if (OB_ISNULL(index_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get table schema", K(index_tid[i]), K(ret));
+      } else if ((index_schema->is_fts_index() || index_schema->is_multivalue_index())&& OB_FAIL(check_dml_table_write_dependency(
+        table_info.ref_table_id_, *index_schema))) {
+        LOG_WARN("failed to check dml table write dependency", K(ret));
       } else if (OB_ISNULL(ptr = get_optimizer_context().get_allocator().alloc(sizeof(IndexDMLInfo)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory", K(ret));
@@ -2551,6 +2554,93 @@ int ObDelUpdLogPlan::extract_assignment_subqueries(ObRawExpr *expr,
       }
     }
   }
+  return ret;
+}
+
+int ObDelUpdLogPlan::check_dml_table_write_dependency(
+  const uint64_t table_id,
+  const ObTableSchema &index_schema) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<uint64_t, 4> read_dependent_tables;
+  ObSchemaGetterGuard* schema_guard = optimizer_context_.get_schema_guard();
+  ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
+  uint64_t tenant_id = OB_INVALID_ID;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null" ,K(ret), KP(schema_guard), KP(session_info));
+  } else if (FALSE_IT(tenant_id = session_info->get_effective_tenant_id())) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null table schema", K(ret));
+  } else if (index_schema.is_fts_index() || index_schema.is_multivalue_index()) {
+    uint64_t rowkey_doc_id_tid = OB_INVALID_ID;
+    uint64_t doc_id_col_id = OB_INVALID_ID;
+    if (OB_FAIL(table_schema->get_docid_col_id(doc_id_col_id))) {
+      if (OB_UNLIKELY(OB_ERR_INDEX_KEY_NOT_FOUND != ret)) {
+        LOG_WARN("fail to get docid column", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_FAIL(table_schema->get_rowkey_doc_tid(rowkey_doc_id_tid))) {
+      LOG_WARN("fail to get rowkey doc table id", K(ret), K(table_schema));
+    }
+    const bool need_check_rowkey_doc = (rowkey_doc_id_tid != OB_INVALID_ID)
+        && (index_schema.is_fts_index_aux()
+          || index_schema.is_fts_doc_word_aux()
+          || index_schema.is_doc_id_rowkey());
+
+    if (OB_FAIL(ret)) {
+    } else if (need_check_rowkey_doc && OB_FAIL(read_dependent_tables.push_back(rowkey_doc_id_tid))) {
+      LOG_WARN("fail to append doc id rowkey tid to rependent array", K(ret));
+    } else if (index_schema.is_fts_index_aux()) {
+      // depend on valid forward index
+      const common::ObIArray<ObAuxTableMetaInfo> &index_infos = table_schema->get_simple_index_infos();
+      const ObString &inv_idx_name = index_schema.get_table_name_str();
+      bool found = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count() && !found; ++i) {
+        const ObAuxTableMetaInfo &index_info = index_infos.at(i);
+        const ObSimpleTableSchemaV2 *fwd_idx_schema = nullptr;
+        if (!share::schema::is_fts_doc_word_aux(index_info.index_type_)) {
+          // skip
+        } else if (OB_FAIL(schema_guard->get_simple_table_schema(tenant_id, index_info.table_id_, fwd_idx_schema))) {
+          LOG_WARN("failed to get fwd idx schema", K(ret), K(tenant_id), K(index_info));
+        } else if (OB_ISNULL(fwd_idx_schema)) {
+          // skip dropped fwd idx schema
+        } else if (!fwd_idx_schema->get_table_name_str().prefix_match(inv_idx_name)) {
+          // skip unmatched fwd idx
+        } else {
+          // found matched fwd idx
+          found = true;
+          if (OB_FAIL(read_dependent_tables.push_back(index_info.table_id_))) {
+            LOG_WARN("failed to append read dependent tables", K(ret), K(index_info));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && !found) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid invert index table for its forward index not exist", K(ret), K(index_schema));
+      }
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < read_dependent_tables.count(); ++i) {
+    const ObTableSchema *depend_schema = nullptr;
+    const uint64_t depend_tid = read_dependent_tables.at(i);
+    if (OB_FAIL(schema_guard->get_table_schema(tenant_id, depend_tid, depend_schema))) {
+      LOG_WARN("failed to get depend table schema", K(ret), K(tenant_id), K(depend_tid));
+    } else if (OB_ISNULL(depend_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null depend schema for check", K(ret), K(tenant_id), K(depend_tid));
+    } else if (OB_UNLIKELY(!depend_schema->can_read_index() || !depend_schema->is_index_visible())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid index table for its dependent table is not readable", K(ret), K(index_schema), KPC(depend_schema));
+    }
+  }
+
   return ret;
 }
 
