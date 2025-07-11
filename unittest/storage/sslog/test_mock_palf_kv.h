@@ -14,6 +14,10 @@
 #define OCEANBASE_SHARED_STORAGE_STORAGE_INCREMENTAL_SSLOG_MOCK_PALF_KV
 
 // #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_define.h"
+#include "lib/ob_errno.h"
+#include "lib/oblog/ob_log_module.h"
+#include "storage/incremental/sslog/ob_sslog_kv_define.h"
+#include <cstring>
 #include <unordered_map>
 #include <vector>
 namespace oceanbase
@@ -49,10 +53,12 @@ public:
 
  ModulePageAllocator allocator_;
 
+  bool watch_key_errsim_;
+
 public:
   void clear() { map_.clear(); }
 
-  ObMockPalfKV() : map_(), base_gts_(0), lock_(), max_gc_version_(),allocator_() {}
+  ObMockPalfKV() : map_(), base_gts_(0), lock_(), max_gc_version_(),allocator_(),watch_key_errsim_(false) {}
 
   void reset()
   {}
@@ -151,6 +157,50 @@ public:
 
     return ret;
   }
+
+  virtual int watch_cas(const common::ObString &key,
+                        const common::ObString &watch_key,
+                        const common::ObString &old_value,
+                        const common::ObString &new_value,
+                        bool &expected)
+  {
+    int ret = OB_SUCCESS;
+
+    expected = false;
+
+    vector<char> palf_key;
+    vector<char> palf_old_val;
+    vector<char> palf_new_val;
+    vector<char> watch_key_val;
+    palf_key.resize(key.length());
+    palf_old_val.resize(old_value.length());
+    palf_new_val.resize(new_value.length());
+    watch_key_val.resize(watch_key.length());
+    memcpy(palf_key.data(), key.ptr(), key.length());
+    memcpy(palf_old_val.data(), old_value.ptr(), old_value.length());
+    memcpy(palf_new_val.data(), new_value.ptr(), new_value.length());
+    memcpy(watch_key_val.data(), watch_key.ptr(), watch_key.length());
+
+    auto iter = map_.find(palf_key);
+    auto watch_iter = map_.find(watch_key_val);
+
+    if (watch_iter == map_.end() || watch_key_errsim_) {
+      ret = OB_ENTRY_NOT_EXIST;
+      TRANS_LOG(WARN, "the watch key is not existed", K(ret), K(watch_key));
+    } else if (iter == map_.end()) {
+      ret = OB_ENTRY_NOT_EXIST;
+      TRANS_LOG(WARN, "the palf key is not existed", K(ret), K(key));
+    } else if (iter->second == palf_old_val) {
+      iter->second.resize(palf_new_val.size());
+      memcpy(iter->second.data(), palf_new_val.data(), palf_new_val.size());
+      expected = true;
+    } else {
+      expected = false;
+    }
+
+    return ret;
+  }
+
   virtual int delete_kv(const common::ObString &key)
   {
     int ret = OB_SUCCESS;
