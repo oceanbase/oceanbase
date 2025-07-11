@@ -94,6 +94,8 @@ int ObGranuleUtil::use_partition_granule(ObGranulePumpArgs &args, bool &partitio
   } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR__PX_MIN_GRANULES_PER_SLAVE,
                                                     hash_partition_scan_hold))) {
     LOG_WARN("failed to get sys variable px min granule per slave", K(ret));
+  } else if (scan_ops.at(0)->is_external_table_) {
+    partition_granule = false;
   } else {
     partition_granule = ObGranuleUtil::use_partition_granule(args.tablet_arrays_.at(0).count(),
                                                              args.parallelism_, partition_scan_hold,
