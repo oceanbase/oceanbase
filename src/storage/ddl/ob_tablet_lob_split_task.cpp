@@ -217,11 +217,7 @@ int ObLobSplitContext::init(const ObLobSplitParam& param)
       , is_data_split_executor_
   #endif
       ))) {
-    if (OB_NEED_RETRY == ret) {
-      if (REACH_COUNT_INTERVAL(1000L)) {
-        LOG_WARN("wait to satisfy the data split condition", K(ret), K(param));
-      }
-    } else {
+    if (OB_NEED_RETRY != ret) {
       LOG_WARN("check satisfy split condition failed", K(ret), K(param));
     }
   } else if (OB_FAIL(ObTabletSplitUtil::get_tablet(allocator_, ls_handle_,

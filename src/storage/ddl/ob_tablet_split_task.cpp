@@ -262,11 +262,7 @@ int ObTabletSplitCtx::init(const ObTabletSplitParam &param)
       , is_data_split_executor_
 #endif
       ))) {
-    if (OB_NEED_RETRY == ret) {
-      if (REACH_COUNT_INTERVAL(1000L)) {
-        LOG_WARN("wait to satisfy the data split condition", K(ret), K(param));
-      }
-    } else {
+    if (OB_NEED_RETRY != ret) {
       LOG_WARN("check satisfy split condition failed", K(ret), K(param));
     }
   } else if (OB_FAIL(ObTabletSplitUtil::get_tablet(allocator_, ls_handle_,
@@ -427,6 +423,9 @@ int ObTabletSplitCtx::get_split_majors_infos()
       ObArray<ObITable::TableKey>()/*skip_split_majors*/,
       major_sstables))) {
     LOG_WARN("get participant sstables failed", K(ret));
+  } else if (OB_UNLIKELY(major_sstables.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("no major sstables", K(ret), KPC(this));
   } else {
     split_majors_count_ = major_sstables.count();
     max_major_snapshot_ = major_sstables.at(major_sstables.count() - 1)->get_snapshot_version();

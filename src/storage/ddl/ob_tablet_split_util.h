@@ -142,6 +142,10 @@ public:
       const bool can_reuse_macro_block,
       bool &is_finished);
 
+  static int check_src_tablet_table_store_ready(
+      const ObLSHandle &ls_handle,
+      const ObTabletHandle &local_source_tablet_handle);
+
   static int check_satisfy_split_condition(
       const ObLSHandle &ls_handle,
       const ObTabletHandle &local_source_tablet_handle,
