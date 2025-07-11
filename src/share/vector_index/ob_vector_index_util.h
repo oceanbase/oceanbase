@@ -851,7 +851,9 @@ struct ObVecExtraInfo {
 public:
   static int extra_infos_to_buf(ObIAllocator &allocator, const ObVecExtraInfoObj *extra_info_obj,
                                 int64_t extra_column_count, int64_t extra_info_actual_size, int64_t count, char *&buf);
-  static int extra_buf_to_obj(const char *buf, int64_t data_len, int64_t extra_column_count, ObObj *obj);
+  // if obj is ordered by column id, extra_in_rowkey_idxs_ is nullptr, else if extra_in_rowkey_idxs_ is ordered by rowkey_id
+  // extra_in_rowkey_idxs_ is not nullptr
+  static int extra_buf_to_obj(const char *buf, int64_t data_len, int64_t extra_column_count, ObObj *obj, const ObIArray<int64_t> *extra_in_rowkey_idxs_ = nullptr);
   static int64_t get_encode_size(const ObIArray<ObVecExtraInfoObj> &extra_obj);
   inline static bool is_obj_type_supported(const ObObjType obj_type)
   {
