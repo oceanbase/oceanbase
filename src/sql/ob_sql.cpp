@@ -3486,7 +3486,8 @@ int ObSql::generate_plan(ParseResult &parse_result,
     } else if (OB_FAIL(ObCacheObjectFactory::alloc(guard,
                                                     ObLibCacheNameSpace::NS_CRSR,
                                                     effective_tid))) {
-      LOG_WARN("fail to alloc phy_plan", K(ret));
+      LOG_WARN("fail to alloc phy_plan", K(ret), K(effective_tid), K(result.get_session().get_effective_tenant_id()),
+          KPC(result.get_session().get_plan_cache()));
     } else if (FALSE_IT(phy_plan = static_cast<ObPhysicalPlan*>(guard.get_cache_obj()))) {
       // do nothing
     } else if (OB_UNLIKELY(NULL == phy_plan)) {
