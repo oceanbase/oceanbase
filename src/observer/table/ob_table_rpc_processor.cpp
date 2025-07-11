@@ -707,7 +707,9 @@ template<class T>
 int ObTableRpcProcessor<T>::before_response(int error_code)
 {
   const int64_t elapsed_us = ObTimeUtility::fast_current_time() - RpcProcessor::get_receive_timestamp();
-  ObTableRpcProcessorUtil::record_stat(stat_process_type_, elapsed_us, stat_row_count_, enable_query_response_time_stats_);
+  if (OB_SUCCESS == error_code) {
+    ObTableRpcProcessorUtil::record_stat(stat_process_type_, elapsed_us, stat_row_count_, enable_query_response_time_stats_);
+  }
   request_finish_callback(); // clear thread local variables used to wait in queue
   return RpcProcessor::before_response(error_code);
 }
