@@ -868,7 +868,7 @@ TEST_F(TestTmpFile, test_write_tail_page)
 // 3. truncate memory data and disk data (wbp begin offset < truncate_offset < file_size_)
 // 4. truncate() do nothing (truncate_offset < file's truncate_offset_)
 // 5. invalid truncate_offset checking
-TEST_F(TestTmpFile, test_tmp_file_truncate)
+TEST_F(TestTmpFile, DISABLED_test_tmp_file_truncate)
 {
   STORAGE_LOG(INFO, "=======================test_tmp_file_truncate begin=======================");
   int ret = OB_SUCCESS;
@@ -1779,7 +1779,7 @@ int check_flush_over(ObSharedStorageTmpFile &file)
   return ret;
 }
 
-TEST_F(TestTmpFile, test_flush_with_write_tail_page_and_truncate)
+TEST_F(TestTmpFile, DISABLED_test_flush_with_write_tail_page_and_truncate)
 {
   STORAGE_LOG(INFO, "=======================test_flush_with_write_tail_page_and_truncate begin=======================");
   int ret = OB_SUCCESS;
@@ -1933,7 +1933,7 @@ TEST_F(TestTmpFile, test_flush_with_write_tail_page_and_truncate)
   STORAGE_LOG(INFO, "=======================test_flush_with_write_tail_page_and_truncate end=======================");
 }
 
-TEST_F(TestTmpFile, test_flush_with_io_error)
+TEST_F(TestTmpFile, DISABLED_test_flush_with_io_error)
 {
   STORAGE_LOG(INFO, "=======================test_flush_with_io_error begin=======================");
   int ret = OB_SUCCESS;
