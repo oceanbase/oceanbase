@@ -104,7 +104,8 @@ public:
       const share::schema::ObTableSchema &input_schema,
       const lib::Worker::CompatMode compat_mode,
       const bool skip_column_info = false,
-      const int64_t compat_version = STORAGE_SCHEMA_VERSION_V2);
+      const int64_t compat_version = STORAGE_SCHEMA_VERSION_V2,
+      const bool need_trim_default_val = false);
   int init(
       common::ObIAllocator &allocator,
       const ObStorageSchema &old_schema,
@@ -204,7 +205,7 @@ private:
   inline bool is_view_table() const { return share::schema::ObTableType::USER_VIEW == table_type_ || share::schema::ObTableType::SYSTEM_VIEW == table_type_ || share::schema::ObTableType::MATERIALIZED_VIEW == table_type_; }
 
   int generate_str(const share::schema::ObTableSchema &input_schema);
-  int generate_column_array(const share::schema::ObTableSchema &input_schema);
+  int generate_column_array(const share::schema::ObTableSchema &input_schema, const bool need_trim_default_val);
   int get_column_ids_without_rowkey(
       common::ObIArray<share::schema::ObColDesc> &column_ids,
       bool no_virtual) const;

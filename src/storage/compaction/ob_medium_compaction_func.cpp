@@ -149,7 +149,7 @@ int ObMediumCompactionScheduleFunc::choose_major_snapshot(
                 K(ls_id), K(tablet_id), K(last_sstable_schema_version), K(freeze_info));
       break;
     } else if (OB_FAIL(get_table_schema_to_merge(
-        *schema_service, tablet, freeze_info.schema_version, medium_info.medium_compat_version_, allocator, medium_info.storage_schema_))) {
+        *schema_service, tablet, freeze_info.schema_version, medium_info.medium_compat_version_, allocator, medium_info.storage_schema_, true /*need_trim_default_val*/))) {
       if (OB_TABLE_IS_DELETED == ret) {
         // do nothing, end loop
       } else if (OB_ERR_SCHEMA_HISTORY_EMPTY == ret) {
@@ -806,7 +806,7 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
       LOG_WARN("failed to get schema service from MTL", K(ret));
     } else if (FALSE_IT(medium_info.storage_schema_.reset())) {
     } else if (OB_FAIL(get_table_schema_to_merge(*schema_service, *tablet, schema_version,
-        medium_info.medium_compat_version_, allocator_, medium_info.storage_schema_))) {
+        medium_info.medium_compat_version_, allocator_, medium_info.storage_schema_, true /*need_trim_default_val*/))) {
       // for major compaction, storage schema is inited in choose_major_snapshot
       if (OB_TABLE_IS_DELETED != ret) {
         LOG_WARN("failed to get table schema", KR(ret), KPC(this), K(medium_info));
@@ -860,7 +860,8 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
     const int64_t schema_version,
     const int64_t medium_compat_version,
     ObIAllocator &allocator,
-    ObStorageSchema &storage_schema)
+    ObStorageSchema &storage_schema,
+    const bool need_trim_default_val /*= false*/)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -917,7 +918,8 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
           allocator, *table_schema, tablet.get_tablet_meta().compat_mode_, false/*skip_column_info*/,
           ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2 <= medium_compat_version
               ? ObStorageSchema::STORAGE_SCHEMA_VERSION_V2
-              : ObStorageSchema::STORAGE_SCHEMA_VERSION))) {
+              : ObStorageSchema::STORAGE_SCHEMA_VERSION,
+          need_trim_default_val))) {
     LOG_WARN("failed to init storage schema", K(ret), K(schema_version));
   } else {
     LOG_TRACE("get schema to merge", K(table_id), K(schema_version), K(save_schema_version),

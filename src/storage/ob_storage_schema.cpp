@@ -166,7 +166,8 @@ int ObStorageSchema::init(
     const ObTableSchema &input_schema,
     const lib::Worker::CompatMode compat_mode,
     const bool skip_column_info/* = false*/,
-    const int64_t compat_version/* = STORAGE_SCHEMA_VERSION_V2*/)
+    const int64_t compat_version/* = STORAGE_SCHEMA_VERSION_V2*/,
+    const bool need_trim_default_val/* = false*/)
 {
   int ret = OB_SUCCESS;
 
@@ -190,7 +191,7 @@ int ObStorageSchema::init(
   } else if (OB_FAIL(generate_str(input_schema))) {
     STORAGE_LOG(WARN, "failed to generate string", K(ret), K(input_schema));
   } else if (FALSE_IT(column_info_simplified_ = skip_column_info)) {
-  } else if (OB_FAIL(generate_column_array(input_schema))) {
+  } else if (OB_FAIL(generate_column_array(input_schema, need_trim_default_val))) {
     STORAGE_LOG(WARN, "failed to generate column array", K(ret), K(input_schema));
   } else if (OB_UNLIKELY(!ObStorageSchema::is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -601,7 +602,9 @@ int ObStorageSchema::generate_str(const ObTableSchema &input_schema)
   return ret;
 }
 
-int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
+int ObStorageSchema::generate_column_array(
+    const ObTableSchema &input_schema,
+    const bool need_trim_default_val)
 {
   int ret = OB_SUCCESS;
   // build column schema map
@@ -633,15 +636,20 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
       col_schema.is_column_stored_in_sstable_ = col->is_column_stored_in_sstable();
       col_schema.is_generated_column_ = col->is_generated_column();
       col_schema.meta_type_ = col->get_meta_type();
+      const ObObj &orig_default_val = col->get_orig_default_value();
       if (ob_is_large_text(col->get_data_type())) {
         col_schema.default_checksum_ = 0;
-      } else if (OB_FAIL(datum.from_obj_enhance(col->get_orig_default_value()))) {
+      } else if (OB_FAIL(datum.from_obj_enhance(orig_default_val))) {
         STORAGE_LOG(WARN, "Failed to transefer obj to datum", K(ret));
+      } else if (need_trim_default_val && orig_default_val.is_fixed_len_char_type()
+              && OB_FAIL(trim(orig_default_val.get_collation_type(), datum))) {
+        STORAGE_LOG(WARN, "failed to trim default value", K(ret), K(orig_default_val), K(datum));
       } else {
         col_schema.default_checksum_ = datum.checksum(0);
       }
-      if (OB_FAIL(col_schema.deep_copy_default_val(*allocator_, col->get_orig_default_value()))) {
-        STORAGE_LOG(WARN, "failed to deep copy", K(ret), K(col->get_orig_default_value()));
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(col_schema.deep_copy_default_val(*allocator_, orig_default_val))) {
+        STORAGE_LOG(WARN, "failed to deep copy", K(ret), K(orig_default_val));
       } else if (OB_FAIL(column_array_.push_back(col_schema))) {
         STORAGE_LOG(WARN, "Fail to push into column array", K(ret), K(col_schema));
         col_schema.destroy(*allocator_);
