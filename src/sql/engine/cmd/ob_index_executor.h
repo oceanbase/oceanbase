@@ -44,7 +44,7 @@ private:
   int sync_check_index_status(sql::ObSQLSessionInfo &my_session,
         obrpc::ObCommonRpcProxy &common_rpc_proxy,
         const obrpc::ObCreateIndexArg &create_index_arg,
-        const obrpc::ObAlterTableRes &res,
+        const int64_t ddl_task_id,
         common::ObIAllocator &allocator,
         bool is_update_global_indexes = false);
   int handle_session_exception(ObSQLSessionInfo &session);
