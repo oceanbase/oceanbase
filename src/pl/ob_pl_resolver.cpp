@@ -5046,7 +5046,7 @@ int ObPLResolver::check_use_idx_illegal(ObRawExpr* expr, int64_t idx)
   return ret;
 }
 
-int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &need_modify, bool &can_array_binding)
+int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &need_modify)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(expr));
@@ -5058,7 +5058,9 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
       for (int64_t i = 0; OB_SUCC(ret) && !need_modify && i < obj_access_expr->get_access_idxs().count(); ++i) {
         if (obj_access_expr->get_access_idxs().at(i).elem_type_.is_collection_type()) {
           collection_index = i;
-          if (obj_access_expr->get_access_idxs().at(collection_index + 1).is_local()) {
+          if ((collection_index + 1) >= obj_access_expr->get_access_idxs().count()) {
+            // do nothing ...
+          } else if (obj_access_expr->get_access_idxs().at(collection_index + 1).is_local()) {
             int64_t var_idx = obj_access_expr->get_access_idxs().at(collection_index + 1).var_index_;
             if (var_idx < 0 || var_idx >= obj_access_expr->get_var_indexs().count()) {
               ret = OB_ERR_UNEXPECTED;
@@ -5109,8 +5111,15 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
           } else {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not supported yet", K(ret), KPC(obj_access_expr));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-urowid type");
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "collection index in forall statement");
           }
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+        if (expr->get_param_expr(i)->get_expr_type() != T_FUN_PL_ASSOCIATIVE_INDEX) {
+          bool inner_modify = false;
+          OZ (SMART_CALL(check_raw_expr_in_forall(expr->get_param_expr(i), idx, inner_modify)));
+          OX (need_modify |= inner_modify);
         }
       }
     } else if (T_QUESTIONMARK == expr->get_expr_type()) {
@@ -5119,18 +5128,11 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
         ret = OB_ERR_FORALL_ITER_NOT_ALLOWED;
         LOG_WARN("PLS-00430: FORALL iteration variable INDX is not allowed in this context", K(ret));
       }
-      //这里控制包含非数组类型变量的forall语句直接以forloop实现, 避免forall先回退, 再forloop执行
-      can_array_binding = true;
     } else {
-      bool inner_modify = false;
-      bool inner_can_array_binding = true;
       for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-        OZ (SMART_CALL(check_raw_expr_in_forall(expr->get_param_expr(i), idx, inner_modify, inner_can_array_binding)));
-        if (inner_modify) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not supported yet", K(ret), K(expr));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "expression batch execution in forall statement");
-        }
+        bool inner_modify = false;
+        OZ (SMART_CALL(check_raw_expr_in_forall(expr->get_param_expr(i), idx, inner_modify)));
+        OX (need_modify |= inner_modify);
       }
     }
   }
@@ -5267,7 +5269,13 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
       ObRawExpr* exec_param = func.get_expr(params.at(i));
       bool need_modify = false;
       CK (OB_NOT_NULL(exec_param));
-      OZ (check_raw_expr_in_forall(exec_param, stmt.get_ident(), need_modify, can_array_binding));
+      if (OB_SUCC(ret)
+          && T_FUN_SYS_PL_SEQ_NEXT_VALUE == exec_param->get_expr_type()) {
+        // nextvalue expression will calc twice if forall rollback to forloop, it make result confused.
+        // so we forbid forall if expression has nextval expression.
+        can_array_binding = false;
+      }
+      OZ (check_raw_expr_in_forall(exec_param, stmt.get_ident(), need_modify));
       if (OB_SUCC(ret)) {
         if (need_modify) {
           OZ (need_modify_exprs.push_back(i));
@@ -5321,20 +5329,24 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
       for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
         ObRawExpr* exec_param = func.get_expr(params.at(i));
         bool need_modify = false;
-        bool is_array_binding = true;
         CK (OB_NOT_NULL(exec_param));
-        OZ (check_raw_expr_in_forall(exec_param, stmt.get_ident(), need_modify, is_array_binding));
+        if (OB_SUCC(ret)
+          && T_FUN_SYS_PL_SEQ_NEXT_VALUE == exec_param->get_expr_type()) {
+          // nextvalue expression will calc twice if forall rollback to forloop, it make result confused.
+          // so we forbid forall if expression has nextval expression.
+          can_array_binding = false;
+        }
+        OZ (check_raw_expr_in_forall(exec_param, stmt.get_ident(), need_modify));
         if (OB_SUCC(ret)) {
           if (need_modify) {
             OZ (need_modify_exprs.push_back(i));
             OZ (exec_param->formalize(&resolve_ctx_.session_info_));
             if (OB_SUCC(ret) && exec_param->get_result_type().is_ext()) {
-              is_array_binding = false; // SQL Engine can not support SqlArray with ext element.
+              can_array_binding = false; // SQL Engine can not support SqlArray with ext element.
             }
           }
           OZ (sql_stmt->get_array_binding_params().push_back(params.at(i)));
         }
-        can_array_binding &= is_array_binding;
       }
       if (OB_SUCC(ret) && 0 == need_modify_exprs.count()) {
         ret = OB_ERR_FORALL_DML_WITHOUT_BULK;

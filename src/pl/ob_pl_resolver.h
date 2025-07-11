@@ -1086,8 +1086,7 @@ private:
 
   int check_raw_expr_in_forall(ObRawExpr* expr,
                                int64_t idx,
-                               bool &need_modify,
-                               bool &can_array_binding);
+                               bool &need_modify);
   int modify_raw_expr_in_forall(ObPLForAllStmt &stmt,
                                 ObPLFunctionAST &func,
                                 ObPLSqlStmt &sql_stmt,
