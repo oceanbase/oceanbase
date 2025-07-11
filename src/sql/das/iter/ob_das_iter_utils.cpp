@@ -1168,6 +1168,7 @@ int ObDASIterUtils::create_text_retrieval_sub_tree(const ObLSID &ls_id,
   } else if (BOOLEAN_MODE == mode && merge_iter_param.query_tokens_.count() > OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("boolean mode with too many tokens not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,"Boolean mode with more than 256 tokens is");
   } else if ((is_func_lookup && merge_iter_param.query_tokens_.count() > OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT) ||
               (!is_func_lookup && (merge_iter_param.query_tokens_.count() > OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT || !ir_scan_ctdef->need_proj_relevance_score()))) {
     need_inv_idx_agg_reset = true;
