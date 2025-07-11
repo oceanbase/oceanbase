@@ -337,9 +337,11 @@ ObIKArbitrator::ObIKArbitrator() : alloc_(lib::ObMemAttr(MTL_ID(), "IK Arbitrato
 int ObIKArbitrator::add_chain(ObIKTokenChain *chain)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(chain) || chain->list().is_empty()) {
+  if (OB_ISNULL(chain)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid chain argument", K(ret));
+  } else if (chain->list().is_empty()) {
+    // no need to add empty chain
   } else if (OB_FAIL(chains_.set_refactored(chain->min_offset(), chain))) {
     LOG_WARN("Failed to add chain to map", K(ret));
   }
