@@ -2135,6 +2135,25 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
         } else {
           if (OB_NOT_NULL(params_.secondary_namespace_)) { //PL语句的Prepare阶段
             CK(OB_NOT_NULL(params_.allocator_), OB_NOT_NULL(params_.expr_factory_));
+            const pl::ObPLVar* var = NULL;
+            bool need_reset_inout_flag = false;
+            if (OB_SUCC(ret) && T_QUESTIONMARK == ch_node->type_) {
+              // get var from symbol table
+              int64_t idx = ch_node->value_;
+              const pl::ObPLSymbolTable* symbol_table = NULL;
+              CK (OB_NOT_NULL(symbol_table = params_.secondary_namespace_->get_symbol_table()));
+              CK (OB_NOT_NULL(var = symbol_table->get_symbol(idx)));
+              if (OB_SUCC(ret)) {
+                if (var->get_name().prefix_match(pl::ObPLResolver::ANONYMOUS_ARG)) {
+                  // This must be a write scenario, but process_datatype_or_questionmark
+                  // will mistakenly mark it as read. So if is_referenced != true ,
+                  // we need to change back the name_ and is_referenced flag of this var
+                  if (!var->is_referenced()) {
+                    need_reset_inout_flag = true;
+                  }
+                }
+              }
+            }
 
             OZ (pl::ObPLResolver::resolve_raw_expr(*ch_node,
                                                    *params_.allocator_,
@@ -2152,6 +2171,13 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
               LOG_USER_ERROR(OB_ERR_EXP_NOT_INTO_TARGET,
                             (int)(ch_node->str_len_),
                             ch_node->str_value_);
+            }
+            if (OB_SUCC(ret) && need_reset_inout_flag && OB_NOT_NULL(var)) {
+              OX (const_cast<pl::ObPLVar*>(var)->set_is_referenced(false));
+              OX (const_cast<pl::ObPLVar*>(var)->set_name(pl::ObPLResolver::ANONYMOUS_ARG));
+              if (expr->get_result_type().is_string_type()) {
+                OX (expr->set_length(LENGTH_UNKNOWN_YET));
+              }
             }
             OZ (pl_vars.push_back(expr));
           } else if (params_.is_prepare_protocol_) { //动态SQL中的RETURNING子句, 后面跟的是QuestionMark
