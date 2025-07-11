@@ -8119,7 +8119,9 @@ int ObDDLResolver::resolve_vec_index_constraint(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("tenant data version is less than 4.3.5.2, sparse vector index not supported", K(ret), K(tenant_data_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.2, sparse vector index");
-    } else {
+    }
+
+    if (OB_SUCC(ret)) {
       const int64_t MAX_DIM_LIMITED = 4096;
       int64_t dim = 0;
 
