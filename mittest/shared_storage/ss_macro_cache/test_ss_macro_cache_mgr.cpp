@@ -42,7 +42,6 @@ public:
   virtual void TearDown();
   void check_macro_cache_meta(const MacroBlockId &macro_id,
                               const ObSSMacroCacheInfo &cache_info);
-
 public:
   static const int64_t WRITE_IO_SIZE = 2 * 1024L * 1024L; // 2MB
   ObStorageObjectWriteInfo write_info_;
@@ -101,7 +100,6 @@ void TestSSMacroCacheMgr::check_macro_cache_meta(
   ASSERT_EQ(cache_info.cache_type_, meta_handle()->get_cache_type()) << "call_times: " << call_times;
   ASSERT_EQ(cache_info.is_write_cache_, meta_handle()->get_is_write_cache()) << "call_times: " << call_times;
 }
-
 TEST_F(TestSSMacroCacheMgr, put_update_erase)
 {
   int ret = OB_SUCCESS;
@@ -455,6 +453,45 @@ TEST_F(TestSSMacroCacheMgr, update_lru_list)
   ASSERT_TRUE(meta_handle.is_valid());
   ASSERT_TRUE(meta_handle()->get_is_in_fifo_list());
   meta_handle.reset();
+}
+
+TEST_F(TestSSMacroCacheMgr, force_evict_by_macro_id_write_cache)
+{
+  int ret = OB_SUCCESS;
+  ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
+  ASSERT_NE(nullptr, macro_cache_mgr);
+
+  const uint64_t tablet_id = 200007;
+  const uint64_t server_id = 1;
+
+  // MacroBlockId
+  MacroBlockId macro_id;
+  macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
+  macro_id.set_storage_object_type((uint64_t)ObStorageObjectType::PRIVATE_DATA_MACRO);
+  macro_id.set_second_id(tablet_id);
+  macro_id.set_third_id(server_id);
+  macro_id.set_macro_transfer_seq(0); // transfer_seq
+  macro_id.set_tenant_seq(100); // tenant_seq
+  ASSERT_TRUE(macro_id.is_valid());
+
+  // 1. write to macro cache
+  ObStorageObjectHandle write_object_handle;
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+  ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
+  ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
+  write_object_handle.reset();
+
+  // check macro cache meta
+  uint64_t effective_tablet_id = tablet_id;
+  uint32_t size = 2 * 1024 * 1024;
+  ObSSMacroCacheType cache_type = ObSSMacroCacheType::MACRO_BLOCK;
+  bool is_write_cache = true;
+  ObSSMacroCacheInfo cache_info(effective_tablet_id, size, cache_type, is_write_cache);
+  check_macro_cache_meta(macro_id, cache_info);
+
+  // 2. force evict the macro
+  ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->force_evict_by_macro_id(macro_id));
+  ASSERT_EQ(nullptr, macro_cache_mgr->meta_map_.get(macro_id));
 }
 
 } // namespace storage
