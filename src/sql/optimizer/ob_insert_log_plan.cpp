@@ -589,12 +589,12 @@ int ObInsertLogPlan::create_insert_plans(ObIArray<CandidatePlan> &candi_plans,
   int64_t inherit_sharding_index = OB_INVALID_INDEX;
   ObShardingInfo *insert_op_sharding = NULL;
   ObSEArray<ObShardingInfo*, 2> input_shardings;
-  int64_t distributed_methods = DIST_BASIC_METHOD | DIST_PARTITION_WISE | DIST_PULL_TO_LOCAL;
   for (int64_t i = 0; OB_SUCC(ret) && i < candi_plans.count(); i++) {
     candi_plan = candi_plans.at(i);
     is_multi_part_dml = force_multi_part;
     input_shardings.reuse();
     insert_op_sharding = NULL;
+    int64_t distributed_methods = DIST_BASIC_METHOD | DIST_PARTITION_WISE | DIST_PULL_TO_LOCAL;
     if (OB_ISNULL(candi_plan.plan_tree_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
@@ -772,9 +772,9 @@ int ObInsertLogPlan::get_best_insert_dist_method(ObLogicalOperator &top,
   } else if (OB_FALSE_IT(is_multi_part_dml |= force_multi_part)) {
     //hint force use multi part dml
   } else if (is_multi_part_dml) {
-    if (OB_FAIL(check_basic_sharding_for_insert_stmt(*local_sharding,
-                                                    top,
-                                                    is_basic))) {
+    if (OB_FAIL(check_basic_sharding_for_dml_stmt(*local_sharding,
+                                                  top,
+                                                  is_basic))) {
       LOG_WARN("failed to check basic sharding for insert stmt", K(ret));
     } else if (is_basic) {
       distributed_methods = DIST_BASIC_METHOD;
@@ -794,9 +794,9 @@ int ObInsertLogPlan::get_best_insert_dist_method(ObLogicalOperator &top,
   } else if (is_partition_wise) {
     distributed_methods = DIST_PARTITION_WISE;
     OPT_TRACE("insert plan will use partition wise method");
-  } else if (OB_FAIL(check_basic_sharding_for_insert_stmt(*insert_table_sharding,
-                                                          top,
-                                                          is_basic))) {
+  } else if (OB_FAIL(check_basic_sharding_for_dml_stmt(*insert_table_sharding,
+                                                       top,
+                                                       is_basic))) {
     LOG_WARN("failed to check basic sharding for insert stmt", K(ret));
   } else if (is_basic) {
     distributed_methods = DIST_BASIC_METHOD;
@@ -804,9 +804,10 @@ int ObInsertLogPlan::get_best_insert_dist_method(ObLogicalOperator &top,
   } else if (!insert_table_sharding->is_local() &&
              OB_FALSE_IT(is_multi_part_dml=true)) {
     //insert into remote table, force use multi part dml
-  } else if (OB_FAIL(check_basic_sharding_for_insert_stmt(*local_sharding,
-                                                          top,
-                                                          is_basic))) {
+  } else if (is_multi_part_dml &&
+             OB_FAIL(check_basic_sharding_for_dml_stmt(*local_sharding,
+                                                       top,
+                                                       is_basic))) {
     LOG_WARN("failed to check basic sharding for insert stmt", K(ret));
   } else if (is_basic) {
     distributed_methods = DIST_BASIC_METHOD;
@@ -911,28 +912,6 @@ int ObInsertLogPlan::check_insert_plan_need_multi_partition_dml(ObTablePartition
   if (OB_SUCC(ret)) {
     LOG_TRACE("succeed to check insert_stmt need multi-partition-dml", K(is_multi_part_dml));
   }
-  return ret;
-}
-
-int ObInsertLogPlan::check_basic_sharding_for_insert_stmt(ObShardingInfo &target_sharding,
-                                                          ObLogicalOperator &child,
-                                                          bool &is_basic)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObShardingInfo*, 4> input_sharding;
-  ObAddr &local_addr = get_optimizer_context().get_local_server_addr();
-  is_basic = false;
-  if (OB_ISNULL(child.get_sharding())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(input_sharding.push_back(&target_sharding)) ||
-             OB_FAIL(input_sharding.push_back(child.get_sharding()))) {
-    LOG_WARN("failed to push back sharding info", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::check_basic_sharding_info(local_addr,
-                                                                input_sharding,
-                                                                is_basic))) {
-    LOG_WARN("failed to check if it is basic sharding info", K(ret));
-  } else { /*do nothing*/ }
   return ret;
 }
 
