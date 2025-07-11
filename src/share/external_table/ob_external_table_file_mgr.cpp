@@ -386,7 +386,7 @@ int ObExternalTableFileManager::get_all_records_from_inner_table(ObIAllocator &a
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret));
       } else {
-        while (OB_SUCC(result->next())) {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
           ObString file_url;
           int64_t file_id;
           EXTRACT_VARCHAR_FIELD_MYSQL(*result, "file_url", file_url);
@@ -458,7 +458,7 @@ int ObExternalTableFileManager::fill_cache_from_inner_table(
             ObSEArray<int64_t, 16> temp_file_ids;
             ObSEArray<int64_t, 16> temp_file_sizes;
             ObArenaAllocator allocator;
-            while (OB_SUCC(result->next())) {
+            while (OB_SUCC(ret) && OB_SUCC(result->next())) {
               ObString file_url;
               ObString tmp_url;
               int64_t file_id = INT64_MAX;
