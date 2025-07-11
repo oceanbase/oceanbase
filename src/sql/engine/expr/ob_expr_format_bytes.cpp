@@ -49,7 +49,8 @@ int ObExprFormatBytes::eval_format_bytes(const ObExpr &expr, ObEvalCtx &ctx,
   if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {
     LOG_WARN("eval arg0 failed", K(ret));
   } else {
-    if (OB_FAIL(eval_format_bytes_util(expr, res_datum, datum, ctx))){
+    if (OB_FAIL(eval_format_bytes_util(expr, res_datum, datum, ctx,
+                                       expr.is_batch_result() ? ctx.get_batch_idx() : 0))){
       LOG_WARN("eval format_bytes unexpect error", K(ret));
     } else {
       // do nothing
