@@ -1549,6 +1549,7 @@ bool ObMigrationUtils::is_need_retry_error(const int err)
     case OB_UNEXPECTED_TABLET_STATUS :
     case OB_TABLET_TRANSFER_SEQ_NOT_MATCH :
     case OB_MIGRATE_TX_DATA_NOT_CONTINUES :
+    case OB_TRANS_CTX_NOT_EXIST:
       bret = false;
       break;
     default:
