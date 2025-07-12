@@ -372,6 +372,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"grouping", GROUPING},
   {"grouping_id", GROUPING_ID},
   {"group_concat", GROUP_CONCAT},
+  {"granularity", GRANULARITY},
   {"gts", GTS},
   {"handler", HANDLER},
   {"having", HAVING},

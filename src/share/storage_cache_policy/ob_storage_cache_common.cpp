@@ -95,6 +95,7 @@ int get_storage_cache_policy_type_from_part_str(const common::ObString &storage_
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid storage cache policy", KR(ret), K(storage_cache_policy_part_str));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "storage_cache_policy, storage_cache_policy for partition must be 'HOT', 'AUTO' or 'NONE'");
   }
   return ret;
 }
