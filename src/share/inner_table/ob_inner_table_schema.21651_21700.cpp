@@ -468,7 +468,7 @@ int ObInnerTableSchema::gv_ob_vector_memory_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     SVR_IP,     SVR_PORT,     TENANT_ID,     RAW_MALLOC_SIZE,     INDEX_METADATA_SIZE,     VECTOR_MEM_HOLD,     VECTOR_MEM_USED,     VECTOR_MEM_LIMIT,     TX_SHARE_LIMIT,     VECTOR_MEM_DETAIL_INFO FROM     oceanbase.__all_virtual_tenant_vector_mem_info )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     SVR_IP,     SVR_PORT,     TENANT_ID,     (VECTOR_MEM_HOLD + RAW_MALLOC_SIZE + INDEX_METADATA_SIZE) as VECTOR_MEM_HOLD,     (VECTOR_MEM_USED + RAW_MALLOC_SIZE + INDEX_METADATA_SIZE) as VECTOR_MEM_USED,     VECTOR_MEM_LIMIT FROM     oceanbase.__all_virtual_tenant_vector_mem_info )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -519,7 +519,7 @@ int ObInnerTableSchema::v_ob_vector_memory_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     SVR_IP,     SVR_PORT,     TENANT_ID,     RAW_MALLOC_SIZE,     INDEX_METADATA_SIZE,     VECTOR_MEM_HOLD,     VECTOR_MEM_USED,     VECTOR_MEM_LIMIT,     TX_SHARE_LIMIT,     VECTOR_MEM_DETAIL_INFO FROM     OCEANBASE.GV$OB_VECTOR_MEMORY WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT     SVR_IP,     SVR_PORT,     TENANT_ID,     VECTOR_MEM_HOLD,     VECTOR_MEM_USED,     VECTOR_MEM_LIMIT FROM     OCEANBASE.GV$OB_VECTOR_MEMORY WHERE         SVR_IP=HOST_IP()     AND         SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
