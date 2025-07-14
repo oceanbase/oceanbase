@@ -14,6 +14,7 @@
 #define OB_ALL_VIRTUAL_TENANT_VECTOR_MEM_INFO_H_
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "lib/alloc/ob_malloc_sample_struct.h"
+#include "storage/tablet/ob_tablet_iterator.h"
 #include "observer/omt/ob_multi_tenant_operator.h"
 
 namespace oceanbase
@@ -50,6 +51,9 @@ private:
   lib::ObMallocSampleMap::const_iterator it_;
   lib::ObMallocSampleMap malloc_sample_map_;
   char vector_used_str_[OB_MAX_MYSQL_VARCHAR_LENGTH];
+  common::ObSEArray<obrpc::ObLSTabletPair, ObTabletCommon::DEFAULT_ITERATOR_TABLET_ID_CNT> complete_tablet_ids_;
+  common::ObSEArray<obrpc::ObLSTabletPair, ObTabletCommon::DEFAULT_ITERATOR_TABLET_ID_CNT> partial_tablet_ids_;
+  common::ObSEArray<obrpc::ObLSTabletPair, ObTabletCommon::DEFAULT_ITERATOR_TABLET_ID_CNT> cache_tablet_ids_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTenantVectorMemInfo);
 };

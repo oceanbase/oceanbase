@@ -103,9 +103,17 @@ int ObAllVirtualTenantVectorMemInfo::inner_get_next_row(ObNewRow *&row)
           int64_t pos = 0;
           int64_t glibc_used = fill_glibc_used_info(tenant_id);
           MEMSET(vector_used_str_, 0, sizeof(vector_used_str_));
-          if (OB_FAIL(databuff_printf(vector_used_str_, OB_MAX_MYSQL_VARCHAR_LENGTH, pos, "{\"rb_used\":%lu, ", rb_used))) {
+          complete_tablet_ids_.reset();
+          partial_tablet_ids_.reset();
+          cache_tablet_ids_.reset();
+          if (OB_FAIL(service->get_snapshot_ids(complete_tablet_ids_, partial_tablet_ids_))) {
+            SERVER_LOG(WARN, "failed to get snapshot_ids", K(ret));
+          } else if (OB_FAIL(service->get_cache_ids(cache_tablet_ids_))) {
+            SERVER_LOG(WARN, "failed to get cache_ids", K(ret));
+          } else if (OB_FAIL(databuff_printf(vector_used_str_, OB_MAX_MYSQL_VARCHAR_LENGTH, pos, "{\"rb_used\":%lu", rb_used))) {
             SERVER_LOG(WARN, "failed to print total vector mem usage", K(ret), K(vector_hold));
-          } else if (OB_FAIL(ObPluginVectorIndexUtils::get_mem_context_detail_info(service, vector_used_str_, OB_MAX_MYSQL_VARCHAR_LENGTH, pos))) {
+          } else if (OB_FAIL(ObPluginVectorIndexUtils::get_mem_context_detail_info(service, complete_tablet_ids_,
+             partial_tablet_ids_, cache_tablet_ids_, vector_used_str_, OB_MAX_MYSQL_VARCHAR_LENGTH, pos))) {
             SERVER_LOG(WARN, "failed to print vector mem usage detail", K(ret), K(vector_hold));
           } else if (OB_FAIL(databuff_printf(vector_used_str_, OB_MAX_MYSQL_VARCHAR_LENGTH, pos, "}"))) {
             SERVER_LOG(WARN, "failed to print total vector mem usage", K(ret));

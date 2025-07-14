@@ -1695,45 +1695,60 @@ int ObPluginVectorIndexUtils::get_ls_leader_flag(const ObLSID &ls_id, bool &is_l
 }
 
 
-int ObPluginVectorIndexUtils::fill_mem_context_detail_info(VectorIndexAdaptorMap& adaptor_map, char *buf, int64_t buf_len, int64_t &pos)
+int ObPluginVectorIndexUtils::fill_mem_context_detail_info(ObPluginVectorIndexService *service, ObIArray<ObLSTabletPair> &tablet_ids, char *buf, int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   hash::ObHashSet<int64_t> adaptor_ptr_set;
-  if (adaptor_map.size() > 0 && OB_FAIL(adaptor_ptr_set.create(adaptor_map.size()))) {
+  if (tablet_ids.count() > 0 && OB_FAIL(adaptor_ptr_set.create(tablet_ids.count()))) {
     LOG_WARN("fail to create tablet_id set", KR(ret));
   }
-  FOREACH_X(adap_iter, adaptor_map, OB_SUCC(ret)) {
-    ObPluginVectorIndexAdaptor *adaptor = adap_iter->second;
-    if (OB_FAIL(adaptor_ptr_set.exist_refactored(reinterpret_cast<int64_t>(adaptor)))) {
-      if (ret == OB_HASH_EXIST) {
+  for (int i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
+    ObLSID ls_id = tablet_ids.at(i).ls_id_;
+    ObTabletID tablet_id = tablet_ids.at(i).tablet_id_;
+    ObPluginVectorIndexAdapterGuard adapter_guard;
+    if (OB_FAIL(service->get_adapter_inst_guard(ls_id, tablet_id, adapter_guard))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("failed to get adapter inst guard", K(ls_id), K(tablet_id), KR(ret));
+      }
+    } else {
+      ObPluginVectorIndexAdaptor *adaptor = adapter_guard.get_adatper();
+      if (OB_ISNULL(adaptor)) {
         // do nothing
-        ret = OB_SUCCESS;
-      } else if (ret == OB_HASH_NOT_EXIST) {
-        ret = OB_SUCCESS;
-        if (adaptor != NULL) {
-          if (OB_NOT_NULL(adaptor->get_incr_data())) {
-            if (OB_FAIL(databuff_printf(buf, buf_len, pos,"\"vsag_incr_%lu\":%d ", adaptor->get_inc_table_id(), adaptor->get_incr_vsag_mem_hold()))) {
-              OB_LOG(WARN, "failed to get vsag incr data mem info", K(ret));
+      } else if (OB_FAIL(adaptor_ptr_set.exist_refactored(reinterpret_cast<int64_t>(adaptor)))) {
+        if (ret == OB_HASH_EXIST) {
+          // do nothing
+          ret = OB_SUCCESS;
+        } else if (ret == OB_HASH_NOT_EXIST) {
+          ret = OB_SUCCESS;
+          if (adaptor != NULL) {
+            if (OB_NOT_NULL(adaptor->get_incr_data()) &&
+                OB_NOT_NULL(adaptor->get_incr_data()->mem_ctx_) &&
+                OB_NOT_NULL(adaptor->get_incr_data()->mem_ctx_->mem_ctx())) {
+              if (OB_FAIL(databuff_printf(buf, buf_len, pos,", \"vsag_incr_%lu\":%d", adaptor->get_inc_table_id(), adaptor->get_incr_vsag_mem_hold()))) {
+                OB_LOG(WARN, "failed to get vsag incr data mem info", K(ret));
+              }
+            }
+            if (OB_FAIL(ret)) {
+            } else if (OB_NOT_NULL(adaptor->get_snap_data_()) &&
+                OB_NOT_NULL(adaptor->get_snap_data_()->mem_ctx_) &&
+                OB_NOT_NULL(adaptor->get_snap_data_()->mem_ctx_->mem_ctx())) {
+              if (OB_FAIL(databuff_printf(buf, buf_len, pos,", \"vsag_snap_%lu\":%d", adaptor->get_snapshot_table_id(), adaptor->get_snap_vsag_mem_hold()))) {
+                OB_LOG(WARN, "failed to get vsag snap data mem info", K(ret));
+              }
+            }
+            if (OB_FAIL(ret)) {
+            } else if (OB_NOT_NULL(adaptor->get_vbitmap_data()) &&
+                OB_NOT_NULL(adaptor->get_vbitmap_data()->mem_ctx_) &&
+                OB_NOT_NULL(adaptor->get_vbitmap_data()->mem_ctx_->mem_ctx())) {
+              if (OB_FAIL(databuff_printf(buf, buf_len, pos,", \"vsag_bitmap_%lu\":%lu", adaptor->get_vbitmap_table_id(), adaptor->get_vbitmap_data()->mem_ctx_->hold()))) {
+                OB_LOG(WARN, "failed to get vsag bitmap data mem info", K(ret));
+              }
             }
           }
-          if (OB_FAIL(ret)) {
-          } else if (OB_NOT_NULL(adaptor->get_snap_data_())) {
-            if (OB_FAIL(databuff_printf(buf, buf_len, pos,"\"vsag_snap_%lu\":%d ", adaptor->get_snapshot_table_id(), adaptor->get_snap_vsag_mem_hold()))) {
-              OB_LOG(WARN, "failed to get vsag snap data mem info", K(ret));
-            }
-          }
-          if (OB_FAIL(ret)) {
-          } else if (OB_NOT_NULL(adaptor->get_vbitmap_data()) &&
-              OB_NOT_NULL(adaptor->get_vbitmap_data()->mem_ctx_) &&
-              OB_NOT_NULL(adaptor->get_vbitmap_data()->mem_ctx_->mem_ctx())) {
-            if (OB_FAIL(databuff_printf(buf, buf_len, pos,"\"vsag_bitmap_%lu\":%lu ", adaptor->get_vbitmap_table_id(), adaptor->get_vbitmap_data()->mem_ctx_->hold()))) {
-              OB_LOG(WARN, "failed to get vsag bitmap data mem info", K(ret));
-            }
-          }
+          OZ(adaptor_ptr_set.set_refactored(reinterpret_cast<int64_t>(adaptor)));
+        } else {
+          LOG_WARN("fail to create tablet_id set", K(ret));
         }
-        OZ(adaptor_ptr_set.set_refactored(reinterpret_cast<int64_t>(adaptor)));
-      } else {
-        LOG_WARN("fail to create tablet_id set", K(ret));
       }
     }
   }
@@ -1741,28 +1756,61 @@ int ObPluginVectorIndexUtils::fill_mem_context_detail_info(VectorIndexAdaptorMap
   return ret;
 }
 
-int ObPluginVectorIndexUtils::get_mem_context_detail_info(ObPluginVectorIndexService *service, char *buf, int64_t buf_len, int64_t &pos)
+int ObPluginVectorIndexUtils::get_mem_context_detail_info(ObPluginVectorIndexService *service,
+                                                          ObIArray<ObLSTabletPair> &complete_tablet_ids,
+                                                          ObIArray<ObLSTabletPair> &partial_tablet_ids,
+                                                          ObIArray<ObLSTabletPair> &cache_tablet_ids,
+                                                          char *buf, int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(fill_mem_context_detail_info(service, complete_tablet_ids, buf, buf_len, pos))) {
+    LOG_WARN("failed to fill complete adaptor detail info", KR(ret));
+  } else if (OB_FAIL(fill_mem_context_detail_info(service, partial_tablet_ids, buf, buf_len, pos))) {
+    LOG_WARN("failed to fill partial adaptor detail info", KR(ret));
+  } else if (OB_FAIL(fill_ivf_mem_context_detail_info(service, cache_tablet_ids, buf, buf_len, pos))) {
+    LOG_WARN("failed to fill ivf mem_ctx detail info", KR(ret));
+  }
 
-  FOREACH_X(iter, service->get_ls_index_mgr_map(), OB_SUCC(ret)) {
-    const ObLSID &ls_id = iter->first;
-    ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
-    if (OB_FAIL(service->get_ls_index_mgr_map().get_refactored(ls_id, index_ls_mgr))) {
-      LOG_WARN("fail to get vector index ls mgr", KR(ret), K(ls_id));
-    } else if (OB_ISNULL(index_ls_mgr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get invalid vector index ls mgr", KR(ret), K(ls_id));
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::fill_ivf_mem_context_detail_info(ObPluginVectorIndexService *service, ObIArray<ObLSTabletPair> &tablet_ids, char *buf, int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  hash::ObHashSet<int64_t> adaptor_ptr_set;
+  if (tablet_ids.count() > 0 && OB_FAIL(adaptor_ptr_set.create(tablet_ids.count()))) {
+    LOG_WARN("fail to create tablet_id set", KR(ret));
+  }
+  for (int i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
+    ObLSID ls_id = tablet_ids.at(i).ls_id_;
+    ObTabletID tablet_id = tablet_ids.at(i).tablet_id_;
+    ObIvfCacheMgrGuard cache_mgr_guard;
+    if (OB_FAIL(service->acquire_ivf_cache_mgr_guard(ls_id, tablet_id, cache_mgr_guard))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("failed to get adapter inst guard", K(ls_id), K(tablet_id), KR(ret));
+      }
     } else {
-      RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
-      if (OB_FAIL(fill_mem_context_detail_info(index_ls_mgr->get_complete_adapter_map(), buf, buf_len, pos))) {
-        LOG_WARN("failed to fill complete adaptor detail info", KR(ret), K(ls_id));
-      } else if (OB_FAIL(fill_mem_context_detail_info(index_ls_mgr->get_partial_adapter_map(), buf, buf_len, pos))) {
-        LOG_WARN("failed to fill partial adaptor detail info", KR(ret), K(ls_id));
+      ObIvfCacheMgr *adaptor = cache_mgr_guard.get_ivf_cache_mgr();
+      if (OB_FAIL(ret) || OB_ISNULL(adaptor)) {
+        // do nothing
+      } else if (OB_FAIL(adaptor_ptr_set.exist_refactored(reinterpret_cast<int64_t>(adaptor)))) {
+        if (ret == OB_HASH_EXIST) {
+          // do nothing
+          ret = OB_SUCCESS;
+        } else if (ret == OB_HASH_NOT_EXIST) {
+          ret = OB_SUCCESS;
+          if (adaptor != NULL) {
+            if (OB_FAIL(databuff_printf(buf, buf_len, pos,", \"ivf_cache_%lu\":%ld", adaptor->get_table_id(), adaptor->get_memory_hold()))) {
+              OB_LOG(WARN, "failed to get vsag incr data mem info", K(ret));
+            }
+          }
+          OZ(adaptor_ptr_set.set_refactored(reinterpret_cast<int64_t>(adaptor)));
+        } else {
+          LOG_WARN("fail to create tablet_id set", K(ret));
+        }
       }
     }
   }
-
   return ret;
 }
 

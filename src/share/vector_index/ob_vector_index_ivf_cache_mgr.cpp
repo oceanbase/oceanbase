@@ -297,6 +297,18 @@ int64_t ObIvfCacheMgr::get_actual_memory_used()
   return used;
 }
 
+int64_t ObIvfCacheMgr::get_memory_hold()
+{
+  int64_t hold = 0;
+  FOREACH(iter, cache_objs_)
+  {
+    ObIvfICache *cache = dynamic_cast<ObIvfICache *>(iter->second);
+    hold += cache->get_memory_hold();
+  }
+  hold += (mem_ctx_ == nullptr ? 0 : mem_ctx_->hold());
+  return hold;
+}
+
 ///////////////////////////////
 // implement of ObIvfICache //
 //////////////////////////////

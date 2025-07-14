@@ -94,11 +94,19 @@ public:
   void* Reallocate(void* p, size_t size) override;
 
   int64_t hold() {
-    return mem_context_->hold();
+    int res = 0;
+    if (mem_context_.ref_context() != NULL) {
+      res = mem_context_->hold();
+    }
+    return res;
   }
 
   int64_t used() {
-    return mem_context_->used();
+    int res = 0;
+    if (mem_context_.ref_context() != NULL) {
+      res = mem_context_->used();
+    }
+    return res;
   }
   inline lib::MemoryContext &mem_ctx() { return mem_context_; }
 
@@ -125,11 +133,19 @@ public:
   void* Allocate(size_t size);
   void Deallocate(void* p);
   int64_t hold() {
-    return mem_context_->hold();
+    int res = 0;
+    if (mem_context_.ref_context() != NULL) {
+      res = mem_context_->hold();
+    }
+    return res;
   }
 
   int64_t used() {
-    return mem_context_->used();
+    int res = 0;
+    if (mem_context_.ref_context() != NULL) {
+      res = mem_context_->used();
+    }
+    return res;
   }
   inline uint64_t * get_all_vsag_use_mem() { return all_vsag_use_mem_; }
   inline uint64_t get_all_vsag_use_mem_byte() { return ATOMIC_LOAD(all_vsag_use_mem_); }
