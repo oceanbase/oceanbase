@@ -114,7 +114,7 @@ int ObVecAsyncTaskExector::check_and_set_thread_pool()
 }
 
 int ObVecAsyncTaskExector::clear_task_ctxs(
-    ObVecIndexAsyncTaskOption &task_opt, const ObIArray<ObVecIndexAsyncTaskCtx*> &task_ctx_array)
+    ObVecIndexAsyncTaskOption &task_opt, const ObVecIndexTaskCtxArray &task_ctx_array)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < task_ctx_array.count(); ++i) {
@@ -160,19 +160,19 @@ int ObVecAsyncTaskExector::clear_task_ctx(
   return ret;
 }
 
-int ObVecAsyncTaskExector::insert_new_task(ObVecIndexTaskStatusArray &task_status_array)
+int ObVecAsyncTaskExector::insert_new_task(ObVecIndexTaskCtxArray &task_ctx_array)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("vector index load task not inited", K(ret));
-  } else if (task_status_array.count() <= 0) {  // skip empty array
+  } else if (task_ctx_array.count() <= 0) {  // skip empty array
   } else {
     ObMySQLTransaction trans;
     if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
       LOG_WARN("fail start transaction", K(ret), K(tenant_id_));
     } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::batch_insert_vec_task(
-        tenant_id_, OB_ALL_VECTOR_INDEX_TASK_TNAME, trans, task_status_array))) {
+        tenant_id_, OB_ALL_VECTOR_INDEX_TASK_TNAME, trans, task_ctx_array))) {
       LOG_WARN("fail to insert vec tasks", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
     }
     if (trans.is_started()) {
@@ -324,7 +324,7 @@ int ObVecAsyncTaskExector::start_task()
   } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) {
     LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
   } else {
-    ObArray<ObVecIndexAsyncTaskCtx*> task_ctx_array;
+    ObVecIndexTaskCtxArray task_ctx_array;
     ObVecIndexAsyncTaskOption &task_opt = index_ls_mgr->get_async_task_opt();
     FOREACH_X(iter, task_opt.get_async_task_map(), OB_SUCC(ret)) {
       ObTabletID tablet_id = iter->first;
@@ -393,7 +393,7 @@ int ObVecAsyncTaskExector::load_task()
 {
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
-  ObVecIndexTaskStatusArray task_status_array;
+  ObArray<ObVecIndexAsyncTaskCtx*> task_ctx_array;
   uint64_t trace_base_num = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -447,27 +447,34 @@ int ObVecAsyncTaskExector::load_task()
           task_ctx->task_status_.target_scn_.convert_from_ts(ObTimeUtility::current_time());
           if (OB_FAIL(index_ls_mgr->get_async_task_opt().add_task_ctx(tablet_id, task_ctx, inc_new_task))) { // not overwrite
             LOG_WARN("fail to add task ctx", K(ret));
-          } else if (inc_new_task && OB_FAIL(task_status_array.push_back(task_ctx->task_status_))) {
+          } else if (inc_new_task && OB_FAIL(task_ctx_array.push_back(task_ctx))) {
             LOG_WARN("fail to push back task status", K(ret), K(task_ctx));
           }
-          // release memory when fail
-          if (OB_FAIL(ret)) {
-            if (OB_NOT_NULL(task_ctx)) {
-              task_ctx->~ObVecIndexAsyncTaskCtx();
-              allocator->free(task_ctx); // arena need free
-              task_ctx = nullptr;
-            }
+        }
+        if (OB_FAIL(ret)) { // release memory when fail
+          if (OB_NOT_NULL(task_ctx)) {
+            task_ctx->~ObVecIndexAsyncTaskCtx();
+            allocator->free(task_ctx); // arena need free
+            task_ctx = nullptr;
           }
         }
       }
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(insert_new_task(task_status_array))) {
-    LOG_WARN("fail to insert new task", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
+  } else if (OB_FAIL(insert_new_task(task_ctx_array))) {
+    LOG_WARN("fail to insert new tasks", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
+  }
+  // clear on fail
+  if (OB_FAIL(ret) && !task_ctx_array.empty()) {
+    if (OB_FAIL(clear_task_ctxs(index_ls_mgr->get_async_task_opt(), task_ctx_array))) {
+      LOG_WARN("fail to clear task ctx", K(ret));
+    }
   }
   return ret;
 }
+
+
 
 }
 }

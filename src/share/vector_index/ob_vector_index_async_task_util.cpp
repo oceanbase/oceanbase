@@ -280,7 +280,7 @@ int ObVecIndexAsyncTaskUtil::batch_insert_vec_task(
     uint64_t tenant_id,
     const char* tname,
     common::ObISQLClient& proxy,
-    ObVecIndexTaskStatusArray &task)
+    ObVecIndexTaskCtxArray &task)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -292,7 +292,7 @@ int ObVecIndexAsyncTaskUtil::batch_insert_vec_task(
       LOG_WARN("fail to insert vec tasks", K(ret));
     }
   } else {
-    ObVecIndexTaskStatusArray tmp_array;
+    ObVecIndexTaskCtxArray tmp_array;
     for (int64_t i = 0; OB_SUCC(ret) && i < task.size(); ++i) {
       // copy task to new array
       if ((i == task.size() - 1) || (i % batch_size == 0 && i != 0)) {
@@ -312,7 +312,7 @@ int ObVecIndexAsyncTaskUtil::insert_vec_tasks(
     const char* tname,
     const int64_t batch_size,
     common::ObISQLClient& proxy,
-    ObVecIndexTaskStatusArray& task)
+    ObVecIndexTaskCtxArray& task_ctx_array)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -320,7 +320,7 @@ int ObVecIndexAsyncTaskUtil::insert_vec_tasks(
   int64_t real_batch_size = 0;
   uint64_t data_version = 0;
 
-  if (batch_size <= 0 || batch_size > task.size()) {
+  if (batch_size <= 0 || batch_size > task_ctx_array.size()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(batch_size));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
@@ -337,17 +337,24 @@ int ObVecIndexAsyncTaskUtil::insert_vec_tasks(
   } else {
     // values
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
-      char trace_id_str[256] = { 0 };
-      task.at(i).trace_id_.to_string(trace_id_str, sizeof(trace_id_str));
-      if (OB_FAIL(sql.append_fmt(" (%ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld, '%s')",
-                                ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
-                                task.at(i).table_id_, task.at(i).tablet_id_.id(),
-                                task.at(i).task_id_, task.at(i).trigger_type_, task.at(i).task_type_,
-                                task.at(i).status_, task.at(i).target_scn_.convert_to_ts(), task.at(i).ret_code_,
-                                trace_id_str))) {
-        LOG_WARN("fail to assign fmt", K(ret));
-      } else if ((i != batch_size - 1) && OB_FAIL(sql.append_fmt(","))) {
-        LOG_WARN("fail to assign fmt", K(ret), K(i));
+      ObVecIndexAsyncTaskCtx *task_ctx = task_ctx_array.at(i);
+      if (OB_ISNULL(task_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr of task ctx", K(ret));
+      } else {
+        ObVecIndexTaskStatus &task = task_ctx->task_status_;
+        char trace_id_str[256] = { 0 };
+        task.trace_id_.to_string(trace_id_str, sizeof(trace_id_str));
+        if (OB_FAIL(sql.append_fmt(" (%ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld, '%s')",
+                                  ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                                  task.table_id_, task.tablet_id_.id(),
+                                  task.task_id_, task.trigger_type_, task.task_type_,
+                                  task.status_, task.target_scn_.convert_to_ts(), task.ret_code_,
+                                  trace_id_str))) {
+          LOG_WARN("fail to assign fmt", K(ret));
+        } else if ((i != batch_size - 1) && OB_FAIL(sql.append_fmt(","))) {
+          LOG_WARN("fail to assign fmt", K(ret), K(i));
+        }
       }
     }
   }
@@ -1820,8 +1827,8 @@ int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adap
   share::schema::ObTableDMLParam table_dml_param(allocator_);
   share::schema::ObTableDMLParam bitmap_table_dml_param(allocator_);
   ObSchemaGetterGuard schema_guard;
-  int64_t affected_rows = 0;
-  int64_t affected_rows2 = 0;
+  int64_t delta_table_affected_rows = 0;
+  int64_t index_table_affected_rows = 0;
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
@@ -1839,16 +1846,16 @@ int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adap
     LOG_WARN("failed to convert table dml param.", K(ret));
   } else if (FALSE_IT(dml_param.schema_version_ = delta_table_schema->get_schema_version())) {
   } else if (FALSE_IT(dml_param.table_param_ = &table_dml_param)) {
-  } else if (OB_FAIL(oas->delete_rows(ls_id_, adaptor.get_inc_tablet_id(), *tx_desc, dml_param, delta_dml_column_ids, &delta_row_iter, affected_rows))) {
+  } else if (OB_FAIL(oas->delete_rows(ls_id_, adaptor.get_inc_tablet_id(), *tx_desc, dml_param, delta_dml_column_ids, &delta_row_iter, delta_table_affected_rows))) {
     LOG_WARN("failed to delete rows from delta table", K(ret), K(adaptor.get_inc_tablet_id()));
-  } else if (OB_FAIL(index_table_schema->get_column_ids(index_dml_column_ids))) {
-    LOG_WARN("failed to get all column ids", K(ret));
   } else if (OB_FAIL(bitmap_table_dml_param.convert(index_table_schema, index_table_schema->get_schema_version(), index_dml_column_ids))) {
     LOG_WARN("failed to convert table dml param.", K(ret));
   } else if (FALSE_IT(dml_param.schema_version_ = index_table_schema->get_schema_version())) {
   } else if (FALSE_IT(dml_param.table_param_ = &bitmap_table_dml_param)) {
-  } else if (OB_FAIL(oas->delete_rows(ls_id_, adaptor.get_vbitmap_tablet_id(), *tx_desc, dml_param, index_dml_column_ids, &delta_row_iter, affected_rows2))) {
+  } else if (OB_FAIL(oas->delete_rows(ls_id_, adaptor.get_vbitmap_tablet_id(), *tx_desc, dml_param, index_dml_column_ids, &index_row_iter, index_table_affected_rows))) {
     LOG_WARN("failed to delete rows from delta table", K(ret), K(adaptor.get_inc_tablet_id()));
+  } else {
+    LOG_DEBUG("print del rows", K(delta_table_affected_rows), K(index_table_affected_rows));
   }
 
   if (OB_NOT_NULL(oas)) {

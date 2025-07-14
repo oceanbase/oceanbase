@@ -173,6 +173,7 @@ public:
 };
 
 typedef common::hash::ObHashMap<common::ObTabletID, ObVecIndexAsyncTaskCtx *> VecIndexAsyncTaskMap;
+typedef common::ObArray<ObVecIndexAsyncTaskCtx*> ObVecIndexTaskCtxArray;
 
 class ObVecIndexAsyncTaskOption
 {
@@ -310,12 +311,12 @@ public:
       const char *tname,
       const int64_t batch_size,
       common::ObISQLClient &proxy,
-      ObVecIndexTaskStatusArray &task);
+      ObVecIndexTaskCtxArray &task);
   static int batch_insert_vec_task(
       uint64_t tenant_id,
       const char *tname,
       common::ObISQLClient &proxy,
-      ObVecIndexTaskStatusArray &task);
+      ObVecIndexTaskCtxArray &task);
   static int clear_history_expire_task_record(
       const uint64_t tenant_id,
       const int64_t batch_size,
