@@ -243,6 +243,7 @@ public:
   constexpr static const float skew_popular_min_ratio = 0.3;
   const static int8_t skew_heap_size = 15;
   const static int8_t skew_item_cnt_tolerance = 5;
+  static const int64_t ADAPTIVE_GBY_MEM_ESTIMATE_SIZE = 2 << 20; // 2MB
 
 public:
   ObHashGroupByOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
