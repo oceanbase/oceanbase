@@ -424,7 +424,7 @@ int ObPlanSet::match_priv_cons(ObPlanCacheCtx &pc_ctx, bool &is_matched)
   ObSchemaGetterGuard *schema_guard = pc_ctx.sql_ctx_.schema_guard_;
   if (OB_ISNULL(session_info) || OB_ISNULL(schema_guard)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret));
+    LOG_WARN("invalid argument", K(ret), K(session_info), K(schema_guard));
   }
   for (int64_t i = 0; OB_SUCC(ret) && is_matched && i < all_priv_constraints_.count(); ++i) {
     const ObPCPrivInfo &priv_info = all_priv_constraints_.at(i);
@@ -447,7 +447,8 @@ int ObPlanSet::match_priv_cons(ObPlanCacheCtx &pc_ctx, bool &is_matched)
       }
     } else {
       uint64_t tenant_id = session_info->get_effective_tenant_id();
-      ObStmtNeedPrivs stmt_need_privs(alloc_);
+      ObArenaAllocator tmp_alloc;
+      ObStmtNeedPrivs stmt_need_privs(tmp_alloc);
       const share::schema::ObSensitiveRuleSchema *rule_schema = NULL;
       if (OB_FAIL(schema_guard->get_sensitive_rule_schema_by_id(tenant_id,
                                                                 priv_info.sensitive_rule_id_,
