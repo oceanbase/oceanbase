@@ -714,8 +714,7 @@ int MockTenantModuleEnv::init_device_config()
   char object_storage_root_path[common::MAX_PATH_SIZE] = { 0 };
   if (OB_FAIL(share::ObMasterKeyGetter::instance().init(NULL))) {
     CLOG_LOG(WARN, "init ObMasterKeyGetter failed");
-  } else if (OB_FAIL(share::ObMasterKeyGetter::instance().set_root_key(OB_SYS_TENANT_ID,
-                                                      obrpc::RootKeyType::DEFAULT, ObString()))) {
+  } else if (OB_FAIL(share::ObMasterKeyGetter::instance().fake_sys_default_root_key())) {
     CLOG_LOG(WARN, "set_root_key failed");
   } else if (OB_FAIL(databuff_printf(access_key_buf, sizeof(access_key_buf),
       "%s%s", ACCESS_KEY, unittest::S3_SK))) {

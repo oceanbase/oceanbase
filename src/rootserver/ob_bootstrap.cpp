@@ -432,6 +432,10 @@ int ObPreBootstrap::notify_sys_tenant_server_unit_resource()
   common::ObArray<uint64_t> sys_unit_id_array;
   const bool is_hidden_sys = false;
 
+#ifdef OB_BUILD_TDE_SECURITY
+  obrpc::ObRootKeyResult root_key_result;
+#endif
+
   if (OB_FAIL(unit_config.gen_sys_tenant_unit_config(is_hidden_sys))) {
     LOG_WARN("gen sys tenant unit config fail", KR(ret), K(is_hidden_sys));
   } else if (OB_FAIL(gen_sys_unit_ids(sys_unit_id_array))) {
@@ -440,6 +444,12 @@ int ObPreBootstrap::notify_sys_tenant_server_unit_resource()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sys unit id array and rs list count not match", KR(ret),
              "unit_id_array_cnt", sys_unit_id_array.count(), "rs_list_cnt", rs_list_.count());
+#ifdef OB_BUILD_TDE_SECURITY
+  } else if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(OB_SYS_TENANT_ID,
+                                                                root_key_result.key_type_,
+                                                                root_key_result.root_key_))) {
+    LOG_WARN("failed to get sys tenant root key", K(ret));
+#endif
   } else {
     ObNotifyTenantServerResourceProxy notify_proxy(
                                       rpc_proxy_,
@@ -459,7 +469,7 @@ int ObPreBootstrap::notify_sys_tenant_server_unit_resource()
               false/*if not grant*/,
               false/*is_delete*/
 #ifdef OB_BUILD_TDE_SECURITY
-              , obrpc::ObRootKeyResult()/*invalid root_key*/
+              , root_key_result
 #endif
               ))) {
         LOG_WARN("fail to init tenant unit server config", KR(ret));

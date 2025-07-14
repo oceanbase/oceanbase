@@ -11787,7 +11787,13 @@ int ObRootService::get_root_key_from_obs_(const obrpc::ObRootKeyArg &arg,
   } else if (OB_FAIL(guard.get_tenant_info(tenant_id, simple_tenant))) {
     LOG_WARN("fail to get simple tenant schema", KR(ret), K(tenant_id));
   } else if (OB_NOT_NULL(simple_tenant) && simple_tenant->is_normal()) {
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (!GCTX.is_shared_storage_mode()) {
+      enable_default = true;
+    }
+#else
     enable_default = true;
+#endif
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(SVR_TRACER.get_alive_servers(empty_zone, active_server_list))) {

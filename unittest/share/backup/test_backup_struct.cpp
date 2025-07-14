@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SHARE
+#define OB_BUILD_UNITTEST
 
 #include <gtest/gtest.h>
 #define private public
