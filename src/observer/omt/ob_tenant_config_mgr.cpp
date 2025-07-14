@@ -632,6 +632,11 @@ int ObTenantConfigMgr::update_local(uint64_t tenant_id, int64_t expected_version
         } else if (OB_FAIL(config->publish_special_config_after_dump())) {
           LOG_WARN("publish special config after dump failed", K(tenant_id), K(ret));
         }
+#ifdef ERRSIM
+        else if (OB_FAIL(config->build_errsim_module_())) {
+          LOG_WARN("failed to build errsim module", K(ret), K(tenant_id));
+        }
+#endif
       }
     }
   }

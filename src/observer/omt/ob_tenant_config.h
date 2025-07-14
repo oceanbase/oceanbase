@@ -92,10 +92,11 @@ public:
                    bool save2file = true, bool publish_special_config = true);
 
   OB_UNIS_VERSION(1);
-private:
 #ifdef ERRSIM
+public:
   int build_errsim_module_();
 #endif
+private:
   // whitout lock, only used inner
   int add_extra_config_unsafe(const char *config_str,
                        int64_t version = 0 ,

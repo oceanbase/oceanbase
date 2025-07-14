@@ -303,11 +303,6 @@ int ObTenantConfig::update_local(int64_t expected_version, ObMySQLProxy::MySQLRe
     } else if (publish_special_config && OB_FAIL(publish_special_config_after_dump())) {
       LOG_WARN("publish special config after dump failed", K(tenant_id_), K(ret));
     }
-#ifdef ERRSIM
-    else if (OB_FAIL(build_errsim_module_())) {
-      LOG_WARN("failed to build errsim module", K(ret), K(tenant_id_));
-    }
-#endif
     print();
   } else {
     LOG_WARN("Read tenant config from inner table error", K_(tenant_id), K(ret));
