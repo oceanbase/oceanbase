@@ -38,6 +38,8 @@ using namespace share::schema;
 
 namespace obrpc
 {
+ERRSIM_POINT_DEF(EN_KEEP_FETCH_MACRO_BLOCK_LOOP);
+
 static bool is_copy_ls_inner_tablet(const common::ObIArray<common::ObTabletID> &tablet_id_list)
 {
   bool is_inner = false;
@@ -1847,11 +1849,13 @@ int ObHAFetchMacroBlockP::process()
       STORAGE_LOG(ERROR, "bandwidth_throttle must not null", K(ret), KP_(bandwidth_throttle));
     } else {
 #ifdef ERRSIM
-          if (!is_meta_tenant(arg_.tenant_id_) && 1001 == arg_.ls_id_.id() && !arg_.table_key_.tablet_id_.is_ls_inner_tablet()) {
-            FLOG_INFO("errsim storage ha fetch macro block", K_(arg));
-            SERVER_EVENT_SYNC_ADD("errsim_storage_ha", "fetch_macro_block");
-            DEBUG_SYNC(BEFORE_MIGRATE_FETCH_MACRO_BLOCK);
-          }
+      if (OB_SUCCESS != EN_KEEP_FETCH_MACRO_BLOCK_LOOP) {
+        (void)errsim_spin_wait_for_specific_tablet_();
+      } else if (!is_meta_tenant(arg_.tenant_id_) && 1001 == arg_.ls_id_.id() && !arg_.table_key_.tablet_id_.is_ls_inner_tablet()) {
+        FLOG_INFO("errsim storage ha fetch macro block", K_(arg));
+        SERVER_EVENT_SYNC_ADD("errsim_storage_ha", "fetch_macro_block");
+        DEBUG_SYNC(BEFORE_MIGRATE_FETCH_MACRO_BLOCK);
+      }
 #endif
 
       SMART_VARS_2((storage::ObCopyMacroBlockObProducer, producer), (ObCopyMacroBlockRangeArg, arg)) {
@@ -1908,6 +1912,36 @@ int ObHAFetchMacroBlockP::process()
   }
   return ret;
 }
+
+#ifdef ERRSIM
+void ObHAFetchMacroBlockP::errsim_spin_wait_for_specific_tablet_()
+{
+  int64_t errsim_migration_ls_id = GCONF.errsim_migration_ls_id;
+  int64_t errsim_tablet_id = GCONF.errsim_migration_tablet_id;
+  const int64_t SPIN_WAIT_TIME = 30 * 1000 * 1000;
+
+  if (!is_meta_tenant(arg_.tenant_id_) && errsim_migration_ls_id == arg_.ls_id_.id() && !arg_.table_key_.tablet_id_.is_ls_inner_tablet()) {
+    // make target tablet process loop for 30s, block other tablet process
+    if (errsim_tablet_id == arg_.table_key_.tablet_id_.id() && arg_.table_key_.is_mds_sstable()) {
+      // for target tablet, loop 30s (only make one worker loop)
+      FLOG_INFO("[ERRSIM] skip debug sync, loop 30s", K_(arg));
+      int64_t start_ts = ObTimeUtil::current_time();
+      int64_t current_time = start_ts;
+      while (current_time - start_ts < SPIN_WAIT_TIME) {
+        if (current_time - start_ts >= SPIN_WAIT_TIME) {
+          break;
+        } else {
+          current_time = ObTimeUtil::current_time();
+        }
+      }
+    } else {
+      // block other tablet
+      FLOG_INFO("[ERRSIM] errsim storage ha fetch macro block", K_(arg));
+      DEBUG_SYNC(BEFORE_MIGRATE_FETCH_MACRO_BLOCK);
+    }
+  }
+}
+#endif
 
 ObFetchTabletInfoP::ObFetchTabletInfoP(common::ObInOutBandwidthThrottle *bandwidth_throttle)
     : ObStorageStreamRpcP(bandwidth_throttle)

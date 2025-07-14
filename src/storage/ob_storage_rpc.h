@@ -1156,6 +1156,10 @@ public:
 protected:
   int process();
 private:
+#ifdef ERRSIM
+  void errsim_spin_wait_for_specific_tablet_();
+#endif
+private:
   int64_t total_macro_block_count_;
 };
 
