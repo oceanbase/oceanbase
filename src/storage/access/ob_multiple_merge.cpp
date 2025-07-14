@@ -613,7 +613,11 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
     if (need_padding_) {
       padding_allocator_.reuse();
     }
-    reuse_lob_locator();
+    if (access_param_->iter_param_.enable_pd_group_by()) {
+      lob_reader_.reuse();
+    } else {
+      reuse_lob_locator();
+    }
     while (OB_SUCC(ret) && !vector_store->is_end()) {
       /* causes of vector_store->is_end()
        * 1. batch full;

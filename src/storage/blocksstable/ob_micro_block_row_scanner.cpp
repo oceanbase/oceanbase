@@ -1106,9 +1106,7 @@ int ObIMicroBlockRowScanner::check_can_group_by(
   int ret = OB_SUCCESS;
   row_cnt = reader_->row_count();
   read_cnt = last_ - current_ + 1;
-  if (param_->has_lob_column_out() && reader_->has_lob_out_row()) {
-    can_group_by = false;
-  } else if (OB_FAIL(reader_->get_distinct_count(group_by_col, distinct_cnt))) {
+  if (OB_FAIL(reader_->get_distinct_count(group_by_col, distinct_cnt))) {
     if (OB_UNLIKELY(OB_NOT_SUPPORTED != ret)) {
       LOG_WARN("Failed to get distinct cnt", K(ret));
     } else {

@@ -64,14 +64,15 @@ class ObDefaultCGScanner : public ObICGIterator
 {
 public:
   ObDefaultCGScanner()
-		:	query_range_valid_row_count_(0),
+		:	iter_param_(nullptr),
+      access_ctx_(nullptr),
+      query_range_valid_row_count_(0),
       datum_infos_(),
 			default_row_(),
       stmt_allocator_(nullptr),
 			is_inited_(false),
       filter_result_(false),
 			total_row_count_(0),
-			iter_param_(nullptr),
       filter_(nullptr),
       agg_group_(nullptr)
 	{}
@@ -100,7 +101,7 @@ public:
   virtual ObCGIterType get_type() override
   { return OB_CG_DEFAULT_SCANNER; }
   TO_STRING_KV(K_(is_inited), K_(total_row_count), K_(default_row), K_(query_range_valid_row_count),
-			KPC_(iter_param), K_(datum_infos), K_(default_row), KPC_(agg_group));
+			KPC_(iter_param), KPC_(access_ctx), K_(datum_infos), K_(default_row), KPC_(agg_group));
 
 private:
 	int init_datum_infos_and_default_row(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx);
@@ -111,6 +112,8 @@ private:
       ObIAllocator &allocator,
       blocksstable::ObStorageDatum &datum);
 protected:
+  const ObTableIterParam *iter_param_;
+  const ObTableAccessContext *access_ctx_;
   uint64_t query_range_valid_row_count_;
   common::ObFixedArray<blocksstable::ObSqlDatumInfo, common::ObIAllocator> datum_infos_;
 	blocksstable::ObDatumRow default_row_;
@@ -119,7 +122,6 @@ private:
 	bool is_inited_;
   bool filter_result_;
 	int64_t total_row_count_;
-	const ObTableIterParam *iter_param_;
   sql::ObPushdownFilterExecutor *filter_;
   ObAggGroupBase *agg_group_;
 };
@@ -143,6 +145,7 @@ public:
       bool &can_group_by) override;
   virtual int read_distinct(const int32_t group_by_col) override;
   virtual int read_reference(const int32_t group_by_col) override;
+  virtual int fill_group_by_col_lob_locator() override;
   virtual int calc_aggregate(const bool is_group_by_col) override;
   virtual int locate_micro_index(const ObCSRange &range) override
   { return locate(range, nullptr); }

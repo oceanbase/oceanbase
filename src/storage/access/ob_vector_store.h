@@ -96,6 +96,7 @@ protected:
       bool &is_agg_mask) const;
   int alloc_group_by_cell(const ObTableAccessParam &param);
   int check_need_group_by(const ObTableAccessParam &param);
+  int fill_group_by_col_lob_locator(const bool has_lob_out_row);
 
   int64_t count_;
   // exprs needed fill in

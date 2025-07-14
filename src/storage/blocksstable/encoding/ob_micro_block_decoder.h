@@ -332,11 +332,15 @@ public:
       const int64_t row_cap,
       storage::ObGroupByCellBase &group_by_cell) const override;
   virtual int get_group_by_aggregate_result(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) override;
   virtual int get_group_by_aggregate_result(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,

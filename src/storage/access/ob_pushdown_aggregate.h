@@ -126,6 +126,7 @@ public:
   OB_INLINE int32_t get_col_offset() const { return basic_info_.col_offset_; }
   OB_INLINE common::ObDatum *get_col_datums() const { return col_datums_; }
   OB_INLINE const sql::ObExpr *get_agg_expr() const { return basic_info_.agg_expr_; }
+  OB_INLINE const share::schema::ObColumnParam *get_col_param() const { return basic_info_.col_param_; }
   OB_INLINE bool is_lob_col() const { return is_lob_col_; }
   OB_INLINE ObObjType get_obj_type() const { return basic_info_.agg_expr_->obj_meta_.get_type(); }
   OB_INLINE common::ObObjDatumMapType get_datum_map_type() const { return basic_info_.agg_expr_->obj_datum_map_; }

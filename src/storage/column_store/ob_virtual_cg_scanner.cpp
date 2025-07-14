@@ -287,6 +287,7 @@ int ObDefaultCGScanner::init(
   } else {
     query_range_valid_row_count_ = 0;
     iter_param_ = &iter_param;
+    access_ctx_ = &access_ctx;
     filter_ = nullptr;
     filter_result_ = false;
     stmt_allocator_ = access_ctx.stmt_allocator_;
@@ -723,6 +724,20 @@ int ObDefaultCGGroupByScanner::read_reference(const int32_t group_by_col)
     query_range_valid_row_count_ -= read_cnt;
   }
   LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), KPC(group_by_cell_));
+  return ret;
+}
+
+int ObDefaultCGGroupByScanner::fill_group_by_col_lob_locator()
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObColumnParam *col_param = group_by_cell_->get_group_by_col_param();
+  if (iter_param_->has_lob_column_out() && nullptr != col_param && col_param->get_meta_type().is_lob_storage()) {
+    if (OB_FAIL(fill_datums_lob_locator(*iter_param_, *access_ctx_, *col_param,
+          group_by_cell_->get_distinct_cnt(), group_by_cell_->get_group_by_col_datums_to_fill(), false))) {
+      LOG_WARN("Failed to fill lob locator", K(ret), K(col_param), KPC(group_by_cell_), KPC(iter_param_));
+    }
+  }
+  LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), KPC(col_param), KPC(group_by_cell_));
   return ret;
 }
 

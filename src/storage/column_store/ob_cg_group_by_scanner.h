@@ -39,6 +39,7 @@ public:
   virtual int decide_can_group_by(const int32_t group_by_col, bool &can_group_by) override;
   virtual int read_distinct(const int32_t group_by_col) override;
   virtual int read_reference(const int32_t group_by_col) override;
+  virtual int fill_group_by_col_lob_locator() override;
   virtual int calc_aggregate(const bool is_group_by_col) override;
   virtual int locate_micro_index(const ObCSRange &range) override;
   INHERIT_TO_STRING_KV("ObCGRowScanner", ObCGRowScanner,
