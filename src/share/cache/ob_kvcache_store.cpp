@@ -1757,7 +1757,11 @@ void ObKVCacheStore::retire_mb_handles(HazardList &retire_list, const bool do_re
     if (wash_itid_ == get_itid()) {  // wash thread should not sync wash
       retire_limit = WASH_THREAD_RETIRE_LIMIT;
     }
+    bool need_purge = retire_list.size() > retire_limit;
     get_retire_station().retire(reclaim_list, retire_list, retire_limit);
+    if (need_purge) {
+      get_retire_station().retire(reclaim_list, retire_list, -1);
+    }
     reuse_mb_handles(reclaim_list);
   }
 }
