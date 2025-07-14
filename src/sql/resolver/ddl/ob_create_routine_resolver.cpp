@@ -604,7 +604,11 @@ int ObCreateRoutineResolver::resolve_param_type(const ParseNode *type_node,
           OX (routine_param.set_param_type(ObExtendType));
         }
       } else {
-        CK (ObObjAccessIdx::is_pkg_type(access_idxs) || ObObjAccessIdx::is_udt_type(access_idxs));
+        if (OB_SUCC(ret) && !ObObjAccessIdx::is_pkg_type(access_idxs) && !ObObjAccessIdx::is_udt_type(access_idxs)) {
+          ret = OB_ERR_FUNC_NAME_SAME_WITH_CONS;
+          LOG_WARN("access_idxs is not pkg_type or udt_type.", K(ret));
+          LOG_USER_ERROR(OB_ERR_FUNC_NAME_SAME_WITH_CONS, access_idxs.at(access_idxs.count() - 1).var_name_.length(), access_idxs.at(access_idxs.count() - 1).var_name_.ptr());
+        }
         OZ (set_routine_param(access_idxs, routine_param));
         if (OB_SUCC(ret)
             && routine_param.is_extern_type()
