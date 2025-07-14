@@ -167,36 +167,46 @@ int ObDBMSVectorMySql::rebuild_index_inner(ObPLExecCtx &ctx, ParamStore &params,
 
 /*
 FUNCTION index_vector_memory_advisor (
-    IN     idx_type          VARCHAR(65535),
-    IN     num_vectors       BIGINT UNSIGNED,
-    IN     dim_count         INT UNSIGNED,
-    IN     dim_type          VARCHAR(65535) DEFAULT 'FLOAT32',
-    IN     idx_parameters    LONGTEXT DEFAULT NULL)
+    IN     idx_type           VARCHAR(65535),
+    IN     num_vectors        BIGINT UNSIGNED,
+    IN     dim_count          INT UNSIGNED,
+    IN     dim_type           VARCHAR(65535) DEFAULT 'FLOAT32',
+    IN     idx_parameters     LONGTEXT DEFAULT NULL,
+    IN     max_tablet_vectors BIGINT UNSIGNED DEFAULT 0)
 RETURN VARCHAR(65535);
 */
 int ObDBMSVectorMySql::index_vector_memory_advisor(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
 {
   int ret = OB_SUCCESS;
   CK(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_3);
-  CK(OB_LIKELY(5 == params.count()));
+  CK(OB_LIKELY(6 == params.count()));
   if (OB_FAIL(ret)) {
   } else if (!params.at(0).is_varchar()
              || !params.at(1).is_uint64()
              || !params.at(2).is_uint32()
              || !params.at(3).is_varchar()
-             || (!params.at(4).is_text() && !params.at(4).is_null())) {
+             || (!params.at(4).is_text() && !params.at(4).is_null())
+             || !params.at(5).is_uint64()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
   } else {
     ObIAllocator *allocator = &ctx.exec_ctx_->get_allocator();
     ObString idx_type_str = params.at(0).get_varchar();
     uint64_t num_vectors = params.at(1).get_uint64();
+    uint64_t max_tablet_vectors = params.at(5).get_uint64();
+    if (max_tablet_vectors == 0) {
+      max_tablet_vectors = num_vectors;
+    }
     uint32_t dim_count = params.at(2).get_uint32();
     ObString dim_type_str = params.at(3).get_varchar();
     ObString idx_param_str;
     ObVectorIndexParam index_param;
 
-    if (dim_type_str.case_compare("FLOAT32") != 0) { // for future use
+    if (max_tablet_vectors > num_vectors) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("invalid max_tablet_vectors", KR(ret), K(max_tablet_vectors), K(num_vectors));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "max_tablet_vectors large than num_vectors");
+    } else if (dim_type_str.case_compare("FLOAT32") != 0) { // for future use
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support vector index dim type", K(ret), K(dim_type_str));
     } else if (params.at(4).is_text() && OB_FAIL(params.at(4).get_string(idx_param_str))) {
@@ -208,7 +218,7 @@ int ObDBMSVectorMySql::index_vector_memory_advisor(ObPLExecCtx &ctx, ParamStore 
       LOG_WARN("allocator is null", K(ret));
     } else {
       ObStringBuffer res_buf(allocator);
-      if (OB_FAIL(get_estimate_memory_str(index_param, num_vectors, num_vectors, res_buf))) {
+      if (OB_FAIL(get_estimate_memory_str(index_param, num_vectors, max_tablet_vectors, res_buf))) {
         LOG_WARN("failed to get estimate memory string");
       } else {
         result.set_varchar(res_buf.ptr(), res_buf.length());
@@ -427,6 +437,7 @@ int ObDBMSVectorMySql::get_estimate_memory_str(ObVectorIndexParam index_param,
                                                ObStringBuffer &res_buf)
 {
   int ret = OB_SUCCESS;
+  const static double VEC_MEMORY_HOLD_FACTOR = 1.2;
   switch(index_param.type_) {
     case ObVectorIndexAlgorithmType::VIAT_HNSW:
     case ObVectorIndexAlgorithmType::VIAT_HNSW_SQ:
@@ -434,7 +445,7 @@ int ObDBMSVectorMySql::get_estimate_memory_str(ObVectorIndexParam index_param,
       uint64_t estimate_mem = 0;
       if (OB_FAIL(ObVectorIndexUtil::estimate_hnsw_memory(num_vectors, index_param, estimate_mem))) {
         LOG_WARN("failed to estimate hnsw vector index memory", K(num_vectors), K(index_param));
-      } else if (OB_FALSE_IT(estimate_mem = ceil(estimate_mem * VEC_ESTIMATE_MEMORY_FACTOR))) { // multiple 2.0
+      } else if (OB_FALSE_IT(estimate_mem = ceil(estimate_mem * VEC_MEMORY_HOLD_FACTOR * 2))) { // multiple 2 for rebuild memory
       } else if (OB_FAIL(res_buf.append(ObString("Suggested minimum vector memory is "), 0))) {
         LOG_WARN("failed to append to buffer", K(ret));
       } else if (OB_FAIL(print_mem_size(estimate_mem, res_buf))) {
@@ -447,11 +458,11 @@ int ObDBMSVectorMySql::get_estimate_memory_str(ObVectorIndexParam index_param,
       uint64_t suggested_mem = 0;
       if (OB_FAIL(ObVectorIndexUtil::estimate_hnsw_memory(num_vectors, index_param, estimate_mem, false/*+is_build*/))) {
         LOG_WARN("failed to estimate hnsw vector index memory", K(num_vectors), K(index_param));
-      } else if (OB_FALSE_IT(estimate_mem = ceil(estimate_mem * VEC_ESTIMATE_MEMORY_FACTOR))) { // multiple 2.0
+      } else if (OB_FALSE_IT(estimate_mem = ceil(estimate_mem * VEC_MEMORY_HOLD_FACTOR))) { // multiple 1.2
       } else if (OB_FAIL(ObVectorIndexUtil::estimate_hnsw_memory(tablet_max_num_vectors, index_param, suggested_mem, true/*+is_build*/))) {
         LOG_WARN("failed to estimate hnsw vector index memory", K(num_vectors), K(index_param));
       } else {
-        suggested_mem += estimate_mem;
+        suggested_mem = estimate_mem + suggested_mem * VEC_MEMORY_HOLD_FACTOR;
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(res_buf.append(ObString("Suggested minimum vector memory is "), 0))) {
