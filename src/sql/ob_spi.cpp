@@ -1586,6 +1586,19 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("session ptr is null", K(ret));
     } else {
+      my_session->set_stmt_type(stmt::T_END_TRANS);
+      ObAuditRecordData &audit_record = my_session->get_raw_audit_record();
+      const bool enable_perf_event = lib::is_diagnose_info_enabled();
+      const bool enable_sql_audit =
+        GCONF.enable_sql_audit && my_session->get_local_ob_enable_sql_audit();
+      ObWaitEventStat total_wait_desc;
+      ObPLTimeRecord time_record;
+      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : nullptr);
+      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
+      if (enable_perf_event) {
+        audit_record.exec_record_.record_start();
+      }
+      time_record.set_send_timestamp(ObTimeUtility::current_time());
       ObString sqlstr(sql);
       OZ (ObSPIResultSet::check_nested_stmt_legal(*(ctx->exec_ctx_), sqlstr, stmt::T_END_TRANS));
       int64_t saved_query_start_time = my_session->get_query_start_time();
@@ -1647,6 +1660,56 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
           }
         }
       }
+      time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+      bool first_record = (1 == audit_record.try_cnt_);
+      ObExecStatUtils::record_exec_timestamp(time_record, first_record, audit_record.exec_timestamp_);
+      audit_record.exec_timestamp_.update_stage_time();
+      if (enable_perf_event) {
+        audit_record.exec_record_.record_end();
+        ObInnerSQLConnection::record_stat(*my_session,stmt::T_END_TRANS, ret, true);
+        audit_record.stmt_type_ = stmt::T_END_TRANS;
+        audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+        audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+        audit_record.update_event_stage_state();
+      }
+      audit_record.status_ = (0 == ret || OB_ITER_END == ret)
+        ? REQUEST_SUCC : (ret);
+      if (enable_sql_audit) {
+        audit_record.seq_ = 0;  //don't use now
+        audit_record.execution_id_ = my_session->get_current_execution_id();
+        audit_record.client_addr_ = my_session->get_peer_addr();
+        audit_record.user_client_addr_ = my_session->get_user_client_addr();
+        audit_record.user_group_ = THIS_WORKER.get_group_id();
+        (void)ObSQLUtils::md5(sqlstr, audit_record.sql_id_, (int32_t)sizeof(audit_record.sql_id_));
+        // MEMCPY(audit_record.sql_id_, ctx->exec_ctx_->get_sql_ctx()->sql_id_, (int32_t)sizeof(audit_record.sql_id_));
+        MEMCPY(audit_record.format_sql_id_, ctx->exec_ctx_->get_sql_ctx()->format_sql_id_, (int32_t)sizeof(audit_record.format_sql_id_));
+        audit_record.format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
+        if (OB_FAIL(ret) && audit_record.trans_id_ == 0) {
+          // normally trans_id is set in the `start-stmt` phase,
+          // if `start-stmt` hasn't run, set trans_id from session if an active txn exist
+          if (my_session->is_in_transaction()) {
+            audit_record.trans_id_ = my_session->get_tx_id();
+          }
+        }
+        audit_record.affected_rows_ = 0;
+        audit_record.return_rows_ = 0;
+        audit_record.partition_cnt_ = 0;
+        audit_record.expected_worker_cnt_ = 0;
+        audit_record.used_worker_cnt_ = 0;
+
+        audit_record.is_executor_rpc_ = false;
+        audit_record.is_inner_sql_ = false;
+        audit_record.is_hit_plan_cache_ = false;
+        audit_record.is_multi_stmt_ = my_session->get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS;
+        audit_record.is_batched_multi_stmt_ = ctx->exec_ctx_->get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt();
+        audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
+        audit_record.plsql_exec_time_ = my_session->get_plsql_exec_time();
+      }
+      audit_record.sql_ = const_cast<char *>(sqlstr.ptr());
+      audit_record.sql_len_ = min(sqlstr.length(), my_session->get_tenant_query_record_size_limit());
+      audit_record.pl_trace_id_ = *ObCurTraceId::get_trace_id();
+      ObSQLUtils::handle_audit_record(false, EXECUTE_PL_EXECUTE,
+                                  *my_session, ctx->exec_ctx_->get_sql_ctx()->is_sensitive_);
       // restore query_start_time
       my_session->set_query_start_time(saved_query_start_time);
     }
