@@ -254,6 +254,8 @@ int ObLogGranuleIterator::check_adaptive_task_splitting(ObLogTableScan *tsc)
       // not support for aggregate/group by push down
     } else if (tsc->get_index_back()) {
       // not support for index back
+    } else if (tsc->is_tsc_with_domain_id()) {
+      // not support for access domain id in full text index
     } else if (tsc->use_das()) {
       // not support das split
     } else if (tsc->get_table_type() == share::schema::EXTERNAL_TABLE) {
