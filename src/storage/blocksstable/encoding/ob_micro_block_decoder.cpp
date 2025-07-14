@@ -2241,20 +2241,22 @@ int ObMicroBlockDecoder::get_group_by_aggregate_result(
         if (OB_FAIL(group_by_cell.eval_batch(group_by_cell.get_group_by_col_datums(), row_cap, i, true))) {
           LOG_WARN("Failed to eval batch", K(ret), K(i));
         }
-      } else if (need_get_col_datum) {
-        if (OB_FAIL(get_col_datums(agg_col_offset, row_ids, cell_datas, row_cap, col_datums))) {
-          LOG_WARN("Failed to get col datums", K(ret), K(i), K(agg_col_offset), K(row_cap));
-        } else if (iter_param.has_lob_column_out() && has_lob_out_row()
-                  && nullptr != col_param && col_param->get_meta_type().is_lob_storage()
-                  && OB_FAIL(fill_datums_lob_locator(iter_param, context, *col_param, row_cap, col_datums, false))) {
-          LOG_WARN("Failed to fill lob locator", K(ret), K(i), K(row_cap), K(has_lob_out_row()), KPC(col_param), K(iter_param), KPC(col_datums));
+      } else {
+        if (need_get_col_datum) {
+          if (OB_FAIL(get_col_datums(agg_col_offset, row_ids, cell_datas, row_cap, col_datums))) {
+            LOG_WARN("Failed to get col datums", K(ret), K(i), K(agg_col_offset), K(row_cap));
+          } else if (iter_param.has_lob_column_out() && has_lob_out_row()
+                    && nullptr != col_param && col_param->get_meta_type().is_lob_storage()
+                    && OB_FAIL(fill_datums_lob_locator(iter_param, context, *col_param, row_cap, col_datums, false))) {
+            LOG_WARN("Failed to fill lob locator", K(ret), K(i), K(row_cap), K(has_lob_out_row()), KPC(col_param), K(iter_param), KPC(col_datums));
+          }
         }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(group_by_cell.eval_batch(col_datums, row_cap, i))) {
-        LOG_WARN("Failed to eval batch", K(ret), K(i));
-      } else if (need_get_col_datum) {
-        last_agg_col_offset = agg_col_offset;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(group_by_cell.eval_batch(col_datums, row_cap, i))) {
+          LOG_WARN("Failed to eval batch", K(ret), K(i));
+        } else if (need_get_col_datum) {
+          last_agg_col_offset = agg_col_offset;
+        }
       }
       LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), K(i), K(group_by_col), K(agg_col_offset), K(group_by_cell), K(need_get_col_datum));
     }
