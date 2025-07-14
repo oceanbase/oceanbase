@@ -861,6 +861,7 @@ int ObPLContext::implicit_end_trans(
 {
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
+  can_async = can_async && (nullptr == session_info.get_pl_profiler());
   bool is_async = false;
   if (session_info.is_in_transaction()) {
     is_async = !is_rollback && ctx.is_end_trans_async() && can_async;
