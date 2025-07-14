@@ -741,55 +741,75 @@ int ObPLPackageManager::get_package_expr(const ObPLResolveCtx &resolve_ctx,
   int ret = OB_SUCCESS;
   const ObPackageInfo *package_spec_info = NULL;
   const ObPackageInfo *package_body_info = NULL;
+
   CK (package_id != OB_INVALID_ID);
   CK (expr_idx != OB_INVALID_ID);
-  OZ (get_package_schema_info(resolve_ctx.schema_guard_, package_id, package_spec_info, package_body_info));
+  OZ (get_package_schema_info(
+    resolve_ctx.schema_guard_, package_id, package_spec_info, package_body_info));
   CK (OB_NOT_NULL(package_spec_info));
-  CK (package_spec_info->get_package_id() == package_id);
+
   if (OB_SUCC(ret)) {
-    ObPLCompiler compiler(resolve_ctx.allocator_,
+    ObArenaAllocator local_alloc("GetPKGRawExpr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObPLCompiler compiler(local_alloc,
                           resolve_ctx.session_info_,
                           resolve_ctx.schema_guard_,
                           resolve_ctx.package_guard_,
                           resolve_ctx.sql_proxy_);
     const uint64_t tenant_id = package_spec_info->get_tenant_id();
     uint64_t db_id = package_spec_info->get_database_id();
-    uint64_t package_spec_id = package_spec_info->get_package_id();
-    ObPLBlockNS *null_parent_ns = NULL;
     const ObDatabaseSchema *db_schema = NULL;
-    uint64_t effective_tenant_id = resolve_ctx.session_info_.get_effective_tenant_id();
-    HEAP_VAR(ObPLPackageAST, package_spec_ast, resolve_ctx.allocator_) {
-      ObString source;
-      if (package_spec_info->is_for_trigger()) {
-        OZ (ObTriggerInfo::gen_package_source(package_spec_info->get_tenant_id(),
-                                              package_spec_info->get_package_id(),
-                                              source,
-                                              PACKAGE_TYPE,
-                                              resolve_ctx.schema_guard_,
-                                              resolve_ctx.allocator_));
-      } else {
-        source = package_spec_info->get_source();
-      }
-      OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
-        resolve_ctx.allocator_, resolve_ctx.session_info_.get_dtc_params(), source));
+
+    HEAP_VARS_2((ObPLPackageAST, package_spec_ast, local_alloc),
+                (ObPLPackageAST, package_body_ast, local_alloc)) {
+
       OZ (resolve_ctx.schema_guard_.get_database_schema(tenant_id, db_id, db_schema));
-      OZ (package_spec_ast.init(db_schema->get_database_name_str(),
-                                package_spec_info->get_package_name(),
-                                PL_PACKAGE_SPEC,
-                                package_spec_info->get_database_id(),
-                                package_spec_id,
-                                package_spec_info->get_schema_version(),
-                                NULL));
-      {
-        ObPLCompilerEnvGuard guard(
-          *package_spec_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, package_spec_ast, ret);
-        OZ (compiler.analyze_package(source, null_parent_ns,
-                                     package_spec_ast, package_spec_info->is_for_trigger()));
+      CK (OB_NOT_NULL(db_schema));
+
+#define ANALYZE_PACKAGE(package_info, package_ast, package_type, parent_ns, parent_ast)       \
+if (OB_SUCC(ret)) {                                                                           \
+  ObString source;                                                                            \
+  if (package_info->is_for_trigger()) {                                                       \
+    OZ (ObTriggerInfo::gen_package_source(package_info->get_tenant_id(),                      \
+                                          package_info->get_package_id(),                     \
+                                          source,                                             \
+                                          PL_PACKAGE_SPEC == package_type,                    \
+                                          resolve_ctx.schema_guard_,                          \
+                                          local_alloc));                                      \
+  } else {                                                                                    \
+    source = package_info->get_source();                                                      \
+  }                                                                                           \
+  OZ (package_ast.init(db_schema->get_database_name_str(),                                    \
+                       package_info->get_package_name(),                                      \
+                       package_type,                                                          \
+                       package_info->get_database_id(),                                       \
+                       package_info->get_package_id(),                                        \
+                       package_info->get_schema_version(),                                    \
+                       parent_ast));                                                                \
+  OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(                                   \
+    local_alloc, resolve_ctx.session_info_.get_dtc_params(), source));                        \
+  {                                                                                           \
+    ObPLCompilerEnvGuard guard(                                                               \
+      *package_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, package_ast, ret); \
+    OZ (compiler.analyze_package(source, parent_ns,                                           \
+                                 package_ast, package_info->is_for_trigger()));               \
+  }                                                                                           \
+  if (OB_SUCC(ret) && package_id == package_info->get_package_id()) {                         \
+    OV (expr_idx >= 0 && package_ast.get_exprs().count() > expr_idx,                          \
+      OB_ERR_UNEXPECTED, K(expr_idx), K(package_ast.get_exprs().count()));                    \
+    CK (OB_NOT_NULL(package_ast.get_expr(expr_idx)));                                         \
+    OZ (ObPLExprCopier::copy_expr(expr_factory, package_ast.get_expr(expr_idx), expr));       \
+  }                                                                                           \
+}
+
+      ANALYZE_PACKAGE(package_spec_info, package_spec_ast, PL_PACKAGE_SPEC, NULL, NULL);
+      if (package_id != package_spec_info->get_package_id()) {
+        ANALYZE_PACKAGE(package_body_info, package_body_ast, PL_PACKAGE_BODY,
+                        &(package_spec_ast.get_body()->get_namespace()), &package_spec_ast);
       }
-      CK (expr_idx >= 0 && package_spec_ast.get_exprs().count() > expr_idx);
-      CK (OB_NOT_NULL(package_spec_ast.get_expr(expr_idx)));
-      OZ (ObPLExprCopier::copy_expr(expr_factory, package_spec_ast.get_expr(expr_idx), expr));
+
+#undef ANALYZE_PACKAGE
     }
+    CK (OB_NOT_NULL(expr));
   }
   return ret;
 }

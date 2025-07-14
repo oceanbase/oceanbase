@@ -8197,25 +8197,15 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
                                            current_block_->get_namespace().get_package_id(),
                                            cursor->get_package_id(),
                                            prepare_result.exec_params_));
-          //仅当原型和声明完全一致时，才是合法
-          OZ (cursor->set(prepare_result.route_sql_,
-                          expr_idxs,
-                          prepare_result.ps_sql_,
-                          prepare_result.type_,
-                          prepare_result.for_update_,
-                          record_type,
-                          cursor_type,
-                          ObPLCursor::DEFINED,
-                          prepare_result.ref_objects_,
-                          cursor->get_formal_params(),
-                          prepare_result.has_dup_column_name_));
-          if (OB_SUCC(ret)
-          && (cursor->get_package_id() != current_block_->get_namespace().get_package_id()
-              || cursor->get_routine_id() != current_block_->get_namespace().get_routine_id())) {
+          bool is_external = cursor->get_package_id() != current_block_->get_namespace().get_package_id()
+                             || cursor->get_routine_id() != current_block_->get_namespace().get_routine_id();
+          ObArray<int64_t> external_expr_idxs;
+          if (OB_SUCC(ret) && is_external) {
             const ObPLCursor *external_cursor = NULL;
             ObPLBlockNS *external_ns = NULL;
             CK (OB_NOT_NULL(current_block_->get_namespace().get_external_ns()));
             CK (OB_NOT_NULL(external_ns = const_cast<ObPLBlockNS *>(current_block_->get_namespace().get_external_ns()->get_parent_ns())));
+            CK (ObPLBlockNS::BLOCK_PACKAGE_SPEC == external_ns->get_block_type());
             OZ (current_block_->get_namespace().get_external_ns()->get_parent_ns()->get_cursor(
                 cursor->get_package_id(),
                 cursor->get_routine_id(),
@@ -8226,7 +8216,6 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("cursor NULL", K(cursor_index), K(cursor_name), K(ret));
               } else {
-                ObSEArray<int64_t, 16> external_expr_idxs;
                 ObIArray<ObRawExpr *> *external_exprs = const_cast<ObIArray<ObRawExpr*>*>(external_ns->get_exprs());
                 CK (OB_NOT_NULL(external_exprs));
                 for (int64_t i = 0; OB_SUCC(ret) && i < expr_idxs.count(); ++i) {
@@ -8246,9 +8235,24 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
                                           prepare_result.has_dup_column_name_),
                                           K(formal_params),
                                           K(external_cursor->get_formal_params()));
+                OX (const_cast<ObPLCursor*>(external_cursor)->set_package_body_id(
+                                            current_block_->get_namespace().get_package_id()));
               }
             }
           }
+          //仅当原型和声明完全一致时，才是合法
+          OZ (cursor->set(prepare_result.route_sql_,
+                          /*is_external ? external_expr_idxs :*/ expr_idxs,
+                          prepare_result.ps_sql_,
+                          prepare_result.type_,
+                          prepare_result.for_update_,
+                          record_type,
+                          cursor_type,
+                          ObPLCursor::DEFINED,
+                          prepare_result.ref_objects_,
+                          formal_params, /*cursor->get_formal_params(),*/
+                          prepare_result.has_dup_column_name_));
+          OX (cursor->set_package_body_id(current_block_->get_namespace().get_package_id()));
         } else if (ObPLCursor::DEFINED == cursor->get_state()) {
           // already defined, do not defined it agine.
           ret = OB_ERR_ATTR_FUNC_CONFLICT;
@@ -16703,20 +16707,45 @@ int ObPLResolver::add_external_cursor(ObPLBlockNS &ns,
     OZ (ob_write_string(allocator, cursor.get_sql(), sql));
     OZ (ob_write_string(allocator, cursor.get_ps_sql(), ps_sql));
     OZ (cursor_type.deep_copy(*resolve_ctx_.enum_set_ctx_, cursor.get_cursor_type()));
-    ObSEArray<int64_t, 4> sql_params;
 
+    ObSEArray<int64_t, 4> sql_params;
     for (int64_t i = 0; OB_SUCC(ret) && i < cursor.get_sql_params().count(); ++i) {
       ObRawExpr *expr = NULL;
-      ObRawExpr *org_expr = NULL;
-      if (NULL == external_ns) {
-        org_expr = reinterpret_cast<ObRawExpr*>(cursor.get_sql_params().at(i));
-      } else {
+      if (!cursor.is_package_cursor()) {
+        ObRawExpr *org_expr = NULL;
+        CK (OB_NOT_NULL(external_ns));
         CK (OB_NOT_NULL(external_ns->get_exprs()));
         CK (cursor.get_sql_params().at(i) >= 0
             && cursor.get_sql_params().at(i) < external_ns->get_exprs()->count());
         OX (org_expr = external_ns->get_exprs()->at(cursor.get_sql_params().at(i)));
+        OZ (ObPLExprCopier::copy_expr(expr_factory_, org_expr, expr));
+      } else if (cursor.get_package_id() == ns.get_package_id()
+                  || (cursor.is_define_in_body() && cursor.get_package_body_id() == ns.get_package_id())) {
+        ObRawExpr *org_expr = NULL;
+        const ObPLBlockNS *body_ns = &ns;
+        while (OB_NOT_NULL(body_ns)
+          && body_ns->get_block_type() != ObPLBlockNS::BLOCK_PACKAGE_BODY
+          && body_ns->get_block_type() != ObPLBlockNS::BLOCK_OBJECT_BODY) {
+          if (OB_ISNULL(body_ns->get_pre_ns()) && OB_NOT_NULL(body_ns->get_external_ns())) {
+            body_ns = body_ns->get_external_ns()->get_parent_ns();
+          } else {
+            body_ns = body_ns->get_pre_ns();
+          }
+        }
+        CK (OB_NOT_NULL(body_ns));
+        CK (cursor.get_sql_params().at(i) >= 0
+            && cursor.get_sql_params().at(i) < body_ns->get_exprs()->count());
+        OX (org_expr = body_ns->get_exprs()->at(cursor.get_sql_params().at(i)));
+        OZ (ObPLExprCopier::copy_expr(expr_factory_, org_expr, expr));
+      } else {
+        ObPLPackageManager &package_manager =
+          resolve_ctx_.session_info_.get_pl_engine()->get_package_manager();
+        OZ (package_manager.get_package_expr(resolve_ctx_,
+                                             expr_factory_,
+                                             cursor.is_define_in_body() ? cursor.get_package_body_id() : cursor.get_package_id(),
+                                             cursor.get_sql_params().at(i),
+                                             expr));
       }
-      OZ (ObPLExprCopier::copy_expr(expr_factory_, org_expr, expr));
       CK (OB_NOT_NULL(expr));
       OZ (resolve_external_types_from_expr(*expr));
       OZ (func.add_expr(expr));
@@ -16741,7 +16770,9 @@ int ObPLResolver::add_external_cursor(ObPLBlockNS &ns,
                                           cursor_type,
                                           cursor.get_formal_params(),
                                           cursor.get_state(),
-                                          cursor.is_dup_column()));
+                                          cursor.is_dup_column(),
+                                          cursor.is_skip_locked(),
+                                          cursor.get_package_body_id()));
     OZ (ns.get_cursors().push_back(ns.get_cursor_table()->get_count() - 1));
     OX (index = ns.get_cursor_table()->get_count() - 1);
   }
