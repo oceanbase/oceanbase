@@ -765,8 +765,7 @@ public:
   virtual ~ObPLExecState();
 
   int init(const ParamStore *params = NULL, bool is_anonymous = false);
-  int defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type);
-  int check_routine_param_legal(ParamStore *params = NULL);
+  int defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type, int64_t param_idx);
   int check_anonymous_collection_compatible(const ObPLComposite &composite, const ObPLDataType &dest_type, bool &need_cast);
   int convert_composite(ObObjParam &param, const ObPLDataType &dest_type);
   int init_params_simple(const ParamStore *params = NULL, bool is_anonymous = false);

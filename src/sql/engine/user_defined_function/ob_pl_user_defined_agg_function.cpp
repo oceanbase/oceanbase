@@ -219,6 +219,7 @@ int ObPlAggUdfFunction::build_in_params_store(ObObjParam &pl_obj,
     udf_params = new(param_store_buf)ParamStore(ObWrapperAllocator(*allocator_));
     ObObjParam param;
     param.reset();
+    param = pl_obj;
     if (is_out_param) {
       param.set_extend(pl_obj.get_ext(),
                        pl_obj.get_meta().get_extend_type(), pl_obj.get_val_len());
