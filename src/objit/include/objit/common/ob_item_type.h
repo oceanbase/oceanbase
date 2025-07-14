@@ -2884,6 +2884,8 @@ typedef enum ObItemType
   T_SEQUENCE_NAME = 4884,
   T_STORAGE_CACHE_POLICY_IN_PART_LIST = 4885,
   T_COLUMN_INDEX_TYPE = 4886,
+  T_FREQ_THRESHOLD = 4887,
+  T_SEMISTRUCT_PROPERTIES = 4888,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

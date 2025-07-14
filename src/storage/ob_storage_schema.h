@@ -318,6 +318,10 @@ public:
     type = semistruct_encoding_type_;
     return OB_SUCCESS;
   }
+  virtual const common::ObString& get_semistruct_properties() const override
+  {
+    return semistruct_properties_;
+  }
   virtual inline share::schema::ObTableType get_table_type() const override { return table_type_; }
   virtual inline share::schema::ObIndexType get_index_type() const override { return index_type_; }
   const common::ObIArray<ObStorageColumnSchema> &get_store_column_schemas() const { return column_array_; }
@@ -425,7 +429,8 @@ public:
   static const int64_t STORAGE_SCHEMA_VERSION_V3 = 3; // add for cg_group
   static const int64_t STORAGE_SCHEMA_VERSION_V4 = 4;
   static const int64_t STORAGE_SCHEMA_VERSION_V5 = 5; // add for merge_engine_type_ and semistruct encoding type in 4.3.5 bp2
-  static const int64_t STORAGE_SCHEMA_VERSION_LATEST = STORAGE_SCHEMA_VERSION_V5;
+  static const int64_t STORAGE_SCHEMA_VERSION_V6 = 6; // add for semistruct properties in 4.4.1 bp1
+  static const int64_t STORAGE_SCHEMA_VERSION_LATEST = STORAGE_SCHEMA_VERSION_V6;
   common::ObIAllocator *allocator_;
   int64_t storage_schema_version_;
 
@@ -467,6 +472,7 @@ public:
   share::schema::ObMvMode mv_mode_;
   ObMergeEngineType merge_engine_type_;
   share::schema::ObSemiStructEncodingType semistruct_encoding_type_;
+  common::ObString semistruct_properties_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageSchema);

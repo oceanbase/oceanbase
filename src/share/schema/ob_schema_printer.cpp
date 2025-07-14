@@ -6356,7 +6356,7 @@ int ObSchemaPrinter::print_semistruct_encodng_options(const ObTableSchema &table
 {
   int ret = OB_SUCCESS;
   const ObSemiStructEncodingType& type = table_schema.get_semistruct_encoding_type();
-  if (type.mode_ == ObSemiStructEncodingType::Mode::ENCODING) {
+  if (type.mode_ == ObSemistructProperties::Mode::ENCODING) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "SEMISTRUCT_ENCODING_TYPE='ENCODING' "))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print semistruct encoding type", K(ret), K(table_schema));
     }

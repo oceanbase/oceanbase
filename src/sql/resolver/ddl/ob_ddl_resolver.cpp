@@ -13973,9 +13973,9 @@ int ObDDLResolver::resolve_semistruct_encoding_type(const ParseNode *option_node
   } else {
     ObString type_str(static_cast<int32_t>(option_node->children_[0]->str_len_), (char *)(option_node->children_[0]->str_value_));
     if (type_str.empty()) {
-      semistruct_encoding_type_.mode_ = ObSemiStructEncodingType::Mode::NONE;
+      semistruct_encoding_type_.mode_ = ObSemistructProperties::Mode::NONE;
     } else if (0 == type_str.case_compare("encoding")) {
-      semistruct_encoding_type_.mode_ = ObSemiStructEncodingType::Mode::ENCODING;
+      semistruct_encoding_type_.mode_ = ObSemistructProperties::Mode::ENCODING;
     } else {
       ret = OB_INVALID_ARGUMENT;
       SQL_RESV_LOG(WARN, "failed to resolve semistruct encoding type str", K(ret), K(type_str));

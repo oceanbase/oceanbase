@@ -1686,7 +1686,8 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     exec_env_(),
     storage_cache_policy_(),
     semistruct_encoding_type_(),
-    dynamic_partition_policy_()
+    dynamic_partition_policy_(),
+    semistruct_properties_()
 {
   reset();
 }
@@ -1961,6 +1962,10 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
 
   if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.dynamic_partition_policy_, dynamic_partition_policy_))) {
     LOG_WARN("fail to deep copy dynamic partition policy string", KR(ret));
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.semistruct_properties_, semistruct_properties_))) {
+    LOG_WARN("fail to deep copy semistruct properties string", KR(ret));
   }
 
   if (OB_FAIL(ret)) {
@@ -3802,6 +3807,7 @@ int64_t ObTableSchema::get_convert_size() const
   convert_size += semistruct_encoding_type_.get_deep_copy_size();
   convert_size += dynamic_partition_policy_.length() + 1;
   convert_size += external_sub_path_.length() + 1;
+  convert_size += semistruct_properties_.length() + 1;
   return convert_size;
 }
 
@@ -3914,6 +3920,7 @@ void ObTableSchema::reset()
   dynamic_partition_policy_.reset();
   external_location_id_ = OB_INVALID_ID;
   external_sub_path_.reset();
+  semistruct_properties_.reset();
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -7292,7 +7299,8 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(storage_cache_policy),
     K_(merge_engine_type),
     K_(semistruct_encoding_type),
-    K_(dynamic_partition_policy));
+    K_(dynamic_partition_policy),
+    K_(semistruct_properties));
   J_OBJ_END();
 
   return pos;
@@ -7497,6 +7505,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(external_sub_path_);
   OB_UNIS_ENCODE(micro_block_format_version_);
   OB_UNIS_ENCODE(tmp_mlog_tid_);
+  OB_UNIS_ENCODE(semistruct_properties_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7747,6 +7756,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE_AND_FUNC(external_sub_path_, deep_copy_str);
   OB_UNIS_DECODE(micro_block_format_version_);
   OB_UNIS_DECODE(tmp_mlog_tid_);
+  OB_UNIS_DECODE_AND_FUNC(semistruct_properties_, deep_copy_str);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -7897,6 +7907,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(external_sub_path_);
   OB_UNIS_ADD_LEN(micro_block_format_version_);
   OB_UNIS_ADD_LEN(tmp_mlog_tid_);
+  OB_UNIS_ADD_LEN(semistruct_properties_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员

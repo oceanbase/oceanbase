@@ -329,6 +329,7 @@ all_table_def = dict(
       ('external_location_id', 'int', 'false', 'OB_INVALID_ID'),
       ('external_sub_path', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
       ('micro_block_format_version', 'int', 'false', '1'),
+      ('semistruct_properties', 'longtext', 'false', ''),
     ],
 )
 

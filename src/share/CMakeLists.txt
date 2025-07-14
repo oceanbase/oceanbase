@@ -753,6 +753,7 @@ ob_set_subtarget(ob_share domain_id
 
 ob_set_subtarget(ob_share semistruct
   semistruct/ob_sub_column_path.cpp
+  semistruct/ob_semistruct_properties.cpp
 )
 
 ob_add_new_object_target(ob_share ob_share)

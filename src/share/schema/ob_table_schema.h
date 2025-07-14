@@ -35,6 +35,7 @@
 #include "lib/compress/ob_compress_util.h"
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
 #include "storage/ob_micro_block_format_version_helper.h"
+#include "share/semistruct/ob_semistruct_properties.h"
 namespace oceanbase
 {
 
@@ -519,10 +520,6 @@ struct ObSemiStructEncodingType
 {
   OB_UNIS_VERSION(1);
 public:
-  enum Mode {
-    NONE = 0,
-    ENCODING = 1
-  };
 
 public:
   ObSemiStructEncodingType():
@@ -532,7 +529,7 @@ public:
   ~ObSemiStructEncodingType() { reset(); }
 
   void reset() { flags_ = 0;}
-  bool is_enable_semistruct_encoding() const { return ENCODING == mode_; }
+  bool is_enable_semistruct_encoding() const { return ObSemistructProperties::ENCODING == mode_; }
   int64_t get_deep_copy_size() const { return sizeof(ObSemiStructEncodingType); }
 
   union
@@ -770,6 +767,10 @@ public:
   {
     UNUSED(type);
     return common::OB_NOT_SUPPORTED;
+  }
+  virtual const common::ObString& get_semistruct_properties() const
+  {
+    return EMPTY_STRING;
   }
   DECLARE_PURE_VIRTUAL_TO_STRING;
   const static int64_t INVAID_RET = -1;
@@ -2169,6 +2170,10 @@ public:
     type = semistruct_encoding_type_;
     return OB_SUCCESS;
   }
+  virtual const common::ObString& get_semistruct_properties() const override
+  {
+    return semistruct_properties_;
+  }
   inline int set_dynamic_partition_policy(const common::ObString &dynamic_partition_policy)
   {
     return deep_copy_str(dynamic_partition_policy, dynamic_partition_policy_);
@@ -2399,6 +2404,7 @@ protected:
   uint64_t external_location_id_;
   common::ObString external_sub_path_;
   uint64_t tmp_mlog_tid_;
+  common::ObString semistruct_properties_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema
