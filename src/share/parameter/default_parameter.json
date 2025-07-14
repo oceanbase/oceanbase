@@ -180,6 +180,11 @@
           "name": "default_table_merge_engine",
           "value": "PARTIAL_UPDATE",
           "comment": "use partial_update merge engine for olap workloads, modify to delete_insert later"
+        },
+        {
+          "name": "_force_subquery_unnest",
+          "value": true,
+          "comment": "aggressively unnest all subqueries that can be unnested for olap mode"
         }
       ]
     }
