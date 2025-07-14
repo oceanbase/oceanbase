@@ -266,7 +266,7 @@ struct ObGetTableIdOp
     } else if (OB_FAIL(plan->get_base_table_version(table_id_, version))) {
       LOG_WARN("failed to get base table version", K(ret));
     } else if (version > 0) {
-      plan->set_is_expired(true);
+      plan->set_is_expired(EXPIRED_BY_OPT_STAT);
     }
     return ret;
   }
@@ -515,16 +515,18 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
   }
   // if schema expired, update pcv set;
   if (OB_OLD_SCHEMA_VERSION == ret
-    || (plan != NULL && plan->is_expired())
     || need_late_compilation) {
-    if (plan != NULL && plan->is_expired()) {
-      LOG_INFO("the statistics of table is stale and evict plan.", K(plan->stat_));
-    }
-    if (OB_FAIL(remove_cache_node(pc_ctx.key_))) {
-      LOG_WARN("fail to remove pcv set when schema/plan expired", K(ret));
-    } else {
+      if (OB_FAIL(remove_cache_node(pc_ctx.key_))) {
+        LOG_WARN("fail to remove pcv set when schema/plan expired", K(ret));
+      } else {
+        ret = OB_SQL_PC_NOT_EXIST;
+      }
+  } else if (plan != NULL && plan->is_expired()) {
+    if (pc_ctx.regenerating_expired_plan_) {
       ret = OB_SQL_PC_NOT_EXIST;
     }
+    LOG_INFO("the statistics of table is stale and evict plan.", K(plan->stat_.is_expired_),
+                                        K(pc_ctx.regenerating_expired_plan_), K(plan->stat_));
   }
   return ret;
 }
@@ -1101,12 +1103,16 @@ int ObPlanCache::add_plan_cache(ObILibCacheCtx &ctx,
   } else {
     ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
     pc_ctx.key_ = &(pc_ctx.fp_result_.pc_key_);
+    int tmp_ret = OB_SUCCESS;
+    if (pc_ctx.regenerating_expired_plan_
+        && OB_SUCCESS != (tmp_ret = remove_cache_node(pc_ctx.key_))) {
+      SQL_PC_LOG(WARN, "fail to remove lib cache node for expired plan", K(tmp_ret));
+    }
     do {
       if (OB_FAIL(add_cache_obj(ctx, pc_ctx.key_, cache_obj)) && OB_OLD_SCHEMA_VERSION == ret) {
         SQL_PC_LOG(INFO, "table or view in plan cache value is old", K(ret));
       }
       if (ctx.need_destroy_node_) {
-        int tmp_ret = OB_SUCCESS;
         SQL_PC_LOG(INFO, "The cache node needs to be evict due to an invalid state", K(ret));
         if (OB_SUCCESS != (tmp_ret = remove_cache_node(pc_ctx.key_))) {
           ret = tmp_ret;
@@ -1287,6 +1293,11 @@ int ObPlanCache::get_cache_obj(ObILibCacheCtx &ctx,
         LOG_DEBUG("cache_node fail to get cache obj", K(ret));
       }
     } else {
+      if (OB_SUCC(ret) && cache_obj != NULL && ObLibCacheNameSpace::NS_CRSR == cache_obj->get_ns()
+          && static_cast<ObPhysicalPlan*>(cache_obj)->is_expired()
+          && static_cast<ObPCVSet*>(cache_node)->set_expired_time()) {
+        static_cast<ObPlanCacheCtx&>(ctx).regenerating_expired_plan_ = true;
+      }
       guard.cache_obj_ = cache_obj;
       LOG_DEBUG("succ to get cache obj", KPC(key));
     }

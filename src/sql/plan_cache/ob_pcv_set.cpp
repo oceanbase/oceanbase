@@ -91,6 +91,7 @@ void ObPCVSet::destroy()
     plan_num_ = 0;
     need_check_gen_tbl_col_ = false;
     is_inited_ = false;
+    expired_time_ = 0;
   }
 }
 
@@ -531,6 +532,18 @@ int ObPCVSet::get_evolving_evolution_task(EvolutionPlanList &evo_task_list)
   return ret;
 }
 #endif
+
+bool ObPCVSet::set_expired_time()
+{
+  bool ret = false;
+  int64_t expired_time = ATOMIC_LOAD(&expired_time_);
+  int64_t cur_time = ObTimeUtility::current_time();
+  const static int64_t REGENERATE_EXPIRED_PLAN_INTERVAL = 10 * 1000 * 1000L; // 10 second
+  if (expired_time + REGENERATE_EXPIRED_PLAN_INTERVAL < cur_time) {
+    ret = expired_time == ATOMIC_VCAS(&expired_time_, expired_time, cur_time);
+  }
+  return ret;
+}
 
 }
 }

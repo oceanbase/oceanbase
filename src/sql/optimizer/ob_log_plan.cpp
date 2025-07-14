@@ -11147,16 +11147,23 @@ int ObLogPlan::check_enable_plan_expiration(bool &enable) const
 {
   int ret = OB_SUCCESS;
   enable = false;
+  ObOptimizerContext &opt_ctx = get_optimizer_context();
   const ObSqlCtx *sql_ctx = NULL;
-  if (OB_ISNULL(get_stmt())
-      || OB_ISNULL(get_optimizer_context().get_exec_ctx())
-      || OB_ISNULL(sql_ctx = optimizer_context_.get_exec_ctx()->get_sql_ctx())) {
+  if (OB_ISNULL(get_stmt()) || OB_ISNULL(opt_ctx.get_query_ctx())
+      || OB_ISNULL(opt_ctx.get_exec_ctx())
+      || OB_ISNULL(sql_ctx = opt_ctx.get_exec_ctx()->get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(get_stmt()), K(sql_ctx));
+    LOG_WARN("unexpected null", K(ret), K(get_stmt()), K(opt_ctx.get_query_ctx()), K(sql_ctx));
   } else if (!get_stmt()->is_select_stmt()) {
     // do nothing
-  } else if (optimizer_context_.get_phy_plan_type() != OB_PHY_PLAN_LOCAL &&
-             optimizer_context_.get_phy_plan_type() != OB_PHY_PLAN_DISTRIBUTED) {
+  } else if (opt_ctx.get_phy_plan_type() != OB_PHY_PLAN_LOCAL &&
+             opt_ctx.get_phy_plan_type() != OB_PHY_PLAN_DISTRIBUTED) {
+    // do nothing
+  } else if (opt_ctx.get_query_ctx()->get_query_hint().has_outline_data()
+#ifdef OB_BUILD_SPM
+             && !opt_ctx.get_query_ctx()->is_spm_evolution_
+#endif
+            ) {
     // do nothing
 #ifdef OB_BUILD_SPM
   } else if (SPM_MODE_BASELINE_FIRST == sql_ctx->spm_ctx_.spm_mode_

@@ -406,7 +406,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       exist_local_plan_(false),
       compare_plan_(nullptr),
       flag_(0),
-      parameterized_ps_sql_()
+      parameterized_ps_sql_(),
+      regenerating_expired_plan_(false)
   {
     fp_result_.pc_key_.mode_ = mode_;
   }
@@ -485,7 +486,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(is_arraybinding_),
     K(exist_local_plan_),
     K(flag_),
-    K(parameterized_ps_sql_)
+    K(parameterized_ps_sql_),
+    K(regenerating_expired_plan_)
     );
   PlanCacheMode mode_; //control use which variables to do match
 
@@ -568,6 +570,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     uint16_t flag_;
   };
   common::ObString parameterized_ps_sql_;
+  bool regenerating_expired_plan_;
 };
 
 struct ObPlanCacheStat
