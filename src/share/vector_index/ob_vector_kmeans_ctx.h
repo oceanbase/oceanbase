@@ -102,9 +102,9 @@ public:
       ivf_build_mem_ctx_(ivf_build_mem_ctx)
   {}
   virtual ~ObKmeansAlgo() {
-    destroy();
+    ObKmeansAlgo::destroy();
   }
-  void destroy();
+  virtual void destroy();
   int init(ObKmeansCtx &kmeans_ctx);
   int build(const ObIArray<float*> &input_vectors);
   bool is_finish() const { return FINISH == status_; }
@@ -152,7 +152,7 @@ public:
   virtual ~ObElkanKmeansAlgo() {
     destroy();
   }
-  void destroy();
+  virtual void destroy() override;
 
   TO_STRING_KV(KP(upper_bounds_),
                KP(nearest_centers_));

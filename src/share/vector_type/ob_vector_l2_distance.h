@@ -374,15 +374,15 @@ OB_DECLARE_SSE42_SPECIFIC_CODE(
   inline static void fvec_madd(size_t n, const float* a, float bf, const float* b, float* c) {
     size_t i = 0;
     for (; i + 3 < n; i += 4) {
-      __m128 va = _mm_load_ps(a + i);
-      __m128 vb = _mm_load_ps(b + i);
+      __m128 va = _mm_loadu_ps(a + i);
+      __m128 vb = _mm_loadu_ps(b + i);
 
       __m128 vbf = _mm_set1_ps(bf);
       __m128 vb_scaled = _mm_mul_ps(vb, vbf);
 
       __m128 vresult = _mm_add_ps(va, vb_scaled);
 
-      _mm_store_ps(c + i, vresult);
+      _mm_storeu_ps(c + i, vresult);
     }
 
     for (; i < n; ++i) {

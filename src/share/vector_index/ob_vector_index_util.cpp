@@ -4501,6 +4501,8 @@ int ObVectorIndexUtil::estimate_ivf_memory(uint64_t num_vectors,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ivf algorithm type", K(ret), K(param));
   }
+  construct_mem = static_cast<uint64_t>(construct_mem * 1.5);
+  buff_mem = static_cast<uint64_t>(buff_mem * 1.5);
   return ret;
 }
 
