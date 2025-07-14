@@ -201,6 +201,7 @@ TG_DEF(ObPrivateBlockGCThread, PrivGCThread, QUEUE_THREAD,
 TG_DEF(SSWriterWorker, SSWSrv, THREAD_POOL, 1)
 #endif
 
+TG_DEF(ExtDiskCacheServerTimer, ExtDiskCacheServerTimer, TIMER)
 
 TG_DEF(TmpFileSwap, TFSwap, THREAD_POOL, 1)
 TG_DEF(TableGroupCommitMgr, TableGroupCommitMgr, TIMER)
