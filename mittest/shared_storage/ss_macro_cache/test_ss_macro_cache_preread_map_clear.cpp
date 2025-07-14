@@ -9,41 +9,35 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#ifndef USING_LOG_PREFIX
 #define USING_LOG_PREFIX STORAGETEST
-#endif
-#include <gtest/gtest.h>
-#include <filesystem>
 
 #define protected public
 #define private public
-#include "lib/utility/ob_test_util.h"
-#include "storage/shared_storage/storage_cache_policy/ob_storage_cache_service.h"
+#include "mittest/shared_storage/test_ss_common_util.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
-#include "mittest/simple_server/env/ob_simple_cluster_test_base.h"
-#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
-#include "storage/shared_storage/prewarm/ob_storage_cache_policy_prewarmer.h"
-#include "storage/shared_storage/storage_cache_policy/ob_storage_cache_tablet_scheduler.h"
-#include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 #include "storage/shared_storage/ob_ss_object_access_util.h"
+#include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
+#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #include "storage/shared_storage/ob_file_manager.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache_common_meta.h"
 #include "storage/shared_storage/ob_ss_reader_writer.h"
-
-using namespace oceanbase::transaction;
-using namespace oceanbase::storage;
-using namespace oceanbase::common;
-using namespace oceanbase::lib;
-namespace fs = std::filesystem;
+#include "observer/ob_server.h"
+#undef private
+#undef protected
 
 namespace oceanbase
 {
-char *shared_storage_info = nullptr;
-namespace unittest
+namespace storage
 {
+using namespace oceanbase::blocksstable;
+using namespace oceanbase::common;
+using namespace oceanbase::omt;
+using namespace oceanbase::storage;
+using namespace oceanbase::observer;
 
 class MyObSSPrereadMapUpdateCallback
 {
@@ -63,48 +57,13 @@ void MyObSSPrereadMapUpdateCallback::operator()(PrereadMapPairType &entry)
   ret_ = ret;
 }
 
-struct TestRunCtx
-{
-  uint64_t tenant_id_ = 1;
-  int64_t tenant_epoch_ = 0;
-  ObLSID ls_id_;
-  int64_t ls_epoch_;
-  ObTabletID tablet_id_;
-
-  TO_STRING_KV(K(tenant_id_), K(tenant_epoch_), K(ls_id_), K(ls_epoch_), K(tablet_id_));
-};
-
-class ObPrereadMapClearTest : public ObSimpleClusterTestBase
+class ObPrereadMapClearTest : public ::testing::Test
 {
 public:
-  ObPrereadMapClearTest()
-      : ObSimpleClusterTestBase("test_preread_map_clear_dir", "50G", "50G", "50G"),
-        tenant_created_(false),
-        run_ctx_()
-  {}
-
-  virtual void SetUp() override
-  {
-    ObSimpleClusterTestBase::SetUp();
-    if (!tenant_created_) {
-      OK(create_tenant("tt1", "5G", "10G", false/*oracle_mode*/, 8, "2G"));
-      OK(get_tenant_id(run_ctx_.tenant_id_));
-      ASSERT_NE(0, run_ctx_.tenant_id_);
-    //   OK(get_curr_simple_server().init_sql_proxy2());
-      tenant_created_ = true;
-      {
-        share::ObTenantSwitchGuard tguard;
-        OK(tguard.switch_to(run_ctx_.tenant_id_));
-        OK(TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
-      }
-    }
-  }
-
-  static void TearDownTestCase()
-  {
-    ResidualDataCleanerHelper::clean_in_mock_env();
-    ObSimpleClusterTestBase::TearDownTestCase();
-  }
+  ObPrereadMapClearTest() = default;
+  virtual ~ObPrereadMapClearTest() = default;
+  static void SetUpTestCase();
+  static void TearDownTestCase();
 
   void check_exist(ObTenantFileManager *tenant_file_mgr, const int64_t i, const ObSSMacroCacheType cur_type, const bool exist)
   {
@@ -235,34 +194,42 @@ public:
     }
   }
 
-  public:
-    static const uint64_t MACRO_BLOCK_TABLET_ID = 200004; // tablet_id for MACRO_BLOCK
-    static const uint64_t TMP_FILE_ID = 100; // tmp_file_id for TMP_FILE
-    static const uint64_t HOT_TABLET_TABLET_ID = 200005; // tablet_id for HOT_TABLET_MACRO_BLOCK
-    static const uint64_t META_FILE_TABLET_ID = 200001; // tablet_id for META_FILE
-    static const uint64_t META_FILE_LS_ID = 1001; // ls_id for META_FILE
-    static const uint64_t META_FILE_LS_EPOCH_ID = 1; // ls_epoch_id for META_FILE
-    static const uint64_t MACRO_BLOCK_TRANSFER_SEQ = 0; // transfer_seq for MACRO_BLOCK
-    static const uint64_t HOT_TABLET_TRANSFER_SEQ = 0; // transfer_seq for HOT_TABLET_MACRO_BLOCK
-    static const uint64_t META_FILE_TRANSFER_SEQ = 0; // transfer_seq for META_FILE
-    static const uint64_t MACRO_BLOCK_SERVER_ID = 1; // server_id for MACRO_BLOCK
-    static const uint64_t HOT_TABLET_SERVER_ID = 2; // server_id for HOT_TABLET_MACRO_BLOCK
+public:
+  static const uint64_t MACRO_BLOCK_TABLET_ID = 200004; // tablet_id for MACRO_BLOCK
+  static const uint64_t TMP_FILE_ID = 100; // tmp_file_id for TMP_FILE
+  static const uint64_t HOT_TABLET_TABLET_ID = 200005; // tablet_id for HOT_TABLET_MACRO_BLOCK
+  static const uint64_t META_FILE_TABLET_ID = 200001; // tablet_id for META_FILE
+  static const uint64_t META_FILE_LS_ID = 1001; // ls_id for META_FILE
+  static const uint64_t META_FILE_LS_EPOCH_ID = 1; // ls_epoch_id for META_FILE
+  static const uint64_t MACRO_BLOCK_TRANSFER_SEQ = 0; // transfer_seq for MACRO_BLOCK
+  static const uint64_t HOT_TABLET_TRANSFER_SEQ = 0; // transfer_seq for HOT_TABLET_MACRO_BLOCK
+  static const uint64_t META_FILE_TRANSFER_SEQ = 0; // transfer_seq for META_FILE
+  static const uint64_t MACRO_BLOCK_SERVER_ID = 1; // server_id for MACRO_BLOCK
+  static const uint64_t HOT_TABLET_SERVER_ID = 2; // server_id for HOT_TABLET_MACRO_BLOCK
 
-protected:
-  bool tenant_created_;
-  TestRunCtx run_ctx_;
 };
+
+void ObPrereadMapClearTest::SetUpTestCase()
+{
+  GCTX.startup_mode_ = observer::ObServerMode::SHARED_STORAGE_MODE;
+  EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
+  ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
+}
+
+void ObPrereadMapClearTest::TearDownTestCase()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ResidualDataCleanerHelper::clean_in_mock_env())) {
+      LOG_WARN("failed to clean residual data", KR(ret));
+  }
+  MockTenantModuleEnv::get_instance().destroy();
+}
 
 TEST_F(ObPrereadMapClearTest, test_clear)
 {
-  share::ObTenantSwitchGuard tguard;
-  OK(tguard.switch_to(run_ctx_.tenant_id_));
-
   ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_mgr);
   ObStorageCachePolicyService *policy_service = MTL(ObStorageCachePolicyService *);
-  ASSERT_NE(nullptr, policy_service);
-  policy_service->update_tablet_status(200005, PolicyStatus::HOT); //HOT 0
   ObTenantFileManager *tenant_file_mgr = MTL(ObTenantFileManager*);
   ASSERT_NE(nullptr, tenant_file_mgr);
 
@@ -270,33 +237,25 @@ TEST_F(ObPrereadMapClearTest, test_clear)
 
   for (ObSSMacroCacheType cache_type = static_cast<ObSSMacroCacheType>(0); cache_type < ObSSMacroCacheType::MAX_TYPE;
       cache_type = static_cast<ObSSMacroCacheType>(static_cast<uint8_t>(cache_type) + 1)) {
-    if (ObSSMacroCacheType::META_FILE == cache_type) {
+    if (ObSSMacroCacheType::META_FILE == cache_type ||
+        ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK == cache_type) {
       // META_FILE is not supported
+      // HOT_TABLET_MACRO_BLOCK is not used in preread map clear test
       continue;
     }
     test_preread_map_clear(tenant_file_mgr, cache_type);
   }
 }
 
-} // end unittest
-} // end oceanbase
+} // namespace storage
+} // namespace oceanbase
 
 int main(int argc, char **argv)
 {
-    char buf[1000] = {0};
-    const int64_t cur_time_ns = ObTimeUtility::current_time_ns();
-    databuff_printf(buf, sizeof(buf),
-        "%s/%lu?host=%s&access_id=%s&access_key=%s&s3_region=%s&max_iops=10000&max_bandwidth=200000000B&scope=region",
-        oceanbase::unittest::S3_BUCKET, cur_time_ns, oceanbase::unittest::S3_ENDPOINT,
-        oceanbase::unittest::S3_AK, oceanbase::unittest::S3_SK, oceanbase::unittest::S3_REGION);
-    oceanbase::shared_storage_info = buf;
-    oceanbase::unittest::init_log_and_gtest(argc, argv);
-    OB_LOGGER.set_log_level("INFO");
-    GCONF.ob_startup_mode.set_value("shared_storage");
-    GCONF.datafile_size.set_value("100G");
-    GCONF.memory_limit.set_value("20G");
-    GCONF.system_memory.set_value("5G");
-
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+  int ret = 0;
+  system("rm -f ./test_ss_macro_cache_preread_map_clear.log*");
+  OB_LOGGER.set_file_name("test_ss_macro_cache_preread_map_clear.log", true);
+  OB_LOGGER.set_log_level("INFO");
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }

@@ -9,41 +9,36 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#ifndef USING_LOG_PREFIX
 #define USING_LOG_PREFIX STORAGETEST
-#endif
-#include <gtest/gtest.h>
 #include <filesystem>
-
 #define protected public
 #define private public
-#include "lib/utility/ob_test_util.h"
-#include "storage/shared_storage/storage_cache_policy/ob_storage_cache_service.h"
+#include "mittest/shared_storage/test_ss_common_util.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
-#include "mittest/simple_server/env/ob_simple_cluster_test_base.h"
-#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
-#include "storage/shared_storage/prewarm/ob_storage_cache_policy_prewarmer.h"
-#include "storage/shared_storage/storage_cache_policy/ob_storage_cache_tablet_scheduler.h"
-#include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 #include "storage/shared_storage/ob_ss_object_access_util.h"
+#include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
+#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #include "storage/shared_storage/ob_file_manager.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache_common_meta.h"
 #include "storage/shared_storage/ob_ss_reader_writer.h"
-
-using namespace oceanbase::transaction;
-using namespace oceanbase::storage;
-using namespace oceanbase::common;
-using namespace oceanbase::lib;
-namespace fs = std::filesystem;
+#include "observer/ob_server.h"
+#undef private
+#undef protected
 
 namespace oceanbase
 {
-char *shared_storage_info = nullptr;
-namespace unittest
+namespace storage
 {
+using namespace oceanbase::blocksstable;
+using namespace oceanbase::common;
+using namespace oceanbase::omt;
+using namespace oceanbase::storage;
+using namespace oceanbase::observer;
+namespace fs = std::filesystem;
 
 class MyObSSLocalCacheWriter : public ObSSLocalCacheWriter
 {
@@ -77,67 +72,19 @@ void MyObSSMacroCacheUpdateCallback::operator()(const SSMacroCacheMetaMapPairTyp
   ret_ = ret;
 }
 
-
 bool MyObSSLocalCacheWriter::need_add_macro_cache(const blocksstable::ObStorageObjectType object_type)
 {
   return false;
 }
 
-struct TestRunCtx
-{
-  uint64_t tenant_id_ = 1;
-  int64_t tenant_epoch_ = 0;
-  ObLSID ls_id_;
-  int64_t ls_epoch_;
-  ObTabletID tablet_id_;
-
-  TO_STRING_KV(K(tenant_id_), K(tenant_epoch_), K(ls_id_), K(ls_epoch_), K(tablet_id_));
-};
-
-class ObMacroCacheCalibrateTest : public ObSimpleClusterTestBase
+class ObMacroCacheCalibrateTest : public ::testing::Test
 {
 public:
-  ObMacroCacheCalibrateTest()
-      : ObSimpleClusterTestBase("test_macro_cache_calibrate", "50G", "50G", "50G"),
-        tenant_created_(false),
-        run_ctx_()
-  {}
-
-  virtual void SetUp() override
-  {
-    ObSimpleClusterTestBase::SetUp();
-    if (!tenant_created_) {
-      OK(create_tenant("tt1", "5G", "10G", false/*oracle_mode*/, 8, "2G"));
-      OK(get_tenant_id(run_ctx_.tenant_id_));
-      ASSERT_NE(0, run_ctx_.tenant_id_);
-    //   OK(get_curr_simple_server().init_sql_proxy2());
-      tenant_created_ = true;
-      {
-        share::ObTenantSwitchGuard tguard;
-        OK(tguard.switch_to(run_ctx_.tenant_id_));
-        OK(TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
-      }
-    }
-
-    // construct write info
-    write_buf_[0] = '\0';
-    const int64_t mid_offset = WRITE_IO_SIZE / 2;
-    memset(write_buf_, 'a', mid_offset);
-    memset(write_buf_ + mid_offset, 'b', WRITE_IO_SIZE - mid_offset);
-    write_info_.io_desc_.set_wait_event(1);
-    write_info_.buffer_ = write_buf_;
-    write_info_.offset_ = 0;
-    write_info_.size_ = WRITE_IO_SIZE;
-    write_info_.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
-    write_info_.mtl_tenant_id_ = run_ctx_.tenant_id_;
-
-  }
-
-  static void TearDownTestCase()
-  {
-    ResidualDataCleanerHelper::clean_in_mock_env();
-    ObSimpleClusterTestBase::TearDownTestCase();
-  }
+  ObMacroCacheCalibrateTest() = default;
+  virtual ~ObMacroCacheCalibrateTest() = default;
+  static void SetUpTestCase();
+  static void TearDownTestCase();
+  virtual void SetUp();
 
   void info_log(const ObSSMacroCacheType cur_type, const int64_t i, ObTenantDiskSpaceManager *disk_space_mgr,
                 ObSSMacroCacheMgr *macro_cache_mgr, const int64_t test_type)
@@ -304,7 +251,7 @@ public:
     macro_cache_info = ObSSMacroCacheInfo(tablet_id, WRITE_IO_SIZE, cache_type, false/*is_write_cache*/);
     ASSERT_TRUE(macro_cache_info.is_valid());
     if (if_put) {
-      OK(macro_cache_mgr->put(macro_id, macro_cache_info));
+      ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->put(macro_id, macro_cache_info));
       ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->meta_map_.atomic_refactored(macro_id, update_callback));
       ASSERT_EQ(OB_SUCCESS, update_callback.ret_);
       ASSERT_NE(nullptr, macro_cache_mgr->meta_map_.get(macro_id));
@@ -375,8 +322,8 @@ public:
     // put or write
     for (ObSSMacroCacheType cache_type = static_cast<ObSSMacroCacheType>(0); cache_type < ObSSMacroCacheType::MAX_TYPE;
         cache_type = static_cast<ObSSMacroCacheType>(static_cast<uint8_t>(cache_type) + 1)) {
-      if (cache_type == ObSSMacroCacheType::META_FILE) {
-        continue; // skip META_FILE
+      if (cache_type == ObSSMacroCacheType::META_FILE || cache_type == ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK) {
+        continue; // skip META_FILE and HOT_TABLET_MACRO_BLOCK
       }
       for (int64_t i = 0; i < num; i++) {
         if (i < num / 2) {
@@ -392,8 +339,8 @@ public:
     // check file exist
     for (ObSSMacroCacheType cache_type = static_cast<ObSSMacroCacheType>(0); cache_type < ObSSMacroCacheType::MAX_TYPE;
         cache_type = static_cast<ObSSMacroCacheType>(static_cast<uint8_t>(cache_type) + 1)) {
-      if (cache_type == ObSSMacroCacheType::META_FILE) {
-        continue; // skip META_FILE
+      if (cache_type == ObSSMacroCacheType::META_FILE || cache_type == ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK) {
+        continue; // skip META_FILE and HOT_TABLET_MACRO_BLOCK
       }
       for (int64_t i = 0; i < num; i++) {
         if (i < num / 2) {
@@ -410,14 +357,14 @@ public:
     // after clibrate
     meta_map_size_af_calibrate = macro_cache_mgr->meta_map_.size();
     info_log(ObSSMacroCacheType::MAX_TYPE, -1, disk_space_mgr, macro_cache_mgr, test_type);
-    // num / 2 * 3 -> Because three types of macro caches were written: MACRO_BLOCK, TMP_FILE, HOT_TABLET_MACRO_BLOCK
-    LOG_INFO("calibrate_test_info_log", K(meta_map_size_af_calibrate - meta_map_size), K(num / 2 * 3), K(test_type));
-    ASSERT_TRUE((meta_map_size_af_calibrate - meta_map_size) == (num / 2 * 3));
+    // num / 2 * 2 -> Because two types of macro caches were written: MACRO_BLOCK, TMP_FILE
+    LOG_INFO("calibrate_test_info_log", K(meta_map_size_af_calibrate - meta_map_size), K(num / 2 * 2), K(test_type));
+    ASSERT_TRUE((meta_map_size_af_calibrate - meta_map_size) == (num / 2 * 2));
     // check file exist
     for (ObSSMacroCacheType cache_type = static_cast<ObSSMacroCacheType>(0); cache_type < ObSSMacroCacheType::MAX_TYPE;
         cache_type = static_cast<ObSSMacroCacheType>(static_cast<uint8_t>(cache_type) + 1)) {
-      if (cache_type == ObSSMacroCacheType::META_FILE) {
-        continue; // skip META_FILE
+      if (cache_type == ObSSMacroCacheType::META_FILE || cache_type == ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK) {
+        continue; // skip META_FILE and HOT_TABLET_MACRO_BLOCK
       }
       for (int64_t i = 0; i < num; i++) {
           is_exist = true;
@@ -427,8 +374,8 @@ public:
     // delete file
     for (ObSSMacroCacheType cache_type = static_cast<ObSSMacroCacheType>(0); cache_type < ObSSMacroCacheType::MAX_TYPE;
         cache_type = static_cast<ObSSMacroCacheType>(static_cast<uint8_t>(cache_type) + 1)) {
-      if (cache_type == ObSSMacroCacheType::META_FILE) {
-        continue; // skip META_FILE
+      if (cache_type == ObSSMacroCacheType::META_FILE || cache_type == ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK) {
+        continue; // skip META_FILE and HOT_TABLET_MACRO_BLOCK
       }
       delete_all_wr_file(0, num, tenant_file_mgr, cache_type);
     }
@@ -446,8 +393,8 @@ public:
     // put or write
     for (ObSSMacroCacheType cache_type = static_cast<ObSSMacroCacheType>(0); cache_type < ObSSMacroCacheType::MAX_TYPE;
         cache_type = static_cast<ObSSMacroCacheType>(static_cast<uint8_t>(cache_type) + 1)) {
-      if (cache_type == ObSSMacroCacheType::META_FILE) {
-        continue; // skip META_FILE
+      if (cache_type == ObSSMacroCacheType::META_FILE || cache_type == ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK) {
+        continue; // skip META_FILE and HOT_TABLET_MACRO_BLOCK
       }
       for (int64_t i = 0; i < num; i++) {
         if (i < num / 2) {
@@ -463,8 +410,8 @@ public:
     // check file exist
     for (ObSSMacroCacheType cache_type = static_cast<ObSSMacroCacheType>(0); cache_type < ObSSMacroCacheType::MAX_TYPE;
         cache_type = static_cast<ObSSMacroCacheType>(static_cast<uint8_t>(cache_type) + 1)) {
-      if (cache_type == ObSSMacroCacheType::META_FILE) {
-        continue; // skip META_FILE
+      if (cache_type == ObSSMacroCacheType::META_FILE || cache_type == ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK) {
+        continue; // skip META_FILE and HOT_TABLET_MACRO_BLOCK
       }
       for (int64_t i = 0; i < num; i++) {
         is_exist = true;
@@ -476,14 +423,14 @@ public:
     // after clibrate
     meta_map_size_af_calibrate = macro_cache_mgr->meta_map_.size();
     info_log(ObSSMacroCacheType::MAX_TYPE, -1, disk_space_mgr, macro_cache_mgr, test_type);
-    // num / 2 * 3 -> Because three types of macro caches were written: MACRO_BLOCK, TMP_FILE, HOT_TABLET_MACRO_BLOCK
-    LOG_INFO("calibrate_test_info_log", K(meta_map_size - meta_map_size_af_calibrate), K(num / 2 * 3), K(test_type));
-    ASSERT_TRUE((meta_map_size - meta_map_size_af_calibrate) == (num / 2 * 3));
+    // num / 2 * 2 -> Because two types of macro caches were written: MACRO_BLOCK, TMP_FILE
+    LOG_INFO("calibrate_test_info_log", K(meta_map_size - meta_map_size_af_calibrate), K(num / 2 * 2), K(test_type));
+    ASSERT_TRUE((meta_map_size - meta_map_size_af_calibrate) == (num / 2 * 2));
     // check file exist
     for (ObSSMacroCacheType cache_type = static_cast<ObSSMacroCacheType>(0); cache_type < ObSSMacroCacheType::MAX_TYPE;
         cache_type = static_cast<ObSSMacroCacheType>(static_cast<uint8_t>(cache_type) + 1)) {
-      if (cache_type == ObSSMacroCacheType::META_FILE) {
-        continue; // skip META_FILE
+      if (cache_type == ObSSMacroCacheType::META_FILE || cache_type == ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK) {
+        continue; // skip META_FILE and HOT_TABLET_MACRO_BLOCK
       }
       for (int64_t i = 0; i < num; i++) {
         if (i < num / 2) {
@@ -498,12 +445,37 @@ public:
     // delete file
     for (ObSSMacroCacheType cache_type = static_cast<ObSSMacroCacheType>(0); cache_type < ObSSMacroCacheType::MAX_TYPE;
         cache_type = static_cast<ObSSMacroCacheType>(static_cast<uint8_t>(cache_type) + 1)) {
-      if (cache_type == ObSSMacroCacheType::META_FILE) {
-        continue; // skip META_FILE
+      if (cache_type == ObSSMacroCacheType::META_FILE || cache_type == ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK) {
+        continue; // skip META_FILE and HOT_TABLET_MACRO_BLOCK
       }
       delete_all_wr_file(0, num, tenant_file_mgr, cache_type);
     }
     info_log(ObSSMacroCacheType::MAX_TYPE, -1, disk_space_mgr, macro_cache_mgr, test_type);
+  }
+
+  void write_unexpected_path_file(const char *dir_path)
+  {
+    fs::path folderPath = dir_path;
+    if (fs::exists(folderPath)) {
+      fs::path filePath = folderPath / "abcde.txt";
+      std::ofstream outFile(filePath);
+      if (outFile.is_open()) {
+        outFile << "abcdefghijklmnopkrstuvwxyz\n";
+        outFile.close();
+      } else {
+        ASSERT_TRUE(false);
+      }
+      fs::path filePath2 = folderPath / "abcde.T8";
+      std::ofstream outFile2(filePath2);
+      if (outFile2.is_open()) {
+        outFile2 << "abcdefghijklmnopkrstuvwxyz\n";
+        outFile2.close();
+      } else {
+        ASSERT_TRUE(false);
+      }
+    } else {
+      ASSERT_TRUE(false);
+    }
   }
 
   void test_unexpected_path(ObSSMacroCacheMgr *macro_cache_mgr, ObTenantDiskSpaceManager *disk_space_mgr,
@@ -518,50 +490,23 @@ public:
     // put or write
     for (ObSSMacroCacheType cache_type = static_cast<ObSSMacroCacheType>(0); cache_type < ObSSMacroCacheType::MAX_TYPE;
         cache_type = static_cast<ObSSMacroCacheType>(static_cast<uint8_t>(cache_type) + 1)) {
-      if (cache_type != ObSSMacroCacheType::META_FILE) { // skip META_FILE
-        for (int64_t i = 0; i < num; i++) {
-          if (i < num / 2) {
-            macro_cache_put_write(i, macro_cache_mgr, cache_type, test_type, true, true);    // write & put
-          } else {
-            macro_cache_put_write(i, macro_cache_mgr, cache_type, test_type, false, true);   // only put
-          }
+      if (cache_type == ObSSMacroCacheType::META_FILE || cache_type == ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK) {
+        continue; // skip META_FILE and HOT_TABLET_MACRO_BLOCK
+      }
+      for (int64_t i = 0; i < num; i++) {
+        if (i < num / 2) {
+          macro_cache_put_write(i, macro_cache_mgr, cache_type, test_type, true, true);    // write & put
+        } else {
+          macro_cache_put_write(i, macro_cache_mgr, cache_type, test_type, false, true);   // only put
         }
       }
       if (cache_type == ObSSMacroCacheType::TMP_FILE) {
         ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tmp_file_dir(dir_path, sizeof(dir_path), MTL_ID(), MTL_EPOCH_ID(), TMP_FILE_ID));
-        fs::path folderPath = dir_path;
-        if (fs::exists(folderPath)) {
-          fs::path filePath = folderPath / "abcde.txt";
-          std::ofstream outFile(filePath);
-          fs::path filePath2 = folderPath / "abcde.T8";
-          std::ofstream outFile2(filePath2);
-        } else {
-          ASSERT_TRUE(false); // tmp file dir not exist
-        }
+        write_unexpected_path_file(dir_path);
         LOG_INFO("calibrate_test_info_log", K(dir_path), K(test_type));
       } else if (cache_type == ObSSMacroCacheType::MACRO_BLOCK) {
         ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tablet_id_macro_dir(dir_path, sizeof(dir_path), MTL_ID(), MTL_EPOCH_ID(), MACRO_BLOCK_TABLET_ID, MACRO_BLOCK_TRANSFER_SEQ, ObMacroType::DATA_MACRO));
-        fs::path folderPath = dir_path;
-        if (fs::exists(folderPath)) {
-          fs::path filePath = folderPath / "abcde.txt";
-          std::ofstream outFile(filePath);
-          fs::path filePath2 = folderPath / "abcde.T0";
-          std::ofstream outFile2(filePath2);
-        } else {
-          ASSERT_TRUE(false); // tmp file dir not exist
-        }
-        LOG_INFO("calibrate_test_info_log", K(dir_path), K(test_type));
-      } else if (cache_type == ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK) {
-        ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_local_tablet_id_macro_dir(dir_path, sizeof(dir_path), MTL_ID(), MTL_EPOCH_ID(), HOT_TABLET_TABLET_ID, HOT_TABLET_TRANSFER_SEQ, ObMacroType::DATA_MACRO));
-        fs::path folderPath = dir_path;
-        if (fs::exists(folderPath)) {
-          fs::path filePath = folderPath / "abcde.txt";
-          std::ofstream outFile(filePath);
-          fs::path filePath2 = folderPath / "abcde.T0";
-          std::ofstream outFile2(filePath2);
-        } else {
-          ASSERT_TRUE(false); // tmp file dir not exist
-        }
+        write_unexpected_path_file(dir_path);
         LOG_INFO("calibrate_test_info_log", K(dir_path), K(test_type));
       }
     }
@@ -571,8 +516,8 @@ public:
     // check file exist
     for (ObSSMacroCacheType cache_type = static_cast<ObSSMacroCacheType>(0); cache_type < ObSSMacroCacheType::MAX_TYPE;
         cache_type = static_cast<ObSSMacroCacheType>(static_cast<uint8_t>(cache_type) + 1)) {
-      if (cache_type == ObSSMacroCacheType::META_FILE) {
-        continue; // skip META_FILE
+      if (cache_type == ObSSMacroCacheType::META_FILE || cache_type == ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK) {
+        continue; // skip META_FILE and HOT_TABLET_MACRO_BLOCK
       }
       for (int64_t i = 0; i < num; i++) {
         is_exist = true;
@@ -584,14 +529,14 @@ public:
     // after clibrate
     meta_map_size_af_calibrate = macro_cache_mgr->meta_map_.size();
     info_log(ObSSMacroCacheType::MAX_TYPE, -1, disk_space_mgr, macro_cache_mgr, test_type);
-    // num / 2 * 3 -> Because three types of macro caches were written: MACRO_BLOCK, TMP_FILE, HOT_TABLET_MACRO_BLOCK
-    LOG_INFO("calibrate_test_info_log", K(meta_map_size - meta_map_size_af_calibrate), K(num / 2 * 3), K(test_type));
-    ASSERT_TRUE((meta_map_size - meta_map_size_af_calibrate) == (num / 2 * 3));
+    // num / 2 * 2 -> Because two types of macro caches were written: MACRO_BLOCK, TMP_FILE
+    LOG_INFO("calibrate_test_info_log", K(meta_map_size - meta_map_size_af_calibrate), K(num / 2 * 2), K(test_type));
+    ASSERT_TRUE((meta_map_size - meta_map_size_af_calibrate) == (num / 2 * 2));
     // check file exist
     for (ObSSMacroCacheType cache_type = static_cast<ObSSMacroCacheType>(0); cache_type < ObSSMacroCacheType::MAX_TYPE;
         cache_type = static_cast<ObSSMacroCacheType>(static_cast<uint8_t>(cache_type) + 1)) {
-      if (cache_type == ObSSMacroCacheType::META_FILE) {
-        continue; // skip META_FILE
+      if (cache_type == ObSSMacroCacheType::META_FILE || cache_type == ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK) {
+        continue; // skip META_FILE and HOT_TABLET_MACRO_BLOCK
       }
       for (int64_t i = 0; i < num; i++) {
         if (i < num / 2) {
@@ -606,80 +551,82 @@ public:
     // delete file
     for (ObSSMacroCacheType cache_type = static_cast<ObSSMacroCacheType>(0); cache_type < ObSSMacroCacheType::MAX_TYPE;
         cache_type = static_cast<ObSSMacroCacheType>(static_cast<uint8_t>(cache_type) + 1)) {
-      if (cache_type == ObSSMacroCacheType::META_FILE) {
-        continue; // skip META_FILE
+      if (cache_type == ObSSMacroCacheType::META_FILE || cache_type == ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK) {
+        continue; // skip META_FILE and HOT_TABLET_MACRO_BLOCK
       }
       delete_all_wr_file(0, num, tenant_file_mgr, cache_type);
     }
     info_log(ObSSMacroCacheType::MAX_TYPE, -1, disk_space_mgr, macro_cache_mgr, test_type);
-
-    // test meta file unexpected path
-    macro_cache_put_write(0, macro_cache_mgr, ObSSMacroCacheType::META_FILE, test_type, true, true);    // write & put
-    macro_cache_put_write(1, macro_cache_mgr, ObSSMacroCacheType::META_FILE, test_type, false, true);   // only put
-    info_log(ObSSMacroCacheType::MAX_TYPE, -1, disk_space_mgr, macro_cache_mgr, test_type);
-    ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.get_tablet_meta_tablet_id_dir(dir_path, sizeof(dir_path), MTL_ID(), MTL_EPOCH_ID(), META_FILE_LS_ID, META_FILE_LS_EPOCH_ID, META_FILE_TABLET_ID));
-    fs::path folderPath = dir_path;
-    if (fs::exists(folderPath)) {
-      fs::path filePath = folderPath / "abcde.txt";
-      std::ofstream outFile(filePath);
-      fs::path filePath2 = folderPath / "abcde.T10";
-      std::ofstream outFile2(filePath2);
-    } else {
-      ASSERT_TRUE(false);
-    }
-    LOG_INFO("calibrate_test_info_log", K(dir_path), K(test_type));
-    ASSERT_EQ(OB_SUCCESS, tenant_file_mgr->calibrate_disk_space_task_.calibrate_disk_space());
-    info_log(ObSSMacroCacheType::MAX_TYPE, -1, disk_space_mgr, macro_cache_mgr, test_type);
-    delete_all_wr_file(0, 1, tenant_file_mgr, ObSSMacroCacheType::META_FILE);
-    info_log(ObSSMacroCacheType::MAX_TYPE, -1, disk_space_mgr, macro_cache_mgr, test_type);
   }
 
-  public:
-    static const int64_t WRITE_IO_SIZE = 2 * 1024L * 1024L; // 2MB
-    static const uint64_t MACRO_BLOCK_TABLET_ID = 200004; // tablet_id for MACRO_BLOCK
-    static const uint64_t TMP_FILE_ID = 100; // tmp_file_id for TMP_FILE
-    static const uint64_t HOT_TABLET_TABLET_ID = 200005; // tablet_id for HOT_TABLET_MACRO_BLOCK
-    static const uint64_t META_FILE_TABLET_ID = 200001; // tablet_id for META_FILE
-    static const uint64_t META_FILE_LS_ID = 1001; // ls_id for META_FILE
-    static const uint64_t META_FILE_LS_EPOCH_ID = 1; // ls_epoch_id for META_FILE
-    static const uint64_t MACRO_BLOCK_TRANSFER_SEQ = 0; // transfer_seq for MACRO_BLOCK
-    static const uint64_t HOT_TABLET_TRANSFER_SEQ = 0; // transfer_seq for HOT_TABLET_MACRO_BLOCK
-    static const uint64_t META_FILE_TRANSFER_SEQ = 0; // transfer_seq for META_FILE
-    static const uint64_t MACRO_BLOCK_SERVER_ID = 1; // server_id for MACRO_BLOCK
-    static const uint64_t HOT_TABLET_SERVER_ID = 2; // server_id for HOT_TABLET_MACRO_BLOCK
-    ObStorageObjectWriteInfo write_info_;
-    char write_buf_[WRITE_IO_SIZE];
-
-protected:
-  bool tenant_created_;
-  TestRunCtx run_ctx_;
+public:
+  static const int64_t WRITE_IO_SIZE = 2 * 1024L * 1024L; // 2MB
+  static const uint64_t MACRO_BLOCK_TABLET_ID = 200004; // tablet_id for MACRO_BLOCK
+  static const uint64_t TMP_FILE_ID = 100; // tmp_file_id for TMP_FILE
+  static const uint64_t HOT_TABLET_TABLET_ID = 200005; // tablet_id for HOT_TABLET_MACRO_BLOCK
+  static const uint64_t META_FILE_TABLET_ID = 200001; // tablet_id for META_FILE
+  static const uint64_t META_FILE_LS_ID = 1001; // ls_id for META_FILE
+  static const uint64_t META_FILE_LS_EPOCH_ID = 1; // ls_epoch_id for META_FILE
+  static const uint64_t MACRO_BLOCK_TRANSFER_SEQ = 0; // transfer_seq for MACRO_BLOCK
+  static const uint64_t HOT_TABLET_TRANSFER_SEQ = 0; // transfer_seq for HOT_TABLET_MACRO_BLOCK
+  static const uint64_t META_FILE_TRANSFER_SEQ = 0; // transfer_seq for META_FILE
+  static const uint64_t MACRO_BLOCK_SERVER_ID = 1; // server_id for MACRO_BLOCK
+  static const uint64_t HOT_TABLET_SERVER_ID = 2; // server_id for HOT_TABLET_MACRO_BLOCK
+  ObStorageObjectWriteInfo write_info_;
+  char write_buf_[WRITE_IO_SIZE];
 };
+
+void ObMacroCacheCalibrateTest::SetUpTestCase()
+{
+  GCTX.startup_mode_ = observer::ObServerMode::SHARED_STORAGE_MODE;
+  EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
+  ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
+}
+
+void ObMacroCacheCalibrateTest::TearDownTestCase()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ResidualDataCleanerHelper::clean_in_mock_env())) {
+      LOG_WARN("failed to clean residual data", KR(ret));
+  }
+  MockTenantModuleEnv::get_instance().destroy();
+}
+
+void ObMacroCacheCalibrateTest::SetUp()
+{
+  // construct write info
+  write_buf_[0] = '\0';
+  const int64_t mid_offset = WRITE_IO_SIZE / 2;
+  memset(write_buf_, 'a', mid_offset);
+  memset(write_buf_ + mid_offset, 'b', WRITE_IO_SIZE - mid_offset);
+  write_info_.io_desc_.set_wait_event(1);
+  write_info_.buffer_ = write_buf_;
+  write_info_.offset_ = 0;
+  write_info_.size_ = WRITE_IO_SIZE;
+  write_info_.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  write_info_.mtl_tenant_id_ = MTL_ID();
+}
 
 enum TestType {
   TEST_MACRO_BLOCK = 0,
   TEST_TMP_FILE = 1,
-  TEST_HOT_TABLET_MACRO_BLOCK = 2,
-  TEST_CALIBRATE_MAP_LESS = 3,
-  TEST_CALIBRATE_MAP_MORE = 4,
-  TEST_UNEXPECTED_PATH = 5,
-  TEST_MAX_NUM = 6
+  TEST_CALIBRATE_MAP_LESS = 2,
+  TEST_CALIBRATE_MAP_MORE = 3,
+  TEST_UNEXPECTED_PATH = 4,
+  TEST_MAX_NUM = 5
 };
 
 TEST_F(ObMacroCacheCalibrateTest, test_calibrate)
 {
-  share::ObTenantSwitchGuard tguard;
-  OK(tguard.switch_to(run_ctx_.tenant_id_));
-
   ObSSMacroCacheMgr *macro_cache_mgr = MTL(ObSSMacroCacheMgr *);
   ASSERT_NE(nullptr, macro_cache_mgr);
   ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_mgr);
   ObStorageCachePolicyService *policy_service = MTL(ObStorageCachePolicyService *);
-  ASSERT_NE(nullptr, policy_service);
-  policy_service->update_tablet_status(200005, PolicyStatus::HOT); //HOT 0
   ObTenantFileManager *tenant_file_mgr = MTL(ObTenantFileManager*);
   ASSERT_NE(nullptr, tenant_file_mgr);
 
+  sleep(10);  // wait for background calibrate task to complete
   for (int64_t test_type = TEST_MACRO_BLOCK; test_type < TEST_MAX_NUM; test_type++) {
     switch (static_cast<TestType>(test_type)) {
       case TEST_MACRO_BLOCK:                      /* write to macro cache -- MACRO_BLOCK */
@@ -689,10 +636,6 @@ TEST_F(ObMacroCacheCalibrateTest, test_calibrate)
       case TEST_TMP_FILE:                         /* write to macro cache -- TMP_FILE */
         test_macro_cache_calibrate(macro_cache_mgr, disk_space_mgr, tenant_file_mgr,
                               ObSSMacroCacheType::TMP_FILE, test_type);
-        break;
-      case TEST_HOT_TABLET_MACRO_BLOCK:           /* write to macro cache -- HOT_TABLET_MACRO_BLOCK */
-        test_macro_cache_calibrate(macro_cache_mgr, disk_space_mgr, tenant_file_mgr,
-                              ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, test_type);
         break;
       case TEST_CALIBRATE_MAP_LESS:                           /* meta_map records less than the actual disk */
         test_calibrate_map_less(macro_cache_mgr, disk_space_mgr, tenant_file_mgr, test_type);
@@ -710,25 +653,15 @@ TEST_F(ObMacroCacheCalibrateTest, test_calibrate)
   }
 }
 
-} // end unittest
-} // end oceanbase
+} // namespace storage
+} // namespace oceanbase
 
 int main(int argc, char **argv)
 {
-    char buf[1000] = {0};
-    const int64_t cur_time_ns = ObTimeUtility::current_time_ns();
-    databuff_printf(buf, sizeof(buf),
-        "%s/%lu?host=%s&access_id=%s&access_key=%s&s3_region=%s&max_iops=10000&max_bandwidth=200000000B&scope=region",
-        oceanbase::unittest::S3_BUCKET, cur_time_ns, oceanbase::unittest::S3_ENDPOINT,
-        oceanbase::unittest::S3_AK, oceanbase::unittest::S3_SK, oceanbase::unittest::S3_REGION);
-    oceanbase::shared_storage_info = buf;
-    oceanbase::unittest::init_log_and_gtest(argc, argv);
-    OB_LOGGER.set_log_level("INFO");
-    GCONF.ob_startup_mode.set_value("shared_storage");
-    GCONF.datafile_size.set_value("100G");
-    GCONF.memory_limit.set_value("20G");
-    GCONF.system_memory.set_value("5G");
-
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+  int ret = 0;
+  system("rm -f ./test_ss_macro_cache_calibrate.log*");
+  OB_LOGGER.set_file_name("test_ss_macro_cache_calibrate.log", true);
+  OB_LOGGER.set_log_level("INFO");
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }
