@@ -300,7 +300,7 @@ protected:
   int get_main_rowkey_brute(ObIAllocator &allocator, const ObDASScanCtDef *cid_vec_ctdef, const int64_t rowkey_cnt,
                             ObRowkey &main_rowkey);
   template <typename T>
-  int calc_vec_dis(T *a, T *b, int dim, float &dis);
+  int calc_vec_dis(T *a, T *b, int dim, float &dis, ObExprVectorDistance::ObVecDisType dis_type);
   int get_rowkey_brute_post(bool is_vectorized, IvfRowkeyHeap& nearest_rowkey_heap);
 
 protected:

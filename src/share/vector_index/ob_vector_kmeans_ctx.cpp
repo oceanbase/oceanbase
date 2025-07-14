@@ -1424,7 +1424,8 @@ int ObKmeansBuildTaskHandler::push_task(ObKmeansBuildTask &build_task)
     }
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) || !is_push_succ) {
+    LOG_WARN("fail to push task", KR(ret), K(build_task), K(is_push_succ));
   } else {
     // !!!! inc task ref cnt;
     inc_task_ref();
@@ -1519,13 +1520,11 @@ int ObKmeansBuildTask::do_work()
   } else if (OB_FALSE_IT(task_ctx_.gmt_modified_ = ObTimeUtility::current_time())) {
   } else if (OB_FAIL(algo_->build(*vectors_))) {
     LOG_WARN("fail to build", KR(ret), K_(task_ctx), KP_(algo), KP_(vectors));
-  } else {
-    // update ctx
-    task_ctx_.is_finish_ = true;
-    task_ctx_.ret_code_ = ret;
-    task_ctx_.gmt_modified_ = ObTimeUtility::current_time();
   }
-
+  // update ctx
+  task_ctx_.is_finish_ = true;
+  task_ctx_.ret_code_ = ret;
+  task_ctx_.gmt_modified_ = ObTimeUtility::current_time();
   return ret;
 }
 }

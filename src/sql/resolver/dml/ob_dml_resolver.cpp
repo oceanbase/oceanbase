@@ -19566,7 +19566,8 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
   } else if (OB_UNLIKELY(T_FUN_SYS_VEC_IVF_CENTER_ID != raw_expr->get_expr_type())
           && OB_UNLIKELY(T_FUN_SYS_VEC_IVF_SQ8_DATA_VECTOR != raw_expr->get_expr_type())
           && OB_UNLIKELY(T_FUN_SYS_VEC_IVF_PQ_CENTER_IDS != raw_expr->get_expr_type())
-          && OB_UNLIKELY(T_FUN_SYS_VEC_IVF_PQ_CENTER_VECTOR != raw_expr->get_expr_type())) {
+          && OB_UNLIKELY(T_FUN_SYS_VEC_IVF_PQ_CENTER_VECTOR != raw_expr->get_expr_type()
+          && OB_UNLIKELY(T_FUN_SYS_VEC_IVF_FLAT_DATA_VECTOR != raw_expr->get_expr_type()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("not ivf center id/sq8 data vector/pq centroids expr", K(ret), "expr type", raw_expr->get_expr_type());
   } else if (OB_ISNULL(session_info_) || OB_ISNULL(params_.expr_factory_) || OB_ISNULL(stmt) || OB_ISNULL(schema_checker_)) {
@@ -19583,7 +19584,7 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
     if (OB_FAIL(ObVectorIndexUtil::get_vector_index_type(raw_expr, param,
                                                          index_type_array))) {
       LOG_WARN("fail to get vector index type", K(ret), K(param));
-    } else if (index_type_array.empty()) {
+    } else if (index_type_array.empty() && T_FUN_SYS_VEC_IVF_FLAT_DATA_VECTOR != raw_expr->get_expr_type()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected index type", K(ret));
     }
@@ -20429,6 +20430,9 @@ int ObDMLResolver::check_need_fill_ivf_vec_expr_param(const ObDMLStmt &stmt,
     } else if (column_schema.is_vec_ivf_data_vector_column()
             && T_FUN_SYS_VEC_IVF_SQ8_DATA_VECTOR == ref_expr->get_expr_type()) {
       need_fill = true;
+    } else if (column_schema.is_vec_ivf_data_vector_column() && T_FUN_SYS_VEC_IVF_FLAT_DATA_VECTOR == ref_expr->get_expr_type()) {
+      need_fill = true;
+      need_dist_algo_expr = true;
     } else if (column_schema.is_vec_ivf_center_vector_column()
             && T_FUN_SYS_VEC_IVF_PQ_CENTER_VECTOR == ref_expr->get_expr_type()) {
       need_fill = true;

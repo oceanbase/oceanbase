@@ -1206,12 +1206,12 @@ int ObDASIvfBaseScanIter::get_pre_filter_rowkey_batch(ObIAllocator &allocator,
 }
 
 template <typename T>
-int ObDASIvfBaseScanIter::calc_vec_dis(T *a, T *b, int dim, float &dis)
+int ObDASIvfBaseScanIter::calc_vec_dis(T *a, T *b, int dim, float &dis, ObExprVectorDistance::ObVecDisType dis_type)
 {
   int ret = OB_SUCCESS;
-  if (dis_type_ != oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN) {
+  if (dis_type != oceanbase::sql::ObExprVectorDistance::ObVecDisType::EUCLIDEAN) {
     double distance = 0;
-    if (OB_FAIL(oceanbase::sql::ObExprVectorDistance::DisFunc<T>::distance_funcs[dis_type_](a, b, dim, distance))) {
+    if (OB_FAIL(oceanbase::sql::ObExprVectorDistance::DisFunc<T>::distance_funcs[dis_type](a, b, dim, distance))) {
       LOG_WARN("failed to get distance type", K(ret), KP(a), KP(b), K(dim));
     } else {
       dis = distance;
@@ -1343,13 +1343,6 @@ int ObDASIvfScanIter::get_rowkeys_to_heap(const ObString &cid_str, int64_t cid_v
           // ignoring null vector.
         } else if (OB_FAIL(get_main_rowkey_from_cid_vec_datum(mem_context_->get_arena_allocator(), cid_vec_ctdef, rowkey_cnt, main_rowkey))) {
           LOG_WARN("fail to get main rowkey", K(ret));
-        } else if (std::is_same<T, float>::value) {
-          // vec in cid_vector table is not normlized
-          if (need_norm_ && OB_FAIL(ObVectorNormalize::L2_normalize_vector(
-                                vec_aux_ctdef_->dim_, reinterpret_cast<float *>(vec.ptr()),
-                                reinterpret_cast<float *>(vec.ptr())))) {
-            LOG_WARN("failed to normalize vector.", K(ret));
-          }
         }
         if (OB_FAIL(ret)) {
           LOG_WARN("failed to get rowkey", K(ret));
@@ -1372,13 +1365,6 @@ int ObDASIvfScanIter::get_rowkeys_to_heap(const ObString &cid_str, int64_t cid_v
         LOG_WARN("fail to parse cid vec datum", K(ret), K(cid_vec_column_count), K(rowkey_cnt));
       } else if (OB_ISNULL(vec.ptr())) {
         // ignoring null vector.
-      } else if (std::is_same<T, float>::value) {
-        // vec in cid_vector table is not normlized
-        if (need_norm_ &&
-            OB_FAIL(ObVectorNormalize::L2_normalize_vector(vec_aux_ctdef_->dim_, reinterpret_cast<float *>(vec.ptr()),
-                                                           reinterpret_cast<float *>(vec.ptr())))) {
-          LOG_WARN("failed to normalize vector.", K(ret));
-        }
       }
       if (OB_FAIL(ret)) {
         LOG_WARN("failed to get rowkey", K(ret));
@@ -1500,7 +1486,7 @@ int ObDASIvfScanIter::filter_rowkey_by_cid(bool is_vectorized,
         index_end = true;
       } else if (OB_FAIL(check_cid_exist(cid, is_cid_exist))) {
         LOG_WARN("failed to check cid exist", K(ret), K(cid));
-      } else if (is_cid_exist) {
+      } else if (!is_cid_exist) {
         push_count++;
       } else if (OB_FAIL(saved_rowkeys_.push_back(pre_fileter_rowkeys_[push_count++]))) {
         LOG_WARN("failed to add rowkey", K(ret));
@@ -1525,7 +1511,7 @@ int ObDASIvfScanIter::filter_rowkey_by_cid(bool is_vectorized,
         ObString cid = cid_datum[i].get_string();
         if (OB_FAIL(check_cid_exist(cid, is_cid_exist))) {
           LOG_WARN("failed to check cid exist", K(ret), K(cid));
-        } else if (is_cid_exist) {
+        } else if (!is_cid_exist) {
           push_count++;
         } else if (OB_FAIL(saved_rowkeys_.push_back(pre_fileter_rowkeys_[push_count++]))) {
           LOG_WARN("failed to add rowkey", K(ret));
@@ -1574,13 +1560,15 @@ int ObDASIvfScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_vect
 {
   int ret = OB_SUCCESS;
   float *search_vec = reinterpret_cast<float *>(real_search_vec_.ptr());
+  ObExprVectorDistance::ObVecDisType raw_dis_type = !need_norm_ ? dis_type_ : ObExprVectorDistance::ObVecDisType::COSINE;
+
   int64_t batch_row_count = ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE;
   // Firstly, scan whether it is an brute search.
   if (OB_FAIL(get_rowkey_pre_filter(vec_op_alloc_, is_vectorized, IVF_MAX_BRUTE_FORCE_SIZE))) {
     LOG_WARN("failed to get rowkey pre filter", K(ret), K(is_vectorized));
   } else if (pre_fileter_rowkeys_.count() < IVF_MAX_BRUTE_FORCE_SIZE) {
     // do brute search
-    IvfRowkeyHeap nearest_rowkey_heap(vec_op_alloc_, search_vec, dis_type_, dim_,
+    IvfRowkeyHeap nearest_rowkey_heap(vec_op_alloc_, search_vec, raw_dis_type, dim_,
                                       get_nprobe(limit_param_, 1));
     if (OB_FAIL(get_rowkey_brute_post(is_vectorized, nearest_rowkey_heap))) {
       LOG_WARN("failed to get limit rowkey brute", K(ret));
@@ -1593,7 +1581,7 @@ int ObDASIvfScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_vect
       if (ret == OB_ENTRY_NOT_EXIST) {
         // cid_center table is empty, just do brute search
         ret = OB_SUCCESS;
-        IvfRowkeyHeap nearest_rowkey_heap(vec_op_alloc_, search_vec /*unused*/, dis_type_, dim_,
+        IvfRowkeyHeap nearest_rowkey_heap(vec_op_alloc_, search_vec /*unused*/, raw_dis_type, dim_,
                                           get_nprobe(limit_param_, 1));
         bool index_end = false;
         while (OB_SUCC(ret) && !index_end) {
@@ -1810,7 +1798,7 @@ int ObDASIvfPQScanIter::calc_distance_between_pq_ids_by_cache(ObIvfCentCache &ce
       // 3.3.2 Calculate the distance between pq_center_vecs[j] and r(x)[j].
       //       The sum of j = 0 ~ m is the distance from x to rowkey
       float dis = 0.0f;
-      if (OB_FAIL(calc_vec_dis<float>(splited_residual.at(j), pq_cid_vec, dim_ / m_, dis))) {
+      if (OB_FAIL(calc_vec_dis<float>(splited_residual.at(j), pq_cid_vec, dim_ / m_, dis, dis_type_))) {
         SHARE_LOG(WARN, "failed to get distance type", K(ret));
       } else {
         square += dis;
@@ -1893,7 +1881,7 @@ int ObDASIvfPQScanIter::calc_distance_between_pq_ids_by_table(
             // ignoring null vector.
             pq_cid_idx++;
           } else if (OB_FAIL(calc_vec_dis<float>(splited_residual.at(pq_cid_idx), reinterpret_cast<float *>(vec.ptr()),
-                                                 dim_ / m_, cur_dis))) {
+                                                 dim_ / m_, cur_dis, dis_type_))) {
             SHARE_LOG(WARN, "failed to get distance type", K(ret));
           } else {
             dis_square += cur_dis;
@@ -1926,7 +1914,7 @@ int ObDASIvfPQScanIter::calc_distance_between_pq_ids_by_table(
             // ignoring null vector.
             pq_cid_idx++;
           } else if (OB_FAIL(calc_vec_dis<float>(splited_residual.at(pq_cid_idx), reinterpret_cast<float *>(vec.ptr()),
-                                                 dim_ / m_, cur_dis))) {
+                                                 dim_ / m_, cur_dis, dis_type_))) {
             SHARE_LOG(WARN, "failed to get distance type", K(ret));
           } else {
             dis_square += cur_dis;
@@ -2351,24 +2339,29 @@ int ObDASIvfPQScanIter::get_nearest_probe_centers(bool is_vectorized)
 int ObDASIvfBaseScanIter::get_rowkey_brute_post(bool is_vectorized, IvfRowkeyHeap& nearest_rowkey_heap)
 {
   int ret = OB_SUCCESS;
+
   float *search_vec = reinterpret_cast<float *>(real_search_vec_.ptr());
+  ObString raw_search_vec;
   const ObDASScanCtDef *brute_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(
       vec_aux_ctdef_->get_ivf_brute_tbl_idx(), ObTSCIRScanType::OB_VEC_COM_AUX_SCAN);
   ObDASScanRtDef *brute_rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_ivf_brute_tbl_idx());
   int64_t main_rowkey_cnt = 0;
   // prepare norm info
-  ObExprVectorDistance::ObVecDisType real_dis_type;
+  ObExprVectorDistance::ObVecDisType raw_dis_type = !need_norm_ ? dis_type_ : ObExprVectorDistance::ObVecDisType::COSINE;
   ObVectorNormalizeInfo norm_info;
   if (OB_ISNULL(brute_ctdef) || OB_ISNULL(brute_rtdef)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctdef or rtdef is null", K(ret), KP(brute_ctdef), KP(brute_rtdef));
-  } else if (OB_FAIL(ObDasVecScanUtils::get_distance_expr_type(*sort_ctdef_->sort_exprs_[0],
-                                                               *sort_rtdef_->eval_ctx_, real_dis_type))) {
-    LOG_WARN("failed to get distance type.", K(ret));
   } else if (OB_FALSE_IT(main_rowkey_cnt = brute_ctdef->table_param_.get_read_info().get_schema_rowkey_count())) {
   } else if (OB_UNLIKELY(main_rowkey_cnt <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid rowkey cnt", K(ret));
+  } else if (need_norm_) {
+    if (OB_FAIL(ObDasVecScanUtils::get_real_search_vec(mem_context_->get_arena_allocator(), sort_rtdef_, search_vec_,
+                                                       raw_search_vec))) {
+      LOG_WARN("failed to get real search vec", K(ret));
+    } else if (OB_FALSE_IT(search_vec = reinterpret_cast<float *>(raw_search_vec.ptr()))) {
+    }
   }
   int count = 0;
   int batch_count = ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE;
@@ -2421,21 +2414,17 @@ int ObDASIvfBaseScanIter::get_rowkey_brute_post(bool is_vectorized, IvfRowkeyHea
           ObString c_vec = vec_datum[i].get_string();
           if (vec_datum[i].is_null()) {
             // do nothing for null vector
-          } else if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(
-                  mem_context_->get_arena_allocator(),
-                  vec_expr->locate_expr_datum(*vec_aux_rtdef_->eval_ctx_),
-                  vec_expr->datum_meta_,
-                  vec_expr->obj_meta_.has_lob_header(),
-                  c_vec))) {
+          } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+                             &mem_context_->get_arena_allocator(),
+                             ObLongTextType,
+                             CS_TYPE_BINARY,
+                             vec_expr->obj_meta_.has_lob_header(),
+                             c_vec))) {
             LOG_WARN("failed to get real data.", K(ret));
-          } else if (need_norm_ && OB_FAIL(ObVectorNormalize::L2_normalize_vector(vec_aux_ctdef_->dim_,
-                                                                                  reinterpret_cast<float *>(c_vec.ptr()),
-                                                                                  reinterpret_cast<float *>(c_vec.ptr())))) {
-            LOG_WARN("failed to normalize vector", K(ret));
           } else { // dis for l2
             float distance = 0.0f;
             ObRowkey main_rowkey;
-            if (OB_FAIL(calc_vec_dis<float>(reinterpret_cast<float *>(c_vec.ptr()), search_vec, dim_, distance))) {
+            if (OB_FAIL(calc_vec_dis<float>(reinterpret_cast<float *>(c_vec.ptr()), search_vec, dim_, distance, raw_dis_type))) {
               LOG_WARN("fail to calc vec dis", K(ret), K(dim_));
             } else if (OB_FAIL(get_main_rowkey_brute(mem_context_->get_arena_allocator(), brute_ctdef, main_rowkey_cnt, main_rowkey))) {
               LOG_WARN("fail to get main rowkey", K(ret));
@@ -2459,21 +2448,17 @@ int ObDASIvfBaseScanIter::get_rowkey_brute_post(bool is_vectorized, IvfRowkeyHea
           // do nothing
         } else {
           ObString c_vec = vec_datum.get_string();
-          if (OB_FAIL(ObTextStringHelper::read_real_string_data_with_copy(
-                  mem_context_->get_arena_allocator(),
-                  vec_datum,
-                  vec_expr->datum_meta_,
-                  vec_expr->obj_meta_.has_lob_header(),
-                  c_vec))) {
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+                      &mem_context_->get_arena_allocator(),
+                      ObLongTextType,
+                      CS_TYPE_BINARY,
+                      vec_expr->obj_meta_.has_lob_header(),
+                      c_vec))) {
             LOG_WARN("failed to get real data.", K(ret));
-          } else if (need_norm_ && OB_FAIL(ObVectorNormalize::L2_normalize_vector(vec_aux_ctdef_->dim_,
-                                                                                  reinterpret_cast<float *>(c_vec.ptr()),
-                                                                                  reinterpret_cast<float *>(c_vec.ptr())))) {
-            LOG_WARN("failed to normalize vector", K(ret));
           } else {
             float distance = 0.0f;
             ObRowkey main_rowkey;
-            if (OB_FAIL(calc_vec_dis<float>(reinterpret_cast<float *>(c_vec.ptr()), search_vec, dim_, distance))) {
+            if (OB_FAIL(calc_vec_dis<float>(reinterpret_cast<float *>(c_vec.ptr()), search_vec, dim_, distance, raw_dis_type))) {
               LOG_WARN("fail to calc vec dis", K(ret), K(dim_));
             } else if (OB_FAIL(get_main_rowkey_brute(mem_context_->get_arena_allocator(), brute_ctdef, main_rowkey_cnt, main_rowkey))) {
               LOG_WARN("fail to get main rowkey", K(ret));
@@ -2547,7 +2532,8 @@ int ObDASIvfPQScanIter::process_ivf_scan_post(bool is_vectorized)
   if (OB_FAIL(get_nearest_probe_centers(is_vectorized))) {
     if (ret == OB_ENTRY_NOT_EXIST) {
       float *search_vec = reinterpret_cast<float *>(real_search_vec_.ptr());
-      IvfRowkeyHeap nearest_rowkey_heap(vec_op_alloc_, search_vec/*unused*/, dis_type_, dim_, get_nprobe(limit_param_, 1));
+      ObExprVectorDistance::ObVecDisType raw_dis_type = !need_norm_ ? dis_type_ : ObExprVectorDistance::ObVecDisType::COSINE;
+      IvfRowkeyHeap nearest_rowkey_heap(vec_op_alloc_, search_vec/*unused*/, raw_dis_type, dim_, get_nprobe(limit_param_, 1));
       if (OB_FAIL(get_rowkey_brute_post(is_vectorized, nearest_rowkey_heap))) {
         LOG_WARN("failed to get limit rowkey brute", K(ret));
       } else if (OB_FAIL(nearest_rowkey_heap.get_nearest_probe_center_ids(saved_rowkeys_))) {
@@ -2647,7 +2633,7 @@ int ObDASIvfPQScanIter::calc_adc_distance(
         LOG_WARN("fail to calc residual vector", K(ret), K(dim_));
       }
     } else {
-      if (OB_FAIL(calc_vec_dis<float>(reinterpret_cast<float *>(real_search_vec_.ptr()), cur_cid_vec, dim_, dis0))) {
+      if (OB_FAIL(calc_vec_dis<float>(reinterpret_cast<float *>(real_search_vec_.ptr()), cur_cid_vec, dim_, dis0, dis_type_))) {
         LOG_WARN("fail to calc vec dis", K(ret), K(dim_));
       } else {
         residual = reinterpret_cast<float *>(real_search_vec_.ptr());
@@ -2772,6 +2758,8 @@ int ObDASIvfPQScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_ve
   int ret = OB_SUCCESS;
   int64_t batch_row_count = ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE;
   float *search_vec = reinterpret_cast<float *>(real_search_vec_.ptr());
+  ObExprVectorDistance::ObVecDisType raw_dis_type = !need_norm_ ? dis_type_ : ObExprVectorDistance::ObVecDisType::COSINE;
+
   bool is_rk_opt = vec_aux_ctdef_->can_use_vec_pri_opt();
   ObDASScanIter* inv_iter = (ObDASScanIter*)inv_idx_scan_iter_;
   bool is_range_prefilter = is_rk_opt && (inv_iter->get_scan_param().pd_storage_filters_ == nullptr);
@@ -2782,7 +2770,7 @@ int ObDASIvfPQScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_ve
     if (ret == OB_ENTRY_NOT_EXIST) {
       // cid_center table is empty, just do brute search
       ret = OB_SUCCESS;
-      IvfRowkeyHeap nearest_rowkey_heap(vec_op_alloc_, search_vec/*unused*/, dis_type_, dim_, get_nprobe(limit_param_, 1));
+      IvfRowkeyHeap nearest_rowkey_heap(vec_op_alloc_, search_vec/*unused*/, raw_dis_type, dim_, get_nprobe(limit_param_, 1));
       bool index_end = false;
       while (OB_SUCC(ret) && !index_end) {
         if (OB_FAIL(get_pre_filter_rowkey_batch(mem_context_->get_arena_allocator(), is_vectorized, batch_row_count,
@@ -2806,7 +2794,7 @@ int ObDASIvfPQScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_ve
       LOG_WARN("failed to get rowkey pre filter", K(ret), K(is_vectorized));
     } else if (pre_fileter_rowkeys_.count() < IVF_MAX_BRUTE_FORCE_SIZE) {
       // do brute search
-      IvfRowkeyHeap nearest_rowkey_heap(vec_op_alloc_, search_vec/*unused*/, dis_type_, dim_, get_nprobe(limit_param_, 1));
+      IvfRowkeyHeap nearest_rowkey_heap(vec_op_alloc_, search_vec/*unused*/, raw_dis_type, dim_, get_nprobe(limit_param_, 1));
       if (OB_FAIL(get_rowkey_brute_post(is_vectorized, nearest_rowkey_heap))) {
         LOG_WARN("failed to get limit rowkey brute", K(ret));
       } else if (OB_FAIL(nearest_rowkey_heap.get_nearest_probe_center_ids(saved_rowkeys_))) {

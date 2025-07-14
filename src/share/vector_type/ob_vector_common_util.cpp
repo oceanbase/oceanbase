@@ -27,16 +27,16 @@ int ObVectorNormalize::L2_normalize_vector(const int64_t dim, float *data, float
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), K(dim), KP(data), KP(norm_vector));
   } else {
-    const double double_accuracy = 1e-10;
-    double norm = 0.0;
-    if (OB_FAIL(ObVectorNorm::vector_norm_func(data, dim, norm))) {
-      SHARE_LOG(WARN, "failed to calc vector norm", K(ret));
-    } else if (fabs(norm) < double_accuracy) {
-      // do nothing
-    } else {
+    const float float_accuracy = 0.00001;
+    float norm_l2_sqr = ObVectorL2Distance<float>::l2_norm_square(data, dim);
+
+    if (norm_l2_sqr > 0 && fabs(1.0f - norm_l2_sqr) > float_accuracy) {
+      float norm_l2 = sqrt(norm_l2_sqr);
       for (int64_t i = 0; i < dim; ++i) {
-        norm_vector[i] = data[i] / norm;
+        norm_vector[i] = data[i] / norm_l2;
       }
+    } else if (data != norm_vector) {
+      MEMCPY(norm_vector, data, dim * sizeof(float));
     }
   }
   return ret;
