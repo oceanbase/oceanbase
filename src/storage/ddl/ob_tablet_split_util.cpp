@@ -1794,7 +1794,7 @@ int ObSSDataSplitHelper::check_satisfy_ss_split_condition(
     mds::MdsTableHandle mds_table;
     bool need_upload = false;
     ObLSIncSSTableUploader &upload_handler =
-        ls_handle.get_ls()->get_inc_sstable_upload_handler();
+        ls_handle.get_ls()->get_inc_sstable_uploader();
     if (OB_FAIL(local_source_tablet_handle.get_obj()->get_mds_table_for_dump(mds_table))) {
       if (OB_EMPTY_RESULT != ret) {
         LOG_WARN("get mds table failed", K(ret), K(source_tablet_id));

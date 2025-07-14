@@ -60,14 +60,14 @@ int ObTxTable::resolve_shared_storage_upload_info_(share::SCN &tablet_recycle_sc
     }
     // Tip1: may output min_scn if no uploads exists or max_uploaded_scn if
     // there exists
-    if (FAILEDx(ls_->get_inc_sstable_upload_handler().
+    if (FAILEDx(ls_->get_inc_sstable_uploader().
                 get_tablet_upload_pos(LS_TX_DATA_TABLET,
                                       transfer_scn,
                                       tx_data_table_upload_scn))) {
       TRANS_LOG(WARN, "get tablet upload pos failed", K(ret));
     // Tip2: may output min_scn if no uploads exists or max_uploaded_scn if
     // there exists
-    } else if (OB_FAIL(ls_->get_inc_sstable_upload_handler().
+    } else if (OB_FAIL(ls_->get_inc_sstable_uploader().
                        get_upload_min_end_scn_from_ss(data_upload_min_end_scn))) {
       TRANS_LOG(WARN, "get tablet upload min end scn failed", K(ret));
     // We need ensure that no concurrent user after an hour later will

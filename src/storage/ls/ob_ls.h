@@ -1075,7 +1075,7 @@ public:
   DELEGATE_WITH_RET(ls_tablet_svr_, write_tablet_id_set_to_pending_free, int);
   DELEGATE_WITH_RET(inc_sstable_uploader_, prepare_register_sstable_upload, int);
   DELEGATE_WITH_RET(inc_sstable_uploader_, register_all_sstables_upload, int);
-  ObLSIncSSTableUploader &get_inc_sstable_upload_handler() { return inc_sstable_uploader_; }
+  ObLSIncSSTableUploader &get_inc_sstable_uploader() { return inc_sstable_uploader_; }
   DELEGATE_WITH_RET(ls_tablet_svr_, create_or_update_with_ss_tablet, int);
 #endif
 

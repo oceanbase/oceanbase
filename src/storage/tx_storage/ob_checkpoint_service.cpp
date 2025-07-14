@@ -477,7 +477,8 @@ public:
     if (OB_FAIL(MTL(ObSSMetaService *)->get_ls_meta(ls_id, ss_ls_meta))) {
       STORAGE_LOG(WARN, "get ls meta failed", KR(ret), K(ss_ls_meta));
     } else if (FALSE_IT(ss_checkpoint_lsn = ss_ls_meta.get_ss_base_lsn())) {
-    } else if (FALSE_IT(throttle_flush_if_checkpoint_lag_too_large(sn_checkpoint_lsn, ss_checkpoint_lsn, ls))) {
+    } else if (FALSE_IT(throttle_flush_if_needed(
+                   ss_ls_meta, sn_checkpoint_lsn, ss_checkpoint_lsn, ls))) {
     } else if (sn_checkpoint_lsn < ss_checkpoint_lsn) {
       FLOG_INFO("local ckpt less than ss ckpt", K(ls_id), K(sn_checkpoint_lsn), K(ss_checkpoint_lsn));
     } else {
@@ -507,24 +508,37 @@ public:
   }
 
 private:
-  void throttle_flush_if_checkpoint_lag_too_large(LSN sn_ckpt_lsn, LSN ss_ckpt_lsn, ObLS &ls) {
+#define PRINT_CKPT_INFO_WRAPPER                                                                 \
+  "ls_id", ls.get_ls_id(), K(sn_ckpt_lsn), K(ss_ckpt_lsn), K(sn_ckpt_scn), K(ss_ckpt_scn),       \
+      KTIME(sn_ckpt_scn.convert_to_ts()), KTIME(ss_ckpt_scn.convert_to_ts()), "MAX LSN GAP(MB)", \
+      max_lsn_gap / 1024 / 1024
+
+  void throttle_flush_if_needed(const ObSSLSMeta &ss_ls_meta, LSN sn_ckpt_lsn, LSN ss_ckpt_lsn, ObLS &ls)
+  {
+    bool ckpt_lag_too_large = false;
     int64_t max_lsn_gap = INT64_MAX;
     (void)MTL(ObTenantFreezer*)->get_tenant_memstore_limit(max_lsn_gap);
     const int64_t config_trigger = ObTenantFreezer::get_freeze_trigger_percentage();
     const int64_t freeze_trigger = config_trigger > 0 ? config_trigger : 20;
     max_lsn_gap = max_lsn_gap * freeze_trigger / 100;
-    if ((sn_ckpt_lsn > ss_ckpt_lsn) && (sn_ckpt_lsn - ss_ckpt_lsn > max_lsn_gap)) {
+
+    const SCN sn_ckpt_scn = ls.get_clog_checkpoint_scn();
+    const SCN ss_ckpt_scn = ss_ls_meta.get_ss_checkpoint_scn();
+
+    if (!ls.get_inc_sstable_uploader().finish_reloading()) {
       (void)ls.disable_flush();
-      FLOG_INFO("disable memtable flush to throttle writes and allow ss checkpoint to catch up with sn checkpoint",
-                "ls_id", ls.get_ls_id(),
-                K(sn_ckpt_lsn),
-                K(ss_ckpt_lsn),
-                K(max_lsn_gap));
+      FLOG_INFO("disable ls flush to wait uploader reloading", PRINT_CKPT_INFO_WRAPPER);
+    } else if ((sn_ckpt_lsn > ss_ckpt_lsn) && (sn_ckpt_lsn - ss_ckpt_lsn > max_lsn_gap)) {
+      (void)ls.disable_flush();
+      ckpt_lag_too_large = true;
+      FLOG_INFO("disable ls flush to throttle writes and allow ss checkpoint to catch up with sn checkpoint",
+                PRINT_CKPT_INFO_WRAPPER);
     } else if (ls.flush_is_disabled()) {
       (void)ls.enable_flush();
-      FLOG_INFO("enable memtable flush", "ls_id", ls.get_ls_id(), K(sn_ckpt_lsn), K(ss_ckpt_lsn));
+      FLOG_INFO("enable ls flush", PRINT_CKPT_INFO_WRAPPER);
     }
   }
+#undef  PRINT_CKPT_INFO_WRAPPER
 };
 
 void ObCheckPointService::ObSSUpdateCkptSCNTask::runTimerTask()
@@ -632,7 +646,7 @@ public:
   int operator()(ObLS &ls)
   {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(ls.get_inc_sstable_upload_handler().try_schedule_upload_task())) {
+    if (OB_FAIL(ls.get_inc_sstable_uploader().try_schedule_upload_task())) {
       STORAGE_LOG(WARN, "process ls fail", K(ret), K(ls.get_ls_id()));
     }
 
