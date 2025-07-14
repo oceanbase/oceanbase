@@ -143,6 +143,7 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_mem_blk_update_meta_fail)
   // free sealed_mem_block
   ASSERT_EQ(OB_SUCCESS, persist_data_task.persist_data_op_.handle_sealed_mem_block(updated_micro_cnt, true, tmp_mem_handle));
   ASSERT_EQ(micro_cnt / 2, cache_stat.micro_stat().mark_del_micro_cnt_); // micro_block which fail to update meta are deleted from map.
+  mem_blk_mgr.fg_mem_blk_ = nullptr;
   LOG_INFO("TEST_CASE: finish test_mem_blk_update_meta_fail");
 }
 
