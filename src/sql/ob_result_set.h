@@ -288,6 +288,7 @@ public:
   int update_last_insert_id();
   int update_last_insert_id_to_client();
   int update_is_result_accurate();
+  bool no_ps_protocol() const { return NO_PS == ps_protocol_; };
   bool is_ps_protocol() const { return STD_PS == ps_protocol_; };
   void set_ps_protocol() { ps_protocol_ = STD_PS; }
   bool is_simple_ps_protocol() const { return SIMPLE_PS == ps_protocol_; };
