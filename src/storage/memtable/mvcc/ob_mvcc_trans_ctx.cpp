@@ -1414,9 +1414,6 @@ int ObTransCallbackMgr::log_sync_succ(const ObCallbackScopeArray &callbacks,
   int ret = OB_SUCCESS;
   sync_cnt = 0;
   const bool serial_final = is_serial_final_();
-  if (!serial_final) {
-    update_serial_sync_scn_(scn);
-  }
   ObIMemtable *last_mt = NULL;
   ARRAY_FOREACH(callbacks, i) {
     const ObCallbackScope &scope = callbacks.at(i);
@@ -1451,6 +1448,11 @@ int ObTransCallbackMgr::log_sync_succ(const ObCallbackScopeArray &callbacks,
       ob_abort();
     }
   }
+
+  if (!serial_final) {
+    update_serial_sync_scn_(scn);
+  }
+
   return ret;
 }
 
