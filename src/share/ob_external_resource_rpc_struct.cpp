@@ -57,7 +57,7 @@ int ObCreateExternalResourceArg::assign(const ObCreateExternalResourceArg &other
   return ret;
 }
 
-OB_SERIALIZE_MEMBER((ObDropExternalResourceArg, ObDDLArg), tenant_id_, database_id_, name_);
+OB_SERIALIZE_MEMBER((ObDropExternalResourceArg, ObDDLArg), tenant_id_, database_id_, name_, type_);
 
 bool ObDropExternalResourceArg::is_valid() const
 {
@@ -81,6 +81,7 @@ int ObDropExternalResourceArg::assign(const ObDropExternalResourceArg &other)
     tenant_id_ = other.tenant_id_;
     database_id_ = other.database_id_;
     name_ = other.name_;
+    type_ = other.type_;
   }
 
   return ret;

@@ -2735,6 +2735,9 @@ DEFINE_ORACLE_ERROR(OB_UTL_HTTP_TOO_MANY_REQUESTS, -9822, -1, "HY000", "too many
 DEFINE_ORACLE_ERROR(OB_UTL_HTTP_TRANSFER_TIMEOUT, -9823, -1, "HY000", "transfer timeout", 29276, "transfer timeout");
 DEFINE_ORACLE_ERROR(OB_UTL_HTTP_UNKNOWN_SCHEME, -9824, -1, "HY000", "unknown or unsupported URL scheme", 29264, "unknown or unsupported URL scheme");
 DEFINE_ORACLE_ERROR(OB_ERR_EXECUTE_CODE_COVERAGE, -9825, -1, "HY000", "error executing PL/SQL code coverage", 8402, "error executing PL/SQL code coverage");
+DEFINE_ERROR_DEP(OB_PYTHON_ENV_ERROR, -9826, -1, "HY000", "Python env could not be found")
+DEFINE_ERROR_EXT(OB_PYTHON_PARAMS_ERROR, -9827, -1, "HY000", "python params error", "%s");
+DEFINE_ERROR_EXT(OB_PYTHON_EXEC_ERROR, -9828, -1, "HY000", "python execute error", "%s");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)

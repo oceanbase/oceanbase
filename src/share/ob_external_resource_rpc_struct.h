@@ -86,17 +86,19 @@ public:
       name_(external_resource_name)
   {
     exec_tenant_id_ = tenant_id;
+    type_ = share::schema::ObSimpleExternalResourceSchema::INVALID_TYPE;
   }
 
   int assign(const ObDropExternalResourceArg &arg);
   bool is_valid() const;
 
-  TO_STRING_KV(K_(tenant_id), K_(database_id), K_(name));
+  TO_STRING_KV(K_(tenant_id), K_(database_id), K_(name), K_(type));
 
 public:
   uint64_t tenant_id_;
   uint64_t database_id_;
   ObString name_;
+  share::schema::ObSimpleExternalResourceSchema::ResourceType type_;
 };
 
 struct ObCreateExternalResourceRes final

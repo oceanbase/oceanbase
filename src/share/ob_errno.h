@@ -1931,6 +1931,8 @@ constexpr int OB_UTL_HTTP_TOO_MANY_REQUESTS = -9822;
 constexpr int OB_UTL_HTTP_TRANSFER_TIMEOUT = -9823;
 constexpr int OB_UTL_HTTP_UNKNOWN_SCHEME = -9824;
 constexpr int OB_ERR_EXECUTE_CODE_COVERAGE = -9825;
+constexpr int OB_PYTHON_PARAMS_ERROR = -9827;
+constexpr int OB_PYTHON_EXEC_ERROR = -9828;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -4367,6 +4369,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_UTL_HTTP_TRANSFER_TIMEOUT__USER_ERROR_MSG "transfer timeout"
 #define OB_UTL_HTTP_UNKNOWN_SCHEME__USER_ERROR_MSG "unknown or unsupported URL scheme"
 #define OB_ERR_EXECUTE_CODE_COVERAGE__USER_ERROR_MSG "error executing PL/SQL code coverage"
+#define OB_PYTHON_ENV_ERROR__USER_ERROR_MSG "Python env could not be found"
+#define OB_PYTHON_PARAMS_ERROR__USER_ERROR_MSG "%s"
+#define OB_PYTHON_EXEC_ERROR__USER_ERROR_MSG "%s"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -9171,6 +9176,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_UTL_HTTP_UNKNOWN_SCHEME__OBE_USER_ERROR_MSG "OBE-29264: unknown or unsupported URL scheme"
 #define OB_ERR_EXECUTE_CODE_COVERAGE__ORA_USER_ERROR_MSG "ORA-08402: error executing PL/SQL code coverage"
 #define OB_ERR_EXECUTE_CODE_COVERAGE__OBE_USER_ERROR_MSG "OBE-08402: error executing PL/SQL code coverage"
+#define OB_PYTHON_ENV_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9826, Python env could not be found"
+#define OB_PYTHON_ENV_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9826, Python env could not be found"
+#define OB_PYTHON_PARAMS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9827, %s"
+#define OB_PYTHON_PARAMS_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9827, %s"
+#define OB_PYTHON_EXEC_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9828, %s"
+#define OB_PYTHON_EXEC_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9828, %s"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -9464,7 +9475,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2472];
+extern int g_all_ob_errnos[2475];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

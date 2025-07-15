@@ -443,6 +443,7 @@ constexpr int OB_DAG_TASK_IS_SUSPENDED = -9143;
 constexpr int OB_SSLOG_LS_NOT_EXIST = -9146;
 constexpr int OB_ERR_XML_PARSE = -9549;
 constexpr int OB_ERR_XSLT_PARSE = -9574;
+constexpr int OB_PYTHON_ENV_ERROR = -9826;
 constexpr int OB_HDFS_CONNECT_FS_ERROR = -11019;
 constexpr int OB_HDFS_OPEN_FILE_ERROR = -11020;
 constexpr int OB_HDFS_READ_FILE_ERROR = -11021;

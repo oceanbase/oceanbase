@@ -108,6 +108,8 @@ enum class ObExternalRoutineType
   INTERNAL_ROUTINE = 0,
   EXTERNAL_JAVA_UDF_FROM_URL = 1,
   EXTERNAL_JAVA_UDF_FROM_RES = 2,
+  EXTERNAL_PY_UDF_FROM_URL = 3,
+  EXTERNAL_PY_UDF_FROM_RES = 4,
 };
 
 class ObIRoutineParam
