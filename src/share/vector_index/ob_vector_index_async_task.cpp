@@ -459,8 +459,13 @@ int ObVecAsyncTaskExector::load_task()
   } else if (OB_FAIL(get_index_ls_mgr(index_ls_mgr))) { // skip
     LOG_WARN("fail to get index ls mgr", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
   } else {
+    ObVecIndexAsyncTaskOption &task_opt = index_ls_mgr->get_async_task_opt();
+    ObIAllocator *allocator = task_opt.get_allocator();
+    const int64_t current_task_cnt = ObVecIndexAsyncTaskUtil::get_processing_task_cnt(task_opt);
+
     RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
-    FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(), OB_SUCC(ret)) {
+    FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(),
+        OB_SUCC(ret) && (task_ctx_array.count() + current_task_cnt <= MAX_ASYNC_TASK_PROCESSING_COUNT)) {
       ObTabletID tablet_id = iter->first;
       ObPluginVectorIndexAdaptor *adapter = iter->second;
       if (OB_ISNULL(adapter)) {
@@ -472,8 +477,6 @@ int ObVecAsyncTaskExector::load_task()
         bool inc_new_task = false;
         common::ObCurTraceId::TraceId new_trace_id;
 
-        ObVecIndexAsyncTaskOption &task_opt = index_ls_mgr->get_async_task_opt();
-        ObIAllocator *allocator = task_opt.get_allocator();
         char *task_ctx_buf = static_cast<char *>(allocator->alloc(sizeof(ObVecIndexAsyncTaskCtx)));
         ObVecIndexAsyncTaskCtx* task_ctx = nullptr;
         if (OB_ISNULL(task_ctx_buf)) {
@@ -517,6 +520,7 @@ int ObVecAsyncTaskExector::load_task()
         }
       }
     }
+    LOG_INFO("finish load async task", K(ret), K(task_ctx_array.count()), K(current_task_cnt));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(insert_new_task(task_ctx_array))) {
