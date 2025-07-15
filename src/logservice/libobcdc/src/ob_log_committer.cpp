@@ -1138,9 +1138,9 @@ int ObLogCommitter::update_tenant_trans_commit_version_(const PartTransTask &par
   if (OB_UNLIKELY(! tls_id.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid tenant_ls_id for checkpoint_task", KR(ret), K(participants));
-//  } else if (OB_UNLIKELY(OB_INVALID_VERSION == commit_version)) {
-//    ret = OB_ERR_UNEXPECTED;
-//    LOG_ERROR("invalid commit_version", KR(ret), K(participants));
+  } else if (OB_UNLIKELY(OB_INVALID_VERSION == trans_commit_version)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid commit_version", KR(ret), K(participants));
   } else {
     ObLogTenantGuard guard;
     ObLogTenant *tenant = NULL;
@@ -1303,7 +1303,7 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
       }
 
       // push data
-      while (! stop_flag_ && OB_SUCC(ret) && ! trans_ctx.is_all_br_committed()) {
+      while (! stop_flag_ && OB_SUCC(ret) && ! trans_ctx.is_trans_commit_finish()) {
         ObLogBR *br_task = NULL;
         uint64_t retry_count = 0;
 
@@ -1330,15 +1330,22 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
         }
       } // while
 
+      if (OB_SUCC(ret) && OB_UNLIKELY(stop_flag_)) {
+        ret = OB_IN_STOP_STATE;
+        LOG_INFO("stop_flag_ is true, stop commit", KR(ret), K(trans_ctx), K_(stop_flag));
+      }
+
       // push commit br to commit
       if (OB_SUCC(ret)) {
         if (OB_FAIL(push_br_queue_(commit_br))) {
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("push_br_queue_ fail", KR(ret), K(commit_br));
           }
-        } else if (trans_ctx.get_total_br_count() != trans_ctx.get_committed_br_count()) {
+        } else if (OB_UNLIKELY(! trans_ctx.is_all_br_committed())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("expected all br commit but not", KR(ret), K(trans_ctx));
+          const int64_t total_br_count = trans_ctx.get_total_br_count();
+          const int64_t committed_br_count = trans_ctx.get_committed_br_count();
+          LOG_ERROR("expected all br commit but not", KR(ret), K_(stop_flag), K(total_br_count), K(committed_br_count), K(trans_ctx));
         }
       }
     }
