@@ -84,6 +84,7 @@ public:
   virtual int log_sync_fail()
   { return common::OB_SUCCESS; }
   virtual int64_t get_data_size() { return 0; }
+  virtual int64_t get_old_row_data_size() { return 0; }
   virtual MutatorType get_mutator_type() const; 
   virtual int get_cluster_version(uint64_t &cluster_version) const
   {

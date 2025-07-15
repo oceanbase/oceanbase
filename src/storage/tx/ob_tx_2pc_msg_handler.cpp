@@ -690,12 +690,16 @@ int ObPartTransCtx::apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type)
 int ObPartTransCtx::handle_tx_2pc_prepare_req(const Ob2pcPrepareReqMsg &msg)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(submit_parallel_redo_before_commit_())) {
+    TRANS_LOG(WARN, "submit redo before 2pc commit fail", KR(ret), K(*this));
+  }
   CtxLockGuard guard(lock_);
   ObTwoPhaseCommitMsgType msg_type = switch_msg_type_(msg.get_msg_type());
   exec_info_.trans_type_ = TransType::DIST_TRANS;
 
   msg_2pc_cache_ = &msg;
-  if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
     TRANS_LOG(WARN, "set request id failed", KR(ret), K(msg), K(*this));
   } else if (OB_FAIL(set_app_trace_info_(msg.app_trace_info_))) {
     TRANS_LOG(WARN, "set app trace info failed", KR(ret), K(msg), K(*this));

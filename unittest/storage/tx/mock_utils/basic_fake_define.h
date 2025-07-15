@@ -516,15 +516,13 @@ public:
       scn.convert_for_gts(ts);
       int64_t queue_idx = replay_hint % TASK_QUEUE_CNT;
 
-      if (need_nonblock == true) {
-        ObTxLogCb *tx_log_cb = static_cast<ObTxLogCb *>(cb);
-        for (int i = 0; i < block_log_type_array_.size() && OB_SUCC(ret); i++) {
-          TRANS_LOG(INFO, "check block log type", K(ret), K(i), K(replay_hint), KP(tx_log_cb));
-          if (is_contain(tx_log_cb->cb_arg_array_, block_log_type_array_[i])) {
-            ret = OB_EAGAIN;
-            TRANS_LOG(INFO, "block to submit log", K(ret), K(replay_hint), K(block_log_type_array_[i]),
-                      KPC(tx_log_cb));
-          }
+      ObTxLogCb *tx_log_cb = static_cast<ObTxLogCb *>(cb);
+      for (int i = 0; i < block_log_type_array_.size() && OB_SUCC(ret); i++) {
+        TRANS_LOG(INFO, "check block log type", K(ret), K(i), K(replay_hint), KP(tx_log_cb));
+        if (is_contain(tx_log_cb->cb_arg_array_, block_log_type_array_[i])) {
+          ret = OB_EAGAIN;
+          TRANS_LOG(INFO, "block to submit log", K(ret), K(replay_hint), K(block_log_type_array_[i]),
+                    KPC(tx_log_cb));
         }
       }
 
