@@ -2814,6 +2814,8 @@ typedef enum ObItemType
   T_DYNAMIC_PARTITION_BIGINT_PRECISION = 4839,
 
   T_DATABASE_FACTOR = 4840,
+
+  T_RESCAN_LIMIT = 4841,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

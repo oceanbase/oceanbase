@@ -1012,6 +1012,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>INDEX_SS { return INDEX_SS_HINT; }
 <hint>INDEX_SS_ASC { return INDEX_SS_ASC_HINT; }
 <hint>INDEX_SS_DESC { return INDEX_SS_DESC_HINT; }
+<hint>RESCAN_LIMIT { return RESCAN_LIMIT; }
 <hint>USE_NL { return USE_NL; }
 <hint>NO_USE_NL { return NO_USE_NL; }
 <hint>USE_NL_MATERIALIZATION { return USE_NL_MATERIALIZATION; }

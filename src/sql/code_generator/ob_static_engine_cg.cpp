@@ -34,6 +34,7 @@
 #include "sql/optimizer/ob_log_select_into.h"
 #include "sql/optimizer/ob_log_topk.h"
 #include "sql/optimizer/ob_log_count.h"
+#include "sql/optimizer/ob_log_rescan_limit.h"
 #include "sql/optimizer/ob_log_granule_iterator.h"
 #include "sql/optimizer/ob_log_link_scan.h"
 #include "sql/optimizer/ob_log_link_dml.h"
@@ -101,6 +102,7 @@
 #include "sql/engine/table/ob_block_sample_scan_op.h"
 #include "sql/engine/table/ob_table_scan_with_index_back_op.h"
 #include "sql/executor/ob_direct_receive_op.h"
+#include "sql/engine/basic/ob_rescan_limit_op.h"
 #include "sql/engine/basic/ob_temp_table_access_op.h"
 #include "sql/engine/basic/ob_temp_table_insert_op.h"
 #include "sql/engine/basic/ob_temp_table_access_vec_op.h"
@@ -6591,6 +6593,16 @@ int ObStaticEngineCG::generate_spec(ObLogJoin &op,
   return ret;
 }
 
+int ObStaticEngineCG::generate_spec(ObLogRescanLimit &op,
+                                    ObRescanLimitSpec &spec,
+                                    const bool in_root_job)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(in_root_job);
+  spec.rescan_limit_ = op.get_rescan_limit();
+  return ret;
+}
+
 int ObStaticEngineCG::generate_spec(ObLogJoin &op,
                                     ObMergeJoinSpec &spec,
                                     const bool in_root_job)
@@ -10031,6 +10043,10 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
     }
     case log_op_def::LOG_SUBPLAN_SCAN: {
       type = PHY_SUBPLAN_SCAN;
+      break;
+    }
+    case log_op_def::LOG_RESCAN_LIMIT: {
+      type = PHY_RESCAN_LIMIT;
       break;
     }
     case log_op_def::LOG_MATERIAL: {

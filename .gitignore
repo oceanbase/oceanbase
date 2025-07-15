@@ -390,3 +390,10 @@ Query43.sql
 windowFunction.sql
 tools/deploy/init_for_ce.sql
 tool/deploy/obd/observer.include.yaml
+perf_ck.sh
+.codefuserules/OB技术规范.md
+tmp_file/*
+mydeploy_ob.sh
+data.viz
+clean_log.sh
+.gitignore

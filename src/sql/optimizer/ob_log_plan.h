@@ -722,6 +722,10 @@ public:
   int allocate_subquery_path(SubQueryPath *subpath,
                              ObLogicalOperator *&out_subquery_op);
 
+  /** @brief Allocate operator  */
+  int allocate_rescan_limit_as_top(ObLogicalOperator *&old_top,
+                                   const ObRescanLimitHint *hint);
+
   /** @brief Allcoate a ,aterial operator as parent of a path */
   int allocate_material_as_top(ObLogicalOperator *&old_top);
 

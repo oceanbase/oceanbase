@@ -15768,6 +15768,11 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
       OZ(resolve_table_dynamic_sampling_hint(hint_node, opt_hint));
       break;
     }
+    case T_RESCAN_LIMIT: {
+      CK(1 == hint_node.num_child_);
+      OZ(resolve_rescan_limit_hint(hint_node, opt_hint));
+      break;
+    }
     default: {
       resolved_hint = false;
       break;
@@ -16942,6 +16947,26 @@ int ObDMLResolver::resolve_pq_distribute_window_hint(const ParseNode &node,
   } else {
     win_dist->set_qb_name(qb_name);
     hint = win_dist;
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_rescan_limit_hint(const ParseNode &node,
+                                             ObOptHint *&hint)
+{
+  int ret = OB_SUCCESS;
+  hint = NULL;
+  ObRescanLimitHint *rescan_limit = NULL;
+  uint64_t rescan_limit_val = 0;
+  if (OB_UNLIKELY(T_RESCAN_LIMIT != node.type_ || 1 != node.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected rescan_limit hint node", K(ret), K(node.type_), K(node.num_child_));
+  } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, T_RESCAN_LIMIT, rescan_limit))) {
+    LOG_WARN("failed to create hint", K(ret));
+  } else {
+    rescan_limit_val = node.children_[0]->value_;
+    rescan_limit->set_rescan_limit(rescan_limit_val);
+    hint = rescan_limit;
   }
   return ret;
 }

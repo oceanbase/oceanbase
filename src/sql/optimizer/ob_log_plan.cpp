@@ -23,6 +23,7 @@
 #include "sql/optimizer/ob_log_sequence.h"
 #include "sql/optimizer/ob_log_subplan_scan.h"
 #include "sql/optimizer/ob_log_subplan_filter.h"
+#include "sql/optimizer/ob_log_rescan_limit.h"
 #include "sql/optimizer/ob_log_material.h"
 #include "sql/optimizer/ob_log_select_into.h"
 #include "sql/optimizer/ob_log_count.h"
@@ -4709,6 +4710,17 @@ int ObLogPlan::candi_allocate_root_exchange()
         LOG_WARN("failed to allocate exchange as top", K(ret));
       } else { /*do nothing*/ }
       OPT_TRACE("generate root exchange for plan:", best_candidates.at(i).plan_tree_);
+
+      if (OB_SUCC(ret)) {
+        // TODO: if rescan_limit hint exists, allocate operator
+        const ObRescanLimitHint *hint = static_cast<const ObRescanLimitHint *>(get_log_plan_hint().get_normal_hint(T_RESCAN_LIMIT));
+        if (OB_NOT_NULL(hint)) {
+          if (OB_FAIL(allocate_rescan_limit_as_top(best_candidates.at(i).plan_tree_, hint))) {
+            LOG_WARN("failed to allocate rescan limit as top");
+          }
+          OPT_TRACE("generate root rescan limit for plan", best_candidates.at(i).plan_tree_);
+        }
+      }
     }
     if (OB_SUCC(ret)) {
       ObLogicalOperator *best_plan = NULL;
@@ -7244,6 +7256,35 @@ int ObLogPlan::get_order_by_topn_expr(int64_t input_card,
       topn_expr = stmt->get_limit_expr();
       is_fetch_with_ties = stmt->is_fetch_with_ties();
       need_limit = false;
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::allocate_rescan_limit_as_top(ObLogicalOperator *&old_top,
+                                            const ObRescanLimitHint *hint)
+{
+  int ret = OB_SUCCESS;
+  // add rescan limit operator on the top of the tree
+  if (OB_ISNULL(hint)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  }
+  else {
+    ObLogRescanLimit *rescan_limit_op = NULL;
+    if (OB_ISNULL(rescan_limit_op = static_cast<ObLogRescanLimit*>(get_log_op_factory().allocate(*this, LOG_RESCAN_LIMIT)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate material operator", K(ret));
+    } else {
+      if (OB_NOT_NULL(hint)) {
+        rescan_limit_op->set_rescan_limit(hint->get_rescan_limit());
+      }
+      rescan_limit_op->set_child(ObLogicalOperator::first_child, old_top);
+      if (OB_FAIL(rescan_limit_op->compute_property())) {
+        LOG_WARN("failed to compute property", K(ret));
+      } else {
+        old_top = rescan_limit_op;
+      }
     }
   }
   return ret;

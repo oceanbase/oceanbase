@@ -22,6 +22,7 @@
 #include "sql/engine/px/ob_px_coord_op.h"
 #include "sql/engine/basic/ob_material_vec_op.h"
 #include "sql/engine/basic/ob_select_into_op.h"
+#include "sql/engine/basic/ob_rescan_limit_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

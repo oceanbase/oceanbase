@@ -1353,6 +1353,24 @@ private:
   ObLeadingTable table_;
 };
 
+class ObRescanLimitHint : public ObOptHint {
+public:
+  explicit ObRescanLimitHint(ObItemType hint_type = T_RESCAN_LIMIT)
+      : ObOptHint(hint_type), rescan_limit_(0)
+  {
+  }
+
+  void set_rescan_limit(uint64_t rescan_limit) { rescan_limit_ = rescan_limit; }
+  uint64_t get_rescan_limit() const { return rescan_limit_; }
+
+  virtual int print_hint_desc(PlanText &plan_text) const override;
+
+  INHERIT_TO_STRING_KV("hint", ObHint, K_(rescan_limit));
+
+private:
+  uint64_t rescan_limit_;
+};
+
 class ObWindowDistHint : public ObOptHint {
 public:
   explicit ObWindowDistHint(ObItemType hint_type = T_PQ_DISTRIBUTE_WINDOW)

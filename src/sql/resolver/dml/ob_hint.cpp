@@ -1412,6 +1412,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_PQ_DISTINCT_HINT:  return "PQ_DISTINCT";
     case T_INDEX_ASC_HINT:    return "INDEX_ASC";
     case T_INDEX_DESC_HINT:   return "INDEX_DESC";
+    case T_RESCAN_LIMIT:      return "RESCAN_LIMIT";
     default:                    return NULL;
   }
 }
@@ -3282,6 +3283,18 @@ void ObTableInHint::set_table(const TableItem& table)
       db_name_.assign_ptr(table.database_name_.ptr(), table.database_name_.length());
     }
   }
+}
+
+int ObRescanLimitHint::print_hint_desc(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
+  if (OB_FAIL(BUF_PRINTF(" (%ld)", rescan_limit_))) {
+    LOG_WARN("fail to print rescan limit", K(ret), K(rescan_limit_));
+  }
+  return ret;
 }
 
 const char *ObWindowDistHint::get_dist_algo_str(WinDistAlgo dist_algo)

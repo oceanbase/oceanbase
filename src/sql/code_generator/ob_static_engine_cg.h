@@ -149,6 +149,8 @@ class ObExpandVecSpec;
 class ObHashRollupInfo;
 class HashRollupRTInfo;
 
+class ObRescanLimitSpec;
+
 class ObMergeGroupByVecSpec;
 class ObNestedLoopJoinVecSpec;
 class ObTableDirectInsertSpec;
@@ -394,6 +396,8 @@ private:
 
   int set_optimization_info(ObLogTableScan &op, ObTableScanSpec &spec);
   int set_partition_range_info(ObLogTableScan &op, ObTableScanSpec &spec);
+
+  int generate_spec(ObLogRescanLimit &op, ObRescanLimitSpec &spec, const bool in_root_job);
 
   int generate_spec(ObLogExprValues &op, ObExprValuesSpec &spec, const bool in_root_job);
   int generate_spec(ObLogValuesTableAccess &op, ObValuesTableAccessSpec &spec, const bool in_root_job);

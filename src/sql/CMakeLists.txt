@@ -192,6 +192,7 @@ ob_set_subtarget(ob_sql engine_aggregate
 
 ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_arrow_basic.cpp
+  engine/basic/ob_rescan_limit_op.cpp
   engine/basic/ob_batch_result_holder.cpp
   engine/basic/ob_compact_row.cpp
   engine/basic/ob_temp_block_store.cpp
@@ -1185,6 +1186,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_log_values_table_access.cpp
   optimizer/ob_direct_load_optimizer_ctx.cpp
   optimizer/ob_log_expand.cpp
+  optimizer/ob_log_rescan_limit.cpp
 )
 
 ob_set_subtarget(ob_sql plan_cache

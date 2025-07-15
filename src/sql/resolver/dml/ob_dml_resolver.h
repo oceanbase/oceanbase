@@ -1000,6 +1000,7 @@ private:
                              ObIArray<ObItemType> &dist_methods,
                              bool &is_valid);
   int resolve_pq_distribute_window_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
+  int resolve_rescan_limit_hint(const ParseNode &node, ObOptHint *&hint);
   int resolve_win_dist_options(const ParseNode *option_list,
                                ObIArray<ObWindowDistHint::WinDistOption> &win_dist_options);
   int resolve_win_dist_option(const ParseNode *option,

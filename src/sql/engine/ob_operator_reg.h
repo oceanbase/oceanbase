@@ -183,6 +183,13 @@ REGISTER_OPERATOR(ObLogDistinct, PHY_VEC_HASH_DISTINCT, ObHashDistinctVecSpec,
                   ObHashDistinctVecOp, NOINPUT, VECTORIZED_OP, 0 /*+version*/,
                   SUPPORT_RICH_FORMAT);
 
+class ObLogRescanLimit;
+class ObRescanLimitSpec;
+class ObRescanLimitOp;
+REGISTER_OPERATOR(ObLogRescanLimit, PHY_RESCAN_LIMIT, ObRescanLimitSpec, ObRescanLimitOp,
+                  NOINPUT, VECTORIZED_OP, 0,
+                  SUPPORT_RICH_FORMAT);
+
 class ObLogMaterial;
 class ObMaterialSpec;
 class ObMaterialOp;
