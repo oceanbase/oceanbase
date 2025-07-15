@@ -1098,6 +1098,8 @@ int ObVecIndexAsyncTask::do_work()
         LOG_WARN("failed to copy meta info", K(ret));
       } else if (OB_FAIL(new_adapter->init(vec_idx_mgr_->get_memory_context(), vec_idx_mgr_->get_all_vsag_use_mem()))) {
         LOG_WARN("failed to init adpt.", K(ret));
+      } else if (OB_FAIL(new_adapter->set_index_identity(adpt_guard.get_adatper()->get_index_identity()))) {
+        LOG_WARN("failed to set index identity", K(ret));
       }
     }
   }
