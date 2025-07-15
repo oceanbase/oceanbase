@@ -1096,6 +1096,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_reserve_micro_ckpt_blk)
     }
   } while (!finish_check && ObTimeUtility::current_time_s() - check_start_s <= WAIT_TIMEOUT_S);
   ASSERT_EQ(micro_ckpt_cnt + 2, cache_stat.task_stat().micro_ckpt_cnt_);
+  ob_usleep(5 * 1000 * 1000L); // wait for update_super_block and try_free_blocks
   ASSERT_EQ(blk_cnt_info.meta_blk_.used_cnt_, phy_blk_mgr_->super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
   ASSERT_LT(origin_meta_blk_usd_cnt, blk_cnt_info.meta_blk_.used_cnt_);
   ASSERT_LT(origin_meta_blk_usd_cnt, phy_blk_mgr_->super_blk_.micro_ckpt_info_.get_total_used_blk_cnt());
