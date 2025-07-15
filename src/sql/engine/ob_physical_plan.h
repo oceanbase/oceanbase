@@ -160,8 +160,8 @@ public:
   bool is_plan_unstable(const int64_t sample_count,
                         const int64_t sample_exec_row_count,
                         const int64_t sample_exec_usec) const;
-  bool is_expired() const { return stat_.is_expired_; }
-  void set_is_expired(bool expired) { stat_.is_expired_ = expired; }
+  bool is_expired() const { return NOT_EXPIRED != stat_.is_expired_; }
+  void set_is_expired(ObPlanExpiredStat expired_stat) { stat_.is_expired_ = expired_stat; }
   void inc_large_querys();
   void inc_delayed_large_querys();
   void inc_delayed_px_querys();
