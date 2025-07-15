@@ -227,6 +227,7 @@ public:
   const static int8_t SKEW_HEAP_SIZE = 15;
   const static int8_t SKEW_ITEM_CNT_TOLERANCE = 64;
   const static int8_t INIT_BUCKET_COUNT_FOR_POPULAR = 32;
+  static const int64_t ADAPTIVE_GBY_MEM_ESTIMATE_SIZE = 2 << 20; // 2MB
 
 public:
   ObHashGroupByOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
