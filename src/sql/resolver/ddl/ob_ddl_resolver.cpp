@@ -6036,14 +6036,6 @@ int ObDDLResolver::resolve_part_func(ObResolverParams &params,
     }
   }
   if (OB_SUCC(ret)) {
-    bool is_h_t = false;
-    if (OB_FAIL(table_schema.is_hbase_table(is_h_t))) {
-      LOG_WARN("failed to check is hbase table", K(ret));
-    } else if (is_h_t && OB_FAIL(verify_hbase_table_part_keys(partition_keys))) {
-      LOG_WARN("failed to verify hbase table part keys", K(ret), K(table_schema.get_partition_key_info()));
-    }
-  }
-  if (OB_SUCC(ret)) {
     //check duplicate of PARTITION_FUNC_TYPE_RANGE_COLUMNS
     /* because key range has checked as sys(c1,c1) before, so here key is no need check */
     if (OB_SUCC(ret)) {
@@ -6385,26 +6377,56 @@ int ObDDLResolver::check_partition_name_duplicate(ParseNode *node, bool is_oracl
   return ret;
 }
 
-int ObDDLResolver::verify_hbase_table_part_keys(const ObIArray<ObString> &part_keys)
+int ObDDLResolver::check_hbase_tbl_auto_partkey(const ObIArray<ObString> &part_keys)
 {
   int ret = OB_SUCCESS;
   if (part_keys.count() != 1) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("the number of partition keys of range partitioned hbase table can only be 1", K(ret), K(part_keys));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "settting the number of partition keys of hbase table other than 1 is");
+    LOG_WARN("the number of partition keys of auto range partitioned hbase table can only be 1", K(ret), K(part_keys));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "settting the number of keys of auto range partitioned hbase table other than 1 is");
   } else {
     const ObString &col_name = part_keys.at(0);
-    const char* K_COLUMN = "K";
+    // since the partition key column is case insensitive, we need to check the column name is "K" or "k"
+    const char *K_COLUMN = "K";
+    const char *k_column = "k";
     ObCompareNameWithTenantID name_cmp;
-
     if (OB_ISNULL(col_name.ptr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("col_name ptr should not be null", K(ret));
-    } else if (OB_UNLIKELY(0 != strcmp(col_name.ptr(), K_COLUMN))) {
+    } else if ((0 == strcmp(col_name.ptr(), K_COLUMN) || 0 == strcmp(col_name.ptr(), k_column))) {
+    } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("the partition key column of the hbase table can only be K column", K(ret), K(part_keys));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "settting the partition key column of the hbase other than K column is");
     }
+  }
+  return ret;
+}
+
+int ObDDLResolver::check_hbase_tbl_auto_partkey(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  const ObPartitionKeyInfo &part_key_info = table_schema.get_partition_key_info();
+  ObSEArray<ObString, 4> partition_keys;
+  const ObRowkeyColumn *cur_column = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_key_info.get_size(); ++i) {
+    common::ObString column_name;
+    bool is_column_exist = false;
+    cur_column = part_key_info.get_column(i);
+    if (OB_ISNULL(cur_column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the partition column is NULL, ", KR(ret), K(i), K(part_key_info));
+    } else if (OB_FALSE_IT(table_schema.get_column_name_by_column_id(cur_column->column_id_, column_name, is_column_exist))) {
+    } else if (OB_UNLIKELY(!is_column_exist)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the partition column is not exist, ", KR(ret), K(i), K(part_key_info));
+    } else if (OB_FAIL(partition_keys.push_back(column_name))) {
+      LOG_WARN("failed to push back partition key", KR(ret), K(column_name));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_hbase_tbl_auto_partkey(partition_keys))) {
+    LOG_WARN("failed to check hbase table auto partkey", KR(ret));
   }
   return ret;
 }
@@ -11880,6 +11902,15 @@ int ObDDLResolver::resolve_auto_partition(ObPartitionedStmt *stmt, ParseNode *no
         }
       }
 
+      if (OB_SUCC(ret) && SET_PARTITION_DEFINITION) {
+        bool is_h_table = false;
+        if (OB_FAIL(table_schema.is_hbase_table(is_h_table))) {
+          LOG_WARN("failed to check is hbase table", K(ret));
+        } else if (is_h_table && OB_FAIL(check_hbase_tbl_auto_partkey(table_schema))) {
+          LOG_WARN("failed to verify hbase table auto part key", K(ret));
+        }
+      }
+
       // check whether activate auto-partition
       if (OB_FAIL(ret)) {
       } else if (SET_AUTO_PARTITION_SIZE) {
@@ -12023,6 +12054,13 @@ int ObDDLResolver::resolve_presetting_partition_key(ParseNode *node, ObTableSche
                                                   KR(ret), K(presetting_partition_keys), K(table_schema));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "mismatching between primary key prefix and partition key is");
       }
+      bool is_h_table = false;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(table_schema.is_hbase_table(is_h_table))) {
+        LOG_WARN("failed to check is hbase table", K(ret));
+      } else if (is_h_table && (OB_FAIL(check_hbase_tbl_auto_partkey(presetting_partition_keys)))) {
+        LOG_WARN("failed to verify hbase table part keys", K(ret));
+      }
     }
   }
 
@@ -12105,6 +12143,14 @@ int ObDDLResolver::try_set_auto_partition_by_config(const ParseNode *node,
                       K(table_schema), KPC(partition_column));
             }
           }
+        }
+      } else {
+        bool is_h_table = false;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(table_schema.is_hbase_table(is_h_table))) {
+          LOG_WARN("failed to check is hbase table", K(ret));
+        } else if (is_h_table && OB_FAIL(check_hbase_tbl_auto_partkey(table_schema))) {
+          LOG_WARN("failed to verify hbase table auto part key", K(ret));
         }
       }
 
