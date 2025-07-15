@@ -1336,7 +1336,13 @@ void ObSSTable::dec_macro_ref() const
     ret = get_meta(meta_handle, &safe_allocator);
   } while (ignore_ret(ret));
   if (OB_FAIL(ret)) {
-    LOG_ERROR("fail to get sstable meta", K(ret));
+    if (OB_STATE_NOT_MATCH == ret) {
+      // When the observer exits, the io manager will stop sending io requests and return a -4109 error.
+      // If the error level is printed, it will affect the graceful exit case in vostest.
+      LOG_WARN("fail to get sstable meta", K(ret));
+    } else {
+      LOG_ERROR("fail to get sstable meta", K(ret));
+    }
   } else if (OB_UNLIKELY(!meta_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("meta handle is invalid", K(ret), K(meta_handle));
