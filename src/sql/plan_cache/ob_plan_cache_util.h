@@ -1010,11 +1010,10 @@ struct ObPhyLocationGetter
 {
 public:
   // used for getting plan
-  // In this interface, we first process the table locations that were marked select_leader, the tablet
-  // locations of them will be added to das_ctx directly, without the need to construct candi_table_locs.
-  // For the remaining table locations that are not marked select_leader, continue to use the previous
-  // logic where a candi_table_loc is generated for each table location. These candi_table_locs will be
-  // added to das_ctx by @build_candi_table_locs().
+  // In this interface, we will first verify whether all tables were marked select_leader.
+  // If confirmed, the fast path will be activated to directly select leader replicas for each table
+  // and add them to das ctx, without the need to construct candi table locs.
+  // Otherwise, fallback to the original path and add candi table locs to das ctx manually.
   static int get_phy_locations(const ObIArray<ObTableLocation> &table_locations,
                                const ObPlanCacheCtx &pc_ctx,
                                ObIArray<ObCandiTableLoc> &phy_location_infos);
