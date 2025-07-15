@@ -1210,7 +1210,8 @@ static OB_INLINE int convert_string_type_statistics(
     const ObDatumMeta &col_meta,
     const bool has_lob_header,
     ObIAllocator &allocator,
-    blocksstable::ObMinMaxFilterParam &param)
+    blocksstable::ObMinMaxFilterParam &param,
+    bool &has_null)
 {
   int ret = OB_SUCCESS;
   const orc::StringColumnStatistics *string_col_stat =
@@ -1235,6 +1236,10 @@ static OB_INLINE int convert_string_type_statistics(
         LOG_WARN("fail to string to templob result", K(ret));
       }
     }
+    if (OB_SUCC(ret) && lib::is_oracle_mode() && min_str.empty()) {
+      // oracle empty string is equivalent to null
+      has_null = true;
+    }
   }
   return ret;
 }
@@ -1248,6 +1253,7 @@ int ObOrcTableRowIterator::convert_orc_statistics(const orc::ColumnStatistics *o
   int ret = OB_SUCCESS;
   param.set_uncertain();
   const orc::TypeKind type_kind = orc_type->getKind();
+  bool has_null = orc_stat->hasNull();
   switch (ob_obj_type_class(col_meta.type_)) {
     case ObIntTC: {
       ret = convert_integer_type_statistics(orc_stat, orc_type, col_meta, param);
@@ -1300,11 +1306,12 @@ int ObOrcTableRowIterator::convert_orc_statistics(const orc::ColumnStatistics *o
     }
     case ObStringTC:
     case ObTextTC: {
-      if (CS_TYPE_UTF8MB4_BIN == col_meta.cs_type_ && (
+      if (ObCharset::is_bin_sort(col_meta.cs_type_) && (
           orc::TypeKind::STRING == type_kind ||
           orc::TypeKind::VARCHAR == type_kind ||
           orc::TypeKind::CHAR == type_kind)) {
-        ret = convert_string_type_statistics(orc_stat, col_meta, has_lob_header, temp_allocator_, param);
+        ret = convert_string_type_statistics(orc_stat, col_meta, has_lob_header, temp_allocator_,
+                                             param, has_null);
       }
       break;
     }
@@ -1314,7 +1321,6 @@ int ObOrcTableRowIterator::convert_orc_statistics(const orc::ColumnStatistics *o
   }
   if (OB_SUCC(ret) && !param.min_datum_.is_null() && !param.max_datum_.is_null()) {
     // set null count
-    const bool has_null = orc_stat->hasNull();
     const bool all_null = (orc_stat->getNumberOfValues() == 0);
     int64_t null_count = 0;
     if (all_null) {
