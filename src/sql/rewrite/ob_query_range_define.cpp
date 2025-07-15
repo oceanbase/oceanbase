@@ -802,7 +802,7 @@ int ObPreRangeGraph::get_prefix_info(int64_t &equal_prefix_count,
 {
   int ret = OB_SUCCESS;
   equal_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
-  range_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
+  range_prefix_count = 0;
   if (OB_ISNULL(node_head_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null range node");
@@ -812,11 +812,11 @@ int ObPreRangeGraph::get_prefix_info(int64_t &equal_prefix_count,
     contain_always_false = node_head_->always_false_;
   } else {
     bool equals[column_count_];
+    bool extract_ranges[column_count_];
     MEMSET(equals, 0, sizeof(bool) * column_count_);
-    if (OB_FAIL(get_prefix_info(node_head_, equals, equal_prefix_count))) {
+    MEMSET(extract_ranges, 0, sizeof(bool) * column_count_);
+    if (OB_FAIL(get_prefix_info(node_head_, equals, extract_ranges, equal_prefix_count, range_prefix_count))) {
       LOG_WARN("failed to get prefix info");
-    } else {
-      range_prefix_count = (equal_prefix_count == column_count_) ? equal_prefix_count : equal_prefix_count + 1;
     }
   }
   return ret;
@@ -824,39 +824,48 @@ int ObPreRangeGraph::get_prefix_info(int64_t &equal_prefix_count,
 
 int ObPreRangeGraph::get_prefix_info(const ObRangeNode *range_node,
                                      bool* equals,
-                                     int64_t &equal_prefix_count) const
+                                     bool* extract_ranges,
+                                     int64_t &equal_prefix_count,
+                                     int64_t &range_prefix_count) const
 {
   int ret = OB_SUCCESS;
-  ObSEArray<int64_t, 8> new_idx;
+  ObSEArray<int64_t, 8> new_equal_idx;
+  ObSEArray<int64_t, 8> new_range_idx;
   for (const ObRangeNode *cur_node = range_node; OB_SUCC(ret) && cur_node != NULL; cur_node = cur_node->or_next_) {
-    // reset equal flag in previous or range node
-    for (int64_t j = 0; j < new_idx.count(); ++j) {
-      equals[new_idx.at(j)] = false;
-    }
-    new_idx.reset();
-
     if (cur_node->min_offset_ >= 0 &&
-        OB_FAIL(get_new_equal_idx(cur_node, equals, new_idx))) {
+        OB_FAIL(get_new_equal_idx(cur_node, equals, new_equal_idx))) {
+      LOG_WARN("failed to get new idx");
+    } else if (cur_node->min_offset_ >= 0 &&
+        OB_FAIL(get_new_range_idx(cur_node, extract_ranges, new_range_idx))) {
       LOG_WARN("failed to get new idx");
     } else if (cur_node->and_next_ != nullptr) {
-      if (OB_FAIL(SMART_CALL(get_prefix_info(cur_node->and_next_, equals, equal_prefix_count)))) {
+      if (OB_FAIL(SMART_CALL(get_prefix_info(cur_node->and_next_, equals, extract_ranges,
+                                             equal_prefix_count, range_prefix_count)))) {
         LOG_WARN("failed to check is strict equal graph");
       }
     } else {
       int64_t cur_pos = 0;
-      for (; cur_pos < column_count_; ++cur_pos) {
+      int64_t tmp_range_prefix_count = 0;
+      for (; cur_pos < column_count_; ++cur_pos, ++tmp_range_prefix_count) {
         if (!equals[cur_pos]) {
+          if (extract_ranges[cur_pos]) {
+            ++tmp_range_prefix_count;
+          }
           break;
         }
       }
       equal_prefix_count = std::min(equal_prefix_count, cur_pos);
+      range_prefix_count = std::max(range_prefix_count, tmp_range_prefix_count);
     }
-  }
-  // reset equal flag in current range node
-  if (OB_SUCC(ret)) {
-    for (int64_t j = 0; j < new_idx.count(); ++j) {
-      equals[new_idx.at(j)] = false;
+    // reset flag in current range node
+    for (int64_t j = 0; j < new_equal_idx.count(); ++j) {
+      equals[new_equal_idx.at(j)] = false;
     }
+    new_equal_idx.reuse();
+    for (int64_t j = 0; j < new_range_idx.count(); ++j) {
+      extract_ranges[new_range_idx.at(j)] = false;
+    }
+    new_range_idx.reuse();
   }
   return ret;
 }
@@ -870,6 +879,25 @@ int ObPreRangeGraph::get_new_equal_idx(const ObRangeNode *range_node,
     if (!equals[i] && range_node->start_keys_[i] == range_node->end_keys_[i] &&
         (range_node->start_keys_[i] < OB_RANGE_EXTEND_VALUE || range_node->start_keys_[i] == OB_RANGE_NULL_VALUE)) {
       equals[i] = true;
+      if (OB_FAIL(new_idx.push_back(i))) {
+        LOG_WARN("failed to push back idx", K(i));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPreRangeGraph::get_new_range_idx(const ObRangeNode *range_node,
+                                       bool* extract_ranges,
+                                       ObIArray<int64_t> &new_idx) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = range_node->min_offset_; OB_SUCC(ret) && i <= range_node->max_offset_; ++i) {
+    if (!extract_ranges[i] && (range_node->start_keys_[i] < OB_RANGE_EXTEND_VALUE ||
+                               range_node->start_keys_[i] == OB_RANGE_NULL_VALUE  ||
+                               range_node->end_keys_[i] < OB_RANGE_EXTEND_VALUE ||
+                               range_node->end_keys_[i] == OB_RANGE_NULL_VALUE)) {
+      extract_ranges[i] = true;
       if (OB_FAIL(new_idx.push_back(i))) {
         LOG_WARN("failed to push back idx", K(i));
       }
