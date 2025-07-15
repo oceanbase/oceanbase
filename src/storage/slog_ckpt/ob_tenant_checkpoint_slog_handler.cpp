@@ -1885,8 +1885,8 @@ int ObTenantCheckpointSlogHandler::delete_tenant_ls_item(const share::ObLSID ls_
     if (OB_FAIL(ret)) {
       // error occurred
     } else if (OB_LIKELY(is_delete_hit)) {
-      if (OB_FAIL(SERVER_STORAGE_META_SERVICE.update_tenant_super_block(tenant->get_epoch(), tenant_super_block))) {
-        LOG_WARN("fail to write tenant super block", K(ret), K(tenant->get_epoch()), K(tenant_super_block));
+      if (OB_FAIL(SERVER_STORAGE_META_SERVICE.update_tenant_super_block(tenant->get_epoch(), tmp_super_block))) {
+        LOG_WARN("fail to write tenant super block", K(ret), K(tenant->get_epoch()), K(tmp_super_block), K(tenant_super_block));
       } else {
         tenant->set_tenant_super_block(tmp_super_block);
         FLOG_INFO("update tenant super block ls item (delete)", K(ret), K(ls_id), K(ls_epoch), K(tenant_super_block), K(tmp_super_block));
