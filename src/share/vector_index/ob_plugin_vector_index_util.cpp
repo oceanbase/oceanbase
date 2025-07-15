@@ -432,7 +432,77 @@ void ObVectorQueryVidIterator::reset()
   extra_info_ptr_.reset();
 }
 
-int ObPluginVectorIndexHelper::merge_delta_and_snap_vids(const ObVsagQueryResult &first,
+int ObPluginVectorIndexHelper::driect_merge_delta_and_snap_vids(const ObVsagQueryResult &first,
+                                                                       const ObVsagQueryResult &second,
+                                                                       int64_t &actual_cnt,
+                                                                       int64_t *&vids_result,
+                                                                       float *&float_result,
+                                                                       ObVecExtraInfoPtr &extra_info_result)
+{
+  INIT_SUCC(ret);
+  actual_cnt = 0;
+  int64_t res_num = 0;
+  if (first.total_ == 0) {
+    while (res_num < second.total_ && OB_SUCC(ret)) {
+      if (!extra_info_result.is_null()) {
+        if (OB_FAIL(extra_info_result.set_with_copy(res_num, second.extra_info_ptr_[res_num], second.extra_info_ptr_.extra_info_actual_size_))) {
+          LOG_WARN("set extra info failed", K(ret), K(second.extra_info_ptr_), K(res_num));
+        }
+      }
+      vids_result[res_num] = second.vids_[res_num];
+      float_result[res_num] = second.distances_[res_num];
+      res_num++;
+    }
+    actual_cnt = res_num;
+  } else {
+    const int64_t hashset_size = first.total_;
+    common::hash::ObHashSet<int64_t> vid_hash_set;
+    if (OB_FAIL(vid_hash_set.create(hashset_size))){
+      LOG_WARN("fail to create vid hashset id set failed", KR(ret), K(hashset_size));
+    } else {
+      while (res_num < first.total_ && OB_SUCC(ret)) {
+        if (OB_FAIL(vid_hash_set.set_refactored(first.vids_[res_num]))) {
+          LOG_WARN("fail to set vid to hashset", K(first.vids_[res_num]));
+        } else {
+          if (!extra_info_result.is_null()) {
+            if (OB_FAIL(extra_info_result.set_with_copy(res_num, first.extra_info_ptr_[res_num], first.extra_info_ptr_.extra_info_actual_size_))) {
+              LOG_WARN("set extra info failed", K(ret), K(first.extra_info_ptr_), K(res_num));
+            }
+          }
+          vids_result[res_num] = first.vids_[res_num];
+          float_result[res_num] = first.distances_[res_num];
+          res_num++;
+        }
+      }
+      int64_t i = res_num;
+      while (i < first.total_ + second.total_ && OB_SUCC(ret)) {
+        ret = vid_hash_set.exist_refactored(second.vids_[res_num - first.total_]);
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS;
+          i++; // skip
+        } else if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          if (!extra_info_result.is_null()) {
+            if (OB_FAIL(extra_info_result.set_with_copy(res_num, second.extra_info_ptr_[res_num - first.total_], second.extra_info_ptr_.extra_info_actual_size_))) {
+              LOG_WARN("set extra info failed", K(ret), K(second.extra_info_ptr_), K(res_num));
+            }
+          }
+          vids_result[res_num] = second.vids_[res_num - first.total_];
+          float_result[res_num] = second.distances_[res_num -first.total_];
+          res_num++;
+          i++;
+        } else {
+          LOG_WARN("fail to check exist refactored", K(ret));
+        }
+      }
+      actual_cnt = res_num;
+    }
+  }
+
+  return ret;
+}
+
+int ObPluginVectorIndexHelper::sort_merge_delta_and_snap_vids(const ObVsagQueryResult &first,
                                                          const ObVsagQueryResult &second,
                                                          const int64_t total,
                                                          int64_t &actual_cnt,
