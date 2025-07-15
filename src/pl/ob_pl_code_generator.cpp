@@ -2759,6 +2759,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
           CK (OB_NOT_NULL(exception_store.get_v()));
           CK (OB_NOT_NULL(ob_error_code.get_v()));
           OZ (generator_.get_helper().create_load(ObString(""), exception_store, unwindException));
+          OX (unwindException.set_t(int8_type));
           OZ (generator_.get_helper().create_const_gep1_64(ObString("extract_unwind_exception_header"),
                                                            unwindException,
                                                            generator_.get_eh_service().pl_exception_base_offset_,
