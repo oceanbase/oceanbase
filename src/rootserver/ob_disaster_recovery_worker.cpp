@@ -2188,6 +2188,7 @@ int ObDRWorker::check_ls_common_dr_tasks_(
 }
 
 ERRSIM_POINT_DEF(ERRSIM_SKIP_CHECK_TENANT_SINGLE_REPLACE_REPLICA_TASK)
+ERRSIM_POINT_DEF(ERRSIM_SKIP_GEN_SPECIFIED_SINGLE_REPLACE_REPLICA_TASK)
 ERRSIM_POINT_DEF(ERRSIM_SKIP_PERSIST_REPLACE_REPLICA_TASK_INTO_INNER_TABLE)
 int ObDRWorker::try_tenant_single_replica_task(
     const uint64_t tenant_id,
@@ -2224,6 +2225,16 @@ int ObDRWorker::try_tenant_single_replica_task(
         palf::LogConfigVersion config_version;
         // reasons for using user tenant_id: get the tenant's available resources, meta tenant uses user tenant's unit
         DRLSInfo dr_ls_info_with_flag(gen_user_tenant_id(tenant_id), GCTX.schema_service_);
+
+#ifdef ERRSIM
+        if (ls_status_info.tenant_id_ == GCONF.errsim_tenant_id && ls_status_info.ls_id_.id() == GCONF.errsim_migration_ls_id) {
+          if (OB_UNLIKELY(ERRSIM_SKIP_GEN_SPECIFIED_SINGLE_REPLACE_REPLICA_TASK)) {
+            LOG_INFO("errsim skip gen specified ls single replace replaca task", "tenant_id", ls_status_info.tenant_id_, "ls_id", ls_status_info.ls_id_);
+            continue;
+          }
+        }
+#endif
+
         if (OB_TMP_FAIL(build_ls_info_for_cross_az_dr(ls_status_info_array.at(i), dr_ls_info_with_flag))) {
           LOG_WARN("fail to init dr log stream info", KR(tmp_ret));
         } else if (OB_TMP_FAIL(check_ls_single_replica_dr_tasks(dr_ls_info_with_flag, config_version, source_server, dest_zone, found_replace_task))) {
