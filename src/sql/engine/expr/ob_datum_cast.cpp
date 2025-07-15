@@ -19,6 +19,7 @@
 #include "lib/roaringbitmap/ob_rb_utils.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "lib/geo/ob_geometry_cast.h"
+#include "lib/geo/ob_wkb_to_json_bin_visitor.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
@@ -11141,8 +11142,47 @@ CAST_FUNC_NAME(geometry, json)
 {
   EVAL_STRING_ARG()
   {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "geomerty, json");
+    ObString in_str = child_res->get_string();
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *child_res,
+                expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), in_str,
+                &ctx.exec_ctx_))) {
+      LOG_WARN("fail to get real data.", K(ret), K(in_str));
+    } else if (CM_IS_IMPLICIT_CAST(expr.extra_) && !CM_IS_WARN_ON_FAIL(expr.extra_)) {
+      if (expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
+        ret = OB_ERR_INVALID_JSON_CHARSET;
+        LOG_USER_ERROR(OB_ERR_INVALID_JSON_CHARSET);
+      } else if (OB_FAIL(common_string_json(expr, expr.args_[0]->datum_meta_.type_, in_str, ctx,
+                                            res_datum))) {
+        LOG_WARN("fail to cast string to json", K(ret));
+      }
+    } else {
+      ObString json_bin;
+      ObGeoSrid srid = 0;
+      ObGeometry *geo = nullptr;
+      omt::ObSrsCacheGuard srs_guard;
+      const ObSrsItem *srs = nullptr;
+      if (OB_FAIL(ObGeoExprUtils::construct_geometry(
+                            temp_allocator,
+                            in_str,
+                            srs_guard,
+                            srs,
+                            geo,
+                            N_CONVERT,
+                            true,
+                            false))) {
+        LOG_WARN("fail to build geometry from wkb", K(ret), K(in_str));
+      }
+      // No SRID or BBOX info requried for output json
+      ObWkbToJsonBinVisitor visitor(&temp_allocator);
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(visitor.to_jsonbin(geo, json_bin))) {
+        LOG_WARN("fail to convert geo to jsonbin", K(ret));
+      } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, json_bin))) {
+        LOG_WARN("fail to fill json bin lob locator", K(ret));
+      }
+    }
   }
   return ret;
 }

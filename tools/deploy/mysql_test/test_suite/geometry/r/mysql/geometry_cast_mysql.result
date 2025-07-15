@@ -1330,7 +1330,7 @@ insert into t(c10) value (point(0,0));
 ERROR 22001: Data too long for column 'c10' at row 1
 insert into t(c11) value (point(0,0));
 insert into t(c12) value (point(0,0));
-ERROR 0A000: geomerty, json not supported
+ERROR 22032: Cannot create a JSON value from a string.
 drop table t;
 select cast(x'010100000000000000008056403333333333836640' as MULTIPOINT);
 ERROR SR001: There's no spatial reference system with SRID 257.
@@ -1369,3 +1369,66 @@ MULTIPOINT((0 1))
 MULTIPOINT((0.1 0.1))
 drop table t;
 drop view v;
+drop table t1;
+create table t1(id int  AUTO_INCREMENT primary key ,g geometry not null);
+insert into t1(g) values(ST_GeomFromText('point(10 20)'));
+insert into t1(g) values(ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)'));
+insert into t1(g) values(ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7, 5 5))'));
+insert into t1(g) values(ST_GeomFromText('MULTIPOINT(0 0, 20 20, 60 60)'));
+insert into t1(g) values(ST_GeomFromText('MULTILINESTRING((10 10, 20 20), (15 15, 30 15))'));
+insert into t1(g) values(ST_GeomFromText('MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)),((5 5,7 5,7 7,5 7, 5 5)))'));
+insert into t1(g) values(ST_GeomFromText('GEOMETRYCOLLECTION(POINT(10 10), POINT(30 30), LINESTRING(15 15, 20 20))'));
+select SOUNDEX(g) from t1;
+SOUNDEX(g)
+
+I500
+
+N000
+
+
+
+select CONVERT(g, json) from t1;
+CONVERT(g, json)
+{"type": "Point", "coordinates": [10.0, 20.0]}
+{"type": "LineString", "coordinates": [[0.0, 0.0], [10.0, 10.0], [20.0, 25.0], [50.0, 60.0]]}
+{"type": "Polygon", "coordinates": [[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0], [0.0, 0.0]], [[5.0, 5.0], [7.0, 5.0], [7.0, 7.0], [5.0, 7.0], [5.0, 5.0]]]}
+{"type": "MultiPoint", "coordinates": [[0.0, 0.0], [20.0, 20.0], [60.0, 60.0]]}
+{"type": "MultiLineString", "coordinates": [[[10.0, 10.0], [20.0, 20.0]], [[15.0, 15.0], [30.0, 15.0]]]}
+{"type": "MultiPolygon", "coordinates": [[[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0], [0.0, 0.0]]], [[[5.0, 5.0], [7.0, 5.0], [7.0, 7.0], [5.0, 7.0], [5.0, 5.0]]]]}
+{"type": "GeometryCollection", "geometries": [{"type": "Point", "coordinates": [10.0, 10.0]}, {"type": "Point", "coordinates": [30.0, 30.0]}, {"type": "LineString", "coordinates": [[15.0, 15.0], [20.0, 20.0]]}]}
+select CAST(g as json) from t1;
+CAST(g as json)
+{"type": "Point", "coordinates": [10.0, 20.0]}
+{"type": "LineString", "coordinates": [[0.0, 0.0], [10.0, 10.0], [20.0, 25.0], [50.0, 60.0]]}
+{"type": "Polygon", "coordinates": [[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0], [0.0, 0.0]], [[5.0, 5.0], [7.0, 5.0], [7.0, 7.0], [5.0, 7.0], [5.0, 5.0]]]}
+{"type": "MultiPoint", "coordinates": [[0.0, 0.0], [20.0, 20.0], [60.0, 60.0]]}
+{"type": "MultiLineString", "coordinates": [[[10.0, 10.0], [20.0, 20.0]], [[15.0, 15.0], [30.0, 15.0]]]}
+{"type": "MultiPolygon", "coordinates": [[[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0], [0.0, 0.0]]], [[[5.0, 5.0], [7.0, 5.0], [7.0, 7.0], [5.0, 7.0], [5.0, 5.0]]]]}
+{"type": "GeometryCollection", "geometries": [{"type": "Point", "coordinates": [10.0, 10.0]}, {"type": "Point", "coordinates": [30.0, 30.0]}, {"type": "LineString", "coordinates": [[15.0, 15.0], [20.0, 20.0]]}]}
+drop table t1;
+create table t1(id int  AUTO_INCREMENT primary key ,g geometry not null);
+insert into t1(g) values(ST_GeomFromText('point(10 20)', 4326));
+insert into t1(g) values(ST_GeomFromText('LINESTRING(0 0, 10 10, 20 25, 50 60)', 4326));
+insert into t1(g) values(ST_GeomFromText('POLYGON((0 0,10 0,10 10,0 10,0 0),(5 5,7 5,7 7,5 7, 5 5))', 4326));
+insert into t1(g) values(ST_GeomFromText('MULTIPOINT(0 0, 20 20, 60 60)', 4326));
+insert into t1(g) values(ST_GeomFromText('MULTILINESTRING((10 10, 20 20), (15 15, 30 15))', 4326));
+insert into t1(g) values(ST_GeomFromText('MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)),((5 5,7 5,7 7,5 7, 5 5)))', 4326));
+insert into t1(g) values(ST_GeomFromText('GEOMETRYCOLLECTION(POINT(10 10), POINT(30 30), LINESTRING(15 15, 20 20))', 4326));
+select CONVERT(g, json) from t1;
+CONVERT(g, json)
+{"type": "Point", "coordinates": [20.0, 10.0]}
+{"type": "LineString", "coordinates": [[0.0, 0.0], [10.0, 10.0], [25.0, 20.0], [60.0, 50.0]]}
+{"type": "Polygon", "coordinates": [[[0.0, 0.0], [0.0, 10.0], [10.0, 10.0], [10.0, 0.0], [0.0, 0.0]], [[5.0, 5.0], [5.0, 7.0], [7.0, 7.0], [7.0, 5.0], [5.0, 5.0]]]}
+{"type": "MultiPoint", "coordinates": [[0.0, 0.0], [20.0, 20.0], [60.0, 60.0]]}
+{"type": "MultiLineString", "coordinates": [[[10.0, 10.0], [20.0, 20.0]], [[15.0, 15.0], [15.0, 30.0]]]}
+{"type": "MultiPolygon", "coordinates": [[[[0.0, 0.0], [0.0, 10.0], [10.0, 10.0], [10.0, 0.0], [0.0, 0.0]]], [[[5.0, 5.0], [5.0, 7.0], [7.0, 7.0], [7.0, 5.0], [5.0, 5.0]]]]}
+{"type": "GeometryCollection", "geometries": [{"type": "Point", "coordinates": [10.0, 10.0]}, {"type": "Point", "coordinates": [30.0, 30.0]}, {"type": "LineString", "coordinates": [[15.0, 15.0], [20.0, 20.0]]}]}
+select CAST(g as json) from t1;
+CAST(g as json)
+{"type": "Point", "coordinates": [20.0, 10.0]}
+{"type": "LineString", "coordinates": [[0.0, 0.0], [10.0, 10.0], [25.0, 20.0], [60.0, 50.0]]}
+{"type": "Polygon", "coordinates": [[[0.0, 0.0], [0.0, 10.0], [10.0, 10.0], [10.0, 0.0], [0.0, 0.0]], [[5.0, 5.0], [5.0, 7.0], [7.0, 7.0], [7.0, 5.0], [5.0, 5.0]]]}
+{"type": "MultiPoint", "coordinates": [[0.0, 0.0], [20.0, 20.0], [60.0, 60.0]]}
+{"type": "MultiLineString", "coordinates": [[[10.0, 10.0], [20.0, 20.0]], [[15.0, 15.0], [15.0, 30.0]]]}
+{"type": "MultiPolygon", "coordinates": [[[[0.0, 0.0], [0.0, 10.0], [10.0, 10.0], [10.0, 0.0], [0.0, 0.0]]], [[[5.0, 5.0], [5.0, 7.0], [7.0, 7.0], [7.0, 5.0], [5.0, 5.0]]]]}
+{"type": "GeometryCollection", "geometries": [{"type": "Point", "coordinates": [10.0, 10.0]}, {"type": "Point", "coordinates": [30.0, 30.0]}, {"type": "LineString", "coordinates": [[15.0, 15.0], [20.0, 20.0]]}]}

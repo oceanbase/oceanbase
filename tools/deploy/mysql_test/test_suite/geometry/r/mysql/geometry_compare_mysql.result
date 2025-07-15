@@ -78,7 +78,7 @@ ERROR HY000: Invalid argument
 select * from matrix where ST_GeomFromText('POINT(1 1)') = SetType;
 ERROR HY000: Invalid argument
 select * from matrix where ST_GeomFromText('POINT(1 1)') = JsonType;
-ERROR 0A000: geomerty, json not supported
+TinyIntType	SmallIntType	MediumIntType	Int32Type	IntType	UTinyIntType	USmallIntType	UMediumIntType	UInt32Type	UInt64Type	FloatType	DoubleType	UFloatType	UDoubleType	NumberType	UNumberType	DateTimeType	TimestampType	DateType	TimeType	YearType	VarcharType	CharType	VarbinaryType	BinaryType	ExtendType	TinyTextType	TextType	MediumTextType	LongTextType	BitType	EnumType	SetType	JsonType	GeometryType
 select st_astext(GeometryType) from matrix where ST_GeomFromText('POINT(1 1)') = GeometryType;
 st_astext(GeometryType)
 POINT(1 1)
