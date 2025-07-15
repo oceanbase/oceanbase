@@ -4391,10 +4391,6 @@ int ObDDLOperator::update_aux_table(
           new_aux_table_schema.set_lob_inrow_threshold(new_table_schema.get_lob_inrow_threshold());
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(new_aux_table_schema.set_block_size_for_cg(new_table_schema.get_block_size()))) {
-          LOG_WARN("set bock size for cg failed", K(ret), K(new_table_schema));
-        } else if (OB_FAIL(new_aux_table_schema.set_row_store_type_for_cg(new_table_schema.get_row_store_type()))) {
-          LOG_WARN("set row store type for cg failed", K(ret));
         } else if (OB_FAIL(new_aux_table_schema.set_compress_func_name(new_table_schema.get_compress_func_name()))) {
           LOG_WARN("set_compress_func_name failed", K(new_table_schema));
         } else if (aux_table_schema->is_in_recyclebin()) {
@@ -4442,8 +4438,6 @@ int ObDDLOperator::update_aux_table(
                   OB_DDL_ALTER_TABLE))) {
             RS_LOG(WARN, "schema service update_table_options failed",
                 K(*aux_table_schema), K(ret));
-          } else if (OB_FAIL(schema_service->get_table_sql_service().update_column_group_options(trans, (*aux_table_schema), new_aux_table_schema))) {
-            RS_LOG(WARN, "failed to update column group schema option", K(ret));
           } else if ((nullptr != idx_schema_versions) &&
               OB_FAIL(idx_schema_versions->push_back(std::make_pair(new_aux_table_schema.get_table_id(), new_schema_version)))) {
             RS_LOG(WARN, "fail to push_back array", K(ret), KPC(idx_schema_versions), K(new_schema_version));
@@ -4865,7 +4859,7 @@ int ObDDLOperator::update_single_column_group(common::ObMySQLTransaction &trans,
   } else if (OB_ISNULL(orig_column_schema)) {
     ret = OB_ERR_UNEXPECTED;
     RS_LOG(WARN, "column should not be null", K(ret), K(column_schema), K(origin_table_schema));
-  } else if (ObColumnNameHashWrapper(orig_column_schema->get_column_name_str()) == ObColumnNameHashWrapper(column_schema.get_column_name_str())) {
+  } else if (orig_column_schema->get_column_name_str() == column_schema.get_column_name_str()) {
     /* now only rename column will use this func, other skip*/
   } else if (!origin_table_schema.is_column_store_supported()) {
     /* only support table need column group*/

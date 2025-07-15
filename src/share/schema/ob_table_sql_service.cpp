@@ -2218,12 +2218,6 @@ int ObTableSqlService::update_table_options(ObISQLClient &sql_client,
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(update_column_group_options(sql_client, table_schema, new_table_schema))) {
-      LOG_WARN("failed to update column group option", K(ret));
-    }
-  }
-
   // rename constraint name while drop/truncate table and recyclebin is on.
   if (OB_SUCC(ret)) {
     if (OB_DDL_DROP_TABLE_TO_RECYCLEBIN == operation_type){
@@ -5551,47 +5545,6 @@ int ObTableSqlService::inner_update_table_options_(ObISQLClient &sql_client,
   return ret;
 }
 
-/*
- * this function is used for update column group option
-*/
-int ObTableSqlService::update_column_group_options(ObISQLClient &sql_client,
-                                                   const ObTableSchema &data_table_schema,
-                                                   ObTableSchema &new_table_schema)
-{
-  int ret = OB_SUCCESS;
-  ObTableSchema::const_column_group_iterator src_iter_begin = data_table_schema.column_group_begin();
-  ObTableSchema::const_column_group_iterator src_iter_end = data_table_schema.column_group_end();
-
-  ObTableSchema::const_column_group_iterator new_iter_begin = new_table_schema.column_group_begin();
-  ObTableSchema::const_column_group_iterator new_iter_end   = new_table_schema.column_group_end();
-
-  if (data_table_schema.get_block_size() == new_table_schema.get_block_size() &&
-      data_table_schema.get_compressor_type() == new_table_schema.get_compressor_type() &&
-      data_table_schema.get_row_store_type() == new_table_schema.get_row_store_type()) {
-    /* skip */
-  } else  {
-    for (; OB_SUCC(ret) && src_iter_begin != src_iter_end && new_iter_begin != new_iter_end; ) {
-      ObColumnGroupSchema *src_cg = *src_iter_begin;
-      ObColumnGroupSchema *new_cg = *new_iter_begin;
-      if (OB_ISNULL(src_cg) || OB_ISNULL(new_cg)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid cg", K(ret), KPC(src_cg), KPC(new_cg));
-      } else if (!(ObColumnNameHashWrapper(src_cg->get_column_group_name()) == ObColumnNameHashWrapper(new_cg->get_column_group_name()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("uneual column name ", K(ret), K(data_table_schema), K(new_table_schema));
-      } else if (FALSE_IT(new_cg->set_schema_version(new_table_schema.get_schema_version()))) {
-      } else if (OB_FAIL(update_single_column_group(sql_client, new_table_schema, *src_cg, *new_cg))) {
-        LOG_WARN("failed to update single column group", K(ret));
-      } else {
-        src_iter_begin++;
-        new_iter_begin++;
-      }
-    }
-  }
-  return ret;
-}
-
-
 int ObTableSqlService::update_table_schema_version(ObISQLClient &sql_client,
                                                    const ObTableSchema &table_schema,
                                                    share::schema::ObSchemaOperationType operation_type,
@@ -6166,10 +6119,12 @@ int ObTableSqlService::update_single_column_group(ObISQLClient &sql_client,
       LOG_WARN("fail to gen column group dml", K(ret));
     } else if (OB_FAIL(exec.exec_update(OB_ALL_COLUMN_GROUP_TNAME, dml, affect_rows))) {
       LOG_WARN("fail to update all column group", K(ret));
-    } else if (affect_rows != 1) {
+    } else if (affect_rows != (ori_cg_schema.get_column_group_name() != new_cg_schema.get_column_group_name())) {
+      /* for some ddl don't change propertype, affect rows should be 0, since all_column_group has no schema version*/
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to update single row in all column group ", K(ret), K(affect_rows), K(ori_cg_schema), K(new_cg_schema));
     }
+
     /* write into __all_column_group_history*/
     dml.reset();
     affect_rows = 0;

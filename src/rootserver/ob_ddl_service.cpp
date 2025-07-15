@@ -3049,9 +3049,6 @@ int ObDDLService::set_raw_table_options(
         case ObAlterTableArg::BLOCK_SIZE: {
           need_update_index_table = true;
           new_table_schema.set_block_size(alter_table_schema.get_block_size());
-          if (OB_FAIL(new_table_schema.set_block_size_for_cg(alter_table_schema.get_block_size()))) {
-            LOG_WARN("failed to set block size for cg", K(ret));
-          }
           break;
         }
         case ObAlterTableArg::CHARSET_TYPE: {
@@ -3066,9 +3063,6 @@ int ObDDLService::set_raw_table_options(
           new_table_schema.set_row_store_type(alter_table_schema.get_row_store_type());
           new_table_schema.set_store_format(alter_table_schema.get_store_format());
           need_update_index_table = true;
-          if (OB_FAIL(new_table_schema.set_row_store_type_for_cg(alter_table_schema.get_row_store_type()))) {
-            LOG_WARN("failed to set row store_type for cg", K(ret));
-          }
           break;
         }
         case ObAlterTableArg::ENABLE_MACRO_BLOCK_BLOOM_FILTER: {
