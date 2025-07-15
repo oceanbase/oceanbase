@@ -199,6 +199,7 @@ public:
  int update_tenant_info_cache(const int64_t new_ora_rowscn, const ObAllTenantInfo &new_tenant_info);
  bool need_refresh(const int64_t refresh_time_interval_us);
  int get_max_ls_id(uint64_t &tenant_id, ObLSID &max_ls_id);
+ int get_switchover_epoch(int64_t &switchover_epoch);
  /**
   * @description:
   *    check if service_status of the given service_name is STOPPED or STOPPING
