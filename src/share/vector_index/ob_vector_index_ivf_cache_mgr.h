@@ -53,6 +53,9 @@ struct ObIvfAuxTableInfo
     centroid_tablet_ids_.set_attr(ObMemAttr(MTL_ID(), "IvfAuxInfo"));
     pq_centroid_tablet_ids_.set_attr(ObMemAttr(MTL_ID(), "IvfAuxInfo"));
   }
+  ~ObIvfAuxTableInfo() {
+    reset();
+  }
   bool is_valid() const;
   void reset();
   int64_t count() const { return centroid_tablet_ids_.count(); }

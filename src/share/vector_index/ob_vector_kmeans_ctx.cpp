@@ -66,7 +66,7 @@ int ObKmeansCtx::try_normalize(int64_t dim, float *data, float *norm_vector) con
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(norm_info_)) { // cos&ip need norm center vec
-    if (OB_FAIL(norm_info_->normalize_func_(dim, data, norm_vector))) {
+    if (OB_FAIL(norm_info_->normalize_func_(dim, data, norm_vector, nullptr))) {
       LOG_WARN("failed to normalize vector", K(ret));
     }
   }
@@ -78,7 +78,7 @@ int ObKmeansCtx::try_normalize_samples() const
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(norm_info_) && VIDA_COS == dist_algo_) {  // cos need norm before kmeans
     for (int i = 0; OB_SUCC(ret) && i < sample_vectors_.count(); ++i) {
-      if (OB_FAIL(norm_info_->normalize_func_(sample_dim_, sample_vectors_[i], sample_vectors_[i]))) {
+      if (OB_FAIL(norm_info_->normalize_func_(sample_dim_, sample_vectors_[i], sample_vectors_[i], nullptr))) {
         LOG_WARN("failed to normalize vector", K(ret), K(i), K(sample_dim_));
       }
     }

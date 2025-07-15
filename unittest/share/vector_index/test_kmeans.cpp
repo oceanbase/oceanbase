@@ -426,7 +426,7 @@ int ObTestAnnSearchHelper::inner_ann_search(const int64_t idx, float *vector, co
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc norm vector", K(ret));
     } else if (FALSE_IT(MEMSET(norm_vector, 0, dim * sizeof(float)))) {
-    } else if (OB_FAIL(norm_info_->normalize_func_(dim, vector, norm_vector))) {
+    } else if (OB_FAIL(norm_info_->normalize_func_(dim, vector, norm_vector, nullptr))) {
       LOG_WARN("failed to normalize vector", K(ret));
     }
   }

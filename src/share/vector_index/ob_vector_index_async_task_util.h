@@ -163,7 +163,7 @@ public:
         allocator_(ObMemAttr(MTL_ID(), "VecIdxTaskCtx")), // set after init
         extra_data_()
   {}
-  ~ObVecIndexAsyncTaskCtx() {}
+  ~ObVecIndexAsyncTaskCtx();
 
   TO_STRING_KV(K_(tenant_id), K_(retry_time), KP_(ls), K_(task_status), K_(sys_task_id), K_(in_thread_pool), KP_(extra_data));
 

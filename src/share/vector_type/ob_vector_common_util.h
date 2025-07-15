@@ -110,7 +110,7 @@ private:
 class ObVectorNormalize final
 {
 public:
-  static int L2_normalize_vector(const int64_t dim, float *data, float *norm_vector);
+  static int L2_normalize_vector(const int64_t dim, float *data, float *norm_vector, bool *do_normalize = nullptr);
   static int L2_normalize_vectors(const int64_t dim, const int64_t count, float *datas, float *norm_vectors);
   // others if needed
 };
@@ -130,7 +130,7 @@ struct ObVectorNormalizeInfo
 
   int normalize_vectors(const int64_t dim, const int64_t count, float *datas, float *norm_vectors);
 
-  using FuncPtrType = int (*)(const int64_t dim, float *data, float *norm_vector);
+  using FuncPtrType = int (*)(const int64_t dim, float *data, float *norm_vector, bool *do_normalize);
 
   ObVectorNormalizeType type_;
   FuncPtrType normalize_func_;

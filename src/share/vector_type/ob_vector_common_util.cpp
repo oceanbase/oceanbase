@@ -20,7 +20,7 @@ namespace share {
 // ------------------ ObVectorNormalize implement ------------------
 
 // norm_vector = data means update inplace
-int ObVectorNormalize::L2_normalize_vector(const int64_t dim, float *data, float *norm_vector)
+int ObVectorNormalize::L2_normalize_vector(const int64_t dim, float *data, float *norm_vector, bool *do_normalize /*= nullptr*/)
 {
   int ret = OB_SUCCESS;
   if (0 >= dim || OB_ISNULL(data) || OB_ISNULL(norm_vector)) {
@@ -37,6 +37,9 @@ int ObVectorNormalize::L2_normalize_vector(const int64_t dim, float *data, float
       }
     } else if (data != norm_vector) {
       MEMCPY(norm_vector, data, dim * sizeof(float));
+    }
+    if (OB_NOT_NULL(do_normalize)) {
+      *do_normalize = norm_l2_sqr > 0 && fabs(1.0f - norm_l2_sqr) > float_accuracy;
     }
   }
   return ret;
@@ -74,7 +77,7 @@ int ObVectorNormalizeInfo::normalize_vectors(const int64_t dim, const int64_t co
     for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
       float *data = datas + i * dim;
       float *norm_vector = norm_vectors + i * dim;
-      if (OB_FAIL(normalize_func_(dim, data, norm_vector))) {
+      if (OB_FAIL(normalize_func_(dim, data, norm_vector, nullptr))) {
         SHARE_LOG(WARN, "failed to calc normalize", K(ret));
       }
     }
@@ -109,7 +112,7 @@ int ObVectorClusterHelper::get_nearest_probe_centers(
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc norm vector", K(ret));
       } else if (FALSE_IT(MEMSET(norm_vector, 0, dim * sizeof(float)))) {
-      } else if (OB_FAIL(norm_info->normalize_func_(dim, vector, norm_vector))) {
+      } else if (OB_FAIL(norm_info->normalize_func_(dim, vector, norm_vector, nullptr))) {
         LOG_WARN("failed to normalize vector", K(ret));
       }
     }
