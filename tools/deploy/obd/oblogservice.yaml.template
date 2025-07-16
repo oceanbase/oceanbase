@@ -1,0 +1,32 @@
+
+oblogservice:
+{{%% OBLOG_SERVERS %%}}
+  global:
+    cluster_id: {{%% OBLOG_SERVERS_ID %%}}
+    object_store_url: {{%% OBJECT_STORE_URL %%}}
+oceanbase-ce:
+  depends:
+  - oblogservice
+{{%% SERVERS %%}}
+  global:
+    logservice_cluster_id: {{%% OBLOG_SERVERS_ID %%}}
+    object_store_url: {{%% OBJECT_STORE_URL %%}}
+    enable_logservice: true
+    mode: 'shared_storage'
+    shared_storage: "{{%% OBJECT_STORE_URL %%}}"
+    random_shared_storage_bucket: "1"
+    memory_limit: '15G'
+    system_memory: '4G'
+    datafile_size: '200G'
+    cpu_count: '24'
+    _system_tenant_limit_mode: '2'
+
+obproxy-ce:
+{{%% OBPORXY_SERVERS %%}}
+  global:
+    listen_port: {{%% LISTEN_PORT %%}}
+    prometheus_listen_port: {{%% PROMETHEUS_LISTEN_PORT %%}}
+    home_path: {{%% OBPORXY_HOME_PATH %%}}
+  include: obd/obproxy.include.yaml
+  depends:
+    - oceanbase-ce

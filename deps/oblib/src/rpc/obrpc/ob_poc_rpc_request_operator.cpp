@@ -42,6 +42,11 @@ ObAddr ObPocRpcRequestOperator::get_peer(const ObRequest* req)
   return get_poc_handle_context(req)->get_peer();
 }
 
+void ObPocRpcRequestOperator::set_trace_point(const ObRequest* req, int32_t trace_point)
+{
+  get_poc_handle_context(req)->set_trace_point(trace_point);
+}
+
 }; // end namespace obrpc
 }; // end namespace oceanbase
 

@@ -5294,6 +5294,13 @@ int PalfHandleImpl::get_config_change_lock_stat(int64_t &lock_owner, bool &is_lo
   return ret;
 }
 
+int PalfHandleImpl::inc_config_version(int64_t timeout_us)
+{
+  int ret = OB_NOT_SUPPORTED;
+  PALF_LOG(WARN, "inc_config_version is not support in SN mode");
+  return ret;
+}
+
 void PalfHandleImpl::is_in_sync_(bool &is_log_sync, bool &is_use_cache)
 {
   int ret = OB_SUCCESS;

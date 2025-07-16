@@ -46,6 +46,7 @@ public:
   virtual uint64_t get_consumer_group_id() const override
   { return consumer_group_id_; }
   virtual int64_t to_string(char* buf, const int64_t buf_len) const override;
+  virtual bool is_ha_dag() const { return true; }
 
   int init(
       const share::ObLSID &ls_id,

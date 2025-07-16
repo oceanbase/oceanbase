@@ -46,7 +46,7 @@ int ObGCUpperTransHelper::try_get_sstable_upper_trans_version(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("max trans version should not be 0", K(sstable));
     } else if (INT64_MAX != max_trans_version) {
-      new_upper_trans_version = max_trans_version;
+      new_upper_trans_version = MAX(max_trans_version, sstable.get_max_merged_trans_version());
       FLOG_INFO("success to get new upper trans version", K(ret), K(ls_id), K(tablet_id), K(max_trans_version), K(sstable));
     } else {
       LOG_TRACE("can not get upper trans version", K(ret), K(ls_id), K(tablet_id));

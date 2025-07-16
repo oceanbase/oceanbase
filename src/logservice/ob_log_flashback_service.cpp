@@ -126,15 +126,12 @@ int ObLogFlashbackService::get_ls_list_(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   share::ObLSStatusOperator ls_status_op;
   ls_array.reset();
+
   if (!is_user_tenant(tenant_id)|| OB_ISNULL(sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("only support flashback user tenant", KR(ret), K(tenant_id), KP(sql_proxy_));
-  } else if (OB_FAIL(ls_status_op.get_all_ls_status_by_order_for_switch_tenant(
-                                  tenant_id,
-                                  false/* ignore_need_create_abort */,
-                                  ls_array,
-                                  *sql_proxy_))) {
-    LOG_WARN("fail to get_all_ls_status_by_order_for_switch_tenant", KR(ret), K(tenant_id), KP(sql_proxy_));
+  } else if (OB_FAIL(ls_status_op.get_all_ls_status_by_order_for_flashback_log(tenant_id, ls_array, *sql_proxy_))) {
+    LOG_WARN("fail to get_all_ls_status_by_order_for_flashback_log", KR(ret), K(tenant_id), KP(sql_proxy_));
   }
   return ret;
 }
@@ -162,7 +159,7 @@ int ObLogFlashbackService::wait_all_ls_replicas_log_sync_(
         if (REACH_TIME_INTERVAL(500 * 1000)) {
           CLOG_LOG(WARN, "wait_all_ls_replicas_log_sync_ eagain", COMMON_LOG_INFO, K(check_log_op_array));
         }
-        ::usleep(10 * 1000);
+        ob_usleep(10 * 1000);
       } else {
         CLOG_LOG(WARN, "wait_all_ls_replicas_log_sync_ fail", COMMON_LOG_INFO, K(check_log_op_array));
       }
@@ -221,7 +218,7 @@ int ObLogFlashbackService::get_and_change_access_mode_(
           // display sync process
           CLOG_LOG(WARN, "get_and_change_access_mode_ eagain", COMMON_LOG_INFO, K(change_mode_op_array));
         }
-        ::usleep(10 * 1000);
+        ob_usleep(10 * 1000);
       } else {
         CLOG_LOG(WARN, "get_and_change_access_mode_ fail", COMMON_LOG_INFO, K(change_mode_op_array));
       }
@@ -255,7 +252,7 @@ int ObLogFlashbackService::do_flashback_(
           // display sync process
           CLOG_LOG(WARN, "do_flashback_ eagain", COMMON_LOG_INFO, K_(flashback_op_array));
         }
-        ::usleep(50 * 1000);
+        ob_usleep(50 * 1000);
       } else {
         CLOG_LOG(INFO, "do_flashback_ fail", COMMON_LOG_INFO, K_(flashback_op_array));
       }

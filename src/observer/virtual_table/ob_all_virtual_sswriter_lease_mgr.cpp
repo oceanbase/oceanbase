@@ -25,6 +25,7 @@ namespace observer
 {
 void ObAllVirtualSSWriterLeaseMgr::reset()
 {
+  omt::ObMultiTenantOperator::reset();
   memset(ip_buffer_, 0, common::OB_IP_STR_BUFF);
   memset(target_ip_buffer_, 0, common::OB_IP_STR_BUFF);
 #ifdef OB_BUILD_SHARED_STORAGE

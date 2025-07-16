@@ -333,9 +333,9 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (ERRSIM_DISABLE_MINI_MERGE) {
+  } else if (ERRSIM_DISABLE_MINI_MERGE && !is_sys_tenant(MTL_ID())) {
     ret = OB_NO_NEED_MERGE;
-    LOG_INFO("Errsim: disable mini merge", K(ret), "tablet_id", tablet.get_tablet_meta().tablet_id_);
+    LOG_INFO("Errsim: disable mini merge", K(ret), "tenant_id", MTL_ID(), "tablet_id", tablet.get_tablet_meta().tablet_id_);
   } else if (OB_FAIL(find_mini_merge_tables(param, next_freeze_info.frozen_scn_.get_val_for_tx(), ls, tablet, memtable_handles, result))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to find mini merge tables", K(ret), K(next_freeze_info));
@@ -513,9 +513,11 @@ int ObPartitionMergePolicy::get_minor_merge_tables(
     LOG_WARN("fail to calculate boundary version", K(ret));
   }
   if (OB_FAIL(ret)) {
-  } else if (ERRSIM_DISABLE_MINOR_MERGE) {
+#ifdef ERRSIM
+  } else if (ERRSIM_DISABLE_MINOR_MERGE && !is_sys_tenant(MTL_ID())) {
     ret = OB_NO_NEED_MERGE;
-    LOG_INFO("Errsim: disable minor merge", K(ret), "tablet_id", tablet.get_tablet_meta().tablet_id_);
+    LOG_INFO("Errsim: disable minor merge", K(ret), "tenant_id", MTL_ID(), "tablet_id", tablet.get_tablet_meta().tablet_id_);
+#endif
   } else if (OB_FAIL(find_minor_merge_tables(param,
                                              min_snapshot_version,
                                              max_snapshot_version,
@@ -940,7 +942,8 @@ int ObPartitionMergePolicy::refine_mini_merge_result(
   } else if (result.scn_range_.start_scn_ > last_table->get_end_scn()) {
     need_check_tablet = true;
   } else if (result.scn_range_.start_scn_ < last_table->get_end_scn()
-      && !tablet.get_tablet_meta().tablet_id_.is_special_merge_tablet()) {
+             && ((GCTX.is_shared_storage_mode() && !tablet.get_tablet_id().is_only_mini_merge_tablet())
+                 || !tablet.get_tablet_id().is_special_merge_tablet())) {
     // fix start_scn to make scn_range continuous in migrate phase for issue 42832934
     if (result.scn_range_.end_scn_ <= last_table->get_end_scn()) {
       ret = OB_ERR_UNEXPECTED;
@@ -948,7 +951,6 @@ int ObPartitionMergePolicy::refine_mini_merge_result(
                K(ret), K(result), KPC(last_table), K(PRINT_TS_WRAPPER(table_store_wrapper)), K(tablet));
     } else {
       result.scn_range_.start_scn_ = last_table->get_end_scn();
-      result.rec_scn_ = last_table->get_rec_scn();
       FLOG_INFO("Fix mini merge result scn range", K(ret), K(result), KPC(last_table), K(PRINT_TS_WRAPPER(table_store_wrapper)), K(tablet));
     }
   }
@@ -1843,7 +1845,7 @@ int ObAdaptiveMergePolicy::check_ineffecient_read(
   if (OB_UNLIKELY(!analyzer.tablet_stat_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(analyzer));
-  } else if (analyzer.is_hot_tablet() && analyzer.has_slow_query()) {
+  } else if (analyzer.is_hot_tablet() && analyzer.has_frequent_slow_query()) {
     reason = AdaptiveMergeReason::INEFFICIENT_QUERY;
   }
   LOG_DEBUG("check_ineffecient_read", K(ret), K(reason), K(analyzer));
@@ -2203,6 +2205,11 @@ int ObPartitionMergePolicy::get_ss_minor_merge_tables(
   if (OB_FAIL(ret)) {
   } else if (minor_merge_candidates.empty()) {
     ret = OB_NO_NEED_MERGE;
+#ifdef ERRSIM
+  } else if (ERRSIM_DISABLE_MINOR_MERGE && !is_sys_tenant(MTL_ID())) {
+    ret = OB_NO_NEED_MERGE;
+    LOG_INFO("Errsim: disable ss minor merge", K(ret), "tenant_id", MTL_ID(), "tablet_id", tablet.get_tablet_meta().tablet_id_);
+#endif
   } else if (OB_FAIL(refine_and_get_minor_merge_result(param, tablet, minor_compact_trigger, minor_merge_candidates, result))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("refine and get minor merge result fail", K(ret));

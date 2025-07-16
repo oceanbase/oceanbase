@@ -17,6 +17,7 @@
 #include "storage/ob_file_system_router.h"
 #include <sys/utsname.h>
 #include "share/ob_version.h"
+#include "logservice/ob_server_log_block_mgr.h"
 
 namespace oceanbase
 {
@@ -63,7 +64,6 @@ int ObServerUtils::get_log_disk_info_in_config(int64_t& log_disk_size,
   int64_t clog_disk_total_size = 0;
   bool shared_mode = false;
   const char* data_dir = OB_FILE_SYSTEM_ROUTER.get_sstable_dir();
-  const char* clog_dir = OB_FILE_SYSTEM_ROUTER.get_clog_dir();
   if (OB_FAIL(cal_all_part_disk_default_percentage(data_disk_total_size,
                                                    data_default_disk_percentage,
                                                    clog_disk_total_size,
@@ -104,7 +104,6 @@ int ObServerUtils::get_data_disk_info_in_config(int64_t& data_disk_size,
   int64_t clog_disk_total_size = 0;
   bool shared_mode = false;
   const char* data_dir = OB_FILE_SYSTEM_ROUTER.get_sstable_dir();
-  const char* clog_dir = OB_FILE_SYSTEM_ROUTER.get_clog_dir();
   if (OB_FAIL(cal_all_part_disk_default_percentage(data_disk_total_size,
                                                    data_default_disk_percentage,
                                                    clog_disk_total_size,
@@ -285,14 +284,22 @@ int ObServerUtils::cal_all_part_disk_default_percentage(int64_t& data_disk_total
     if (OB_UNLIKELY(0 != statvfs(data_dir, &data_statvfs))) {
       LOG_ERROR("Failed to get data disk space ", KR(ret), K(data_dir), K(errno));
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_UNLIKELY(0 != statvfs(clog_dir, &clog_statvfs))) {
+    } else if (
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+      !GCONF.enable_logservice &&
+#endif
+      OB_UNLIKELY(0 != statvfs(clog_dir, &clog_statvfs))) {
       LOG_ERROR("Failed to get clog disk space ", KR(ret), K(clog_dir), K(errno));
       ret = OB_ERR_UNEXPECTED;
     }
   }
 
   if (OB_SUCC(ret)) {
-    if (data_statvfs.f_fsid == clog_statvfs.f_fsid) {
+    if (
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+      !GCONF.enable_logservice &&
+#endif
+      data_statvfs.f_fsid == clog_statvfs.f_fsid) {
       shared_mode = true;
       data_disk_default_percentage = DEFAULT_DATA_DISK_PERCENTAGE_IN_SHARED_MODE;
       clog_disk_default_percentage = DEFAULT_CLOG_DISK_PERCENTAGE_IN_SHARED_MODE;
@@ -302,7 +309,12 @@ int ObServerUtils::cal_all_part_disk_default_percentage(int64_t& data_disk_total
       clog_disk_default_percentage = DEFAULT_DISK_PERCENTAGE_IN_SEPRATE_MODE;
     }
     data_disk_total_size = (data_statvfs.f_blocks + data_statvfs.f_bavail - data_statvfs.f_bfree) * data_statvfs.f_bsize;
-    clog_disk_total_size = (clog_statvfs.f_blocks + clog_statvfs.f_bavail - clog_statvfs.f_bfree) * clog_statvfs.f_bsize;
+    clog_disk_total_size =
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    GCONF.enable_logservice?
+      logservice::ObServerLogBlockMgr::OB_SERVER_LOG_DISK_CAPACITY_IN_SHARED_LOG_SERVICE:
+#endif
+      (clog_statvfs.f_blocks + clog_statvfs.f_bavail - clog_statvfs.f_bfree) * clog_statvfs.f_bsize;
     LOG_INFO("cal_all_part_disk_default_percentage succ",
         K(data_dir), K(clog_dir),
         K(shared_mode), K(data_disk_total_size), K(data_disk_default_percentage),

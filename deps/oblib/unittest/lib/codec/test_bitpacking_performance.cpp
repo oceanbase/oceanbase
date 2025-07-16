@@ -11,6 +11,7 @@
  */
 
 #include <random>
+#include <memory>
 
 #include "gtest/gtest.h"
 

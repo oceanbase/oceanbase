@@ -1095,7 +1095,8 @@ public:
   static const int64_t ADVANCE_LS_CKPT_TASK = 1;
   static const int64_t STANDBY_CLEANUP_TASK = 2;
   static const int64_t DUP_TABLE_TX_REDO_SYNC_RETRY_TASK = 3;
-  static const int64_t MAX = 4;
+  static const int64_t PALF_KV_GC_TASK = 4;
+  static const int64_t MAX = 5;
 public:
   static bool is_valid(const int64_t task_type)
   { return task_type > UNKNOWN && task_type < MAX; }
@@ -1951,6 +1952,22 @@ struct ObIArraySerDeTrait {
     }
     return ret;
   }
+};
+
+static const uint64_t GTS_TENANT_ID_BITS = 48;
+static const uint64_t GTS_SSLOG_TENANT_ID_FLAG_MASK = (1ULL << GTS_TENANT_ID_BITS);
+static const uint64_t GTS_REAL_TENANT_ID_MASK = (1ULL << GTS_TENANT_ID_BITS) - 1;
+
+OB_INLINE uint64_t get_sslog_gts_tenant_id(uint64_t tenant_id)
+{ return tenant_id | GTS_SSLOG_TENANT_ID_FLAG_MASK; }
+
+OB_INLINE bool is_sslog_gts_tenant_id(uint64_t tenant_id)
+{ return ~GTS_REAL_TENANT_ID_MASK & tenant_id; }
+
+struct SSLogModID
+{
+  static constexpr const char OB_SSLOG_UID_RPC_PROXY[] = "SSLogUIdProxy";
+  static constexpr const char OB_SSLOG_UID_REQUEST_RPC[] = "SSLogUIdReqRPC";
 };
 
 } // transaction

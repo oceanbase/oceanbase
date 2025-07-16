@@ -331,6 +331,9 @@ OB_DEF_SERIALIZE_SIZE(ObRangeMap)
 //ObRangeColumnMeta
 OB_SERIALIZE_MEMBER(ObRangeColumnMeta, column_type_);
 
+//ObFastFinalPos
+OB_SERIALIZE_MEMBER(ObFastFinalPos, index_, offset_, flags_);
+
 int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
                           const ObIArray<ColumnItem> &range_columns,
                           ExprConstrantArray *expr_constraints,
@@ -341,13 +344,15 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
                           const int64_t index_prefix,
                           const ColumnIdInfoMap *geo_column_id_map,
                           const bool force_no_link,
-                          const ObTableSchema *index_schema)
+                          const ObTableSchema *index_schema,
+                          ObRawExprFactory *constraints_expr_factory)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(pre_range_graph)  || OB_ISNULL(exec_ctx_) || OB_ISNULL(exec_ctx_->get_my_session()) ||
-      OB_UNLIKELY(range_columns.count() <= 0)) {
+  ObQueryCtx *query_ctx = NULL;
+  if (OB_ISNULL(pre_range_graph) || OB_ISNULL(exec_ctx_) || OB_ISNULL(exec_ctx_->get_my_session()) ||
+      OB_ISNULL(query_ctx = exec_ctx_->get_query_ctx()) || OB_UNLIKELY(range_columns.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected param", K(pre_range_graph), K(exec_ctx_));
+    LOG_WARN("get unexpected param", K(ret), K(pre_range_graph), K(exec_ctx_), K(query_ctx));
   } else if (OB_FAIL(column_metas_.assign(pre_range_graph->get_column_metas()))) {
     LOG_WARN("failed to assign column meta");
   } else if (OB_FAIL(column_flags_.prepare_allocate(pre_range_graph->get_column_metas().count()))) {
@@ -355,6 +360,8 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
   } else if (OB_FAIL(exec_ctx_->get_my_session()->
              is_enable_range_extraction_for_not_in(enable_not_in_range_))) {
     LOG_WARN("failed to check not in range enabled", K(ret));
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::ENABLE_RANGE_EXTRACTION_FOR_NOT_IN, enable_not_in_range_))) {
+    LOG_WARN("fail to check opt param not in range enabled", K(ret));
   } else if (OB_FAIL(exec_ctx_->get_my_session()->
              get_optimizer_features_enable_version(optimizer_features_enable_version_))) {
     LOG_WARN("failed to get optimizer features enable version", K(ret));
@@ -371,6 +378,7 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
     geo_column_id_map_ = geo_column_id_map;
     is_geo_range_ = geo_column_id_map != NULL;
     force_no_link_ = force_no_link;
+    constraints_expr_factory_ = constraints_expr_factory;
     if (OB_NOT_NULL(index_schema) &&
         index_schema->is_unique_index() &&
         index_schema->get_index_column_num() > 0) {
@@ -616,7 +624,8 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
                                                      const bool ignore_calc_failure,
                                                      const int64_t index_prefix /* =-1*/,
                                                      const ObTableSchema *index_schema /* = NULL*/,
-                                                     const ColumnIdInfoMap *geo_column_id_map /* = NULL*/)
+                                                     const ColumnIdInfoMap *geo_column_id_map /* = NULL*/,
+                                                     ObRawExprFactory *constraint_expr_factory /* = NULL*/)
 {
   int ret = OB_SUCCESS;
   bool force_no_link = false;
@@ -630,7 +639,8 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
   } else if (OB_FAIL(ctx.init(this, range_columns, expr_constraints,
                               params, &expr_factory,
                               phy_rowid_for_table_loc, ignore_calc_failure, index_prefix,
-                              geo_column_id_map, force_no_link, index_schema))) {
+                              geo_column_id_map, force_no_link, index_schema,
+                              constraint_expr_factory))) {
     LOG_WARN("failed to init query range context");
   } else {
     ObExprRangeConverter converter(allocator_, ctx);
@@ -790,7 +800,7 @@ int ObPreRangeGraph::get_prefix_info(int64_t &equal_prefix_count,
 {
   int ret = OB_SUCCESS;
   equal_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
-  range_prefix_count = OB_USER_MAX_ROWKEY_COLUMN_NUMBER;
+  range_prefix_count = 0;
   if (OB_ISNULL(node_head_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null range node");
@@ -800,11 +810,11 @@ int ObPreRangeGraph::get_prefix_info(int64_t &equal_prefix_count,
     contain_always_false = node_head_->always_false_;
   } else {
     bool equals[column_count_];
+    bool extract_ranges[column_count_];
     MEMSET(equals, 0, sizeof(bool) * column_count_);
-    if (OB_FAIL(get_prefix_info(node_head_, equals, equal_prefix_count))) {
+    MEMSET(extract_ranges, 0, sizeof(bool) * column_count_);
+    if (OB_FAIL(get_prefix_info(node_head_, equals, extract_ranges, equal_prefix_count, range_prefix_count))) {
       LOG_WARN("failed to get prefix info");
-    } else {
-      range_prefix_count = (equal_prefix_count == column_count_) ? equal_prefix_count : equal_prefix_count + 1;
     }
   }
   return ret;
@@ -812,39 +822,48 @@ int ObPreRangeGraph::get_prefix_info(int64_t &equal_prefix_count,
 
 int ObPreRangeGraph::get_prefix_info(const ObRangeNode *range_node,
                                      bool* equals,
-                                     int64_t &equal_prefix_count) const
+                                     bool* extract_ranges,
+                                     int64_t &equal_prefix_count,
+                                     int64_t &range_prefix_count) const
 {
   int ret = OB_SUCCESS;
-  ObSEArray<int64_t, 8> new_idx;
+  ObSEArray<int64_t, 8> new_equal_idx;
+  ObSEArray<int64_t, 8> new_range_idx;
   for (const ObRangeNode *cur_node = range_node; OB_SUCC(ret) && cur_node != NULL; cur_node = cur_node->or_next_) {
-    // reset equal flag in previous or range node
-    for (int64_t j = 0; j < new_idx.count(); ++j) {
-      equals[new_idx.at(j)] = false;
-    }
-    new_idx.reset();
-
     if (cur_node->min_offset_ >= 0 &&
-        OB_FAIL(get_new_equal_idx(cur_node, equals, new_idx))) {
+        OB_FAIL(get_new_equal_idx(cur_node, equals, new_equal_idx))) {
+      LOG_WARN("failed to get new idx");
+    } else if (cur_node->min_offset_ >= 0 &&
+        OB_FAIL(get_new_range_idx(cur_node, extract_ranges, new_range_idx))) {
       LOG_WARN("failed to get new idx");
     } else if (cur_node->and_next_ != nullptr) {
-      if (OB_FAIL(SMART_CALL(get_prefix_info(cur_node->and_next_, equals, equal_prefix_count)))) {
+      if (OB_FAIL(SMART_CALL(get_prefix_info(cur_node->and_next_, equals, extract_ranges,
+                                             equal_prefix_count, range_prefix_count)))) {
         LOG_WARN("failed to check is strict equal graph");
       }
     } else {
       int64_t cur_pos = 0;
-      for (; cur_pos < column_count_; ++cur_pos) {
+      int64_t tmp_range_prefix_count = 0;
+      for (; cur_pos < column_count_; ++cur_pos, ++tmp_range_prefix_count) {
         if (!equals[cur_pos]) {
+          if (extract_ranges[cur_pos]) {
+            ++tmp_range_prefix_count;
+          }
           break;
         }
       }
       equal_prefix_count = std::min(equal_prefix_count, cur_pos);
+      range_prefix_count = std::max(range_prefix_count, tmp_range_prefix_count);
     }
-  }
-  // reset equal flag in current range node
-  if (OB_SUCC(ret)) {
-    for (int64_t j = 0; j < new_idx.count(); ++j) {
-      equals[new_idx.at(j)] = false;
+    // reset flag in current range node
+    for (int64_t j = 0; j < new_equal_idx.count(); ++j) {
+      equals[new_equal_idx.at(j)] = false;
     }
+    new_equal_idx.reuse();
+    for (int64_t j = 0; j < new_range_idx.count(); ++j) {
+      extract_ranges[new_range_idx.at(j)] = false;
+    }
+    new_range_idx.reuse();
   }
   return ret;
 }
@@ -858,6 +877,25 @@ int ObPreRangeGraph::get_new_equal_idx(const ObRangeNode *range_node,
     if (!equals[i] && range_node->start_keys_[i] == range_node->end_keys_[i] &&
         (range_node->start_keys_[i] < OB_RANGE_EXTEND_VALUE || range_node->start_keys_[i] == OB_RANGE_NULL_VALUE)) {
       equals[i] = true;
+      if (OB_FAIL(new_idx.push_back(i))) {
+        LOG_WARN("failed to push back idx", K(i));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPreRangeGraph::get_new_range_idx(const ObRangeNode *range_node,
+                                       bool* extract_ranges,
+                                       ObIArray<int64_t> &new_idx) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = range_node->min_offset_; OB_SUCC(ret) && i <= range_node->max_offset_; ++i) {
+    if (!extract_ranges[i] && (range_node->start_keys_[i] < OB_RANGE_EXTEND_VALUE ||
+                               range_node->start_keys_[i] == OB_RANGE_NULL_VALUE  ||
+                               range_node->end_keys_[i] < OB_RANGE_EXTEND_VALUE ||
+                               range_node->end_keys_[i] == OB_RANGE_NULL_VALUE)) {
+      extract_ranges[i] = true;
       if (OB_FAIL(new_idx.push_back(i))) {
         LOG_WARN("failed to push back idx", K(i));
       }
@@ -997,6 +1035,13 @@ OB_DEF_SERIALIZE(ObPreRangeGraph)
   OB_UNIS_ENCODE(range_map_);
   OB_UNIS_ENCODE(skip_scan_offset_);
   OB_UNIS_ENCODE(flags_);
+  if (OB_SUCC(ret)) {
+    int64_t count = fast_final_pos_arr_.count();
+    OB_UNIS_ENCODE(count);
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+      OB_UNIS_ENCODE(fast_final_pos_arr_.at(i));
+    }
+  }
   return ret;
 }
 
@@ -1044,6 +1089,20 @@ OB_DEF_DESERIALIZE(ObPreRangeGraph)
   OB_UNIS_DECODE(range_map_);
   OB_UNIS_DECODE(skip_scan_offset_);
   OB_UNIS_DECODE(flags_);
+  if (OB_SUCC(ret)) {
+    fast_final_pos_arr_.reset();
+    int64_t count = 0;
+    OB_UNIS_DECODE(count);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(fast_final_pos_arr_.prepare_allocate(count))) {
+        LOG_WARN("failed to prepare allocate fast final pos arr", K(count));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+      OB_UNIS_DECODE(fast_final_pos_arr_.at(i));
+    }
+  }
+
   return ret;
 }
 
@@ -1068,6 +1127,11 @@ OB_DEF_SERIALIZE_SIZE(ObPreRangeGraph)
   OB_UNIS_ADD_LEN(range_map_);
   OB_UNIS_ADD_LEN(skip_scan_offset_);
   OB_UNIS_ADD_LEN(flags_);
+  count = fast_final_pos_arr_.count();
+  OB_UNIS_ADD_LEN(count);
+  for (int64_t i = 0; i < count; ++i) {
+    OB_UNIS_ADD_LEN(fast_final_pos_arr_.at(i));
+  }
   return len;
 }
 
@@ -1152,7 +1216,8 @@ int ObPreRangeGraph::get_range_exprs(ObRawExprFactory &expr_factory,
   } else if (OB_FAIL(ctx.init(this, range_columns, expr_constraints,
                               params, &expr_factory,
                               phy_rowid_for_table_loc, ignore_calc_failure, index_prefix,
-                              geo_column_id_map, force_no_link, index_schema))) {
+                              geo_column_id_map, force_no_link, index_schema,
+                              NULL))) {
     LOG_WARN("failed to init query range context");
   } else {
     ObExprRangeConverter converter(allocator_, ctx);

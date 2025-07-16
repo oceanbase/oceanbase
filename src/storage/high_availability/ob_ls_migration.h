@@ -536,7 +536,6 @@ private:
   int try_remove_tablets_info_();
   int remove_tablets_info_();
   int record_server_event_();
-
 private:
   bool is_inited_;
   ObLSHandle ls_handle_;

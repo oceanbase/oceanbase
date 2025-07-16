@@ -122,7 +122,8 @@ int ObDiagnosticInfos::inc_ref(const ObDiagnosticInfo *di_info)
       LOG_WARN("failed to inc di ref", K(ret));
     } else {
 #ifdef ENABLE_DEBUG_LOG
-      if (!(*di_info == *tmp_di)) {
+      // using cache would change group id.
+      if (!di_info->is_using_cache() && !(*di_info == *tmp_di)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("inc ref wrongly", K(di_info->get_session_id()), K(tmp_di->get_session_id()),
             KPC(di_info), KPC(tmp_di));
@@ -711,13 +712,13 @@ int ObDiagnosticInfoContainer::for_each_and_delay_release_ref(
             ret = tmp_ret;
           }
         } else if (OB_FAIL(fn(id, di))) {
-          LOG_DEBUG("faield to exec fn", K(ret));
+          LOG_WARN("faield to exec fn", K(ret));
         }
         return ret;
       };
 
   if (OB_FAIL(for_each_running_di(fn_wrapper))) {
-    LOG_ERROR("failed to for each running di", K(ret));
+    LOG_WARN("failed to for each running di", K(ret));
   }
 
   for (int i = 0; i < di_array.count(); i++) {

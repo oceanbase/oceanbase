@@ -3705,7 +3705,7 @@ int ObDDLUtil::init_macro_block_seq(const int64_t parallel_idx, blocksstable::Ob
     LOG_WARN("invalid argument", K(ret), K(parallel_idx));
 #ifdef OB_BUILD_SHARED_STORAGE
   } else if (GCTX.is_shared_storage_mode()) {
-    start_seq.data_seq_ = parallel_idx * compaction::MACRO_STEP_SIZE;
+    start_seq.macro_data_seq_ = parallel_idx * compaction::MACRO_STEP_SIZE;
 #endif
   } else if (OB_FAIL(start_seq.set_parallel_degree(parallel_idx))) {
     LOG_WARN("set parallel index failed", K(ret), K(parallel_idx));
@@ -3718,7 +3718,7 @@ int64_t ObDDLUtil::get_parallel_idx(const blocksstable::ObMacroDataSeq &start_se
   int64_t parallel_idx = start_seq.get_parallel_idx();
 #ifdef OB_BUILD_SHARED_STORAGE
   if (GCTX.is_shared_storage_mode()) {
-    parallel_idx = start_seq.data_seq_ / compaction::MACRO_STEP_SIZE;
+    parallel_idx = start_seq.macro_data_seq_ / compaction::MACRO_STEP_SIZE;
   }
 #endif
   return parallel_idx;
@@ -3781,72 +3781,6 @@ int ObDDLUtil::is_major_exist(const ObLSID &ls_id, const common::ObTabletID &tab
   }
   return ret;
 }
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObDDLUtil::upload_block_for_ss(const char *buf, const int64_t len, const blocksstable::MacroBlockId &macro_block_id)
-{
-  int ret = OB_SUCCESS;
-  if (nullptr == buf || 0 == len || !macro_block_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argumen", K(ret), KP(buf), K(len), K(macro_block_id));
-  } else {
-    ObStorageObjectHandle object_handle;
-    ObStorageObjectWriteInfo object_info;
-    object_info.buffer_ = buf;
-    object_info.offset_ = 0;
-    object_info.size_ = len;
-    object_info.mtl_tenant_id_ = MTL_ID();
-    object_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-    object_info.io_desc_.set_unsealed();
-    object_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
-    object_info.set_ls_epoch_id(0);
-
-    if (OB_FAIL(OB_STORAGE_OBJECT_MGR.async_write_object(macro_block_id, object_info, object_handle))) {
-      LOG_WARN("failed to write info", K(ret), K(macro_block_id), K(object_info), K(object_handle));
-    } else if (OB_FAIL(object_handle.wait())) {
-      LOG_WARN("failed to wai object handle finish", K(ret));
-    }
-  }
-  return ret;
-}
-
-/*
- used for adding gc info when ddl update tablet
- ddl may retry and generate same major which need to skip
-*/
-int ObDDLUtil::update_tablet_gc_info(const ObTabletID &tablet_id, const int64_t pre_snapshot_version, const int64_t new_snapshot_version)
-{
-  int ret = OB_SUCCESS;
-  ObGCTabletMetaInfoList tablet_meta_version_list;
-  ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
-  bool is_exist = false;
-
-  if (!tablet_id.is_valid() || OB_INVALID_TIMESTAMP == new_snapshot_version) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(new_snapshot_version));
-  } else if (OB_ISNULL(meta_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("meta service should not be null", K(ret));
-  } else if (pre_snapshot_version == new_snapshot_version) {
-    /* skip */
-  } else if (OB_FAIL(ObTenantStorageMetaService::ss_is_meta_list_exist(tablet_id, is_exist))) {
-    LOG_WARN("fail to check existence", K(ret), K(tablet_id));
-  } else if (is_exist) {
-    /* skip */
-  } else {
-    ObGCTabletMetaInfo meta_info;
-    ObGCTabletMetaInfoList tablet_meta_version_list;
-    if (OB_FAIL(meta_info.scn_.convert_for_tx(new_snapshot_version))) {
-      LOG_WARN("fail to convert for tx", K(ret), K(new_snapshot_version));
-    } else if (OB_FAIL(tablet_meta_version_list.tablet_version_arr_.push_back(meta_info))) {
-      LOG_WARN("failed to push back gc info", K(ret));
-    } else if (OB_FAIL(meta_service->write_gc_tablet_scn_arr(tablet_id, ObStorageObjectType::SHARED_MAJOR_META_LIST, tablet_meta_version_list))) {
-      LOG_WARN("failed to write gc info arr", K(ret), K(tablet_id));
-    }
-  }
-  return ret;
-}
-
-#endif
 
 int ObDDLUtil::get_global_index_table_ids(const schema::ObTableSchema &table_schema, ObIArray<uint64_t> &global_index_table_ids, ObSchemaGetterGuard &schema_guard)
 {
@@ -5489,6 +5423,19 @@ int ObCODDLUtil::is_rowkey_based_co_sstable(
     } else {
       is_rowkey_based = storage_schema->get_column_groups().at(base_cg_idx).is_rowkey_column_group();
     }
+  }
+  return ret;
+}
+
+int ObDDLUtil::is_ls_leader(ObLS &ls, bool &is_leader)
+{
+  int ret = OB_SUCCESS;
+  ObRole role;
+  int64_t proposal_id = 0;
+  if (OB_FAIL(ls.get_log_handler()->get_role(role, proposal_id))) {
+    LOG_WARN("failed to get role", K(ret), K(ls.get_ls_id()));
+  } else {
+    is_leader = is_strong_leader(role);
   }
   return ret;
 }

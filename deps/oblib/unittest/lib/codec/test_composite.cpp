@@ -11,6 +11,7 @@
  */
 
 #include <random>
+#include <memory>
 
 #include "lib/codec/ob_composite_codec.h"
 #include "lib/codec/ob_simd_fixed_pfor.h"

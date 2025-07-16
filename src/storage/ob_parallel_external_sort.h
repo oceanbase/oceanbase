@@ -194,7 +194,6 @@ private:
   ObMacroBufferWriter<T> macro_buffer_writer_;
   bool has_sample_item_;
   T sample_item_;
-  tmp_file::ObTmpFileIOHandle file_io_handle_;
   int64_t fd_;
   int64_t dir_id_;
   uint64_t tenant_id_;
@@ -206,7 +205,7 @@ ObFragmentWriterV2<T>::ObFragmentWriterV2()
   : is_inited_(false), buf_(NULL), buf_size_(0), expire_timestamp_(0),
     allocator_(common::ObNewModIds::OB_ASYNC_EXTERNAL_SORTER, common::OB_MALLOC_BIG_BLOCK_SIZE),
     macro_buffer_writer_(), has_sample_item_(false), sample_item_(),
-    file_io_handle_(), fd_(-1), dir_id_(-1), tenant_id_(common::OB_INVALID_ID)
+    fd_(-1), dir_id_(-1), tenant_id_(common::OB_INVALID_ID)
 {
 }
 
@@ -313,13 +312,12 @@ int ObFragmentWriterV2<T>::flush_buffer()
   } else {
     tmp_file::ObTmpFileIOInfo io_info;
     io_info.fd_ = fd_;
-    io_info.dir_id_ = dir_id_;
     io_info.size_ = buf_size_;
     io_info.buf_ = buf_;
     io_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_WRITE);
     io_info.io_timeout_ms_ = timeout_ms;
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.aio_write(tenant_id_, io_info, file_io_handle_))) {
-      STORAGE_LOG(WARN, "fail to do aio write macro file", K(ret), K(io_info));
+    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.write(tenant_id_, io_info))) {
+      STORAGE_LOG(WARN, "fail to do write macro file", K(ret), K(io_info));
     } else {
       macro_buffer_writer_.assign(ObExternalSortConstant::BUF_HEADER_LENGTH, buf_size_, buf_);
     }
@@ -354,7 +352,6 @@ void ObFragmentWriterV2<T>::reset()
   allocator_.reuse();
   macro_buffer_writer_.assign(0, 0, NULL);
   has_sample_item_ = false;
-  file_io_handle_.reset();
   fd_ = -1;
   dir_id_ = -1;
   tenant_id_ = common::OB_INVALID_ID;
@@ -558,10 +555,9 @@ int ObFragmentReaderV2<T>::prefetch()
     if (OB_SUCC(ret)) {
       tmp_file::ObTmpFileIOInfo io_info;
       io_info.fd_ = fd_;
-      io_info.dir_id_ = dir_id_;
       io_info.size_ = buf_size_;
       io_info.buf_ = buf_[handle_index];
-      io_info.disable_page_cache_ = true;
+      io_info.disable_page_cache_ = false;
       io_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_READ);
       if (OB_FAIL(ObExternalSortConstant::get_io_timeout_ms(expire_timestamp_, io_info.io_timeout_ms_))) {
         STORAGE_LOG(WARN, "fail to get io timeout ms", K(ret), K(expire_timestamp_), K(io_info.io_timeout_ms_));

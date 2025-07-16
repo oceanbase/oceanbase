@@ -25,6 +25,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PLAN_CACHE_STAT|%') then 2
 when ('' like '%|GV$OB_PLAN_CACHE_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_PLAN_CACHE_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PLAN_CACHE_STAT limit 1);
@@ -93,10 +94,12 @@ PLAN_STATUS	varchar(8)	NO		NULL
 ADAPTIVE_FEEDBACK_TIMES	bigint(20)	NO		NULL	
 FIRST_GET_PLAN_TIME	bigint(20)	NO		NULL	
 FIRST_EXE_USEC	bigint(20)	NO		NULL	
+FORMAT_SQL_ID	varchar(32)	NO		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PLAN_CACHE_PLAN_STAT|%') then 2
 when ('' like '%|GV$OB_PLAN_CACHE_PLAN_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_PLAN_CACHE_PLAN_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT limit 1);
@@ -114,6 +117,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|SCHEMATA|%') then 2
 when ('' like '%|SCHEMATA|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|SCHEMATA|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.SCHEMATA limit 1);
@@ -129,6 +133,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|CHARACTER_SETS|%') then 2
 when ('' like '%|CHARACTER_SETS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CHARACTER_SETS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.CHARACTER_SETS limit 1);
@@ -142,6 +147,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GLOBAL_VARIABLES|%') then 2
 when ('' like '%|GLOBAL_VARIABLES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GLOBAL_VARIABLES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.GLOBAL_VARIABLES limit 1);
@@ -171,6 +177,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|STATISTICS|%') then 2
 when ('' like '%|STATISTICS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|STATISTICS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.STATISTICS limit 1);
@@ -192,6 +199,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|VIEWS|%') then 2
 when ('' like '%|VIEWS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|VIEWS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.VIEWS limit 1);
@@ -227,6 +235,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|TABLES|%') then 2
 when ('' like '%|TABLES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|TABLES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.TABLES limit 1);
@@ -244,6 +253,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|COLLATIONS|%') then 2
 when ('' like '%|COLLATIONS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|COLLATIONS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.COLLATIONS limit 1);
@@ -257,6 +267,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|COLLATION_CHARACTER_SET_APPLICABILITY|%') then 2
 when ('' like '%|COLLATION_CHARACTER_SET_APPLICABILITY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|COLLATION_CHARACTER_SET_APPLICABILITY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.COLLATION_CHARACTER_SET_APPLICABILITY limit 1);
@@ -276,6 +287,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|PROCESSLIST|%') then 2
 when ('' like '%|PROCESSLIST|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|PROCESSLIST|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.PROCESSLIST limit 1);
@@ -299,6 +311,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|KEY_COLUMN_USAGE|%') then 2
 when ('' like '%|KEY_COLUMN_USAGE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|KEY_COLUMN_USAGE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from information_schema.KEY_COLUMN_USAGE;
@@ -316,6 +329,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|ENGINES|%') then 2
 when ('' like '%|ENGINES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|ENGINES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.ENGINES limit 1);
@@ -358,6 +372,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|ROUTINES|%') then 2
 when ('' like '%|ROUTINES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|ROUTINES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.ROUTINES limit 1);
@@ -387,6 +402,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|PROFILING|%') then 2
 when ('' like '%|PROFILING|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|PROFILING|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.PROFILING limit 1);
@@ -402,6 +418,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|OPTIMIZER_TRACE|%') then 2
 when ('' like '%|OPTIMIZER_TRACE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|OPTIMIZER_TRACE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.OPTIMIZER_TRACE limit 1);
@@ -424,6 +441,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|PLUGINS|%') then 2
 when ('' like '%|PLUGINS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|PLUGINS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.PLUGINS limit 1);
@@ -441,6 +459,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_SYS_COLUMNS|%') then 2
 when ('' like '%|INNODB_SYS_COLUMNS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_SYS_COLUMNS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_COLUMNS limit 1);
@@ -453,6 +472,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_FT_BEING_DELETED|%') then 2
 when ('' like '%|INNODB_FT_BEING_DELETED|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_FT_BEING_DELETED|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_FT_BEING_DELETED limit 1);
@@ -466,6 +486,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_FT_CONFIG|%') then 2
 when ('' like '%|INNODB_FT_CONFIG|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_FT_CONFIG|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_FT_CONFIG limit 1);
@@ -478,6 +499,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_FT_DELETED|%') then 2
 when ('' like '%|INNODB_FT_DELETED|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_FT_DELETED|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_FT_DELETED limit 1);
@@ -495,6 +517,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_FT_INDEX_CACHE|%') then 2
 when ('' like '%|INNODB_FT_INDEX_CACHE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_FT_INDEX_CACHE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_FT_INDEX_CACHE limit 1);
@@ -522,6 +545,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$SESSION_EVENT|%') then 2
 when ('' like '%|GV$SESSION_EVENT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$SESSION_EVENT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$SESSION_EVENT limit 1);
@@ -551,6 +575,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$SESSION_WAIT|%') then 2
 when ('' like '%|GV$SESSION_WAIT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$SESSION_WAIT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$SESSION_WAIT limit 1);
@@ -578,6 +603,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$SESSION_WAIT_HISTORY|%') then 2
 when ('' like '%|GV$SESSION_WAIT_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$SESSION_WAIT_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$SESSION_WAIT_HISTORY limit 1);
@@ -602,6 +628,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$SYSTEM_EVENT|%') then 2
 when ('' like '%|GV$SYSTEM_EVENT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$SYSTEM_EVENT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$SYSTEM_EVENT limit 1);
@@ -619,6 +646,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$SESSTAT|%') then 2
 when ('' like '%|GV$SESSTAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$SESSTAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$SESSTAT limit 1);
@@ -639,6 +667,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$SYSSTAT|%') then 2
 when ('' like '%|GV$SYSSTAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$SYSSTAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$SYSSTAT limit 1);
@@ -656,6 +685,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$STATNAME|%') then 2
 when ('' like '%|V$STATNAME|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$STATNAME|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$STATNAME limit 1);
@@ -678,6 +708,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$EVENT_NAME|%') then 2
 when ('' like '%|V$EVENT_NAME|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$EVENT_NAME|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$EVENT_NAME limit 1);
@@ -705,6 +736,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$SESSION_EVENT|%') then 2
 when ('' like '%|V$SESSION_EVENT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$SESSION_EVENT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$SESSION_EVENT limit 1);
@@ -734,6 +766,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$SESSION_WAIT|%') then 2
 when ('' like '%|V$SESSION_WAIT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$SESSION_WAIT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$SESSION_WAIT limit 1);
@@ -761,6 +794,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$SESSION_WAIT_HISTORY|%') then 2
 when ('' like '%|V$SESSION_WAIT_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$SESSION_WAIT_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$SESSION_WAIT_HISTORY limit 1);
@@ -778,6 +812,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$SESSTAT|%') then 2
 when ('' like '%|V$SESSTAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$SESSTAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$SESSTAT limit 1);
@@ -798,6 +833,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$SYSSTAT|%') then 2
 when ('' like '%|V$SYSSTAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$SYSSTAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$SYSSTAT limit 1);
@@ -822,6 +858,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$SYSTEM_EVENT|%') then 2
 when ('' like '%|V$SYSTEM_EVENT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$SYSTEM_EVENT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$SYSTEM_EVENT limit 1);
@@ -942,6 +979,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SQL_AUDIT|%') then 2
 when ('' like '%|GV$OB_SQL_AUDIT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SQL_AUDIT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SQL_AUDIT limit 1);
@@ -968,6 +1006,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$LATCH|%') then 2
 when ('' like '%|GV$LATCH|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$LATCH|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$LATCH limit 1);
@@ -987,6 +1026,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_MEMORY|%') then 2
 when ('' like '%|GV$OB_MEMORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_MEMORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_MEMORY limit 1);
@@ -1006,6 +1046,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_MEMORY|%') then 2
 when ('' like '%|V$OB_MEMORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_MEMORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_MEMORY limit 1);
@@ -1025,6 +1066,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_MEMSTORE|%') then 2
 when ('' like '%|GV$OB_MEMSTORE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_MEMSTORE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_MEMSTORE limit 1);
@@ -1044,6 +1086,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_MEMSTORE|%') then 2
 when ('' like '%|V$OB_MEMSTORE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_MEMSTORE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_MEMSTORE limit 1);
@@ -1064,6 +1107,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_MEMSTORE_INFO|%') then 2
 when ('' like '%|GV$OB_MEMSTORE_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_MEMSTORE_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_MEMSTORE_INFO limit 1);
@@ -1084,6 +1128,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_MEMSTORE_INFO|%') then 2
 when ('' like '%|V$OB_MEMSTORE_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_MEMSTORE_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_MEMSTORE_INFO limit 1);
@@ -1108,6 +1153,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PLAN_CACHE_STAT|%') then 2
 when ('' like '%|V$OB_PLAN_CACHE_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_PLAN_CACHE_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PLAN_CACHE_STAT limit 1);
@@ -1176,10 +1222,12 @@ PLAN_STATUS	varchar(8)	NO
 ADAPTIVE_FEEDBACK_TIMES	bigint(20)	NO			
 FIRST_GET_PLAN_TIME	bigint(20)	NO			
 FIRST_EXE_USEC	bigint(20)	NO			
+FORMAT_SQL_ID	varchar(32)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PLAN_CACHE_PLAN_STAT|%') then 2
 when ('' like '%|V$OB_PLAN_CACHE_PLAN_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_PLAN_CACHE_PLAN_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PLAN_CACHE_PLAN_STAT limit 1);
@@ -1202,6 +1250,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PLAN_CACHE_PLAN_EXPLAIN|%') then 2
 when ('' like '%|GV$OB_PLAN_CACHE_PLAN_EXPLAIN|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_PLAN_CACHE_PLAN_EXPLAIN|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PLAN_CACHE_PLAN_EXPLAIN limit 1);
@@ -1224,6 +1273,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PLAN_CACHE_PLAN_EXPLAIN|%') then 2
 when ('' like '%|V$OB_PLAN_CACHE_PLAN_EXPLAIN|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_PLAN_CACHE_PLAN_EXPLAIN|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PLAN_CACHE_PLAN_EXPLAIN limit 1);
@@ -1344,6 +1394,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SQL_AUDIT|%') then 2
 when ('' like '%|V$OB_SQL_AUDIT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SQL_AUDIT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SQL_AUDIT limit 1);
@@ -1370,6 +1421,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$LATCH|%') then 2
 when ('' like '%|V$LATCH|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$LATCH|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$LATCH limit 1);
@@ -1394,6 +1446,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_RPC_OUTGOING|%') then 2
 when ('' like '%|GV$OB_RPC_OUTGOING|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_RPC_OUTGOING|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_RPC_OUTGOING limit 1);
@@ -1418,6 +1471,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_RPC_OUTGOING|%') then 2
 when ('' like '%|V$OB_RPC_OUTGOING|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_RPC_OUTGOING|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_RPC_OUTGOING limit 1);
@@ -1442,6 +1496,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_RPC_INCOMING|%') then 2
 when ('' like '%|GV$OB_RPC_INCOMING|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_RPC_INCOMING|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_RPC_INCOMING limit 1);
@@ -1466,6 +1521,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_RPC_INCOMING|%') then 2
 when ('' like '%|V$OB_RPC_INCOMING|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_RPC_INCOMING|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_RPC_INCOMING limit 1);
@@ -1563,6 +1619,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$SQL_PLAN_MONITOR|%') then 2
 when ('' like '%|GV$SQL_PLAN_MONITOR|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$SQL_PLAN_MONITOR|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$SQL_PLAN_MONITOR limit 1);
@@ -1660,6 +1717,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$SQL_PLAN_MONITOR|%') then 2
 when ('' like '%|V$SQL_PLAN_MONITOR|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$SQL_PLAN_MONITOR|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$SQL_PLAN_MONITOR limit 1);
@@ -1687,6 +1745,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_RECYCLEBIN|%') then 2
 when ('' like '%|DBA_RECYCLEBIN|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_RECYCLEBIN|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_RECYCLEBIN limit 1);
@@ -1700,6 +1759,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|time_zone|%') then 2
 when ('' like '%|time_zone|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|time_zone|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.time_zone limit 1);
@@ -1713,6 +1773,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|time_zone_name|%') then 2
 when ('' like '%|time_zone_name|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|time_zone_name|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.time_zone_name limit 1);
@@ -1727,6 +1788,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|time_zone_transition|%') then 2
 when ('' like '%|time_zone_transition|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|time_zone_transition|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.time_zone_transition limit 1);
@@ -1743,6 +1805,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|time_zone_transition_type|%') then 2
 when ('' like '%|time_zone_transition_type|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|time_zone_transition_type|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.time_zone_transition_type limit 1);
@@ -1765,6 +1828,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$SESSION_LONGOPS|%') then 2
 when ('' like '%|GV$SESSION_LONGOPS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$SESSION_LONGOPS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$SESSION_LONGOPS limit 1);
@@ -1787,6 +1851,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$SESSION_LONGOPS|%') then 2
 when ('' like '%|V$SESSION_LONGOPS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$SESSION_LONGOPS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$SESSION_LONGOPS limit 1);
@@ -1810,6 +1875,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_SEQUENCE_OBJECTS|%') then 2
 when ('' like '%|DBA_OB_SEQUENCE_OBJECTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_SEQUENCE_OBJECTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SEQUENCE_OBJECTS limit 1);
@@ -1843,6 +1909,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|COLUMNS|%') then 2
 when ('' like '%|COLUMNS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|COLUMNS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.COLUMNS limit 1);
@@ -1864,6 +1931,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PX_WORKER_STAT|%') then 2
 when ('' like '%|GV$OB_PX_WORKER_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_PX_WORKER_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PX_WORKER_STAT limit 1);
@@ -1885,6 +1953,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PX_WORKER_STAT|%') then 2
 when ('' like '%|V$OB_PX_WORKER_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_PX_WORKER_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PX_WORKER_STAT limit 1);
@@ -1903,6 +1972,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PS_STAT|%') then 2
 when ('' like '%|GV$OB_PS_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_PS_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PS_STAT limit 1);
@@ -1921,6 +1991,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PS_STAT|%') then 2
 when ('' like '%|V$OB_PS_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_PS_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PS_STAT limit 1);
@@ -1945,6 +2016,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PS_ITEM_INFO|%') then 2
 when ('' like '%|GV$OB_PS_ITEM_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_PS_ITEM_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PS_ITEM_INFO limit 1);
@@ -1969,6 +2041,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PS_ITEM_INFO|%') then 2
 when ('' like '%|V$OB_PS_ITEM_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_PS_ITEM_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PS_ITEM_INFO limit 1);
@@ -2004,6 +2077,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$SQL_WORKAREA|%') then 2
 when ('' like '%|GV$SQL_WORKAREA|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$SQL_WORKAREA|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$SQL_WORKAREA limit 1);
@@ -2039,6 +2113,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$SQL_WORKAREA|%') then 2
 when ('' like '%|V$SQL_WORKAREA|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$SQL_WORKAREA|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$SQL_WORKAREA limit 1);
@@ -2075,6 +2150,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$SQL_WORKAREA_ACTIVE|%') then 2
 when ('' like '%|GV$SQL_WORKAREA_ACTIVE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$SQL_WORKAREA_ACTIVE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$SQL_WORKAREA_ACTIVE limit 1);
@@ -2111,6 +2187,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$SQL_WORKAREA_ACTIVE|%') then 2
 when ('' like '%|V$SQL_WORKAREA_ACTIVE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$SQL_WORKAREA_ACTIVE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$SQL_WORKAREA_ACTIVE limit 1);
@@ -2131,6 +2208,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$SQL_WORKAREA_HISTOGRAM|%') then 2
 when ('' like '%|GV$SQL_WORKAREA_HISTOGRAM|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$SQL_WORKAREA_HISTOGRAM|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$SQL_WORKAREA_HISTOGRAM limit 1);
@@ -2151,6 +2229,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$SQL_WORKAREA_HISTOGRAM|%') then 2
 when ('' like '%|V$SQL_WORKAREA_HISTOGRAM|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$SQL_WORKAREA_HISTOGRAM|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$SQL_WORKAREA_HISTOGRAM limit 1);
@@ -2174,6 +2253,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SQL_WORKAREA_MEMORY_INFO|%') then 2
 when ('' like '%|GV$OB_SQL_WORKAREA_MEMORY_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SQL_WORKAREA_MEMORY_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SQL_WORKAREA_MEMORY_INFO limit 1);
@@ -2197,6 +2277,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SQL_WORKAREA_MEMORY_INFO|%') then 2
 when ('' like '%|V$OB_SQL_WORKAREA_MEMORY_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SQL_WORKAREA_MEMORY_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SQL_WORKAREA_MEMORY_INFO limit 1);
@@ -2246,6 +2327,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PLAN_CACHE_REFERENCE_INFO|%') then 2
 when ('' like '%|GV$OB_PLAN_CACHE_REFERENCE_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_PLAN_CACHE_REFERENCE_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PLAN_CACHE_REFERENCE_INFO limit 1);
@@ -2295,6 +2377,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PLAN_CACHE_REFERENCE_INFO|%') then 2
 when ('' like '%|V$OB_PLAN_CACHE_REFERENCE_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_PLAN_CACHE_REFERENCE_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PLAN_CACHE_REFERENCE_INFO limit 1);
@@ -2321,6 +2404,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SSTABLES|%') then 2
 when ('' like '%|GV$OB_SSTABLES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SSTABLES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SSTABLES limit 1);
@@ -2347,6 +2431,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SSTABLES|%') then 2
 when ('' like '%|V$OB_SSTABLES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SSTABLES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SSTABLES limit 1);
@@ -2366,6 +2451,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SERVER_SCHEMA_INFO|%') then 2
 when ('' like '%|GV$OB_SERVER_SCHEMA_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SERVER_SCHEMA_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SERVER_SCHEMA_INFO limit 1);
@@ -2385,6 +2471,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SERVER_SCHEMA_INFO|%') then 2
 when ('' like '%|V$OB_SERVER_SCHEMA_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SERVER_SCHEMA_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SERVER_SCHEMA_INFO limit 1);
@@ -2403,6 +2490,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$SQL_MONITOR_STATNAME|%') then 2
 when ('' like '%|V$SQL_MONITOR_STATNAME|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$SQL_MONITOR_STATNAME|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$SQL_MONITOR_STATNAME limit 1);
@@ -2426,6 +2514,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_MERGE_INFO|%') then 2
 when ('' like '%|GV$OB_MERGE_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_MERGE_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_MERGE_INFO limit 1);
@@ -2449,6 +2538,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_MERGE_INFO|%') then 2
 when ('' like '%|V$OB_MERGE_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_MERGE_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_MERGE_INFO limit 1);
@@ -2471,6 +2561,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_ENCRYPTED_TABLES|%') then 2
 when ('' like '%|V$OB_ENCRYPTED_TABLES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_ENCRYPTED_TABLES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_ENCRYPTED_TABLES limit 1);
@@ -2491,6 +2582,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$ENCRYPTED_TABLESPACES|%') then 2
 when ('' like '%|V$ENCRYPTED_TABLESPACES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$ENCRYPTED_TABLESPACES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$ENCRYPTED_TABLESPACES limit 1);
@@ -2504,6 +2596,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|CONNECTION_CONTROL_FAILED_LOGIN_ATTEMPTS|%') then 2
 when ('' like '%|CONNECTION_CONTROL_FAILED_LOGIN_ATTEMPTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CONNECTION_CONTROL_FAILED_LOGIN_ATTEMPTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.CONNECTION_CONTROL_FAILED_LOGIN_ATTEMPTS limit 1);
@@ -2520,6 +2613,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_TENANT_MEMORY|%') then 2
 when ('' like '%|GV$OB_TENANT_MEMORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_TENANT_MEMORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TENANT_MEMORY limit 1);
@@ -2536,6 +2630,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_TENANT_MEMORY|%') then 2
 when ('' like '%|V$OB_TENANT_MEMORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_TENANT_MEMORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TENANT_MEMORY limit 1);
@@ -2558,6 +2653,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PX_TARGET_MONITOR|%') then 2
 when ('' like '%|GV$OB_PX_TARGET_MONITOR|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_PX_TARGET_MONITOR|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PX_TARGET_MONITOR limit 1);
@@ -2580,6 +2676,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PX_TARGET_MONITOR|%') then 2
 when ('' like '%|V$OB_PX_TARGET_MONITOR|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_PX_TARGET_MONITOR|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PX_TARGET_MONITOR limit 1);
@@ -2598,6 +2695,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|COLUMN_PRIVILEGES|%') then 2
 when ('' like '%|COLUMN_PRIVILEGES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|COLUMN_PRIVILEGES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.COLUMN_PRIVILEGES limit 1);
@@ -2615,6 +2713,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|VIEW_TABLE_USAGE|%') then 2
 when ('' like '%|VIEW_TABLE_USAGE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|VIEW_TABLE_USAGE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.VIEW_TABLE_USAGE limit 1);
@@ -2664,6 +2763,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|FILES|%') then 2
 when ('' like '%|FILES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|FILES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.FILES limit 1);
@@ -2696,10 +2796,12 @@ UNIT_NUM	bigint(20)	NO
 COMPATIBLE	varchar(65536)	NO			
 MAX_LS_ID	bigint(20)	NO			
 RESTORE_DATA_MODE	varchar(128)	NO			
+FLASHBACK_LOG_SCN	bigint(20) unsigned	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TENANTS|%') then 2
 when ('' like '%|DBA_OB_TENANTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TENANTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TENANTS limit 1);
@@ -2724,6 +2826,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_LS_LOCATIONS|%') then 2
 when ('' like '%|DBA_OB_LS_LOCATIONS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_LS_LOCATIONS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_LS_LOCATIONS limit 1);
@@ -2737,6 +2840,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TABLET_TO_LS|%') then 2
 when ('' like '%|DBA_OB_TABLET_TO_LS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TABLET_TO_LS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TABLET_TO_LS limit 1);
@@ -2757,6 +2861,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TABLET_REPLICAS|%') then 2
 when ('' like '%|DBA_OB_TABLET_REPLICAS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TABLET_REPLICAS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TABLET_REPLICAS limit 1);
@@ -2776,6 +2881,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TABLEGROUPS|%') then 2
 when ('' like '%|DBA_OB_TABLEGROUPS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TABLEGROUPS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TABLEGROUPS limit 1);
@@ -2794,6 +2900,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TABLEGROUP_PARTITIONS|%') then 2
 when ('' like '%|DBA_OB_TABLEGROUP_PARTITIONS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TABLEGROUP_PARTITIONS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TABLEGROUP_PARTITIONS limit 1);
@@ -2812,6 +2919,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TABLEGROUP_SUBPARTITIONS|%') then 2
 when ('' like '%|DBA_OB_TABLEGROUP_SUBPARTITIONS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TABLEGROUP_SUBPARTITIONS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TABLEGROUP_SUBPARTITIONS limit 1);
@@ -2828,6 +2936,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_DATABASES|%') then 2
 when ('' like '%|DBA_OB_DATABASES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_DATABASES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_DATABASES limit 1);
@@ -2843,6 +2952,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TABLEGROUP_TABLES|%') then 2
 when ('' like '%|DBA_OB_TABLEGROUP_TABLES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TABLEGROUP_TABLES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TABLEGROUP_TABLES limit 1);
@@ -2860,6 +2970,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_ZONE_MAJOR_COMPACTION|%') then 2
 when ('' like '%|DBA_OB_ZONE_MAJOR_COMPACTION|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_ZONE_MAJOR_COMPACTION|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_ZONE_MAJOR_COMPACTION limit 1);
@@ -2881,6 +2992,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_MAJOR_COMPACTION|%') then 2
 when ('' like '%|DBA_OB_MAJOR_COMPACTION|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_MAJOR_COMPACTION|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_MAJOR_COMPACTION limit 1);
@@ -2919,6 +3031,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OBJECTS|%') then 2
 when ('' like '%|DBA_OBJECTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OBJECTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OBJECTS limit 1);
@@ -2976,6 +3089,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_PART_TABLES|%') then 2
 when ('' like '%|DBA_PART_TABLES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_PART_TABLES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_PART_TABLES limit 1);
@@ -2993,6 +3107,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_PART_KEY_COLUMNS|%') then 2
 when ('' like '%|DBA_PART_KEY_COLUMNS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_PART_KEY_COLUMNS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_PART_KEY_COLUMNS limit 1);
@@ -3010,6 +3125,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_SUBPART_KEY_COLUMNS|%') then 2
 when ('' like '%|DBA_SUBPART_KEY_COLUMNS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_SUBPART_KEY_COLUMNS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_SUBPART_KEY_COLUMNS limit 1);
@@ -3074,6 +3190,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_TAB_PARTITIONS|%') then 2
 when ('' like '%|DBA_TAB_PARTITIONS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_TAB_PARTITIONS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_TAB_PARTITIONS limit 1);
@@ -3136,6 +3253,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_TAB_SUBPARTITIONS|%') then 2
 when ('' like '%|DBA_TAB_SUBPARTITIONS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_TAB_SUBPARTITIONS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_TAB_SUBPARTITIONS limit 1);
@@ -3156,6 +3274,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_SUBPARTITION_TEMPLATES|%') then 2
 when ('' like '%|DBA_SUBPARTITION_TEMPLATES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_SUBPARTITION_TEMPLATES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_SUBPARTITION_TEMPLATES limit 1);
@@ -3199,6 +3318,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_PART_INDEXES|%') then 2
 when ('' like '%|DBA_PART_INDEXES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_PART_INDEXES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_PART_INDEXES limit 1);
@@ -3254,6 +3374,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_IND_PARTITIONS|%') then 2
 when ('' like '%|DBA_IND_PARTITIONS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_IND_PARTITIONS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_IND_PARTITIONS limit 1);
@@ -3307,6 +3428,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_IND_SUBPARTITIONS|%') then 2
 when ('' like '%|DBA_IND_SUBPARTITIONS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_IND_SUBPARTITIONS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_IND_SUBPARTITIONS limit 1);
@@ -3339,6 +3461,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_UNITS|%') then 2
 when ('' like '%|GV$OB_UNITS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_UNITS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_UNITS limit 1);
@@ -3371,6 +3494,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_UNITS|%') then 2
 when ('' like '%|V$OB_UNITS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_UNITS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_UNITS limit 1);
@@ -3395,6 +3519,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PARAMETERS|%') then 2
 when ('' like '%|GV$OB_PARAMETERS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_PARAMETERS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PARAMETERS limit 1);
@@ -3419,6 +3544,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PARAMETERS|%') then 2
 when ('' like '%|V$OB_PARAMETERS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_PARAMETERS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PARAMETERS limit 1);
@@ -3472,6 +3598,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PROCESSLIST|%') then 2
 when ('' like '%|GV$OB_PROCESSLIST|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_PROCESSLIST|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PROCESSLIST limit 1);
@@ -3525,6 +3652,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PROCESSLIST|%') then 2
 when ('' like '%|V$OB_PROCESSLIST|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_PROCESSLIST|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PROCESSLIST limit 1);
@@ -3546,6 +3674,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_KVCACHE|%') then 2
 when ('' like '%|GV$OB_KVCACHE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_KVCACHE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_KVCACHE limit 1);
@@ -3567,6 +3696,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_KVCACHE|%') then 2
 when ('' like '%|V$OB_KVCACHE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_KVCACHE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_KVCACHE limit 1);
@@ -3599,6 +3729,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_TRANSACTION_PARTICIPANTS|%') then 2
 when ('' like '%|GV$OB_TRANSACTION_PARTICIPANTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_TRANSACTION_PARTICIPANTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TRANSACTION_PARTICIPANTS limit 1);
@@ -3631,6 +3762,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_TRANSACTION_PARTICIPANTS|%') then 2
 when ('' like '%|V$OB_TRANSACTION_PARTICIPANTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_TRANSACTION_PARTICIPANTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TRANSACTION_PARTICIPANTS limit 1);
@@ -3657,6 +3789,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_COMPACTION_PROGRESS|%') then 2
 when ('' like '%|GV$OB_COMPACTION_PROGRESS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_COMPACTION_PROGRESS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_COMPACTION_PROGRESS limit 1);
@@ -3683,6 +3816,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_COMPACTION_PROGRESS|%') then 2
 when ('' like '%|V$OB_COMPACTION_PROGRESS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_COMPACTION_PROGRESS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_COMPACTION_PROGRESS limit 1);
@@ -3711,6 +3845,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_TABLET_COMPACTION_PROGRESS|%') then 2
 when ('' like '%|GV$OB_TABLET_COMPACTION_PROGRESS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_TABLET_COMPACTION_PROGRESS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TABLET_COMPACTION_PROGRESS limit 1);
@@ -3739,6 +3874,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_TABLET_COMPACTION_PROGRESS|%') then 2
 when ('' like '%|V$OB_TABLET_COMPACTION_PROGRESS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_TABLET_COMPACTION_PROGRESS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TABLET_COMPACTION_PROGRESS limit 1);
@@ -3788,6 +3924,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_TABLET_COMPACTION_HISTORY|%') then 2
 when ('' like '%|GV$OB_TABLET_COMPACTION_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_TABLET_COMPACTION_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TABLET_COMPACTION_HISTORY limit 1);
@@ -3837,6 +3974,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_TABLET_COMPACTION_HISTORY|%') then 2
 when ('' like '%|V$OB_TABLET_COMPACTION_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_TABLET_COMPACTION_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TABLET_COMPACTION_HISTORY limit 1);
@@ -3857,6 +3995,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_COMPACTION_DIAGNOSE_INFO|%') then 2
 when ('' like '%|GV$OB_COMPACTION_DIAGNOSE_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_COMPACTION_DIAGNOSE_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_COMPACTION_DIAGNOSE_INFO limit 1);
@@ -3877,6 +4016,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_COMPACTION_DIAGNOSE_INFO|%') then 2
 when ('' like '%|V$OB_COMPACTION_DIAGNOSE_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_COMPACTION_DIAGNOSE_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_COMPACTION_DIAGNOSE_INFO limit 1);
@@ -3897,6 +4037,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_COMPACTION_SUGGESTIONS|%') then 2
 when ('' like '%|GV$OB_COMPACTION_SUGGESTIONS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_COMPACTION_SUGGESTIONS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_COMPACTION_SUGGESTIONS limit 1);
@@ -3917,6 +4058,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_COMPACTION_SUGGESTIONS|%') then 2
 when ('' like '%|V$OB_COMPACTION_SUGGESTIONS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_COMPACTION_SUGGESTIONS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_COMPACTION_SUGGESTIONS limit 1);
@@ -3947,6 +4089,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_DTL_INTERM_RESULT_MONITOR|%') then 2
 when ('' like '%|GV$OB_DTL_INTERM_RESULT_MONITOR|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_DTL_INTERM_RESULT_MONITOR|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_DTL_INTERM_RESULT_MONITOR limit 1);
@@ -3977,6 +4120,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_DTL_INTERM_RESULT_MONITOR|%') then 2
 when ('' like '%|V$OB_DTL_INTERM_RESULT_MONITOR|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_DTL_INTERM_RESULT_MONITOR|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_DTL_INTERM_RESULT_MONITOR limit 1);
@@ -4016,6 +4160,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_TAB_STATISTICS|%') then 2
 when ('' like '%|DBA_TAB_STATISTICS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_TAB_STATISTICS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_TAB_STATISTICS limit 1);
@@ -4044,6 +4189,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_TAB_COL_STATISTICS|%') then 2
 when ('' like '%|DBA_TAB_COL_STATISTICS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_TAB_COL_STATISTICS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_TAB_COL_STATISTICS limit 1);
@@ -4072,6 +4218,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_PART_COL_STATISTICS|%') then 2
 when ('' like '%|DBA_PART_COL_STATISTICS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_PART_COL_STATISTICS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_PART_COL_STATISTICS limit 1);
@@ -4100,6 +4247,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_SUBPART_COL_STATISTICS|%') then 2
 when ('' like '%|DBA_SUBPART_COL_STATISTICS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_SUBPART_COL_STATISTICS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_SUBPART_COL_STATISTICS limit 1);
@@ -4120,6 +4268,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_TAB_HISTOGRAMS|%') then 2
 when ('' like '%|DBA_TAB_HISTOGRAMS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_TAB_HISTOGRAMS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_TAB_HISTOGRAMS limit 1);
@@ -4140,6 +4289,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_PART_HISTOGRAMS|%') then 2
 when ('' like '%|DBA_PART_HISTOGRAMS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_PART_HISTOGRAMS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_PART_HISTOGRAMS limit 1);
@@ -4160,6 +4310,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_SUBPART_HISTOGRAMS|%') then 2
 when ('' like '%|DBA_SUBPART_HISTOGRAMS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_SUBPART_HISTOGRAMS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_SUBPART_HISTOGRAMS limit 1);
@@ -4176,6 +4327,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_TAB_STATS_HISTORY|%') then 2
 when ('' like '%|DBA_TAB_STATS_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_TAB_STATS_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_TAB_STATS_HISTORY limit 1);
@@ -4212,6 +4364,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_IND_STATISTICS|%') then 2
 when ('' like '%|DBA_IND_STATISTICS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_IND_STATISTICS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_IND_STATISTICS limit 1);
@@ -4241,6 +4394,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BACKUP_JOBS|%') then 2
 when ('' like '%|DBA_OB_BACKUP_JOBS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BACKUP_JOBS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_JOBS limit 1);
@@ -4270,6 +4424,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BACKUP_JOB_HISTORY|%') then 2
 when ('' like '%|DBA_OB_BACKUP_JOB_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BACKUP_JOB_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_JOB_HISTORY limit 1);
@@ -4313,6 +4468,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BACKUP_TASKS|%') then 2
 when ('' like '%|DBA_OB_BACKUP_TASKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BACKUP_TASKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_TASKS limit 1);
@@ -4352,6 +4508,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BACKUP_TASK_HISTORY|%') then 2
 when ('' like '%|DBA_OB_BACKUP_TASK_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BACKUP_TASK_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_TASK_HISTORY limit 1);
@@ -4401,6 +4558,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BACKUP_SET_FILES|%') then 2
 when ('' like '%|DBA_OB_BACKUP_SET_FILES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BACKUP_SET_FILES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_SET_FILES limit 1);
@@ -4443,6 +4601,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_SQL_PLAN_BASELINES|%') then 2
 when ('' like '%|DBA_SQL_PLAN_BASELINES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_SQL_PLAN_BASELINES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_SQL_PLAN_BASELINES limit 1);
@@ -4458,6 +4617,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_SQL_MANAGEMENT_CONFIG|%') then 2
 when ('' like '%|DBA_SQL_MANAGEMENT_CONFIG|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_SQL_MANAGEMENT_CONFIG|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_SQL_MANAGEMENT_CONFIG limit 1);
@@ -4539,6 +4699,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$ACTIVE_SESSION_HISTORY|%') then 2
 when ('' like '%|GV$ACTIVE_SESSION_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$ACTIVE_SESSION_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$ACTIVE_SESSION_HISTORY limit 1);
@@ -4620,6 +4781,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$ACTIVE_SESSION_HISTORY|%') then 2
 when ('' like '%|V$ACTIVE_SESSION_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$ACTIVE_SESSION_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$ACTIVE_SESSION_HISTORY limit 1);
@@ -4644,6 +4806,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$DML_STATS|%') then 2
 when ('' like '%|GV$DML_STATS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$DML_STATS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$DML_STATS limit 1);
@@ -4668,6 +4831,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$DML_STATS|%') then 2
 when ('' like '%|V$DML_STATS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$DML_STATS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$DML_STATS limit 1);
@@ -4689,6 +4853,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_TAB_MODIFICATIONS|%') then 2
 when ('' like '%|DBA_TAB_MODIFICATIONS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_TAB_MODIFICATIONS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_TAB_MODIFICATIONS limit 1);
@@ -4764,6 +4929,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_SCHEDULER_JOBS|%') then 2
 when ('' like '%|DBA_SCHEDULER_JOBS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_SCHEDULER_JOBS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_SCHEDULER_JOBS limit 1);
@@ -4788,6 +4954,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_OUTLINE_CONCURRENT_HISTORY|%') then 2
 when ('' like '%|DBA_OB_OUTLINE_CONCURRENT_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_OUTLINE_CONCURRENT_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_OUTLINE_CONCURRENT_HISTORY limit 1);
@@ -4811,6 +4978,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BACKUP_STORAGE_INFO|%') then 2
 when ('' like '%|DBA_OB_BACKUP_STORAGE_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BACKUP_STORAGE_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_STORAGE_INFO limit 1);
@@ -4834,6 +5002,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BACKUP_STORAGE_INFO_HISTORY|%') then 2
 when ('' like '%|DBA_OB_BACKUP_STORAGE_INFO_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BACKUP_STORAGE_INFO_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_STORAGE_INFO_HISTORY limit 1);
@@ -4847,6 +5016,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BACKUP_DELETE_POLICY|%') then 2
 when ('' like '%|DBA_OB_BACKUP_DELETE_POLICY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BACKUP_DELETE_POLICY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_DELETE_POLICY limit 1);
@@ -4873,6 +5043,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BACKUP_DELETE_JOBS|%') then 2
 when ('' like '%|DBA_OB_BACKUP_DELETE_JOBS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BACKUP_DELETE_JOBS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_DELETE_JOBS limit 1);
@@ -4899,6 +5070,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BACKUP_DELETE_JOB_HISTORY|%') then 2
 when ('' like '%|DBA_OB_BACKUP_DELETE_JOB_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BACKUP_DELETE_JOB_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_DELETE_JOB_HISTORY limit 1);
@@ -4925,6 +5097,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BACKUP_DELETE_TASKS|%') then 2
 when ('' like '%|DBA_OB_BACKUP_DELETE_TASKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BACKUP_DELETE_TASKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_DELETE_TASKS limit 1);
@@ -4951,6 +5124,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BACKUP_DELETE_TASK_HISTORY|%') then 2
 when ('' like '%|DBA_OB_BACKUP_DELETE_TASK_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BACKUP_DELETE_TASK_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_DELETE_TASK_HISTORY limit 1);
@@ -4975,6 +5149,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_OUTLINES|%') then 2
 when ('' like '%|DBA_OB_OUTLINES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_OUTLINES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_OUTLINES limit 1);
@@ -4998,6 +5173,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_CONCURRENT_LIMIT_SQL|%') then 2
 when ('' like '%|DBA_OB_CONCURRENT_LIMIT_SQL|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_CONCURRENT_LIMIT_SQL|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_CONCURRENT_LIMIT_SQL limit 1);
@@ -5035,6 +5211,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_RESTORE_PROGRESS|%') then 2
 when ('' like '%|DBA_OB_RESTORE_PROGRESS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_RESTORE_PROGRESS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_RESTORE_PROGRESS limit 1);
@@ -5073,6 +5250,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_RESTORE_HISTORY|%') then 2
 when ('' like '%|DBA_OB_RESTORE_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_RESTORE_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_RESTORE_HISTORY limit 1);
@@ -5087,6 +5265,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_ARCHIVE_DEST|%') then 2
 when ('' like '%|DBA_OB_ARCHIVE_DEST|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_ARCHIVE_DEST|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_ARCHIVE_DEST limit 1);
@@ -5124,6 +5303,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_ARCHIVELOG|%') then 2
 when ('' like '%|DBA_OB_ARCHIVELOG|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_ARCHIVELOG|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_ARCHIVELOG limit 1);
@@ -5161,6 +5341,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_ARCHIVELOG_SUMMARY|%') then 2
 when ('' like '%|DBA_OB_ARCHIVELOG_SUMMARY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_ARCHIVELOG_SUMMARY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_ARCHIVELOG_SUMMARY limit 1);
@@ -5195,6 +5376,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_ARCHIVELOG_PIECE_FILES|%') then 2
 when ('' like '%|DBA_OB_ARCHIVELOG_PIECE_FILES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_ARCHIVELOG_PIECE_FILES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_ARCHIVELOG_PIECE_FILES limit 1);
@@ -5208,6 +5390,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BACKUP_PARAMETER|%') then 2
 when ('' like '%|DBA_OB_BACKUP_PARAMETER|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BACKUP_PARAMETER|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_PARAMETER limit 1);
@@ -5240,6 +5423,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_DEADLOCK_EVENT_HISTORY|%') then 2
 when ('' like '%|DBA_OB_DEADLOCK_EVENT_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_DEADLOCK_EVENT_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_DEADLOCK_EVENT_HISTORY limit 1);
@@ -5264,6 +5448,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_KV_TTL_TASKS|%') then 2
 when ('' like '%|DBA_OB_KV_TTL_TASKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_KV_TTL_TASKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_KV_TTL_TASKS limit 1);
@@ -5288,6 +5473,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_KV_TTL_TASK_HISTORY|%') then 2
 when ('' like '%|DBA_OB_KV_TTL_TASK_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_KV_TTL_TASK_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY limit 1);
@@ -5320,6 +5506,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_LOG_STAT|%') then 2
 when ('' like '%|GV$OB_LOG_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_LOG_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_LOG_STAT limit 1);
@@ -5352,6 +5539,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_LOG_STAT|%') then 2
 when ('' like '%|V$OB_LOG_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_LOG_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_LOG_STAT limit 1);
@@ -5369,6 +5557,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|ST_GEOMETRY_COLUMNS|%') then 2
 when ('' like '%|ST_GEOMETRY_COLUMNS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|ST_GEOMETRY_COLUMNS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.ST_GEOMETRY_COLUMNS limit 1);
@@ -5386,6 +5575,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|ST_SPATIAL_REFERENCE_SYSTEMS|%') then 2
 when ('' like '%|ST_SPATIAL_REFERENCE_SYSTEMS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|ST_SPATIAL_REFERENCE_SYSTEMS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.ST_SPATIAL_REFERENCE_SYSTEMS limit 1);
@@ -5402,6 +5592,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|QUERY_RESPONSE_TIME|%') then 2
 when ('' like '%|QUERY_RESPONSE_TIME|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|QUERY_RESPONSE_TIME|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.QUERY_RESPONSE_TIME limit 1);
@@ -5425,6 +5616,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_RSRC_PLANS|%') then 2
 when ('' like '%|DBA_RSRC_PLANS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_RSRC_PLANS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_RSRC_PLANS limit 1);
@@ -5482,6 +5674,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_RSRC_PLAN_DIRECTIVES|%') then 2
 when ('' like '%|DBA_RSRC_PLAN_DIRECTIVES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_RSRC_PLAN_DIRECTIVES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_RSRC_PLAN_DIRECTIVES limit 1);
@@ -5497,6 +5690,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_RSRC_GROUP_MAPPINGS|%') then 2
 when ('' like '%|DBA_RSRC_GROUP_MAPPINGS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_RSRC_GROUP_MAPPINGS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_RSRC_GROUP_MAPPINGS limit 1);
@@ -5517,6 +5711,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_RSRC_CONSUMER_GROUPS|%') then 2
 when ('' like '%|DBA_RSRC_CONSUMER_GROUPS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_RSRC_CONSUMER_GROUPS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_RSRC_CONSUMER_GROUPS limit 1);
@@ -5536,6 +5731,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$RSRC_PLAN|%') then 2
 when ('' like '%|V$RSRC_PLAN|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$RSRC_PLAN|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$RSRC_PLAN limit 1);
@@ -5557,6 +5753,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_LS|%') then 2
 when ('' like '%|DBA_OB_LS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_LS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_LS limit 1);
@@ -5589,6 +5786,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TABLE_LOCATIONS|%') then 2
 when ('' like '%|DBA_OB_TABLE_LOCATIONS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TABLE_LOCATIONS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TABLE_LOCATIONS limit 1);
@@ -5605,6 +5803,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_FREEZE_INFO|%') then 2
 when ('' like '%|DBA_OB_FREEZE_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_FREEZE_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_FREEZE_INFO limit 1);
@@ -5639,6 +5838,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_LS_REPLICA_TASKS|%') then 2
 when ('' like '%|DBA_OB_LS_REPLICA_TASKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_LS_REPLICA_TASKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_LS_REPLICA_TASKS limit 1);
@@ -5666,6 +5866,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_LS_REPLICA_TASK_PLAN|%') then 2
 when ('' like '%|V$OB_LS_REPLICA_TASK_PLAN|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_LS_REPLICA_TASK_PLAN|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_LS_REPLICA_TASK_PLAN limit 1);
@@ -5683,6 +5884,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_AUTO_INCREMENT|%') then 2
 when ('' like '%|DBA_OB_AUTO_INCREMENT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_AUTO_INCREMENT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AUTO_INCREMENT limit 1);
@@ -5703,6 +5905,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_SEQUENCES|%') then 2
 when ('' like '%|DBA_SEQUENCES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_SEQUENCES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_SEQUENCES limit 1);
@@ -5732,6 +5935,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_SCHEDULER_WINDOWS|%') then 2
 when ('' like '%|DBA_SCHEDULER_WINDOWS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_SCHEDULER_WINDOWS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_SCHEDULER_WINDOWS limit 1);
@@ -5798,6 +6002,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_USERS|%') then 2
 when ('' like '%|DBA_OB_USERS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_USERS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_USERS limit 1);
@@ -5832,6 +6037,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_DATABASE_PRIVILEGE|%') then 2
 when ('' like '%|DBA_OB_DATABASE_PRIVILEGE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_DATABASE_PRIVILEGE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_DATABASE_PRIVILEGE limit 1);
@@ -5852,6 +6058,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_USER_DEFINED_RULES|%') then 2
 when ('' like '%|DBA_OB_USER_DEFINED_RULES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_USER_DEFINED_RULES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_USER_DEFINED_RULES limit 1);
@@ -5902,6 +6109,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SQL_PLAN|%') then 2
 when ('' like '%|GV$OB_SQL_PLAN|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SQL_PLAN|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SQL_PLAN limit 1);
@@ -5950,6 +6158,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SQL_PLAN|%') then 2
 when ('' like '%|V$OB_SQL_PLAN|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SQL_PLAN|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SQL_PLAN limit 1);
@@ -5977,6 +6186,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|PARAMETERS|%') then 2
 when ('' like '%|PARAMETERS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|PARAMETERS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.PARAMETERS limit 1);
@@ -5994,6 +6204,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|TABLE_PRIVILEGES|%') then 2
 when ('' like '%|TABLE_PRIVILEGES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|TABLE_PRIVILEGES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.TABLE_PRIVILEGES limit 1);
@@ -6009,6 +6220,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|USER_PRIVILEGES|%') then 2
 when ('' like '%|USER_PRIVILEGES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|USER_PRIVILEGES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.USER_PRIVILEGES limit 1);
@@ -6025,6 +6237,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|SCHEMA_PRIVILEGES|%') then 2
 when ('' like '%|SCHEMA_PRIVILEGES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|SCHEMA_PRIVILEGES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.SCHEMA_PRIVILEGES limit 1);
@@ -6040,6 +6253,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|CHECK_CONSTRAINTS|%') then 2
 when ('' like '%|CHECK_CONSTRAINTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CHECK_CONSTRAINTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.CHECK_CONSTRAINTS limit 1);
@@ -6062,6 +6276,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|REFERENTIAL_CONSTRAINTS|%') then 2
 when ('' like '%|REFERENTIAL_CONSTRAINTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|REFERENTIAL_CONSTRAINTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.REFERENTIAL_CONSTRAINTS limit 1);
@@ -6080,6 +6295,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|TABLE_CONSTRAINTS|%') then 2
 when ('' like '%|TABLE_CONSTRAINTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|TABLE_CONSTRAINTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.TABLE_CONSTRAINTS limit 1);
@@ -6110,6 +6326,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_TRANSACTION_SCHEDULERS|%') then 2
 when ('' like '%|GV$OB_TRANSACTION_SCHEDULERS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_TRANSACTION_SCHEDULERS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TRANSACTION_SCHEDULERS limit 1);
@@ -6140,6 +6357,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_TRANSACTION_SCHEDULERS|%') then 2
 when ('' like '%|V$OB_TRANSACTION_SCHEDULERS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_TRANSACTION_SCHEDULERS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TRANSACTION_SCHEDULERS limit 1);
@@ -6173,6 +6391,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|TRIGGERS|%') then 2
 when ('' like '%|TRIGGERS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|TRIGGERS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.TRIGGERS limit 1);
@@ -6210,6 +6429,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|PARTITIONS|%') then 2
 when ('' like '%|PARTITIONS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|PARTITIONS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.PARTITIONS limit 1);
@@ -6231,6 +6451,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_LS_ARB_REPLICA_TASKS|%') then 2
 when ('' like '%|DBA_OB_LS_ARB_REPLICA_TASKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_LS_ARB_REPLICA_TASKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_LS_ARB_REPLICA_TASKS limit 1);
@@ -6253,6 +6474,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_LS_ARB_REPLICA_TASK_HISTORY|%') then 2
 when ('' like '%|DBA_OB_LS_ARB_REPLICA_TASK_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_LS_ARB_REPLICA_TASK_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_LS_ARB_REPLICA_TASK_HISTORY limit 1);
@@ -6271,6 +6493,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_ARCHIVE_DEST_STATUS|%') then 2
 when ('' like '%|V$OB_ARCHIVE_DEST_STATUS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_ARCHIVE_DEST_STATUS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_ARCHIVE_DEST_STATUS limit 1);
@@ -6296,6 +6519,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_LS_LOG_ARCHIVE_PROGRESS|%') then 2
 when ('' like '%|DBA_OB_LS_LOG_ARCHIVE_PROGRESS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_LS_LOG_ARCHIVE_PROGRESS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_LS_LOG_ARCHIVE_PROGRESS limit 1);
@@ -6313,6 +6537,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_RSRC_IO_DIRECTIVES|%') then 2
 when ('' like '%|DBA_OB_RSRC_IO_DIRECTIVES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_RSRC_IO_DIRECTIVES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_RSRC_IO_DIRECTIVES limit 1);
@@ -6340,6 +6565,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_TABLET_STATS|%') then 2
 when ('' like '%|GV$OB_TABLET_STATS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_TABLET_STATS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TABLET_STATS limit 1);
@@ -6367,6 +6593,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_TABLET_STATS|%') then 2
 when ('' like '%|V$OB_TABLET_STATS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_TABLET_STATS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TABLET_STATS limit 1);
@@ -6382,6 +6609,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_ACCESS_POINT|%') then 2
 when ('' like '%|DBA_OB_ACCESS_POINT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_ACCESS_POINT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_ACCESS_POINT limit 1);
@@ -6397,6 +6625,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_DATA_DICTIONARY_IN_LOG|%') then 2
 when ('' like '%|DBA_OB_DATA_DICTIONARY_IN_LOG|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_DATA_DICTIONARY_IN_LOG|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_DATA_DICTIONARY_IN_LOG limit 1);
@@ -6423,6 +6652,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_OPT_STAT_GATHER_MONITOR|%') then 2
 when ('' like '%|GV$OB_OPT_STAT_GATHER_MONITOR|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_OPT_STAT_GATHER_MONITOR|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_OPT_STAT_GATHER_MONITOR limit 1);
@@ -6449,6 +6679,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_OPT_STAT_GATHER_MONITOR|%') then 2
 when ('' like '%|V$OB_OPT_STAT_GATHER_MONITOR|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_OPT_STAT_GATHER_MONITOR|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_OPT_STAT_GATHER_MONITOR limit 1);
@@ -6468,6 +6699,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TASK_OPT_STAT_GATHER_HISTORY|%') then 2
 when ('' like '%|DBA_OB_TASK_OPT_STAT_GATHER_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TASK_OPT_STAT_GATHER_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TASK_OPT_STAT_GATHER_HISTORY limit 1);
@@ -6488,6 +6720,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY|%') then 2
 when ('' like '%|DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY limit 1);
@@ -6509,6 +6742,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_THREAD|%') then 2
 when ('' like '%|GV$OB_THREAD|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_THREAD|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_THREAD limit 1);
@@ -6530,6 +6764,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_THREAD|%') then 2
 when ('' like '%|V$OB_THREAD|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_THREAD|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_THREAD limit 1);
@@ -6552,6 +6787,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_ARBITRATION_MEMBER_INFO|%') then 2
 when ('' like '%|GV$OB_ARBITRATION_MEMBER_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_ARBITRATION_MEMBER_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_ARBITRATION_MEMBER_INFO limit 1);
@@ -6574,6 +6810,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_ARBITRATION_MEMBER_INFO|%') then 2
 when ('' like '%|V$OB_ARBITRATION_MEMBER_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_ARBITRATION_MEMBER_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_ARBITRATION_MEMBER_INFO limit 1);
@@ -6589,6 +6826,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_ARBITRATION_SERVICE_STATUS|%') then 2
 when ('' like '%|GV$OB_ARBITRATION_SERVICE_STATUS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_ARBITRATION_SERVICE_STATUS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_ARBITRATION_SERVICE_STATUS limit 1);
@@ -6604,6 +6842,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_ARBITRATION_SERVICE_STATUS|%') then 2
 when ('' like '%|V$OB_ARBITRATION_SERVICE_STATUS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_ARBITRATION_SERVICE_STATUS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_ARBITRATION_SERVICE_STATUS limit 1);
@@ -6681,6 +6920,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_WR_ACTIVE_SESSION_HISTORY|%') then 2
 when ('' like '%|DBA_WR_ACTIVE_SESSION_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_WR_ACTIVE_SESSION_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_ACTIVE_SESSION_HISTORY limit 1);
@@ -6701,6 +6941,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_WR_SNAPSHOT|%') then 2
 when ('' like '%|DBA_WR_SNAPSHOT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_WR_SNAPSHOT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_SNAPSHOT limit 1);
@@ -6716,6 +6957,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_WR_STATNAME|%') then 2
 when ('' like '%|DBA_WR_STATNAME|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_WR_STATNAME|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_STATNAME limit 1);
@@ -6734,6 +6976,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_WR_SYSSTAT|%') then 2
 when ('' like '%|DBA_WR_SYSSTAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_WR_SYSSTAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_SYSSTAT limit 1);
@@ -6754,6 +6997,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_KV_CONNECTIONS|%') then 2
 when ('' like '%|GV$OB_KV_CONNECTIONS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_KV_CONNECTIONS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_KV_CONNECTIONS limit 1);
@@ -6774,6 +7018,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_KV_CONNECTIONS|%') then 2
 when ('' like '%|V$OB_KV_CONNECTIONS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_KV_CONNECTIONS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_KV_CONNECTIONS limit 1);
@@ -6798,6 +7043,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_LOCKS|%') then 2
 when ('' like '%|GV$OB_LOCKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_LOCKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_LOCKS limit 1);
@@ -6822,6 +7068,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_LOCKS|%') then 2
 when ('' like '%|V$OB_LOCKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_LOCKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_LOCKS limit 1);
@@ -6838,6 +7085,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_LOG_RESTORE_SOURCE|%') then 2
 when ('' like '%|DBA_OB_LOG_RESTORE_SOURCE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_LOG_RESTORE_SOURCE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_LOG_RESTORE_SOURCE limit 1);
@@ -6854,6 +7102,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_TIMESTAMP_SERVICE|%') then 2
 when ('' like '%|V$OB_TIMESTAMP_SERVICE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_TIMESTAMP_SERVICE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TIMESTAMP_SERVICE limit 1);
@@ -6875,6 +7124,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BALANCE_JOBS|%') then 2
 when ('' like '%|DBA_OB_BALANCE_JOBS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BALANCE_JOBS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BALANCE_JOBS limit 1);
@@ -6896,6 +7146,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BALANCE_JOB_HISTORY|%') then 2
 when ('' like '%|DBA_OB_BALANCE_JOB_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BALANCE_JOB_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BALANCE_JOB_HISTORY limit 1);
@@ -6925,6 +7176,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BALANCE_TASKS|%') then 2
 when ('' like '%|DBA_OB_BALANCE_TASKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BALANCE_TASKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BALANCE_TASKS limit 1);
@@ -6954,6 +7206,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_BALANCE_TASK_HISTORY|%') then 2
 when ('' like '%|DBA_OB_BALANCE_TASK_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_BALANCE_TASK_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BALANCE_TASK_HISTORY limit 1);
@@ -6985,6 +7238,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TRANSFER_TASKS|%') then 2
 when ('' like '%|DBA_OB_TRANSFER_TASKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TRANSFER_TASKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TRANSFER_TASKS limit 1);
@@ -7016,6 +7270,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TRANSFER_TASK_HISTORY|%') then 2
 when ('' like '%|DBA_OB_TRANSFER_TASK_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TRANSFER_TASK_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TRANSFER_TASK_HISTORY limit 1);
@@ -7032,6 +7287,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_EXTERNAL_TABLE_FILES|%') then 2
 when ('' like '%|DBA_OB_EXTERNAL_TABLE_FILES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_EXTERNAL_TABLE_FILES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_EXTERNAL_TABLE_FILES limit 1);
@@ -7048,6 +7304,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|ALL_OB_EXTERNAL_TABLE_FILES|%') then 2
 when ('' like '%|ALL_OB_EXTERNAL_TABLE_FILES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|ALL_OB_EXTERNAL_TABLE_FILES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.ALL_OB_EXTERNAL_TABLE_FILES limit 1);
@@ -7068,6 +7325,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PX_P2P_DATAHUB|%') then 2
 when ('' like '%|GV$OB_PX_P2P_DATAHUB|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_PX_P2P_DATAHUB|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PX_P2P_DATAHUB limit 1);
@@ -7088,6 +7346,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PX_P2P_DATAHUB|%') then 2
 when ('' like '%|V$OB_PX_P2P_DATAHUB|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_PX_P2P_DATAHUB|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PX_P2P_DATAHUB limit 1);
@@ -7111,6 +7370,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$SQL_JOIN_FILTER|%') then 2
 when ('' like '%|GV$SQL_JOIN_FILTER|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$SQL_JOIN_FILTER|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$SQL_JOIN_FILTER limit 1);
@@ -7134,6 +7394,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$SQL_JOIN_FILTER|%') then 2
 when ('' like '%|V$SQL_JOIN_FILTER|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$SQL_JOIN_FILTER|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$SQL_JOIN_FILTER limit 1);
@@ -7156,6 +7417,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TABLE_STAT_STALE_INFO|%') then 2
 when ('' like '%|DBA_OB_TABLE_STAT_STALE_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TABLE_STAT_STALE_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TABLE_STAT_STALE_INFO limit 1);
@@ -7174,6 +7436,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_LS_LOG_RESTORE_STATUS|%') then 2
 when ('' like '%|V$OB_LS_LOG_RESTORE_STATUS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_LS_LOG_RESTORE_STATUS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_LS_LOG_RESTORE_STATUS limit 1);
@@ -7204,6 +7467,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_DB_LINKS|%') then 2
 when ('' like '%|DBA_DB_LINKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_DB_LINKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_DB_LINKS limit 1);
@@ -7219,6 +7483,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_WR_CONTROL|%') then 2
 when ('' like '%|DBA_WR_CONTROL|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_WR_CONTROL|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_CONTROL limit 1);
@@ -7235,6 +7500,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_LS_HISTORY|%') then 2
 when ('' like '%|DBA_OB_LS_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_LS_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_LS_HISTORY limit 1);
@@ -7268,6 +7534,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TENANT_EVENT_HISTORY|%') then 2
 when ('' like '%|DBA_OB_TENANT_EVENT_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TENANT_EVENT_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TENANT_EVENT_HISTORY limit 1);
@@ -7288,6 +7555,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_FLT_TRACE_CONFIG|%') then 2
 when ('' like '%|GV$OB_FLT_TRACE_CONFIG|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_FLT_TRACE_CONFIG|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_FLT_TRACE_CONFIG limit 1);
@@ -7323,6 +7591,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SESSION|%') then 2
 when ('' like '%|GV$OB_SESSION|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SESSION|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SESSION limit 1);
@@ -7358,6 +7627,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SESSION|%') then 2
 when ('' like '%|V$OB_SESSION|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SESSION|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SESSION limit 1);
@@ -7398,6 +7668,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PL_CACHE_OBJECT|%') then 2
 when ('' like '%|GV$OB_PL_CACHE_OBJECT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_PL_CACHE_OBJECT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PL_CACHE_OBJECT limit 1);
@@ -7438,6 +7709,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PL_CACHE_OBJECT|%') then 2
 when ('' like '%|V$OB_PL_CACHE_OBJECT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_PL_CACHE_OBJECT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PL_CACHE_OBJECT limit 1);
@@ -7475,6 +7747,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_RECOVER_TABLE_JOBS|%') then 2
 when ('' like '%|DBA_OB_RECOVER_TABLE_JOBS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_RECOVER_TABLE_JOBS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_RECOVER_TABLE_JOBS limit 1);
@@ -7512,6 +7785,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_RECOVER_TABLE_JOB_HISTORY|%') then 2
 when ('' like '%|DBA_OB_RECOVER_TABLE_JOB_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_RECOVER_TABLE_JOB_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_RECOVER_TABLE_JOB_HISTORY limit 1);
@@ -7544,6 +7818,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_IMPORT_TABLE_JOBS|%') then 2
 when ('' like '%|DBA_OB_IMPORT_TABLE_JOBS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_IMPORT_TABLE_JOBS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_IMPORT_TABLE_JOBS limit 1);
@@ -7576,6 +7851,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_IMPORT_TABLE_JOB_HISTORY|%') then 2
 when ('' like '%|DBA_OB_IMPORT_TABLE_JOB_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_IMPORT_TABLE_JOB_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_IMPORT_TABLE_JOB_HISTORY limit 1);
@@ -7615,6 +7891,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_IMPORT_TABLE_TASKS|%') then 2
 when ('' like '%|DBA_OB_IMPORT_TABLE_TASKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_IMPORT_TABLE_TASKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_IMPORT_TABLE_TASKS limit 1);
@@ -7654,6 +7931,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_IMPORT_TABLE_TASK_HISTORY|%') then 2
 when ('' like '%|DBA_OB_IMPORT_TABLE_TASK_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_IMPORT_TABLE_TASK_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_IMPORT_TABLE_TASK_HISTORY limit 1);
@@ -7671,6 +7949,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_CGROUP_CONFIG|%') then 2
 when ('' like '%|GV$OB_CGROUP_CONFIG|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_CGROUP_CONFIG|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_CGROUP_CONFIG limit 1);
@@ -7688,6 +7967,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_CGROUP_CONFIG|%') then 2
 when ('' like '%|V$OB_CGROUP_CONFIG|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_CGROUP_CONFIG|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_CGROUP_CONFIG limit 1);
@@ -7709,6 +7989,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_WR_SYSTEM_EVENT|%') then 2
 when ('' like '%|DBA_WR_SYSTEM_EVENT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_WR_SYSTEM_EVENT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_SYSTEM_EVENT limit 1);
@@ -7727,6 +8008,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_WR_EVENT_NAME|%') then 2
 when ('' like '%|DBA_WR_EVENT_NAME|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_WR_EVENT_NAME|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_EVENT_NAME limit 1);
@@ -7751,6 +8033,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_FORMAT_OUTLINES|%') then 2
 when ('' like '%|DBA_OB_FORMAT_OUTLINES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_FORMAT_OUTLINES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_FORMAT_OUTLINES limit 1);
@@ -7770,6 +8053,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|procs_priv|%') then 2
 when ('' like '%|procs_priv|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|procs_priv|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.procs_priv limit 1);
@@ -7842,6 +8126,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SQLSTAT|%') then 2
 when ('' like '%|GV$OB_SQLSTAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SQLSTAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SQLSTAT limit 1);
@@ -7914,6 +8199,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SQLSTAT|%') then 2
 when ('' like '%|V$OB_SQLSTAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SQLSTAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SQLSTAT limit 1);
@@ -7983,6 +8269,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_WR_SQLSTAT|%') then 2
 when ('' like '%|DBA_WR_SQLSTAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_WR_SQLSTAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_SQLSTAT limit 1);
@@ -8001,6 +8288,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SESS_TIME_MODEL|%') then 2
 when ('' like '%|GV$OB_SESS_TIME_MODEL|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SESS_TIME_MODEL|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SESS_TIME_MODEL limit 1);
@@ -8019,6 +8307,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SESS_TIME_MODEL|%') then 2
 when ('' like '%|V$OB_SESS_TIME_MODEL|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SESS_TIME_MODEL|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SESS_TIME_MODEL limit 1);
@@ -8036,6 +8325,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SYS_TIME_MODEL|%') then 2
 when ('' like '%|GV$OB_SYS_TIME_MODEL|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SYS_TIME_MODEL|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SYS_TIME_MODEL limit 1);
@@ -8053,6 +8343,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SYS_TIME_MODEL|%') then 2
 when ('' like '%|V$OB_SYS_TIME_MODEL|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SYS_TIME_MODEL|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SYS_TIME_MODEL limit 1);
@@ -8070,6 +8361,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_WR_SYS_TIME_MODEL|%') then 2
 when ('' like '%|DBA_WR_SYS_TIME_MODEL|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_WR_SYS_TIME_MODEL|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_SYS_TIME_MODEL limit 1);
@@ -8086,6 +8378,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_AUX_STATISTICS|%') then 2
 when ('' like '%|DBA_OB_AUX_STATISTICS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_AUX_STATISTICS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_AUX_STATISTICS limit 1);
@@ -8114,6 +8407,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_INDEX_USAGE|%') then 2
 when ('' like '%|DBA_INDEX_USAGE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_INDEX_USAGE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_INDEX_USAGE limit 1);
@@ -8135,6 +8429,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_SYS_VARIABLES|%') then 2
 when ('' like '%|DBA_OB_SYS_VARIABLES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_SYS_VARIABLES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SYS_VARIABLES limit 1);
@@ -8156,6 +8451,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TRANSFER_PARTITION_TASKS|%') then 2
 when ('' like '%|DBA_OB_TRANSFER_PARTITION_TASKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TRANSFER_PARTITION_TASKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TRANSFER_PARTITION_TASKS limit 1);
@@ -8177,6 +8473,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TRANSFER_PARTITION_TASK_HISTORY|%') then 2
 when ('' like '%|DBA_OB_TRANSFER_PARTITION_TASK_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TRANSFER_PARTITION_TASK_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TRANSFER_PARTITION_TASK_HISTORY limit 1);
@@ -8192,6 +8489,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_WR_SQLTEXT|%') then 2
 when ('' like '%|DBA_WR_SQLTEXT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_WR_SQLTEXT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_SQLTEXT limit 1);
@@ -8273,6 +8571,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_ACTIVE_SESSION_HISTORY|%') then 2
 when ('' like '%|GV$OB_ACTIVE_SESSION_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_ACTIVE_SESSION_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_ACTIVE_SESSION_HISTORY limit 1);
@@ -8354,6 +8653,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_ACTIVE_SESSION_HISTORY|%') then 2
 when ('' like '%|V$OB_ACTIVE_SESSION_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_ACTIVE_SESSION_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_ACTIVE_SESSION_HISTORY limit 1);
@@ -8370,6 +8670,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|role_edges|%') then 2
 when ('' like '%|role_edges|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|role_edges|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.role_edges limit 1);
@@ -8385,6 +8686,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|default_roles|%') then 2
 when ('' like '%|default_roles|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|default_roles|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.default_roles limit 1);
@@ -8398,6 +8700,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|audit_log_filter|%') then 2
 when ('' like '%|audit_log_filter|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|audit_log_filter|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.audit_log_filter limit 1);
@@ -8412,6 +8715,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|audit_log_user|%') then 2
 when ('' like '%|audit_log_user|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|audit_log_user|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.audit_log_user limit 1);
@@ -8430,6 +8734,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|columns_priv|%') then 2
 when ('' like '%|columns_priv|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|columns_priv|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.columns_priv limit 1);
@@ -8457,6 +8762,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_LS_SNAPSHOTS|%') then 2
 when ('' like '%|GV$OB_LS_SNAPSHOTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_LS_SNAPSHOTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_LS_SNAPSHOTS limit 1);
@@ -8484,6 +8790,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_LS_SNAPSHOTS|%') then 2
 when ('' like '%|V$OB_LS_SNAPSHOTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_LS_SNAPSHOTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_LS_SNAPSHOTS limit 1);
@@ -8503,6 +8810,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SHARED_STORAGE_QUOTA|%') then 2
 when ('' like '%|GV$OB_SHARED_STORAGE_QUOTA|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SHARED_STORAGE_QUOTA|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SHARED_STORAGE_QUOTA limit 1);
@@ -8522,6 +8830,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SHARED_STORAGE_QUOTA|%') then 2
 when ('' like '%|V$OB_SHARED_STORAGE_QUOTA|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SHARED_STORAGE_QUOTA|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SHARED_STORAGE_QUOTA limit 1);
@@ -8558,6 +8867,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_LS_REPLICA_TASK_HISTORY|%') then 2
 when ('' like '%|DBA_OB_LS_REPLICA_TASK_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_LS_REPLICA_TASK_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_LS_REPLICA_TASK_HISTORY limit 1);
@@ -8590,6 +8900,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_MVIEW_LOGS|%') then 2
 when ('' like '%|DBA_MVIEW_LOGS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_MVIEW_LOGS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_MVIEW_LOGS limit 1);
@@ -8642,6 +8953,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_MVIEWS|%') then 2
 when ('' like '%|DBA_MVIEWS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_MVIEWS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_MVIEWS limit 1);
@@ -8655,6 +8967,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_MVREF_STATS_SYS_DEFAULTS|%') then 2
 when ('' like '%|DBA_MVREF_STATS_SYS_DEFAULTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_MVREF_STATS_SYS_DEFAULTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_MVREF_STATS_SYS_DEFAULTS limit 1);
@@ -8670,6 +8983,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_MVREF_STATS_PARAMS|%') then 2
 when ('' like '%|DBA_MVREF_STATS_PARAMS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_MVREF_STATS_PARAMS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_MVREF_STATS_PARAMS limit 1);
@@ -8703,6 +9017,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_MVREF_RUN_STATS|%') then 2
 when ('' like '%|DBA_MVREF_RUN_STATS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_MVREF_RUN_STATS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_MVREF_RUN_STATS limit 1);
@@ -8728,6 +9043,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_MVREF_STATS|%') then 2
 when ('' like '%|DBA_MVREF_STATS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_MVREF_STATS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_MVREF_STATS limit 1);
@@ -8751,6 +9067,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_MVREF_CHANGE_STATS|%') then 2
 when ('' like '%|DBA_MVREF_CHANGE_STATS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_MVREF_CHANGE_STATS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_MVREF_CHANGE_STATS limit 1);
@@ -8770,6 +9087,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_MVREF_STMT_STATS|%') then 2
 when ('' like '%|DBA_MVREF_STMT_STATS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_MVREF_STMT_STATS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_MVREF_STMT_STATS limit 1);
@@ -8793,6 +9111,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SESSION_PS_INFO|%') then 2
 when ('' like '%|GV$OB_SESSION_PS_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SESSION_PS_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SESSION_PS_INFO limit 1);
@@ -8816,6 +9135,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SESSION_PS_INFO|%') then 2
 when ('' like '%|V$OB_SESSION_PS_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SESSION_PS_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SESSION_PS_INFO limit 1);
@@ -8836,6 +9156,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_TRACEPOINT_INFO|%') then 2
 when ('' like '%|GV$OB_TRACEPOINT_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_TRACEPOINT_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TRACEPOINT_INFO limit 1);
@@ -8856,6 +9177,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_TRACEPOINT_INFO|%') then 2
 when ('' like '%|V$OB_TRACEPOINT_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_TRACEPOINT_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TRACEPOINT_INFO limit 1);
@@ -8871,6 +9193,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_COMPATIBILITY_CONTROL|%') then 2
 when ('' like '%|V$OB_COMPATIBILITY_CONTROL|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_COMPATIBILITY_CONTROL|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_COMPATIBILITY_CONTROL limit 1);
@@ -8892,6 +9215,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_RSRC_DIRECTIVES|%') then 2
 when ('' like '%|DBA_OB_RSRC_DIRECTIVES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_RSRC_DIRECTIVES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_RSRC_DIRECTIVES limit 1);
@@ -8908,6 +9232,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_SERVICES|%') then 2
 when ('' like '%|DBA_OB_SERVICES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_SERVICES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SERVICES limit 1);
@@ -8929,6 +9254,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_TENANT_RESOURCE_LIMIT|%') then 2
 when ('' like '%|GV$OB_TENANT_RESOURCE_LIMIT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_TENANT_RESOURCE_LIMIT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TENANT_RESOURCE_LIMIT limit 1);
@@ -8950,6 +9276,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_TENANT_RESOURCE_LIMIT|%') then 2
 when ('' like '%|V$OB_TENANT_RESOURCE_LIMIT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_TENANT_RESOURCE_LIMIT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TENANT_RESOURCE_LIMIT limit 1);
@@ -8967,6 +9294,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_TENANT_RESOURCE_LIMIT_DETAIL|%') then 2
 when ('' like '%|GV$OB_TENANT_RESOURCE_LIMIT_DETAIL|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_TENANT_RESOURCE_LIMIT_DETAIL|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TENANT_RESOURCE_LIMIT_DETAIL limit 1);
@@ -8984,6 +9312,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_TENANT_RESOURCE_LIMIT_DETAIL|%') then 2
 when ('' like '%|V$OB_TENANT_RESOURCE_LIMIT_DETAIL|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_TENANT_RESOURCE_LIMIT_DETAIL|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TENANT_RESOURCE_LIMIT_DETAIL limit 1);
@@ -8999,6 +9328,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_LOCK_WAITS|%') then 2
 when ('' like '%|INNODB_LOCK_WAITS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_LOCK_WAITS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_LOCK_WAITS limit 1);
@@ -9020,6 +9350,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_LOCKS|%') then 2
 when ('' like '%|INNODB_LOCKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_LOCKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_LOCKS limit 1);
@@ -9055,6 +9386,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_TRX|%') then 2
 when ('' like '%|INNODB_TRX|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_TRX|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_TRX limit 1);
@@ -9069,6 +9401,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|NDB_TRANSID_MYSQL_CONNECTION_MAP|%') then 2
 when ('' like '%|NDB_TRANSID_MYSQL_CONNECTION_MAP|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|NDB_TRANSID_MYSQL_CONNECTION_MAP|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.NDB_TRANSID_MYSQL_CONNECTION_MAP limit 1);
@@ -9094,6 +9427,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_GROUP_IO_STAT|%') then 2
 when ('' like '%|V$OB_GROUP_IO_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_GROUP_IO_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_GROUP_IO_STAT limit 1);
@@ -9119,6 +9453,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_GROUP_IO_STAT|%') then 2
 when ('' like '%|GV$OB_GROUP_IO_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_GROUP_IO_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_GROUP_IO_STAT limit 1);
@@ -9135,6 +9470,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_STORAGE_IO_USAGE|%') then 2
 when ('' like '%|DBA_OB_STORAGE_IO_USAGE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_STORAGE_IO_USAGE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_STORAGE_IO_USAGE limit 1);
@@ -9155,6 +9491,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|TABLESPACES|%') then 2
 when ('' like '%|TABLESPACES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|TABLESPACES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.TABLESPACES limit 1);
@@ -9186,6 +9523,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_BUFFER_PAGE|%') then 2
 when ('' like '%|INNODB_BUFFER_PAGE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_BUFFER_PAGE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_BUFFER_PAGE limit 1);
@@ -9217,6 +9555,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_BUFFER_PAGE_LRU|%') then 2
 when ('' like '%|INNODB_BUFFER_PAGE_LRU|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_BUFFER_PAGE_LRU|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_BUFFER_PAGE_LRU limit 1);
@@ -9260,6 +9599,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_BUFFER_POOL_STATS|%') then 2
 when ('' like '%|INNODB_BUFFER_POOL_STATS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_BUFFER_POOL_STATS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_BUFFER_POOL_STATS limit 1);
@@ -9277,6 +9617,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_CMP|%') then 2
 when ('' like '%|INNODB_CMP|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_CMP|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_CMP limit 1);
@@ -9296,6 +9637,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_CMP_PER_INDEX|%') then 2
 when ('' like '%|INNODB_CMP_PER_INDEX|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_CMP_PER_INDEX|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_CMP_PER_INDEX limit 1);
@@ -9315,6 +9657,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_CMP_PER_INDEX_RESET|%') then 2
 when ('' like '%|INNODB_CMP_PER_INDEX_RESET|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_CMP_PER_INDEX_RESET|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_CMP_PER_INDEX_RESET limit 1);
@@ -9332,6 +9675,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_CMP_RESET|%') then 2
 when ('' like '%|INNODB_CMP_RESET|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_CMP_RESET|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_CMP_RESET limit 1);
@@ -9349,6 +9693,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_CMPMEM|%') then 2
 when ('' like '%|INNODB_CMPMEM|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_CMPMEM|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_CMPMEM limit 1);
@@ -9366,6 +9711,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_CMPMEM_RESET|%') then 2
 when ('' like '%|INNODB_CMPMEM_RESET|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_CMPMEM_RESET|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_CMPMEM_RESET limit 1);
@@ -9379,6 +9725,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_SYS_DATAFILES|%') then 2
 when ('' like '%|INNODB_SYS_DATAFILES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_SYS_DATAFILES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_DATAFILES limit 1);
@@ -9398,6 +9745,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_SYS_INDEXES|%') then 2
 when ('' like '%|INNODB_SYS_INDEXES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_SYS_INDEXES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_INDEXES limit 1);
@@ -9418,6 +9766,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_SYS_TABLES|%') then 2
 when ('' like '%|INNODB_SYS_TABLES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_SYS_TABLES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_TABLES limit 1);
@@ -9440,6 +9789,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_SYS_TABLESPACES|%') then 2
 when ('' like '%|INNODB_SYS_TABLESPACES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_SYS_TABLESPACES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_TABLESPACES limit 1);
@@ -9460,6 +9810,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_SYS_TABLESTATS|%') then 2
 when ('' like '%|INNODB_SYS_TABLESTATS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_SYS_TABLESTATS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_TABLESTATS limit 1);
@@ -9474,6 +9825,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_SYS_VIRTUAL|%') then 2
 when ('' like '%|INNODB_SYS_VIRTUAL|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_SYS_VIRTUAL|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_VIRTUAL limit 1);
@@ -9491,6 +9843,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_TEMP_TABLE_INFO|%') then 2
 when ('' like '%|INNODB_TEMP_TABLE_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_TEMP_TABLE_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_TEMP_TABLE_INFO limit 1);
@@ -9519,6 +9872,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_METRICS|%') then 2
 when ('' like '%|INNODB_METRICS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_METRICS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_METRICS limit 1);
@@ -9554,6 +9908,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|EVENTS|%') then 2
 when ('' like '%|EVENTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|EVENTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.EVENTS limit 1);
@@ -9569,6 +9924,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_NIC_INFO|%') then 2
 when ('' like '%|V$OB_NIC_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_NIC_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_NIC_INFO limit 1);
@@ -9589,6 +9945,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|ROLE_TABLE_GRANTS|%') then 2
 when ('' like '%|ROLE_TABLE_GRANTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|ROLE_TABLE_GRANTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.ROLE_TABLE_GRANTS limit 1);
@@ -9610,6 +9967,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|ROLE_COLUMN_GRANTS|%') then 2
 when ('' like '%|ROLE_COLUMN_GRANTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|ROLE_COLUMN_GRANTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.ROLE_COLUMN_GRANTS limit 1);
@@ -9633,6 +9991,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|ROLE_ROUTINE_GRANTS|%') then 2
 when ('' like '%|ROLE_ROUTINE_GRANTS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|ROLE_ROUTINE_GRANTS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.ROLE_ROUTINE_GRANTS limit 1);
@@ -9648,6 +10007,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|func|%') then 2
 when ('' like '%|func|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|func|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.func limit 1);
@@ -9663,6 +10023,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_NIC_INFO|%') then 2
 when ('' like '%|GV$OB_NIC_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_NIC_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_NIC_INFO limit 1);
@@ -9681,6 +10042,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM|%') then 2
 when ('' like '%|GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM limit 1);
@@ -9699,6 +10061,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_QUERY_RESPONSE_TIME_HISTOGRAM|%') then 2
 when ('' like '%|V$OB_QUERY_RESPONSE_TIME_HISTOGRAM|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_QUERY_RESPONSE_TIME_HISTOGRAM|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_QUERY_RESPONSE_TIME_HISTOGRAM limit 1);
@@ -9734,6 +10097,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_SCHEDULER_JOB_RUN_DETAILS|%') then 2
 when ('' like '%|DBA_SCHEDULER_JOB_RUN_DETAILS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_SCHEDULER_JOB_RUN_DETAILS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_SCHEDULER_JOB_RUN_DETAILS limit 1);
@@ -9750,6 +10114,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TABLE_SPACE_USAGE|%') then 2
 when ('' like '%|DBA_OB_TABLE_SPACE_USAGE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TABLE_SPACE_USAGE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TABLE_SPACE_USAGE limit 1);
@@ -9781,6 +10146,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_LOG_TRANSPORT_DEST_STAT|%') then 2
 when ('' like '%|GV$OB_LOG_TRANSPORT_DEST_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_LOG_TRANSPORT_DEST_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_LOG_TRANSPORT_DEST_STAT limit 1);
@@ -9812,6 +10178,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_LOG_TRANSPORT_DEST_STAT|%') then 2
 when ('' like '%|V$OB_LOG_TRANSPORT_DEST_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_LOG_TRANSPORT_DEST_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_LOG_TRANSPORT_DEST_STAT limit 1);
@@ -9835,6 +10202,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SS_LOCAL_CACHE|%') then 2
 when ('' like '%|GV$OB_SS_LOCAL_CACHE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SS_LOCAL_CACHE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SS_LOCAL_CACHE limit 1);
@@ -9858,6 +10226,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SS_LOCAL_CACHE|%') then 2
 when ('' like '%|V$OB_SS_LOCAL_CACHE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SS_LOCAL_CACHE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SS_LOCAL_CACHE limit 1);
@@ -9880,6 +10249,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_KV_GROUP_COMMIT_STATUS|%') then 2
 when ('' like '%|GV$OB_KV_GROUP_COMMIT_STATUS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_KV_GROUP_COMMIT_STATUS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_KV_GROUP_COMMIT_STATUS limit 1);
@@ -9902,6 +10272,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_KV_GROUP_COMMIT_STATUS|%') then 2
 when ('' like '%|V$OB_KV_GROUP_COMMIT_STATUS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_KV_GROUP_COMMIT_STATUS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_KV_GROUP_COMMIT_STATUS limit 1);
@@ -9916,6 +10287,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_SYS_FIELDS|%') then 2
 when ('' like '%|INNODB_SYS_FIELDS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_SYS_FIELDS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_FIELDS limit 1);
@@ -9932,6 +10304,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_SYS_FOREIGN|%') then 2
 when ('' like '%|INNODB_SYS_FOREIGN|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_SYS_FOREIGN|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_FOREIGN limit 1);
@@ -9947,6 +10320,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|INNODB_SYS_FOREIGN_COLS|%') then 2
 when ('' like '%|INNODB_SYS_FOREIGN_COLS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|INNODB_SYS_FOREIGN_COLS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_FOREIGN_COLS limit 1);
@@ -9968,6 +10342,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_KV_CLIENT_INFO|%') then 2
 when ('' like '%|GV$OB_KV_CLIENT_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_KV_CLIENT_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_KV_CLIENT_INFO limit 1);
@@ -9989,6 +10364,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_KV_CLIENT_INFO|%') then 2
 when ('' like '%|V$OB_KV_CLIENT_INFO|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_KV_CLIENT_INFO|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_KV_CLIENT_INFO limit 1);
@@ -10010,6 +10386,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_RES_MGR_SYSSTAT|%') then 2
 when ('' like '%|GV$OB_RES_MGR_SYSSTAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_RES_MGR_SYSSTAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_RES_MGR_SYSSTAT limit 1);
@@ -10031,6 +10408,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_RES_MGR_SYSSTAT|%') then 2
 when ('' like '%|V$OB_RES_MGR_SYSSTAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_RES_MGR_SYSSTAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_RES_MGR_SYSSTAT limit 1);
@@ -10085,6 +10463,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_WR_SQL_PLAN|%') then 2
 when ('' like '%|DBA_WR_SQL_PLAN|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_WR_SQL_PLAN|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_SQL_PLAN limit 1);
@@ -10104,6 +10483,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_WR_RES_MGR_SYSSTAT|%') then 2
 when ('' like '%|DBA_WR_RES_MGR_SYSSTAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_WR_RES_MGR_SYSSTAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_WR_RES_MGR_SYSSTAT limit 1);
@@ -10132,6 +10512,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_SPM_EVO_RESULT|%') then 2
 when ('' like '%|DBA_OB_SPM_EVO_RESULT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_SPM_EVO_RESULT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SPM_EVO_RESULT limit 1);
@@ -10147,6 +10528,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_KV_REDIS_TABLE|%') then 2
 when ('' like '%|DBA_OB_KV_REDIS_TABLE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_KV_REDIS_TABLE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_KV_REDIS_TABLE limit 1);
@@ -10169,6 +10551,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_FUNCTION_IO_STAT|%') then 2
 when ('' like '%|GV$OB_FUNCTION_IO_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_FUNCTION_IO_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_FUNCTION_IO_STAT limit 1);
@@ -10191,6 +10574,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_FUNCTION_IO_STAT|%') then 2
 when ('' like '%|V$OB_FUNCTION_IO_STAT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_FUNCTION_IO_STAT|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_FUNCTION_IO_STAT limit 1);
@@ -10217,6 +10601,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TEMP_FILES|%') then 2
 when ('' like '%|DBA_OB_TEMP_FILES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TEMP_FILES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TEMP_FILES limit 1);
@@ -10248,6 +10633,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|proc|%') then 2
 when ('' like '%|proc|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|proc|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.proc limit 1);
@@ -10267,6 +10653,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_CS_REPLICA_STATS|%') then 2
 when ('' like '%|DBA_OB_CS_REPLICA_STATS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_CS_REPLICA_STATS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_CS_REPLICA_STATS limit 1);
@@ -10290,6 +10677,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PLUGINS|%') then 2
 when ('' like '%|GV$OB_PLUGINS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_PLUGINS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_PLUGINS limit 1);
@@ -10313,9 +10701,27 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PLUGINS|%') then 2
 when ('' like '%|V$OB_PLUGINS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_PLUGINS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_PLUGINS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_TENANT_FLASHBACK_LOG_SCN;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+TIMESTAMP	timestamp(6)	NO		NULL	
+SWITCHOVER_EPOCH	bigint(20)	NO		NULL	
+OP_TYPE	varchar(64)	NO		NULL	
+FLASHBACK_LOG_SCN	bigint(20) unsigned	NO			
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TENANT_FLASHBACK_LOG_SCN|%') then 2
+when ('' like '%|DBA_OB_TENANT_FLASHBACK_LOG_SCN|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_TENANT_FLASHBACK_LOG_SCN|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TENANT_FLASHBACK_LOG_SCN limit 1);
 cnt
 1
 desc oceanbase.DBA_OB_VECTOR_INDEX_TASKS;
@@ -10335,6 +10741,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_VECTOR_INDEX_TASKS|%') then 2
 when ('' like '%|DBA_OB_VECTOR_INDEX_TASKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_VECTOR_INDEX_TASKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_VECTOR_INDEX_TASKS limit 1);
@@ -10357,6 +10764,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_VECTOR_INDEX_TASK_HISTORY|%') then 2
 when ('' like '%|DBA_OB_VECTOR_INDEX_TASK_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_VECTOR_INDEX_TASK_HISTORY|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_VECTOR_INDEX_TASK_HISTORY limit 1);
@@ -10378,6 +10786,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_STORAGE_CACHE_TASKS|%') then 2
 when ('' like '%|GV$OB_STORAGE_CACHE_TASKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_STORAGE_CACHE_TASKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_STORAGE_CACHE_TASKS limit 1);
@@ -10399,6 +10808,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_STORAGE_CACHE_TASKS|%') then 2
 when ('' like '%|V$OB_STORAGE_CACHE_TASKS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_STORAGE_CACHE_TASKS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_STORAGE_CACHE_TASKS limit 1);
@@ -10421,6 +10831,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_TABLET_LOCAL_CACHE|%') then 2
 when ('' like '%|GV$OB_TABLET_LOCAL_CACHE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_TABLET_LOCAL_CACHE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TABLET_LOCAL_CACHE limit 1);
@@ -10443,6 +10854,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_TABLET_LOCAL_CACHE|%') then 2
 when ('' like '%|V$OB_TABLET_LOCAL_CACHE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_TABLET_LOCAL_CACHE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TABLET_LOCAL_CACHE limit 1);
@@ -10462,6 +10874,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_MVIEW_RUNNING_JOBS|%') then 2
 when ('' like '%|DBA_MVIEW_RUNNING_JOBS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_MVIEW_RUNNING_JOBS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_MVIEW_RUNNING_JOBS limit 1);
@@ -10478,6 +10891,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_MVIEW_DEPS|%') then 2
 when ('' like '%|DBA_MVIEW_DEPS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_MVIEW_DEPS|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_MVIEW_DEPS limit 1);
@@ -10499,6 +10913,7 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_DYNAMIC_PARTITION_TABLES|%') then 2
 when ('' like '%|DBA_OB_DYNAMIC_PARTITION_TABLES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_DYNAMIC_PARTITION_TABLES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_DYNAMIC_PARTITION_TABLES limit 1);
@@ -10522,9 +10937,28 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_DYNAMIC_PARTITION_TABLES|%') then 2
 when ('' like '%|V$OB_DYNAMIC_PARTITION_TABLES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_DYNAMIC_PARTITION_TABLES|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_DYNAMIC_PARTITION_TABLES limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_EXTERNAL_RESOURCES;
+Field	Type	Null	Key	Default	Extra
+RESOURCE_ID	bigint(20)	NO		NULL	
+DATABASE_ID	bigint(20)	NO		NULL	
+NAME	varchar(256)	NO		NULL	
+TYPE	varchar(12)	NO		NULL	
+CONTENT	longblob	NO		NULL	
+COMMENT	varchar(4096)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_EXTERNAL_RESOURCES|%') then 2
+when ('' like '%|DBA_OB_EXTERNAL_RESOURCES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_EXTERNAL_RESOURCES|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_EXTERNAL_RESOURCES limit 1);
 cnt
 1
 desc oceanbase.V$OB_SS_SSTABLES;
@@ -10546,11 +10980,9 @@ set @query_type = (select
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SS_SSTABLES|%') then 2
 when ('' like '%|V$OB_SS_SSTABLES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SS_SSTABLES|%') then 4
 else 1
 end a);
-select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SS_SSTABLES limit 1);
-cnt
-1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from
 (SELECT t.table_name,
 group_concat(c.column_name) as column_name_list

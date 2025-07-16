@@ -380,6 +380,7 @@ struct ObStringStreamMeta
   uint8_t attr_;
   uint32_t uncompressed_len_;
   uint32_t fixed_str_len_;
+  uint32_t padding_; // pad sizeof(ObStringStreamMeta) to 16 bytes
 };
 
 struct ObStringStreamEncoderInfo

@@ -873,6 +873,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case ENABLE_PX_ORDERED_COORD:
     case ENABLE_TOPN_RUNTIME_FILTER:
     case DISABLE_GTT_SESSION_ISOLATION:
+    case ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY:
     case PRESERVE_ORDER_FOR_GROUPBY: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
@@ -1028,6 +1029,11 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case PARQUET_FILTER_PUSHDOWN_LEVEL:
     case ORC_FILTER_PUSHDOWN_LEVEL: {
       is_valid = val.is_int() && val.get_int() >= 0 && val.get_int() <= 4;
+      break;
+    }
+    case ENABLE_INDEX_MERGE: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                      || 0 == val.get_varchar().case_compare("false"));
       break;
     }
 

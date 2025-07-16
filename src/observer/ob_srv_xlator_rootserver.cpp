@@ -82,6 +82,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcAbortRedefTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcUpdateDDLTaskActiveTimeP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateHiddenTableP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCreateHiddenTableV2P, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcSetCommentP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcExchangePartitionP, *gctx_.root_service_);
@@ -176,6 +177,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcRevokeRoutineP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRevokeSysPrivP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterRoleP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcRevokeObjP, *gctx_.root_service_);
 
     //profile
     RPC_PROCESSOR(rootserver::ObRpcAlterUserProfileP, *gctx_.root_service_);
@@ -265,6 +267,9 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcCreateDirectoryP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropDirectoryP, *gctx_.root_service_);
 
+    RPC_PROCESSOR(rootserver::ObRpcCreateLocationP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcDropLocationP, *gctx_.root_service_);
+
 #ifdef OB_BUILD_SPM
     // sql plan baseline
     RPC_PROCESSOR(rootserver::ObRpcAcceptPlanBaselineP, *gctx_.root_service_);
@@ -292,4 +297,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
 
     RPC_PROCESSOR(rootserver::ObRpcRebuildTabletP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObForceDropLonelyLobAuxTableP, *gctx_.root_service_);
+
+    RPC_PROCESSOR(rootserver::ObRpcCreateExternalResourceP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcDropExternalResourceP, *gctx_.root_service_);
 }

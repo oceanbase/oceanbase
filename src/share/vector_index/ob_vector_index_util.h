@@ -90,6 +90,16 @@ enum ObKmeansAlgoType
   KAT_ELKAN = 0,
   KAT_MAX
 };
+
+// for descripe vec index adaptive scan try path, choose from: pre, post and in-filter
+enum ObVecIdxAdaTryPath : uint8_t
+{
+  VEC_PATH_UNCHOSEN = 0,
+  VEC_INDEX_PRE_FILTER = 1,
+  VEC_INDEX_ITERATIVE_FILTER = 2,
+  VEC_INDEX_IN_FILTER = 3,
+  VEC_PATH_MAX = 4
+};
 const static double VEC_ESTIMATE_MEMORY_FACTOR = 2.0;
 constexpr static uint32_t VEC_INDEX_MIN_METRIC = 8;
 constexpr const static char* const VEC_INDEX_ALGTH[ObVectorIndexDistAlgorithm::VIDA_MAX] = {
@@ -115,8 +125,14 @@ struct ObVectorIndexAlgorithmHeader
 // TODO: opt struct
 struct ObVectorIndexParam
 {
+  static constexpr float DEFAULT_REFINE_K = 4.0;
+  static constexpr int DEFAULT_BQ_BITS_QUERY = 32;
+
   ObVectorIndexParam() :
-    type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0), nlist_(0), sample_per_nlist_(0), extra_info_max_size_(0), extra_info_actual_size_(0)
+    type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0),
+    nlist_(0), sample_per_nlist_(0), extra_info_max_size_(0), extra_info_actual_size_(0),
+    refine_type_(0), bq_bits_query_(DEFAULT_BQ_BITS_QUERY),
+    refine_k_(DEFAULT_REFINE_K), bq_use_fht_(false)
   {}
   void reset() {
     type_ = VIAT_MAX;
@@ -130,6 +146,10 @@ struct ObVectorIndexParam
     sample_per_nlist_ = 0;
     extra_info_max_size_ = 0;
     extra_info_actual_size_ = 0;
+    refine_type_ = 0;
+    bq_bits_query_ = DEFAULT_BQ_BITS_QUERY;
+    refine_k_= DEFAULT_REFINE_K;
+    bq_use_fht_ = false;
   };
   ObVectorIndexAlgorithmType type_;
   ObVectorIndexAlgorithmLib lib_;
@@ -144,10 +164,15 @@ struct ObVectorIndexParam
   // default: 1024
   int64_t extra_info_max_size_;
   int64_t extra_info_actual_size_;
+  int16_t refine_type_;
+  int16_t bq_bits_query_;
+  float refine_k_;
+  bool bq_use_fht_;
   OB_UNIS_VERSION(1);
 public:
   TO_STRING_KV(K_(type), K_(lib), K_(dist_algorithm), K_(dim), K_(m), K_(ef_construction), K_(ef_search),
-    K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size));
+    K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size),
+    K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht));
 };
 
 class ObExprVecIvfCenterIdCache
@@ -207,6 +232,7 @@ class ObVectorIndexUtil final
   };
 public:
   static int construct_rebuild_index_param(
+      const ObTableSchema &data_table_schema,
       const ObString &old_index_params,
       ObString &new_index_params,
       common::ObIAllocator *allocator);
@@ -522,6 +548,13 @@ public:
       const uint64_t tenant_id,
       const int64_t tablet_row_count,
       int64_t &estimate_memory);
+  static int alter_vec_aux_column_schema(const ObTableSchema &aux_table_schema,
+                                         const ObColumnSchemaV2 &new_column_schema,
+                                         ObColumnSchemaV2 &new_aux_column_schema);
+  static int check_only_change_search_params(const ObString &old_idx_params,
+                                             const ObString &new_idx_params,
+                                             const ObTableSchema &index_table_schema,
+                                             bool &only_change_search_params);
 
 private:
   static void save_column_schema(
@@ -570,6 +603,7 @@ private:
       bool &has_same_col_id);
   static bool check_is_match_index_type(
       const ObIndexType type1, const ObIndexType type2);
+  static int is_int_val(const ObString &str, bool &is_int);
 };
 
 // For vector index snapshot write data

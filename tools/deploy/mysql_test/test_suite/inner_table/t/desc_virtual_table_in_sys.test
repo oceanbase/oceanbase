@@ -27,6 +27,8 @@ case when "$table_name" in (
 "__tenant_virtual_show_create_catalog" ,
 "__tenant_virtual_show_catalog_databases",
 "__tenant_virtual_show_catalog_tables",
+"__tenant_virtual_show_create_location",
+"__tenant_virtual_list_file",
 "__tenant_virtual_show_create_database" ,
 "__tenant_virtual_show_create_table" ,
 "__tenant_virtual_current_tenant" ,
@@ -52,7 +54,11 @@ when "$table_name" in (
 "__all_virtual_checkpoint_diagnose_checkpoint_unit_info") then 5
 when "$table_name" in (
 "__all_virtual_ss_tablet_meta",
-"__all_virtual_ss_ls_meta") then 6
+"__all_virtual_ss_ls_meta",
+"__all_virtual_ss_sstable_mgr",
+"__all_virtual_ss_existing_tablet_meta",
+"__all_virtual_ss_existing_sstable_mgr",
+"__all_virtual_ss_notify_tablets_stat") then 6
 else 1 end) as query_type from dual`;
 
 

@@ -73,6 +73,10 @@ private:
   typedef common::hash::ObHashMap<uint64_t, omt::ObTenantMeta> TENANT_META_MAP;
   virtual int parse(const int32_t cmd, const char *buf, const int64_t len, FILE *stream) override;
 
+  int inner_write_checkpoint(bool is_force);
+  int gc_checkpoint_file();
+  int gc_min_checkpoint_file(const int64_t min_file_id);
+  int gc_max_checkpoint_file(const int64_t max_file_id);
   int read_checkpoint(const ObServerSuperBlock &super_block);
   int replay_and_apply_server_slog(const common::ObLogCursor &replay_start_point);
   int replay_server_slog(const common::ObLogCursor &replay_start_point, common::ObLogCursor &replay_finish_point);

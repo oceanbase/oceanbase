@@ -218,6 +218,7 @@ void ObIndexBlockMacroIterator::reset() {
   is_iter_end_ = false;
   is_reverse_scan_ = false;
   is_inited_ = false;
+  index_tree_type_ = IndexTreeType::Unknown;
 }
 
 int ObIndexBlockMacroIterator::open(

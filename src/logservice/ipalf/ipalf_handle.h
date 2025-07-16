@@ -261,6 +261,7 @@ public:
   virtual int register_refresh_priority_cb() = 0;
 
   virtual int unregister_refresh_priority_cb() = 0;
+  virtual int set_allow_election_without_memlist(const bool allow_election_without_memlist) = 0;
 #endif
 	//================= 依赖功能注册 ===========================
 

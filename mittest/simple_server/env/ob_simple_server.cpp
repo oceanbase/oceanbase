@@ -130,7 +130,7 @@ int ObSimpleServer::simple_init()
   opts.rs_list_ = rs_list_.c_str();
   // NOTE: memory_limit must keep same with log_disk_size
   optstr_ = std::string();
-  optstr_ = optstr_ + "log_disk_size=" + std::string(log_disk_size_) + ",memory_limit=" + std::string(memory_limit_) + ",cache_wash_threshold=1G,net_thread_count=4,cpu_count=16,schema_history_expire_time=1d,workers_per_cpu_quota=10,datafile_disk_percentage=2,__min_full_resource_pool_memory=1073741824,system_memory=5G,trace_log_slow_query_watermark=100ms,datafile_size=" + std::string(datafile_size_) +",stack_size=512K";
+  optstr_ = optstr_ + "log_disk_size=" + std::string(log_disk_size_) + ",memory_limit=" + std::string(memory_limit_) + ",cache_wash_threshold=1G,net_thread_count=4,cpu_count=16,schema_history_expire_time=1d,workers_per_cpu_quota=10,datafile_disk_percentage=2,__min_full_resource_pool_memory=1073741824,system_memory=5G,trace_log_slow_query_watermark=100ms,datafile_size=" + std::string(datafile_size_) +",stack_size=512K,_enable_palf_kv=0";
   opts.optstr_ = optstr_.c_str();
   //opts.devname_ = "eth0";
   opts.use_ipv6_ = false;
@@ -176,7 +176,8 @@ int ObSimpleServer::simple_init()
     for (auto &dir : dirs) {
       ret = mkdir(dir.c_str(), 0777);
       if (OB_FAIL(ret)) {
-        SERVER_LOG(ERROR, "ObSimpleServer mkdir", K(ret), K(dir.c_str()));
+        SERVER_LOG(ERROR, "ObSimpleServer mkdir", K(ret), K(errno), KERRMSG,
+                   K(run_dir_.c_str()), K(dir.c_str()));
         return ret;
       }
     }

@@ -106,32 +106,30 @@ int ObDfoSchedulerBasic::on_sqc_threads_inited(ObExecContext &ctx, ObDfo &dfo) c
 int ObDfoSchedulerBasic::build_data_mn_xchg_ch(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const
 {
   int ret = OB_SUCCESS;
-  if ((parent.is_in_slave_mapping() && child.is_out_slave_mapping())
-      || ObPQDistributeMethod::Type::PARTITION == child.get_dist_method()
-      || ObPQDistributeMethod::Type::PARTITION_RANDOM == child.get_dist_method()
-      || ObPQDistributeMethod::Type::PARTITION_HASH == child.get_dist_method()
-      || ObPQDistributeMethod::Type::PARTITION_RANGE == child.get_dist_method()) {
-    // 构建对应的channel map：目前channel map分为三种类型
-    // 1. slave-mapping类型：会按照slave mapping的具体类型决定
-    // 2. affinity+pw类型(PARTITION)：pkey类型，按照partition粒度匹配
-    // 3. PARTITION_RANDOM：pkey类型，按照sqc粒度匹配
-    uint64_t tenant_id = OB_INVALID_ID;
-    if (OB_FAIL(get_tenant_id(ctx, tenant_id))) {
-    } else if (OB_FAIL(ObSlaveMapUtil::build_mn_ch_map(
-        ctx, child, parent, tenant_id))) {
-      LOG_WARN("fail to build slave mapping group", K(ret));
+  uint64_t tenant_id = OB_INVALID_ID;
+  bool is_slave_mapping = (parent.is_in_slave_mapping() && child.is_out_slave_mapping());
+  ObPQDistributeMethod::Type child_dist_method = child.get_dist_method();
+  if (OB_FAIL(get_tenant_id(ctx, tenant_id))) {
+    LOG_WARN("failed to get tenant id");
+  } else if (is_slave_mapping) {
+    // build channel for slave mapping scenes
+    if (OB_FAIL(ObSlaveMapUtil::build_slave_mapping_mn_ch_map(ctx, child, parent, tenant_id))) {
+      LOG_WARN("failed to build slave mapping mn channel map");
+    }
+  } else if (IS_PKEY_DIST_METHOD(child_dist_method)) {
+    // build channel for pkey related scenes, e.g. pdml && pkey
+    if (OB_FAIL(ObSlaveMapUtil::build_pkey_mn_ch_map(ctx, child, parent, tenant_id))) {
+      LOG_WARN("failed to build partition mn channel map");
     }
   } else {
-    // 其他普通场景下的channel创建
+    // build channel for other normal scenes
     int64_t child_dfo_idx = -1;
     ObPxChTotalInfos *transmit_mn_ch_info = &child.get_dfo_ch_total_infos();
-    uint64_t tenant_id = -1;
     if (OB_FAIL(ObDfo::check_dfo_pair(parent, child, child_dfo_idx))) {
       LOG_WARN("failed to check dfo pair", K(ret));
-    } else if (OB_FAIL(get_tenant_id(ctx, tenant_id))) {
-    } else if (OB_FAIL(ObSlaveMapUtil::build_mn_channel(
-        transmit_mn_ch_info, child, parent, tenant_id))) {
-      LOG_WARN("failed to build mn channel", K(ret));
+    } else if (OB_FAIL(ObSlaveMapUtil::build_mn_channel(transmit_mn_ch_info, child, parent,
+                                                        tenant_id))) {
+      LOG_WARN("failed to build mn channel");
     }
   }
   return ret;
@@ -310,11 +308,12 @@ int ObSerialDfoScheduler::init_all_dfo_channel(ObExecContext &ctx) const
                 coord_info_.pruning_table_location_, ctx, *parent))) {
           LOG_WARN("fail alloc addr by data distribution", K(parent), K(ret));
         }
-        LOG_TRACE("alloc_by_data_distribution", K(parent));
+        LOG_TRACE("alloc_by_data_distribution", K(*parent));
       } else if (has_reference_child) {
         if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(*parent))) {
           LOG_WARN("fail alloc addr by data distribution", K(parent), K(child), K(ret));
         }
+        LOG_TRACE("alloc_by_reference_child_distribution", K(*parent));
       } else if (OB_FAIL(ObPXServerAddrUtil::alloc_by_data_distribution(
                      coord_info_.pruning_table_location_, ctx, *parent))) {
         LOG_WARN("fail to alloc data distribution", K(ret));
@@ -940,8 +939,34 @@ int ObParallelDfoScheduler::dispatch_receive_channel_info(ObExecContext &ctx,
           LOG_WARN("Unexpected param", KP(ch), K(parent), K(sqc_id), K(ret));
         } else {
           ObDtlChTotalInfo *ch_info = nullptr;
-          if (OB_FAIL(child.get_dfo_ch_info(idx, ch_info))) {
+          if (parent.need_access_store() && parent.is_in_slave_mapping()
+              && child.is_out_slave_mapping()
+              && ObPQDistributeMethod::HASH == child.get_dist_method()) {
+            // for slave mapping under union all, the parent dfo may contain scan ops
+            // the sqc addr's sequence for each union branch may be different
+            // we should map the sqc pair of parent and child for slave mapping
+            bool found = false;
+            const ObAddr &parent_sqc_addr = sqcs.at(idx)->get_exec_addr();
+            for (int64_t k = 0; k < child.get_dfo_ch_total_infos().count() && OB_SUCC(ret); ++k) {
+              ch_info = &child.get_dfo_ch_total_infos().at(k);
+              if (OB_UNLIKELY(ch_info->receive_exec_server_.exec_addrs_.count() != 1)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected exec addrs count", K(*ch_info));
+              } else if (ch_info->receive_exec_server_.exec_addrs_.at(0) == parent_sqc_addr) {
+                found = true;
+                break;
+              }
+            }
+            if (OB_FAIL(ret)) {
+            } else if (OB_UNLIKELY(!found)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("ch_info not found");
+            }
+          } else if (OB_FAIL(child.get_dfo_ch_info(idx, ch_info))) {
             LOG_WARN("failed to get task receive chs", K(ret));
+          }
+
+          if (OB_FAIL(ret)) {
           } else if (OB_FAIL(receive_data_channel_msg.set_payload(child_dfo_id, *ch_info))) {
             LOG_WARN("fail init msg", K(ret));
           } else if (!receive_data_channel_msg.is_valid()) {

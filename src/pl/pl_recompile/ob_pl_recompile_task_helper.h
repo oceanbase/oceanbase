@@ -66,7 +66,8 @@ public:
   static int collect_delta_recompile_obj_data(common::ObMySQLProxy* sql_proxy,
                                                       uint64_t tenant_id,
                                                       ObIAllocator& allocator,
-                                                      int64_t& last_max_schema_version);
+                                                      int64_t& last_max_schema_version,
+                                                      share::schema::ObSchemaGetterGuard *schema_guard);
   static int collect_delta_error_data(common::ObMySQLProxy* sql_proxy,
                                                       uint64_t tenant_id,
                                                       int64_t last_max_schema_version,

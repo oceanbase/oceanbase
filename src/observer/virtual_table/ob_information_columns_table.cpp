@@ -325,13 +325,12 @@ int ObInfoSchemaColumnsTable::iterate_column_schema_array(
       if (column_schema->is_hidden()) {
         continue;
       }
-      ++logical_index;
       // use const_column_iterator, if it's index table
       // so should use the physical position
       if (table_schema.is_index_table()) {
         ordinal_position = column_schema->get_column_id() - 15;
       } else {
-        ordinal_position = logical_index;
+        ordinal_position = logical_index + 1;
       }
       if (OB_FAIL(fill_row_cells(database_name, &table_schema,
                                  column_schema, ordinal_position))) {
@@ -352,6 +351,7 @@ int ObInfoSchemaColumnsTable::iterate_column_schema_array(
           SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
         }
       }
+      ++logical_index;
     }
   }
   if (OB_FAIL(ret)) {

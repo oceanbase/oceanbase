@@ -318,6 +318,10 @@ public:
     type = semistruct_encoding_type_;
     return OB_SUCCESS;
   }
+  virtual const common::ObString& get_semistruct_properties() const override
+  {
+    return semistruct_properties_;
+  }
   virtual inline share::schema::ObTableType get_table_type() const override { return table_type_; }
   virtual inline share::schema::ObIndexType get_index_type() const override { return index_type_; }
   const common::ObIArray<ObStorageColumnSchema> &get_store_column_schemas() const { return column_array_; }
@@ -327,6 +331,7 @@ public:
   virtual inline common::ObCompressorType get_compressor_type() const override { return compressor_type_; }
   virtual inline ObMergeEngineType get_merge_engine_type() const override { return merge_engine_type_; }
   virtual inline bool is_delete_insert_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type_; }
+  virtual inline bool is_insert_only_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_INSERT_ONLY == merge_engine_type_; }
   virtual inline bool is_column_info_simplified() const override { return column_info_simplified_; }
 
   virtual int init_column_meta_array(
@@ -377,7 +382,7 @@ private:
   inline bool is_view_table() const { return share::schema::ObTableType::USER_VIEW == table_type_ || share::schema::ObTableType::SYSTEM_VIEW == table_type_ || share::schema::ObTableType::MATERIALIZED_VIEW == table_type_; }
 
   int generate_str(const share::schema::ObTableSchema &input_schema);
-  int generate_column_array(const share::schema::ObTableSchema &input_schema);
+  int generate_column_array(const share::schema::ObTableSchema &input_schema, const bool need_trim_default_val);
   int generate_column_group_array(const share::schema::ObTableSchema &input_schema, common::ObIAllocator &allocator);
   int generate_cs_replica_cg_array(common::ObIAllocator &allocator, ObIArray<ObStorageColumnGroupSchema> &cg_schemas) const; // also used by ddl
   int generate_cs_replica_cg_array();
@@ -424,7 +429,8 @@ public:
   static const int64_t STORAGE_SCHEMA_VERSION_V3 = 3; // add for cg_group
   static const int64_t STORAGE_SCHEMA_VERSION_V4 = 4;
   static const int64_t STORAGE_SCHEMA_VERSION_V5 = 5; // add for merge_engine_type_ and semistruct encoding type in 4.3.5 bp2
-  static const int64_t STORAGE_SCHEMA_VERSION_LATEST = STORAGE_SCHEMA_VERSION_V5;
+  static const int64_t STORAGE_SCHEMA_VERSION_V6 = 6; // add for semistruct properties in 4.4.1 bp1
+  static const int64_t STORAGE_SCHEMA_VERSION_LATEST = STORAGE_SCHEMA_VERSION_V6;
   common::ObIAllocator *allocator_;
   int64_t storage_schema_version_;
 
@@ -466,6 +472,7 @@ public:
   share::schema::ObMvMode mv_mode_;
   ObMergeEngineType merge_engine_type_;
   share::schema::ObSemiStructEncodingType semistruct_encoding_type_;
+  common::ObString semistruct_properties_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageSchema);

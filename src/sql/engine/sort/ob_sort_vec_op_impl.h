@@ -63,11 +63,12 @@ public:
     ties_array_pos_(0), ties_array_(), sorted_dumped_rows_ptrs_(), last_ties_row_(nullptr), rows_(nullptr),
     sort_exprs_getter_(allocator_),
     store_row_factory_(allocator_, sql_mem_processor_, sk_row_meta_, addon_row_meta_, inmem_row_size_, topn_cnt_),
-    topn_filter_(nullptr), is_topn_filter_enabled_(false), is_fixed_key_sort_enabled_(false), fixed_sort_key_len_(0), compress_type_(NONE_COMPRESSOR)
+    topn_filter_(nullptr), is_topn_filter_enabled_(false), is_fixed_key_sort_enabled_(false), fixed_sort_key_len_(0),
+    compress_type_(NONE_COMPRESSOR), tempstore_read_alignment_size_(0)
   {}
   virtual ~ObSortVecOpImpl()
   {
-    reset();
+    destroy();
   }
   virtual void reset() override;
   virtual int init(ObSortVecOpContext &context) override;
@@ -88,6 +89,7 @@ public:
   // reset to state before init
   void destroy()
   {
+    sql_mem_processor_.unregister_profile();
     reset();
   }
   int init_pd_topn_filter_msg(ObSortVecOpContext &ctx);
@@ -203,7 +205,7 @@ protected:
   bool need_dump()
   {
     return sql_mem_processor_.get_data_size() > get_tmp_buffer_mem_bound()
-           || get_total_used_size() >= profile_.get_max_bound();
+           || get_total_used_size() >= profile_.get_global_bound_size();
   }
   int64_t get_total_used_size()
   {
@@ -495,6 +497,7 @@ protected:
   uint32_t fixed_sort_key_len_;
   ObCompressorType compress_type_;
   ObPushDownTopNFilter pd_topn_filter_;
+  int64_t tempstore_read_alignment_size_;
 };
 
 } // end namespace sql

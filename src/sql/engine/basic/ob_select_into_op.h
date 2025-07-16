@@ -36,6 +36,7 @@
 #include "sql/engine/basic/ob_select_into_basic.h"
 #include "sql/engine/basic/ob_external_file_writer.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
+#include "sql/engine/table/ob_odps_table_utils.h"
 
 namespace oceanbase
 {
@@ -170,7 +171,8 @@ public:
       need_commit_(true),
       arrow_alloc_(),
       parquet_writer_schema_(nullptr),
-      orc_schema_(nullptr)
+      orc_schema_(nullptr),
+      array_helpers_()
   {
   }
 
@@ -268,12 +270,12 @@ private:
 
   int create_odps_schema();
 
-  int into_odps_jni_batch_one_col(int64_t col_idx, JniWriter::OdpsType odps_type, arrow::Field &arrow_field,
+  int into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector::OdpsType odps_type, arrow::Field &arrow_field,
       ObDatumMeta &meta, ObObjMeta &obj_meta, ObIVector &expr_vector, arrow::ArrayBuilder *builder,
       const ObBatchRows &brs, int &act_cnt, ObIAllocator &alloc, const bool is_strict_mode, const ObDateSqlMode date_sql_mode);
 
   int set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder,
-                                                JniWriter::OdpsType odps_type,
+                                                ObJniConnector::OdpsType odps_type,
                                                 const ObDatum &datum,
                                                 const ObDatumMeta &datum_meta,
                                                 const ObObjMeta &obj_meta,
@@ -283,7 +285,7 @@ private:
                                                 const ObDateSqlMode date_sql_mode);
 
   int set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builder,
-                                                 JniWriter::OdpsType odps_type,
+                                                 ObJniConnector::OdpsType odps_type,
                                                  const ObDatum &datum,
                                                  const ObDatumMeta &datum_meta,
                                                  const ObObjMeta &obj_meta,
@@ -353,7 +355,6 @@ private:
   int create_shared_buffer_for_data_writer();
   int create_the_only_data_writer(ObExternalFileWriter *&data_writer);
   int new_data_writer(ObExternalFileWriter *&data_writer);
-  int check_secure_file_path(ObString file_name);
   int get_data_writer_for_partition(const ObString &partition_str, ObExternalFileWriter *&data_writer);
   char *get_json_buf() { return json_buf_; }
   int64_t get_json_buf_len() { return json_buf_len_; }
@@ -431,6 +432,24 @@ private:
   bool file_need_split(int64_t file_size);
   int check_oracle_number(ObObjType obj_type, int16_t &precision, int8_t scale);
   static bool day_number_checker(int32_t days);
+
+  #ifdef OB_BUILD_CPP_ODPS
+  int recursive_fill_list_record(shared_ptr<apsara::odps::sdk::ODPSArray> odps_array,
+                                 ObODPSArrayHelper *array_helper,
+                                 ObIAllocator &alloc,
+                                 const bool is_strict_mode,
+                                 const ObDateSqlMode date_sql_mode);
+  #endif
+  #ifdef OB_BUILD_JNI_ODPS
+  int recursive_fill_list_builder(arrow::ListBuilder *list_builder,
+                                  arrow::ArrayBuilder *child_builder,
+                                  ObODPSArrayHelper *array_helper,
+                                  ObIAllocator &alloc,
+                                  const bool is_strict_mode,
+                                  const ObDateSqlMode date_sql_mode);
+  #endif
+public:
+  static int check_secure_file_path(ObString file_name);
 private:
   int64_t top_limit_cnt_;
   bool is_first_;
@@ -489,6 +508,7 @@ private:
   orc::WriterOptions options_;
   ObOrcMemPool orc_alloc_;
   std::unique_ptr<orc::Type> orc_schema_;
+  ObSEArray<ObODPSArrayHelper*, 8> array_helpers_;
 };
 
 

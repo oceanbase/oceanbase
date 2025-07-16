@@ -136,7 +136,7 @@ int ObDDLEpochMgr::promote_ddl_epoch(const uint64_t tenant_id, int64_t wait_us, 
         locked = true;
         break;
       } else {
-        ::usleep(10 * 1000);
+        ob_usleep(10 * 1000);
       }
     }
     if (locked) {

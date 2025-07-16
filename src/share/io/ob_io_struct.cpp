@@ -821,7 +821,7 @@ int ObIOTuner::init()
   return ret;
 }
 
-int ObIOTuner::send_detect_task()
+int ObIOTuner::send_sn_detect_task()
 {
   int ret = OB_SUCCESS;
   ObArray<MacroBlockId> macro_ids;
@@ -840,6 +840,24 @@ int ObIOTuner::send_detect_task()
       LOG_WARN("fail to record timing task", K(ret), K(rand_id));
     }
   }
+  return ret;
+}
+
+int ObIOTuner::send_ss_detect_task()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (!OB_SERVER_FILE_MGR.is_started()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("server file manager has not been started", KR(ret));
+  } else {
+    const int64_t first_id = ObIOFd::NORMAL_FILE_ID;
+    const int64_t second_id = OB_SERVER_FILE_MGR.get_io_detect_file_fd();
+    if (OB_FAIL(OB_IO_MANAGER.get_device_health_detector().record_timing_task(first_id, second_id))) {
+      LOG_WARN("fail to record timing task", KR(ret), K(first_id), K(second_id));
+    }
+  }
+#endif
   return ret;
 }
 
@@ -872,8 +890,10 @@ void ObIOTuner::run1()
     // print interval must <= 1s, for ensuring real_iops >= 1 in gv$ob_io_quota.
     if (REACH_TIME_INTERVAL(1000L * 1000L * 1L)) {
       OB_IO_MANAGER.print_status();
-      if (!GCTX.is_shared_storage_mode() && OB_FAIL(send_detect_task())) {
-        LOG_WARN("fail to send detect task", K(ret));
+      if (GCTX.is_shared_storage_mode() && OB_FAIL(send_ss_detect_task())) {
+        LOG_WARN("fail to send detect task", KR(ret));
+      } else if (!GCTX.is_shared_storage_mode() && OB_FAIL(send_sn_detect_task())) {
+        LOG_WARN("fail to send detect task", KR(ret));
       }
     }
     ob_usleep(100 * 1000, true/*is_idle_sleep*/); // 100ms
@@ -3053,9 +3073,6 @@ int ObIORunner::handle(ObIORequest *req)
             K(time_in_queue), K(get_queue_count()), KPC(req));
       }
     }
-    if (TC_REACH_TIME_INTERVAL(1000LL * 1000LL)) {  // 1000ms
-      LOG_INFO("callback runner call handle", K(get_queue_count()), KPC(req));
-    }
     ObTraceIDGuard trace_guard(req->trace_id_);
     { // callback must execute in guard, in case of cancel halfway
       if (OB_ISNULL(req->io_result_)) {
@@ -3168,6 +3185,7 @@ int ObIOCallbackManager::init(const int64_t tenant_id, const int64_t thread_coun
 
 void ObIOCallbackManager::destroy()
 {
+  DRWLock::WRLockGuard guard(lock_);
   if (nullptr != io_allocator_) {
     for (int64_t i = 0; i < runners_.count(); ++i) {
       runners_.at(i)->stop();
@@ -3181,7 +3199,6 @@ void ObIOCallbackManager::destroy()
   }
   config_thread_count_ = 0;
   queue_depth_ = 0;
-  DRWLock::WRLockGuard guard(lock_);
   runners_.reset();
   io_allocator_ = nullptr;
   is_inited_ = false;
@@ -3393,6 +3410,16 @@ int ObIOFaultDetector::init()
   return ret;
 }
 
+void ObIOFaultDetector::stop()
+{
+  TG_STOP(TGDefIDs::IO_HEALTH);
+}
+
+void ObIOFaultDetector::wait()
+{
+  TG_WAIT(TGDefIDs::IO_HEALTH);
+}
+
 void ObIOFaultDetector::destroy()
 {
   TG_STOP(TGDefIDs::IO_HEALTH);
@@ -3440,7 +3467,9 @@ void ObIOFaultDetector::handle(void *task)
     if ((is_device_warning_ || is_device_error_) && retry_task->io_info_.flag_.is_time_detect()) {
       //ignore
     } else if (!is_supported_detect_read_(retry_task->io_info_.tenant_id_, retry_task->io_info_.fd_)) {
-      //ignore
+      // Note: here is a defence
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected detect read", KR(ret), KPC(retry_task));
     } else {
       int64_t timeout_ms = retry_task->timeout_ms_;
       // remain 1s to avoid race condition for retry_black_list_interval
@@ -3598,9 +3627,21 @@ bool ObIOFaultDetector::is_supported_detect_read_(const uint64_t tenant_id, cons
     if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
       bret = false;
     } else if (is_virtual_tenant_id(tenant_id)) {
-      // In SS mode, server tenant does not have micro cache file,
-      // thus it's unnecessary to execute detect tasks
-      bret = false;
+      if (OB_SERVER_TENANT_ID == tenant_id) {
+        const int io_detect_fd = OB_SERVER_FILE_MGR.get_io_detect_file_fd();
+        if (io_detect_fd == OB_INVALID_FD) {
+          ret = OB_NOT_SUPPORTED;
+          bret = false;
+          LOG_WARN("io detect file not exist, no need to detect", KR(ret));
+        } else if (io_detect_fd != fd.second_id_) {
+          ret = OB_NOT_SUPPORTED;
+          bret = false;
+          LOG_INFO("in shared_storage mode, only io_detect_file reads are supported for detection",
+              KR(ret), K(tenant_id), K(fd), K(io_detect_fd));
+        }
+      } else {
+        bret = false;
+      }
     } else {
       MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
       if (OB_SUCC(guard.switch_to(tenant_id, false/*need_check_allow*/))) {
@@ -3634,7 +3675,8 @@ void ObIOFaultDetector::record_io_timeout(const ObIOResult &result, const ObIORe
     //ignore, do not retry
   } else if (req.get_flag().is_sync()) {
     LOG_INFO("ignore fault detect for sync io", K(req));
-  } else if (result.flag_.is_read() && !result.is_object_device_req_) {
+  } else if (result.flag_.is_read() && !result.is_object_device_req_ &&
+             is_supported_detect_read_(req.tenant_id_, req.fd_)) {
     RetryTask *retry_task = nullptr;
     if (OB_ISNULL(retry_task = op_alloc(RetryTask))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3670,7 +3712,8 @@ void ObIOFaultDetector::record_io_error(const ObIOResult &result, const ObIORequ
     //ignore, do not retry
   } else if (req.get_flag().is_sync()) {
     LOG_INFO("ignore fault detect for sync io", K(req));
-  } else if (result.flag_.is_read() && !result.is_object_device_req_) {
+  } else if (result.flag_.is_read() && !result.is_object_device_req_ &&
+             is_supported_detect_read_(req.tenant_id_, req.fd_)) {
     if (OB_FAIL(record_read_failure_(result, req))) {
       LOG_WARN("record read failure failed", K(ret), K(result), K(req));
     }

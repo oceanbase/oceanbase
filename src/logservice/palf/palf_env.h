@@ -112,6 +112,8 @@ public:
   virtual int update_replayable_point(const SCN &replayable_scn) override final;
 
   virtual int64_t get_tenant_id() override final;
+
+  virtual int advance_base_lsn(int64_t id, palf::LSN lsn) override final;
 public:
   // just for LogRpc
   palf::IPalfEnvImpl *get_palf_env_impl() { return &palf_env_impl_; }

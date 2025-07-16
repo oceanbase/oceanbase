@@ -13,6 +13,7 @@
 #ifndef OB_ALL_VIRTUAL_SS_LS_TABLET_REORG_INFO_H_
 #define OB_ALL_VIRTUAL_SS_LS_TABLET_REORG_INFO_H_
 
+#include "storage/reorganization_info_table/ob_tablet_reorg_info_table_operation.h"
 #include "common/row/ob_row.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/guard/ob_shared_guard.h"
@@ -21,7 +22,6 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/tx_storage/ob_ls_map.h"
-#include "storage/member_table/ob_member_table_operation.h"
 
 namespace oceanbase
 {
@@ -61,18 +61,18 @@ private:
   // release last tenant's resource.
   virtual void release_last_tenant() override;
   int get_next_ls_(ObLS *&ls);
-  int get_next_member_table_data_(ObMemberTableData &data, share::SCN &commit_scn);
+  int get_next_reorg_info_data_(ObTabletReorgInfoData &data, share::SCN &commit_scn);
   int init_read_op_(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id);
-  void free_read_op_(ObMemberTableReadOperator *&read_op);
+  void free_read_op_(ObTabletReorgInfoTableReadOperator *&read_op);
 
 private:
   common::ObAddr addr_;
   int64_t ls_id_;
   char ip_buf_[common::OB_IP_STR_BUFF];
   ObSharedGuard<storage::ObLSIterator> ls_iter_guard_;
-  ObMemberTableReadOperator *read_op_;
+  ObTabletReorgInfoTableReadOperator *read_op_;
   char buf_[OB_MAX_VARCHAR_LENGTH];
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualSSLsTabletReorgInfo);

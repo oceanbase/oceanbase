@@ -70,7 +70,7 @@ WAIT_EVENT_DEF(TRANS_SET_VIOLATION_RETRY, 14006, "retry: transaction set violati
 WAIT_EVENT_DEF(IO_QUEUE_COND_WAIT, 15066, "io queue condition wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(LATCH_WAIT_QUEUE_LOCK_WAIT, 15084, "latch wait queue lock wait", "address", "number", "tries", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(DEFAULT_COND_WAIT, 15101, "default condition wait", "address", "", "", CONCURRENCY, true, true)
-WAIT_EVENT_DEF(DEFAULT_SLEEP, 15102, "sleep wait", "sleep_interval", "", "", IDLE, true, true)
+WAIT_EVENT_DEF(DEFAULT_SLEEP, 15102, "sleep wait", "sleep_interval", "caller bt", "", IDLE, true, true)
 WAIT_EVENT_DEF(CLOG_WRITER_COND_WAIT, 15103, "clog writer condition wait", "address", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(IO_CONTROLLER_COND_WAIT, 15104, "io controller condition wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(IO_PROCESSOR_COND_WAIT, 15105, "io processor condition wait", "address", "", "", CONCURRENCY, true, false)
@@ -135,6 +135,13 @@ WAIT_EVENT_DEF(TMP_FILE_FLUSH_COND_WAIT, 18107, "tmp file flush condition wait",
 WAIT_EVENT_DEF(MACRO_BLOOM_FILTER_COND_WAIT, 18108, "macro block bloom filter condition wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(LS_BACKUP_COND_WAIT, 18109, "logstream backup condition wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(TMP_FILE_COND_WAIT, 18110, "tmp file condition wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(DL_ROOT_QUEUE_LOCK, 18111, "root queue lock", "", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(OCI_GET_LOCK, 18112, "oci get lock", "", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(OCI_DBLINK_POOL_LOCK, 18113, "dbink pool lock", "", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(USER_INFO_LOCK, 18114, "user info lock", "", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(MYSQL_CONN_GET_LOCK, 18115, "mysql conn get lock", "", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(MYSQL_CONN_DBLINK_POOL_LOCK, 18116, "mysql conn dblink pool lock", "", "", "", CONCURRENCY, true, true)
+
 
 //sleep
 WAIT_EVENT_DEF(BANDWIDTH_THROTTLE_SLEEP, 20000, "sleep: bandwidth throttle sleep wait", "sleep_interval", "", "", NETWORK, true, true)

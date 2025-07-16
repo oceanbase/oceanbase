@@ -99,12 +99,14 @@ public: // dalegate functions
                        memtable::ObMvccTransNode &tnode,
                        const bool need_row_latch);
 
-  int get_recycle_scn(share::SCN &recycle_scn,
-                      const bool is_shared_minor = false);
+  int get_recycle_scn(share::SCN &recycle_scn);
 
   int self_freeze_task();
 
+  void record_tx_data_recycle_scn(const share::SCN recycle_scn, const bool is_local_exec_mode);
+
   bool check_ls_offline();
+  bool can_recycle_tx_data(const share::SCN current_recycle_scn, const bool is_local_exec_mode);
 
   void reuse() { mini_cache_.reset(); }
 
@@ -114,6 +116,12 @@ private:
   ObTxTable *tx_table_;
   int64_t epoch_;
   ObTxDataMiniCache mini_cache_;
+
+#ifdef OB_BUILD_SHARED_STORAGE
+public:
+  int get_ss_recycle_scn(share::SCN &recycle_scn);
+#endif
+
 };
 
 }  // namespace storage

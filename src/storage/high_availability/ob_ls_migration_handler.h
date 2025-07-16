@@ -68,6 +68,7 @@ public:
       const ObLSMigrationHandlerStatus &curr_status,
       const int32_t result,
       ObLSMigrationHandlerStatus &next_status);
+  static const char *get_status_str(const ObLSMigrationHandlerStatus &status);
 };
 
 struct ObLSMigrationTask
@@ -107,6 +108,16 @@ public:
   bool is_cancel() const;
   bool is_complete() const;
   int set_result(const int32_t result);
+  int get_migration_task_and_handler_status(
+      ObLSMigrationTask &task,
+      ObLSMigrationHandlerStatus &status);
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  int notify_switch_to_leader_and_wait_replace_complete(const int64_t new_proposal_id);
+  int wait_notified_switch_to_leader(
+      const ObTimeoutCtx &timeout_ctx,
+      int64_t &leader_proposal_id);
+#endif
 private:
   void reuse_();
   void wakeup_();
@@ -178,6 +189,12 @@ private:
   bool is_cancel_;
   ObStorageHASrcInfo chosen_src_;
   bool is_complete_; // true when ObLSCompleteMigrationDagNet has been generated
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  common::ObThreadCond switch_leader_cond_;
+  int64_t switch_leader_cnt_;
+  int64_t leader_proposal_id_;
+#endif
   DISALLOW_COPY_AND_ASSIGN(ObLSMigrationHandler);
 };
 

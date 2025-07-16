@@ -120,34 +120,5 @@ void ObPsStmtInfoDestroyAtomicOp::operator()(const PsStmtInfoKV &entry)
   }
 }
 
-void ObPsPCVSetAtomicOp::operator()(PsPlanCacheKV &entry)
-{
-  if (NULL != entry.second) {
-    entry.second->inc_ref_count(ref_handle_);
-    pcv_set_ = entry.second;
-    SQL_PC_LOG(DEBUG, "succ to get plan cache value", "ref_count", pcv_set_->get_ref_count());
-  } else {
-    // if no pcv set found, no need to do anything now
-  }
-}
-
-//get pcvs and lock
-int ObPsPCVSetAtomicOp::get_value(ObPCVSet *&pcvs)
-{
-  int ret = OB_SUCCESS;
-  pcvs = NULL;
-  if (OB_ISNULL(pcv_set_)) {
-    ret = OB_NOT_INIT;
-    SQL_PC_LOG(WARN, "invalid argument", K(pcv_set_));
-  } else if (OB_SUCC(lock(*pcv_set_))) {
-    pcvs = pcv_set_;
-  } else {
-    if (NULL != pcv_set_) {
-      pcv_set_->dec_ref_count(ref_handle_);
-    }
-    SQL_PC_LOG(ERROR, "failed to get read lock of plan cache value", K(ret));
-  }
-  return ret;
-}
 }
 }

@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_STORAGE_OB_DDL_SERVER_CLIENT_H
 #define OCEANBASE_STORAGE_OB_DDL_SERVER_CLIENT_H
 
-#include "share/ob_rpc_struct.h"
+#include "share/ob_create_hidden_tablev2_rpc_struct.h"
 #include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
@@ -32,8 +32,10 @@ public:
   /**
    * for load data.
   */
+
+  template<typename CreateHiddenTableArgType>
   static int create_hidden_table(
-      const obrpc::ObCreateHiddenTableArg &arg,
+      const CreateHiddenTableArgType &arg,
       obrpc::ObCreateHiddenTableRes &res,
       int64_t &snapshot_version,
       uint64_t &data_format_version,
@@ -56,6 +58,8 @@ private:
       bool &is_no_logging);
   static int heart_beat_clear(const int64_t task_id, const uint64_t tenant_id);
   static int check_need_stop(const uint64_t tenant_id);
+  static int inner_create_hidden_table_(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res);
+  static int inner_create_hidden_table_(const obrpc::ObCreateHiddenTableArgV2 &arg, obrpc::ObCreateHiddenTableRes &res);
 };
 
 }  // end of namespace observer

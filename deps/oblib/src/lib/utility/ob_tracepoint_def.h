@@ -358,6 +358,10 @@ GLOBAL_ERRSIM_POINT_DEF(522, EN_BLOCK_LOB_SPLIT_BEFORE_SSTABLES_SPLIT, "");
 GLOBAL_ERRSIM_POINT_DEF(523, EN_DDL_CREATE_OLD_VERSION_COLUMN_GROUP, "");
 GLOBAL_ERRSIM_POINT_DEF(524, EN_AUTO_SPLIT_TABLET_SIZE, "Used to set auto_split_tablet_size in bytes");
 GLOBAL_ERRSIM_POINT_DEF(525, EN_SKIP_DROP_LOB_AUX_TABLE, "do not drop lob aux table");
+GLOBAL_ERRSIM_POINT_DEF(526, EN_AFTER_MINOR_BUT_BEFORE_MAJOR_SPLIT, "test data-split after the minor split, but before the major");
+GLOBAL_ERRSIM_POINT_DEF(527, EN_WRITE_SPLIT_START_LOG_DELAY_SEC, "delay seconds before write split start log");
+GLOBAL_ERRSIM_POINT_DEF(528, EN_AUTO_SPLIT_TASK_CNT_LESS_THAN, "max number of running auto split task allowed in cluster");
+GLOBAL_ERRSIM_POINT_DEF(529, EN_BLOCK_BEFORE_SPLIT_DOWNLOAD_SSTABLE, "block split before downloading sstables");
 
 // vec index
 GLOBAL_ERRSIM_POINT_DEF(530, EN_VEC_INDEX_DROP_SHARE_TABLE_ERR, "");
@@ -480,6 +484,7 @@ GLOBAL_ERRSIM_POINT_DEF(762, EN_MV_LARGE_SSTABLE_THRESHOLD, "used to check mv ss
 GLOBAL_ERRSIM_POINT_DEF(763, EN_SHARED_STORAGE_MICRO_CACHE_WRITE_DISK_ERR, "ss_micro_cache write disk error");
 GLOBAL_ERRSIM_POINT_DEF(764, EN_SHARED_STORAGE_DISK_OUTOF_SPACE_ERR, "disk outof space error");
 GLOBAL_ERRSIM_POINT_DEF(765, EN_SHARED_STORAGE_MICRO_CACHE_REPLAY_CKPT_ERR, "ss_micro_cache replay checkpoint error");
+GLOBAL_ERRSIM_POINT_DEF(766, EN_SHARED_STORAGE_MACRO_CACHE_REPLAY_CKPT_ERR, "ss macro cache replay checkpoint error");
 GLOBAL_ERRSIM_POINT_DEF(800, EN_END_PARTICIPANT, "");
 
 // compaction 801 - 899
@@ -630,5 +635,17 @@ GLOBAL_ERRSIM_POINT_DEF(2503, EN_OBJECT_STORAGE_IO_RETRY, "whether to enable pro
 GLOBAL_ERRSIM_POINT_DEF(2550, EN_SPI_SQL_EXEC, "Used to check spi sql");
 GLOBAL_ERRSIM_POINT_DEF(2551, EN_SPI_GET_NEXT_ROW, "Used to check cursor fetch");
 // PL end
+
+// RPC framework 2601 - 2620
+GLOBAL_ERRSIM_POINT_DEF(2601, EN_RPC_SOCKET_ERROR, "inject rpc socket error, making rpc failed");
+GLOBAL_ERRSIM_POINT_DEF(2602, EN_RPC_IO_THREAD_HANG, "make rpc io thread hang for a while");
+
+// HTable Parallel DDL begin 2621 - 2650
+GLOBAL_ERRSIM_POINT_DEF(2621, EN_CREATE_HTABLE_TG_FINISH_ERR, "create htable tablegroup finish error");
+GLOBAL_ERRSIM_POINT_DEF(2622, EN_CREATE_HTABLE_CF_FINISH_ERR, "create htable table finish error");
+GLOBAL_ERRSIM_POINT_DEF(2623, EN_DISABLE_HTABLE_CF_FINISH_ERR, "disable htable table finish error");
+GLOBAL_ERRSIM_POINT_DEF(2624, EN_DELETE_HTABLE_CF_FINISH_ERR, "delete htable table finish error");
+GLOBAL_ERRSIM_POINT_DEF(2625, EN_DELETE_HTABLE_SKIP_CF_ERR, "delete htable table without delete cf");
+// HTable Parallel DDL end
 
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/

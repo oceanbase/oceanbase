@@ -42,7 +42,7 @@ struct ObExternalFileInfo {
   int64_t row_count_;
   common::ObString session_id_;
   int deep_copy(ObIAllocator &allocator, const ObExternalFileInfo &other);
-  TO_STRING_KV(K_(file_url), K_(file_id), K_(part_id), K_(file_addr), K_(file_size), K_(row_start), K_(row_count));
+  TO_STRING_KV(K_(file_url), K_(file_id), K_(part_id), K_(file_addr), K_(file_size), K_(row_start), K_(row_count), K_(session_id));
   OB_UNIS_VERSION(1);
 };
 
@@ -207,6 +207,7 @@ public:
 
   int refresh_external_table(const uint64_t tenant_id,
                               const ObTableSchema *table_schema,
+                              ObSchemaGetterGuard &schema_guard,
                               ObExecContext &exec_ctx,
                               bool &has_partition_changed);
 

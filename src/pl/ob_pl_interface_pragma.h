@@ -82,6 +82,7 @@
 #include "pl/sys_package/ob_dbms_vector_mysql.h"
 #include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
 #include "pl/sys_package/ob_dbms_partition.h"
+#include "pl/sys_package/ob_dbms_java.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -299,6 +300,8 @@
   INTERFACE_DEF(INTERFACE_GET_TIME, "GET_TIME", (DbmsUtilityHelper::get_time))
   INTERFACE_DEF(INTERFACE_INVALIDATE, "INVALIDATE", (DbmsUtilityHelper::invalidate))
   INTERFACE_DEF(INTERFACE_VALIDATE, "VALIDATE", (DbmsUtilityHelper::validate))
+  INTERFACE_DEF(INTERFACE_INNER_CHECK_DISK_CACHE_OBJ_EXPIRED, "INNER_CHECK_DISK_CACHE_OBJ_EXPIRED", (DbmsUtilityHelper::check_disk_cache_obj_expired))
+  INTERFACE_DEF(INTERFACE_INNER_CHECK_PL_CACHE_OBJ_EXPIRED, "INNER_CHECK_PL_CACHE_OBJ_EXPIRED", (DbmsUtilityHelper::check_pl_cache_obj_expired))
   INTERFACE_DEF(INTERFACE_PSDANAM, "PSDANAM", (DbmsUtilityHelper::psdanam))
   INTERFACE_DEF(INTERFACE_RECOMPILE, "PL_RECOMPILE", (ObPLRecompileTaskHelper::recompile_pl_objs))
   // end dbms_utility
@@ -870,6 +873,11 @@
   // start of dbms_partition
   INTERFACE_DEF(INTERFACE_DBMS_PARTITION_MANAGE_DYNAMIC_PARTITION, "DBMS_PARTITION_MANAGE_DYNAMIC_PARTITION", (ObDBMSPartition::manage_dynamic_partition))
   // end of dbms_partition
+
+  // start of dbms_java
+  INTERFACE_DEF(INTERFACE_DBMS_JAVA_LOADJAVA_MYSQL, "DBMS_JAVA_LOADJAVA_MYSQL", (ObDBMSJava::loadjava_mysql))
+  INTERFACE_DEF(INTERFACE_DBMS_JAVA_DROPJAVA_MYSQL, "DBMS_JAVA_DROPJAVA_MYSQL", (ObDBMSJava::dropjava_mysql))
+  // end of dbms_java
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

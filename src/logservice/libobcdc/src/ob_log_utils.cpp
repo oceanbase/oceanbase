@@ -1254,7 +1254,7 @@ int get_tenant_compat_mode(const uint64_t tenant_id,
     if (! done) {
       // Retry to get it again
       ret = OB_SUCCESS;
-      // After a failure to acquire the tenant schema, and in order to ensure that the modules can handle the performance, usleep for a short time
+      // After a failure to acquire the tenant schema, and in order to ensure that the modules can handle the performance, ob_usleep for a short time
       ob_usleep(100);
     }
 

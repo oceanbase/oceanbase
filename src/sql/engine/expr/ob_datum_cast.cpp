@@ -19,6 +19,7 @@
 #include "lib/roaringbitmap/ob_rb_utils.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "lib/geo/ob_geometry_cast.h"
+#include "lib/geo/ob_wkb_to_json_bin_visitor.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
@@ -160,6 +161,8 @@ static OB_INLINE int get_cast_ret(const ObCastMode &cast_mode, int ret, int &war
   } else if (OB_SUCCESS != ret && CM_IS_WARN_ON_FAIL(cast_mode)) {
     warning = ret;
     ret = OB_SUCCESS;
+  } else if (ret == OB_INVALID_ZERO_DATE) {
+    ret = OB_INVALID_DATE_VALUE;
   }
   return ret;
 }
@@ -194,6 +197,7 @@ int get_cast_ret_wrap(const ObCastMode &cast_mode, int ret, int &warning)
           || OB_DATA_OUT_OF_RANGE == warning                      \
           || OB_ERR_DATA_TRUNCATED == warning                     \
           || OB_ERR_DOUBLE_TRUNCATED == warning                   \
+          || OB_INVALID_ZERO_DATE == warning                      \
           || OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD == warning) { \
         res_datum.set_##func_val(value);                          \
       } else if (CM_IS_ZERO_ON_WARN(cast_mode)) {                 \
@@ -3139,8 +3143,17 @@ static int common_floating_string(const ObExpr &expr,
     if (0 <= scale) {
       length = ob_fcvt(in_val, scale, sizeof(buf) - 1, buf, NULL);
     } else {
-      length = ob_gcvt_opt(in_val, arg_type, static_cast<int32_t>(sizeof(buf) - 1),
-                           buf, NULL, lib::is_oracle_mode(), TRUE);
+      const int32_t buf_length = static_cast<int32_t>(sizeof(buf) - 1);
+      int32_t double_width = buf_length;
+      if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(expr.extra_) &&
+          ob_is_double_tc(expr.args_[0]->datum_meta_.type_) && expr.max_length_ > 0) {
+        double_width = min(double_width, expr.max_length_);
+      }
+      length = ob_gcvt_opt(in_val, arg_type, double_width, buf, NULL, lib::is_oracle_mode(), TRUE);
+      if (length == 0 && double_width < buf_length) {
+        length = double_width;
+        buf[length] = '\0';
+      }
     }
   }
   ObString in_str(sizeof(buf), static_cast<int32_t>(length), buf);
@@ -11129,8 +11142,47 @@ CAST_FUNC_NAME(geometry, json)
 {
   EVAL_STRING_ARG()
   {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "geomerty, json");
+    ObString in_str = child_res->get_string();
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *child_res,
+                expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), in_str,
+                &ctx.exec_ctx_))) {
+      LOG_WARN("fail to get real data.", K(ret), K(in_str));
+    } else if (CM_IS_IMPLICIT_CAST(expr.extra_) && !CM_IS_WARN_ON_FAIL(expr.extra_)) {
+      if (expr.args_[0]->datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
+        ret = OB_ERR_INVALID_JSON_CHARSET;
+        LOG_USER_ERROR(OB_ERR_INVALID_JSON_CHARSET);
+      } else if (OB_FAIL(common_string_json(expr, expr.args_[0]->datum_meta_.type_, in_str, ctx,
+                                            res_datum))) {
+        LOG_WARN("fail to cast string to json", K(ret));
+      }
+    } else {
+      ObString json_bin;
+      ObGeoSrid srid = 0;
+      ObGeometry *geo = nullptr;
+      omt::ObSrsCacheGuard srs_guard;
+      const ObSrsItem *srs = nullptr;
+      if (OB_FAIL(ObGeoExprUtils::construct_geometry(
+                            temp_allocator,
+                            in_str,
+                            srs_guard,
+                            srs,
+                            geo,
+                            N_CONVERT,
+                            true,
+                            false))) {
+        LOG_WARN("fail to build geometry from wkb", K(ret), K(in_str));
+      }
+      // No SRID or BBOX info requried for output json
+      ObWkbToJsonBinVisitor visitor(&temp_allocator);
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(visitor.to_jsonbin(geo, json_bin))) {
+        LOG_WARN("fail to convert geo to jsonbin", K(ret));
+      } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, json_bin))) {
+        LOG_WARN("fail to fill json bin lob locator", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -18786,7 +18838,8 @@ int ObDatumCaster::to_type(const ObDatumMeta &dst_type,
                            const ObCastMode &cm,
                            ObDatum *&res,
                            int64_t batch_idx,
-                           const uint16_t subschema_id)
+                           const uint16_t subschema_id,
+                           const int32_t max_length)
 {
   int ret = OB_SUCCESS;
   const ObDatumMeta &src_type = src_expr.datum_meta_;
@@ -18843,13 +18896,13 @@ int ObDatumCaster::to_type(const ObDatumMeta &dst_type,
     }
 
     if (need_extra_cast_for_src_type || need_extra_cast_for_dst_type) {
-      if (OB_FAIL(setup_cast_expr(extra_dst_type, src_expr, cm, *extra_cast_expr_))) {
+      if (OB_FAIL(setup_cast_expr(extra_dst_type, src_expr, cm, *extra_cast_expr_, 0, max_length))) {
         LOG_WARN("setup_cast_expr failed", K(ret));
-      } else if (OB_FAIL(setup_cast_expr(dst_type, *extra_cast_expr_, cm, *cast_expr_))) {
+      } else if (OB_FAIL(setup_cast_expr(dst_type, *extra_cast_expr_, cm, *cast_expr_, 0, max_length))) {
         LOG_WARN("setup_cast_expr failed", K(ret));
       }
     } else {
-      if (OB_FAIL(setup_cast_expr(dst_type, src_expr, cm, *cast_expr_, subschema_id))) {
+      if (OB_FAIL(setup_cast_expr(dst_type, src_expr, cm, *cast_expr_, subschema_id, max_length))) {
         LOG_WARN("setup_cast_expr failed", K(ret));
       }
     }
@@ -18946,7 +18999,8 @@ int ObDatumCaster::setup_cast_expr(const ObDatumMeta &dst_type,
                                    const ObExpr &src_expr,
                                    const ObCastMode cm,
                                    ObExpr &cast_expr,
-                                   const uint16_t subschema_id)
+                                   const uint16_t subschema_id,
+                                   const int32_t max_length)
 {
   int ret = OB_SUCCESS;
   const ObDatumMeta &src_type = src_expr.datum_meta_;
@@ -18988,6 +19042,10 @@ int ObDatumCaster::setup_cast_expr(const ObDatumMeta &dst_type,
     }
     if (ob_is_user_defined_pl_type(src_expr.obj_meta_.get_type()) && dst_type.type_ == ObUserDefinedSQLType) {
       cast_expr.obj_meta_.set_subschema_id(subschema_id);
+    }
+    if (lib::is_mysql_mode() && ob_is_double_tc(src_expr.datum_meta_.type_) &&
+        ob_is_string_tc(dst_type.type_) && CM_IS_COLUMN_CONVERT(cm) && max_length > 0) {
+      cast_expr.max_length_ = max_length;
     }
     // implicit cast donot use these, so we set it all invalid.
     cast_expr.parents_ = NULL;

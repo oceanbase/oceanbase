@@ -1439,6 +1439,43 @@ int ObSQLUtils::is_odps_external_table(const ObString &table_format_or_propertie
   return ret;
 }
 
+int ObSQLUtils::get_odps_api_mode(const ObString &table_format_or_properties,
+                                    bool &is_odps_external_table,
+                                    ObODPSGeneralFormat::ApiMode& mode)
+{
+  int ret = OB_SUCCESS;
+  ObExternalFileFormat format;
+  ObArenaAllocator allocator;
+  if (table_format_or_properties.empty()) {
+  } else if (OB_FAIL(format.load_from_string(table_format_or_properties, allocator))) {
+    LOG_WARN("fail to load from properties string", K(ret), K(table_format_or_properties));
+  }else {
+    is_odps_external_table = (ObExternalFileFormat::FormatType:: ODPS_FORMAT == format.format_type_);
+    if (is_odps_external_table) {
+      mode = format.odps_format_.api_mode_;
+    }
+  }
+  return ret;
+}
+
+int ObSQLUtils::check_location_constraint(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  bool is_odps_external_table = false;
+  if (OB_FAIL(ObSQLUtils::is_odps_external_table(&table_schema, is_odps_external_table))) {
+    LOG_WARN("failed to check is odps external table or not", K(ret));
+  } else if (is_odps_external_table) {
+    // do nothing
+  } else if ((!table_schema.get_external_file_location().empty()
+      && OB_INVALID_ID != table_schema.get_external_location_id())
+      || (table_schema.get_external_file_location().empty()
+          && OB_INVALID_ID == table_schema.get_external_location_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("both file location and location id are valid", KR(ret), K(table_schema));
+  }
+  return ret;
+}
+
 int ObSQLUtils::check_ident_name(const ObCollationType cs_type, ObString &name,
                                  const bool check_for_path_char, const int64_t max_ident_len)
 {
@@ -5050,8 +5087,8 @@ int ObPreCalcExprConstraint::check_is_match(ObDatumObjParam &datum_param,
       case PRE_CALC_RESULT_TRUE:
         is_match = obj_param.get_bool() && !obj_param.is_null();
         break;
-      case PRE_CALC_RESULT_FALSE:
-        is_match = !obj_param.get_bool() && !obj_param.is_null();
+      case PRE_CALC_RESULT_FALSE: // this constraint actually means NOT TRUE (FALSE or NULL)
+        is_match = !obj_param.get_bool();
         break;
       case PRE_CALC_PRECISE:
       case PRE_CALC_NOT_PRECISE: {
@@ -5506,6 +5543,7 @@ int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, Param
           }
         }
         OZ (ObSql::add_param_to_param_store(*(data + actual_pos), obj_params));
+        OX (obj_params.at(obj_params.count() - 1).set_accuracy(coll->get_element_type().get_accuracy()));
       }
     }
   }

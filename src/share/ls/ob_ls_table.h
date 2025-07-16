@@ -37,9 +37,9 @@ public:
   // Mode is used to control data source of sys tenant's ls info.
   // Other tenant's ls infos always come from inner table.
   enum Mode {
-    DEFAULT_MODE          = 0,  // sys tenant's ls info come from rs
+    DEFAULT_MODE          = 0,  // sys tenant's sys ls info come from rs, sslog ls come from rpc request
     INNER_TABLE_ONLY_MODE = 1,  // sys tenant's ls info come from inner table
-    COMPOSITE_MODE        = 2   // sys tenant's ls info come from both rs and inner table
+    COMPOSITE_MODE        = 2   // sys tenant's ls info come from both rs/rpc and inner table
   };
 public:
   explicit ObLSTable();

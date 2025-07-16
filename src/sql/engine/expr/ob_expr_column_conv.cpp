@@ -307,6 +307,9 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
         } else if (ob_is_user_defined_type(type.get_type())
             || ob_is_collection_sql_type(type.get_type())) { // if calc meta is udt, set calc udt id
           types[4].set_calc_accuracy(type.get_accuracy());
+        } else if (lib::is_mysql_mode() &&
+            ob_is_double_tc(types[4].get_type()) && ob_is_string_tc(type.get_type())) {
+          types[4].set_calc_accuracy(type.get_accuracy());
         }
       }
     }
@@ -433,7 +436,8 @@ static OB_INLINE int column_convert_datum_accuracy_check(const ObExpr &expr,
     LOG_WARN("fail to check accuracy", K(ret), K(expr), K(warning));
     //compatible with old code
     if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode()
-        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_) {
+        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_
+        && !ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
       ObString column_info_str;
       ObDatum *column_info = NULL;
       if (OB_FAIL(expr.args_[5]->eval(ctx, column_info))) {
@@ -488,7 +492,8 @@ static OB_INLINE int column_convert_vector_accuracy_check(const ObExpr &expr,
     LOG_WARN("fail to check accuracy", K(ret), K(expr), K(warning));
     //compatible with old code
     if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode()
-        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_) {
+        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_
+        && !ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
       ObString column_info_str;
       ObDatum *column_info = NULL;
       ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
@@ -816,6 +821,7 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
                 }
               }
             }
+           int64_t ori_len = str.length();
            if (OB_FAIL(ret)) {
            }  else if (!check_is_ascii(str)
                         && OB_FAIL(string_collation_check(is_strict, out_cs_type, out_type, str))) {
@@ -829,7 +835,9 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
             const int64_t str_len_byte = static_cast<int64_t>(datum_for_check.len_);
             bool need_check_length = true;
             if (OB_FAIL(ret)) {
-            } else if (max_accuracy_len > 0 && str.length() < max_accuracy_len) {
+            } else if (ori_len == str.length()
+                       && max_accuracy_len > 0
+                       && str.length() < max_accuracy_len) {
               need_check_length = false;
               results[i].set_datum(datum_for_check);
             } else if (OB_FAIL(column_convert_datum_accuracy_check(expr, ctx, has_lob_header_for_check, results[i],

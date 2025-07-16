@@ -33,7 +33,7 @@ using namespace common::hash;
 
 ObTableLoadResourceService::~ObTableLoadResourceService()
 {
-  obsys::ObWLockGuard w_guard(rw_lock_);
+  obsys::ObWLockGuard<> w_guard(rw_lock_);
   ob_delete(resource_manager_);
 }
 
@@ -67,7 +67,7 @@ int ObTableLoadResourceService::mtl_init(ObTableLoadResourceService *&service)
 
 void ObTableLoadResourceService::stop()
 {
-  obsys::ObRLockGuard r_guard(rw_lock_);
+  obsys::ObRLockGuard<> r_guard(rw_lock_);
   if (OB_NOT_NULL(resource_manager_)) {
     LOG_INFO("resource_manager_ start to stop", K_(tenant_id));
     resource_manager_->stop();
@@ -77,7 +77,7 @@ void ObTableLoadResourceService::stop()
 
 void ObTableLoadResourceService::wait()
 {
-  obsys::ObRLockGuard r_guard(rw_lock_);
+  obsys::ObRLockGuard<> r_guard(rw_lock_);
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(resource_manager_)) {
     LOG_INFO("resource_manager_ start to wait", K_(tenant_id));
@@ -90,7 +90,7 @@ void ObTableLoadResourceService::wait()
 
 void ObTableLoadResourceService::destroy()
 {
-  obsys::ObRLockGuard r_guard(rw_lock_);
+  obsys::ObRLockGuard<> r_guard(rw_lock_);
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(resource_manager_)) {
     LOG_INFO("resource_manager_ start to destroy", K_(tenant_id));
@@ -108,12 +108,12 @@ int ObTableLoadResourceService::switch_to_leader()
     LOG_WARN("fail to check_inner_stat", KR(ret), K_(tenant_id));
   } else {
     if (OB_ISNULL(resource_manager_)) {
-      obsys::ObWLockGuard w_guard(rw_lock_);
+      obsys::ObWLockGuard<> w_guard(rw_lock_);
       if (OB_FAIL(alloc_resource_manager())) {
         LOG_WARN("fail to alloc resource_manager", KR(ret), K_(tenant_id));
       }
     } else {
-      obsys::ObRLockGuard r_guard(rw_lock_);
+      obsys::ObRLockGuard<> r_guard(rw_lock_);
       ret = resource_manager_->resume();
       LOG_INFO("resource_service finish to resume",KR(ret), K_(tenant_id));
     }
@@ -207,7 +207,7 @@ int ObTableLoadResourceService::inner_switch_to_follower()
 {
   int ret = OB_SUCCESS;
   ObMutexGuard switch_guard(switch_lock_);
-  obsys::ObRLockGuard r_guard(rw_lock_);
+  obsys::ObRLockGuard<> r_guard(rw_lock_);
   const int64_t start_time_us = ObTimeUtility::current_time();
   if (OB_NOT_NULL(resource_manager_)) {
     resource_manager_->pause();

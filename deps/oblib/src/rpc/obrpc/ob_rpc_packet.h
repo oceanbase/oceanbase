@@ -400,7 +400,7 @@ int ObRpcPacket::verify_checksum() const
 {
   return hdr_.checksum_ == common::ob_crc64(cdata_, clen_) ?
       common::OB_SUCCESS :
-      common::OB_CHECKSUM_ERROR;
+      common::OB_PACKET_CHECKSUM_ERROR;
 }
 
 void ObRpcPacket::set_content(const char *content, int64_t len)

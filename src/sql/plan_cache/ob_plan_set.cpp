@@ -2135,7 +2135,7 @@ int ObSqlPlanSet::get_phy_locations(const ObIArray<ObTableLocation> &table_locat
   } else if (candi_table_locs.empty()) {
     // do nothing.
   } else if (!pc_ctx.try_get_plan_
-             && OB_FAIL(ObPhyLocationGetter::build_candi_table_locs(
+             && OB_FAIL(ObPhyLocationGetter::build_table_locs(
                   pc_ctx.exec_ctx_.get_das_ctx(), table_locations, candi_table_locs))) {
     LOG_WARN("fail to init table locs", K(ret));
   }
@@ -2568,7 +2568,7 @@ bool ObPlanSet::match_decint_precision(const ObParamInfo &param_info, ObPrecisio
   bool ret = false;
   if (ob_is_decimal_int(param_info.type_) || ob_is_integer_type(param_info.type_)) {
     ret = (param_info.precision_ == other_prec);
-  } else if (ob_is_extend(param_info.type_) && ob_is_decimal_int(param_info.ext_real_type_)) {
+  } else if (ob_is_extend(param_info.type_) && ob_is_decimal_int(static_cast<common::ObObjType>(param_info.ext_real_type_))) {
     ret = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(param_info.precision_)
           == wide::ObDecimalIntConstValue::get_int_bytes_by_precision(other_prec);
   } else {

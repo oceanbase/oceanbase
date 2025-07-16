@@ -78,7 +78,7 @@ void *ObDalMemoryManager::allocate(std::size_t size, std::size_t align)
   do {
     ptr = allocator_.alloc_align(size, align);
     if (OB_ISNULL(ptr)) {
-      ::usleep(10000); // 10ms
+      ob_usleep(10000); // 10ms
       if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         OB_LOG(ERROR, "ObVSliceAlloc failed to allocate memory",
@@ -115,11 +115,12 @@ void *obdal_malloc(std::size_t size, std::size_t align)
   void *ptr = nullptr;
   ObMemAttr attr;
   attr.label_ = OB_DAL_SDK;
+  SET_IGNORE_MEM_VERSION(attr);
   do {
     // ptr = ObDalMemoryManager::get_instance().allocate(size, align);
     ptr = ob_malloc_align(align, size, attr);
     if (OB_ISNULL(ptr)) {
-      ::usleep(10000);   // 10ms
+      ob_usleep(10000);   // 10ms
       if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
         OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "obdal failed to allocate memory", K(size), K(align));
       }
@@ -153,6 +154,19 @@ void obdal_log_handler(const char *level, const char *message) {
   }
 }
 
+static int64_t get_obdal_thread_cnt()
+{
+  int64_t thread_cnt = 4;
+  const int64_t cpu_num = get_cpu_num();
+  if (cpu_num <= 16) {
+    thread_cnt = max(thread_cnt, cpu_num);
+  } else {
+    thread_cnt = 16 + (cpu_num - 16) / 3;
+    thread_cnt = min(thread_cnt, 256);
+  }
+  return thread_cnt;
+}
+
 int ObDalEnvIniter::global_init()
 {
   int ret = OB_SUCCESS;
@@ -164,12 +178,13 @@ int ObDalEnvIniter::global_init()
   } else if (OB_FAIL(ObDalMemoryManager::get_instance().init())) {
     OB_LOG(WARN, "failed init global obdal memory manager", K(ret));
   } else if (OB_FAIL(ObDalAccessor::init_env(reinterpret_cast<void *>(obdal_malloc),
-                                         reinterpret_cast<void *>(obdal_free),
-                                         reinterpret_cast<void *>(obdal_log_handler),
-                                         OB_LOGGER.get_level(),
-                                         get_cpu_num(),
-                                         POOL_MAX_IDLE_PER_HOST,
-                                         POOL_MAX_IDLE_TIME_S))) {
+                                             reinterpret_cast<void *>(obdal_free),
+                                             reinterpret_cast<void *>(obdal_log_handler),
+                                             OB_LOGGER.get_level(),
+                                             get_obdal_thread_cnt(),
+                                             POOL_MAX_IDLE_PER_HOST,
+                                             POOL_MAX_IDLE_TIME_S,
+                                             CONNECT_TIMEOUT_S))) {
     OB_LOG(WARN, "failed init obdal env", K(ret));
   } else {
     signal(SIGPIPE, SIG_IGN);
@@ -238,6 +253,7 @@ int ObDalAccount::assign(const ObObjectStorageInfo *storage_info)
 //========================= ObStorageObDalBase =========================
 ObStorageObDalBase::ObStorageObDalBase()
   : is_inited_(false),
+    is_write_with_if_match_(false),
     allocator_(OB_STORAGE_OBDAL_ALLOCATOR),
     storage_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
     bucket_(),
@@ -251,7 +267,7 @@ ObStorageObDalBase::ObStorageObDalBase()
 
 ObStorageObDalBase::~ObStorageObDalBase()
 {
-  reset();
+  ObStorageObDalBase::reset();
 }
 
 void ObStorageObDalBase::reset()
@@ -310,7 +326,7 @@ int set_obdal_options_with_account(
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), KP(options), K(obdal_account), K(bucket));
   } else {
-    if (storage_type == ObStorageType::OB_STORAGE_S3 || storage_type == ObStorageType::OB_STORAGE_COS) {
+    if (storage_type == ObStorageType::OB_STORAGE_S3) {
       if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "bucket", bucket.ptr()))) {
         OB_LOG(WARN, "failed to set bucket", K(ret), K(bucket));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "endpoint", obdal_account.endpoint_))) {
@@ -393,6 +409,7 @@ int ObStorageObDalBase::inner_open(const ObString &uri, ObObjectStorageInfo *sto
     OB_LOG(WARN, "failed to build obdal account", K(ret));
   } else {
     checksum_type_ = storage_info->get_checksum_type();
+    is_write_with_if_match_ = storage_info->is_write_with_if_match();
 #ifdef ERRSIM
     if (OB_NOT_NULL(storage_info) && (OB_SUCCESS != EventTable::EN_ENABLE_LOG_OBJECT_STORAGE_CHECKSUM_TYPE)) {
       OB_LOG(ERROR, "errsim backup io with checksum type", "checksum_type", storage_info->get_checksum_type_str());
@@ -525,9 +542,49 @@ int ObStorageObDalWriter::write(const char *buf, const int64_t size)
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(size < 0)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), KP(buf), K(size));
-  } else if (OB_FAIL(ObDalAccessor::obdal_operator_write(op_, object_.ptr(), buf, size))) {
+  } else if (is_write_with_if_match_ && OB_FAIL(ObDalAccessor::obdal_operator_write_with_if_not_exists(op_, object_.ptr(), buf, size))) {
+    if (OB_UNLIKELY(ret != OB_OBJECT_STORAGE_CONDITION_NOT_MATCH)) {
+      OB_LOG(WARN, "fail write with if not exists in obdal", K(ret), K(object_), K(bucket_), K(obdal_account_));
+    } else {
+      ret = OB_SUCCESS;
+      opendal_reader *reader = nullptr;
+      char *read_buf = nullptr;
+      // Notice: in order to avoid reading the prefixes of existing files, size
+      // should be incremented by 1. if not, suppose that there already exists a
+      // file with content 'abcde' of length 5, and then overwriting content 'abc'
+      // of length 3, the overwriting will be mistaken for consistent content.
+      const int64_t read_buf_size = size + 1;
+      int64_t read_size = 0;
+      ObArenaAllocator allocator(OB_DAL_SDK);
+      if (OB_FAIL(ObDalAccessor::obdal_operator_reader(op_, object_.ptr(), reader))) {
+        OB_LOG(WARN, "failed to get opendal reader", K(ret), KP(op_), K(object_), K(obdal_account_));
+      } else if (OB_ISNULL(read_buf = static_cast<char *>(allocator.alloc(read_buf_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(WARN, "failed to alloc read buf", K(ret), K(read_buf_size));
+      } else if (OB_FAIL(ObDalAccessor::obdal_reader_read(reader, read_buf, read_buf_size, 0/*offset*/, read_size))) {
+        OB_LOG(WARN, "failed to read", K(ret), KP(reader), K(read_buf_size));
+      } else if (OB_UNLIKELY(read_size != size || 0 != MEMCMP(read_buf, buf, size))) {
+        ret = OB_OBJECT_STORAGE_CONDITION_NOT_MATCH;
+        OB_LOG(ERROR, "failed write_with_if_match", KR(ret), K(read_size), K(size));
+      } else {
+        // if 'if-match' is enabled, the lastmodify time of the object will no longer be accurate.
+        OB_LOG(INFO, "an overlay write occurs and the data is consistent", K(ret), K(object_), K(bucket_), K(obdal_account_));
+      }
+
+      if (OB_NOT_NULL(reader)) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(ObDalAccessor::obdal_reader_free(reader))) {
+          ret = COVER_SUCC(tmp_ret);
+          OB_LOG(WARN, "failed to free opendal reader", K(tmp_ret), KP(reader));
+        }
+        reader = nullptr;
+      }
+    }
+  } else if (!is_write_with_if_match_ && OB_FAIL(ObDalAccessor::obdal_operator_write(op_, object_.ptr(), buf, size))) {
     OB_LOG(WARN, "fail write in obdal", K(ret), K(object_), K(bucket_), K(obdal_account_));
-  } else {
+  }
+
+  if (OB_SUCC(ret)) {
     file_length_ = size;
   }
   return ret;
@@ -670,7 +727,9 @@ ObStorageObDalUtil::ObStorageObDalUtil()
 {}
 
 ObStorageObDalUtil::~ObStorageObDalUtil()
-{}
+{
+  close();
+}
 
 int ObStorageObDalUtil::open(common::ObObjectStorageInfo *storage_info)
 {
@@ -1574,11 +1633,10 @@ int ObStorageParallelObDalMultiPartWriter::upload_part(const char *buf, const in
   int64_t obdal_part_id = part_id;
   // In obdal, the part id of the operator writer starts from 0,
   // and then each service increases by 1 according to the actual situation.
-  // Since S3, COS, OSS all require part ids to start at 1 and be continuous,
+  // Since S3, OSS all require part ids to start at 1 and be continuous,
   // and the old logic of OB, including tests, is already specified from 1,
   // 1 needs to be subtracted in advance here
   if (OB_LIKELY(storage_type_ == OB_STORAGE_S3
-                || storage_type_ == OB_STORAGE_COS
                 || storage_type_ == OB_STORAGE_OSS)) {
     obdal_part_id -= 1;
   }

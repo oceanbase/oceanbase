@@ -54,36 +54,6 @@ void ObTmpFileIOHandle::reset()
   read_offset_in_file_ = -1;
 }
 
-int ObTmpFileIOHandle::init_write(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info)
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("ObTmpFileIOHandle has been inited twice", KR(ret), KPC(this));
-  } else if (OB_UNLIKELY(!io_info.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(io_info), KPC(this));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(io_info), K(tenant_id));
-  } else if (OB_FAIL(ctx_.init(io_info.fd_, io_info.dir_id_, false /*is_read*/,
-                               io_info.io_desc_, io_info.io_timeout_ms_, io_info.disable_page_cache_,
-                               io_info.disable_block_cache_, false /*prefetch*/))) {
-    LOG_WARN("failed to init io handle context", KR(ret), K(io_info));
-  } else if (OB_FAIL(ctx_.prepare_write(io_info.buf_, io_info.size_))) {
-    LOG_WARN("fail to prepare write context", KR(ret), KPC(this));
-  } else {
-    is_inited_ = true;
-    tenant_id_ = tenant_id;
-    fd_ = io_info.fd_;
-    buf_ = io_info.buf_;
-    buf_size_ = io_info.size_;
-    done_size_ = 0;
-  }
-
-  return ret;
-}
-
 int ObTmpFileIOHandle::init_pread(const uint64_t tenant_id, const ObTmpFileIOInfo &io_info, const int64_t read_offset)
 {
   int ret = OB_SUCCESS;
@@ -99,11 +69,11 @@ int ObTmpFileIOHandle::init_pread(const uint64_t tenant_id, const ObTmpFileIOInf
   } else if (OB_UNLIKELY(read_offset < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(read_offset));
-  } else if (OB_FAIL(ctx_.init(io_info.fd_, io_info.dir_id_, true /*is_read*/,
-                               io_info.io_desc_, io_info.io_timeout_ms_, io_info.disable_page_cache_,
-                               io_info.disable_block_cache_, io_info.prefetch_))) {
+  } else if (OB_FAIL(ctx_.init(io_info.fd_, io_info.io_desc_,
+                               io_info.io_timeout_ms_, io_info.disable_page_cache_,
+                               io_info.prefetch_))) {
     LOG_WARN("failed to init io handle context", KR(ret), K(io_info));
-  } else if (OB_FAIL(ctx_.prepare_read(io_info.buf_, MIN(io_info.size_, ObTmpFileGlobal::TMP_FILE_READ_BATCH_SIZE), read_offset))) {
+  } else if (OB_FAIL(ctx_.prepare(io_info.buf_, MIN(io_info.size_, ObTmpFileGlobal::TMP_FILE_READ_BATCH_SIZE), read_offset))) {
     LOG_WARN("fail to prepare read context", KR(ret), KPC(this), K(read_offset));
   } else {
     is_inited_ = true;
@@ -130,11 +100,11 @@ int ObTmpFileIOHandle::init_read(const uint64_t tenant_id, const ObTmpFileIOInfo
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(io_info), K(tenant_id));
-  } else if (OB_FAIL(ctx_.init(io_info.fd_, io_info.dir_id_, true /*is_read*/,
-                               io_info.io_desc_, io_info.io_timeout_ms_, io_info.disable_page_cache_,
-                               io_info.disable_block_cache_, io_info.prefetch_))) {
+  } else if (OB_FAIL(ctx_.init(io_info.fd_, io_info.io_desc_,
+                               io_info.io_timeout_ms_, io_info.disable_page_cache_,
+                               io_info.prefetch_))) {
     LOG_WARN("failed to init io handle context", KR(ret), K(io_info));
-  } else if (OB_FAIL(ctx_.prepare_read(io_info.buf_, MIN(io_info.size_, ObTmpFileGlobal::TMP_FILE_READ_BATCH_SIZE)))) {
+  } else if (OB_FAIL(ctx_.prepare(io_info.buf_, MIN(io_info.size_, ObTmpFileGlobal::TMP_FILE_READ_BATCH_SIZE)))) {
     LOG_WARN("fail to prepare read context", KR(ret), KPC(this));
   } else {
     is_inited_ = true;
@@ -170,7 +140,7 @@ int ObTmpFileIOHandle::wait()
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid handle", KR(ret), KPC(this));
-  } else if (is_finished() || !ctx_.is_read()) {
+  } else if (is_finished()) {
     // do nothing
   } else {
     MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
@@ -190,10 +160,10 @@ int ObTmpFileIOHandle::wait()
       LOG_WARN("fail to get tmp file handle", KR(ret), K(fd_));
     } else {
       while (OB_SUCC(ret) && !is_finished()) {
-        if (OB_FAIL(ctx_.prepare_read(buf_ + done_size_,
-                                      MIN(buf_size_ - done_size_,
-                                          ObTmpFileGlobal::TMP_FILE_READ_BATCH_SIZE),
-                                      read_offset_in_file_))) {
+        if (OB_FAIL(ctx_.prepare(buf_ + done_size_,
+                                 MIN(buf_size_ - done_size_,
+                                     ObTmpFileGlobal::TMP_FILE_READ_BATCH_SIZE),
+                                 read_offset_in_file_))) {
           LOG_WARN("fail to generate read ctx", KR(ret), KPC(this));
         } else if (OB_FAIL(file_handle.get()->aio_pread(ctx_))) {
           LOG_WARN("fail to continue read once batch", KR(ret), K(ctx_));
@@ -213,16 +183,14 @@ int ObTmpFileIOHandle::wait()
   return ret;
 }
 
-int ObTmpFileIOHandle::handle_finished_ctx_(ObTmpFileIOCtx &ctx)
+int ObTmpFileIOHandle::handle_finished_ctx_(ObTmpFileIOReadCtx &ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ctx.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(ctx));
   } else {
-    if (ctx_.is_read()) {
-      read_offset_in_file_ = ctx.get_read_offset_in_file();
-    }
+    read_offset_in_file_ = ctx.get_read_offset_in_file();
     done_size_ += ctx.get_done_size();
     ctx.reuse();
   }

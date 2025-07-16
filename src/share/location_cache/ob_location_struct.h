@@ -88,7 +88,8 @@ public:
       K_(server),
       K_(role),
       K_(sql_port),
-      K_(replica_type),
+      "replica_type",
+      ObShareUtil::replica_type_to_string(replica_type_),
       K_(property),
       K_(restore_status),
       K_(proposal_id));

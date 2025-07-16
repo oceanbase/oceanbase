@@ -196,6 +196,7 @@ public:
   void reset();
   void offline() { enable_ = false; }
   void online() { enable_ = true; }
+  ObLS *get_ls() { return ls_; }
 
 public:
   /********************** freeze **********************/
@@ -256,6 +257,9 @@ public:
   void set_tenant_replay_is_pending() { tenant_replay_is_pending_ = true; }
   void unset_tenant_replay_is_pending() { tenant_replay_is_pending_ = false; }
   bool tenant_replay_is_pending() const { return tenant_replay_is_pending_; }
+  void disable_flush() { flush_is_disabled_ = true; }
+  void enable_flush() { flush_is_disabled_ = false; }
+  bool flush_is_disabled() { return flush_is_disabled_; }
   // get consequent callbacked log_ts right boundary
   virtual int get_max_consequent_callbacked_scn(share::SCN &max_consequent_callbacked_scn);
   // to set snapshot version when memtables meet ready_for_flush
@@ -401,6 +405,7 @@ private:
   bool is_async_ls_freeze_task_existing_;
   bool throttle_is_skipping_;
   bool tenant_replay_is_pending_;
+  bool flush_is_disabled_;
   common::hash::ObHashSet<AsyncFreezeTabletInfo> async_freeze_tablets_;
 };
 

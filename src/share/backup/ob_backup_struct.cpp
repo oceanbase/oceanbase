@@ -1128,9 +1128,16 @@ int ObBackupStorageInfo::set(
 
 int ObBackupStorageInfo::get_authorization_info(char *authorization, const int64_t length) const
 {
+  int64_t out_len = 0;
+  return get_authorization_info(authorization, length, out_len);
+}
+
+int ObBackupStorageInfo::get_authorization_info(char *authorization, const int64_t length, int64_t &out_len) const
+{
   int ret = OB_SUCCESS;
   const int64_t key_len = MAX(OB_MAX_BACKUP_SERIALIZEKEY_LENGTH, OB_MAX_BACKUP_ACCESSKEY_LENGTH);
   char access_key_buf[key_len] = { 0 };
+  int64_t pos = 0;
   STATIC_ASSERT(OB_MAX_BACKUP_AUTHORIZATION_LENGTH > (OB_MAX_BACKUP_ACCESSID_LENGTH + key_len), "array length overflow");
   if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1144,12 +1151,11 @@ int ObBackupStorageInfo::get_authorization_info(char *authorization, const int64
     // access by ak/sk mode
     if (OB_FAIL(get_access_key_(access_key_buf, sizeof(access_key_buf)))) {
       LOG_WARN("failed to get access key", K(ret));
-    } else if (OB_FAIL(databuff_printf(authorization, length, "%s&%s", access_id_, access_key_buf))) {
+    } else if (OB_FAIL(databuff_printf(authorization, length, pos, "%s&%s", access_id_, access_key_buf))) {
       LOG_WARN("failed to set authorization", K(ret), K(length), K_(access_id), K(strlen(access_key_buf)));
     }
   } else {
     // access by assume role mode
-    int64_t pos = 0;
     if (OB_FAIL(databuff_printf(authorization, length, pos, "%s", role_arn_))) {
       LOG_WARN("failed to set authorization", K(ret), K(length), KP_(role_arn));
     } else if (external_id_[0] != '\0') {
@@ -1159,15 +1165,27 @@ int ObBackupStorageInfo::get_authorization_info(char *authorization, const int64
     }
   }
 
+  if (OB_SUCC(ret)) {
+    out_len = pos;
+  }
+
   return ret;
 }
 
 int ObBackupStorageInfo::get_unencrypted_authorization_info(
     char *authorization, const int64_t length) const
 {
+  int64_t out_len = 0;
+  return get_unencrypted_authorization_info(authorization, length, out_len);
+}
+
+int ObBackupStorageInfo::get_unencrypted_authorization_info(
+    char *authorization, const int64_t length, int64_t &out_len) const
+{
   int ret = OB_SUCCESS;
   const int64_t key_len = MAX(OB_MAX_BACKUP_SERIALIZEKEY_LENGTH, OB_MAX_BACKUP_ACCESSKEY_LENGTH);
   char access_key_buf[key_len] = { 0 };
+  int64_t pos = 0;
   STATIC_ASSERT(OB_MAX_BACKUP_AUTHORIZATION_LENGTH > (OB_MAX_BACKUP_ACCESSID_LENGTH + key_len), "array length overflow");
   if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1177,8 +1195,10 @@ int ObBackupStorageInfo::get_unencrypted_authorization_info(
     LOG_WARN("invalid args", K(ret), KP(authorization), K(length));
   } else if (OB_STORAGE_FILE == device_type_) {
     // do nothing
-  } else if (OB_FAIL(databuff_printf(authorization, length, "%s&%s",  access_id_, access_key_))) {
+  } else if (OB_FAIL(databuff_printf(authorization, length, pos, "%s&%s",  access_id_, access_key_))) {
     LOG_WARN("failed to set authorization", K(ret), K(length), K_(access_id), K(strlen(access_key_)));
+  } else {
+    out_len = pos;
   }
 
   return ret;
@@ -1323,6 +1343,25 @@ int ObBackupStorageInfo::decrypt_access_key_(const char *buf)
   return ret;
 }
 #endif
+
+//***********************ObExternalTableStorageInfo***************************
+int ObExternalTableStorageInfo::set(const char *uri, const char *storage_info)
+{
+  int ret = OB_SUCCESS;
+  common::ObStorageType device_type;
+  // compatible with external table, convert cos to s3.
+  if (OB_FAIL(get_storage_type_from_path_for_external_table(uri, device_type))) {
+    LOG_WARN("failed to get storage from path", K(ret), KPC(this));
+  } else if (OB_FAIL(set(device_type, storage_info))) {
+    LOG_WARN("failed to set storage info", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+ObExternalTableStorageInfo::~ObExternalTableStorageInfo()
+{
+  reset();
+}
 
 ObBackupDest::ObBackupDest()
   : root_path_(NULL),

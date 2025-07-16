@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_table_resolver_base.h"
+#include "share/external_table/ob_external_table_utils.h"
 
 namespace oceanbase
 {
@@ -264,8 +265,12 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
       }
     }
     if (OB_SUCC(ret) && table_schema.is_external_table()) {
+      ObString file_location;
+      ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+      CK (OB_NOT_NULL(schema_guard));
+      OZ (ObExternalTableUtils::get_external_file_location(table_schema, *schema_guard, *allocator_, file_location));
       if ((table_schema.get_external_file_format().empty()
-          || table_schema.get_external_file_location().empty()) &&
+          || file_location.empty()) &&
            table_schema.get_external_properties().empty()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Default properties or format or location option for external table");

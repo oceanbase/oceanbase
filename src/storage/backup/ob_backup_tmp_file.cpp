@@ -104,7 +104,6 @@ int ObBackupTmpFile::get_io_info_(const char *buf, const int64_t size, const int
   int ret = OB_SUCCESS;
   io_info.reset();
   io_info.fd_ = file_fd_;
-  io_info.dir_id_ = file_dir_;
   io_info.io_desc_.set_wait_event(common::ObWaitEventIds::BACKUP_TMP_FILE_WAIT);
   io_info.buf_ = const_cast<char *>(buf);
   io_info.size_ = size;

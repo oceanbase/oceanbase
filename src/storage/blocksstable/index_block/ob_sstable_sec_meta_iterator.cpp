@@ -533,6 +533,8 @@ int ObSSTableSecMetaIterator::get_micro_block(
             macro_id,
             idx_info,
             prefetch_flag_.is_use_block_cache(),
+            // Note: no need to pass effective_tablet_id for ObSSTableSecMetaIterator
+            ObTabletID(ObTabletID::INVALID_TABLET_ID)/*effective_tablet_id*/,
             data_handle.io_handle_,
             &io_allocator_))) {
           LOG_WARN("Fail to prefetch with async io", K(ret));

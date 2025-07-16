@@ -1578,7 +1578,7 @@ int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id
         if (1 == execution_id && !ddl_can_retry) {
             // has been executed before
             ret = OB_TASK_EXPIRED; //task can not be retry
-            LOG_WARN("do not retry for heap table ddl plan", K(tenant_id), K(task_id), K(ddl_can_retry));
+            LOG_WARN("do not retry for heap table ddl plan", K(ret_code), K(task_status), K(tenant_id), K(task_id), K(ddl_can_retry));
         } else {
           if ( -1 == execution_id) {
             execution_id = 0;

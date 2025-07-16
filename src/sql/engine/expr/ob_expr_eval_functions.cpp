@@ -185,7 +185,7 @@
 #include "ob_expr_collection_construct.h"
 #include "ob_expr_obj_access.h"
 #include "ob_expr_pl_associative_index.h"
-#include "ob_expr_udf.h"
+#include "ob_expr_udf/ob_expr_udf.h"
 #include "ob_expr_object_construct.h"
 #include "ob_expr_pl_get_cursor_attr.h"
 #include "ob_expr_pl_integer_checker.h"
@@ -316,6 +316,7 @@
 #include "ob_expr_generator_func.h"
 #include "ob_expr_random.h"
 #include "ob_expr_randstr.h"
+#include "ob_expr_startup_mode.h"
 #include "ob_expr_zipf.h"
 #include "ob_expr_normal.h"
 #include "ob_expr_uniform.h"
@@ -448,6 +449,7 @@
 #include "ob_expr_map_keys.h"
 #include "ob_expr_current_catalog.h"
 #include "ob_expr_check_catalog_access.h"
+#include "ob_expr_check_location_access.h"
 
 namespace oceanbase
 {
@@ -1398,9 +1400,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprMapValues::eval_map_values,                                    /* 846 */
   ObExprSpivDim::generate_spiv_dim,                                    /* 847 */
   ObExprInnerInfoColsColumnKeyPrinter::eval_column_column_key,         /* 848 */
-  NULL, //ObExprCheckLocationAccess::eval_check_location_access        /* 849 */
-  NULL,// ObExprUDF::eval_external_udf,                                /* 850 */
-  NULL,// ObExprStartUpMode::eval_startup_mode,                        /* 851 */
+  ObExprCheckLocationAccess::eval_check_location_access,               /* 849 */
+  ObExprUDF::eval_external_udf,                                        /* 850 */
+  ObExprStartUpMode::eval_startup_mode,                                /* 851 */
+  NULL, // ObExprVectorL2Squared::calc_l2_squared,                     /* 852 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1582,7 +1585,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprArrayUnion::eval_array_union_batch,                           /* 175 */
   NULL, // ObExprArrayReplace::eval_array_replace_batch,              /* 176 */
   NULL, // ObExprArrayPopfront::eval_array_popfront_batch,            /* 177 */
-  NULL, // ObExprUDF::eval_udf_batch                                  /* 178 */
+  ObExprUDF::eval_udf_batch                                           /* 178 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
@@ -1807,8 +1810,13 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprMapValues::eval_map_values_vector,                               /* 218 */
   ObExprRbToArray::eval_rb_to_array_vector,                              /* 219 */
   ObExprRbContains::eval_rb_contains_vector,                             /* 220 */
-  NULL, // ObExprUDF::eval_udf_vector                                    /* 221 */
-  NULL, // ObExprUDF::eval_external_udf_vector,                          /* 222 */
+  ObExprUDF::eval_udf_vector,                                            /* 221 */
+  ObExprUDF::eval_external_udf_vector,                                   /* 222 */
+  NULL, // ObExprInstr::calc_mysql_instr_expr_vector,                             /* 223 */
+  NULL, // ObExprOracleInstr::calc_oracle_instr_expr_vector,                      /* 224 */
+  NULL, // ObLocationExprOperator::calc_location_expr_vector,                     /* 225 */
+  NULL, // ObExprConvertTZ::calc_convert_tz_vector,                               /* 226 */
+  NULL, // ObExprMul::mul_decimalint64_int64_int64_vector,                        /* 227 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
@@ -1930,6 +1938,7 @@ static ObExpr::EvalFunc g_decimal_int_eval_functions[] = {
   ObExprDiv::decint_div_mysql_fn<int512_t, int128_t>,
   ObExprDiv::decint_div_mysql_fn<int512_t, int256_t>,
   ObExprDiv::decint_div_mysql_fn<int512_t, int512_t>,
+  NULL, // ObExprMul::mul_decimalint64_int64_int64
 };
 
 static ObExpr::EvalBatchFunc g_decimal_int_eval_batch_functions[] = {
@@ -2040,6 +2049,7 @@ static ObExpr::EvalBatchFunc g_decimal_int_eval_batch_functions[] = {
   ObExprDiv::decint_div_mysql_batch_fn<int512_t, int128_t>,
   ObExprDiv::decint_div_mysql_batch_fn<int512_t, int256_t>,
   ObExprDiv::decint_div_mysql_batch_fn<int512_t, int512_t>,
+  NULL, // ObExprMul::mul_decimalint64_int64_int64_batch
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_EXPR_EVAL,

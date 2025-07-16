@@ -241,29 +241,44 @@ public:
   int update_tablet_release_memtable_for_offline(
       const common::ObTabletID &tablet_id,
       const SCN scn);
-  int update_tablet_ddl_commit_scn(
-      const common::ObTabletID &tablet_id,
-      const SCN ddl_commit_scn);
   int update_tablet_restore_status(
+      const share::SCN &reorg_scn,
       const common::ObTabletID &tablet_id,
       const ObTabletRestoreStatus::STATUS &restore_status,
       const bool need_reset_transfer_flag,
       const bool need_to_set_split_data_complete);
   int update_tablet_ha_data_status(
+      const share::SCN &reorg_scn,
       const common::ObTabletID &tablet_id,
       const ObTabletDataStatus::STATUS &data_status);
   int update_tablet_ha_expected_status(
+      const share::SCN &reorg_scn,
       const common::ObTabletID &tablet_id,
       const ObTabletExpectedStatus::STATUS &expected_status);
+  int set_tablet_status_to_transfer_out_deleted(
+      const share::SCN &reorg_scn,
+      const common::ObTabletID &tablet_id);
 #ifdef OB_BUILD_SHARED_STORAGE
-  int upload_major_compaction_tablet_meta(
+  int update_tablet_ss_change_version(
+    const share::SCN &reorg_scn,
     const common::ObTabletID &tablet_id,
-    const ObUpdateTableStoreParam &param,
-    const int64_t start_macro_seq);
+    const share::SCN &ss_change_version,
+    const bool &fully_applied);
   int get_pending_upload_tablet_id_arr(
     const SCN &ls_ss_checkpoint_scn,
     ObIArray<ObTabletID> &tablet_id_arr);
   int write_tablet_id_set_to_pending_free();
+
+  // Create or update local tablet with shared tablet.
+  int create_or_update_with_ss_tablet(
+      const ObTablet &ss_tablet,
+      const SCN &meta_version,
+      const SCN &tx_data_table_filled_tx_scn);
+
+  int advance_notify_ss_change_version(
+      const ObTabletID &tablet_id,
+      const share::SCN &transfer_scn,
+      const share::SCN &change_version);
 #endif
   // Get tablet handle but ignore empty shell. Return OB_TABLET_NOT_EXIST if it is empty shell.
   int ha_get_tablet(
@@ -279,7 +294,9 @@ public:
       const ObTabletMapKey &key,
       common::ObArenaAllocator &allocator,
       ObTabletHandle &handle);
-  int update_tablet_to_empty_shell(const common::ObTabletID &tablet_id);
+  int update_tablet_to_empty_shell(
+      const uint64_t data_version,
+      const common::ObTabletID &tablet_id);
   int replay_create_tablet(
       const ObUpdateTabletPointerParam &param,
       const char *buf,
@@ -449,12 +466,8 @@ public:
   int ha_scan_all_tablets(
       const HandleTabletMetaFunc &handle_tablet_meta_f,
       const bool need_sorted_tablet_id);
-  int trim_rebuild_tablet(
-      const ObTabletID &tablet_id,
-      const bool is_rollback = false);
   int rebuild_create_tablet(
-      const ObMigrationTabletParam &mig_tablet_param,
-      const bool keep_old);
+      const ObMigrationTabletParam &mig_tablet_param);
   int create_or_update_migration_tablet(
       const ObMigrationTabletParam &mig_tablet_param,
       const bool is_transfer);
@@ -510,15 +523,43 @@ private:
     common::ObTabletID cur_tablet_id_;
     ObLSTabletService *tablet_svr_;
   };
-  class ObUpdateDDLCommitSCN final : public ObITabletMetaModifier
+  class ObUpdateTransferOutDeletedStatus final : public ObITabletMetaModifier
   {
   public:
-    explicit ObUpdateDDLCommitSCN(const share::SCN ddl_commit_scn) : ddl_commit_scn_(ddl_commit_scn) {}
-    virtual ~ObUpdateDDLCommitSCN() = default;
+    explicit ObUpdateTransferOutDeletedStatus() {}
+    virtual ~ObUpdateTransferOutDeletedStatus() = default;
     virtual int modify_tablet_meta(ObTabletMeta &meta) override;
   private:
-    const share::SCN ddl_commit_scn_;
-    DISALLOW_COPY_AND_ASSIGN(ObUpdateDDLCommitSCN);
+    DISALLOW_COPY_AND_ASSIGN(ObUpdateTransferOutDeletedStatus);
+  };
+  class ObUpdateRestoreStatus final : public ObITabletMetaModifier
+  {
+  public:
+    explicit ObUpdateRestoreStatus(
+        const ObTabletRestoreStatus::STATUS &restore_status,
+        const bool need_reset_transfer_flag,
+        const bool need_to_set_split_data_complete)
+      : restore_status_(restore_status),
+        need_reset_transfer_flag_(need_reset_transfer_flag),
+        need_to_set_split_data_complete_(need_to_set_split_data_complete) {}
+    virtual ~ObUpdateRestoreStatus() = default;
+    virtual int modify_tablet_meta(ObTabletMeta &meta) override;
+  private:
+    const ObTabletRestoreStatus::STATUS restore_status_;
+    const bool need_reset_transfer_flag_;
+    const bool need_to_set_split_data_complete_;
+    DISALLOW_COPY_AND_ASSIGN(ObUpdateRestoreStatus);
+  };
+  class ObUpdateHAExpectedStatus final : public ObITabletMetaModifier
+  {
+  public:
+    explicit ObUpdateHAExpectedStatus(const ObTabletExpectedStatus::STATUS &expected_status)
+      : expected_status_(expected_status) {}
+    virtual ~ObUpdateHAExpectedStatus() = default;
+    virtual int modify_tablet_meta(ObTabletMeta &meta) override;
+  private:
+    const ObTabletExpectedStatus::STATUS expected_status_;
+    DISALLOW_COPY_AND_ASSIGN(ObUpdateHAExpectedStatus);
   };
   class ObDmlSplitCtx final {
   public:
@@ -558,8 +599,10 @@ private:
       const ObMetaDiskAddr &addr,
       const ObTabletHandle &old_handle,
       ObTabletHandle &new_handle,
-      ObTimeGuard &time_guard);
+      ObTimeGuard &time_guard,
+      const share::SCN &ss_change_version = share::SCN::invalid_scn());
   int safe_update_cas_empty_shell(
+      const uint64_t data_version,
       const ObTabletMapKey &key,
       const ObTabletHandle &old_handle,
       ObTabletHandle &new_handle,
@@ -569,8 +612,10 @@ private:
       const ObTabletID &tablet_id,
       const ObMetaDiskAddr &addr,
       ObTabletHandle &tablet_handle,
-      ObTimeGuard &time_guard);
+      ObTimeGuard &time_guard,
+      const share::SCN &ss_change_version = share::SCN::invalid_scn());
   int safe_create_cas_empty_shell(
+      const uint64_t data_version,
       const ObLSID &ls_id,
       const ObTabletID &tablet_id,
       ObTabletHandle &tablet_handle,
@@ -591,6 +636,7 @@ private:
       const common::ObTabletID &tablet_id,
       bool &b_exist);
   int create_inner_tablet(
+      const uint64_t data_version,
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const common::ObTabletID &data_tablet_id,
@@ -609,6 +655,7 @@ private:
       const int64_t split_cnt,
       const ObMDSGetTabletMode mode,
       const int64_t timeout_us,
+      const int64_t snapshot_version_for_tables,
       int64_t &macro_block_count,
       int64_t &micro_block_count,
       int64_t &sstable_row_count,
@@ -630,14 +677,24 @@ private:
   int rollback_remove_tablet_without_lock(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id);
-  int rollback_rebuild_tablet(const ObTabletID &tablet_id);
-  int trim_old_tablets(const ObTabletID &tablet_id);
-  int rebuild_tablet_with_old(
-      const ObMigrationTabletParam &mig_tablet_param,
-      ObTabletHandle &tablet_guard);
-  int migrate_update_tablet(const ObMigrationTabletParam &mig_tablet_param);
+  int migrate_update_tablet(
+      const uint64_t data_version,
+      const ObMigrationTabletParam &mig_tablet_param);
   int migrate_create_tablet(
+      const uint64_t data_version,
       const ObMigrationTabletParam &mig_tablet_param,
+      ObTabletHandle &handle);
+  // Create tablet with shared tablet.
+  int update_with_ss_tablet(
+      const uint64_t data_version,
+      const ObTablet &ss_tablet,
+      const SCN &meta_version,
+      const SCN &tx_data_table_filled_tx_scn);
+  int create_with_ss_tablet(
+      const uint64_t data_version,
+      const ObTablet &ss_tablet,
+      const SCN &meta_version,
+      const SCN &tx_data_table_filled_tx_scn,
       ObTabletHandle &handle);
   int delete_all_tablets();
   int offline_build_tablet_without_memtable_();
@@ -662,6 +719,11 @@ private:
       const bool allow_no_ready_read);
 
   int mock_duplicated_rows_(blocksstable::ObDatumRowIterator *&duplicated_rows);
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  int register_all_sstables_upload_(ObTabletHandle &new_tablet_handle);
+#endif
+
 private:
   static int replay_deserialize_tablet(
       const ObTabletMapKey &key,
@@ -892,6 +954,7 @@ private:
   int set_allow_to_read_(ObLS *ls);
   // TODO(chenqingxiang.cqx): remove this
   int create_empty_shell_tablet(
+      const uint64_t data_version,
       const ObMigrationTabletParam &param,
       ObTabletHandle &tablet_handle);
   int check_rollback_tablet_is_same_(

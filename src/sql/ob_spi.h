@@ -39,6 +39,7 @@ namespace pl
 {
 class ObDbmsCursorInfo;
 class ObPLSqlCodeInfo;
+class ObPLSqlAuditRecord;
 }
 
 namespace sql
@@ -784,7 +785,12 @@ public:
 
   static int spi_destruct_collection(pl::ObPLExecCtx *ctx, int64_t idx);
 
-  static int spi_sub_nestedtable(pl::ObPLExecCtx *ctx, int64_t src_idx, int64_t dst_idx, int32_t lower, int32_t upper);
+  static int spi_sub_nestedtable(pl::ObPLExecCtx *ctx,
+                                 int64_t src_expr_idx,
+                                 int64_t dst_coll_idx,
+                                 int64_t index_idx,
+                                 int32_t lower,
+                                 int32_t upper);
 
 #ifdef OB_BUILD_ORACLE_PL
   static int spi_extend_assoc_array(int64_t tenant_id,
@@ -953,6 +959,8 @@ public:
   static int fill_ps_cursor(ObSQLSessionInfo &session,
                             pl::ObPsCursorInfo &ps_cursor,
                             int64_t pre_store_size = 0);
+  static int close_ps_cursor_result_set(ObSQLSessionInfo &session,
+                                        int64_t cursor_id);
 
 #ifdef OB_BUILD_ORACLE_PL
   static int spi_execute_dblink(ObExecContext &exec_ctx,
@@ -977,6 +985,8 @@ public:
                                       ObObj *result,
                                       ObObj &tmp_result);
 #endif
+  static int spi_internal_error(pl::ObPLExecCtx *ctx);
+
 private:
   static int recreate_implicit_savapoint_if_need(pl::ObPLExecCtx *ctx, int &result);
   static int recreate_implicit_savapoint_if_need(sql::ObExecContext &ctx, int &result);
@@ -1309,6 +1319,8 @@ private:
                                    int64_t type,
                                    void *params,
                                    int64_t sql_param_count,
+                                   pl::ObPLSqlAuditRecord &audit_record,
+                                   observer::ObQueryRetryCtrl &retry_ctrl,
                                    bool is_server_cursor,
                                    bool is_for_update,
                                    bool has_hidden_rowid,

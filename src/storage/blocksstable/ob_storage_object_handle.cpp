@@ -351,7 +351,19 @@ int ObStorageObjectHandle::wait()
     if (OB_SUCCESS != (tmp_ret = report_bad_block())) {
       LOG_WARN("fail to report bad block", K(tmp_ret), K(ret));
     }
-    io_handle_.reset();
+    if ((macro_id_.is_id_mode_share()) &&
+        (ObStorageObjectType::PRIVATE_SLOG_FILE == macro_id_.storage_object_type()) &&
+        (OB_DATA_OUT_OF_RANGE == ret)) {
+      // cannot reset io_handle_ for slog, cuz io_handle_.get_data_size() will be called
+    } else {
+      io_handle_.reset();
+    }
+  } else if ((macro_id_.is_id_mode_share()) &&
+             (ObStorageObjectType::PRIVATE_SLOG_FILE == macro_id_.storage_object_type()) &&
+             (get_data_size() < get_user_io_size())) {
+    ret = OB_DATA_OUT_OF_RANGE;
+    LOG_WARN("real read size is smaller than expected read size", KR(ret), "real_read_size",
+             get_data_size(), "expected_read_size", get_user_io_size());
   }
   return ret;
 }

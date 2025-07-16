@@ -118,7 +118,9 @@ int ObBatchFreezeTabletsTask::schedule_tablet_major_after_freeze(
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   ObTablet *tablet = NULL;
-  if (!MTL(ObTenantTabletScheduler *)->could_major_merge_start()) {
+  if (GCTX.is_shared_storage_mode()) {
+  // disable schedule merge after freeze, because other check is required in shared storage mode
+  } else if (!MTL(ObTenantTabletScheduler *)->could_major_merge_start()) {
     // merge is suspended
   } else if (OB_FAIL(ls.get_tablet_svr()->get_tablet(
                  cur_pair.tablet_id_, tablet_handle, 0 /*timeout_us*/,

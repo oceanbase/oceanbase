@@ -108,6 +108,8 @@ enum class ObExternalRoutineType
   INTERNAL_ROUTINE = 0,
   EXTERNAL_JAVA_UDF_FROM_URL = 1,
   EXTERNAL_JAVA_UDF_FROM_RES = 2,
+  EXTERNAL_PY_UDF_FROM_URL = 3,
+  EXTERNAL_PY_UDF_FROM_RES = 4,
 };
 
 class ObIRoutineParam
@@ -456,6 +458,10 @@ public:
   OB_INLINE uint64_t get_dblink_id() const { return dblink_id_; }
   OB_INLINE const common::ObString &get_dblink_db_name() const { return dblink_db_name_; }
   OB_INLINE const common::ObString &get_dblink_pkg_name() const { return dblink_pkg_name_; }
+  OB_INLINE ObExternalRoutineType get_external_routine_type() const { return external_routine_type_; }
+  OB_INLINE const common::ObString &get_external_routine_entry() const { return external_routine_entry_; }
+  OB_INLINE const common::ObString &get_external_routine_url() const { return external_routine_url_; }
+  OB_INLINE const common::ObString &get_external_routine_resource() const { return external_routine_resource_;}
 
   // setter
   OB_INLINE void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
@@ -486,6 +492,12 @@ public:
   OB_INLINE int set_dblink_db_name(const common::ObString &db_name) { return deep_copy_str(db_name, dblink_db_name_); }
   OB_INLINE int set_dblink_pkg_name(const common::ObString &pkg_name)
                   { return deep_copy_str(pkg_name, dblink_pkg_name_); }
+
+  OB_INLINE void set_external_routine_type(ObExternalRoutineType type) { external_routine_type_ = type; }
+  OB_INLINE int set_external_routine_entry(const common::ObString &entry) { return deep_copy_str(entry, external_routine_entry_); }
+  OB_INLINE int set_external_routine_url(const common::ObString &url) { return deep_copy_str(url, external_routine_url_); }
+  OB_INLINE int set_external_routine_resource(const common::ObString &resource) { return deep_copy_str(resource, external_routine_resource_); }
+
   OB_INLINE void set_routine_invalid() { flag_ |= SP_FLAG_INVALID; }
   OB_INLINE void set_noneditionable() { flag_ |= SP_FLAG_NONEDITIONABLE; }
   OB_INLINE void set_deterministic() { flag_ |= SP_FLAG_DETERMINISTIC; }

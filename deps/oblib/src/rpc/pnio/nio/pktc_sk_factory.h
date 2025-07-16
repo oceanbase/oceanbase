@@ -74,6 +74,7 @@ static pktc_sk_t* pktc_sk_new(pktc_sf_t* sf) {
     s->ep_fd = -1;
     s->handle_event = (handle_event_t)pktc_sk_handle_event;
     s->sk_diag_info.establish_time = rk_get_us();
+    s->tid = get_current_pnio()->tid;
     pktc_sk_init(sf, s);
   }
   rk_info("sk_new: s=%p", s);

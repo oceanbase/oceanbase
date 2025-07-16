@@ -469,6 +469,10 @@ TEST_F(TestIndexBlockTreeCursor, test_micro_block_index_iter)
   ObMicroIndexInfo micro_index_info;
   iter_range.set_whole_range();
 
+  uint64_t offset = 0;
+  MacroBlockId block_id;
+  block_id.reset();
+  ASSERT_EQ(false, block_id.is_valid());
   // reverse whole scan
   ASSERT_EQ(OB_SUCCESS, micro_iter.open(
     sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, true));
@@ -476,6 +480,16 @@ TEST_F(TestIndexBlockTreeCursor, test_micro_block_index_iter)
     tmp_ret = micro_iter.get_next(micro_index_info);
     STORAGE_LOG(DEBUG, "Reverse get next micro block", K(tmp_ret), K(micro_block_cnt), K(micro_index_info));
     if (OB_SUCCESS == tmp_ret) {
+      ASSERT_EQ(true, micro_index_info.get_macro_id().is_valid());
+      ASSERT_GT(micro_index_info.get_block_offset(), 0);
+      ASSERT_GT(micro_index_info.get_block_size(), 0);
+      if (block_id != micro_index_info.get_macro_id()) {
+        block_id = micro_index_info.get_macro_id();
+        offset = micro_index_info.get_block_offset();
+      } else {
+        ASSERT_EQ(offset - micro_index_info.get_block_size(), micro_index_info.get_block_offset());
+        offset = micro_index_info.get_block_offset();
+      }
       micro_block_cnt++;
     }
   }
@@ -483,6 +497,10 @@ TEST_F(TestIndexBlockTreeCursor, test_micro_block_index_iter)
   ASSERT_EQ(data_micro_block_cnt_, micro_block_cnt);
 
   // sequential whole scan
+  offset = 0;
+  uint64_t block_size = 0;
+  block_id.reset();
+  ASSERT_EQ(false, block_id.is_valid());
   tmp_ret = OB_SUCCESS;
   micro_block_cnt = 0;
   micro_iter.reset();
@@ -490,6 +508,18 @@ TEST_F(TestIndexBlockTreeCursor, test_micro_block_index_iter)
     sstable_, iter_range, tablet_handle_.get_obj()->get_rowkey_read_info(), allocator_, false));
   tmp_ret = micro_iter.get_next(micro_index_info);
   while (OB_SUCCESS == tmp_ret) {
+    ASSERT_EQ(true, micro_index_info.get_macro_id().is_valid());
+    ASSERT_GT(micro_index_info.get_block_offset(), 0);
+    ASSERT_GT(micro_index_info.get_block_size(), 0);
+    if (block_id != micro_index_info.get_macro_id()) {
+      block_id = micro_index_info.get_macro_id();
+      offset = micro_index_info.get_block_offset();
+      block_size = micro_index_info.get_block_size();
+    } else {
+      ASSERT_EQ(offset + block_size, micro_index_info.get_block_offset());
+      offset = micro_index_info.get_block_offset();
+      block_size = micro_index_info.get_block_size();
+    }
     micro_block_cnt++;
     STORAGE_LOG(DEBUG, "Sequential get next micro block", K(tmp_ret), K(micro_block_cnt), K(micro_index_info));
     tmp_ret = micro_iter.get_next(micro_index_info);

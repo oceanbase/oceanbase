@@ -37,6 +37,13 @@ int tw_regist(time_wheel_t* tw, dlink_t* l) {
   return tw_check_node(tw, l);
 }
 
+int tw_regist_timeout(time_wheel_t* tw, time_dlink_t* l, int64_t timeout_us) {
+  int64_t abs_timeout_us = tw->finished_us + timeout_us;
+  l->expire_us = abs_timeout_us;
+  dlink_insert(tw_get_slot(tw, abs_timeout_us), &l->dlink);
+  return 0;
+}
+
 static void tw_sweep_slot(time_wheel_t* tw) {
   dlink_t* slot = tw_get_slot(tw, tw->finished_us - TIME_WHEEL_SLOT_INTERVAL);
   dlink_for(slot, p) {
@@ -79,7 +86,7 @@ void keepalive_check(pktc_t* client_io, pkts_t* server_io) {
       }
     }
     // walks through pkts_t skmap, refresh tcp keepalive params
-    if (server_io->user_keepalive_timeout != pnio_keepalive_timeout) {
+    if (pkts_is_init(server_io) && server_io->user_keepalive_timeout != pnio_keepalive_timeout) {
       dlink_for(&server_io->sk_list, p) {
         pkts_sk_t *sk = structof(p, pkts_sk_t, list_link);
         rk_info("user_keepalive_timeout has been reset, sock_ptr=%p, old=%ld, new=%ld",
@@ -98,6 +105,9 @@ static int timerfd_handle_tw(timerfd_t* s) {
   pktc_t* client_io = structof(s, pktc_t, cb_timerfd);
   pkts_t* server_io = (pkts_t*)(client_io) - 1;
   keepalive_check(client_io, server_io);
+  if (pkts_is_init(server_io)) {
+    tw_check(&server_io->resp_ctx_hold);
+  }
   return EAGAIN;
 }
 
@@ -107,4 +117,9 @@ int timerfd_init_tw(eloop_t* ep, timerfd_t* s) {
   ef(err = timerfd_set_interval(s, TIME_WHEEL_SLOT_INTERVAL));
   el();
   return err;
+}
+
+void time_dlink_init(time_dlink_t* l) {
+  dlink_init(&l->dlink);
+  l->expire_us = 0;
 }

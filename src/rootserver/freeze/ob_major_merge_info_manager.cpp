@@ -105,19 +105,6 @@ int ObMajorMergeInfoManager::set_freeze_info(const ObMajorFreezeReason freeze_re
     // In 'ddl_sql_transaction.start()', it implements the semantics of 'lock_all_ddl_operation'.
     if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_, fake_schema_version))) {
       LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id), K(fake_schema_version));
-#ifdef OB_BUILD_SHARED_STORAGE
-    } else if (GCTX.is_shared_storage_mode()
-            && OB_FAIL(ObTenantBalanceService::lock_and_check_balance_job(trans, tenant_id_))) {
-      if (OB_ENTRY_EXIST == ret) {
-        LOG_WARN("exist balance job, can't update broadcast version now", KR(ret), K_(tenant_id));
-        ROOTSERVICE_EVENT_ADD("ss_major_merge", "root_major_freeze",
-                              K_(tenant_id),
-                              "disabled_reason", "exist balance job",
-                              "freeze_reason", major_freeze_reason_to_str(freeze_reason));
-      } else {
-        LOG_WARN("fail to check balance job", KR(ret), K_(tenant_id));
-      }
-#endif
     // 1. lock snapshot_gc_ts in __all_global_stat
     } else if (OB_FAIL(ObGlobalStatProxy::select_snapshot_gc_scn_for_update(
               trans, tenant_id_, remote_snapshot_gc_scn))) {

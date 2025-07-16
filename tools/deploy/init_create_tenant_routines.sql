@@ -301,8 +301,14 @@ drop procedure if exists adjust_sys_resource;/
 create procedure adjust_sys_resource()
 begin
   declare mem bigint;
+  declare startup_mode VARCHAR(255);
   select memory_limit from GV$OB_SERVERS limit 1 into mem;
-  set @sql_text = "alter resource unit sys_unit_config memory_size = 1073741824;";
+  select value from oceanbase.__all_virtual_tenant_parameter_stat where name = 'ob_startup_mode' limit 1 into startup_mode;
+  if (startup_mode = 'shared_storage') then
+    set @sql_text = "alter resource unit sys_unit_config memory_size = 1610612736;";
+  else
+    set @sql_text = "alter resource unit sys_unit_config memory_size = 1073741824;";
+  end if;
   if (mem < 17179869184) then
     prepare stmt from @sql_text;
     execute stmt;

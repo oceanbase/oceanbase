@@ -611,7 +611,8 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
           eval_ctx_.exec_ctx_.set_cur_rownum(row_num);
           eval_ctx_.exec_ctx_.set_cur_column_name(&column_name);
           if (OB_FAIL(datum_caster_.to_type(dst_expr->datum_meta_, real_src_expr,
-                                            cm_, datum, 0, dst_expr->obj_meta_.get_subschema_id()))) {
+                                            cm_, datum, 0, dst_expr->obj_meta_.get_subschema_id(),
+                                            dst_expr->max_length_))) {
             LOG_WARN("fail to dynamic cast", K(dst_expr->datum_meta_),
                                              K(real_src_expr), K(cm_), K(ret));
             if (dst_expr->obj_meta_.is_geometry()) {

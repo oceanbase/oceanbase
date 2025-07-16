@@ -168,8 +168,12 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ObAddr server2(common::ObAddr::IPV4, "127.1.1.1", 3882);
   ASSERT_EQ(OB_SUCCESS, member_list.add_server(server1));
   ASSERT_EQ(OB_SUCCESS, member_list.add_server(server2));
+  ObMySQLTransaction trans;
+  ret = trans.start(&get_curr_simple_server().get_observer().get_mysql_proxy(), gen_meta_tenant_id(tenant_id_));
   ret = status_operator.update_init_member_list(tenant_id_, ls_id, member_list,
-      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member, learner_list);
+      trans, arb_member, learner_list);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = trans.end(OB_SUCC(ret));
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLSStatusInfo new_status_info;
   ObMemberList new_list;
@@ -187,10 +191,14 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ObAddr server4(common::ObAddr::IPV4, "127.1.1.1", 4882);
   ObMember arb_member2(server4, 0);
   common::GlobalLearnerList learner_list2;
-
-  ret = status_operator.update_init_member_list(tenant_id_, ls_id3, member_list,
-      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member2, learner_list2);
+  ret = trans.start(&get_curr_simple_server().get_observer().get_mysql_proxy(), gen_meta_tenant_id(tenant_id_));
   ASSERT_EQ(OB_SUCCESS, ret);
+  ret = status_operator.update_init_member_list(tenant_id_, ls_id3, member_list,
+      trans, arb_member2, learner_list2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = trans.end(OB_SUCC(ret));
+  ASSERT_EQ(OB_SUCCESS, ret);
+
   ObLSStatusInfo new_status_info3;
   ObMemberList new_list2;
   ObMember arb_member3;

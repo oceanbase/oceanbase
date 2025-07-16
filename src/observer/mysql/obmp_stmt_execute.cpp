@@ -1457,6 +1457,8 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       audit_record.user_client_addr_ = session.get_user_client_addr();
       audit_record.user_group_ = THIS_WORKER.get_group_id();
       MEMCPY(audit_record.sql_id_, ctx_.sql_id_, (int32_t)sizeof(audit_record.sql_id_));
+      MEMCPY(audit_record.format_sql_id_, ctx_.format_sql_id_, (int32_t)sizeof(audit_record.format_sql_id_));
+      audit_record.format_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
       if (NULL != plan) {
         audit_record.plan_type_ = plan->get_plan_type();
         audit_record.table_scan_ = plan->contain_table_scan();
@@ -1685,6 +1687,7 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
                                        bool &async_resp_used)
 {
   int ret = OB_SUCCESS;
+  ObReqTimeGuard req_timeinfo_guard;
   // 每次执行不同sql都需要更新
   ctx_.self_add_plan_ = false;
   oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
@@ -1729,6 +1732,7 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
     LOG_TRACE("sql retry",
               K(ret), "retry_times", retry_ctrl_.get_retry_times(), "sql", ctx_.cur_sql_);
   }
+  ctx_.spm_ctx_.reset();
   return ret;
 }
 
@@ -1923,7 +1927,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
   }
 
   //对于tracelog的处理, 不影响正常逻辑, 错误码无须赋值给ret, 清空WARNING BUFFER
-  do_after_process(session, ctx_, async_resp_used);
+  do_after_process(session, async_resp_used);
 
   if (OB_FAIL(ret) && need_response_error && is_conn_valid()) {
     send_error_packet(ret, NULL, (void *)(ctx_.get_reroute_info()));
@@ -2131,6 +2135,7 @@ int ObMPStmtExecute::process()
   }
 
   // 如果已经异步回包，则这部分逻辑在cb中执行，这里跳过flush_buffer()
+  bool need_close_result_set = is_async_cursor;
   if (!THIS_WORKER.need_retry()) {
     if (async_resp_used) {
       async_resp_used_ = true;
@@ -2138,6 +2143,7 @@ int ObMPStmtExecute::process()
     } else {
       flush_ret = flush_buffer(true);
       if (OB_SUCC(ret) && (OB_SUCCESS == flush_ret) && is_async_cursor) {
+        need_close_result_set = false;
         if (OB_FAIL(ps_cursor_store_data(*sess, 0))) {
           LOG_WARN("async ps cursor store data failed", K(ret));
         }
@@ -2148,6 +2154,12 @@ int ObMPStmtExecute::process()
   }
   if (is_async_cursor) {
     int tmp_ret = OB_SUCCESS;
+    if (need_close_result_set) {
+      if (OB_SUCCESS != (tmp_ret = ObSPIService::close_ps_cursor_result_set(*sess, stmt_id_))) {
+        LOG_WARN("close ps cursor result set failed", K(ret), K(stmt_id_));
+      }
+      tmp_ret = OB_SUCCESS;
+    }
     if (OB_SUCCESS != (tmp_ret = sess->get_query_lock().unlock())) {
       LOG_WARN("unlock session failed", K(ret), K(tmp_ret));
     }

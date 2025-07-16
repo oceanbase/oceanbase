@@ -825,10 +825,13 @@ int ObLSLocationService::construct_rpc_dests_(
   int ret = OB_SUCCESS;
   ObArray<ObAddr> rs_list;
   ObArray<ObAddr> all_server_list;
-  const bool check_ls_service = false;
+  // set check_ls_service is false is mainly to avoid blocking in the test RTO scenario,
+  // in the stage of bootstrap, no need to worry.
+  const bool check_ls_service = GCTX.in_bootstrap_ ? true : false;
+  const ObLSID &ls_id = GCTX.is_shared_storage_mode() ? SSLOG_LS : SYS_LS;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(rs_mgr_->construct_initial_server_list(check_ls_service, rs_list))) {
+  } else if (OB_FAIL(rs_mgr_->construct_initial_server_list(check_ls_service, ls_id, rs_list))) {
     LOG_WARN("fail to get rs list", KR(ret));
   } else if (OB_FAIL(ObShareUtil::parse_all_server_list(rs_list, all_server_list))) {
     LOG_WARN("fail to get all server list", KR(ret), K(rs_list));

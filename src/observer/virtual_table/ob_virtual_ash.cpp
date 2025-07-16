@@ -138,7 +138,7 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
         break;
       }
       case SESSION_ID: {
-        if (node.session_type_ == 0) {
+        if (node.session_type_ == 0 && node.client_sid_ != INVALID_SESSID) {
           cells[cell_idx].set_int(node.client_sid_);
         } else {
           cells[cell_idx].set_int(node.session_id_);
@@ -530,6 +530,10 @@ int ObVirtualASHI1::init_next_query_range()
       }
       if (cur_range.end_key_.is_max_row()) {
         right = INT64_MAX;  // maximum sample time is INT64_MAX
+      }
+      if (lib::is_oracle_mode() && cur_range.end_key_.get_obj_ptr()->is_null()) {
+        // oracle null last
+        right = INT64_MAX;  // sample time cannot be null.
       }
       if (OB_UNLIKELY(cur_range.end_key_.is_min_row() || cur_range.start_key_.is_max_row())) {
         left = INT64_MAX;

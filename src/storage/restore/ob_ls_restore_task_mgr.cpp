@@ -533,7 +533,7 @@ int ObLSRestoreTaskMgr::check_transfer_start_finish_(const ObTabletHandle &table
   if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet is nullptr", K(ret));
-  } else if (OB_FAIL(tablet->get_latest_committed(user_data))) {
+  } else if (OB_FAIL(tablet->get_latest_committed_tablet_status(user_data))) {
     if (OB_EMPTY_RESULT == ret) {
       // No committed user data exist, indicate that transfer start transaction is not finish.
       ret = OB_SUCCESS;
@@ -804,7 +804,7 @@ int ObLSRestoreTaskMgr::check_tablet_is_deleted_(
   } else if (tablet->is_empty_shell()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet is empty shell", K(ret), KPC(tablet));
-  } else if (OB_FAIL(tablet->get_latest_committed(data))) {
+  } else if (OB_FAIL(tablet->get_latest_committed_tablet_status(data))) {
     if (OB_EMPTY_RESULT == ret || OB_ERR_SHARED_LOCK_CONFLICT == ret) {
       LOG_WARN("tablet_status is null or not committed", K(ret), KPC(tablet));
       ret = OB_SUCCESS;

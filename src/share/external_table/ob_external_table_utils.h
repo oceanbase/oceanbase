@@ -60,6 +60,8 @@ class ObExternalTableUtils {
     FILE_ID,
     ROW_GROUP_NUMBER,
     LINE_NUMBER,
+    SESSION_ID,
+    SPLIT_IDX,
     MAX_EXTERNAL_FILE_SCANKEY
   };
 
@@ -96,13 +98,14 @@ class ObExternalTableUtils {
 
   static int prepare_single_scan_range(const uint64_t tenant_id,
                                        const ObDASScanCtDef &das_ctdef,
+                                       ObDASScanRtDef *das_rtdef,
+                                       ObExecContext &exec_ctx,
                                        ObIArray<int64_t> &partition_ids,
                                        common::ObIArray<common::ObNewRange *> &ranges,
                                        common::ObIAllocator &range_allocator,
                                        common::ObIArray<common::ObNewRange *> &new_range,
                                        bool is_file_on_disk,
                                        ObExecContext &ctx);
-
   static int calc_assigned_files_to_sqcs(
     const common::ObIArray<ObExternalFileInfo> &files,
     common::ObIArray<int64_t> &assigned_idx,
@@ -118,13 +121,21 @@ class ObExternalTableUtils {
 
   static int assign_odps_file_to_sqcs(
     ObDfo &dfo,
+    ObExecContext &exec_ctx,
     ObIArray<ObPxSqcMeta *> &sqcs,
-    int64_t parallel);
-
+    int64_t parallel,
+    ObODPSGeneralFormat::ApiMode odps_api_mode);
+  static int split_odps_to_sqcs_process_tunnel(common::ObIArray<share::ObExternalFileInfo> &files,
+                                        ObIArray<ObPxSqcMeta *> &sqcs,
+                                        int parallel);
+  static int split_odps_to_sqcs_storage_api(int64_t split_task_count, int64_t table_total_file_size,
+      const ObString &session_str, const ObString &new_file_urls, ObIArray<ObPxSqcMeta *> &sqcs, int parallel,
+      ObIAllocator &range_allocator, ObODPSGeneralFormat::ApiMode odps_api_mode);
   static int filter_files_in_locations(common::ObIArray<share::ObExternalFileInfo> &files,
-                                       common::ObIArray<common::ObAddr> &locations);
+      common::ObIArray<common::ObAddr> &locations);
 
   static int collect_external_file_list(
+    const ObSQLSessionInfo* session_ptr_in,
     const uint64_t tenant_id,
     const uint64_t table_id,
     const ObString &location,
@@ -153,10 +164,25 @@ class ObExternalTableUtils {
                                             const uint64_t ref_table_id,
                                             const int64_t first_lineno,
                                             const int64_t last_lineno,
+                                            const common::ObString &session_id,
+                                            const int64_t first_split_idx,
+                                            const int64_t last_split_idx,
                                             common::ObIAllocator &allocator,
                                             common::ObNewRange &new_range);
   static bool is_skipped_insert_column(const schema::ObColumnSchemaV2& column);
-
+  static int get_external_file_location(const ObTableSchema &table_schema,
+                                        ObSchemaGetterGuard &schema_guard,
+                                        ObIAllocator &allocator,
+                                        ObString &file_location);
+  static int get_external_file_location_access_info(const ObTableSchema &table_schema,
+                                                    ObSchemaGetterGuard &schema_guard,
+                                                    ObString &access_info);
+  static int remove_external_file_list(const uint64_t tenant_id,
+                                       const ObString &location,
+                                       const ObString &access_info,
+                                       const ObString &pattern,
+                                       const sql::ObExprRegexpSessionVariables &regexp_vars,
+                                       ObIAllocator &allocator);
  private:
   static bool is_left_edge(const common::ObObj &value);
   static bool is_right_edge(const common::ObObj &value);

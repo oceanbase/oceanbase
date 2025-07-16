@@ -200,6 +200,12 @@ private:
   bool is_need_gc_ls_status_(const LSStatus &status);
   bool is_normal_ls_status_(const LSStatus &status);
   bool is_need_delete_entry_ls_status_(const LSStatus &status);
+  int check_can_remove_sslog_ls_(bool &can_remove_sslog);
+  int get_ls_leader_(const share::ObLSID &ls_id, common::ObAddr &addr);
+  int remove_from_member_list_(const share::ObLSID &ls_id);
+  int fix_sslog_memberlist_();
+  // migration failed相关
+  int gc_check_ls_migration_failed_(ObGCCandidateArray &gc_candidates);
   //member list相关
   int gc_check_member_list_(ObGCCandidateArray &gc_candidates);
   int construct_server_ls_map_for_member_list_(ServerLSMap &server_ls_map) const;

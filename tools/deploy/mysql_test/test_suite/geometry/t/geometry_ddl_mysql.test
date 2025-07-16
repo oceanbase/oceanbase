@@ -718,7 +718,7 @@ ALTER TABLE geo_t1 MODIFY t varchar(1);
 ALTER TABLE geo_t1 MODIFY t ENUM('a','b');
 --error 1235
 ALTER TABLE geo_t1 MODIFY t SET('a','b');
---error 1235
+--error 3144
 ALTER TABLE geo_t1 MODIFY t JSON;
 # mysql success but truncate
 --error 1406
@@ -749,7 +749,7 @@ ALTER TABLE geo_t1 change t tt varchar(1);
 ALTER TABLE geo_t1 change t tt ENUM('a','b');
 --error 1235
 ALTER TABLE geo_t1 change t tt SET('a','b');
---error 1235
+--error 3144
 ALTER TABLE geo_t1 change t tt JSON;
 # mysql success but truncate
 --error 1406

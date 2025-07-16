@@ -128,7 +128,7 @@ void ObBaseLogWriter::stop()
       }
 
       if (!is_empty) {
-        ::usleep(MAX_STOP_WAIT_TIME_US / max_try_cnt);
+        ob_usleep(MAX_STOP_WAIT_TIME_US / max_try_cnt);
         --try_cnt;
       }
     }

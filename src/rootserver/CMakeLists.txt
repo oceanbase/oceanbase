@@ -31,6 +31,7 @@ ob_set_subtarget(ob_rootserver common
   ob_admin_drtask_util.cpp
   ob_disaster_recovery_task_table_operator.cpp
   ob_balance_group_ls_stat_operator.cpp
+  ob_disaster_recovery_sslog_service.cpp
   ob_disaster_recovery_info.cpp
   ob_disaster_recovery_worker.cpp
   ob_disaster_recovery_service.cpp
@@ -115,6 +116,11 @@ ob_set_subtarget(ob_rootserver common
   ob_load_sys_package_task.cpp
   ob_root_rebuild_tablet.cpp
   ob_alter_table_constraint_checker.cpp
+  ob_location_ddl_operator.cpp
+  ob_location_ddl_service.cpp
+  ob_objpriv_mysql_ddl_operator.cpp
+  ob_objpriv_mysql_ddl_service.cpp
+  ob_objpriv_mysql_schema_history_recycler.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance
@@ -235,6 +241,7 @@ ob_set_subtarget(ob_rootserver standby
   standby/ob_standby_service.cpp
   standby/ob_recovery_ls_service.cpp
   standby/ob_tenant_role_transition_service.cpp
+  standby/ob_flashback_standby_log_command.cpp
 )
 
 ob_set_subtarget(ob_rootserver truncate_info

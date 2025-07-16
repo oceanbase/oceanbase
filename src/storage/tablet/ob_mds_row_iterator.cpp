@@ -60,9 +60,6 @@ int ObMdsRowIterator::init(
   } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
-  } else if (OB_UNLIKELY(tablet_handle.get_obj()->is_empty_shell())) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("There is no mds data for emtpy shell tablet", K(ret), KPC(tablet_handle.get_obj()));
   } else {
     const ObRowkeyReadInfo *rowkey_read_info = ObMdsSchemaHelper::get_instance().get_rowkey_read_info();
 

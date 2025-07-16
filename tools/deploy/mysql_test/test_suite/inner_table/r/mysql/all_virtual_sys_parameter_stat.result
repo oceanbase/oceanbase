@@ -29,6 +29,7 @@ arbitration_degradation_policy
 arbitration_timeout
 archive_lag_target
 async_ps_cursor_max_count
+attach_shared_sstable_thread_score
 audit_log_buffer_size
 audit_log_compression
 audit_log_enable
@@ -162,6 +163,8 @@ large_query_threshold
 large_query_worker_percentage
 leak_mod_to_check
 lease_time
+load_data_diagnosis_log_compression
+load_data_diagnosis_log_max_size
 lob_enable_block_cache_threshold
 local_ip
 location_cache_cpu_quota
@@ -210,6 +213,7 @@ ob_compaction_schedule_interval
 ob_deterministic_udf_cache_max_size
 ob_enable_batched_multi_statement
 ob_enable_java_env
+ob_enable_java_udf
 ob_encoding_granularity
 ob_event_history_recycle_interval
 ob_java_connector_path
@@ -414,6 +418,7 @@ _enable_numa_aware
 _enable_obdal
 _enable_optimizer_qualify_filter
 _enable_oracle_priv_check
+_enable_palf_kv
 _enable_parallel_das_dml
 _enable_parallel_minor_merge
 _enable_parallel_redo_logging
@@ -435,6 +440,7 @@ _enable_range_extraction_for_not_in
 _enable_reserved_user_dcl_restriction
 _enable_resource_limit_spec
 _enable_routine_call_param_defend
+_enable_runtime_filter_adaptive_apply
 _enable_skip_index
 _enable_spf_batch_rescan
 _enable_sql_audit_query_sql
@@ -469,6 +475,7 @@ _ha_diagnose_history_recycle_interval
 _ha_rpc_timeout
 _ha_tablet_info_batch_count
 _hidden_sys_tenant_memory
+_hnsw_max_scan_vectors
 _ignore_system_memory_over_limit_error
 _inlist_rewrite_threshold
 _io_callback_thread_count
@@ -505,6 +512,7 @@ _ndv_runtime_bloom_filter_size
 _nested_loop_join_enabled
 _non_standard_comparison_level
 _no_logging
+_object_storage_condition_put_mode
 _object_storage_io_timeout
 _obkv_enable_distributed_execution
 _obkv_feature_mode
@@ -524,6 +532,7 @@ _ob_enable_standby_db_parallel_log_transport
 _ob_enable_truncate_partition_preserve_global_index
 _ob_get_gts_ahead_interval
 _ob_immediate_row_conflict_check
+_ob_java_odps_data_transfer_mode
 _ob_max_thread_num
 _ob_obj_dep_maint_task_interval
 _ob_plan_cache_auto_flush_interval
@@ -554,6 +563,7 @@ _pipelined_table_function_memory_limit
 _preserve_order_for_groupby
 _preserve_order_for_pagination
 _preset_runtime_bloom_filter_size
+_prexec_prepare_with_params
 _print_sample_ppm
 _private_buffer_size
 _publish_schema_mode
@@ -586,17 +596,25 @@ _session_context_size
 _sort_area_size
 _sqlexec_disable_hash_based_distagg_tiv
 _sql_insert_multi_values_split_opt
+_ss_clog_retention_period
 _ss_deleted_tablet_gc_time
 _ss_enable_garbage_collection_service
+_ss_enable_timeout_garbage_collection
+_ss_failed_block_gc_expiration_time
 _ss_garbage_collect_file_expiration_time
 _ss_garbage_collect_interval
 _ss_hidden_sys_tenant_data_disk_size
+_ss_local_cache_control
 _ss_local_cache_expiration_time
+_ss_macro_cache_miss_threshold_for_prefetch
 _ss_major_compaction_prewarm_level
+_ss_micro_cache_arc_limit_percent
 _ss_micro_cache_memory_percentage
+_ss_micro_cache_size_max_percentage
 _ss_new_leader_overwrite_delay
 _ss_old_ver_retention_time
 _ss_schedule_upload_interval
+_ss_tablet_version_retention_time
 _stall_threshold_for_dynamic_worker
 _standby_max_replay_gap_time
 _storage_leak_check_mod
@@ -606,6 +624,7 @@ _stream_rpc_max_wait_timeout
 _system_tenant_limit_mode
 _system_trig_enabled
 _temporary_file_io_area_size
+_tempstore_read_alignment_size
 _tenant_stack_size
 _trace_control_info
 _transfer_finish_trans_timeout
@@ -621,6 +640,7 @@ _tx_data_memory_limit_percentage
 _tx_debug_level
 _tx_result_retention
 _tx_share_memory_limit_percentage
+_update_all_columns_for_trigger
 _upgrade_stage
 _use_hash_rollup
 _use_odps_jni_connector

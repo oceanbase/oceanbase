@@ -139,6 +139,7 @@ int ObPlAggUdfFunction::call_pl_engine_exectue_udf(ParamStore& udf_params,
   pl::ObPL *pl_engine = NULL;
   ObSEArray<int64_t, 8> empty_subprogram_path;
   ObSEArray<int64_t, 8> empty_nocopy_params;
+  ObCacheObjGuard cacheobj_guard(PL_ROUTINE_HANDLE);
   uint64_t loc = 0;
   if (OB_ISNULL(routine_info) || OB_ISNULL(session_info_) ||
       OB_ISNULL(pl_engine = session_info_->get_pl_engine()) || OB_ISNULL(allocator_) ||
@@ -159,6 +160,7 @@ int ObPlAggUdfFunction::call_pl_engine_exectue_udf(ParamStore& udf_params,
                                         udf_params,
                                         empty_nocopy_params,
                                         result,
+                                        cacheobj_guard,
                                         NULL,
                                         false,
                                         true,
@@ -217,6 +219,7 @@ int ObPlAggUdfFunction::build_in_params_store(ObObjParam &pl_obj,
     udf_params = new(param_store_buf)ParamStore(ObWrapperAllocator(*allocator_));
     ObObjParam param;
     param.reset();
+    param = pl_obj;
     if (is_out_param) {
       param.set_extend(pl_obj.get_ext(),
                        pl_obj.get_meta().get_extend_type(), pl_obj.get_val_len());

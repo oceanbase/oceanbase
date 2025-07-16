@@ -3306,6 +3306,43 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
   return ret;
 }
 
-
-}//end namespace rootserver
+int ObFtsIndexSchemaPrinter::print_fts_parser_info(
+    const ObTableSchema &table_schema,
+    const bool strict_compat,
+    char *&buf,
+    const int64_t &buf_len,
+    int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  storage::ObFTParser parser;
+  storage::ObFTParserJsonProps parser_properties;
+  bool is_mysql_compat = false;
+  if (OB_FAIL(parser.parse_from_str(table_schema.get_parser_name_str().ptr(), table_schema.get_parser_name_str().length()))) {
+    LOG_WARN("fail to parse name from cstring", K(ret), K(parser));
+  } else if (strict_compat
+             && OB_FAIL(is_mysql_compat_parser(ObString(parser.get_parser_name().len(), parser.get_parser_name().str()),
+                                               is_mysql_compat))) {
+    LOG_WARN("fail to check if parser is mysql compat", K(ret), K(parser));
+  } else if (strict_compat && !is_mysql_compat) {
+    // do nothing
+  } else if (OB_FAIL(databuff_printf(
+                 buf,
+                 buf_len,
+                 pos,
+                 "WITH PARSER %.*s ",
+                 parser.get_parser_name().len(),
+                 parser.get_parser_name().str()))) {
+    SHARE_SCHEMA_LOG(WARN, "print parser name failed", K(ret), K(parser));
+  } else if (strict_compat || table_schema.get_parser_property_str().empty()) {
+    // do nothing.
+  } else if (OB_FAIL(parser_properties.init())) {
+    LOG_WARN("fail to init parser properties", K(ret));
+  } else if (OB_FAIL(parser_properties.parse_from_valid_str(table_schema.get_parser_property_str()))) { // TODO: check valid.
+    LOG_WARN("fail to parse properties", K(ret), K(parser), K(table_schema.get_parser_property_str()));
+  } else if (OB_FAIL(ObFTParserJsonProps::show_parser_properties(parser_properties, buf, buf_len, pos))) {
+    LOG_WARN("fail to show parser properties", K(ret), K(parser_properties));
+  }
+  return ret;
+}
+} // namespace share
 }//end namespace oceanbase

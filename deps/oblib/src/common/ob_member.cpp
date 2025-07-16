@@ -21,11 +21,12 @@ ObMember::ObMember() : timestamp_(OB_INVALID_TIMESTAMP), flag_(0)
 }
 
 ObMember::ObMember(const common::ObAddr &server,
-                   const int64_t timestamp)
+                   const int64_t timestamp,
+                   const int64_t flag)
     : server_(server),
-      timestamp_(timestamp)
+      timestamp_(timestamp),
+      flag_(flag)
 {
-  flag_ = 0;
 }
 
 const common::ObAddr &ObMember::get_server() const

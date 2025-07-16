@@ -255,7 +255,7 @@ uint64_t ObMonitorNode::calc_db_time()
 void ObMonitorNode::covert_to_static_node()
 {
   db_time_ = calc_db_time();
-  uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
+  uint64_t cpu_khz = OBSERVER_FREQUENCE.get_cpu_frequency_khz();
   db_time_ = db_time_ * 1000 / cpu_khz;
   block_time_ = block_time_ * 1000 / cpu_khz;
   op_ = nullptr;

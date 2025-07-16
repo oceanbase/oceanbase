@@ -445,6 +445,8 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_server_storage.cpp
   virtual_table/ob_all_virtual_sswriter_group_stat.cpp
   virtual_table/ob_all_virtual_sswriter_lease_mgr.cpp
+  virtual_table/ob_all_virtual_ss_notify_tasks_stat.cpp
+  virtual_table/ob_all_virtual_ss_notify_tablets_stat.cpp
   virtual_table/ob_all_virtual_tablet_compaction_history.cpp
   virtual_table/ob_all_virtual_tablet_compaction_progress.cpp
   virtual_table/ob_all_virtual_io_status.cpp
@@ -466,6 +468,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_apply_stat.cpp
   virtual_table/ob_all_virtual_replay_stat.cpp
   virtual_table/ob_all_virtual_ha_diagnose.cpp
+  virtual_table/ob_all_virtual_ls_migration_task.cpp
   virtual_table/ob_global_variables.cpp
   virtual_table/ob_gv_sql.cpp
   virtual_table/ob_gv_sql_audit.cpp
@@ -489,6 +492,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_information_schema_enable_roles_table.cpp
   virtual_table/ob_iterate_private_virtual_table.cpp
   virtual_table/ob_iterate_virtual_table.cpp
+  virtual_table/ob_list_file.cpp
   virtual_table/ob_mem_leak_checker_info.cpp
   virtual_table/ob_mysql_db_table.cpp
   virtual_table/ob_mysql_proc_table.cpp
@@ -497,6 +501,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_session_variables.cpp
   virtual_table/ob_show_create_catalog.cpp
   virtual_table/ob_show_create_database.cpp
+  virtual_table/ob_show_create_location.cpp
   virtual_table/ob_show_create_procedure.cpp
   virtual_table/ob_show_create_table.cpp
   virtual_table/ob_show_create_tablegroup.cpp
@@ -568,11 +573,16 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_ss_tablet_meta.cpp
   virtual_table/ob_all_virtual_ss_ls_meta.cpp
   virtual_table/ob_all_virtual_ss_sstable_mgr.cpp
+  virtual_table/ob_all_virtual_ss_existing_tablet_meta.cpp
+  virtual_table/ob_all_virtual_ss_existing_sstable_mgr.cpp
   virtual_table/ob_all_virtual_dynamic_partition_table.cpp
   virtual_table/ob_all_virtual_storage_cache_task.cpp
   virtual_table/ob_all_virtual_tablet_local_cache.cpp
   virtual_table/ob_tenant_show_catalog_databases.cpp
   virtual_table/ob_all_virtual_ss_ls_tablet_reorg_info.cpp
+  virtual_table/ob_all_virtual_logservice_cluster_info.cpp
+  virtual_table/ob_all_virtual_ss_gc_status.cpp
+  virtual_table/ob_all_virtual_ss_gc_detect_info.cpp
 )
 
 ob_server_add_target(ob_server)
@@ -595,8 +605,11 @@ endif()
 if (OB_SO_CACHE)
   add_library(oceanbase SHARED IMPORTED GLOBAL)
   set_target_properties(oceanbase PROPERTIES
-    IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/liboceanbase.so"
-    IMPORTED_LINK_INTERFACE_LIBRARIES ob_base)
+    IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/liboceanbase.so")
+  target_link_libraries(oceanbase
+    INTERFACE ob_base
+    ${HYPERSCAN_SHARED_LIB}
+    ${STDC_SHARED_LIB})
 else()
   add_library(oceanbase
     SHARED
@@ -604,6 +617,9 @@ else()
     ${CMAKE_CURRENT_BINARY_DIR}/ob_version.cpp)
   target_link_libraries(oceanbase
     PUBLIC ob_base
+    ${HYPERSCAN_SHARED_LIB}
+    INTERFACE
+    ${STDC_SHARED_LIB}
     PRIVATE
     -Wl,-z,notext
     -Wl,--whole-archive
@@ -617,6 +633,10 @@ else()
     -static-libgcc -static-libstdc++
     objit)
 endif()
+
+get_filename_component(STDC_SHARED_LIB_DIR ${STDC_SHARED_LIB} DIRECTORY)
+target_link_options(oceanbase INTERFACE
+    "-Wl,-rpath=${STDC_SHARED_LIB_DIR}")
 
 if (NOT OB_USE_ASAN)
   set(link_malloc_hook malloc_hook)
@@ -679,3 +699,9 @@ else()
 endif()
 
 configure_file(../share/ob_version.cpp.in ob_version.cpp)
+
+message(STATUS "dump config item")
+add_custom_command(TARGET observer POST_BUILD
+COMMAND ${CMAKE_BINARY_DIR}/src/observer/observer -C
+WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)

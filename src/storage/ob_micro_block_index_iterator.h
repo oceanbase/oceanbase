@@ -27,7 +27,7 @@ public:
   void reset();
 
   int open(
-      const blocksstable::ObSSTable &sstable,
+      blocksstable::ObSSTable &sstable,
       const blocksstable::ObDatumRange &range,
       const ObITableReadInfo &rowkey_read_info,
       ObIAllocator &allocator,
@@ -55,6 +55,7 @@ private:
   const blocksstable::ObDatumRange *range_;
   bool is_reverse_scan_;
   bool is_iter_end_;
+  bool has_fetched_micro_info_;
   bool is_inited_;
 };
 

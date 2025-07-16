@@ -217,7 +217,6 @@ private:
   static const int64_t PRINT_INTERVAL = 30 * 1000L * 1000L;
   static const int64_t MAP_WASH_CLEAN_INTERNAL = 10;
   static const int64_t MAP_REPLACE_ONCE_SKIP_COUNT = 10;
-  static ObKVGlobalCache instance_;
 private:
   class KVStoreWashTask: public ObTimerTask
   {

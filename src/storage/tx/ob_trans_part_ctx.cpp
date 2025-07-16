@@ -24,6 +24,7 @@
 #include "storage/tx/ob_tx_log_operator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_service.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_adapter.h"
 #endif
 
 namespace oceanbase {
@@ -211,6 +212,7 @@ int ObPartTransCtx::init_memtable_ctx_(const uint64_t tenant_id, const ObLSID &l
 void ObPartTransCtx::destroy()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_LIKELY(is_inited_)) {
     TRANS_LOG(DEBUG, "part_ctx_destroy", K(*this));
 
@@ -295,6 +297,22 @@ void ObPartTransCtx::destroy()
     timeout_task_.destroy();
     trace_info_.reset();
     block_frozen_memtable_ = nullptr;
+#ifdef OB_BUILD_SHARED_STORAGE
+    if (GCTX.is_shared_storage_mode()) {
+      if (!sslog_notify_queue_.empty()) {
+        MTL_SWITCH(gen_user_tenant_id(MTL_ID())) {
+          sslog::ObSSLogNotifyTaskQueue queue;
+          if (OB_TMP_FAIL(MTL(sslog::ObSSLogNotifyService*)->fetch_shadow_queue(trans_id_, queue))) {
+            SSLOG_LOG(WARN, "failed to fetch shadow queue to destroy while sslog_notify_queue_ is valid",
+                            KR(ret), K_(sslog_notify_queue), K(trans_id_));
+          }
+        } else {
+          SSLOG_LOG(WARN, "switch to user tenant failed", KR(ret));
+        }
+        sslog_notify_queue_.~ObSSLogNotifyTaskQueue();
+      }
+    }
+#endif
 
     is_inited_ = false;
   }
@@ -360,6 +378,12 @@ void ObPartTransCtx::default_init_()
   standby_part_collected_.reset();
   trace_log_.reset();
   transfer_deleted_ = false;
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (GCTX.is_shared_storage_mode()) {
+    new (&sslog_notify_queue_) sslog::ObSSLogNotifyTaskQueue();
+  }
+#endif
 }
 
 // thread-unsafe
@@ -736,9 +760,13 @@ int ObPartTransCtx::commit(const ObTxCommitParts &parts,
 {
   TRANS_LOG(DEBUG, "tx.commit", K(parts), K(trans_id_), K(ls_id_));
   int ret = OB_SUCCESS;
+  if (OB_FAIL(submit_parallel_redo_before_commit_())) {
+    TRANS_LOG(WARN, "submit redo before commit fail", KR(ret), K(*this));
+  }
   int tmp_ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
-  if (IS_NOT_INIT) {
+  if (OB_FAIL(ret)) {
+  } else if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(0 >= expire_ts)) {
@@ -1072,11 +1100,12 @@ int ObPartTransCtx::trans_replay_commit_(const SCN &commit_version,
     }
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode() && sslog_notify_queue_.count_ > 0) {
+      tg.click();
       if (OB_ISNULL(MTL(sslog::ObSSLogNotifyService *))) {
         ret = OB_SUCCESS;
         TRANS_LOG(WARN, "ObSSLogNotifyService is NULL", KR(ret), KPC(this));
       } else {
-        MTL(sslog::ObSSLogNotifyService *)->commit_queue(sslog_notify_queue_);
+        ObSSLogNotifyAdapter::dispatch_commit_sslog_nofity_queue(this, final_log_ts, commit_version);
       }
     }
 #endif
@@ -1094,7 +1123,12 @@ int ObPartTransCtx::update_publish_version_(const SCN &publish_version, const bo
   } else if (OB_FAIL(ctx_tx_data_.set_commit_version(publish_version))) {
     TRANS_LOG(WARN, "set commit version failed", K(ret));
   } else {
-    trans_service_->get_tx_version_mgr().update_max_commit_ts(publish_version, false);
+    if (is_for_sslog_()) {
+      // for sslog
+      trans_service_->get_tx_version_mgr_for_sslog().update_max_commit_ts(publish_version, false);
+    } else {
+      trans_service_->get_tx_version_mgr().update_max_commit_ts(publish_version, false);
+    }
     REC_TRANS_TRACE_EXT2(tlog_, push_max_commit_version, OB_ID(trans_version), publish_version,
                          OB_ID(ref), get_ref());
   }
@@ -1218,7 +1252,11 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
       set_trans_need_wait_wrap_(receive_gts_ts, GET_GTS_AHEAD_INTERVAL);
       // the same as before prepare
       mt_ctx_.set_trans_version(gts);
-      const SCN max_read_ts = trans_service_->get_tx_version_mgr().get_max_read_ts();
+      SCN max_read_ts = trans_service_->get_tx_version_mgr().get_max_read_ts();
+      if (is_for_sslog_()) {
+        // for sslog
+        max_read_ts = trans_service_->get_tx_version_mgr_for_sslog().get_max_read_ts();
+      }
       // TRANS_LOG(INFO, "get_gts_callback mid", K(*this), K(log_type));
       if (is_local_tx_() && exec_info_.is_dup_tx_) {
         TRANS_LOG(ERROR, "invalid trans type for a local dup_table trx", K(ret), KPC(this));
@@ -1243,6 +1281,11 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
           }
         } else if (OB_FAIL(submit_log_impl_(ObTxLogType::TX_COMMIT_LOG))) {
           TRANS_LOG(WARN, "submit commit log in gts callback failed", K(ret), KPC(this));
+          // log submitting will retry in handle_timeout
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(restart_2pc_trans_timer_())) {
+            TRANS_LOG(WARN, "restart_2pc_trans_timer_ error", KR(ret), KR(tmp_ret), KPC(this));
+          }
         }
       } else {
         const SCN local_prepare_version = SCN::max(gts, max_read_ts);
@@ -1669,9 +1712,16 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
           || ObTxState::CLEAR == exec_info_.state_) {
         ls_tx_ctx_mgr_->update_max_replay_commit_version(ctx_tx_data_.get_commit_version());
         //update max_commit_ts for dup table because of migrate or recover
-        MTL(ObTransService *)
-            ->get_tx_version_mgr()
-            .update_max_commit_ts(ctx_tx_data_.get_commit_version(), false);
+        if (is_for_sslog_()) {
+          // for sslog
+          MTL(ObTransService *)
+              ->get_tx_version_mgr_for_sslog()
+              .update_max_commit_ts(ctx_tx_data_.get_commit_version(), false);
+        } else {
+          MTL(ObTransService *)
+              ->get_tx_version_mgr()
+              .update_max_commit_ts(ctx_tx_data_.get_commit_version(), false);
+        }
       }
       create_ctx_scn_ = exec_info_.max_applying_log_ts_;
 
@@ -2067,8 +2117,14 @@ int ObPartTransCtx::abort_(int reason)
 int ObPartTransCtx::update_max_commit_version_()
 {
   int ret = OB_SUCCESS;
-  trans_service_->get_tx_version_mgr().update_max_commit_ts(
-      ctx_tx_data_.get_commit_version(), false);
+  if (is_for_sslog_()) {
+    // for sslog
+    trans_service_->get_tx_version_mgr_for_sslog().update_max_commit_ts(
+        ctx_tx_data_.get_commit_version(), false);
+  } else {
+    trans_service_->get_tx_version_mgr().update_max_commit_ts(
+        ctx_tx_data_.get_commit_version(), false);
+  }
   return ret;
 }
 
@@ -2151,7 +2207,7 @@ int ObPartTransCtx::tx_end_(const bool commit)
         ret = OB_SUCCESS;
         TRANS_LOG(WARN, "ObSSLogNotifyService is NULL", KR(ret), KPC(this));
       } else {
-        MTL(sslog::ObSSLogNotifyService *)->commit_queue(sslog_notify_queue_);
+        ObSSLogNotifyAdapter::dispatch_commit_sslog_nofity_queue(this, end_scn, commit_version);
       }
     }
   }
@@ -2209,7 +2265,7 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
     #ifdef ERRSIM
     uint64_t sleep_us = abs(EN_TX_ON_SUCCESS_DELAY);
     if (sleep_us > 0) {
-      usleep(sleep_us);
+      ob_usleep(sleep_us);
       TRANS_LOG(INFO, "ERRSIM: delay tx on_success", K(ret), KPC(log_cb), K(sleep_us),
                 K(EN_TX_ON_SUCCESS_DELAY));
     } else if (sleep_us < 0) {
@@ -2276,7 +2332,7 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
             // rewrite ret
             ret = OB_SUCCESS;
 
-            usleep(1000*1000);
+            ob_usleep(1000*1000);
             ob_abort();
           }
           // ignore ret and set cur_cb callbacked
@@ -2904,7 +2960,7 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "cb arg array is empty", K(ret), KPC(this));
         print_trace_log_();
-        usleep(5000);
+        ob_usleep(5000);
         ob_abort();
       }
       exec_info_.next_log_entry_no_--;
@@ -3012,6 +3068,10 @@ int ObPartTransCtx::get_local_max_read_version_(SCN &local_max_read_version)
 {
   int ret = OB_SUCCESS;
   local_max_read_version = trans_service_->get_tx_version_mgr().get_max_read_ts();
+  if (is_for_sslog_()) {
+    // for sslog
+    local_max_read_version = trans_service_->get_tx_version_mgr_for_sslog().get_max_read_ts();
+  }
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "get_local_max_read_version_", KR(ret), K(local_max_read_version), K(*this));
   }
@@ -3025,11 +3085,14 @@ int ObPartTransCtx::get_gts_(SCN &gts)
   const int64_t GET_GTS_AHEAD_INTERVAL = 0; //GCONF._ob_get_gts_ahead_interval;
   const MonotonicTs stc_ahead = get_stc_() - MonotonicTs(GET_GTS_AHEAD_INTERVAL);
   ObTsMgr *ts_mgr = trans_service_->get_ts_mgr();
+  const uint64_t target_gts_tenant_id = is_for_sslog_()
+                                        ? get_sslog_gts_tenant_id(tenant_id_)
+                                        : tenant_id_;
 
   if (sub_state_.is_gts_waiting()) {
     ret = OB_EAGAIN;
     TRANS_LOG(INFO, "gts is waiting", K(ret), K(*this));
-  } else if (OB_FAIL(ts_mgr->get_gts(tenant_id_, stc_ahead, this, gts, receive_gts_ts))) {
+  } else if (OB_FAIL(ts_mgr->get_gts(target_gts_tenant_id, stc_ahead, this, gts, receive_gts_ts))) {
     if (OB_EAGAIN == ret) {
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = acquire_ctx_ref_())) {
@@ -3055,8 +3118,11 @@ int ObPartTransCtx::wait_gts_elapse_commit_version_(bool &need_wait)
   need_wait = false;
 
   ObTsMgr *ts_mgr = trans_service_->get_ts_mgr();
+  const uint64_t target_gts_tenant_id = is_for_sslog_()
+                                        ? get_sslog_gts_tenant_id(tenant_id_)
+                                        : tenant_id_;
 
-  if (OB_FAIL(ts_mgr->wait_gts_elapse(tenant_id_,
+  if (OB_FAIL(ts_mgr->wait_gts_elapse(target_gts_tenant_id,
                                       ctx_tx_data_.get_commit_version(),
                                       this,
                                       need_wait))) {
@@ -3159,7 +3225,11 @@ int ObPartTransCtx::generate_commit_version_()
     } else {
       // the same as before prepare
       mt_ctx_.set_trans_version(gts);
-      const SCN max_read_ts = trans_service_->get_tx_version_mgr().get_max_read_ts();
+      SCN max_read_ts = trans_service_->get_tx_version_mgr().get_max_read_ts();
+      if (is_for_sslog_()) {
+        // for sslog
+        max_read_ts = trans_service_->get_tx_version_mgr_for_sslog().get_max_read_ts();
+      }
       if (OB_FAIL(ctx_tx_data_.set_commit_version(SCN::max(gts, max_read_ts)))) {
         TRANS_LOG(WARN, "set tx data commit version", K(ret));
       }
@@ -3206,6 +3276,54 @@ int ObPartTransCtx::submit_redo_if_parallel_logging_()
       TRANS_LOG(WARN, "submit redo log fail", K(ret));
     }
   }
+  return ret;
+}
+
+// when parallel logging, redo need submitted seperate with other txn's log
+inline
+int ObPartTransCtx::submit_parallel_redo_() {
+  int ret = OB_SUCCESS;
+  ObTxRedoSubmitter submitter(*this, mt_ctx_);
+  if (OB_FAIL(submitter.submit_all(true /*display blocked info*/))) {
+    TRANS_LOG(WARN, "submit redo log fail", K(ret));
+  }
+  return ret;
+}
+
+// when parallel logging, redo need submitted seperate with other txn's log
+int ObPartTransCtx::submit_parallel_redo_before_commit_() {
+  int ret = OB_SUCCESS;
+  static const int64_t SUBMIT_REDO_TIMEOUT = 30;
+  int cnt = 0;
+  do {
+    if (get_pending_log_size() > GCONF._private_buffer_size) {
+      CtxLockGuard guard(lock_, CtxLockGuard::MODE::CTX);
+      if (is_2pc_blocking()
+       || get_upstream_state() > ObTxState::PREPARE
+       || get_downstream_state() >= ObTxState::REDO_COMPLETE
+       || sub_state_.is_force_abort()
+       || sub_state_.is_state_log_submitted()
+       || sub_state_.is_state_log_submitting()) {
+        if (REACH_TIME_INTERVAL(1000 * 1000)) {
+          TRANS_LOG(INFO, "no need to submit redo before commit", KR(ret), K(*this));
+        }
+      } else if (OB_FAIL(submit_parallel_redo_())) {
+        if (ret != OB_EAGAIN) {
+          TRANS_LOG(WARN, "submit redo fail", KR(ret), K(*this));
+        }
+      }
+    }
+    if (ret == OB_EAGAIN) {
+      cnt++;
+      ob_usleep(100 * 1000);
+    }
+    if (OB_EAGAIN == ret && REACH_TIME_INTERVAL(1000 * 1000)) {
+      TRANS_LOG(WARN, "submit redo before commit failed", KR(ret), K(*this));
+    }
+    if (cnt > SUBMIT_REDO_TIMEOUT) {
+      break;
+    }
+  } while (ret == OB_EAGAIN);
   return ret;
 }
 
@@ -4473,7 +4591,7 @@ int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
                                     log_block.get_size(),
                                     base_scn,
                                     log_cb,
-                                    true,
+                                    !is_2pc_state_log, /*nonblock*/
                                     retry_timeout_us))) {
       busy_cbs_.add_last(log_cb);
       log_cb->set_log_size(log_block.get_size());
@@ -8729,7 +8847,7 @@ int ObPartTransCtx::check_pending_log_overflow(const int64_t stmt_timeout)
                       KPC(this));
             break;
           }
-          usleep(LOCAL_RETRY_INTERVAL_US);
+          ob_usleep(LOCAL_RETRY_INTERVAL_US);
         }
       }
     }
@@ -11396,6 +11514,11 @@ int ObPartTransCtx::collect_mview_mds_op(bool &need_collect, ObMViewOpArg &arg)
     }
   }
   return ret;
+}
+
+bool ObPartTransCtx::is_for_sslog_() const
+{
+  return is_tenant_sslog_ls(tenant_id_, ls_id_);
 }
 
 } // namespace transaction

@@ -350,7 +350,7 @@ int ObLSBackupMetaDagNet::start_running()
   } else if (OB_FALSE_IT(init_param.backup_stage_ = start_stage_)) {
   } else if (OB_FAIL(inner_init_before_run_())) {
     LOG_WARN("failed to inner init before run", K(ret));
-  } else if (OB_FAIL(dag_scheduler->alloc_dag(backup_meta_dag))) {
+  } else if (OB_FAIL(dag_scheduler->alloc_dag(backup_meta_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc backup meta dag", K(ret));
   } else if (OB_FAIL(backup_meta_dag->init(param_.start_scn_, init_param, report_ctx_, ls_backup_ctx_))) {
     LOG_WARN("failed to init backup meta dag", K(ret), K_(param));
@@ -358,7 +358,7 @@ int ObLSBackupMetaDagNet::start_running()
     LOG_WARN("failed to create first task for child dag", K(ret), KPC(backup_meta_dag));
   } else if (OB_FAIL(add_dag_into_dag_net(*backup_meta_dag))) {
     LOG_WARN("failed to add dag into dag net", K(ret), KPC(backup_meta_dag));
-  } else if (OB_FAIL(dag_scheduler->alloc_dag(prepare_dag))) {
+  } else if (OB_FAIL(dag_scheduler->alloc_dag(prepare_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc dag", K(ret));
   } else if (OB_FAIL(prepare_dag->init(init_param,
                                        backup_data_type_,
@@ -372,7 +372,7 @@ int ObLSBackupMetaDagNet::start_running()
     LOG_WARN("failed to create first task", K(ret));
   } else if (OB_FAIL(backup_meta_dag->add_child(*prepare_dag))) {
     LOG_WARN("failed to add dag into dag_net", K(ret), KPC(prepare_dag));
-  } else if (OB_FAIL(dag_scheduler->alloc_dag(finish_dag))) {
+  } else if (OB_FAIL(dag_scheduler->alloc_dag(finish_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to create dag", K(ret));
   } else if (OB_FAIL(finish_dag->init(init_param, report_ctx_, ls_backup_ctx_, *index_kv_cache_))) {
     LOG_WARN("failed to init finish dag", K(ret), K(init_param));
@@ -581,7 +581,7 @@ int ObLSBackupDataDagNet::start_running()
   } else if (OB_FAIL(param_.convert_to(init_param))) {
     LOG_WARN("failed to convert to param", K(ret), K_(param));
   } else if (FALSE_IT(init_param.backup_stage_ = start_stage_)) {
-  } else if (OB_FAIL(scheduler->alloc_dag(prepare_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(prepare_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc dag", K(ret));
   } else if (OB_FAIL(prepare_dag->init(init_param,
                  backup_data_type_,
@@ -595,7 +595,7 @@ int ObLSBackupDataDagNet::start_running()
     LOG_WARN("failed to create first task", K(ret));
   } else if (OB_FAIL(add_dag_into_dag_net(*prepare_dag))) {
     LOG_WARN("failed to add dag into dag_net", K(ret), KPC(prepare_dag));
-  } else if (OB_FAIL(scheduler->alloc_dag(finish_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(finish_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to create dag", K(ret));
   } else if (OB_FAIL(finish_dag->init(init_param, report_ctx_, ls_backup_ctx_, *index_kv_cache_))) {
     LOG_WARN("failed to init finish dag", K(ret), K(init_param));
@@ -844,7 +844,7 @@ int ObBackupBuildTenantIndexDagNet::start_running()
   } else if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag scheduler must not be NULL", K(ret));
-  } else if (OB_FAIL(dag_scheduler->alloc_dag(rebuild_dag))) {
+  } else if (OB_FAIL(dag_scheduler->alloc_dag(rebuild_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc rebuild index dag", K(ret));
   } else if (OB_FAIL(rebuild_dag->init(param_,
                  backup_data_type_,
@@ -2189,7 +2189,7 @@ int ObPrefetchBackupInfoTask::generate_next_prefetch_dag_()
   } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), K(*this));
-  } else if (OB_FAIL(scheduler->alloc_dag(child_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(child_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc child dag", K(ret));
   } else if (OB_FAIL(ls_backup_ctx_->get_prefetch_task_id(prefetch_task_id))) {
     LOG_WARN("failed to get prefetch task id", K(ret));
@@ -2240,7 +2240,7 @@ int ObPrefetchBackupInfoTask::generate_backup_dag_(
   } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), K(*this));
-  } else if (OB_FAIL(scheduler->alloc_dag(child_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(child_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc child dag", K(ret));
   } else if (OB_FAIL(child_dag->init(task_id,
                  param_,
@@ -2744,6 +2744,7 @@ int ObLSBackupDataTask::check_tx_data_can_explain_user_data_(
   ObTablet *tablet = nullptr;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   can_explain = true;
+  const share::SCN &backup_tx_table_filled_tx_scn = ls_backup_ctx_->backup_tx_table_filled_tx_scn_;
   // Only backup minor needs to check whether tx data can explain user data.
   // If tablet has no minor sstable, or has no uncommitted row in sstable, it's also no need to check tx_data.
   // The condition that tx_data can explain user data is that tx_data_table's filled_tx_scn is less than the
@@ -2756,7 +2757,6 @@ int ObLSBackupDataTask::check_tx_data_can_explain_user_data_(
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (table_store_wrapper.get_member()->get_minor_sstables().empty()) {
-    const share::SCN &backup_tx_table_filled_tx_scn = ls_backup_ctx_->backup_tx_table_filled_tx_scn_;
     const share::SCN &ls_clog_checkpoint_scn = ls_backup_ctx_->ls_clog_checkpoint_scn_;
     const bool is_newly_created_ls = ls_backup_ctx_->is_newly_created_ls_;
     if (is_newly_created_ls) {
@@ -2766,43 +2766,17 @@ int ObLSBackupDataTask::check_tx_data_can_explain_user_data_(
       LOG_WARN("ls clog checkpoint scn less than backup tx table filled tx sc",
         K(ls_clog_checkpoint_scn), K(backup_tx_table_filled_tx_scn));
     }
-  } else {
-    const ObSSTableArray &sstable_array = table_store_wrapper.get_member()->get_minor_sstables();
-    share::SCN min_filled_tx_scn = SCN::max_scn();
-    ARRAY_FOREACH(sstable_array, i) {
-      ObITable *table_ptr = sstable_array[i];
-      ObSSTable *sstable = NULL;
-      ObSSTableMetaHandle sst_meta_hdl;
-      if (OB_ISNULL(table_ptr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table ptr should not be null", K(ret));
-      } else if (!table_ptr->is_sstable()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table ptr type not expectedd", K(ret));
-      } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table_ptr))) {
-      } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
-        LOG_WARN("fail to get sstable meta", K(ret));
-      } else if (!sst_meta_hdl.get_sstable_meta().contain_uncommitted_row()) { // just skip.
-        // ls inner tablet and tablet created by transfer after backfill has no uncommited row.
-      } else {
-        // get_tablet_handle_ will return normal tablet, so no need to concern about transfer in tablet
-        min_filled_tx_scn = std::min(
-          std::max(sst_meta_hdl.get_sstable_meta().get_filled_tx_scn(), sstable->get_end_scn()), min_filled_tx_scn);
-      }
+  } else if (OB_FAIL(tablet->check_tx_data_can_explain_user_data(backup_tx_table_filled_tx_scn))) {
+    if (OB_TRANS_CTX_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      can_explain = false;
+      LOG_WARN("tx data can not explain user data", K(ret), K(OB_REPLICA_CANNOT_BACKUP), KPC(tablet), K(backup_tx_table_filled_tx_scn));
+    } else {
+      LOG_WARN("fail to check tx data can explain user data", K(ret), K(tablet_handle), K(backup_tx_table_filled_tx_scn));
     }
-    if (OB_SUCC(ret)) {
-      can_explain = min_filled_tx_scn >= ls_backup_ctx_->backup_tx_table_filled_tx_scn_;
-      if (!can_explain) {
-        const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-        FLOG_WARN("tx data can't explain user data",
-                 K(OB_REPLICA_CANNOT_BACKUP), K(can_explain),
-                 K(tablet_id), K(min_filled_tx_scn),
-                 "backup_tx_table_filled_tx_scn", ls_backup_ctx_->backup_tx_table_filled_tx_scn_, K(sstable_array));
-      } else {
-        if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-          LOG_INFO("tx data can explain user data", K(ret), K(tablet_handle));
-        }
-      }
+  } else {
+    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+      LOG_INFO("tx data can explain user data", K(ret), K(tablet_handle));
     }
   }
   return ret;
@@ -2861,7 +2835,7 @@ int ObLSBackupDataTask::do_wait_index_builder_ready_(const common::ObTabletID &t
       LOG_WARN("failed to check sstable index builder mgr exist", K(ret), K(tablet_id), K(table_key));
     } else if (!exist) {
       LOG_INFO("index builder mgr still not exist", K(ret), K(tablet_id), K(table_key));
-      usleep(DEFAULT_SLEEP_US);
+      ob_usleep(DEFAULT_SLEEP_US);
     } else {
       break;
     }
@@ -3757,7 +3731,7 @@ int ObLSBackupDataTask::do_generate_next_backup_dag_()
     LOG_WARN("unexpected null MTL scheduler", K(ret), KP(scheduler), KP_(ls_backup_ctx));
   } else if (OB_FAIL(param_.convert_to(stage, dag_param))) {
     LOG_WARN("failed to convert to param", K(ret), K(stage));
-  } else if (OB_FAIL(scheduler->alloc_dag(next_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(next_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc child dag", K(ret));
   } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
@@ -4169,7 +4143,7 @@ int ObLSBackupDataTask::wait_reuse_other_block_ready_(
 #endif
       break;
     } else {
-      usleep(DEFAULT_SLEEP_US);
+      ob_usleep(DEFAULT_SLEEP_US);
     }
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(ls_backup_ctx_)) {
@@ -4660,7 +4634,7 @@ int ObLSBackupPrepareTask::process()
     LOG_WARN("may need advance checkpoint failed", K(ret), K_(param));
   } else if (OB_FAIL(prepare_backup_tx_table_filled_tx_scn_())) {
     LOG_WARN("failed to check tx data can explain user data", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(rebuild_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag(rebuild_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc child dag", K(ret));
   } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
@@ -4689,7 +4663,7 @@ int ObLSBackupPrepareTask::process()
     if (OB_ISNULL(scheduler) || OB_ISNULL(ls_backup_ctx_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null MTL scheduler", K(ret), KP(scheduler), KP_(ls_backup_ctx));
-    } else if (OB_FAIL(scheduler->alloc_dag(child_dag))) {
+    } else if (OB_FAIL(scheduler->alloc_dag(child_dag, true/*is_ha_dag*/))) {
       LOG_WARN("failed to alloc child dag", K(ret));
     } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
       ret = OB_ERR_UNEXPECTED;

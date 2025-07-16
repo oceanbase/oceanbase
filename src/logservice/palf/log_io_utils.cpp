@@ -161,7 +161,7 @@ int rename_with_retry(const char *src_name,
           ret = OB_SUCCESS;
           break;
         }
-        usleep(RETRY_INTERVAL);
+        ob_usleep(RETRY_INTERVAL);
       }
     } while(OB_FAIL(ret));
   }

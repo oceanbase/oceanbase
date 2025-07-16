@@ -14,7 +14,6 @@
 #include "storage/high_availability/ob_physical_copy_task.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction/ob_refresh_tablet_util.h"
 #include "share/compaction/ob_shared_storage_compaction_util.h"
 #endif
 

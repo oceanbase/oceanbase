@@ -662,10 +662,17 @@ public:
       tmp_allocator_("IvfSSTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       helper_guard_(),
       context_id_(-1),
-      lob_inrow_threshold_(-1)
+      lob_inrow_threshold_(-1),
+      ls_id_(share::ObLSID::INVALID_LS_ID)
   {}
 
   virtual ~ObIvfSliceStore() {}
+  virtual int init(
+    ObTabletDirectLoadMgr *tablet_direct_load_mgr,
+    const ObString vec_idx_param,
+    const int64_t vec_dim,
+    const ObIArray<ObColumnSchemaItem> &col_array,
+    const int64_t context_id) override;
   virtual void reset();
   virtual int build_clusters() = 0;
   virtual int is_empty(bool &empty) = 0;
@@ -675,12 +682,14 @@ public:
 protected:
   template<typename HelperType>
   int get_spec_ivf_helper(HelperType *&helper);
+  int clean_ivf_build_helper();
 
   ObArenaAllocator vec_allocator_;
   ObArenaAllocator tmp_allocator_;
   ObIvfBuildHelperGuard helper_guard_;
   int64_t context_id_;
   int64_t lob_inrow_threshold_;
+  share::ObLSID ls_id_;
 };
 
 template<typename HelperType>

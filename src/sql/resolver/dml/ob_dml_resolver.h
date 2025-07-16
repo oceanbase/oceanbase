@@ -424,6 +424,7 @@ protected:
   int resolve_mocked_table(const ParseNode *table_node,
                            TableItem *&table_item,
                            const ParseNode *alias_node = NULL);
+  int resolve_error_log_table(const ParseNode *table_node, TableItem *&table_item);
   virtual int resolve_basic_table(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_flashback_query_node(const ParseNode *time_node, TableItem *table_item);
   int check_flashback_expr_validity(ObRawExpr *expr, bool &has_column);
@@ -716,7 +717,8 @@ protected:
   int add_additional_function_according_to_type(const ColumnItem *column,
                                                 ObRawExpr *&expr,
                                                 ObStmtScope scope,
-                                                bool need_padding);
+                                                bool need_padding,
+                                                bool in_insert_value_list = false);
   int try_add_padding_expr_for_column_conv(const ColumnItem *column, ObRawExpr *&expr);
   int resolve_generated_column_expr_temp(TableItem *table_item);
   int find_generated_column_expr(ObRawExpr *&expr, bool &is_found);
@@ -1109,7 +1111,9 @@ private:
                                       common::ObIAllocator &allocator);
   int set_basic_info_for_mocked_table(ObTableSchema &table_schema,
                                       common::ObString table_location,
-                                      const ObExternalFileFormat &format);
+                                      const ObExternalFileFormat &format,
+                                      common::ObString sub_path = "",
+                                      bool using_location_object = false);
   int sample_external_file_name(common::ObIAllocator &allocator,
                                 ObTableSchema &table_schema,
                                 common::ObString &sampled_file_name);

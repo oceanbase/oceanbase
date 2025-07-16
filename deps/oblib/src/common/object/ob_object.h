@@ -131,7 +131,8 @@ public:
                || ObExtendType == type_) {
       set_collation_level(CS_LEVEL_INVALID);
       set_collation_type(CS_TYPE_INVALID);
-    } else if (ObHexStringType == type_) {
+    } else if (ObHexStringType == type_
+               || ob_is_geometry(static_cast<ObObjType>(type_))) {
       set_collation_type(CS_TYPE_BINARY);
     } else if (ObJsonType == type_) {
       set_collation_type(CS_TYPE_UTF8MB4_BIN);
@@ -142,7 +143,6 @@ public:
                && !ob_is_lob_locator(static_cast<ObObjType>(type_))
                && !ob_is_raw(static_cast<ObObjType>(type_))
                && !ob_is_enum_or_set_type(static_cast<ObObjType>(type_))
-               && !ob_is_geometry(static_cast<ObObjType>(type_))
                && !ob_is_roaringbitmap(static_cast<ObObjType>(type_))) {
       set_collation_level(CS_LEVEL_NUMERIC);
       set_collation_type(CS_TYPE_BINARY);
@@ -297,6 +297,8 @@ public:
   OB_INLINE bool is_year() const { return type_ == static_cast<uint8_t>(ObYearType); }
   OB_INLINE bool is_date() const { return type_ == static_cast<uint8_t>(ObDateType); }
   OB_INLINE bool is_mysql_date() const { return type_ == static_cast<uint8_t>(ObMySQLDateType); }
+  OB_INLINE bool is_mysql_date_or_date() const { return is_date() || is_mysql_date(); }
+  OB_INLINE bool is_mysql_datetime_or_datetime() const { return is_datetime() || is_mysql_datetime(); }
   OB_INLINE bool is_time() const { return type_ == static_cast<uint8_t>(ObTimeType); }
   OB_INLINE bool is_timestamp_tz() const { return type_ == static_cast<uint8_t>(ObTimestampTZType); }
   OB_INLINE bool is_timestamp_ltz() const { return type_ == static_cast<uint8_t>(ObTimestampLTZType); }

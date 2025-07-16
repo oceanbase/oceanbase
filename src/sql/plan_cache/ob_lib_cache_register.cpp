@@ -15,6 +15,7 @@
 #include "pl/ob_pl_package.h"
 #include "src/observer/table/ob_table_cache.h"
 #include "sql/resolver/cmd/ob_call_procedure_stmt.h"
+#include "sql/engine/expr/ob_expr_udf/ob_udf_result_cache.h"
 
 using namespace oceanbase::common;
 namespace oceanbase

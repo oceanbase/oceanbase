@@ -625,6 +625,8 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
           LOG_WARN("failed to copy meta info", K(ret));
         } else if (OB_FAIL(new_adapter->init(vec_idx_mgr->get_memory_context(), vec_idx_mgr->get_all_vsag_use_mem()))) {
           LOG_WARN("failed to init adpt.", K(ret));
+        } else if (OB_FAIL(new_adapter->set_index_identity(adapter->get_index_identity()))) {
+          LOG_WARN("failed to set index identity", K(ret));
         }
       }
       if (OB_FAIL(ret)) {
@@ -633,6 +635,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
       } else if (OB_FAIL(iter_table_rescan(snapshot_scan_param, table_scan_iter))) {
         LOG_WARN("failed to rescan", K(ret));
       } else {
+
         ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
         ObHNSWDeserializeCallback::CbParam param;
         param.iter_ = snapshot_idx_iter;
@@ -643,17 +646,22 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
         // ToDo: concurrency with weakread
         ObVectorIndexSerializer index_seri(tmp_allocator);
         ObVectorIndexMemData *snap_memdata = new_adapter->get_snap_data_();
-        // name rule: TabletID_SCN_hnsw_(sq_)data_partn, we need TabletID_SCN
-        key_prefix = key_prefix.split_on("_hnsw_");  // hgraph?
-        if (OB_ISNULL(snap_memdata)) {
+        // name rule: TabletID_SCN_xxx_data_partn, we need TabletID_SCN
+        ObVectorIndexAlgorithmType index_type;
+        ObString target_prefix;
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(snap_memdata)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("snap memdata is null", K(ret));
         } else {
           TCWLockGuard lock_guard(snap_memdata->mem_data_rwlock_);
           if (OB_FAIL(index_seri.deserialize(snap_memdata->index_, param, cb, MTL_ID()))) {
             LOG_WARN("serialize index failed.", K(ret));
-          } else if (OB_FAIL(new_adapter->set_snapshot_key_prefix(key_prefix))) {
-            LOG_WARN("failed to set snapshot key prefix", K(ret), K(key_prefix));
+          } else if (OB_FALSE_IT(index_type = new_adapter->get_snap_index_type())) {
+          } else if (OB_FAIL(get_split_snapshot_prefix(index_type, key_prefix, target_prefix))) {
+            LOG_WARN("fail to get split snapshot prefix", K(ret), K(index_type), K(key_prefix));
+          } else if (OB_FAIL(new_adapter->set_snapshot_key_prefix(target_prefix))) {
+            LOG_WARN("failed to set snapshot key prefix", K(ret), K(index_type), K(target_prefix));
           } else if (OB_FAIL(obvectorutil::get_index_number(snap_memdata->index_, index_count))) {
             ret = OB_ERR_VSAG_RETURN_ERROR;
             LOG_WARN("fail to get incr index number", K(ret));
@@ -1490,6 +1498,48 @@ int ObPluginVectorIndexUtils::get_vector_index_prefix(const ObTableSchema &index
     if (OB_SUCC(ret)) {
       prefix.assign_ptr(tmp_table_name.ptr(), prefix_len);
       LOG_INFO("get_index_prefix", K(prefix), K(tmp_table_name));
+    }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::get_split_snapshot_prefix(
+    const ObVectorIndexAlgorithmType index_type, const ObString &src, ObString &dst)
+{
+  int ret = OB_SUCCESS;
+
+  if (index_type == VIAT_HGRAPH) {
+    ObString split_item("_hgraph_");
+    if (OB_FAIL(split_snapshot_prefix(src, split_item, dst))) {
+      LOG_WARN("fail to split snapshot prefix");
+    }
+  } else if (index_type == VIAT_HNSW || index_type == VIAT_HNSW_SQ || index_type == VIAT_HNSW_BQ) {
+    ObString split_item("_hnsw_");
+    if (OB_FAIL(split_snapshot_prefix(src, split_item, dst))) {
+      LOG_WARN("fail to split snapshot prefix");
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid index type", K(ret), K(index_type));
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexUtils::split_snapshot_prefix(const ObString &src, const ObString &item, ObString &dst)
+{
+  int ret = OB_SUCCESS;
+  dst.reset();
+  if (src.empty() || item.empty() || (src.length() < item.length())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(src), K(item));
+  } else {
+    const char *str = strstr(src.ptr(), item.ptr());
+    if (OB_ISNULL(str)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("item is not include to src", K(ret), K(src), K(dst));
+    } else {
+      const int64_t len = str - src.ptr();
+      dst.assign_ptr(src.ptr(), static_cast<int32_t>(len));
     }
   }
   return ret;

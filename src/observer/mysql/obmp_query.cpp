@@ -215,6 +215,9 @@ int ObMPQuery::process()
           // 进入本分支，说明push_back出错，OOM，委托外层代码返回错误码
           // 且进入此分支之后，要断连接
           need_response_error = true;
+          if (OB_ERR_PARSE_SQL == ret) {
+            need_disconnect = false;
+          }
         } else if (OB_UNLIKELY(queries.count() <= 0)) {
           ret = OB_ERR_UNEXPECTED;
           need_response_error = true;//进入此分支之后，要断连接，极其严重错误
@@ -459,6 +462,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(mpquery_single_stmt);
+  ObReqTimeGuard req_timeinfo_guard;
   ctx_.spm_ctx_.reset();
   bool need_response_error = true;
   session.get_raw_audit_record().request_memory_used_ = 0;
@@ -563,7 +567,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
   int tmp_ret = OB_SUCCESS;
   //清空WARNING BUFFER
-  tmp_ret = do_after_process(session, ctx_, async_resp_used);
+  tmp_ret = do_after_process(session, async_resp_used);
 
   // 设置上一条语句的结束时间，由于这里只用于实现事务内部的语句之间的执行超时，
   // 因此，首先，需要判断是否处于事务执行的过程中。然后对于事务提交的时候的异步回包,
@@ -581,6 +585,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
         !ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
     send_error_packet(ret, NULL);
   }
+  ctx_.spm_ctx_.reset();
   ctx_.reset();
   return ret;
 }
@@ -876,7 +881,9 @@ OB_INLINE int ObMPQuery::do_process_trans_ctrl(ObSQLSessionInfo &session,
     if (OB_FAIL(ret) && audit_record.trans_id_ == 0) {
       // normally trans_id is set in the `start-stmt` phase,
       // if `start-stmt` hasn't run, set trans_id from session if an active txn exist
-      audit_record.trans_id_ = session.get_tx_id();
+      if (session.is_in_transaction()) {
+        audit_record.trans_id_ = session.get_tx_id();
+      }
     }
     // for begin/commit/rollback, the following values are 0
     audit_record.affected_rows_ = 0;
@@ -1276,7 +1283,9 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       if (OB_FAIL(ret) && audit_record.trans_id_ == 0) {
         // normally trans_id is set in the `start-stmt` phase,
         // if `start-stmt` hasn't run, set trans_id from session if an active txn exist
-        audit_record.trans_id_ = session.get_tx_id();
+        if (session.is_in_transaction()) {
+          audit_record.trans_id_ = session.get_tx_id();
+        }
       }
       audit_record.affected_rows_ = result.get_affected_rows();
       audit_record.return_rows_ = result.get_return_rows();
@@ -1596,7 +1605,10 @@ int ObMPQuery::is_readonly_stmt(ObMySQLResultSet &result, bool &is_readonly)
     case stmt::T_SHOW_CREATE_USER:
     case stmt::T_SET_CATALOG:
     case stmt::T_SHOW_CATALOGS:
-    case stmt::T_SHOW_CREATE_CATALOG: {
+    case stmt::T_SHOW_CREATE_CATALOG:
+    case stmt::T_SHOW_LOCATIONS:
+    case stmt::T_SHOW_CREATE_LOCATION:
+    case stmt::T_LOCATION_UTILS_LIST: {
       is_readonly = true;
       break;
     }

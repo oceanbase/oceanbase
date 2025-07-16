@@ -394,6 +394,10 @@ public:
             // application context
             || stmt_type == stmt::T_CREATE_CONTEXT
             || stmt_type == stmt::T_DROP_CONTEXT
+            // location
+            || stmt_type == stmt::T_CREATE_LOCATION
+            || stmt_type == stmt::T_ALTER_LOCATION
+            || stmt_type == stmt::T_DROP_LOCATION
             // catalog
             || stmt_type == stmt::T_CREATE_CATALOG
             || stmt_type == stmt::T_ALTER_CATALOG

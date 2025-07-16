@@ -106,6 +106,7 @@ enum PluginVectorQueryResStatus
   PVQ_OK, // ok
   PVQ_COM_DATA,
   PVQ_INVALID_SCN,
+  PVQ_REFRESH,
   PVQ_MAX
 };
 
@@ -681,10 +682,13 @@ public:
     need_be_optimized_ = false;   // single thread modify need_be_optimized_
   }
 
-  ObString get_snapshot_key_prefix() { return snapshot_key_prefix_; }
-  int set_snapshot_key_prefix(ObString &key_prefix) { return ob_write_string(*allocator_, key_prefix, snapshot_key_prefix_); }
+  ObString &get_snapshot_key_prefix() { return snapshot_key_prefix_; }
+  int set_snapshot_key_prefix(const ObString &key_prefix);
   int set_snapshot_key_prefix(uint64_t tablet_id, uint64_t scn, uint64_t max_length);
   int copy_meta_info(ObPluginVectorIndexAdaptor &other);
+
+  int get_inc_index_row_cnt(int64_t &count);
+  int get_snap_index_row_cnt(int64_t &count);
 
   int get_vid_bound(ObVidBound &bound);
 

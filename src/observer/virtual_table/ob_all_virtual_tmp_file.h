@@ -21,7 +21,7 @@ namespace oceanbase
 {
 namespace tmp_file
 {
-class ObTmpFileInfo;
+class ObTmpFileBaseInfo;
 class ObTmpFileGlobal;
 }
 namespace observer
@@ -42,8 +42,8 @@ private:
   virtual bool is_need_process(uint64_t tenant_id) override;
   virtual int process_curr_tenant(common::ObNewRow *&row) override;
   virtual void release_last_tenant() override;
-  int get_next_tmp_file_info_(tmp_file::ObTmpFileInfo *tmp_file_info);
-  int fill_columns_(tmp_file::ObTmpFileInfo *tmp_file_info);
+  int get_next_tmp_file_info_(tmp_file::ObTmpFileBaseInfo *tmp_file_info);
+  int fill_columns_(tmp_file::ObTmpFileBaseInfo *tmp_file_info);
   int fill_sn_column_(const uint64_t col_index, tmp_file::ObSNTmpFileInfo *tmp_file_info);
   #ifdef OB_BUILD_SHARED_STORAGE
   int fill_ss_column_(const uint64_t col_index, tmp_file::ObSSTmpFileInfo *tmp_file_info);
@@ -95,6 +95,7 @@ private:
     TOTAL_WBP_PAGE_READ_CNT,
     WBP_PAGE_HITS,
   };
+
   static const int64_t OB_MAX_FILE_LABEL_SIZE = tmp_file::ObTmpFileGlobal::TMP_FILE_MAX_LABEL_SIZE + 1;
   char ip_buffer_[common::OB_IP_STR_BUFF];
   char trace_id_buffer_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];

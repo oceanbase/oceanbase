@@ -65,6 +65,14 @@ private:
 
   struct ObSSLocalCacheInfoInst
   {
+  public:
+    ObSSLocalCacheInfoInst()
+      : tenant_id_(OB_INVALID_TENANT_ID), cache_name_(nullptr), priority_(0), hit_ratio_(0),
+        total_hit_cnt_(0), total_hit_bytes_(0), total_miss_cnt_(0), total_miss_bytes_(0),
+        hold_size_(0), alloc_disk_size_(0), used_disk_size_(0), used_mem_size_(0)
+    {}
+    virtual ~ObSSLocalCacheInfoInst() {}
+  public:
     uint64_t tenant_id_;
     const char *cache_name_;
     int64_t priority_;
@@ -85,7 +93,7 @@ private:
 
   int add_micro_cache_inst_();
   int add_tmpfile_cache_inst_();
-  int add_major_macro_cache_inst_();
+  int add_shared_macro_cache_inst_();
   int add_private_macro_cache_inst_();
   int set_local_cache_insts_();
 

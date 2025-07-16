@@ -36,6 +36,11 @@ class ObConfigManager
   friend class UpdateTask;
   friend class oceanbase::omt::ObTenantConfigMgr;
 public:
+  // update the config of OB_LOGGER and OB_LOG_COMPRESSOR.
+  // notice: this function won't update the syslog_level, if you want to update it,
+  // please use OB_LOGGER.parse_set()
+  static int ob_logger_config_update(const ObServerConfig& config);
+public:
   static const int64_t DEFAULT_VERSION = 1;
 
   ObConfigManager(ObServerConfig &server_config, ObReloadConfig &reload_config);

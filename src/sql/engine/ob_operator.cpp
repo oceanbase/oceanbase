@@ -1210,7 +1210,7 @@ int ObOperator::setup_op_feedback_info()
     common::ObIArray<ObExecFeedbackNode> &nodes = fb_info.get_feedback_nodes();
     int64_t &total_db_time = fb_info.get_total_db_time();
     uint64_t db_time = op_monitor_info_.calc_db_time();
-    uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
+    uint64_t cpu_khz = OBSERVER_FREQUENCE.get_cpu_frequency_khz();
     db_time = db_time * 1000 / cpu_khz;
     total_db_time += db_time;
     if (fb_node_idx_ >= 0 && fb_node_idx_ < nodes.count()) {
@@ -1622,6 +1622,10 @@ int ObOperator::convert_vector_format()
     FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
       VectorFormat format = (*e)->is_batch_result() ? VEC_UNIFORM : VEC_UNIFORM_CONST;
       LOG_TRACE("init vector", K(format), K(*e));
+      VectorFormat expr_fmt = (*e)->get_format(eval_ctx_);
+      if (expr_fmt == VEC_UNIFORM || expr_fmt == VEC_UNIFORM_CONST) {
+        continue;
+      }
       if (OB_FAIL((*e)->init_vector(eval_ctx_, format, brs_.size_))) {
         LOG_WARN("expr evaluate failed", K(ret), KPC(*e), K_(eval_ctx));
       }

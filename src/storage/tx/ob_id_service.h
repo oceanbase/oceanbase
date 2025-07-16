@@ -99,12 +99,22 @@ public:
     TimestampService,
     TransIDService,
     DASIDService,
+    SSLogGTS,  // FARM COMPAT WHITELIST
+    SSLogUID,  // FARM COMPAT WHITELIST
     MAX_SERVICE_TYPE,
   };
 
   static void get_all_id_service_type(int64_t *service_type);
   static int get_id_service(const int64_t id_service_type, ObIDService *&id_service);
+  // this is for TimestampService, TransIDService, DASIDService
   static int update_id_service(const ObAllIDMeta &id_meta);
+  // this is for SSLogGTS, SSLogUID
+  static int update_id_service_for_sslog(const ObAllIDMeta &id_meta);
+  static bool is_id_service_for_sslog(
+      const int64_t service_type);
+  static bool is_working_service(
+      const int64_t service_type,
+      const uint64_t tenant_id);
 
   //获取数值或数值组
   int get_number(const int64_t range, const int64_t base_id, int64_t &start_id, int64_t &end_id);
@@ -143,10 +153,8 @@ public:
   static const int64_t SUBMIT_LOG_ALARM_INTERVAL = 100 * 1000;
   static const int64_t MIN_LAST_ID = 1;
 
-public:
-#ifdef OB_BUILD_SHARED_STORAGE
-
-#endif
+protected:
+  share::ObLSID get_target_ls_id_() const;
 
 protected:
   typedef common::SpinWLockGuard  WLockGuard;

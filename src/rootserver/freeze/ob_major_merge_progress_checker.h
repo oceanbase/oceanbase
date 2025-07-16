@@ -62,7 +62,7 @@ public:
       share::ObIServerTrace &server_trace,
       ObMajorMergeInfoManager &merge_info_mgr) = 0;
   virtual int set_basic_info(
-      share::SCN global_broadcast_scn,
+      const share::ObFreezeInfo &freeze_info,
       const int64_t expected_epoch) = 0;
   virtual int clear_cached_info() = 0;
   virtual int check_progress() = 0;
@@ -94,7 +94,7 @@ public:
       ObMajorMergeInfoManager &merge_info_mgr) override;
 
   virtual int set_basic_info(
-    share::SCN global_broadcast_scn,
+    const share::ObFreezeInfo &freeze_info,
     const int64_t expected_epoch) override; // For each round major_freeze, need invoke this once.
   virtual int clear_cached_info() override;
   virtual int get_uncompacted_tablets(
@@ -156,6 +156,8 @@ private:
     const int64_t table_id,
     const ObIArray<const ObSimpleTableSchemaV2 *> &index_schemas);
   int handle_fts_checksum();
+  share::SCN get_compaction_scn() const { return freeze_info_.frozen_scn_; }
+  int64_t get_compaction_scn_val() const { return get_compaction_scn().get_val_for_tx(); }
 private:
   static const int64_t ADD_RS_EVENT_INTERVAL = 10L * 60 * 1000 * 1000; // 10m
   static const int64_t DEAL_REST_TABLE_CNT_THRESHOLD = 100;
@@ -168,7 +170,7 @@ private:
   uint8_t loop_cnt_;
   int last_errno_;
   uint64_t tenant_id_;
-  share::SCN compaction_scn_; // check merged scn
+  share::ObFreezeInfo freeze_info_;
   uint64_t expected_epoch_;
   common::ObMySQLProxy *sql_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

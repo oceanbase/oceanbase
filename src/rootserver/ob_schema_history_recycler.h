@@ -582,7 +582,6 @@ private:
   common::hash::ObHashMap<ObObjectPrivSchemaKey, ObRecycleSchemaValue, common::hash::NoPthreadDefendMode> schema_history_map_;
   DISALLOW_COPY_AND_ASSIGN(ObObjectPrivRecycleSchemaExecutor);
 };
-
 } // end namespace rootserver
 } // end namespace oceanbase
 

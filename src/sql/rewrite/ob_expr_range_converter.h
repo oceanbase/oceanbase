@@ -78,10 +78,6 @@ public:
 
   int sort_range_exprs(const ObIArray<ObRawExpr*> &range_exprs,
                        ObIArray<ObRawExpr*> &out_range_exprs);
-  static int is_implicit_collation_range_valid(ObItemType cmp_type,
-                                               ObCollationType l_collation,
-                                               ObCollationType r_collation,
-                                               bool &is_valid);
 private:
   ObExprRangeConverter();
   int alloc_range_node(ObRangeNode *&range_node);
@@ -236,6 +232,17 @@ private:
                                           const ObExprResType &result_type,
                                           int64_t expr_depth,
                                           ObRangeNode *&range_node);
+  int can_be_extract_orcl_spatial_range(const ObRawExpr *const_expr,
+                                        bool &can_extract);
+  int get_orcl_spatial_range_node(const ObRawExpr &l_expr,
+                                  const ObRawExpr &r_expr,
+                                  int64_t expr_depth,
+                                  ObRangeNode *&range_node);
+  int get_orcl_spatial_relationship(const ObRawExpr *const_expr,
+                                    bool &can_extract,
+                                    ObDomainOpType& real_op_type);
+  int add_string_equal_expr_constraint(const ObRawExpr *const_expr,
+                                       const ObString &val);
 private:
   ObIAllocator &allocator_;
   ObQueryRangeCtx &ctx_;

@@ -38,6 +38,7 @@ ob_set_subtarget(ob_pl common
   ob_pl_persistent.cpp
   ob_pl_package_encode_info.cpp
   ob_pl_dependency_util.cpp
+  ob_pl_resolve_cache.cpp
 )
 
 ob_set_subtarget(ob_pl pl_cache
@@ -68,6 +69,7 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_vector_mysql.cpp
   sys_package/ob_dbms_external_table.cpp
   sys_package/ob_dbms_partition.cpp
+  sys_package/ob_dbms_java.cpp
 )
 
 ob_set_subtarget(ob_pl pl_recompile
@@ -76,6 +78,12 @@ ob_set_subtarget(ob_pl pl_recompile
 
 ob_set_subtarget(ob_pl dblink
   dblink/ob_pl_dblink_guard.cpp
+)
+
+ob_set_subtarget(ob_pl external_routine
+  external_routine/ob_external_resource.cpp
+  external_routine/ob_java_utils.cpp
+  external_routine/ob_java_udf.cpp
 )
 
 ob_server_add_target(ob_pl)

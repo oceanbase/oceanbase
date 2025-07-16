@@ -19,7 +19,9 @@
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/compaction/ob_compaction_dag_ranker.h"
 #include "observer/ob_server_event_history_table_operator.h"
-
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/compaction_v2/ob_ss_major_merge_ctx.h"
+#endif
 namespace oceanbase
 {
 using namespace share;
@@ -251,11 +253,13 @@ int ObCOMergePrepareTask::schedule_minor_exec_dag(
                                   ctx.get_tablet_id(), ctx.get_schedule_transfer_seq());
   if (OB_FAIL(MTL(share::ObTenantDagScheduler *)->alloc_dag(minor_exe_dag))) {
     LOG_WARN("failed to alloc dag", K(ret));
+  } else if (OB_FAIL(ctx.get_tablet()->get_recycle_version(result.version_range_.multi_version_start_, result.version_range_.base_version_))) {
+    LOG_WARN("Fail to get table store recycle version", K(ret), K(result.version_range_), KPC(ctx.get_tablet()));
   } else if (OB_FAIL(minor_exe_dag->prepare_init(
-            dag_param,
-            ctx.get_tablet()->get_tablet_meta().compat_mode_,
-            result,
-            ctx.static_param_.ls_handle_))) {
+              dag_param,
+              ctx.get_tablet()->get_tablet_meta().compat_mode_,
+              result,
+              ctx.static_param_.ls_handle_))) {
     LOG_WARN("failed to init dag", K(ret), K(result));
   } else if (OB_FAIL(dag_net_->add_dag_into_dag_net(*minor_exe_dag))) {
     LOG_WARN("failed to add dag into dag net", K(ret), K(minor_exe_dag), KPC(dag_net_));
@@ -1740,9 +1744,7 @@ int ObCOMergeDagNet::prepare_co_merge_ctx()
     co_merge_ctx_ = NEW_CTX(ObCOTabletMergeCtx);
 #ifdef OB_BUILD_SHARED_STORAGE
   } else if (is_output_exec_mode(basic_param_.exec_mode_)) {
-    co_merge_ctx_ = NEW_CTX(ObCOTabletOutputMergeCtx);
-  } else if (is_calc_ckm_exec_mode(basic_param_.exec_mode_)) {
-    co_merge_ctx_ = NEW_CTX(ObCOTabletValidateMergeCtx);
+    co_merge_ctx_ = NEW_CTX(ObSSCOTabletMergeCtx);
 #endif
   } else {
     ret = OB_ERR_UNEXPECTED;

@@ -414,7 +414,8 @@ TEST_F(TestTabletStatusCache, get_transfer_out_tablet)
   ObLS *ls = ls_handle.get_ls();
   ASSERT_NE(nullptr, ls);
 
-  ret = ls->get_tablet_svr()->update_tablet_to_empty_shell(tablet_id);
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  ret = ls->get_tablet_svr()->update_tablet_to_empty_shell(data_version, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
@@ -476,7 +477,8 @@ TEST_F(TestTabletStatusCache, get_transfer_deleted)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(!tablet->tablet_status_cache_.is_valid());
 
-  ret = ls->get_tablet_svr()->update_tablet_to_empty_shell(tablet_id);
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  ret = ls->get_tablet_svr()->update_tablet_to_empty_shell(data_version, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,

@@ -60,7 +60,10 @@ class ObGtiSource : public ObIGtiSource
 public:
   ObGtiSource() { reset(); }
   ~ObGtiSource() { destroy(); }
-  int init(const common::ObAddr &server, rpc::frame::ObReqTransport *req_transport);
+  int init(
+      const common::ObAddr &server,
+      rpc::frame::ObReqTransport *req_transport,
+      const uint64_t tenant_id);
   virtual int start();
   virtual void stop();
   virtual void wait();
@@ -74,7 +77,7 @@ private:
   int64_t get_preallocate_count_();
 public:
   TO_STRING_KV(K_(is_inited), K_(is_running), K_(is_requesting),
-               K_(server), K_(gti_cache_leader));
+               K_(server), K_(gti_cache_leader), K_(tenant_id));
 public:
   static const int64_t MIN_PREALLOCATE_COUNT = 10000;
   static const int64_t MAX_PREALLOCATE_COUNT = 1000000;
@@ -86,6 +89,7 @@ public:
   static const int64_t MAX_RETRY_REQUEST_INTERVAL = RETRY_REQUEST_INTERVAL * 10;
 private:
   bool is_inited_;
+  uint64_t tenant_id_;
   bool is_running_;
   bool is_requesting_;
   IdCache id_cache_[MAX_CACHE_NUM];

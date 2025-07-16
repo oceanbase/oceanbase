@@ -78,7 +78,11 @@ OB_DEF_SERIALIZE_SIZE(ObVectorIndexParam)
               ef_construction_,
               ef_search_,
               extra_info_max_size_,
-              extra_info_actual_size_);
+              extra_info_actual_size_,
+              refine_type_,
+              bq_bits_query_,
+              refine_k_,
+              bq_use_fht_);
   return len;
 }
 
@@ -94,7 +98,11 @@ OB_DEF_SERIALIZE(ObVectorIndexParam)
               ef_construction_,
               ef_search_,
               extra_info_max_size_,
-              extra_info_actual_size_);
+              extra_info_actual_size_,
+              refine_type_,
+              bq_bits_query_,
+              refine_k_,
+              bq_use_fht_);
   return ret;
 }
 
@@ -117,7 +125,11 @@ OB_DEF_DESERIALIZE(ObVectorIndexParam)
               ef_construction_,
               ef_search_,
               extra_info_max_size_,
-              extra_info_actual_size_);
+              extra_info_actual_size_,
+              refine_type_,
+              bq_bits_query_,
+              refine_k_,
+              bq_use_fht_);
   return ret;
 }
 
@@ -2928,8 +2940,6 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
       LOG_WARN("failed to query vids.", K(ret), K(dim));
     }
   } else if (ctx->flag_ == PVQP_SECOND) {
-    close_snap_data_rb_flag();
-
     ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
     if (OB_ISNULL(query_cond->row_iter_) || OB_ISNULL(query_cond->scan_param_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2948,14 +2958,14 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
         LOG_WARN("invalid row", K(ret), K(row));
       } else if (get_snapshot_key_prefix().empty() ||
                  !row->storage_datums_[0].get_string().prefix_match(get_snapshot_key_prefix())) {
+        ObVectorIndexAlgorithmType index_type;
         ObString key_prefix;
-        if (OB_FAIL(ob_write_string(*allocator_, row->storage_datums_[0].get_string(), key_prefix))) {
+        ObString target_prefix;
+        if (OB_FAIL(ob_write_string(tmp_allocator, row->storage_datums_[0].get_string(), key_prefix))) {
           LOG_WARN("failed to write string", K(ret), K(row->storage_datums_[0].get_string()));
         } else if (OB_FAIL(ObPluginVectorIndexUtils::iter_table_rescan(*query_cond->scan_param_, table_scan_iter))) {
           LOG_WARN("failed to rescan", K(ret));
         } else {
-          key_prefix = key_prefix.split_on("_hnsw_");  // hgraph?
-
           ObHNSWDeserializeCallback::CbParam param;
           param.iter_ = query_cond->row_iter_;
           param.allocator_ = &tmp_allocator;
@@ -2963,12 +2973,21 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
           ObIStreamBuf::Callback cb = callback;
           ObVectorIndexSerializer index_seri(tmp_allocator);
           TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
-          if (OB_FAIL(index_seri.deserialize(snap_data_->index_, param, cb, tenant_id_))) {
+          if (!get_snapshot_key_prefix().empty() && key_prefix.prefix_match(get_snapshot_key_prefix()) && !snap_data_->rb_flag_) {
+            // skip deserialize, already been deserialized by other concurrent thread
+          } else if (OB_FAIL(index_seri.deserialize(snap_data_->index_, param, cb, tenant_id_))) {
             LOG_WARN("serialize index failed.", K(ret));
-          } else {
-            set_snapshot_key_prefix(key_prefix);
+          } else if (OB_FALSE_IT(index_type = get_snap_index_type())) {
+          } else if (OB_FAIL(ObPluginVectorIndexUtils::get_split_snapshot_prefix(index_type, key_prefix, target_prefix))) {
+            LOG_WARN("fail to get split snapshot prefix", K(ret));
+          } else if (OB_FAIL(set_snapshot_key_prefix(target_prefix))) {
+            LOG_WARN("fail to set snapshot key prefix", K(ret), K(index_type), K(key_prefix), K(target_prefix));
           }
         }
+      }
+
+      if (OB_SUCC(ret)) {
+        close_snap_data_rb_flag();
       }
     }
 
@@ -3136,6 +3155,32 @@ int ObPluginVectorIndexAdaptor::set_index_identity(ObString &index_identity)
   return ret;
 }
 
+int ObPluginVectorIndexAdaptor::set_snapshot_key_prefix(const ObString &snapshot_key_prefix)
+{
+  int ret = OB_SUCCESS;
+  if (!snapshot_key_prefix_.empty() && snapshot_key_prefix_ == snapshot_key_prefix) {
+    // do nothing
+    LOG_INFO("try to change same vector index snapshot_key_prefix", K(snapshot_key_prefix), K(*this));
+  } else if (snapshot_key_prefix.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector index snapshot_key_prefix is empty", KR(ret), K(*this));
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null allocator to set vector index snapshot_key_prefix ", KR(ret), K(*this));
+  } else {
+    if (!snapshot_key_prefix_.empty()) {
+      allocator_->free(snapshot_key_prefix_.ptr());
+      snapshot_key_prefix_.reset();
+    }
+    if (OB_FAIL(ob_write_string(*allocator_, snapshot_key_prefix, snapshot_key_prefix_))) {
+      LOG_WARN("fail set vector index snapshot_key_prefix ", KR(ret), K(*this));
+    } else {
+      LOG_INFO("change vector index snapshot_key_prefix success", K(snapshot_key_prefix), K(*this));
+    }
+  }
+  return ret;
+}
+
 void ObPluginVectorIndexAdaptor::set_vid_rowkey_info(ObVectorIndexSharedTableInfo &info)
 {
   rowkey_vid_tablet_id_ = info.rowkey_vid_tablet_id_;
@@ -3279,9 +3324,11 @@ int ObPluginVectorIndexAdaptor::merge_parital_index_adapter(ObPluginVectorIndexA
         LOG_WARN("partial vector index adapter not valid", K(partial_idx_adpt), K(*this), KR(ret));
       } else if (OB_FAIL(merge_mem_data_(VIRT_SNAP, partial_idx_adpt, partial_idx_adpt->snap_data_, snap_data_))){
         LOG_WARN("partial vector index adapter not valid", K(partial_idx_adpt), K(*this), KR(ret));
-      } else {
-        ObString key_prefix = partial_idx_adpt->get_snapshot_key_prefix();
-        set_snapshot_key_prefix(key_prefix);
+      }
+      if (OB_SUCC(ret) && !partial_idx_adpt->get_snapshot_key_prefix().empty()) {
+        if (OB_FAIL(set_snapshot_key_prefix(partial_idx_adpt->get_snapshot_key_prefix()))) {
+          LOG_WARN("failed to set index snapshot key prefix", KR(ret), K(*this), KPC(partial_idx_adpt));
+        }
       }
     }
 
@@ -3515,6 +3562,32 @@ int ObPluginVectorIndexAdaptor::get_vid_bound(ObVidBound &bound)
   }
   bound.min_vid_ = min_vid;
   bound.max_vid_ = max_vid;
+  return ret;
+}
+
+int ObPluginVectorIndexAdaptor::get_inc_index_row_cnt(int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  count = 0;
+  if (OB_NOT_NULL(get_incr_index()) && OB_FAIL(obvectorutil::get_index_number(get_incr_index(), count))) {
+    ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
+    LOG_WARN("failed to get inc index number.", K(ret));
+  } else {
+    LOG_DEBUG("succ to get inc index row cnt", K(ret), K(count));
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexAdaptor::get_snap_index_row_cnt(int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  count = 0;
+  if (OB_NOT_NULL(get_snap_index()) && OB_FAIL(obvectorutil::get_index_number(get_snap_index(), count))) {
+    ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
+    LOG_WARN("failed to get snap index number.", K(ret));
+  } else {
+    LOG_DEBUG("succ to get snap index row cnt", K(ret), K(count));
+  }
   return ret;
 }
 

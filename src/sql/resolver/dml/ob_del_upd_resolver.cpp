@@ -659,6 +659,7 @@ int ObDelUpdResolver::resolve_additional_assignments(ObIArray<ObTableAssignment>
           //do nothing
         } else if (OB_FAIL(check_need_assignment(assigns.at(i).assignments_,
                                                  table_item->table_id_,
+                                                 table_schema->get_table_id(),
                                                  trigger_exist,
                                                  *column_schema,
                                                  need_assigned))) {
@@ -851,6 +852,7 @@ int ObDelUpdResolver::add_assignment(common::ObIArray<ObTableAssignment> &assign
 
 int ObDelUpdResolver::check_need_assignment(const common::ObIArray<ObAssignment> &assigns,
                                             uint64_t table_id,
+                                            uint64_t ref_table_id,
                                             bool before_update_row_trigger_exist,
                                             const ObColumnSchemaV2 &column,
                                             bool &need_assign)
@@ -886,13 +888,25 @@ int ObDelUpdResolver::check_need_assignment(const common::ObIArray<ObAssignment>
         need_assign = true;
       }
     }
-  } else if (column.is_on_update_current_timestamp() || before_update_row_trigger_exist) {
+  } else if (column.is_on_update_current_timestamp()) {
     if (column.get_column_id() == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
       // for heap_table the hidden_pk should not be updated
-    } else if (OB_FAIL(ObResolverUtils::check_whether_assigned(stmt, assigns, table_id, column.get_column_id(), exist))) {
+  } else if (OB_FAIL(ObResolverUtils::check_whether_assigned(stmt, assigns, table_id, column.get_column_id(), exist))) {
       LOG_WARN("check whether assigned cascaded columns failed", K(ret), K(table_id), K(column.get_column_id()));
     } else if (!exist) {
       need_assign = true;
+    }
+  } else if (before_update_row_trigger_exist) {
+    if (column.get_column_id() == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+      // for heap_table the hidden_pk should not be updated
+    } else if (OB_FAIL(ObResolverUtils::check_whether_assigned_for_before_update_trigger(params_,
+                      schema_checker_, column, ref_table_id, need_assign))) {
+      LOG_WARN("failed to check", K(ret), K(ref_table_id));
+    } else if (!need_assign) {
+    } else if (OB_FAIL(ObResolverUtils::check_whether_assigned(stmt, assigns, table_id, column.get_column_id(), exist))) {
+      LOG_WARN("check whether assigned cascaded columns failed", K(ret), K(table_id), K(column.get_column_id()));
+    } else if (exist) {
+      need_assign = false;
     }
   }
   return ret;
@@ -3058,6 +3072,15 @@ int ObDelUpdResolver::build_column_conv_function_with_default_expr(ObInsertTable
     if (OB_SUCC(ret)) {
       table_info.column_conv_exprs_.at(idx) = function_expr;
       LOG_DEBUG("add column conv expr", K(*function_expr));
+      ObSEArray<ObRawExpr *, 8> pseudo_column_like_exprs;
+      if (OB_FAIL(ObTransformUtils::extract_pseudo_column_like_expr(function_expr, pseudo_column_like_exprs))) {
+        LOG_WARN("failed to extract pseudo column like expr", K(ret));
+      } else if (OB_ISNULL(get_stmt())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null stmt", K(ret));
+      } else if (OB_FAIL(append_array_no_dup(get_stmt()->get_pseudo_column_like_exprs(), pseudo_column_like_exprs))) {
+        LOG_WARN("failed to push back pseudo column like expr", K(ret));
+      }
     }
   }
   return ret;

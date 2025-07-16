@@ -29,6 +29,8 @@ using namespace lib;
 using namespace logservice;
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_CREATE_LS_FAILED_BEFORE_ADD_MIGRATION_TASK);
+
 #define OB_BREAK_FAIL(statement) (OB_UNLIKELY(((++process_point) && break_point == process_point && OB_FAIL(OB_BREAK_BY_TEST)) || OB_FAIL(statement)))
 
 static inline void prepare_palf_base_info(const obrpc::ObCreateLSArg &arg,
@@ -563,6 +565,7 @@ int ObLSService::post_create_ls_(const int64_t create_type,
       break;
     }
     case ObLSCreateType::MIGRATE: {
+      // ATTENTION! when migration, set_start_ha_state must be the last step in this function that can fail
       if (OB_FAIL(ls->set_start_ha_state())) {
         LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
       }
@@ -1314,15 +1317,20 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg,
       } else if (OB_BREAK_FAIL(ls->finish_create_ls())) {
         LOG_WARN("finish create ls failed", KR(ret));
       } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_FINISH)) {
-      } else if (OB_BREAK_FAIL(post_create_ls_(arg.create_type_, ls))) {
-        LOG_WARN("post create ls failed", K(ret), K(ls_meta));
+#ifdef ERRSIM
+      } else if (OB_FAIL(EN_CREATE_LS_FAILED_BEFORE_ADD_MIGRATION_TASK)) {
+        LOG_INFO("[ERRSIM] create ls failed before add migration task", K(ret));
+#endif
       } else if (ObLSCreateType::MIGRATE == arg.create_type_ &&
                  OB_BREAK_FAIL(ls->get_ls_migration_handler()->add_ls_migration_task(arg.task_id_,
                                                                                      mig_arg))) {
         LOG_WARN("failed to add ls migration task", K(ret), K(mig_arg));
+      } else if (OB_BREAK_FAIL(post_create_ls_(arg.create_type_, ls))) {
+        LOG_WARN("post create ls failed", K(ret), K(ls_meta));
       }
     }
     if (OB_BREAK_FAIL(ret)) {
+      DEBUG_SYNC(BEFORE_DEL_LS_AFTER_CREATE_LS_FAILED);
       del_ls_after_create_ls_failed_(state, ls);
     }
   }
@@ -1340,14 +1348,22 @@ int ObLSService::create_ls_for_ha(
   if (task_id.is_invalid() || !arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create ls for ha get invalid argument", K(ret), K(task_id), K(arg));
-  } else if (ObMigrationOpType::MIGRATE_LS_OP != arg.type_ && ObMigrationOpType::ADD_LS_OP != arg.type_) {
+  } else if (ObMigrationOpType::MIGRATE_LS_OP != arg.type_
+             && ObMigrationOpType::ADD_LS_OP != arg.type_
+             && ObMigrationOpType::REPLACE_LS_OP != arg.type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("create ls for migration get unexpected op type", K(ret), K(task_id), K(arg));
   } else if (OB_FAIL(ObMigrationStatusHelper::trans_migration_op(arg.type_, migration_status))) {
     LOG_WARN("failed to trans migration op", K(ret), K(arg), K(task_id));
   } else if (OB_FAIL(get_restore_status_(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), K(arg), K(task_id));
-  } else {
+  }
+#ifdef OB_BUILD_SHARED_STORAGE
+  else if (OB_FAIL(check_sslog_ls_exist_(arg))) {
+    LOG_WARN("failed to check sslog ls exist", K(ret), K(arg));
+  }
+#endif
+  else {
     palf::PalfBaseInfo palf_base_info;
     palf_base_info.generate_by_default();
 
@@ -1710,6 +1726,74 @@ int ObLSService::get_replica_type_(
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObLSService::check_sslog_ls_exist_(
+    const ObMigrationOpArg &arg)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  bool is_exist = false;
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
+
+  if (!is_shared_storage || is_tenant_sslog_ls(tenant_id, arg.ls_id_)) {
+    is_exist = true;
+  } else {
+    const ObLSID sslog_ls_id(ObLSID::SSLOG_LS_ID);
+    const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+    MTL_SWITCH(meta_tenant_id) {
+      ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+      ObLSHandle ls_handle;
+      ObLSService *ls_service = nullptr;
+      ObLS *ls = nullptr;
+      ObMemberList ob_member_list;
+      ObLSReplica::MemberList member_list;
+      GlobalLearnerList learner_list;
+      int64_t proposal_id = 0;
+      int64_t paxos_replica_number = 0;
+      const ObAddr &addr = GCTX.self_addr();
+      common::ObMember learner_member;
+      if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
+      } else if (OB_FAIL(ls_service->get_ls(sslog_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+        if (OB_LS_NOT_EXIST == ret) {
+          ret = OB_SSLOG_LS_NOT_EXIST;
+        }
+        LOG_WARN("failed to get ls", K(ret), K(sslog_ls_id));
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("src ls should not be NULL", K(ret), K(sslog_ls_id), KP(ls));
+      } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
+        LOG_WARN("failed to get migration status", K(ret), K(sslog_ls_id));
+      } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status
+          && !ObMigrationStatusHelper::is_in_replace(migration_status)
+          && !ObMigrationStatusHelper::is_in_rebuild(migration_status)) {
+        is_exist = false;
+        LOG_WARN("sslog ls migration status is not right", K(migration_status), KPC(ls), K(sslog_ls_id));
+      } else if (OB_FAIL(ls->get_paxos_member_list_and_learner_list(ob_member_list, paxos_replica_number, learner_list))) {
+        LOG_WARN("get member list and learner list from ObLS failed", KR(ret));
+      } else if (ob_member_list.contains(addr)) {
+        is_exist = true;
+      } else if (!learner_list.contains(addr)) {
+        is_exist = false;
+      } else if (OB_FAIL(learner_list.get_learner_by_addr(addr, learner_member))) {
+        LOG_WARN("failed to get learner by addr", K(ret), K(addr));
+      } else if (learner_member.is_migrating()) {
+        is_exist = false;
+      } else {
+        is_exist = true;
+      }
+
+      if (OB_SUCC(ret) && !is_exist) {
+        ret = OB_SSLOG_LS_NOT_EXIST;
+        LOG_WARN("sslog ls do not exist, cannot migrate in", K(ret), K(tenant_id));
+      }
+    }
+  }
+  return ret;
+}
+#endif
 
 } // storage
 } // oceanbase

@@ -130,6 +130,7 @@ public:
       const uint64_t data_format_version,
       const blocksstable::ObSSTable *first_ddl_sstable,
       const ObStorageSchema *storage_schema,
+      const share::SCN &reorganization_scn,
       blocksstable::ObWholeDataStoreDesc &data_desc);
 
   static int get_compact_meta_array(

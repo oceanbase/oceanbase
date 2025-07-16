@@ -457,7 +457,7 @@ int ObPLPackageState::is_invalid_value(const ObObj &val, bool &is_invalid)
   is_invalid = false;
 
   if (val.is_varchar_or_char()) {
-    CK (0 == val.get_string().case_compare(PL_PACKAGE_INVALID_VALUE));
+    CK (val.get_string().case_compare_equal(PL_PACKAGE_INVALID_VALUE));
     OX (is_invalid = true);
   }
   return ret;
@@ -479,7 +479,7 @@ int ObPLPackageState::is_oversize_value(const ObObj &val, bool &is_invalid)
   is_invalid = false;
 
   if (val.is_varchar_or_char()) {
-    CK (0 == val.get_string().case_compare(PL_PACKAGE_OVERSIZE_VALUE));
+    CK (val.get_string().case_compare_equal(PL_PACKAGE_OVERSIZE_VALUE));
     OX (is_invalid = true);
   }
   return ret;
@@ -872,9 +872,6 @@ int ObPLPackageState::check_version(const ObPackageStateVersion &state_version,
     match = true;
   } else if (cur_state_version.header_public_syn_count_ != state_version.header_public_syn_count_ ||
              cur_state_version.body_public_syn_count_ != state_version.body_public_syn_count_) {
-    match = false;
-  } else if (cur_state_version.package_version_ != state_version.package_version_ ||
-             cur_state_version.package_body_version_ != state_version.package_body_version_) {
     match = false;
   } else {
     if (cur_state_version.header_merge_version_ != state_version.header_merge_version_) {

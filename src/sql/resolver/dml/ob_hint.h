@@ -25,6 +25,8 @@ namespace sql
 struct PlanText;
 struct TableItem;
 
+#define OB_OUTLINE_DATA_END_STR          " END_OUTLINE_DATA*/"
+
 enum ObHintMergePolicy
 {
   HINT_DOMINATED_EQUAL,
@@ -218,6 +220,8 @@ struct ObOptParamHint
     DEF(ENABLE_PDML_INSERT_UP,)                     \
     DEF(PARQUET_FILTER_PUSHDOWN_LEVEL,)             \
     DEF(ORC_FILTER_PUSHDOWN_LEVEL,)                 \
+    DEF(ENABLE_INDEX_MERGE,)                        \
+    DEF(ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY, )     \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
@@ -348,20 +352,21 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_3_5_BP2  (oceanbase::common::cal_version(4, 3, 5, 2))
 #define COMPAT_VERSION_4_3_5_BP3  (oceanbase::common::cal_version(4, 3, 5, 3))
 #define COMPAT_VERSION_4_4_0      (oceanbase::common::cal_version(4, 4, 0, 0))
-#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_4_0
+#define COMPAT_VERSION_4_4_1      (oceanbase::common::cal_version(4, 4, 1, 0))
+#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_4_1
   static bool is_valid_opt_features_version(uint64_t version)
   { return COMPAT_VERSION_4_0 <= version && (LASTED_COMPAT_VERSION >= version || CLUSTER_CURRENT_VERSION >= version); }
 
-  static const common::ObConsistencyLevel UNSET_CONSISTENCY = common::INVALID_CONSISTENCY;
-  static const int64_t UNSET_QUERY_TIMEOUT = -1;
-  static const int64_t UNSET_MAX_CONCURRENT = -1;
-  static const uint64_t UNSET_OPT_FEATURES_VERSION = 0;
-  static const int64_t DEFAULT_PARALLEL = 1;
-  static const int64_t UNSET_PARALLEL = 0;
-  static const int64_t SET_ENABLE_AUTO_DOP = -1;
-  static const int64_t SET_ENABLE_MANUAL_DOP = -2;
-  static const int64_t UNSET_DYNAMIC_SAMPLING = -1;
-  static const int64_t UNSET_PX_NODE_COUNT = -1;
+  static constexpr common::ObConsistencyLevel UNSET_CONSISTENCY = common::INVALID_CONSISTENCY;
+  static constexpr int64_t UNSET_QUERY_TIMEOUT = -1;
+  static constexpr int64_t UNSET_MAX_CONCURRENT = -1;
+  static constexpr uint64_t UNSET_OPT_FEATURES_VERSION = 0;
+  static constexpr int64_t DEFAULT_PARALLEL = 1;
+  static constexpr int64_t UNSET_PARALLEL = 0;
+  static constexpr int64_t SET_ENABLE_AUTO_DOP = -1;
+  static constexpr int64_t SET_ENABLE_MANUAL_DOP = -2;
+  static constexpr int64_t UNSET_DYNAMIC_SAMPLING = -1;
+  static constexpr int64_t UNSET_PX_NODE_COUNT = -1;
 
   int merge_global_hint(const ObGlobalHint &other);
   int merge_dop_hint(uint64_t dfo, uint64_t dop);

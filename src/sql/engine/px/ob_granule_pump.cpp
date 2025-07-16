@@ -536,7 +536,9 @@ int ObGranulePump::fetch_pw_granule_from_shared_pool(ObIArray<ObGranuleTaskInfo>
 
     // 防御性代码：检查full partition wise的情况下，每一个op对应的GI task是否被同时消费完毕
     if (OB_FAIL(ret)) {
-      set_fetch_task_ret(ret);
+      if (ret != OB_ITER_END) {
+        set_fetch_task_ret(ret);
+      }
     } else if (OB_FAIL(check_pw_end(end_op_count, op_ids.count(), infos.count()))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("incorrect state", K(ret));
@@ -698,7 +700,7 @@ int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
     }
     if (OB_SUCC(ret)) {
       if (!GCONF._use_odps_jni_connector) {
-#if defined(OB_BUILD_CPP_ODPS)
+#if defined (OB_BUILD_CPP_ODPS)
         if (OB_FAIL(odps_partition_downloader_mgr_.init_downloader(args.external_table_files_.count()))) {
           LOG_WARN("init odps_partition_downloader_mgr_ failed", K(ret), K(args.external_table_files_.count()));
         } else {

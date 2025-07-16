@@ -63,6 +63,8 @@ public:
   DEFINE_GETTER_AND_SETTER(int64_t, schema_version);
   DEFINE_GETTER_AND_SETTER(int64_t, refresh_dop);
   DEFINE_GETTER_AND_SETTER(uint64_t, data_sync_scn);
+  DEFINE_GETTER_AND_SETTER(bool, is_synced);
+  DEFINE_GETTER_AND_SETTER(ObMVNestedRefreshMode, nested_refresh_mode);
 
 #undef DEFINE_GETTER_AND_SETTER
 #undef DEFINE_STRING_GETTER_AND_SETTER
@@ -116,7 +118,9 @@ public:
                K_(last_refresh_trace_id),
                K_(schema_version),
                K_(refresh_dop),
-               K_(data_sync_scn));
+               K_(data_sync_scn),
+               K_(is_synced),
+               K_(nested_refresh_mode));
 
 public:
   static constexpr char *MVIEW_REFRESH_JOB_PREFIX = const_cast<char *>("MVIEW_REFRESH$J_");
@@ -138,6 +142,8 @@ private:
   int64_t schema_version_;
   int64_t refresh_dop_;
   uint64_t data_sync_scn_;
+  bool is_synced_;
+  ObMVNestedRefreshMode nested_refresh_mode_;
 };
 
 } // namespace schema

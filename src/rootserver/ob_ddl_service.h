@@ -20,7 +20,6 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/container/ob_array.h"
 #include "lib/hash/ob_placement_hashset.h"
-#include "share/ob_rpc_struct.h"
 #include "share/ob_leader_election_waiter.h"
 #include "lib/worker.h"
 #include "share/schema/ob_schema_getter_guard.h"
@@ -38,6 +37,7 @@
 #include "rootserver/parallel_ddl/ob_index_name_checker.h"
 #include "rootserver/parallel_ddl/ob_tablet_balance_allocator.h"
 #include "pl_ddl/ob_pl_ddl_service.h"
+#include "share/ob_create_hidden_tablev2_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -168,7 +168,6 @@ public:
                                     const ObTabletID splitted_tablet_id,
                                     const share::schema::ObTableSchema &splitting_table_schema,
                                     share::schema::ObTableSchema *&del_table_schema);
-
   int create_inner_expr_index(ObMySQLTransaction &trans,
                               const share::schema::ObTableSchema &orig_table_schema,
                               const uint64_t tenant_data_version,
@@ -216,8 +215,8 @@ public:
                          const share::schema::ObTableType expected_table_type,
                          share::schema::ObSchemaGetterGuard &guard,
                          const share::schema::ObTableSchema **table_schema);
-  int create_hidden_table(const obrpc::ObCreateHiddenTableArg &create_hidden_table_arg,
-                                      obrpc::ObCreateHiddenTableRes &res);
+  int create_hidden_table(const obrpc::ObCreateHiddenTableArgV2 &ObCreateHiddenTableArg,
+                          obrpc::ObCreateHiddenTableRes &res);
   int mview_complete_refresh(const obrpc::ObMViewCompleteRefreshArg &arg,
                              obrpc::ObMViewCompleteRefreshRes &res,
                              share::schema::ObSchemaGetterGuard &schema_guard);
@@ -896,7 +895,6 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
     share::schema::ObSchemaGetterGuard &schema_guard,
     const common::ObString &grantor = "",
     const common::ObString &grantor_host = "");
-
   virtual int revoke_routine(
     const share::schema::ObRoutinePrivSortKey &routine_key,
     const ObPrivSet priv_set,
@@ -2430,7 +2428,7 @@ private:
                                const common::ObIArray<common::ObTabletID> *del_data_tablet_ids,
                                obrpc::ObDropIndexArg *drop_index_arg,
                                ObDDLOperator &ddl_operator,
-                               obrpc::ObAlterTableRes &res,
+                               ObIArray<obrpc::ObDDLRes> &ddl_res_array,
                                ObIArray<ObDDLTaskRecord> &ddl_tasks);
   template <class TTableSchema>
   int get_tablets_with_table_id_(const ObArray<TTableSchema *> &table_schemas,

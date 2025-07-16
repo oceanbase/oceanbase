@@ -5746,7 +5746,7 @@ int ObBasePartition::convert_character_for_range_columns_part(
       } else if (OB_ISNULL(part_column_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null column schema", K(ret));
-      } else if (ObDDLUtil::check_can_convert_character(obj_meta, part_column_schema->is_domain_index_column())) {
+      } else if (ObDDLUtil::check_can_convert_character(obj_meta, part_column_schema->is_domain_index_column(), part_column_schema->is_string_lob())) {
         ObString dst_string;
         if (OB_FAIL(ObCharset::charset_convert(*allocator, obj.get_string(), obj.get_collation_type(),
                                                to_collation, dst_string))) {
@@ -5784,7 +5784,7 @@ int ObBasePartition::convert_character_for_list_columns_part(
         } else if (OB_ISNULL(part_column_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null column schema", K(ret));
-        } else if (ObDDLUtil::check_can_convert_character(obj_meta, part_column_schema->is_domain_index_column())) {
+        } else if (ObDDLUtil::check_can_convert_character(obj_meta, part_column_schema->is_domain_index_column(), part_column_schema->is_string_lob())) {
           ObString dst_string;
           if (OB_FAIL(ObCharset::charset_convert(*allocator, obj.get_string(), obj.get_collation_type(),
                                                to_collation, dst_string))) {
@@ -8218,7 +8218,8 @@ OB_SERIALIZE_MEMBER(ObMVRefreshInfo,
     next_time_expr_,
     exec_env_,
     parallel_,
-    refresh_dop_);
+    refresh_dop_,
+    nested_refresh_mode_);
 
 /*-------------------------------------------------------------------------------------------------
  * ------------------------------ObViewSchema-------------------------------------------
@@ -12047,7 +12048,8 @@ OB_SERIALIZE_MEMBER(ObSequenceSchema,
                     name_,
                     option_,
                     is_system_generated_,
-                    dblink_id_);
+                    dblink_id_,
+                    remote_db_name_);
 
 ObSequenceSchema::ObSequenceSchema()
   : ObSchema()
@@ -12089,6 +12091,8 @@ int ObSequenceSchema::assign(const ObSequenceSchema &src_schema)
       LOG_WARN("fail assign option", K(src_schema));
     } else if (OB_FAIL(set_sequence_name(src_schema.name_))) {
       LOG_WARN("fail set seq name", K(src_schema));
+    } else if (OB_FAIL(set_remote_database_name(src_schema.remote_db_name_))) {
+      LOG_WARN("fail set remote db name", K(ret));
     }
   }
   return ret;
@@ -12114,6 +12118,7 @@ void ObSequenceSchema::reset()
   reset_string(name_);
   option_.reset();
   dblink_id_ = OB_INVALID_ID;
+  reset_string(remote_db_name_);
 }
 
 int64_t ObSequenceSchema::get_convert_size() const

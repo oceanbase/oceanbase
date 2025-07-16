@@ -611,7 +611,7 @@ int ObColDataStoreDesc::add_col_desc(const ObObjMeta meta, int64_t col_idx)
   share::schema::ObColDesc fake_col;
   fake_col.col_id_ = static_cast<uint64_t>(col_idx + OB_APP_MIN_COLUMN_ID);
   fake_col.col_type_ = meta;
-  fake_col.col_order_ = DESC;
+  fake_col.col_order_ = common::ObOrderType::DESC;
   if (OB_FAIL(col_desc_array_.push_back(fake_col))) {
     STORAGE_LOG(WARN, "failed to push back fake col desc", K(ret), K(fake_col), K_(col_desc_array));
   }

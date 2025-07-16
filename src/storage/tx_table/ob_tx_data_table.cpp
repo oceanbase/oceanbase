@@ -26,7 +26,6 @@ using namespace oceanbase::share;
 
 namespace storage
 {
-ERRSIM_POINT_DEF(EN_COMPACTION_TX_DATA_GET_MIN_SCN);
 int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
 {
   int ret = OB_SUCCESS;
@@ -680,17 +679,16 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "tx data table has not been inited", KR(ret));
-  } else if (OB_UNLIKELY(EN_COMPACTION_TX_DATA_GET_MIN_SCN)) {
-    ret = OB_EAGAIN;
-    STORAGE_LOG(INFO, "EN_COMPACTION_TX_DATA_GET_MIN_SCN", KR(ret));
   } else if (OB_FAIL(ls_->get_migration_status(migration_status))) {
     STORAGE_LOG(WARN, "get migration status failed", KR(ret), "ls_id", ls_->get_ls_id());
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+    ret = OB_EAGAIN;
     recycle_scn.set_min();
     STORAGE_LOG(INFO, "logstream is in migration state. skip recycle tx data", "ls_id", ls_->get_ls_id());
   } else if (OB_FAIL(ls_->get_restore_status(restore_status))) {
     STORAGE_LOG(WARN, "get restore status failed", KR(ret), "ls_id", ls_->get_ls_id());
   } else if (ObLSRestoreStatus::NONE != restore_status) {
+    ret = OB_EAGAIN;
     recycle_scn.set_min();
     STORAGE_LOG(INFO, "logstream is in restore state. skip recycle tx data", "ls_id", ls_->get_ls_id());
   } else if (FALSE_IT(tg.click("iterate tablets start"))) {
@@ -1327,6 +1325,11 @@ int ObTxDataTable::dump_tx_data_in_sstable_2_text_(const ObTransID tx_id, FILE *
 ERRSIM_POINT_DEF(EN_TX_DATA_MAX_FREEZE_INTERVAL_SECOND)
 bool ObTxDataTable::FreezeFrequencyController::need_re_freeze(const share::ObLSID ls_id)
 {
+  if (!is_user_tenant(MTL_ID()) || ls_id.is_sys_ls()) {
+    // Non-user Tenant no need refreeze
+    return false;
+  }
+
   // Inject logic to modify default freeze interval
   int tmp_ret = OB_SUCCESS;
   int64_t max_freeze_interval = MAX_FREEZE_TX_DATA_INTERVAL;

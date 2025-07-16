@@ -857,7 +857,11 @@ int ObTenant::construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantMo
   if (OB_ISNULL(ctx = OB_NEW(share::ObTenantModuleInitCtx, ObMemAttr(id_, "ModuleInitCtx")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc ObTenantModuleInitCtx failed", K(ret));
-  } else if (OB_FAIL(OB_FILE_SYSTEM_ROUTER.get_tenant_clog_dir(id_, mtl_init_ctx_->tenant_clog_dir_))) {
+  } else if (
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    !GCONF.enable_logservice &&
+#endif
+    OB_FAIL(OB_FILE_SYSTEM_ROUTER.get_tenant_clog_dir(id_, mtl_init_ctx_->tenant_clog_dir_))) {
     LOG_ERROR("get_tenant_clog_dir failed", K(ret));
   } else {
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -1253,7 +1257,7 @@ int ObTenant::get_new_request(
       ret = group->multi_level_queue_.pop_timeup(task, wk_level, timeout);
       if ((ret == OB_SUCCESS && nullptr == task) || ret == OB_ENTRY_NOT_EXIST) {
         ret = OB_ENTRY_NOT_EXIST;
-        usleep(10 * 1000L);
+        ob_usleep(10 * 1000L);
       } else if (ret == OB_SUCCESS){
         rpc::ObRequest *tmp_req = static_cast<rpc::ObRequest*>(task);
         LOG_WARN("req is timeout and discard", "tenant_id", id_, K(tmp_req));
@@ -1965,7 +1969,7 @@ void ObTenant::lq_wait(ObThWorker &w)
                                          last_query_us);
   wait_us = std::min(wait_us, min(100 * 1000, w.get_timeout_remain()));
   if (wait_us > 10 * 1000) {
-    usleep(wait_us);
+    ob_usleep(wait_us);
     w.set_last_wakeup_ts(ObTimeUtility::current_time());
   }
 }

@@ -304,6 +304,24 @@ public:
     return OB_SUCCESS;
   }
 
+  inline bool case_compare_equal(const ObString &obstr) const
+  {
+    bool cmp = true;
+    if (NULL == ptr_) {
+      if (NULL != obstr.ptr_) {
+        cmp = false;
+      }
+    } else if (NULL == obstr.ptr_) {
+      cmp = false;
+    } else if (data_length_ != obstr.data_length_) {
+      cmp = false;
+    } else {
+      cmp = (0 == strncasecmp(ptr_, obstr.ptr_, data_length_));
+    }
+
+    return cmp;
+  }
+
   inline int case_compare(const ObString &obstr) const
   {
     int cmp = 0;
@@ -320,6 +338,17 @@ public:
       }
     }
     return cmp;
+  }
+
+  inline bool case_compare_equal(const char *str) const
+  {
+    obstr_size_t len = 0;
+    if (NULL != str) {
+      len = static_cast<obstr_size_t>(strlen(str));
+    }
+    char *p = const_cast<char *>(str);
+    const ObString rv(0, len, p);
+    return case_compare_equal(rv);
   }
 
   inline int case_compare(const char *str) const
@@ -345,6 +374,32 @@ public:
       cmp = data_length_ - obstr.data_length_;
     }
     return cmp;
+  }
+
+  inline bool compare_equal(const ObString &obstr) const
+  {
+    bool cmp = true;
+    if (ptr_ == obstr.ptr_) {
+      cmp = data_length_ == obstr.data_length_;
+    } else if (0 == data_length_ && 0 == obstr.data_length_) {
+      cmp = true;
+    } else if (data_length_ != obstr.data_length_) {
+      cmp = false;
+    } else {
+      cmp = (0 == MEMCMP(ptr_, obstr.ptr_, data_length_));
+    }
+    return cmp;
+  }
+
+  inline bool compare_equal(const char *str) const
+  {
+    obstr_size_t len = 0;
+    if (NULL != str) {
+      len = static_cast<obstr_size_t>(strlen(str));
+    }
+    char *p = const_cast<char *>(str);
+    const ObString rv(0, len, p);
+    return compare_equal(rv);
   }
 
   inline int32_t compare(const char *str) const
@@ -470,12 +525,12 @@ public:
 
   inline bool operator==(const ObString &obstr) const
   {
-    return compare(obstr) == 0;
+    return compare_equal(obstr);
   }
 
   inline bool operator!=(const ObString &obstr) const
   {
-    return compare(obstr) != 0;
+    return !compare_equal(obstr);
   }
 
   inline bool operator<(const char *str) const
@@ -500,12 +555,12 @@ public:
 
   inline bool operator==(const char *str) const
   {
-    return compare(str) == 0;
+    return compare_equal(str);
   }
 
   inline bool operator!=(const char *str) const
   {
-    return compare(str) != 0;
+    return !compare_equal(str);
   }
 
   const ObString trim() const

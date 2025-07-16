@@ -43,12 +43,10 @@ int ObFTTrie<DATA_TYPE>::insert(const ObString &words, const ObFTTrieNodeData<DA
       if (isNewNode || node_ptr->is_empty()
           || node_ptr->children_->last()->word_.get_word() != current_char) {
         isNewNode = true; // anyway new node
-        ObFTTrieNode<DATA_TYPE> *new_child = static_cast<ObFTTrieNode<DATA_TYPE> *>(
-            allocator_.alloc(sizeof(ObFTTrieNode<DATA_TYPE>)));
-        if (OB_ISNULL(new_child)) {
+        ObFTTrieNode<DATA_TYPE> *new_child = nullptr;
+        if (OB_ISNULL(new_child = OB_NEWx(ObFTTrieNode<DATA_TYPE>, &allocator_, allocator_))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
         } else {
-          new (new_child) ObFTTrieNode<DATA_TYPE>(allocator_);
           level_statistics_[level]++;
           new_child->dat_build_info_.level_ = level;
           new_child->is_leaf_ = (offset + char_len == words.length());

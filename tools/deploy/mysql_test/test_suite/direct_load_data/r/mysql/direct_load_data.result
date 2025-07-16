@@ -100,7 +100,6 @@ Optimization Info:
       table_rows:1
       physical_range_rows:1
       logical_range_rows:1
-      index_back_rows:0
       output_rows:1
       table_dop:2
       dop_method:Global DOP

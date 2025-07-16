@@ -51,6 +51,7 @@ private:
                                common::ObRowDesc &row_desc,
                                const share::schema::ObTableSchema &base_table_schema);
     int add_base_table_pk_columns(common::ObRowDesc &row_desc,
+                                  share::schema::ObSchemaGetterGuard &schema_guard,
                                   const share::schema::ObTableSchema &base_table_schema);
     int add_base_table_part_key_columns(common::ObRowDesc &row_desc,
                                         const share::schema::ObTableSchema &base_table_schema);

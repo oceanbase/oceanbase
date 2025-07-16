@@ -972,8 +972,13 @@ int ObLSTxService::set_max_replay_commit_version(share::SCN commit_version)
     TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
   } else {
     mgr_->update_max_replay_commit_version(commit_version);
-    MTL(ObTransService *)->get_tx_version_mgr().update_max_commit_ts(commit_version, false /*elr*/);
-    TRANS_LOG(INFO, "succ set max_replay_commit_version", K(commit_version));
+    if (is_tenant_sslog_ls(MTL_ID(), ls_id_)) {
+      // for sslog
+      MTL(ObTransService *)->get_tx_version_mgr_for_sslog().update_max_commit_ts(commit_version, false /*elr*/);
+    } else {
+      MTL(ObTransService *)->get_tx_version_mgr().update_max_commit_ts(commit_version, false /*elr*/);
+    }
+    TRANS_LOG(INFO, "succ set max_replay_commit_version", K(commit_version), K_(ls_id));
   }
   return ret;
 }

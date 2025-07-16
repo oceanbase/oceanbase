@@ -1540,7 +1540,7 @@ struct ObSchemaObjVersion
     return get_schema_type(object_type_);
   }
 
-  static  ObSchemaType get_schema_type(ObDependencyTableType object_type)
+  static ObSchemaType get_schema_type(ObDependencyTableType object_type)
   {
     ObSchemaType ret_type = OB_MAX_SCHEMA;
     switch (object_type) {
@@ -1581,6 +1581,46 @@ struct ObSchemaObjVersion
     return ret_type;
   }
 
+  static ObDependencyTableType get_depemdency_table_type(ObObjectType object_type)
+  {
+    ObDependencyTableType ret_type = DEPENDENCY_INVALID;
+    switch (object_type) {
+      case ObObjectType::TABLE:
+        ret_type = DEPENDENCY_TABLE;
+        break;
+      case ObObjectType::VIEW:
+        ret_type = DEPENDENCY_VIEW;
+        break;
+      case ObObjectType::PROCEDURE:
+        ret_type = DEPENDENCY_PROCEDURE;
+        break;
+      case ObObjectType::FUNCTION:
+        ret_type = DEPENDENCY_FUNCTION;
+        break;
+      case ObObjectType::PACKAGE:
+        ret_type = DEPENDENCY_PACKAGE;
+        break;
+      case ObObjectType::PACKAGE_BODY:
+        ret_type = DEPENDENCY_PACKAGE_BODY;
+        break;
+      case ObObjectType::SEQUENCE:
+        ret_type = DEPENDENCY_SEQUENCE;
+        break;
+      case ObObjectType::TYPE:
+        ret_type = DEPENDENCY_TYPE;
+        break;
+      case ObObjectType::TYPE_BODY:
+        ret_type = DEPENDENCY_TYPE_BODY;
+        break;
+      case ObObjectType::SYNONYM:
+        ret_type = DEPENDENCY_SYNONYM;
+        break;
+      default:
+        break;
+    }
+    return ret_type;
+  }
+
   static ObObjectType get_schema_object_type(ObDependencyTableType object_type)
   {
     ObObjectType ret_type = ObObjectType::MAX_TYPE;
@@ -1608,6 +1648,9 @@ struct ObSchemaObjVersion
         break;
       case DEPENDENCY_TYPE:
         ret_type = ObObjectType::TYPE;
+        break;
+      case DEPENDENCY_TYPE_BODY:
+        ret_type = ObObjectType::TYPE_BODY;
         break;
       case DEPENDENCY_SYNONYM:
         ret_type = ObObjectType::SYNONYM;
@@ -3954,6 +3997,14 @@ enum class ObMVRefreshStatsCollectionLevel : int64_t
   MAX
 };
 
+enum class ObMVNestedRefreshMode : int64_t
+{
+  INDIVIDUAL = 0,
+  INCONSISTENT = 1,
+  CONSISTENT = 2,
+  MAX
+};
+
 struct ObVectorIndexRefreshInfo
 {
   OB_UNIS_VERSION(1);
@@ -3988,6 +4039,7 @@ public:
   ObString exec_env_;
   int64_t parallel_;
   int64_t refresh_dop_;
+  ObMVNestedRefreshMode nested_refresh_mode_;
 
   ObMVRefreshInfo() :
   refresh_method_(ObMVRefreshMethod::NEVER),
@@ -3996,7 +4048,8 @@ public:
   next_time_expr_(),
   exec_env_(),
   parallel_(OB_INVALID_COUNT),
-  refresh_dop_(0) {}
+  refresh_dop_(0),
+  nested_refresh_mode_(ObMVNestedRefreshMode::INDIVIDUAL) {}
 
   void reset() {
     refresh_method_ = ObMVRefreshMethod::NEVER;
@@ -4006,6 +4059,7 @@ public:
     exec_env_.reset();
     parallel_ = OB_INVALID_COUNT;
     refresh_dop_ = 0;
+    nested_refresh_mode_ = ObMVNestedRefreshMode::INDIVIDUAL;
   }
 
   bool operator == (const ObMVRefreshInfo &other) const {
@@ -4015,7 +4069,8 @@ public:
       && next_time_expr_ == other.next_time_expr_
       && exec_env_ == other.exec_env_
       && parallel_ == other.parallel_
-      && refresh_dop_ == other.refresh_dop_;
+      && refresh_dop_ == other.refresh_dop_
+      && nested_refresh_mode_ == other.nested_refresh_mode_;
   }
 
 
@@ -4025,7 +4080,8 @@ public:
       K_(next_time_expr),
       K_(exec_env),
       K_(parallel),
-      K_(refresh_dop));
+      K_(refresh_dop),
+      K_(nested_refresh_mode));
 };
 
 class ObViewSchema : public ObSchema
@@ -7511,7 +7567,8 @@ public:
       const bool is_tmp_mlog = false)
       : table_id_(table_id),
         table_type_(table_type),
-        index_type_(index_type)
+        index_type_(index_type),
+        is_tmp_mlog_(is_tmp_mlog)
   {}
   bool operator ==(const ObAuxTableMetaInfo &other) const {
     return (table_id_ == other.table_id_
@@ -8032,6 +8089,7 @@ public:
   inline int set_sequence_name(const char *name) { return deep_copy_str(name, name_); }
   inline int set_sequence_name(const common::ObString &name) { return deep_copy_str(name, name_); }
   inline int set_name(const common::ObString &name) { return set_sequence_name(name); }
+  inline int set_remote_database_name(const common::ObString &name) { return deep_copy_str(name, remote_db_name_); }
   // inline void set_max_value(int64_t val) { option_.set_max_value(val); }
   // inline void set_min_value(int64_t val) { option_.set_min_value(val); }
   // inline void set_increment_by(int64_t val) { option_.set_increment_by(val); }
@@ -8083,6 +8141,7 @@ public:
   }
   inline const common::ObString &get_sequence_name() const { return name_; }
   inline const char *get_sequence_name_str() const { return extract_str(name_); }
+  inline const common::ObString &get_remote_database_name() const { return remote_db_name_; }
   inline share::ObSequenceOption &get_sequence_option() { return option_; }
   inline const share::ObSequenceOption &get_sequence_option() const { return option_; }
   inline ObTenantSequenceId get_tenant_sequence_id() const
@@ -8099,7 +8158,8 @@ public:
                        K_(schema_version),
                        K_(option),
                        K_(is_system_generated),
-                       K_(dblink_id));
+                       K_(dblink_id),
+                       K_(remote_db_name));
 private:
   //void *alloc(int64_t size);
   // int get_value(const common::ObString &str, int64_t &val);
@@ -8114,6 +8174,8 @@ private:
   bool is_system_generated_;
   //common::ObArenaAllocator allocator_;
   uint64_t dblink_id_;
+  // select db.seq.nextval@link, remote_db_name_ = 'db'
+  ObString remote_db_name_;
 };
 
 typedef ObSequenceSchema ObSequenceInfo;
@@ -8710,7 +8772,6 @@ public:
   inline const common::ObString &get_directory_name_str() const { return directory_name_; }
   inline const char *get_directory_path() const { return extract_str(directory_path_); }
   inline const common::ObString &get_directory_path_str() const { return directory_path_; }
-
   inline ObTenantDirectoryId get_tenant_directory_id() const { return ObTenantDirectoryId(tenant_id_, directory_id_); }
 
   TO_STRING_KV(K_(tenant_id), K_(directory_id), K_(schema_version),
@@ -8722,7 +8783,6 @@ private:
   common::ObString directory_name_;
   common::ObString directory_path_;
 };
-
 
 // Add or delete an audit rule, corresponding to the audit/noaudit syntax
 enum ObSAuditModifyType : uint64_t

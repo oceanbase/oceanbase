@@ -317,7 +317,15 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
             if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
               SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
             } else {
-               flag = sst_meta_hdl.get_sstable_meta().get_table_shared_flag().get_flag();
+#ifdef OB_BUILD_SHARED_STORAGE
+              if (!GCTX.is_shared_storage_mode()) {
+                flag = sst_meta_hdl.get_sstable_meta().get_table_backup_flag().get_flag();
+              } else {
+                flag = sst_meta_hdl.get_sstable_meta().get_table_shared_flag().get_flag();
+              }
+#else
+              flag = sst_meta_hdl.get_sstable_meta().get_table_backup_flag().get_flag();
+#endif
             }
           }
           cur_row_.cells_[i].set_int(flag);
@@ -326,12 +334,6 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
         case REC_SCN: {
           uint64_t v = table->get_rec_scn().get_val_for_inner_table_field();
           cur_row_.cells_[i].set_int(v);
-          break;
-        }
-        // FIXME: the value of SS_TABLET_VERSION is invalid
-        case SS_TABLET_VERSION: {
-          uint64_t v = share::SCN::min_scn().get_val_for_inner_table_field();
-          cur_row_.cells_[i].set_uint64(v);
           break;
         }
         default:

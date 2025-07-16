@@ -48,6 +48,10 @@
 #include "ob_tx_free_route_msg.h"
 #include "ob_tablet_to_ls_cache.h"
 #include "src/storage/tx_storage/ob_tx_leak_checker.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/sslog/ob_sslog_uid_source.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_kv_palf_adapter.h"
+#endif
 
 #define MAX_REDO_SYNC_TASK_COUNT 10
 
@@ -227,6 +231,7 @@ public:
   share::ObAliveServerTracer *get_server_tracer() { return server_tracer_; }
   share::schema::ObMultiVersionSchemaService *get_schema_service() { return schema_service_; }
   ObTxVersionMgr &get_tx_version_mgr() { return tx_version_mgr_; }
+  ObTxVersionMgr &get_tx_version_mgr_for_sslog() { return tx_version_mgr_for_sslog_; }
   int handle_part_trans_ctx(const obrpc::ObTrxToolArg &arg, obrpc::ObTrxToolRes &res);
   int register_mds_into_tx(ObTxDesc &tx_desc,
                            const share::ObLSID &ls_id,
@@ -258,6 +263,8 @@ public:
 #ifdef ENABLE_DEBUG_LOG
   transaction::ObDefensiveCheckMgr *get_defensive_check_mgr() { return defensive_check_mgr_; }
 #endif
+
+  int push_palf_kv_gc_task(const share::SCN &max_gc_scn);
 private:
   void check_env_();
   bool can_create_ctx_(const int64_t trx_start_ts, const common::ObTsWindows &changing_leader_windows);
@@ -305,6 +312,9 @@ private:
 public:
   ObIGtiSource *gti_source_;
   ObGtiSource gti_source_def_;
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObSSLogUIDSource sslog_gti_source_;
+#endif
   // send lease renew request interval for duplicated table partition
   static const int64_t DUP_TABLE_LEASE_INTERVAL_US = 1 * 1000 * 1000;  // 1s
   // default duplicated table partition lease timeout
@@ -322,6 +332,7 @@ protected:
   ObTransTimer timer_;
   ObDupTableLeaseTimer dup_table_scan_timer_;
   ObTxVersionMgr tx_version_mgr_;
+  ObTxVersionMgr tx_version_mgr_for_sslog_;
 protected:
   bool use_def_;
   ObITransRpc *rpc_;
@@ -351,6 +362,10 @@ private:
   ObDupTableLoopWorker dup_table_loop_worker_;
   ObDupTableRpc dup_table_rpc_impl_;
   ObTxRedoSyncRetryTask redo_sync_task_array_[MAX_REDO_SYNC_TASK_COUNT];
+
+#ifdef OB_BUILD_SHARED_STORAGE
+  sslog::ObPalfKVGcTask *palf_kv_gc_task_;
+#endif
 
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   ObTxELRUtil elr_util_;

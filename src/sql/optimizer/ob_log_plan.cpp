@@ -344,6 +344,11 @@ int ObLogPlan::generate_join_orders()
       OPT_TRACE_MEM_USED;
       OPT_TRACE_END_SECTION;
     }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(append(get_optimizer_context().get_deduce_info(),
+                              join_rels.at(0).at(i)->get_deduce_info()))) {
+      LOG_WARN("failed to append deduce info", K(ret));
+    }
   }
 
   //枚举join order
@@ -3238,30 +3243,9 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
       if (OB_ISNULL(index_merge_root)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr index merge root", K(ret));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < index_merge_root->children_.count(); ++i) {
-        ObIndexMergeNode *child = index_merge_root->children_.at(i);
-        if (OB_ISNULL(child)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null index merge child", K(ret));
-        } else if (child->node_type_ == INDEX_MERGE_FTS_INDEX) {
-          ObRawExpr *match_expr = nullptr;
-          if (OB_ISNULL(child->ap_)
-              || OB_UNLIKELY(1 != child->filter_.count())
-              || OB_ISNULL(child->filter_.at(0))
-              || OB_UNLIKELY(0 >= child->filter_.at(0)->get_param_count())
-              || OB_ISNULL(match_expr = child->filter_.at(0)->get_param_expr(0))
-              || OB_UNLIKELY(!match_expr->has_flag(IS_MATCH_EXPR))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected match expr", K(ret), KPC(child), KPC(match_expr));
-          } else if (OB_FAIL(merge_match_exprs.push_back(match_expr))) {
-            LOG_WARN("failed to push back match expr", K(ret));
-          } else if (OB_FAIL(merge_index_ids.push_back(child->ap_->index_id_))) {
-            LOG_WARN("failed to push back index id", K(ret));
-          }
-        }
-      }
-      if (OB_SUCC(ret) && OB_FAIL(prepare_text_retrieval_merge(merge_match_exprs, merge_index_ids, scan))) {
+      } else if (OB_FAIL(index_merge_root->get_all_match_exprs(merge_match_exprs, merge_index_ids))) {
+        LOG_WARN("failed to get all match exprs", K(ret));
+      } else if (OB_FAIL(prepare_text_retrieval_merge(merge_match_exprs, merge_index_ids, scan))) {
         LOG_WARN("failed to prepare text retrieval merge", K(ret));
       }
     }
@@ -11163,16 +11147,23 @@ int ObLogPlan::check_enable_plan_expiration(bool &enable) const
 {
   int ret = OB_SUCCESS;
   enable = false;
+  ObOptimizerContext &opt_ctx = get_optimizer_context();
   const ObSqlCtx *sql_ctx = NULL;
-  if (OB_ISNULL(get_stmt())
-      || OB_ISNULL(get_optimizer_context().get_exec_ctx())
-      || OB_ISNULL(sql_ctx = optimizer_context_.get_exec_ctx()->get_sql_ctx())) {
+  if (OB_ISNULL(get_stmt()) || OB_ISNULL(opt_ctx.get_query_ctx())
+      || OB_ISNULL(opt_ctx.get_exec_ctx())
+      || OB_ISNULL(sql_ctx = opt_ctx.get_exec_ctx()->get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(get_stmt()), K(sql_ctx));
+    LOG_WARN("unexpected null", K(ret), K(get_stmt()), K(opt_ctx.get_query_ctx()), K(sql_ctx));
   } else if (!get_stmt()->is_select_stmt()) {
     // do nothing
-  } else if (optimizer_context_.get_phy_plan_type() != OB_PHY_PLAN_LOCAL &&
-             optimizer_context_.get_phy_plan_type() != OB_PHY_PLAN_DISTRIBUTED) {
+  } else if (opt_ctx.get_phy_plan_type() != OB_PHY_PLAN_LOCAL &&
+             opt_ctx.get_phy_plan_type() != OB_PHY_PLAN_DISTRIBUTED) {
+    // do nothing
+  } else if (opt_ctx.get_query_ctx()->get_query_hint().has_outline_data()
+#ifdef OB_BUILD_SPM
+             && !opt_ctx.get_query_ctx()->is_spm_evolution_
+#endif
+            ) {
     // do nothing
 #ifdef OB_BUILD_SPM
   } else if (SPM_MODE_BASELINE_FIRST == sql_ctx->spm_ctx_.spm_mode_
@@ -12287,7 +12278,9 @@ int ObLogPlan::gen_das_table_location_info(ObLogTableScan *table_scan,
         // do nothing
       } else {
         das_location.set_has_dynamic_exec_param(has_dppr);
-        table_partition_info->set_table_location(das_location);
+        if (OB_FAIL(table_partition_info->set_table_location(das_location))) {
+          LOG_WARN("failed to set table location");
+        }
       }
     }
   }
@@ -12363,10 +12356,12 @@ int ObLogPlan::collect_table_location(ObLogicalOperator *op)
       } else { /*do nothing*/ }
     } else if (log_op_def::LOG_MERGE == op->get_type()
                && !static_cast<ObLogDelUpd*>(op)->has_instead_of_trigger()) {
-      ObLogDelUpd *dml_op = static_cast<ObLogDelUpd*>(op);
+      ObLogMerge *dml_op = static_cast<ObLogMerge*>(op);
       ObTablePartitionInfo *table_partition_info = dml_op->get_table_partition_info();
       const ObOptimizerContext &opt_ctx = get_optimizer_context();
-      if (OB_ISNULL(table_partition_info) || OB_ISNULL(opt_ctx.get_query_ctx())) {
+      if (NULL == table_partition_info) {
+        // merge into has no insert, do nothing
+      } else if (OB_ISNULL(opt_ctx.get_query_ctx())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(table_partition_info), K(opt_ctx.get_query_ctx()), K(ret));
       } else if (!dml_op->is_multi_part_dml()) {
@@ -14331,10 +14326,12 @@ int ObLogPlan::allocate_material_for_recursive_cte_plan(ObLogicalOperator &op)
 int ObLogPlan::set_advisor_table_id(ObLogicalOperator *op)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(op) || OB_ISNULL(op->get_sharding())) {
+  if (OB_ISNULL(op)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("operator is null", K(ret), K(op));
-  } else if (op->get_sharding()->is_local() || op->get_sharding()->is_remote()) {
+  } else if (OB_NOT_NULL(op->get_sharding()) &&
+             OB_NOT_NULL(op->get_sharding()->get_phy_table_location_info()) &&
+             (op->get_sharding()->is_local() || op->get_sharding()->is_remote())) {
     if (OB_FAIL(negotiate_advisor_table_id(op))) {
       LOG_WARN("failed to negotiate advise table id", K(ret));
     }
@@ -14374,7 +14371,15 @@ int ObLogPlan::negotiate_advisor_table_id(ObLogicalOperator *op)
       }
     }
     for (int64_t j = 0; OB_SUCC(ret) && j < cur_op->get_num_of_child(); ++j) {
-      if (OB_FAIL(all_ops.push_back(cur_op->get_child(j)))) {
+      ObLogicalOperator * child = cur_op->get_child(j);
+      if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (log_op_def::LOG_EXCHANGE == child->get_type()) {
+        if (OB_FAIL(SMART_CALL(set_advisor_table_id(child)))) {
+          LOG_WARN("failed to update advise table id", K(ret));
+        }
+      } else if (OB_FAIL(all_ops.push_back(child))) {
         LOG_WARN("failed to push back child operator", K(ret));
       }
     }
@@ -16123,12 +16128,14 @@ int ObLogPlan::try_push_topn_into_vector_index_scan(ObLogicalOperator *&top,
       // need_further_sort: if add topn
       // if there is filter or pushdown filter, vector will return more data than limit n, need to add a topn
       // ivf pq index always need top n to calculate vector distance
-      need_further_sort = table_scan->get_table_partition_info()->get_table_location().is_partitioned()
+      need_further_sort = table_scan->is_distributed() ||  table_scan->get_table_partition_info()->get_table_location().is_partitioned()
                         || (vc_info.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
                         && (table_scan->get_filter_exprs().count() != 0 || table_scan->get_pushdown_filter_exprs().count() != 0))
                         || vc_info.is_ivf_pq_scan()
                         || vc_info.is_hnsw_bq_scan();
-      if (table_scan->get_filter_exprs().count() != 0 || table_scan->get_pushdown_filter_exprs().count() != 0) {
+      if (vc_info.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
+          && table_scan->get_filter_exprs().count() == 0
+          && table_scan->get_pushdown_filter_exprs().count() == 0) {
         vc_info.selectivity_ = 1;
       }
     }

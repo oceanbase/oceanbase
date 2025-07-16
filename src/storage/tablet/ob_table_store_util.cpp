@@ -275,7 +275,7 @@ int ObSSTableArray::inner_init(
   return ret;
 }
 
-int64_t ObSSTableArray::get_serialize_size() const
+int64_t ObSSTableArray::get_serialize_size(const uint64_t data_version) const
 {
   int ret = OB_SUCCESS;
   int64_t len = 0;
@@ -293,14 +293,14 @@ int64_t ObSSTableArray::get_serialize_size() const
         if (serialize_table_type_) {
           len += serialization::encoded_length_bool(sstable->is_co_sstable());
         }
-        len += sstable->get_serialize_size();
+        len += sstable->get_serialize_size(data_version);
       }
     }
   }
   return len;
 }
 
-int ObSSTableArray::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObSSTableArray::serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   int64_t old_pos = pos;
@@ -323,7 +323,7 @@ int ObSSTableArray::serialize(char *buf, const int64_t buf_len, int64_t &pos) co
       } else if (serialize_table_type_ &&
             OB_FAIL(serialization::encode_bool(buf, buf_len, pos, sstable->is_co_sstable()))) {
         LOG_WARN("fail to encode is co table array flag", K(ret), K(buf_len), K(pos));
-      } else if (OB_FAIL(sstable->serialize(buf, buf_len, pos))) {
+      } else if (OB_FAIL(sstable->serialize(data_version, buf, buf_len, pos))) {
         LOG_WARN("failed to serialize sstable", K(ret), KPC(sstable));
       }
     }

@@ -213,7 +213,8 @@ int ObParquetTableRowIterator::next_file()
 
       LOG_DEBUG("current external file", K(url_), K(ret));
     }
-  } while (OB_OBJECT_NOT_EXIST == ret || (OB_INVALID_EXTERNAL_FILE == ret && status.IsInvalid())); //skip not exist or empty file
+  } while (OB_OBJECT_NOT_EXIST == ret || OB_HDFS_PATH_NOT_FOUND == ret ||
+           (OB_INVALID_EXTERNAL_FILE == ret && status.IsInvalid())); // skip not exist or empty file
 
   if (OB_SUCC(ret)) {
     int64_t part_id = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();

@@ -18,9 +18,6 @@
 #include "storage/column_store/ob_co_merge_dag.h"
 #include "storage/compaction/ob_schedule_tablet_func.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction/ob_tenant_compaction_obj_mgr.h"
-#endif
 
 namespace oceanbase
 {
@@ -695,14 +692,8 @@ int ObCompactionDiagnoseMgr::diagnose_all_tablets(const int64_t tenant_id)
     uint64_t tenant_id = all_tenants[i];
     if (!is_virtual_tenant_id(tenant_id)) { // skip virtual tenant
       MTL_SWITCH(tenant_id) {
-        if (GCTX.is_shared_storage_mode()) {
-#ifdef OB_BUILD_SHARED_STORAGE
-          (void) diagnose_tenant_merge_for_ss();
-#endif
-        } else {
-          (void) diagnose_tenant_tablet(); // storage side
-          (void) diagnose_tenant_major_merge(); // RS side
-        }
+        (void) diagnose_tenant_tablet(); // storage side
+        (void) diagnose_tenant_major_merge(); // RS side
         (void) diagnose_count_info();
         (void) diagnose_existing_report_task();
       } else {
@@ -1032,7 +1023,9 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
       } else if (OB_TMP_FAIL(ls->get_tablet(tablet_id,
                                             tablet_handle,
                                             ObTabletCommon::DEFAULT_GET_TABLET_NO_WAIT))) {
-        LOG_WARN("failed to get tablet", K(tmp_ret), K(ls_id), K(tablet_id));
+        if (OB_TABLET_NOT_EXIST != tmp_ret) {
+          LOG_WARN("failed to get tablet", K(tmp_ret), K(ls_id), K(tablet_id));
+        }
       } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
         tmp_ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid tablet handle", K(tmp_ret), K(ls_id), K(tablet_handle));

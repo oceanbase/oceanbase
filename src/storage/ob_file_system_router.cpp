@@ -103,9 +103,15 @@ int ObFileSystemRouter::get_tenant_clog_dir(
 {
   int ret = OB_SUCCESS;
   int pret = 0;
-  pret = snprintf(tenant_clog_dir, MAX_PATH_SIZE, "%s/tenant_%" PRIu64,
-                  clog_dir_, tenant_id);
-  if (pret < 0 || pret >= MAX_PATH_SIZE) {
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("construct tenant clog path in logservice mode is not supported", KR(ret), K(tenant_id));
+  } else
+#endif
+  if (FALSE_IT(pret = snprintf(tenant_clog_dir, MAX_PATH_SIZE, "%s/tenant_%" PRIu64,
+                  clog_dir_, tenant_id))) { // do nothing
+  } else if (pret < 0 || pret >= MAX_PATH_SIZE) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_ERROR("construct tenant clog path fail", K(ret), K(tenant_id));
   }
@@ -133,7 +139,11 @@ int ObFileSystemRouter::init_local_dirs(const char* data_dir)
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret)
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+    && !GCONF.enable_logservice
+#endif
+  ) {
     pret = snprintf(clog_dir_, MAX_PATH_SIZE, "%s/clog", data_dir);
     if (pret < 0 || pret >= MAX_PATH_SIZE) {
       ret = OB_BUF_NOT_ENOUGH;

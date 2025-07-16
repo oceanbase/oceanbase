@@ -52,32 +52,40 @@ public:
 
 public:
   ObRsAutoSplitScheduler &rs_scheduler_;
-  ObAutoSplitTaskPollingMgr &polling_mgr_;
+  ObSplitTaskPollingMgr &polling_mgr_;
   ObTenantBase sys_tenant_;
 };
-
-void pop(ObArray<ObAutoSplitTask> &task_array, ObAutoSplitTaskPollingMgr &polling_mgr)
+void pop(ObArray<ObAutoSplitTask> &task_array, ObSplitTaskPollingMgr &polling_mgr)
 {
-  ObArray<ObArray<ObAutoSplitTask>> tenant_task_array;
+  ObArray<ObSEArray<ObSplitTask*, 10>> tmp_task_array;
+  ObArenaAllocator arena;
   int64_t pop_nums = 1;
   while (ATOMIC_LOAD(&polling_mgr.total_tasks_) > 0) {
-    tenant_task_array.reuse();
-    ASSERT_OK(polling_mgr.pop_tasks(pop_nums, tenant_task_array));
-    if (tenant_task_array.count() == 0) {
+    tmp_task_array.reuse();
+    ASSERT_OK(polling_mgr.pop_tasks(pop_nums, false, tmp_task_array, arena));
+    if (tmp_task_array.count() == 0) {
       break;
     }
-    for (int64_t i = 0; i < tenant_task_array.count(); ++i) {
-      task_array.push_back(tenant_task_array.at(i));
+    for (int64_t i = 0; i < tmp_task_array.count(); ++i) {
+      for (int64_t j = 0; j < tmp_task_array.at(i).count(); ++j) {
+        ObAutoSplitTask *auto_split_task = static_cast<ObAutoSplitTask*>(tmp_task_array.at(i).at(j));
+        task_array.push_back(*auto_split_task);
+      }
     }
     pop_nums%=10;
     pop_nums+=1;
   }
 }
 
-void push(const ObArray<ObArray<ObAutoSplitTask>> &tenants_task_array, ObAutoSplitTaskPollingMgr &polling_mgr)
+void push(const ObArray<ObArray<ObAutoSplitTask>> &tenants_task_array, ObSplitTaskPollingMgr &polling_mgr)
 {
+  ObSEArray<const ObSplitTask*, 10> task_array;
   for (int64_t i = 0; i < tenants_task_array.count(); ++i) {
-    int ret = polling_mgr.push_tasks(tenants_task_array.at(i));
+    task_array.reuse();
+    for (int64_t j = 0; j < tenants_task_array.at(i).count(); ++j) {
+      task_array.push_back(&tenants_task_array.at(i).at(j));
+    }
+    int ret = polling_mgr.push_tasks(task_array);
     ASSERT_OK(ret);
   }
 }
@@ -95,46 +103,54 @@ void TestSplitTaskScheduler::SetUp()
 TEST_F(TestSplitTaskScheduler, simple_push_and_pop)
 {
   ObArray<ObAutoSplitTask> task_array;
+  ObArray<ObArray<ObAutoSplitTask>> tenants_task_array;
+  ObArenaAllocator arena;
+
   ObArray<uint64_t> ids;
-  ObAutoSplitTask task_a(TEST_TENANT_A_ID, ls_id, 1/*tablet_id*/, 1/*auto_split_size*/, 2/*used_disk_size*/, 0);
-  ObAutoSplitTask task_b(TEST_TENANT_A_ID, ls_id, 2/*tablet_id*/, 1/*auto_split_size*/, 3/*used_disk_size*/, 0);
-  ObAutoSplitTask task_c(TEST_TENANT_B_ID, ls_id, 3/*tablet_id*/, 1/*auto_split_size*/, 4/*used_disk_size*/, 0);
+  ObAutoSplitTask task_a(TEST_TENANT_A_ID, ls_id, ObTabletID(1)/*tablet_id*/, 1/*auto_split_size*/, 2/*used_disk_size*/, 0);
+  ObAutoSplitTask task_b(TEST_TENANT_A_ID, ls_id, ObTabletID(2)/*tablet_id*/, 1/*auto_split_size*/, 3/*used_disk_size*/, 0);
+  ObAutoSplitTask task_c(TEST_TENANT_B_ID, ls_id, ObTabletID(3)/*tablet_id*/, 1/*auto_split_size*/, 4/*used_disk_size*/, 0);
   ASSERT_OK(task_array.push_back(task_a));
-  ASSERT_OK(polling_mgr_.push_tasks(task_array));
+  ASSERT_OK(tenants_task_array.push_back(task_array));
+  push(tenants_task_array, polling_mgr_);
   task_array.reuse();
+  tenants_task_array.reuse();
 
   ASSERT_OK(task_array.push_back(task_c));
-  ASSERT_OK(polling_mgr_.push_tasks(task_array));
+  ASSERT_OK(tenants_task_array.push_back(task_array));
+  push(tenants_task_array, polling_mgr_);
   task_array.reuse();
+  tenants_task_array.reuse();
 
   ASSERT_OK(task_array.push_back(task_b));
-  ASSERT_OK(polling_mgr_.push_tasks(task_array));
+  ASSERT_OK(tenants_task_array.push_back(task_array));
+  push(tenants_task_array, polling_mgr_);
   task_array.reuse();
-  // we expect the first tablet_id popped from mgr to be 2,
-  // because the tenant_cache A is at index 0 and the last_access_index is 0, and the tablet with id 2 has the hightest priority in that cache
-  ObArray<ObArray<ObAutoSplitTask>> tenants_task_array;
-  ASSERT_OK(polling_mgr_.pop_tasks(1, tenants_task_array));
-  ASSERT_EQ(1, tenants_task_array.count());
-  ASSERT_EQ(1, tenants_task_array.at(0).count());
-  ObAutoSplitTask &task1 = tenants_task_array.at(0).at(0);
-  ASSERT_OK(ids.push_back(task1.tablet_id_.id_));
   tenants_task_array.reuse();
-  // we expect the second tablet_id popped from mgr to be 2,
-  // because the tenant_cache B is at index 1, and the last_access_index is 1, the tablet with id 3 has the hightest priority in that cache
-  ASSERT_OK(polling_mgr_.pop_tasks(1, tenants_task_array));
-  ASSERT_EQ(1, tenants_task_array.count());
-  ASSERT_EQ(1, tenants_task_array.at(0).count());
-  ObAutoSplitTask &task2 = tenants_task_array.at(0).at(0);
-  ASSERT_OK(ids.push_back(task2.tablet_id_.id_));
-  tenants_task_array.reuse();
-  // we expect the third tablet_id popped from mgr to be 2,
-  // because the tenant_cache B is at index 1, and the last_access_index is 0, the tablet with id 3 has the hightest priority in that cache
-  ASSERT_OK(polling_mgr_.pop_tasks(1, tenants_task_array));
-  ASSERT_EQ(1, tenants_task_array.count());
-  ASSERT_EQ(1, tenants_task_array.at(0).count());
-  ObAutoSplitTask &task3 = tenants_task_array.at(0).at(0);
-  ASSERT_OK(ids.push_back(task3.tablet_id_.id_));
-  tenants_task_array.reuse();
+
+  ObArray<ObSEArray<ObSplitTask*, 10>> tmp_tenants_task_array;
+  ASSERT_OK(polling_mgr_.pop_tasks(1, false, tmp_tenants_task_array, arena));
+  ASSERT_EQ(1, tmp_tenants_task_array.count());
+  ASSERT_EQ(1, tmp_tenants_task_array.at(0).count());
+  ObAutoSplitTask *task1 = static_cast<ObAutoSplitTask *>(tmp_tenants_task_array.at(0).at(0));
+  ASSERT_OK(ids.push_back(task1->tablet_id_.id_));
+  tmp_tenants_task_array.reuse();
+
+
+  ASSERT_OK(polling_mgr_.pop_tasks(1, false, tmp_tenants_task_array, arena));
+  ASSERT_EQ(1, tmp_tenants_task_array.count());
+  ASSERT_EQ(1, tmp_tenants_task_array.at(0).count());
+  ObAutoSplitTask *task2 = static_cast<ObAutoSplitTask *>(tmp_tenants_task_array.at(0).at(0));
+  ASSERT_OK(ids.push_back(task2->tablet_id_.id_));
+  tmp_tenants_task_array.reuse();
+
+
+  ASSERT_OK(polling_mgr_.pop_tasks(1, false, tmp_tenants_task_array, arena));
+  ASSERT_EQ(1, tmp_tenants_task_array.count());
+  ASSERT_EQ(1, tmp_tenants_task_array.at(0).count());
+  ObAutoSplitTask *task3 = static_cast<ObAutoSplitTask *>(tmp_tenants_task_array.at(0).at(0));
+  ASSERT_OK(ids.push_back(task3->tablet_id_.id_));
+  tmp_tenants_task_array.reuse();
 
   std::sort(ids.begin(), ids.end());
   for (int64_t i = 0; i < ids.count(); ++i) {
@@ -145,72 +161,94 @@ TEST_F(TestSplitTaskScheduler, simple_push_and_pop)
 TEST_F(TestSplitTaskScheduler, test_reset)
 {
   ObArray<ObAutoSplitTask> task_array;
-  ObAutoSplitTask task_a(TEST_TENANT_A_ID, ls_id, 1/*tablet_id*/, 1/*auto_split_size*/, 2/*used_disk_size*/, 0);
-  ObAutoSplitTask task_b(TEST_TENANT_A_ID, ls_id, 2/*tablet_id*/, 1/*auto_split_size*/, 3/*used_disk_size*/, 0);
+  ObArray<ObArray<ObAutoSplitTask>> tenants_task_array;
+  ObArenaAllocator arena;
+  ObArray<ObSEArray<ObSplitTask*, 10>> tmp_tenants_task_array;
+
+
+  ObAutoSplitTask task_a(TEST_TENANT_A_ID, ls_id, ObTabletID(1)/*tablet_id*/, 1/*auto_split_size*/, 2/*used_disk_size*/, 0);
+  ObAutoSplitTask task_b(TEST_TENANT_A_ID, ls_id, ObTabletID(2)/*tablet_id*/, 1/*auto_split_size*/, 3/*used_disk_size*/, 0);
   ASSERT_OK(task_array.push_back(task_a));
-  ASSERT_OK(polling_mgr_.push_tasks(task_array));
+  ASSERT_OK(tenants_task_array.push_back(task_array));
+  push(tenants_task_array, polling_mgr_);
   task_array.reuse();
+  tenants_task_array.reuse();
+
+
   ASSERT_OK(task_array.push_back(task_b));
-  ASSERT_OK(polling_mgr_.push_tasks(task_array));
+  ASSERT_OK(tenants_task_array.push_back(task_array));
+  push(tenants_task_array, polling_mgr_);
   task_array.reuse();
+  tenants_task_array.reuse();
 
   reset();
-  init();
+  ASSERT_OK(init());
 
   task_array.push_back(task_a);
-  ASSERT_OK(polling_mgr_.push_tasks(task_array));
+  ASSERT_OK(tenants_task_array.push_back(task_array));
+  push(tenants_task_array, polling_mgr_);
   task_array.reuse();
-  ObArray<ObArray<ObAutoSplitTask>> tenants_task_array;
-  ASSERT_OK(polling_mgr_.pop_tasks(1, tenants_task_array));
-  ASSERT_EQ(1, tenants_task_array.count());
-  ASSERT_EQ(1, tenants_task_array.at(0).count());
-  ObAutoSplitTask &task1 = tenants_task_array.at(0).at(0);
-  ASSERT_EQ(1, task1.tablet_id_.id_);
   tenants_task_array.reuse();
+
+  ASSERT_OK(polling_mgr_.pop_tasks(1, false, tmp_tenants_task_array, arena));
+  ASSERT_EQ(1, tmp_tenants_task_array.count());
+  ASSERT_EQ(1, tmp_tenants_task_array.at(0).count());
+  ObAutoSplitTask *task1 = static_cast<ObAutoSplitTask *>(tmp_tenants_task_array.at(0).at(0));
+  ASSERT_EQ(1, task1->tablet_id_.id_);
 }
 
 
 TEST_F(TestSplitTaskScheduler, single_tenant_hard_push_and_pop)
 {
   ObArray<ObAutoSplitTask> task_array;
-  ObAutoSplitTask task_high_prio(TEST_TENANT_A_ID, ls_id, 1000/*tablet_id*/, 1/*auto_split_size*/, 1000/*used_disk_size*/, 0);
-  ASSERT_OK(task_array.push_back(task_high_prio));
-  ASSERT_OK(polling_mgr_.push_tasks(task_array));
-  task_array.reuse();
-  for (int64_t i = 2; i < ObAutoSplitTaskCache::CACHE_MAX_CAPACITY + 10; ++i ) {
-    ASSERT_OK(task_array.push_back(ObAutoSplitTask(TEST_TENANT_A_ID, ls_id, i/*tablet_id*/, 1/*auto_split_size*/, i/*used_disk_size*/, 0)));
-    ASSERT_OK(polling_mgr_.push_tasks(task_array));
-    task_array.reuse();
-  }
+  ObArenaAllocator arena;
+  ObArray<ObSEArray<ObSplitTask*, 10>> tmp_tenants_task_array;
   ObArray<ObArray<ObAutoSplitTask>> tenants_task_array;
-  ASSERT_OK(polling_mgr_.pop_tasks(1, tenants_task_array));
-  ASSERT_EQ(1, tenants_task_array.count());
-  ASSERT_EQ(1, tenants_task_array.at(0).count());
-  ObAutoSplitTask &high_prio_task = tenants_task_array.at(0).at(0);
-  ASSERT_EQ(1000, high_prio_task.tablet_id_.id_);
+
+  ObAutoSplitTask task_high_prio(TEST_TENANT_A_ID, ls_id, ObTabletID(1000)/*tablet_id*/, 1/*auto_split_size*/, 1000/*used_disk_size*/, 0);
+  ASSERT_OK(task_array.push_back(task_high_prio));
+  ASSERT_OK(tenants_task_array.push_back(task_array));
+  push(tenants_task_array, polling_mgr_);
+  task_array.reuse();
   tenants_task_array.reuse();
 
+  for (int64_t i = 2; i < ObAutoSplitTaskCache::CACHE_MAX_CAPACITY + 10; ++i ) {
+    ASSERT_OK(task_array.push_back(ObAutoSplitTask(TEST_TENANT_A_ID, ls_id, ObTabletID(i/*tablet_id*/), 1/*auto_split_size*/, i/*used_disk_size*/, 0)));
+    ASSERT_OK(tenants_task_array.push_back(task_array));
+    push(tenants_task_array, polling_mgr_);
+    task_array.reuse();
+    tenants_task_array.reuse();
+  }
+  ASSERT_OK(polling_mgr_.pop_tasks(1, false, tmp_tenants_task_array, arena));
+  ASSERT_EQ(1, tmp_tenants_task_array.count());
+  ASSERT_EQ(1, tmp_tenants_task_array.at(0).count());
+  ObAutoSplitTask *high_prio_task = static_cast<ObAutoSplitTask *>(tmp_tenants_task_array.at(0).at(0));
+  ASSERT_EQ(1000, high_prio_task->tablet_id_.id_);
+  tenants_task_array.reuse();
   int64_t expect_hightest_prio_tablet_id = ObAutoSplitTaskCache::CACHE_MAX_CAPACITY + 9;
   int64_t total_tasks = ObAutoSplitTaskCache::CACHE_MAX_CAPACITY - 1;
   while (total_tasks > 0) {
-    tenants_task_array.reuse();
-    ASSERT_OK(polling_mgr_.pop_tasks(5, tenants_task_array));
-    ASSERT_EQ(1, tenants_task_array.count());
-    int64_t task_arr_len = tenants_task_array.at(0).count();
+    tmp_tenants_task_array.reuse();
+    ASSERT_OK(polling_mgr_.pop_tasks(5, false, tmp_tenants_task_array, arena));
+    ASSERT_EQ(1, tmp_tenants_task_array.count());
+
+    int64_t task_arr_len = tmp_tenants_task_array.at(0).count();
     ASSERT_TRUE(task_arr_len != 0);
     total_tasks -= task_arr_len;
     ASSERT_EQ(total_tasks, polling_mgr_.total_tasks_);
-    ASSERT_TRUE(tenants_task_array.at(0).count() >= 4);
-    LOG_INFO("tenants_task_array", K(tenants_task_array));
-    for (int64_t i = 0; i < tenants_task_array.at(0).count(); ++i) {
-      ObAutoSplitTask &task = tenants_task_array.at(0).at(i);
-      ASSERT_EQ(expect_hightest_prio_tablet_id--, task.tablet_id_.id_);
+
+    for (int64_t i = 0; i < tmp_tenants_task_array.count(); ++i) {
+      ObSEArray<ObSplitTask*, 10> &task_array = tmp_tenants_task_array.at(i);
+      for (int64_t j = 0; j < task_array.count(); ++j) {
+        ObAutoSplitTask *task = static_cast<ObAutoSplitTask*>(task_array.at(j));
+        ASSERT_EQ(expect_hightest_prio_tablet_id--, task->tablet_id_.id_);
+      }
     }
   }
 
-  for (hash::ObHashMap<uint64_t, ObAutoSplitTaskCache*>::iterator iter = polling_mgr_.map_tenant_to_cache_.begin(); iter != polling_mgr_.map_tenant_to_cache_.end(); iter++) {
+  for (common::hash::ObHashMap<uint64_t, ObSplitTaskCache*>::iterator iter = polling_mgr_.map_tenant_to_cache_.begin(); iter != polling_mgr_.map_tenant_to_cache_.end(); iter++) {
     uint64_t tenant_id = iter->first;
-    ObAutoSplitTaskCache *&tenant_cache = iter->second;
+    ObSplitTaskCache *&tenant_cache = iter->second;
     ASSERT_TRUE(tenant_cache != nullptr);
     ASSERT_EQ(0, tenant_cache->get_tasks_num());
   }
@@ -219,6 +257,9 @@ TEST_F(TestSplitTaskScheduler, single_tenant_hard_push_and_pop)
 TEST_F(TestSplitTaskScheduler, mutiple_tenants_hard_push_and_pop)
 {
   ObArray<ObAutoSplitTask> task_array;
+  ObArray<ObArray<ObAutoSplitTask>> tenants_task_array;
+  ObArenaAllocator arena;
+
   ObArray<int64_t> nums;
   for (int64_t i = 2; i < 102; ++i) {
     ASSERT_OK(nums.push_back(i));
@@ -226,51 +267,60 @@ TEST_F(TestSplitTaskScheduler, mutiple_tenants_hard_push_and_pop)
   std::random_shuffle(nums.begin(), nums.end());
   for (int64_t i = 0; i < nums.count(); ++i ) {
     int64_t num = nums.at(i);
-    ASSERT_OK(task_array.push_back(ObAutoSplitTask(TEST_TENANT_A_ID, ls_id, num/*tablet_id*/, 1/*auto_split_size*/, num/*used_disk_size*/, 0)));
-    ASSERT_OK(polling_mgr_.push_tasks(task_array));
+
+    ASSERT_OK(task_array.push_back(ObAutoSplitTask(TEST_TENANT_A_ID, ls_id, ObTabletID(num)/*tablet_id*/, 1/*auto_split_size*/, num/*used_disk_size*/, 0)));
+    ASSERT_OK(tenants_task_array.push_back(task_array));
+    push(tenants_task_array, polling_mgr_);
+    tenants_task_array.reuse();
     task_array.reuse();
 
-    ASSERT_OK(task_array.push_back(ObAutoSplitTask(TEST_TENANT_B_ID, ls_id, num/*tablet_id*/, 1/*auto_split_size*/, num/*used_disk_size*/, 0)));
-    ASSERT_OK(polling_mgr_.push_tasks(task_array));
+    ASSERT_OK(task_array.push_back(ObAutoSplitTask(TEST_TENANT_B_ID, ls_id, ObTabletID(num)/*tablet_id*/, 1/*auto_split_size*/, num/*used_disk_size*/, 0)));
+    ASSERT_OK(tenants_task_array.push_back(task_array));
+    push(tenants_task_array, polling_mgr_);
     task_array.reuse();
+    tenants_task_array.reuse();
 
-    ASSERT_OK(task_array.push_back(ObAutoSplitTask(TEST_TENANT_C_ID, ls_id, num/*tablet_id*/, 1/*auto_split_size*/, num/*used_disk_size*/, 0)));
-    ASSERT_OK(polling_mgr_.push_tasks(task_array));
+
+    ASSERT_OK(task_array.push_back(ObAutoSplitTask(TEST_TENANT_C_ID, ls_id, ObTabletID(num)/*tablet_id*/, 1/*auto_split_size*/, num/*used_disk_size*/, 0)));
+    ASSERT_OK(tenants_task_array.push_back(task_array));
+    push(tenants_task_array, polling_mgr_);
     task_array.reuse();
+    tenants_task_array.reuse();
   }
   ASSERT_EQ(3 * nums.count(), polling_mgr_.total_tasks_);
   ASSERT_EQ(3, polling_mgr_.get_total_tenants());
-  ObArray<ObArray<ObAutoSplitTask>> tenants_task_array;
   int64_t total_tasks = nums.count() * 3;
 
   ObArray<int64_t> tenant_A_task_id;
   ObArray<int64_t> tenant_B_task_id;
   ObArray<int64_t> tenant_C_task_id;
+  ObArray<ObSEArray<ObSplitTask*, 10>> tmp_tenants_task_array;
 
   while (total_tasks > 0) {
-    tenants_task_array.reuse();
-    ASSERT_OK(polling_mgr_.pop_tasks(5, tenants_task_array));
-    for (int64_t i = 0; i < tenants_task_array.count(); ++i) {
-      ObArray<ObAutoSplitTask> &task_array = tenants_task_array.at(i);
+    tmp_tenants_task_array.reuse();
+    ASSERT_OK(polling_mgr_.pop_tasks(5, false, tmp_tenants_task_array, arena));
+
+    for (int64_t i = 0; i < tmp_tenants_task_array.count(); ++i) {
+      ObSEArray<ObSplitTask*, 10> &task_array = tmp_tenants_task_array.at(i);
       ASSERT_TRUE(task_array.count() > 0);
-      uint64_t tenant_id = task_array.at(0).tenant_id_;
+      uint64_t tenant_id = task_array.at(0)->tenant_id_;
       for (int64_t j = 0; j < task_array.count(); ++j) {
         total_tasks -= 1;
-        ASSERT_EQ(tenant_id, task_array.at(j).tenant_id_);
+        ASSERT_EQ(tenant_id, task_array.at(j)->tenant_id_);
         if (tenant_id == TEST_TENANT_A_ID) {
-          ASSERT_OK(tenant_A_task_id.push_back(task_array.at(j).tablet_id_.id_));
+          ASSERT_OK(tenant_A_task_id.push_back(task_array.at(j)->tablet_id_.id_));
         } else if (tenant_id == TEST_TENANT_B_ID) {
-          ASSERT_OK(tenant_B_task_id.push_back(task_array.at(j).tablet_id_.id_));
+          ASSERT_OK(tenant_B_task_id.push_back(task_array.at(j)->tablet_id_.id_));
         } else if (tenant_id == TEST_TENANT_C_ID) {
-          ASSERT_OK(tenant_C_task_id.push_back(task_array.at(j).tablet_id_.id_));
+          ASSERT_OK(tenant_C_task_id.push_back(task_array.at(j)->tablet_id_.id_));
         }
       }
     }
   }
 
-  for (hash::ObHashMap<uint64_t, ObAutoSplitTaskCache*>::iterator iter = polling_mgr_.map_tenant_to_cache_.begin(); iter != polling_mgr_.map_tenant_to_cache_.end(); iter++) {
+  for (hash::ObHashMap<uint64_t, ObSplitTaskCache*>::iterator iter = polling_mgr_.map_tenant_to_cache_.begin(); iter != polling_mgr_.map_tenant_to_cache_.end(); iter++) {
     uint64_t tenant_id = iter->first;
-    ObAutoSplitTaskCache *&tenant_cache = iter->second;
+    ObSplitTaskCache *&tenant_cache = iter->second;
     ASSERT_TRUE(tenant_cache != nullptr);
     ASSERT_EQ(0, tenant_cache->get_tasks_num());
   }
@@ -304,11 +354,11 @@ TEST_F(TestSplitTaskScheduler, parallel_push_and_pop)
   for (int64_t i = 0; i < nums_1.count(); ++i ) {
     tmp_array.reuse();
     int64_t num_1 = nums_1.at(i);
-    ASSERT_OK(tmp_array.push_back(ObAutoSplitTask(TEST_TENANT_A_ID, ls_id, num_1/*tablet_id*/, 1/*auto_split_size*/, num_1/*used_disk_size*/, 0)));
+    ASSERT_OK(tmp_array.push_back(ObAutoSplitTask(TEST_TENANT_A_ID, ls_id, ObTabletID(num_1)/*tablet_id*/, 1/*auto_split_size*/, num_1/*used_disk_size*/, 0)));
     ASSERT_OK(task_array_1.push_back(tmp_array));
     tmp_array.reuse();
     int64_t num_2 = nums_2.at(i);
-    ASSERT_OK(tmp_array.push_back(ObAutoSplitTask(TEST_TENANT_A_ID, ls_id, num_2/*tablet_id*/, 1/*auto_split_size*/, num_2/*used_disk_size*/, 0)));
+    ASSERT_OK(tmp_array.push_back(ObAutoSplitTask(TEST_TENANT_A_ID, ls_id, ObTabletID(num_2)/*tablet_id*/, 1/*auto_split_size*/, num_2/*used_disk_size*/, 0)));
     ASSERT_OK(task_array_2.push_back(tmp_array));
   }
 

@@ -184,6 +184,7 @@ private:
     CCL_RULE_ID,
     CCL_MATCH_TIME,
     INSERT_DUPLICATE_ROW_COUNT,
+    COMMIT_TIME,
   };
 
   const static int64_t PRI_KEY_IP_IDX        = 0;

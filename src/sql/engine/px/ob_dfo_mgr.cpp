@@ -504,15 +504,25 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     }
     if (parent_dfo->need_p2p_info_ && parent_dfo->get_p2p_dh_addrs().empty()) {
       ObDASTableLoc *table_loc = nullptr;
-       if (OB_ISNULL(table_loc = DAS_CTX(exec_ctx).get_table_loc_by_id(
-            tsc_op->get_table_loc_id(), tsc_op->get_loc_ref_table_id()))) {
-         OZ(ObTableLocation::get_full_leader_table_loc(DAS_CTX(exec_ctx).get_location_router(),
-                                                       exec_ctx.get_allocator(),
-                                                       exec_ctx.get_my_session()->get_effective_tenant_id(),
-                                                       tsc_op->get_table_loc_id(),
-                                                       tsc_op->get_loc_ref_table_id(),
-                                                       table_loc));
+      if (!tsc_op->is_external_table_) {
+        if (OB_ISNULL(table_loc = DAS_CTX(exec_ctx).get_table_loc_by_id(
+              tsc_op->get_table_loc_id(), tsc_op->get_loc_ref_table_id()))) {
+          OZ(ObTableLocation::get_full_leader_table_loc(DAS_CTX(exec_ctx).get_location_router(),
+                                                        exec_ctx.get_allocator(),
+                                                        exec_ctx.get_my_session()->get_effective_tenant_id(),
+                                                        tsc_op->get_table_loc_id(),
+                                                        tsc_op->get_loc_ref_table_id(),
+                                                        table_loc));
+        }
+      } else {
+        // 对于外表没有索引rescan, 所以不会出现table_loc
+        if (OB_FAIL(ObPXServerAddrUtil::get_external_table_loc(exec_ctx, tsc_op->get_table_loc_id(),
+            tsc_op->get_loc_ref_table_id(), tsc_op->get_query_range_provider(),
+            *parent_dfo, table_loc))) {
+          LOG_WARN("failed to get external table loc", K(ret));
+        }
       }
+
       if (OB_FAIL(ret)) {
       } else {
         const DASTabletLocList &locations = table_loc->get_tablet_locs();
@@ -525,7 +535,9 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     }
   } else if (phy_op->is_dml_operator() && NULL != parent_dfo) {
     // 当前op是一个dml算子，需要设置dfo的属性
-    parent_dfo->set_dml_op(true);
+    if (ObPXServerAddrUtil::check_build_dfo_with_dml(*phy_op)) {
+      parent_dfo->set_dml_op(true);
+    }
     const ObPhyOperatorType op_type = phy_op->get_type();
     LOG_TRACE("set DFO need_branch_id", K(op_type));
     parent_dfo->set_need_branch_id_op(op_type == PHY_INSERT_ON_DUP
@@ -548,7 +560,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
       OZ(px_coord_info.p2p_temp_table_info_.dfos_.push_back(parent_dfo));
     }
   } else if (phy_op->get_type() == PHY_SELECT_INTO && NULL != parent_dfo) {
-    // odps只支持一台机器上的并行 只能有一个sqc
+    // odps只支持一台机器上的并行 只能有一个sqc ODPS写
     const ObSelectIntoSpec *select_into_spec = static_cast<const ObSelectIntoSpec*>(phy_op);
     ObExternalFileFormat external_properties;
     if (!select_into_spec->external_properties_.str_.empty()) {

@@ -200,7 +200,7 @@ int TruncateInfoHelper::batch_mock_truncate_info(
       COMMON_LOG(WARN, "failed to mock truncate partition", KR(ret));
     } else if (OB_FAIL(TruncateInfoHelper::mock_part_key_idxs(allocator, 1/*part_key_idx*/, truncate_info.truncate_part_))) {
       COMMON_LOG(WARN, "failed to mock part key index", KR(ret));
-    } else if (OB_FAIL(truncate_info_array.append(truncate_info))) {
+    } else if (OB_FAIL(truncate_info_array.append_with_deep_copy(truncate_info))) {
       COMMON_LOG(WARN, "failed to append truncate info", KR(ret), K(truncate_info));
     }
     #undef GET_INT

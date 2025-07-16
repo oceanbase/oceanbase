@@ -89,7 +89,8 @@ public:
       ctx_.next_epoch_ = iter->get_epoch();
     } else if (iter->get_epoch() < ctx_.epoch_from_) {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "found callback with epoch less than `from`", K(ret), KPC(iter), K(ctx_));
+      TRANS_LOG(ERROR, "found callback with epoch less than `from`", K(ret),
+                K(iter->get_epoch()), KPC(iter), K(ctx_));
 #ifdef ENABLE_DEBUG_LOG
       ob_abort();
 #endif
@@ -128,7 +129,7 @@ public:
         if (!fake_fill) {
           ctx_.fill_count_++;
         }
-        data_size_ += iter->get_data_size();
+        data_size_ += iter->get_data_size() + iter->get_old_row_data_size();
         max_seq_no_ = MAX(max_seq_no_, iter->get_seq_no());
       }
     }

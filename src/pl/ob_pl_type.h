@@ -81,6 +81,7 @@ class ObPLUserTypeTable;
 class ObUserDefinedType;
 class ObPLStmt;
 class ObPLDbLinkGuard;
+class ObPLResolveCache;
 
 enum ObProcType
 {
@@ -574,6 +575,17 @@ public:
                   const common::ObCollationType ncs_type, const common::ObTimeZoneInfo *tz_info,
                   const char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
 
+  static int intervalym_element_cell_str(char *buf,
+                                        const int64_t len,
+                                        ObIntervalYMValue val,
+                                        int64_t &pos,
+                                        const ObScale scale);
+  static int intervalds_element_cell_str(char *buf,
+                                        const int64_t len,
+                                        ObIntervalDSValue val,
+                                        int64_t &pos,
+                                        const ObScale scale);
+
   int convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const;
 
   static int get_udt_type_by_name(uint64_t tenant_id,
@@ -594,7 +606,8 @@ public:
                                   common::ObMySQLProxy &sql_proxy,
                                   bool is_pkg_var, // pkg var or pkg type
                                   ObPLDataType &pl_type,
-                                  ObIArray<share::schema::ObSchemaObjVersion> *deps);
+                                  ObIArray<share::schema::ObSchemaObjVersion> *deps,
+                                  pl::ObPLResolveCache *resolve_cache = nullptr);
 #endif
   static int get_table_type_by_name(uint64_t tenant_id,
                                   uint64_t owner_id,
@@ -605,7 +618,8 @@ public:
                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                   bool is_rowtype,
                                   ObPLDataType &pl_type,
-                                  ObIArray<share::schema::ObSchemaObjVersion> *deps);
+                                  ObIArray<share::schema::ObSchemaObjVersion> *deps,
+                                  pl::ObPLResolveCache *resolve_cache = nullptr);
   static int transform_from_iparam(const share::schema::ObRoutineParam *iparam,
                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                   sql::ObSQLSessionInfo &session_info,
@@ -613,7 +627,8 @@ public:
                                   common::ObMySQLProxy &sql_proxy,
                                   pl::ObPLDataType &pl_type,
                                   ObIArray<share::schema::ObSchemaObjVersion> *deps = NULL,
-                                  pl::ObPLDbLinkGuard *dblink_guard = NULL);
+                                  pl::ObPLDbLinkGuard *dblink_guard = NULL,
+                                  pl::ObPLResolveCache *resolve_cache = nullptr);
   static int transform_and_add_routine_param(const pl::ObPLRoutineParam *param,
                                   int64_t position,
                                   int64_t level,

@@ -20,7 +20,7 @@
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h"
-#include "sql/engine/expr/ob_expr_udf.h"
+#include "sql/engine/expr/ob_expr_udf/ob_expr_udf.h"
 #include "sql/engine/expr/ob_expr_pl_get_cursor_attr.h"
 #include "sql/engine/expr/ob_expr_pl_sqlcode_sqlerrm.h"
 #include "sql/engine/expr/ob_expr_plsql_variable.h"
@@ -897,7 +897,7 @@ void ObRawExpr::inner_calc_hash()
   expr_hash_ = result_type_.hash(expr_hash_);
 }
 
-bool ObRawExpr::need_extra_calc_type() const
+bool ObRawExpr::need_extra_calc_type(const bool is_mysql_number) const
 {
   return T_OP_ARG_CASE == type_ ||
          T_OP_DIV == type_ ||
@@ -905,14 +905,20 @@ bool ObRawExpr::need_extra_calc_type() const
          T_FUN_SYS_LEAST == type_ ||
          T_FUN_SYS_GREATEST == type_ ||
          T_FUN_SYS_NULLIF == type_ ||
-         T_FUN_SYS_TREAT == type_;
+         T_FUN_SYS_TREAT == type_ ||
+         (is_mysql_number && (
+          T_OP_ADD == type_ ||
+          T_OP_MINUS == type_ ||
+          T_OP_MUL == type_ ||
+          T_FUN_AVG == type_
+         ));
 }
 
 int ObRawExpr::set_extra_calc_type(const ObExprResType &res_type)
 {
   int ret = OB_SUCCESS;
   ObExprResType *result_type = NULL;
-  if (OB_UNLIKELY(!need_extra_calc_type())) {
+  if (OB_UNLIKELY(!need_extra_calc_type(lib::is_mysql_mode() && res_type.is_number()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected expr type", K(ret), K(type_));
   } else {
@@ -5526,6 +5532,7 @@ int ObUDFRawExpr::assign(const ObRawExpr &other)
       database_name_ = tmp.database_name_;
       package_name_ = tmp.package_name_;
       is_parallel_enable_ = tmp.is_parallel_enable_;
+      is_result_cache_ = tmp.is_result_cache_;
       is_udt_udf_ = tmp.is_udt_udf_;
       is_pkg_body_udf_ = tmp.is_pkg_body_udf_;
       is_return_sys_cursor_ = tmp.is_return_sys_cursor_;
@@ -5538,6 +5545,7 @@ int ObUDFRawExpr::assign(const ObRawExpr &other)
       params_desc_v2_ = tmp.params_desc_v2_;
       dblink_name_ = tmp.dblink_name_;
       dblink_id_ = tmp.dblink_id_;
+      external_routine_type_ = tmp.external_routine_type_;
     }
   }
   return ret;
@@ -5623,6 +5631,7 @@ bool ObUDFRawExpr::inner_same_as(const ObRawExpr &expr,
                 package_name_.compare(other->get_package_name()) == 0 &&
                 is_deterministic() == other->is_deterministic() &&
                 is_parallel_enable_ == other->is_parallel_enable() &&
+                is_result_cache_ == other->is_result_cache() &&
                 is_udt_udf_ == other->get_is_udt_udf() &&
                 is_pkg_body_udf_ == other->is_pkg_body_udf() &&
                 is_return_sys_cursor_ == other->get_is_return_sys_cursor() &&
@@ -5665,6 +5674,7 @@ void ObUDFRawExpr::inner_calc_hash()
   expr_hash_ = common::do_hash(package_name_, expr_hash_);
   expr_hash_ = common::do_hash(is_deterministic(), expr_hash_);
   expr_hash_ = common::do_hash(is_parallel_enable_, expr_hash_);
+  expr_hash_ = common::do_hash(is_result_cache_, expr_hash_);
   expr_hash_ = common::do_hash(is_udt_udf_, expr_hash_);
   expr_hash_ = common::do_hash(is_pkg_body_udf_, expr_hash_);
   expr_hash_ = common::do_hash(is_return_sys_cursor_, expr_hash_);

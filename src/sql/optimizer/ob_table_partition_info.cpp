@@ -27,8 +27,9 @@ namespace sql
 int ObTablePartitionInfo::assign(const ObTablePartitionInfo &other)
 {
   int ret = OB_SUCCESS;
-  table_location_ = other.table_location_;
-  if (OB_FAIL(candi_table_loc_.assign(other.candi_table_loc_))) {
+  if (OB_FAIL(table_location_.assign(other.table_location_))) {
+    LOG_WARN("failed to assign table location");
+  } else if (OB_FAIL(candi_table_loc_.assign(other.candi_table_loc_))) {
     LOG_WARN("fail to assign candi_table_loc_", K(ret), K(candi_table_loc_));
   }
   return ret;

@@ -24,6 +24,9 @@
 #include "share/schema/ob_outline_mgr.h"
 #include "share/schema/ob_udt_mgr.h"
 #include "share/schema/ob_catalog_schema_struct.h"
+#include "share/schema/ob_external_resource_mgr.h"
+#include "share/schema/ob_location_schema_struct.h"
+#include "share/schema/ob_objpriv_mysql_schema_struct.h"
 
 namespace oceanbase
 {
@@ -634,9 +637,11 @@ public:
   int get_db_priv_set(const ObOriginalDBKey &db_priv_key, ObPrivSet &priv_set, bool is_pattern = false);
   int get_table_priv_set(const ObTablePrivSortKey &table_priv_key, ObPrivSet &priv_set);
   int get_routine_priv_set(const ObRoutinePrivSortKey &routine_priv_key, ObPrivSet &priv_set);
-  int get_obj_privs(
-      const ObObjPrivSortKey &obj_priv_key,
-      ObPackedObjPriv &obj_privs);
+  int get_obj_mysql_priv_set(const ObObjMysqlPrivSortKey &obj_mysql_priv_key, ObPrivSet &priv_set);
+  int get_obj_privs( const ObObjPrivSortKey &obj_priv_key, ObPackedObjPriv &obj_privs);
+  int get_obj_mysql_priv_with_user_id(const uint64_t tenant_id,
+                                      const uint64_t user_id,
+                                      ObIArray<const ObObjMysqlPriv *> &obj_mysql_privs);
   //TODO@xiyu: ObDDLOperator::drop_tablegroup
   int check_database_exists_in_tablegroup(
       const uint64_t tenant_id,
@@ -1024,6 +1029,24 @@ public:
                                       common::ObIArray<const ObDirectorySchema *> &directory_schemas);
   // directory function end
 
+  // location function begin
+  int get_location_schema_by_name(const uint64_t tenant_id,
+                                  const common::ObString &name,
+                                  const ObLocationSchema *&schema);
+  int get_location_schema_by_id(const uint64_t tenant_id,
+                                const uint64_t location_id,
+                                const ObLocationSchema *&schema);
+  int get_location_schemas_in_tenant(const uint64_t tenant_id,
+                                     common::ObIArray<const ObLocationSchema *> &location_schemas);
+  int check_location_access(const ObSessionPrivInfo &session_priv,
+                            const common::ObIArray<uint64_t> &enable_role_id_array,
+                            const ObString &location_name);
+  int check_location_show(const ObSessionPrivInfo &session_priv,
+                          const common::ObIArray<uint64_t> &enable_role_id_array,
+                          const common::ObString &location_name,
+                          bool &allow_show);
+  // location function end
+
   // rls function begin
   int get_rls_policy_schema_by_name(const uint64_t tenant_id,
                                     const uint64_t table_id,
@@ -1071,6 +1094,20 @@ public:
                                const uint64_t catalog_id,
                                const ObCatalogSchema *&schema);
   // catalog function end
+
+  // external resource function begin
+  int get_external_resource_schema(const uint64_t &tenant_id,
+                                   const uint64_t &database_id,
+                                   const ObString &name,
+                                   const ObSimpleExternalResourceSchema *&schema);
+  int get_external_resource_schema(const uint64_t &tenant_id,
+                                   const uint64_t &external_resource_id,
+                                   const ObSimpleExternalResourceSchema *&schema);
+  int check_external_resource_exist(uint64_t tenant_id,
+                                    uint64_t database_id,
+                                    ObString name,
+                                    bool &is_exist);
+  // external resource function end
 
   int check_user_exist(const uint64_t tenant_id,
                        const common::ObString &user_name,
@@ -1160,12 +1197,22 @@ public:
   GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(package, ObSimplePackageSchema);
   GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(routine, ObSimpleRoutineSchema);
   GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
+  GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DECLARE(external_resource, ObSimpleExternalResourceSchema);
 
   int check_routine_priv(const ObSessionPrivInfo &session_priv,
                          const common::ObIArray<uint64_t> &enable_role_id_array,
                          const ObNeedPriv &routine_need_priv);
 
   int check_routine_definer_existed(uint64_t tenant_id, const ObString &user_name, bool &existed);
+
+  int check_obj_mysql_priv(const ObSessionPrivInfo &session_priv,
+                           const common::ObIArray<uint64_t> &enable_role_id_array,
+                           const ObNeedPriv &obj_mysql_need_priv);
+  int get_obj_mysql_priv_with_obj_name(const uint64_t tenant_id,
+                                       const ObString &obj_name,
+                                       const uint64_t obj_type,
+                                       ObIArray<const ObObjMysqlPriv *> &obj_privs,
+                                       bool reset_flag);
 
 private:
   int check_ssl_access(const ObUserInfo &user_info,

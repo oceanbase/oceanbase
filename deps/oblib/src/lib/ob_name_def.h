@@ -888,6 +888,7 @@
 #define N_ENHANCED_AES_DECRYPT "enhanced_aes_decrypt"
 #define N_CURRENT_CATALOG "current_catalog"
 #define N_CHECK_CATALOG_ACCESS "check_catalog_access"
+#define N_CHECK_LOCATION_ACCESS "check_location_access"
 
 //*********** for spm
 #define N_SPM_LOAD_PLANS_FROM_PLAN_CACHE "spm_load_plans_from_plan_cache"
@@ -1268,4 +1269,5 @@
 #define N_INNER_INFO_COLS_DATA_TYPE_PRINTER "inner_info_cols_data_type_printer"
 #define N_INNER_INFO_COLS_COLUMN_TYPE_PRINTER "inner_info_cols_column_type_printer"
 #define N_INNER_INFO_COLS_COLUMN_KEY_PRINTER "inner_info_cols_column_key_printer"
+#define N_STARTUP_MODE                       "startup_mode"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

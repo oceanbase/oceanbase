@@ -18,6 +18,7 @@
 #include "storage/shared_storage/ob_ss_reader_writer.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
+#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #undef private
 #undef protected
 
@@ -56,6 +57,7 @@ void TestSSPreReadTask::SetUpTestCase()
   MTL(tmp_file::ObTenantTmpFileManager *)->stop();
   MTL(tmp_file::ObTenantTmpFileManager *)->wait();
   MTL(tmp_file::ObTenantTmpFileManager *)->destroy();
+  ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
 }
 
 void TestSSPreReadTask::TearDownTestCase()
@@ -118,7 +120,9 @@ TEST_F(TestSSPreReadTask, basic_pre_read)
     ObSSObjectStorageWriter object_storage_writer;
     ASSERT_EQ(OB_SUCCESS, object_storage_writer.aio_write(write_info_, write_object_handle));
     ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
-    ASSERT_EQ(OB_SUCCESS, preread_cache_mgr.push_file_id_to_lru(macro_ids[i]));
+    // Note: TMP_FILE has no effective_tablet_id
+    ASSERT_EQ(OB_SUCCESS, file_manager->push_to_preread_queue(macro_ids[i],
+                                        ObTabletID(ObTabletID::INVALID_TABLET_ID)));
   }
 
   // 2. wait preread_task read tmp file to local cache.
@@ -151,10 +155,6 @@ TEST_F(TestSSPreReadTask, basic_pre_read)
     ASSERT_EQ(OB_SUCCESS, read_object_handle.get_io_handle().get_io_flag(flag));
     // check read from tmp file read cache
     ASSERT_FALSE(flag.is_sync());
-
-    bool is_exist = false;
-    ASSERT_EQ(OB_SUCCESS, preread_cache_mgr.is_exist_in_lru(macro_ids[i], is_exist));
-    ASSERT_TRUE(is_exist);
   }
 
   // 4. wait preread_next_segment_file finish
@@ -211,18 +211,15 @@ TEST_F(TestSSPreReadTask, preread_and_gc_parallel)
   ASSERT_EQ(OB_SUCCESS, object_storage_writer.aio_write(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
   // read file from object storage
-  ObPreReadFileMeta file_meta(file_id, 0);
+  ObPreReadFileMeta file_meta(file_id, ObTabletID(ObTabletID::INVALID_TABLET_ID), 0);
   ObSSPreReadEntry preread_entry(preread_task.allocator_);
   ASSERT_EQ(OB_SUCCESS, preread_entry.init(file_meta));
   ASSERT_EQ(OB_SUCCESS, preread_task.do_async_read_segment_file(preread_entry));
   ASSERT_EQ(OB_SUCCESS, preread_entry.read_handle_.wait());
   // test1: preread_write,read_whole,GC,update_to_normal
-  // push to lru node
-  ObPrereadCacheManager::ObListNode list_node = ObPrereadCacheManager::ObListNode(file_id, ObLURNodeStatus::FAKE, 0/*file_length*/);
-  ObPrereadCacheManager::ObListNode *node_iter = nullptr;
-  ASSERT_EQ(OB_SUCCESS, preread_cache_mgr.segment_file_map_.set_refactored(file_id, list_node));
-  node_iter = preread_cache_mgr.segment_file_map_.get(file_id);
-  preread_cache_mgr.segment_file_list_.add_first(node_iter);
+  // push to preread map
+  ObPrereadNode preread_node = ObPrereadNode(ObPrereadNodeStatus::FAKE, 0/*file_length*/);
+  ASSERT_EQ(OB_SUCCESS, preread_cache_mgr.preread_map_.set_refactored(file_id, preread_node));
   // create dir and get dir size
   ASSERT_EQ(OB_SUCCESS, OB_DIR_MGR.create_tmp_file_dir(MTL_ID(), MTL_EPOCH_ID(), tmp_file_id));
   int64_t expected_disk_size = 0;

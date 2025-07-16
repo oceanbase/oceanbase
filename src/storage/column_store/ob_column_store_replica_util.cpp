@@ -268,7 +268,9 @@ int ObCSReplicaUtil::check_need_wait_for_report(
     LOG_WARN("cs replica status is invalid", K(ret), K(ls), K(tablet));
   } else if (!is_normal_status(cs_replica_status)) {
     need_wait_for_report = true;
-    LOG_INFO("tablet status is not normal, try report later", K(ret), K(cs_replica_status), K(ls), K(tablet));
+    if (REACH_TIME_INTERVAL(10_s)) { // avoid too frequently logging
+      LOG_INFO("tablet status is not normal, try report later", K(ret), K(cs_replica_status), K(ls), K(tablet));
+    }
   }
   return ret;
 }
@@ -477,6 +479,37 @@ int ObCSReplicaUtil::get_rebuild_storage_schema(
     full_storage_schema = schema;
   }
   return ret;
+}
+
+void ObCSReplicaUtil::diagnose_trim_default_value_checksum_error(
+     const ObSSTable &row_sstable,
+     const ObStorageSchema &storage_schema)
+{
+  int ret = OB_SUCCESS;
+  if (lib::Worker::CompatMode::ORACLE == THIS_WORKER.get_compatibility_mode()) {
+    ObSSTableMetaHandle meta_handle;
+    if (OB_FAIL(row_sstable.get_meta(meta_handle))) {
+      LOG_WARN("faied to get meta handle", K(ret), K(row_sstable));
+    } else if (meta_handle.get_sstable_meta().get_progressive_merge_step() < meta_handle.get_sstable_meta().get_progressive_merge_round()) {
+      const int64_t column_cnt = storage_schema.column_array_.count();
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
+        const ObObj &orig_default_val = storage_schema.column_array_.at(i).get_orig_default_value();
+        if (orig_default_val.is_fixed_len_char_type()) {
+          blocksstable::ObStorageDatum datum;
+          int64_t orig_datum_length = 0;
+          if (OB_FAIL(datum.from_obj_enhance(orig_default_val))) {
+            STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
+          } else if (FALSE_IT(orig_datum_length = datum.len_)) {
+          } else if (OB_FAIL(ObStorageSchema::trim(orig_default_val.get_collation_type(), datum))) {
+            STORAGE_LOG(WARN, "failed to trim datum", K(ret), K(orig_default_val), K(datum));
+          } else if (orig_datum_length != datum.len_) {
+            FLOG_INFO("Tips: there is default value with space in oracle mode for this table, which will be trimmed in data version > 4.3.5.BP2 when calculating column checksum", K(storage_schema));
+            break;
+          }
+        }
+      }
+    }
+  }
 }
 
 /*---------------------------------- ObCSReplicaStorageSchemaGuard -------------------------------- */

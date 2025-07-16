@@ -63,8 +63,9 @@ int OMPKHandshakeResponse::decode()
 
   // get username
   if (OB_SUCC(ret) && pos < end) {
-    username_ = ObString::make_string(pos);
-    pos += strlen(pos) + 1;
+    int64_t len = strnlen(pos, end - pos);
+    username_ = ObString(0, len, const_cast<char *>(pos));
+    pos += len + 1;
   }
 
   // get auth response
@@ -89,24 +90,27 @@ int OMPKHandshakeResponse::decode()
       pos += auth_response_len;
     } else {
       //string[NUL]    auth-response
-      auth_response_ = ObString::make_string(pos);
-      pos += strlen(pos) + 1;
+      int64_t len = strnlen(pos, end - pos);
+      auth_response_ = ObString(0, len, const_cast<char *>(pos));
+      pos += len + 1;
     }
   }
 
   // get database name
   if (OB_SUCC(ret) && pos < end) {
     if (capability_.cap_flags_.OB_CLIENT_CONNECT_WITH_DB) {
-      database_ = ObString::make_string(pos);
-      pos += strlen(pos) + 1;
+      int64_t len = strnlen(pos, end - pos);
+      database_ = ObString(0, len, const_cast<char *>(pos));
+      pos += len + 1;
     }
   }
 
   // get auth plugin name
   if (OB_SUCC(ret) && pos < end) {
     if (capability_.cap_flags_.OB_CLIENT_PLUGIN_AUTH) {
-      auth_plugin_name_ = ObString::make_string(pos);
-      pos += strlen(pos) + 1;
+      int64_t len = strnlen(pos, end - pos);
+      auth_plugin_name_ = ObString(0, len, const_cast<char *>(pos));
+      pos += len + 1;
     }
   }
 

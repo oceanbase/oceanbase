@@ -32,7 +32,12 @@ int ObTxELRHandler::check_and_early_lock_release(bool has_row_updated, ObPartTra
   if (!ctx->is_can_elr()) {
     // do nothing
   } else {
-    ctx->trans_service_->get_tx_version_mgr().update_max_commit_ts(ctx->ctx_tx_data_.get_commit_version(), true);
+    if (ctx->is_for_sslog()) {
+      // for sslog
+      ctx->trans_service_->get_tx_version_mgr_for_sslog().update_max_commit_ts(ctx->ctx_tx_data_.get_commit_version(), true);
+    } else {
+      ctx->trans_service_->get_tx_version_mgr().update_max_commit_ts(ctx->ctx_tx_data_.get_commit_version(), true);
+    }
     if (has_row_updated) {
       if (OB_FAIL(ctx->acquire_ctx_ref())) {
         TRANS_LOG(WARN, "get trans ctx error", K(ret), K(*this));

@@ -912,6 +912,7 @@ typedef enum ObItemType
   T_FUN_SYS_MAP = 1783,
   T_FUN_SYS_MAP_KEYS = 1784,
   T_FUN_SYS_MAP_VALUES = 1785,
+  T_FUN_SYS_L2_SQUARED = 1786,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -1026,6 +1027,8 @@ typedef enum ObItemType
   T_FUN_INNER_PREFIX_MIN = 2073,
   T_FUN_INNER_PREFIX_MAX = 2074,
   T_FUN_SYS_INNER_INFO_COLS_COLUMN_KEY_PRINTER = 2075,
+  T_FUN_ARG_MIN = 2076,
+  T_FUN_ARG_MAX = 2077,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -2859,6 +2862,30 @@ typedef enum ObItemType
   T_UDF_PROPERTY_LIST = 4866,
 
   T_MICRO_BLOCK_FORMAT_VERSION = 4867,
+  T_MV_NESTED_REFRESH_CLAUSE = 4868, // placeholder for mview
+  T_ALTER_SUBPARTITION_EXCHANGE = 4869,
+
+  T_CREATE_SENSITIVE_RULE       = 4870,
+  T_DROP_SENSITIVE_RULE         = 4871,
+  T_ALTER_SENSITIVE_RULE        = 4872,
+  T_ALTER_SENSITIVE_RULE_ACTION = 4873,
+  T_SENSITIVE_FIELD             = 4874,
+  T_SENSITIVE_FIELD_LIST        = 4875,
+  T_SENSITIVE_PROTECTION_SPEC   = 4876,
+  T_SENSITIVE_ENCRYPTION_SPEC   = 4877,
+  T_SENSITIVE_MASKING_SPEC      = 4878,
+  T_SHOW_SENSITIVE_RULES        = 4879,
+  T_SHOW_SENSITIVE_RULES_OPTION = 4880,
+
+  // catalog
+  T_METASTORE_URI = 4881,
+  T_ACCESS_INFO = 4882,
+  T_WAREHOUSE = 4883,
+  T_SEQUENCE_NAME = 4884,
+  T_STORAGE_CACHE_POLICY_IN_PART_LIST = 4885,
+  T_COLUMN_INDEX_TYPE = 4886,
+  T_FREQ_THRESHOLD = 4887,
+  T_SEMISTRUCT_PROPERTIES = 4888,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
@@ -2882,6 +2909,8 @@ typedef enum ObCacheType
   CACHE_TYPE_PL_OBJ,
   CACHE_TYPE_PS_OBJ,
   CACHE_TYPE_LIB_CACHE,
+  CACHE_TYPE_RESULT,
+  CACHE_TYPE_SEQUENCE,
   CACHE_TYPE_MAX //Attention: add a new type before CACHE_TYPE_MAX
 } ObCacheType;
 
@@ -3000,7 +3029,10 @@ typedef enum ObOutlineType
                            || (op) == T_SHOW_PROCEDURE_CODE || (op) == T_SHOW_FUNCTION_CODE \
                            || (op) == T_SHOW_ENGINE || (op) == T_SHOW_OPEN_TABLES \
                            || (op) == T_SHOW_PLUGINS || (op) == T_SHOW_CHECK_TABLE \
-                           || (op) == T_SHOW_OLAP_ASYNC_JOB_STATUS)
+                           || (op) == T_SHOW_OLAP_ASYNC_JOB_STATUS                \
+                           || (op) == T_SHOW_CREATE_LOCATION \
+                           || (op) == T_SHOW_LOCATIONS       \
+                           || (op) == T_LOCATION_UTILS_LIST)
 
 #define EXPR_OP_NUM (T_MAX_OP-T_MIN_OP-1)
 extern const char *get_type_name(int type);

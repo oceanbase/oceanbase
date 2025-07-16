@@ -268,9 +268,9 @@ END_P SET_VAR DELIMITER
 %token <non_reserved_keyword>
 //-----------------------------non_reserved keyword begin-------------------------------------------
         ACCESS ACCESS_INFO ACCESSID ACCESSKEY ACCESSTYPE ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE ALGORITHM ALL_META ALL_USER ALWAYS ALLOW ANALYSE ANY
-        APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
+        APPID APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
         ARBITRATION ARRAY ASCII ASIS AT ATTRIBUTE AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AUTO_INCREMENT_CACHE_SIZE
-        AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH APPROX APPROXIMATE ARRAY_AGG ARRAY_FILTER ARRAY_FIRST ARRAY_MAP ARRAY_SORTBY
+        AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH API_MODE APPROX APPROXIMATE ARRAY_AGG ARRAY_FILTER ARRAY_FIRST ARRAY_MAP ARRAY_SORTBY
 
         BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINARY_FORMAT BINLOG BIT BIT_AND
         BIT_OR BIT_XOR BLOCK BLOCK_INDEX BLOCK_SIZE BLOOM_FILTER BOOL BOOLEAN BOOTSTRAP BTREE BYTE
@@ -280,8 +280,8 @@ END_P SET_VAR DELIMITER
         CACHE CALIBRATION CALIBRATION_INFO CANCEL CASCADED CAST CATALOG CATALOGS CATALOG_NAME CHAIN CHANGED CHARSET CHECKSUM CHECKPOINT CHUNK CIPHER
         CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_BLOOM_FILTER COLUMN_STAT
         CODE COLLATION COLLECT_STATISTICS_ON_CREATE COLUMN_FORMAT COLUMN_NAME COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPLETION COMPLETE
-        COMPRESSED COMPRESSION COMPRESSION_BLOCK_SIZE COMPRESSION_CODE COMPUTATION COMPUTE CONCURRENT CONDENSED CONDITIONAL CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
-        CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COSINE COUNT CPU CREATE_TIMESTAMP
+        COMPRESSED COMPRESSION COMPRESSION_BLOCK_SIZE COMPRESSION_CODE COMPUTATION COMPUTE CONCURRENT CONDENSED CONDITIONAL CONFIGS CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
+        CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COSINE COUNT CPU CREATE_TIMESTAMP CREDENTIAL
         CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT
 
         DAG DATA DATAFILE DATA_DISK_SIZE DATA_SOURCE DATA_TABLE_ID DATE DATE_ADD DATE_SUB DATETIME DAY DEALLOCATE DECRYPT DECRYPTION
@@ -308,13 +308,13 @@ END_P SET_VAR DELIMITER
 
         JOB JSON JSON_ARRAYAGG JSON_OBJECTAGG JSON_QUERY JSON_VALUE JSON_TABLE
 
-        KEY_BLOCK_SIZE KEY_VERSION KVCACHE KV_ATTRIBUTES
+        KEY_BLOCK_SIZE KEY_VERSION KEYTAB KRB5CONF KVCACHE KV_ATTRIBUTES
 
         LAG LANGUAGE LAST LAST_REFRESH_SCN LAST_VALUE LATERAL LEAD LEADER LEAVES LESS LEAK LEAK_MOD LEAK_RATE LIB LINESTRING LIST_
 
         LISTAGG LOB_INROW_THRESHOLD LOCAL LOCALITY LOCATION LOCKED LOCKS LOGFILE LOGONLY_REPLICA_NUM LOGS LOCK_ LOGICAL_READS
 
-        LEVEL LN LOG LS LINK LOG_RESTORE_SOURCE LINE_DELIMITER
+        LEVEL LN LOG LS LINK LOG_RESTORE_SOURCE LINE_DELIMITER LOCATIONS
 
         MAJOR MAP MANHATTAN MANUAL MASTER MASTER_AUTO_POSITION MASTER_CONNECT_RETRY MASTER_DELAY MASTER_HEARTBEAT_PERIOD
         MASTER_HOST MASTER_LOG_FILE MASTER_LOG_POS MASTER_PASSWORD MASTER_PORT MASTER_RETRY_COUNT
@@ -337,7 +337,7 @@ END_P SET_VAR DELIMITER
 
         PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARSER_PROPERTIES PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PATH PAUSE PAXOS_REPLICA_NUM PERCENTAGE
         PERCENT_RANK PERCENTILE_CONT PHASE PHRASE PLAN PHYSICAL PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
-        PROTECTION PROJECT_NAME PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
+        PRINCIPAL PROTECTION PROJECT_NAME PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
         PROCESSLIST PROFILE PROFILES PROPERTIES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
         PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PLUS PATTERN PARTITION_TYPE FILES PARTIAL_UPDATE PRECREATE_TIME ON_ERROR
 
@@ -349,9 +349,9 @@ END_P SET_VAR DELIMITER
         RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE REWRITE ROLLBACK ROLLUP ROOT
         ROARINGBITMAP ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROWID ROW_COUNT ROW_FORMAT ROW_GROUP_SIZE ROW_INDEX_STRIDE ROWS RTREE RUN
         RECYCLEBIN ROTATE ROW_NUMBER RUDUNDANT RECURSIVE RANDOM REDO_TRANSPORT_OPTIONS REMOTE_OSS RT
-        RANK READ_ONLY RECOVERY REJECT ROLE
+        RANK READ_ERROR_LOG READ_ONLY RECOVERY REJECT ROLE
 
-        SAMPLE SAVEPOINT SCALARS SCHEDULE SCHEMA_NAME SCN SCOPE SECOND SECURITY SEED SEMISTRUCT_ENCODING_TYPE SEQUENCES SERIAL SERIALIZABLE SERVER
+        S3_REGION SAMPLE SAVEPOINT SCALARS SCHEDULE SCHEMA_NAME SCN SCOPE SECOND SECURITY SEED SEMISTRUCT_ENCODING_TYPE SEQUENCES SERIAL SERIALIZABLE SERVER
         SERVER_IP SERVER_PORT SERVER_TYPE SERVICE SESSION SESSION_USER SETS SET_MASTER_CLUSTER SET_SLAVE_CLUSTER
         SET_TP SHARE SHARED_STORAGE_DEST SHARED_STORAGE_INFO SHUTDOWN SIGNED SIMPLE SINGLE SKIP_INDEX SLAVE SLOW SLOT_IDX SNAPSHOT SOCKET SOME SONAME SOUNDS
         SOURCE SPFILE SPLIT SQL_AFTER_GTIDS SQL_AFTER_MTS_GAPS SQL_BEFORE_GTIDS SQL_BUFFER_RESULT
@@ -363,6 +363,7 @@ END_P SET_VAR DELIMITER
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS
         SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER PARSE_HEADER IGNORE_LAST_EMPTY_COLUMN SKIP_BLANK_LINES STATEMENT SUM_OPNSIZE SS_MICRO_CACHE SPARSEVECTOR
 
+
         TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_ID TABLET_MAX_SIZE TASK_ID
         TEMPLATE TEMPORARY TEMPTABLE TENANT TEXT THAN TIME TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TP_NO
         TP_NAME TRACE TRADITIONAL TRANSACTION TRIGGERS TRIM TRUNCATE TYPE TYPES TASK TABLET_SIZE
@@ -370,7 +371,7 @@ END_P SET_VAR DELIMITER
         TRANSFER TUNNEL_ENDPOINT TENANT_STS_CREDENTIAL TABLETS TIME_UNIT TIME_ZONE
 
         UNCOMMITTED UNCONDITIONAL UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNNEST UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_NUM UNLOCKED UNTIL
-        UNUSUAL UPGRADE USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP UNLIMITED USER_SPECIFIED
+        UNUSUAL UPGRADE URL USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP UNLIMITED USER_SPECIFIED
 
         VALID VALUE VARIANCE VARIABLES VERBOSE VERIFY VERSION VIEW VISIBLE VIRTUAL_COLUMN_ID VALIDATE VAR_POP
         VAR_SAMP VALIDATION VECTOR VECTOR_DISTANCE MICRO_INDEX_CLUSTERED
@@ -517,7 +518,7 @@ END_P SET_VAR DELIMITER
 %type <node> list_expr list_partition_element list_partition_expr list_partition_list list_partition_option opt_list_partition_list opt_list_subpartition_list list_subpartition_list list_subpartition_element drop_partition_name_list
 %type <node> primary_zone_name change_tenant_name_or_tenant_id distribute_method distribute_method_list opt_distribute_method_list
 %type <node> load_data_stmt opt_load_local opt_duplicate opt_compression opt_load_charset opt_load_ignore_rows infile_string url_spec
-%type <node> lines_or_rows opt_field_or_var_spec field_or_vars_list field_or_vars opt_load_set_spec opt_load_data_extended_option_list load_data_extended_option_list load_data_extended_option opt_on_error
+%type <node> lines_or_rows opt_field_or_var_spec field_or_vars_list field_or_vars opt_load_set_spec opt_load_data_extended_option_list load_data_extended_option_list load_data_extended_option opt_on_error opt_to_file opt_reject_limit opt_bad_file
 %type <node> load_set_list load_set_element load_data_with_opt_hint
 %type <node> ret_type opt_agg
 %type <node> opt_match_option
@@ -579,7 +580,8 @@ END_P SET_VAR DELIMITER
 %type <node> module_name info_type opt_infile
 %type <node_opt_parens> select_clause_set select_clause_set_body
 %type <node> dynamic_partition_option dynamic_partition_option_list sys_view_cast_opt
-
+%type <node> create_location_stmt alter_location_stmt drop_location_stmt location_name location_url opt_sub_path credential_option_list credential_option opt_credential location_utils_stmt
+%type <node> flashback_standby_log_stmt
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -761,6 +763,11 @@ stmt:
   | transfer_partition_stmt { $$ = $1; check_question_mark($$, result); }
   | mock_stmt {$$ = $1; check_question_mark($$, result);}
   | service_name_stmt { $$ = $1; check_question_mark($$, result); }
+  | create_location_stmt  { $$ = $1; check_question_mark($$, result); }
+  | alter_location_stmt   { $$ = $1; check_question_mark($$, result); }
+  | drop_location_stmt    { $$ = $1; check_question_mark($$, result); }
+  | location_utils_stmt   { $$ = $1; check_question_mark($$, result); }
+  | flashback_standby_log_stmt { $$ = $1; check_question_mark($$, result); }
   ;
 
 /*****************************************************************************
@@ -5189,21 +5196,48 @@ INTO TABLE relation_factor opt_use_partition opt_field_or_var_spec opt_on_error
 ;
 
 opt_on_error:
-LOG ERRORS
+LOG ERRORS opt_to_file opt_reject_limit opt_bad_file
 {
-  ParseNode *params = NULL;
-  malloc_terminal_node(params, result->malloc_pool_, T_INT);
-  params->value_ = 0;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOG_ERROR, 3, $3, $4, $5);
+}
+/* empty */
+| {
+  $$ = NULL;
+}
+;
 
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LOG_ERROR_LIMIT, 1, params);
-}
-| LOG ERRORS REJECT LIMIT INTNUM
+opt_to_file:
+INTO STRING_VALUE
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LOG_ERROR_LIMIT, 1, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA_ERR_FILE, 1, $2);
 }
-| LOG ERRORS REJECT LIMIT UNLIMITED
+/* empty */
+| {
+  $$ = NULL;
+}
+;
+
+opt_reject_limit:
+REJECT LIMIT INTNUM
 {
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOG_ERROR_LIMIT, 1, $3);
+}
+| REJECT LIMIT UNLIMITED
+{
+  (void)($3);
   malloc_terminal_node($$, result->malloc_pool_, T_LOG_ERROR_UNLIMITED);
+}
+/* empty */
+| {
+  $$ = NULL;
+}
+;
+
+opt_bad_file:
+BADFILE opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA_BAD_FILE, 1, $3);
 }
 /* empty */
 | {
@@ -8129,7 +8163,28 @@ LOCATION opt_equal_mark STRING_VALUE
   $$->stmt_loc_.last_column_ = @3.last_column - 1;
   $$->str_len_ = $3->str_len_;
   $$->str_value_ = $3->str_value_;
-};
+}
+| LOCATION opt_equal_mark USER_VARIABLE opt_sub_path
+{
+  (void)($2) ; /* make bison mute */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOCATION_OBJECT, 2, $3, $4);
+  $$->stmt_loc_.first_column_ = @3.first_column - 1;
+  $$->stmt_loc_.last_column_ = @3.last_column - 1;
+  $$->str_len_ = $3->str_len_;
+  $$->str_value_ = $3->str_value_;
+}
+;
+
+opt_sub_path:
+STRING_VALUE
+{
+  $$ = $1;
+}
+|
+{
+  $$ = NULL;
+}
+;
 storage_cache_policy_attribute_list:
 GLOBAL COMP_EQ STRING_VALUE
 {
@@ -9305,6 +9360,14 @@ TYPE COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_REGION, 1, $3);
 }
+| API_MODE COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_MODE, 1, $3);
+}
+| SPLIT COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SPLIT_ACTION, 1, $3);
+}
 ;
 
 compression_key:
@@ -9335,6 +9398,9 @@ opt_pattern:
   $$ = NULL;
 }
 | pattern_expr
+{
+  $$ = $1;
+}
 ;
 
 external_file_format:
@@ -12655,21 +12721,25 @@ NAME_OB
 ;
 
 optimize_hint:
-INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB opt_index_prefix ')'
+INDEX_HINT '(' qb_name_option relation_factor_in_hint opt_comma NAME_OB opt_index_prefix ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_HINT, 4, $3, $4, $5,$6);
+  (void)($5);               /* unused */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_HINT, 4, $3, $4, $6, $7);
 }
-| INDEX_ASC_HINT '(' qb_name_option relation_factor_in_hint NAME_OB opt_index_prefix ')'
+| INDEX_ASC_HINT '(' qb_name_option relation_factor_in_hint opt_comma NAME_OB opt_index_prefix ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ASC_HINT, 4, $3, $4, $5,$6);
+  (void)($5);               /* unused */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ASC_HINT, 4, $3, $4, $6, $7);
 }
-| INDEX_DESC_HINT '(' qb_name_option relation_factor_in_hint NAME_OB opt_index_prefix ')'
+| INDEX_DESC_HINT '(' qb_name_option relation_factor_in_hint opt_comma NAME_OB opt_index_prefix ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_DESC_HINT, 4, $3, $4, $5,$6);
+  (void)($5);               /* unused */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_DESC_HINT, 4, $3, $4, $6, $7);
 }
-| NO_INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
+| NO_INDEX_HINT '(' qb_name_option relation_factor_in_hint opt_comma NAME_OB ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_NO_INDEX_HINT, 3, $3, $4, $5);
+  (void)($5);               /* unused */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_NO_INDEX_HINT, 3, $3, $4, $6);
 }
 | UNION_MERGE_HINT '(' qb_name_option relation_factor_in_hint union_merge_list ')'
 {
@@ -14305,6 +14375,12 @@ relation_factor %prec LOWER_PARENS
     malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $2, NULL, NULL, NULL);
   }
   $$->value_ = T_EXTERNAL_FILE_LOCATION;
+}
+| READ_ERROR_LOG '(' STRING_VALUE ')'
+{
+  ParseNode *read_log_node = NULL;
+  malloc_non_terminal_node(read_log_node, result->malloc_pool_, T_READ_ERROR_LOG, 1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ORG, 4, read_log_node, NULL, NULL, NULL);
 }
 ;
 
@@ -16187,6 +16263,19 @@ SHOW opt_extended_or_full TABLES opt_from_or_in_database_clause opt_show_conditi
 {
   malloc_terminal_node($$, result->malloc_pool_, T_SHOW_CATALOGS);
 }
+| SHOW LOCATIONS
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_SHOW_LOCATIONS);
+}
+| SHOW create_with_opt_hint LOCATION relation_name
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_CREATE_LOCATION, 1, $4);
+}
+| SHOW FILES IN LOCATION USER_VARIABLE opt_sub_path opt_pattern
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOCATION_UTILS_LIST, 3, $5, $6, $7);
+}
 ;
 
 check_table_options:
@@ -17096,44 +17185,48 @@ SET PASSWORD opt_for_user COMP_EQ STRING_VALUE
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 0;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, $5, need_enc_node, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, $5, need_enc_node, NULL, NULL, NULL);
 }
 | SET PASSWORD opt_for_user COMP_EQ PASSWORD '(' password ')'
 {
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 1;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, $7, need_enc_node, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, $7, need_enc_node, NULL, NULL, NULL);
 }
 | alter_with_opt_hint USER user_with_host_name IDENTIFIED opt_auth_plugin BY password
 {
   (void)($1);
   ParseNode *need_enc_node = NULL;
+  ParseNode *from_alter = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
+  malloc_terminal_node(from_alter, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 1;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, $7, need_enc_node, NULL, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, $7, need_enc_node, NULL, $5, from_alter);
 }
 | alter_with_opt_hint USER user_with_host_name IDENTIFIED opt_auth_plugin AS password
 {
   (void)($1);
   ParseNode *need_enc_node = NULL;
+  ParseNode *from_alter = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
+  malloc_terminal_node(from_alter, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 0;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, $7, need_enc_node, NULL, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, $7, need_enc_node, NULL, $5, from_alter);
 }
 | alter_with_opt_hint USER user_with_host_name require_specification
 {
   (void)($1);
   ParseNode *require_node = NULL;
   merge_nodes(require_node, result, T_TLS_OPTIONS, $4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, NULL, NULL, require_node, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, NULL, NULL, require_node, NULL, NULL);
 }
 | alter_with_opt_hint USER user_with_host_name WITH resource_option_list
 {
   (void)($1);
   ParseNode *res_opt_node = NULL;
   merge_nodes(res_opt_node, result, T_USER_RESOURCE_OPTIONS, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 5, $3, NULL, NULL, res_opt_node, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 6, $3, NULL, NULL, res_opt_node, NULL, NULL);
 }
 ;
 
@@ -18121,6 +18214,21 @@ role_with_host
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
   $$->value_ = OB_PRIV_USE_CATALOG;
 }
+| READ
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_READ;
+}
+| WRITE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_WRITE;
+}
+| CREATE LOCATION
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_CREATE_LOCATION;
+}
 ;
 
 opt_privilege:
@@ -18154,6 +18262,11 @@ TABLE
 {
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_OBJECT);
   $$->value_ = 4;
+}
+| LOCATION
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_OBJECT);
+  $$->value_ = 5;
 }
 ;
 
@@ -21469,6 +21582,16 @@ ALL
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = CACHE_TYPE_LIB_CACHE;
 }
+| NAME_OB
+{
+  if (0 == strcasecmp($1->str_value_, "RESULT")) {
+    malloc_terminal_node($$, result->malloc_pool_, T_INT);
+    $$->value_ = CACHE_TYPE_RESULT;
+  } else {
+    yyerror(&@1, result, "get unexpected error");
+    YYABORT_PARSE_SQL_ERROR;
+  }
+}
 ;
 
 balance_task_type:
@@ -22224,6 +22347,10 @@ FOR relation_name_or_string
 {
   $$ = $2;
 }
+| /* EMPTY */
+{
+  $$ = NULL;
+}
 ;
 
 opt_scope_type:
@@ -22609,6 +22736,7 @@ opt_server_or_zone opt_tenant_name
 LOGSERVICE_ACCESS_POINT COMP_EQ STRING_VALUE opt_comment
 {
   ParseNode *logservice_access_point= NULL;
+  result->contain_sensitive_data_ = true;
   make_name_node(logservice_access_point, result->malloc_pool_, "logservice_access_point");
   malloc_non_terminal_node($$, result->malloc_pool_, T_SYSTEM_ACTION, 5,
                            logservice_access_point,    /* param_name */
@@ -22813,6 +22941,159 @@ BEGI
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 2;
+}
+;
+
+/*****************************************************************************
+ *
+ *   create/drop location grammar
+ *
+ ******************************************************************************/
+create_location_stmt:
+create_with_opt_hint opt_replace LOCATION location_name URL opt_equal_mark location_url opt_credential
+{
+  (void)($1);
+  (void)($6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_LOCATION, 4, $2, $4, $7, $8);
+}
+;
+
+opt_credential:
+CREDENTIAL opt_equal_mark '(' credential_option_list ')' {
+  (void)($2);
+  merge_nodes($$, result, T_CREDENTIAL_OPTION_LIST, $4);
+}
+|
+{
+  $$ = NULL;
+};
+
+credential_option_list:
+credential_option
+{
+  $$ = $1;
+}
+| credential_option_list opt_comma credential_option
+{
+  (void) ($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+credential_option:
+ACCESSID COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INT, 1, $3);
+  $$->str_len_ = $3->str_len_;
+  $$->str_value_ = $3->str_value_;
+  $$->stmt_loc_.first_column_ = @3.first_column - 1;
+  $$->stmt_loc_.last_column_ = @3.last_column - 1;
+  $$->value_ = 1;
+}
+| ACCESSKEY COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INT, 1, $3);
+  $$->str_len_ = $3->str_len_;
+  $$->str_value_ = $3->str_value_;
+  $$->stmt_loc_.first_column_ = @3.first_column - 1;
+  $$->stmt_loc_.last_column_ = @3.last_column - 1;
+  $$->value_ = 2;
+}
+| HOST COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INT, 1, $3);
+  $$->str_len_ = $3->str_len_;
+  $$->str_value_ = $3->str_value_;
+  $$->stmt_loc_.first_column_ = @3.first_column - 1;
+  $$->stmt_loc_.last_column_ = @3.last_column - 1;
+  $$->value_ = 3;
+}
+| APPID COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INT, 1, $3);
+  $$->str_len_ = $3->str_len_;
+  $$->str_value_ = $3->str_value_;
+  $$->value_ = 4;
+}
+| S3_REGION COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INT, 1, $3);
+  $$->str_len_ = $3->str_len_;
+  $$->str_value_ = $3->str_value_;
+  $$->value_ = 5;
+}
+| PRINCIPAL COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INT, 1, $3);
+  $$->str_len_ = $3->str_len_;
+  $$->str_value_ = $3->str_value_;
+  $$->value_ = 6;
+}
+| KEYTAB COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INT, 1, $3);
+  $$->str_len_ = $3->str_len_;
+  $$->str_value_ = $3->str_value_;
+  $$->value_ = 7;
+}
+| KRB5CONF COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INT, 1, $3);
+  $$->str_len_ = $3->str_len_;
+  $$->str_value_ = $3->str_value_;
+  $$->value_ = 8;
+}
+| CONFIGS COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INT, 1, $3);
+  $$->str_len_ = $3->str_len_;
+  $$->str_value_ = $3->str_value_;
+  $$->value_ = 9;
+};
+
+alter_location_stmt:
+ALTER LOCATION location_name SET URL opt_equal_mark location_url
+{
+  (void) ($6);
+  $3->value_ = 1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_LOCATION, 2, $3, $7);
+}
+| ALTER LOCATION location_name SET CREDENTIAL opt_equal_mark '(' credential_option_list ')'
+{
+  (void) ($6);
+  ParseNode *credential = NULL;
+  merge_nodes(credential, result, T_CREDENTIAL_OPTION_LIST, $8);
+  $3->value_ = 2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_LOCATION, 2, $3, credential);
+}
+;
+
+drop_location_stmt:
+DROP LOCATION location_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_LOCATION, 1, $3);
+}
+;
+
+location_name:
+NAME_OB
+{ $$ = $1; }
+| unreserved_keyword
+{
+  get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);
+}
+;
+
+location_url:
+STRING_VALUE
+{ $$ = $1; }
+;
+
+location_utils_stmt:
+REMOVE FILES IN LOCATION USER_VARIABLE opt_sub_path opt_pattern
+{
+  $5->value_ = 1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOCATION_UTILS, 3, $5, $6, $7);
 }
 ;
 
@@ -24480,6 +24761,21 @@ CREATE
 ;
 
 /*===========================================================
+ *
+ * 租户 FLASHBACK STANDBY LOG
+ *
+ *===========================================================*/
+
+flashback_standby_log_stmt:
+alter_with_opt_hint SYSTEM FLASHBACK STANDBY LOG TO SCN COMP_EQ INTNUM opt_tenant_name
+{
+  (void)($1);
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FLASHBACK_STANDBY_LOG, 2, $9, $10);
+}
+;
+
+/*===========================================================
 *
 *  JSON TABLE
 *============================================================*/
@@ -25357,6 +25653,8 @@ ACCESS_INFO
 |       ALWAYS
 |       ANALYSE
 |       ANY
+|       API_MODE
+|       APPID
 |       APPROX
 |       APPROXIMATE
 |       APPROX_COUNT_DISTINCT
@@ -25472,6 +25770,7 @@ ACCESS_INFO
 |       CONCURRENT
 |       CONDENSED
 |       CONDITIONAL
+|       CONFIGS
 |       CONNECTION %prec KILL_EXPR
 |       CONSISTENT
 |       CONSISTENT_MODE
@@ -25486,6 +25785,7 @@ ACCESS_INFO
 |       COSINE
 |       CPU
 |       CREATE_TIMESTAMP
+|       CREDENTIAL
 |       CTXCAT
 |       CTX_ID
 |       CUBE
@@ -25672,6 +25972,8 @@ ACCESS_INFO
 |       JSON_TABLE
 |       KEY_BLOCK_SIZE
 |       KEY_VERSION
+|       KEYTAB
+|       KRB5CONF
 |       LAG
 |       LATERAL %prec LOWER_PARENS
 |       LANGUAGE
@@ -25702,6 +26004,7 @@ ACCESS_INFO
 |       LOGS
 |       LOGSERVICE_ACCESS_POINT
 |       LOG_RESTORE_SOURCE
+|       LOCATIONS
 |       MAJOR
 |       MANHATTAN
 |       MANUAL
@@ -25878,6 +26181,7 @@ ACCESS_INFO
 |       PREV
 |       PRIMARY_ZONE
 |       PRIVILEGES
+|       PRINCIPAL
 |       PROCESSLIST
 |       PROFILE
 |       PROFILES
@@ -25896,6 +26200,7 @@ ACCESS_INFO
 |       QUEUE_TIME
 |       QUICK
 |       RANK
+|       READ_ERROR_LOG
 |       READ_ONLY
 |       REBUILD
 |       RECOVER
@@ -26073,6 +26378,7 @@ ACCESS_INFO
 |       SYSTEM_USER
 |       SYSDATE
 |       SLOG
+|       S3_REGION
 |       TABLE_CHECKSUM
 |       TABLE_MODE
 |       TABLEGROUPS
@@ -26133,6 +26439,7 @@ ACCESS_INFO
 |       UNTIL
 |       UNUSUAL
 |       UPGRADE
+|       URL
 |       USE_BLOOM_FILTER
 |       USE_FRM
 |       USER

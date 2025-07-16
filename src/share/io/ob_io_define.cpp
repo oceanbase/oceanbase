@@ -117,8 +117,12 @@ public:
   {
     int ret = OB_SUCCESS;
     if (REACH_TIME_INTERVAL(60 * 1000L * 1000L)) {
-      is_clog_data_in_same_disk_ = is_same_disk(oceanbase::ObFileSystemRouter::get_instance().get_data_dir(),
-          oceanbase::ObFileSystemRouter::get_instance().get_clog_dir());
+      is_clog_data_in_same_disk_ =
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+        !GCONF.enable_logservice &&
+#endif
+        is_same_disk(oceanbase::ObFileSystemRouter::get_instance().get_data_dir(),
+        oceanbase::ObFileSystemRouter::get_instance().get_clog_dir());
     }
     return is_clog_data_in_same_disk_;
   }
@@ -215,6 +219,8 @@ ObIOFlag::ObIOFlag()
       is_write_through_(false),
       is_sealed_(true),
       need_close_dev_and_fd_(false),
+      is_buffered_read_(true),
+      is_preread_(false),
       reserved_(0),
       group_id_(USER_RESOURCE_OTHER_GROUP_ID),
       sys_module_id_(OB_INVALID_ID)
@@ -238,6 +244,8 @@ void ObIOFlag::reset()
   is_write_through_ = false;
   is_sealed_ = true;
   need_close_dev_and_fd_ = false;
+  is_buffered_read_ = true;
+  is_preread_ = false;
   reserved_ = 0;
   group_id_ = USER_RESOURCE_OTHER_GROUP_ID;
   sys_module_id_ = OB_INVALID_ID;
@@ -424,6 +432,31 @@ void ObIOFlag::set_no_need_close_dev_and_fd()
 bool ObIOFlag::is_need_close_dev_and_fd() const
 {
   return need_close_dev_and_fd_;
+}
+
+void ObIOFlag::set_buffered_read(const bool is_buffered_read)
+{
+  is_buffered_read_ = is_buffered_read;
+}
+
+bool ObIOFlag::is_buffered_read() const
+{
+  return is_buffered_read_;
+}
+
+void ObIOFlag::set_preread()
+{
+  is_preread_ = true;
+}
+
+void ObIOFlag::set_no_preread()
+{
+  is_preread_ = false;
+}
+
+bool ObIOFlag::is_preread() const
+{
+  return is_preread_;
 }
 
 
@@ -821,6 +854,11 @@ int64_t ObIOResult::get_data_size() const
   return data_size;
 }
 
+int64_t ObIOResult::get_user_io_size() const
+{
+  return size_;
+}
+
 ObIOMode ObIOResult::get_mode() const
 {
   return flag_.get_mode();
@@ -886,6 +924,13 @@ int ObIOResult::wait(int64_t wait_ms)
       } else if (!is_finished_) {
         int64_t duration_ms = ObTimeUtility::current_time() - begin_ms;
         wait_ms -= duration_ms;
+      }
+      if (REACH_TIME_INTERVAL(1000L * 1000L)) {
+        int64_t cur_time = ObTimeUtility::fast_current_time();
+        if (this->time_log_.enqueue_ts_ > 0 && cur_time - this->time_log_.enqueue_ts_ > 4 * 1000L * 1000L) {
+          LOG_ERROR("schedule time is too long", K(*this), K(wait_ms), K(cur_time), K(this->time_log_.enqueue_ts_));
+          IGNORE_RETURN faststack();
+        }
       }
     }
     if (OB_UNLIKELY(wait_ms <= 0)) { // rarely happen
@@ -1264,6 +1309,8 @@ bool ObIORequest::is_local_clog_not_isolated()
   const ObIOGroupKey group_key = get_group_key();
   const oceanbase::share::ObFunctionType func_type = get_func_type();
   if (OB_UNLIKELY(OBSERVER.is_arbitration_mode())) {
+  } else if (GCONF.enable_logservice) { // in oblogservice mode, clog io is surely isolated
+    clog_not_isolated = true;
   } else if (group_key.mode_ != ObIOMode::MAX_MODE) {
   } else if (clog_io_isolation_mode == 0 || clog_io_isolation_mode > 2) {
     if ((func_type == ObFunctionType::PRIO_CLOG_HIGH ||
@@ -2031,6 +2078,11 @@ const char *ObIOHandle::get_buffer()
 int64_t ObIOHandle::get_data_size() const
 {
   return OB_NOT_NULL(result_) ? result_->get_data_size() : 0;
+}
+
+int64_t ObIOHandle::get_user_io_size() const
+{
+  return OB_NOT_NULL(result_) ? result_->get_user_io_size() : 0;
 }
 
 int64_t ObIOHandle::get_rt() const

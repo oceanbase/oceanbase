@@ -16,6 +16,7 @@
 #include "ob_resource_mgr.h"
 #include "lib/utility/utility.h"
 #include "lib/resource/ob_affinity_ctrl.h"
+#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
@@ -188,15 +189,17 @@ void ObTenantMemoryMgr::update_cache_hold(const int64_t size)
   }
 }
 
+ERRSIM_POINT_DEF(EN_TENANT_HOLD_REACH_LIMIT);
 bool ObTenantMemoryMgr::update_hold(const int64_t size, const uint64_t ctx_id,
                                     const lib::ObLabel &label, bool &reach_ctx_limit)
 {
   bool updated = true;
   reach_ctx_limit = false;
-  if (!limiter_.acquire(size)) {
+  bool is_errsim = false;
+  if ((size > 0 && (is_errsim = EN_TENANT_HOLD_REACH_LIMIT)) || !limiter_.acquire(size)) {
     updated = false;
     auto &afc = g_alloc_failed_ctx();
-    afc.reason_ = TENANT_HOLD_REACH_LIMIT;
+    afc.reason_ = is_errsim ? ERRSIM_TENANT_HOLD_REACH_LIMIT : TENANT_HOLD_REACH_LIMIT;
     afc.alloc_size_ = size;
     afc.tenant_id_ = tenant_id_;
     afc.tenant_hold_ = get_sum_hold();
@@ -212,18 +215,19 @@ bool ObTenantMemoryMgr::update_hold(const int64_t size, const uint64_t ctx_id,
   }
   return updated;
 }
-
+ERRSIM_POINT_DEF(EN_CTX_HOLD_REACH_LIMIT);
 bool ObTenantMemoryMgr::update_ctx_hold(const uint64_t ctx_id, const int64_t size)
 {
   bool updated = false;
   if (ctx_id < ObCtxIds::MAX_CTX_ID) {
     volatile int64_t &hold = hold_bytes_[ctx_id];
     volatile int64_t &limit = limit_bytes_[ctx_id];
+    bool is_errsim = false;
     if (size <= 0) {
       ATOMIC_AAF(&hold, size);
       updated = true;
     } else {
-      if (hold + size <= limit) {
+      if (!(is_errsim = EN_CTX_HOLD_REACH_LIMIT) && hold + size <= limit) {
         const int64_t nvalue = ATOMIC_AAF(&hold, size);
         if (nvalue > limit) {
           ATOMIC_AAF(&hold, -size);
@@ -234,7 +238,7 @@ bool ObTenantMemoryMgr::update_ctx_hold(const uint64_t ctx_id, const int64_t siz
     }
     if (!updated) {
       auto &afc = g_alloc_failed_ctx();
-      afc.reason_ = CTX_HOLD_REACH_LIMIT;
+      afc.reason_ = is_errsim ? ERRSIM_CTX_HOLD_REACH_LIMIT : CTX_HOLD_REACH_LIMIT;
       afc.alloc_size_ = size;
       afc.ctx_id_ = ctx_id;
       afc.ctx_hold_ = hold;

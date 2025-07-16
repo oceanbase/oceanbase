@@ -93,6 +93,7 @@ struct ObTenantID {
   }
   uint64_t hash() const { return tenant_id_; }
   int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+  TO_STRING_KV(K_(tenant_id));
   uint64_t tenant_id_;
 };
 using TenantConfigMap = common::__ObConfigContainer<ObTenantID, ObTenantConfig, common::OB_MAX_SERVER_TENANT_CNT>;
@@ -144,8 +145,9 @@ public:
   int64_t get_tenant_config_version(uint64_t tenant_id);
   void get_lease_request(share::ObLeaseRequest &lease_request);
   int get_lease_response(share::ObLeaseResponse &lease_response);
-  int get_all_tenant_config_info(common::ObArray<TenantConfigInfo> &config_info,
-                                 common::ObIAllocator *allocator);
+  int get_tenant_config_info(common::ObArray<TenantConfigInfo> &tenant_config_info,
+                                 common::ObIAllocator *allocator, uint64_t tenant_id);
+  int get_all_tenant_id(common::ObArray<ObTenantID> &tenant_ids);
   int got_versions(const common::ObIArray<std::pair<uint64_t, int64_t> > &versions);
   int got_version(uint64_t tenant_id, int64_t version, const bool remove_repeat = true);
   int update_local(uint64_t tenant_id, int64_t expected_version);

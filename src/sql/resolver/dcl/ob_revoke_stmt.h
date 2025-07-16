@@ -73,7 +73,8 @@ public:
         : (share::schema::OB_PRIV_TABLE_LEVEL == grant_level_ ?  static_cast<obrpc::ObDDLArg &>(table_arg_)
         : (share::schema::OB_PRIV_ROUTINE_LEVEL == grant_level_ ?  static_cast<obrpc::ObDDLArg &>(routine_arg_)
         : (share::schema::OB_PRIV_CATALOG_LEVEL == grant_level_ ?  static_cast<obrpc::ObDDLArg &>(catalog_arg_)
-        : static_cast<obrpc::ObDDLArg &>(syspriv_arg_)))));
+        : (share::schema::OB_PRIV_OBJECT_LEVEL == grant_level_ ?  static_cast<obrpc::ObDDLArg &>(obj_mysql_arg_)
+        : static_cast<obrpc::ObDDLArg &>(syspriv_arg_))))));
   }
   int add_column_privs(const ObString& column_name,const ObPrivSet priv_set) { return column_names_priv_.push_back(std::make_pair(column_name, priv_set)); }
   const ObIArray<std::pair<ObString, ObPrivType>> &get_column_privs() const { return column_names_priv_; }
@@ -99,6 +100,7 @@ private:
   obrpc::ObRevokeTableArg table_arg_;
   obrpc::ObRevokeRoutineArg routine_arg_;
   obrpc::ObRevokeSysPrivArg syspriv_arg_;
+  obrpc::ObRevokeObjMysqlArg obj_mysql_arg_;
   common::hash::ObPlacementHashSet<uint64_t, common::MAX_ENABLED_ROLES> role_id_set_;
   share::schema::ObObjectType object_type_;
   share::ObRawPrivArray sys_priv_array_;

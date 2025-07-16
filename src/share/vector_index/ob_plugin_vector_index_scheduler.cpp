@@ -554,9 +554,11 @@ int ObPluginVectorIndexLoadScheduler::reload_tenant_task()
   }
   // vector index async task
   int tmp_ret = OB_SUCCESS;
-  if (is_stopped()) { // skip
+  if (is_stopped() || !is_leader_) { // skip
   } else if (OB_TMP_FAIL(async_task_exec_.check_and_set_thread_pool())) {
     LOG_WARN("fail to check and open thread pool", K(tmp_ret));
+  } else if (OB_TMP_FAIL(async_task_exec_.clear_old_task_ctx_if_need())) {
+    LOG_WARN("fail to clear old task ctx", K(tmp_ret));
   } else if (OB_TMP_FAIL(async_task_exec_.load_task())) {
     LOG_WARN("fail to load tenant sync task", K(tmp_ret));
   }
@@ -904,6 +906,8 @@ int ObPluginVectorIndexLoadScheduler::log_tablets_need_memdata_sync(ObPluginVect
           LOG_WARN("get null adapter", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
         } else if (iter->first != adapter->get_inc_tablet_id()) {
           // do nothing
+        } else if (OB_INVALID_ID == adapter->get_inc_table_id()) {
+          // do nothing
         } else if (tablet_id_array_.count() >= ObVectorIndexSyncLogCb::VECTOR_INDEX_MAX_SYNC_COUNT) {
           // do nothing, wait for next schedule
         } else if (!need_refresh_ && OB_FAIL(adapter->check_need_sync_to_follower_or_do_opt_task(need_sync))) {
@@ -1069,7 +1073,7 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
 
     // start exec index async task
     int tmp_ret = OB_SUCCESS;
-    if (is_stopped()) { // skip
+    if (is_stopped() || !is_leader_) { // skip
     } else if (OB_TMP_FAIL(async_task_exec_.start_task())) {
       LOG_WARN("fail to start index async task", K(tmp_ret));
     }
@@ -1107,7 +1111,7 @@ void ObPluginVectorIndexLoadScheduler::run_task()
     // reserved, do nothing
     int tmp_ret = OB_SUCCESS;
     LOG_INFO("switch leader", K(tenant_id_), K(ls_->get_ls_id()), K(is_leader_), K(is_stopped_));
-    if (!check_can_do_work() || is_stopped()) { // skip
+    if (!check_can_do_work() || is_stopped() || !is_leader_) { // skip
     } else if (OB_TMP_FAIL(async_task_exec_.resume_task())) {
       LOG_WARN("fail to resume async task", K(tmp_ret));
     }
@@ -1639,7 +1643,9 @@ int ObVectorIndexMemSyncInfo::add_task_to_waiting_map(VectorIndexAdaptorMap &ada
     // only use complete adapter, tablet id of no.3 aux index table
     ObPluginVectorIndexAdaptor *adapter = iter->second;
     ObTabletID tablet_id = iter->first;
-    if (tablet_id == adapter->get_inc_tablet_id()) {
+    if (OB_INVALID_ID == adapter->get_inc_table_id()) {
+      // do nothing
+    } else if (tablet_id == adapter->get_inc_tablet_id()) {
       char *task_ctx_buf =
         static_cast<char *>(get_processing_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
       ObPluginVectorIndexTaskCtx* task_ctx = nullptr;

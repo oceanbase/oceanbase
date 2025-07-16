@@ -394,7 +394,7 @@ int ObDASDomainIdMergeIter::init_rowkey_domain_scan_param(
   } else {
     scan_param.tablet_id_ = tablet_id;
     scan_param.ls_id_ = ls_id;
-    scan_param.scan_allocator_ = &get_arena_allocator();
+    scan_param.scan_allocator_ = &rtdef->scan_allocator_;
     scan_param.allocator_ = &rtdef->stmt_allocator_;
     scan_param.tx_lock_timeout_ = rtdef->tx_lock_timeout_;
     scan_param.index_id_ = ctdef->ref_table_id_;

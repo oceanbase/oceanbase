@@ -89,6 +89,8 @@
 #include "sql/resolver/cmd/ob_drop_restore_point_stmt.h"
 #include "sql/resolver/ddl/ob_create_directory_stmt.h"
 #include "sql/resolver/ddl/ob_drop_directory_stmt.h"
+#include "sql/resolver/ddl/ob_create_location_stmt.h"
+#include "sql/resolver/ddl/ob_drop_location_stmt.h"
 #include "sql/engine/cmd/ob_empty_query_executor.h"
 #include "sql/engine/cmd/ob_dcl_executor.h"
 #include "sql/engine/cmd/ob_tcl_executor.h"
@@ -115,6 +117,7 @@
 #include "sql/engine/cmd/ob_udf_executor.h"
 #include "sql/engine/cmd/ob_dblink_executor.h"
 #include "sql/engine/cmd/ob_load_data_executor.h"
+#include "sql/engine/cmd/ob_location_utils_executor.h"
 #include "sql/engine/cmd/ob_sequence_executor.h"
 #include "sql/engine/cmd/ob_role_cmd_executor.h"
 #include "sql/engine/cmd/ob_xa_executor.h"
@@ -127,6 +130,7 @@
 #include "sql/engine/prepare/ob_deallocate_executor.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "sql/engine/cmd/ob_directory_executor.h"
+#include "sql/engine/cmd/ob_location_executor.h"
 #include "sql/resolver/dcl/ob_alter_role_stmt.h"
 #include "sql/resolver/ddl/ob_drop_context_resolver.h"
 #include "sql/engine/cmd/ob_context_executor.h"
@@ -138,6 +142,8 @@
 #include "sql/engine/cmd/ob_olap_async_job_executor.h"
 #include "sql/resolver/cmd/ob_event_stmt.h"
 #include "sql/engine/cmd/ob_event_executor.h"
+#include "sql/resolver/cmd/ob_flashback_standby_log_stmt.h"
+#include "sql/engine/cmd/ob_flashback_standby_log_executor.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_keystore_stmt.h"
 #include "sql/resolver/ddl/ob_alter_keystore_stmt.h"
@@ -157,6 +163,8 @@
 #include "sql/resolver/cmd/ob_trigger_storage_cache_stmt.h"
 #include "sql/engine/cmd/ob_trigger_storage_cache_executor.h"
 #endif
+#include "sql/resolver/cmd/ob_sys_dispatch_call_stmt.h"
+#include "sql/engine/cmd/ob_sys_dispatch_call_executor.h"
 
 namespace oceanbase
 {
@@ -1067,6 +1075,19 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObDropDirectoryStmt, ObDropDirectoryExecutor);
         break;
       }
+      case stmt::T_CREATE_LOCATION:
+      case stmt::T_ALTER_LOCATION: {
+        DEFINE_EXECUTE_CMD(ObCreateLocationStmt, ObCreateLocationExecutor);
+        break;
+      }
+      case stmt::T_DROP_LOCATION: {
+        DEFINE_EXECUTE_CMD(ObDropLocationStmt, ObDropLocationExecutor);
+        break;
+      }
+      case stmt::T_LOCATION_UTILS: {
+        DEFINE_EXECUTE_CMD(ObLocationUtilsStmt, ObLocationUtilsExecutor);
+        break;
+      }
       case stmt::T_BACKUP_BACKUPPIECE: {
         DEFINE_EXECUTE_CMD(ObBackupBackupPieceStmt, ObBackupBackupPieceExecutor);
         break;
@@ -1149,6 +1170,14 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_EVENT_JOB_DROP: {
         DEFINE_EXECUTE_CMD(ObDropEventStmt, ObDropEventExecutor);
+        break;
+      }
+      case stmt::T_SYS_DISPATCH_CALL: {
+        DEFINE_EXECUTE_CMD(ObSysDispatchCallStmt, ObSysDispatchCallExecutor);
+        break;
+      }
+      case stmt::T_FLASHBACK_STANDBY_LOG: {
+        DEFINE_EXECUTE_CMD(ObFlashbackStandbyLogStmt, ObFlashbackStandbyLogExecutor);
         break;
       }
       case stmt::T_CS_DISKMAINTAIN:

@@ -38,6 +38,8 @@ int ObExternalFileInfo::deep_copy(ObIAllocator &allocator, const ObExternalFileI
   int ret = OB_SUCCESS;
   if (OB_FAIL(ob_write_string(allocator, other.file_url_, this->file_url_))) {
     LOG_WARN("fail to write string", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.session_id_, this->session_id_))) {
+    LOG_WARN("failed to write session id string", K(ret));
   } else {
     this->file_id_ = other.file_id_;
     this->part_id_ = other.part_id_;
@@ -48,6 +50,8 @@ int ObExternalFileInfo::deep_copy(ObIAllocator &allocator, const ObExternalFileI
   }
   return ret;
 }
+
+OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_, part_id_, row_start_, row_count_, session_id_);
 
 int ObExternalTableFilesKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const
 {
@@ -239,6 +243,7 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
   if (!is_odps_table) {
     OZ (ctx.get_my_session()->get_regexp_session_vars(regexp_vars));
     OZ (ObExternalTableUtils::collect_external_file_list(
+                                                        ctx.get_my_session(),
                                                         tenant_id,
                                                         das_ctdef.ref_table_id_,
                                                         das_ctdef.external_file_location_.str_,
@@ -796,7 +801,9 @@ int ObExternalTableFileManager::calculate_file_part_val_by_file_name(const ObTab
   ObArray<sql::ObTempExpr *> temp_exprs;
   ObNewRow file_name_row; //only store file name, auto-part list val will only be calc by file name.
   CK (OB_NOT_NULL(table_schema) && OB_LIKELY(table_schema->is_external_table()));
-  const bool is_local_storage = ObSQLUtils::is_external_files_on_local_disk(table_schema->get_external_file_location());
+  ObString file_location;
+  OZ (ObExternalTableUtils::get_external_file_location(*table_schema, schema_guard, exec_ctx.get_allocator(), file_location));
+  const bool is_local_storage = ObSQLUtils::is_external_files_on_local_disk(file_location);
   OZ (cg_partition_expr_rt_expr(table_schema, exec_ctx.get_expr_factory(), exec_ctx.get_my_session(),
                                 schema_guard, exec_ctx.get_allocator(), temp_exprs));
   OZ (build_row_for_file_name(file_name_row, exec_ctx.get_allocator()));
@@ -1327,7 +1334,7 @@ int ObExternalTableFileManager::get_all_records_from_inner_table(ObIAllocator &a
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret));
       } else {
-        while (OB_SUCC(result->next())) {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
           ObString file_url;
           int64_t file_id = 0;
           int64_t file_size = 0;
@@ -1408,7 +1415,7 @@ int ObExternalTableFileManager::fill_cache_from_inner_table(
             ObSEArray<int64_t, 16> temp_file_ids;
             ObSEArray<int64_t, 16> temp_file_sizes;
             ObArenaAllocator allocator;
-            while (OB_SUCC(result->next())) {
+            while (OB_SUCC(ret) && OB_SUCC(result->next())) {
               ObString file_url;
               ObString tmp_url;
               int64_t file_id = INT64_MAX;
@@ -1561,31 +1568,37 @@ int ObExternalTableFileManager::refresh_external_table(const uint64_t tenant_id,
                                     table_id,
                                     table_schema));
   CK (table_schema != NULL);
-  OZ (refresh_external_table(tenant_id, table_schema, exec_ctx, has_partition_changed));
+  OZ (refresh_external_table(tenant_id, table_schema, schema_guard, exec_ctx, has_partition_changed));
   return ret;
 }
 
 int ObExternalTableFileManager::refresh_external_table(const uint64_t tenant_id,
                                                        const ObTableSchema *table_schema,
+                                                       ObSchemaGetterGuard &schema_guard,
                                                        ObExecContext &exec_ctx,
                                                        bool &has_partition_changed) {
   int ret = OB_SUCCESS;
   ObArray<ObString> file_urls;
   ObArray<int64_t> file_sizes;
   ObExprRegexpSessionVariables regexp_vars;
-  CK (table_schema != NULL);
+  ObString file_location;
+  ObString access_info;
+  CK (OB_NOT_NULL(table_schema));
   CK (exec_ctx.get_my_session() != NULL);
-  if (OB_SUCC(ret) && ObSQLUtils::is_external_files_on_local_disk(table_schema->get_external_file_location())) {
-    OZ (ObSQLUtils::check_location_access_priv(table_schema->get_external_file_location(), exec_ctx.get_my_session()));
+  OZ (ObExternalTableUtils::get_external_file_location(*table_schema, schema_guard, exec_ctx.get_allocator(), file_location));
+  OZ (ObExternalTableUtils::get_external_file_location_access_info(*table_schema, schema_guard, access_info));
+  if (OB_SUCC(ret) && ObSQLUtils::is_external_files_on_local_disk(file_location)) {
+    OZ (ObSQLUtils::check_location_access_priv(file_location, exec_ctx.get_my_session()));
   }
   ObSqlString full_path;
   CK (GCTX.location_service_);
   OZ (exec_ctx.get_my_session()->get_regexp_session_vars(regexp_vars));
   OZ (ObExternalTableUtils::collect_external_file_list(
+              exec_ctx.get_my_session(),
               tenant_id,
               table_schema->get_table_id(),
-              table_schema->get_external_file_location(),
-              table_schema->get_external_file_location_access_info(),
+              file_location,
+              access_info,
               table_schema->get_external_file_pattern(),
               table_schema->get_external_properties(),
               table_schema->is_partitioned_table(),
@@ -1729,7 +1742,6 @@ int ObExternalTableFileManager::create_auto_refresh_job(ObExecContext &ctx, cons
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_, part_id_, row_start_, row_count_, session_id_);
 
 }
 }

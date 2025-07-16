@@ -75,7 +75,7 @@ ObTabletPointer::ObTabletPointer(
 {
 }
 
-ObTabletBasePointer::~ObTabletBasePointer()
+ObSSTabletDummyPointer::~ObSSTabletDummyPointer()
 {
   reset();
 }
@@ -85,7 +85,7 @@ ObTabletPointer::~ObTabletPointer()
   reset();
 }
 
-void ObTabletBasePointer::reset()
+void ObSSTabletDummyPointer::reset()
 {
   reset_obj();
   phy_addr_.reset();
@@ -106,17 +106,6 @@ void ObTabletPointer::reset()
   ls_handle_.reset();
   flying_ = false;
   attr_.reset();
-}
-
-void ObTabletBasePointer::reset_obj()
-{
-  if (nullptr != obj_.ptr_) {
-    const int64_t ref_cnt = obj_.ptr_->dec_ref();
-  }
-  obj_.ptr_ = nullptr;
-  obj_.allocator_ = nullptr;
-  obj_.t3m_ = nullptr;
-  obj_.pool_ = nullptr;
 }
 
 void ObTabletPointer::reset_obj()
@@ -157,7 +146,7 @@ bool ObTabletPointer::need_push_to_flying_() const
           OB_NOT_NULL(old_version_chain_);
 }
 
-bool ObTabletPointer::need_remove_from_flying_() const
+bool ObTabletPointer::need_remove_from_flying() const
 {
   return is_flying() && is_old_version_chain_empty();
 }
@@ -246,11 +235,6 @@ void ObTabletPointer::get_obj(ObTabletHandle &guard)
   guard.set_wash_priority(WashTabletPriority::WTP_HIGH);
 }
 
-void ObTabletBasePointer::get_obj(ObTabletHandle &guard)
-{
-  guard.reset();
-}
-
 bool ObTabletBasePointer::is_in_memory() const
 {
   return nullptr != obj_.ptr_;
@@ -270,15 +254,6 @@ void ObTabletBasePointer::set_addr_with_reset_obj(const ObMetaDiskAddr &addr)
 {
   reset_obj();
   phy_addr_ = addr;
-}
-
-void ObTabletBasePointer::set_obj(const ObTabletHandle &guard)
-{
-  reset_obj();
-  guard.get_obj(obj_);
-  if (nullptr != obj_.ptr_) {
-    obj_.ptr_->inc_ref();
-  }
 }
 
 void ObTabletPointer::set_obj(const ObTabletHandle &guard)
@@ -378,7 +353,7 @@ int ObTabletPointer::dump_meta_obj(ObTabletHandle &guard, void *&free_obj)
     const ObTabletID tablet_id = obj_.ptr_->tablet_meta_.tablet_id_;
     const int64_t wash_score = obj_.ptr_->get_wash_score();
     guard.get_obj(meta_obj);
-    const ObTabletPersisterParam param(ls_id, ls_handle_.get_ls()->get_ls_epoch(), tablet_id, obj_.ptr_->get_transfer_seq());
+    const ObTabletPersisterParam param(0/*data_version*/, ls_id, ls_handle_.get_ls()->get_ls_epoch(), tablet_id, obj_.ptr_->get_transfer_seq());
     ObTablet *tmp_obj = obj_.ptr_;
     if (OB_NOT_NULL(meta_obj.ptr_) && obj_.ptr_->get_try_cache_size() <= ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
       char *buf = reinterpret_cast<char*>(meta_obj.ptr_);
@@ -536,7 +511,7 @@ int ObTabletPointer::remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle
   return ret;
 }
 
-int ObTabletBasePointer::get_mds_table(const ObTabletID &tablet_id,
+int ObSSTabletDummyPointer::get_mds_table(const ObTabletID &tablet_id,
     mds::MdsTableHandle &handle,
     bool not_exist_create)
 {
@@ -766,6 +741,25 @@ int ObTabletPointer::release_obj(ObTablet *&t)
   return ret;
 }
 
+int ObTabletPointer::advance_notify_ss_change_version(
+    const ObTabletID &tablet_id,
+    const share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  share::SCN old_scn;
+  do {
+    old_scn = attr_.notify_ss_change_version_.atomic_load();
+    if (old_scn >= scn) {
+      ret = OB_NO_NEED_UPDATE;
+    }
+  } while (OB_SUCC(ret) && !attr_.notify_ss_change_version_.atomic_bcas(old_scn, scn));
+  // for test
+  if (OB_SUCC(ret)) {
+    FLOG_INFO("advance notify ss change version", K(ret), K(tablet_id), K(old_scn), K(scn));
+  }
+  return ret;
+}
+
 int ObTabletPointer::set_tablet_attr(const ObTabletAttr &attr)
 {
   int ret = OB_SUCCESS;
@@ -786,6 +780,20 @@ int64_t ObTabletPointer::get_auto_part_size() const
 void ObTabletPointer::set_auto_part_size(const int64_t auto_part_size)
 {
   ATOMIC_STORE(&attr_.auto_part_size_, auto_part_size);
+}
+
+void ObSSTabletDummyPointer::set_obj(const ObTabletHandle &guard)
+{
+  reset_obj();
+  guard.get_obj(obj_);
+}
+
+void ObSSTabletDummyPointer::reset_obj()
+{
+  obj_.ptr_ = nullptr;
+  obj_.allocator_ = nullptr;
+  obj_.t3m_ = nullptr;
+  obj_.pool_ = nullptr;
 }
 
 int64_t ObITabletFilterOp::total_skip_cnt_ = 0;
@@ -844,5 +852,27 @@ int ScanAllVersionTabletsOp::GetMaxMdsCkptScnOp::operator()(ObTablet &tablet)
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
+ScanAllVersionTabletsOp::GetMinSSTabletVersionScnOp::GetMinSSTabletVersionScnOp(
+  share::SCN &min_ss_tablet_version_scn) :
+  min_ss_tablet_version_scn_(min_ss_tablet_version_scn)
+{
+  min_ss_tablet_version_scn_.set_max();
+}
+
+int ScanAllVersionTabletsOp::GetMinSSTabletVersionScnOp::operator()(ObTablet &tablet)
+{
+  int ret = OB_SUCCESS;
+  const SCN ss_tablet_version_scn = tablet.get_min_ss_tablet_version();
+  if (min_ss_tablet_version_scn_ > ss_tablet_version_scn) {
+    LOG_INFO("find smaller ss_tablet_version_scn, will change it on tablet",
+             K(min_ss_tablet_version_scn_),
+             K(ss_tablet_version_scn),
+             K(tablet));
+  }
+  min_ss_tablet_version_scn_ = SCN::min(min_ss_tablet_version_scn_, ss_tablet_version_scn);
+  return ret;
+}
+#endif
 } // namespace storage
 } // namespace oceanbase

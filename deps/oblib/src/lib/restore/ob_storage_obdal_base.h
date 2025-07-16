@@ -34,6 +34,7 @@ void fin_obdal_env();
 
 static constexpr int POOL_MAX_IDLE_PER_HOST = 32;         // the max idle http client count
 static constexpr int POOL_MAX_IDLE_TIME_S = 45;          // the max time of idle http client (unit s)
+static constexpr int CONNECT_TIMEOUT_S = 10;             // the max time of connect timeout (unit s)
 
 static constexpr int MAX_OBDAL_REGION_LENGTH = 128;
 static constexpr int MAX_OBDAL_ENDPOINT_LENGTH = 256;
@@ -112,6 +113,7 @@ public:
 
 protected:
   bool is_inited_;
+  bool is_write_with_if_match_;
   ObArenaAllocator allocator_;
   ObStorageType storage_type_;
   common::ObString bucket_;

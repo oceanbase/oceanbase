@@ -27,7 +27,7 @@ namespace storage
 
 static const int64_t DDL_FLUSH_MACRO_BLOCK_TIMEOUT = 5 * 1000 * 1000;
 
-static const int64_t SS_DDL_START_SCN_VAL = 100;
+static const int64_t SS_DDL_START_SCN_VAL = 1;
 
 enum ObDDLMacroBlockType
 {
@@ -240,13 +240,12 @@ public:
   bool is_valid() const;
   int assign(const ObDDLFinishLogInfo &other);
   void reset();
-  TO_STRING_KV(K_(ls_id), K_(table_key), K_(data_buffer), K_(data_format_version), K_(macro_block_id));
+  TO_STRING_KV(K_(ls_id), K_(table_key), K_(data_buffer), K_(data_format_version));
 public:
   share::ObLSID ls_id_;
   storage::ObITable::TableKey table_key_;
   ObString data_buffer_;
   uint64_t data_format_version_;
-  blocksstable::MacroBlockId  macro_block_id_;
 };
 #endif
 

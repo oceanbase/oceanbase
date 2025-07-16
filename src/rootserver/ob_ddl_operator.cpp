@@ -7048,6 +7048,33 @@ int ObDDLOperator::drop_db_table_privs(
       }
     }
   }
+
+  // delete object privileges of this user MYSQL
+  if (OB_SUCC(ret)) {
+    ObArray<const ObObjMysqlPriv *> obj_mysql_privs;
+    if (OB_FAIL(schema_guard.get_obj_mysql_priv_with_user_id(
+                                 tenant_id, user_id, obj_mysql_privs))) {
+      LOG_WARN("Get obj mysql privileges of user to be deleted error",
+                K(tenant_id), K(user_id), K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < obj_mysql_privs.count(); ++i) {
+        const ObObjMysqlPriv *obj_mysql_priv = obj_mysql_privs.at(i);
+        int64_t new_schema_version = OB_INVALID_VERSION;
+        ObPrivSet empty_priv = 0;
+        ObString dcl_stmt;
+        if (OB_ISNULL(obj_mysql_priv)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("obj mysql priv is NULL", K(ret), K(obj_mysql_priv));
+        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().grant_object(
+            obj_mysql_priv->get_sort_key(), empty_priv, new_schema_version, &dcl_stmt, trans,
+            0, false, "", ""))) {
+          LOG_WARN("Delete obj mysql privilege failed", K(obj_mysql_priv), K(ret));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -7797,7 +7824,8 @@ int ObDDLOperator::grant_table(
       need_flush = (new_priv != table_priv_set);
       bool is_directory_or_catalog = false;
       if (obj_priv_array.count() > 0
-          && ((static_cast<uint64_t>(ObObjectType::DIRECTORY) == obj_priv_key.obj_type_)
+          && (((static_cast<uint64_t>(ObObjectType::DIRECTORY) == obj_priv_key.obj_type_
+              || static_cast<uint64_t>(ObObjectType::LOCATION) == obj_priv_key.obj_type_))
               || (static_cast<uint64_t>(ObObjectType::CATALOG) == obj_priv_key.obj_type_))) {
         is_directory_or_catalog = true;
       }
@@ -10641,7 +10669,6 @@ int ObDDLOperator::drop_directory(const ObString &ddl_str,
   return ret;
 }
 //----End of functions for directory object----
-
 
 int ObDDLOperator::alter_user_proxy(const ObUserInfo* client_user_info,
                                     const ObUserInfo* proxy_user_info,

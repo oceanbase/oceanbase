@@ -29,6 +29,7 @@
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/audit/ob_audit_log_utils.h"
 #endif
+#include "pl/external_routine/ob_external_resource.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -183,7 +184,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       failover_mode_(false),
       service_name_(),
       executing_sql_stat_record_(),
-      unit_gc_min_sup_proxy_version_(0)
+      unit_gc_min_sup_proxy_version_(0),
+      external_resource_schema_cache_(nullptr)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -790,6 +792,15 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
     reset(skip_sys_var);
     is_inited_ = false;
     sql_req_level_ = 0;
+
+    if (OB_NOT_NULL(external_resource_schema_cache_)) {
+      using Cache = pl::ObExternalResourceCache<pl::ObExternalSchemaJar>;
+      Cache *cache = static_cast<Cache *>(external_resource_schema_cache_);
+      cache->~Cache();
+      get_session_allocator().free(cache);
+      cache = nullptr;
+      external_resource_schema_cache_ = nullptr;
+    }
   }
 }
 
@@ -2090,8 +2101,9 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
       || EXECUTE_PS_SEND_LONG_DATA == mode
       || EXECUTE_PS_FETCH == mode
       || EXECUTE_PL_EXECUTE == mode) {
-    audit_record_.tenant_name_ = const_cast<char *>(get_tenant_name().ptr());
-    audit_record_.tenant_name_len_ = min(get_tenant_name().length(),
+    // consistency between tenant_id_ and tenant_name_
+    audit_record_.tenant_name_ = const_cast<char *>(get_effective_tenant_name().ptr());
+    audit_record_.tenant_name_len_ = min(get_effective_tenant_name().length(),
                                          OB_MAX_TENANT_NAME_LENGTH);
     audit_record_.user_name_ = const_cast<char *>(get_user_name().ptr());
     audit_record_.user_name_len_ = min(get_user_name().length(),
@@ -2629,6 +2641,7 @@ int ObSQLSessionInfo::set_package_variable(
                                 NULL, /*param_list*/
                                 NULL, /*extern_param_info*/
                                 TgTimingEvent::TG_TIMING_EVENT_INVALID,
+                                nullptr,
                                 true /*is_sync_pacakge_var*/);
     OZ (package_guard.init());
     if (OB_SUCC(ret)) {

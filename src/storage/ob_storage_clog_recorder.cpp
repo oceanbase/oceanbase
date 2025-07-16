@@ -106,7 +106,7 @@ OB_INLINE void ObIStorageClogRecorder::wait_to_lock(const int64_t update_version
   while (true) {
     int64_t last_time = ObTimeUtility::fast_current_time();
     while (true == ATOMIC_LOAD(&lock_)) {
-      usleep(100);
+      ob_usleep(100);
       if (ObTimeUtility::fast_current_time() + 100 * 1000 > last_time) {
         last_time = ObTimeUtility::fast_current_time();
         LOG_DEBUG("waiting to lock", K(update_version), K(max_saved_version_), KPC(this));
@@ -128,7 +128,7 @@ OB_INLINE void ObIStorageClogRecorder::wait_for_logcb(const int64_t update_versi
       last_time = ObTimeUtility::fast_current_time();
       LOG_DEBUG("waiting for clog callback", K(update_version), K(max_saved_version_), KPC(this));
     }
-    usleep(100);
+    ob_usleep(100);
     WEAK_BARRIER();
   }
 }

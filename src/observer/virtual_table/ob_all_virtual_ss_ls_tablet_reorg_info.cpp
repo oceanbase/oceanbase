@@ -79,7 +79,7 @@ int ObAllVirtualSSLsTabletReorgInfo::init_read_op_(
     const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  ObMemberTableReadOperator *read_op = nullptr;
+  ObTabletReorgInfoTableReadOperator *read_op = nullptr;
   void *buf = nullptr;
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -88,11 +88,11 @@ int ObAllVirtualSSLsTabletReorgInfo::init_read_op_(
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "read op should be nullptr", K(ret), KP(read_op_));
   } else {
-    if (FALSE_IT(buf = ob_malloc(sizeof(ObMemberTableReadOperator), "MemberTabReader"))) {
+    if (FALSE_IT(buf = ob_malloc(sizeof(ObTabletReorgInfoTableReadOperator), "MemberTabReader"))) {
     } else if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       SERVER_LOG(WARN, "failed to alloc memory", K(ret), KP(buf));
-    } else if (FALSE_IT(read_op = new (buf) ObMemberTableReadOperator())) {
+    } else if (FALSE_IT(read_op = new (buf) ObTabletReorgInfoTableReadOperator())) {
     } else if (OB_FAIL(read_op->init(tenant_id, ls_id))) {
       SERVER_LOG(WARN, "failed to init member table read operator", K(ret), K(tenant_id), K(ls_id));
     } else {
@@ -107,10 +107,10 @@ int ObAllVirtualSSLsTabletReorgInfo::init_read_op_(
   return ret;
 }
 
-void ObAllVirtualSSLsTabletReorgInfo::free_read_op_(ObMemberTableReadOperator *&read_op)
+void ObAllVirtualSSLsTabletReorgInfo::free_read_op_(ObTabletReorgInfoTableReadOperator *&read_op)
 {
   if (OB_NOT_NULL(read_op)) {
-    read_op->~ObMemberTableReadOperator();
+    read_op->~ObTabletReorgInfoTableReadOperator();
     ob_free(read_op);
     read_op = nullptr;
   }
@@ -140,8 +140,8 @@ int ObAllVirtualSSLsTabletReorgInfo::get_next_ls_(ObLS *&ls)
   return ret;
 }
 
-int ObAllVirtualSSLsTabletReorgInfo::get_next_member_table_data_(
-    ObMemberTableData &data, share::SCN &commit_scn)
+int ObAllVirtualSSLsTabletReorgInfo::get_next_reorg_info_data_(
+    ObTabletReorgInfoData &data, share::SCN &commit_scn)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -181,7 +181,7 @@ int ObAllVirtualSSLsTabletReorgInfo::get_next_member_table_data_(
 int ObAllVirtualSSLsTabletReorgInfo::process_curr_tenant(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObMemberTableData data;
+  ObTabletReorgInfoData data;
   share::SCN commit_scn;
 
   if (OB_ISNULL(allocator_)) {
@@ -191,9 +191,9 @@ int ObAllVirtualSSLsTabletReorgInfo::process_curr_tenant(ObNewRow *&row)
   } else if (ls_iter_guard_.get_ptr() == nullptr
       && OB_FAIL(MTL(ObLSService*)->get_ls_iter(ls_iter_guard_, ObLSGetMod::OBSERVER_MOD))) {
     SERVER_LOG(WARN, "get_ls_iter fail", K(ret));
-  } else if (OB_FAIL(get_next_member_table_data_(data, commit_scn))) {
+  } else if (OB_FAIL(get_next_reorg_info_data_(data, commit_scn))) {
     if (OB_ITER_END != ret) {
-      SERVER_LOG(WARN, "get_next_member_table_data_ failed", K(ret));
+      SERVER_LOG(WARN, "get_next_reorg_info_data_ failed", K(ret));
     }
   }
 
@@ -234,7 +234,7 @@ int ObAllVirtualSSLsTabletReorgInfo::process_curr_tenant(ObNewRow *&row)
         break;
       case DATA_TYPE:
         //data_type
-        cur_row_.cells_[i].set_varchar(ObMemberTableDataType::get_str(data.key_.type_));
+        cur_row_.cells_[i].set_varchar(ObTabletReorgInfoDataType::get_str(data.key_.type_));
         cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
         break;
       case COMMIT_SCN:

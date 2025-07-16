@@ -108,7 +108,7 @@ TEST_F(TestTruncateInfoKVCache, truncate_info_cache_deep_copy)
   ObTruncateInfoKVCache &truncate_info_cache = ObStorageCacheSuite::get_instance().get_truncate_info_cache();
   ObTruncateInfoArray truncate_info_array;
   ASSERT_EQ(OB_SUCCESS, truncate_info_array.init_for_first_creation(allocator_));
-  ASSERT_EQ(OB_SUCCESS, truncate_info_array.append(truncate_info));
+  ASSERT_EQ(OB_SUCCESS, truncate_info_array.append_with_deep_copy(truncate_info));
 
   ObTabletID tablet_id(10001);
   ObTruncateInfoCacheValue cache_value;
@@ -135,7 +135,7 @@ TEST_F(TestTruncateInfoKVCache, truncate_info_cache_deep_copy)
   ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_part_key_idxs(allocator_, 1, truncate_info.truncate_part_));
   TruncateInfoHelper::mock_truncate_info(allocator_, 2/*trans_id*/, 200/*schema_version*/, 2000/*commit_version*/, truncate_info);
   ASSERT_TRUE(truncate_info.is_valid());
-  ASSERT_EQ(OB_SUCCESS, truncate_info_array.append(truncate_info));
+  ASSERT_EQ(OB_SUCCESS, truncate_info_array.append_with_deep_copy(truncate_info));
   ASSERT_EQ(2, truncate_info_array.count());
   {
     ObTruncateInfoCacheKey cache_key(MTL_ID(), tablet_id, truncate_info.schema_version_, last_major_snapshot);

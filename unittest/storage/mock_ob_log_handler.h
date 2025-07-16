@@ -318,6 +318,11 @@ public:
   {
     return OB_SUCCESS;
   }
+  int inc_config_version(int64_t timeout_us)
+  {
+    return OB_SUCCESS;
+  }
+
   int add_member(const common::ObMember &member,
                  const int64_t paxos_replica_num,
                  const palf::LogConfigVersion &config_version,

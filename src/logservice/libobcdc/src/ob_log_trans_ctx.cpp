@@ -891,7 +891,7 @@ void TransCtx::wait_trans_redo_dispatched_()
   static const int64_t WAIT_SLEEP_TIME = 10 * _MSEC_;
 
   while (! ATOMIC_LOAD(&is_trans_redo_dispatched_)) {
-    usleep(WAIT_SLEEP_TIME);
+    ob_usleep(WAIT_SLEEP_TIME);
     if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
       LOG_INFO("waiting redo dispatch finish...", K_(tenant_id), K_(trans_id),
           K_(participant_count), K_(ready_participant_count), K_(revertable_participant_count),

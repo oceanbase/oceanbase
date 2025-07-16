@@ -292,19 +292,7 @@ public:
     return ref_cnt;
   }
 
-  void dec_ref()
-  {
-#ifdef UNITTEST
-  return;
-#endif
-    if (nullptr == tx_data_allocator_) {
-      STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid slice allocator", KPC(this));
-      ob_abort();
-    } else if (0 == ATOMIC_SAF(&ref_cnt_, 1)) {
-      op_guard_.reset();
-      tx_data_allocator_->free(this);
-    }
-  }
+  void dec_ref();
 
   int check_tx_op_exist(share::SCN op_scn, bool &exist);
 

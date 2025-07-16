@@ -26,6 +26,7 @@ namespace oceanbase
 namespace sql
 {
 class ObSqlPlanSet;
+struct ObSpmCacheCtx;
 
 enum PlanBaselineFlag
 {
@@ -241,6 +242,15 @@ public:
   void set_baseline_key(ObBaselineKey &key) { baseline_key_ = key; }
   ObBaselineKey &get_baseline_key() { return baseline_key_; }
   bool check_has_accepted_baseline() const;
+  static bool is_outline_data_str_truncated(const ObString &outline_data_str);
+  static int get_plan_baseline(ObPlanCache *lib_cache,
+                               ObSpmCacheCtx &spm_ctx,
+                               ObBaselineKey *key,
+                               ObCacheObjGuard &guard);
+  static int add_plan_baseline(ObPlanCache *lib_cache,
+                               ObSpmCacheCtx &spm_ctx,
+                               ObBaselineKey *key,
+                               ObPlanBaselineItem *baseline_item);
 
   TO_STRING_KV(K_(is_inited));
 private:

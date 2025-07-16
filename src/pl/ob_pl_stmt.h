@@ -155,6 +155,8 @@ public:
   inline bool is_referenced() const { return is_referenced_; }
   inline void set_is_default_expr_has_reroute_factor(bool val) { is_default_expr_access_external_state_ = val; }
   inline bool is_default_expr_access_external_state() const { return is_default_expr_access_external_state_; }
+  inline ObIArray<std::pair<ObString, bool>> &get_trigger_ref_cols() { return trigger_ref_cols_; };
+  inline const ObIArray<std::pair<ObString, bool>> &get_trigger_ref_cols() const { return trigger_ref_cols_; };
 
   TO_STRING_KV(K_(name),
                K_(type),
@@ -176,13 +178,16 @@ private:
   bool is_dup_declare_;
   bool is_referenced_;
   bool is_default_expr_access_external_state_;
+  // 对于 trigger 的入参 rowtype，body 中显示调用的列 <col_name, is_write>>
+  common::ObSEArray<std::pair<ObString, bool>, 4> trigger_ref_cols_;
 };
 
 class ObPLSymbolTable
 {
 public:
   ObPLSymbolTable(ObIAllocator &allocator) : variables_(allocator),
-                                             self_param_idx_(OB_INVALID_INDEX) {}
+                                             self_param_idx_(OB_INVALID_INDEX),
+                                             allocator_(allocator) {}
   virtual ~ObPLSymbolTable() {}
 
   inline int64_t get_count() const  { return variables_.count(); }
@@ -212,6 +217,7 @@ public:
     }
     return val;
   }
+  inline common::ObIAllocator &get_allocator() const { return allocator_; }
 
   TO_STRING_KV(K_(variables), K_(self_param_idx));
 
@@ -219,6 +225,7 @@ private:
   //所有输入输出参数，和PL体内使用的所有变量（包括游标，但是不包括condition，也不包括函数返回值和隐藏的ctx参数）,和ObPLFunction里的符号表一一对应
   ObPLSEArray<ObPLVar> variables_;
   int64_t self_param_idx_; // index of self_param
+  common::ObIAllocator &allocator_;
 };
 
 class ObPLStmt;
@@ -555,7 +562,8 @@ public:
       cursor_type_(),
       formal_params_(allocator),
       state_(INVALID),
-      has_dup_column_name_(false) {}
+      has_dup_column_name_(false),
+      pkg_body_id_(0) /*0 means not set yet, Why not set to Invalid, Cause When create body resolver, pkg_body_id is INVALID ID*/ {}
   virtual ~ObPLCursor() {}
 
   inline bool is_package_cursor() const
@@ -585,7 +593,7 @@ public:
   inline void set_hidden_rowid(bool has_hidden_rowid) { value_.set_hidden_rowid(has_hidden_rowid); }
   inline bool has_hidden_rowid() const { return value_.has_hidden_rowid(); }
   inline void set_skip_locked(bool is_skip_locked) { value_.set_skip_locked(is_skip_locked); }
-  inline bool is_skip_locked() { return value_.is_skip_locked(); }
+  inline bool is_skip_locked() const { return value_.is_skip_locked(); }
   inline const common::ObIArray<share::schema::ObSchemaObjVersion> &get_ref_objects() const { return value_.get_ref_objects(); }
   inline int set_ref_objects(const common::ObIArray<share::schema::ObSchemaObjVersion> &ref_objects) { return value_.set_ref_objects(ref_objects); }
   inline void set_row_desc(const ObRecordType* row_desc) { value_.set_row_desc(row_desc); }
@@ -602,22 +610,25 @@ public:
   inline void set_rowid_table_id(uint64 table_id) { value_.set_rowid_table_id(table_id); }
   inline void set_dup_column() { has_dup_column_name_ = true; }
   inline bool is_dup_column() const { return has_dup_column_name_; }
+  inline void set_package_body_id(uint64_t pkg_body_id) { pkg_body_id_ = pkg_body_id; }
+  inline uint64_t get_package_body_id() const { return pkg_body_id_; }
+  inline bool is_define_in_body() const { return pkg_body_id_ != 0; }
 
   int set(const ObString &sql,
-                 const ObIArray<int64_t> &expr_idxs,
-                 const common::ObString &ps_sql,
-                 sql::stmt::StmtType type,
-                 bool for_update,
-                 ObRecordType *record_type,
-                 const ObPLDataType &cursor_type,
-                 CursorState state,
-                 const ObIArray<share::schema::ObSchemaObjVersion> &ref_objects,
-                 const common::ObIArray<int64_t> &params,
-                 bool has_dup_column_name
-                 );
+          const ObIArray<int64_t> &expr_idxs,
+          const common::ObString &ps_sql,
+          sql::stmt::StmtType type,
+          bool for_update,
+          ObRecordType *record_type,
+          const ObPLDataType &cursor_type,
+          CursorState state,
+          const ObIArray<share::schema::ObSchemaObjVersion> &ref_objects,
+          const common::ObIArray<int64_t> &params,
+          bool has_dup_column_name);
 
   TO_STRING_KV(
-    K_(pkg_id), K_(routine_id), K_(idx), K_(value), K_(cursor_type), K_(formal_params), K_(state), K_(has_dup_column_name));
+    K_(pkg_id), K_(routine_id), K_(idx), K_(value),
+    K_(cursor_type), K_(formal_params), K_(state), K_(has_dup_column_name), K_(pkg_body_id));
 
 protected:
   uint64_t pkg_id_;
@@ -628,6 +639,7 @@ protected:
   ObPLSEArray<int64_t> formal_params_;
   CursorState state_;
   bool has_dup_column_name_;
+  uint64_t pkg_body_id_; // It means CURSOR is declare in spec and define in body, sql params will save in body instead of spec.
 };
 
 class ObPLCursorTable
@@ -659,7 +671,8 @@ public:
                  const common::ObIArray<int64_t> &formal_params,
                  ObPLCursor::CursorState state = ObPLCursor::DEFINED,
                  bool has_dup_column_name = false,
-                 bool skip_locked = false);
+                 bool skip_locked = false,
+                 uint64_t package_body_id = 0);
 
   TO_STRING_KV(K_(cursors));
 
@@ -1188,7 +1201,7 @@ public:
                       int64_t &var_idx,
                       const ObString &synonym_name,
                       const uint64_t cur_db_id,
-                      const pl::ObPLDependencyTable *dep_table,
+                      ObIArray<ObSchemaObjVersion> &deps,
                       bool full_schema) const;
   int resolve_external_symbol(const common::ObString &name,
                               ExternalType &type,
@@ -1196,6 +1209,7 @@ public:
                               uint64_t &parent_id,
                               int64_t &var_idx,
                               bool full_schema = false) const;
+
   int resolve_external_type_by_name(const ObString &db_name,
                                     const ObString &package_name,
                                     const ObString &type_name,
@@ -1219,7 +1233,8 @@ public:
                                  ExternalType &type,
                                  ObPLDataType &data_type,
                                  uint64_t &parent_id,
-                                 int64_t &var_idx) const;
+                                 int64_t &var_idx,
+                                 ObIArray<ObSchemaObjVersion> &deps) const;
   inline const ObPLBlockNS *get_parent_ns() const { return parent_ns_; }
   inline const ObPLResolveCtx &get_resolve_ctx() { return resolve_ctx_; }
   inline ObPLDependencyTable *get_dependency_table() const { return dependency_table_; }
@@ -1505,7 +1520,8 @@ public:
                             ObObjAccessIdx &access_idx,
                             ObPLDataType &data_type,
                             uint64_t &package_id,
-                            int64_t &var_idx) const;
+                            int64_t &var_idx,
+                            ObIArray<ObObjAccessIdx> &access_idxs) const;
   int find_sub_attr_by_index(const ObUserDefinedType &user_type, int64_t attr_index, const sql::ObRawExpr *func_expr, ObObjAccessIdx &access_idx) const;
   int expand_data_type(const ObUserDefinedType *user_type,
                        ObIArray<ObDataType> &types,
@@ -1722,6 +1738,9 @@ public:
   virtual bool is_has_out_param() const { return is_has_out_param_; }
   virtual void set_external_state() { is_external_state_ = true; }
   virtual bool is_external_state() const { return is_external_state_; }
+  virtual void set_has_continue_handler(bool has_continue_handler) { has_continue_handler_ = has_continue_handler; }
+  virtual bool has_continue_handler() { return has_continue_handler_; }
+
 
   ObPLSymbolDebugInfoTable &get_symbol_debuginfo_table()
   {
@@ -1759,7 +1778,7 @@ protected:
   ObString priv_user_;
   char invoker_database_name_[common::OB_MAX_DATABASE_NAME_BUF_LENGTH * OB_MAX_CHAR_LEN];  //invoker database
   uint64_t invoker_database_id_; //invoker database_id
-  union {
+  union {  // FARM COMPAT WHITELIST
     uint64_t analyze_flag_;
     struct {
       uint64_t is_no_sql_ : 1;
@@ -1771,7 +1790,8 @@ protected:
       uint64_t is_has_sequence_ : 1;
       uint64_t is_has_out_param_ : 1;
       uint64_t is_external_state_ : 1;
-      uint64_t reserved_:54;
+      uint64_t has_continue_handler_ : 1;
+      uint64_t reserved_:53;
     };
   };
 private:
@@ -2915,7 +2935,6 @@ public:
     virtual ~DeclareHandler() {}
 
     inline int64_t get_level() const { return level_; }
-    inline void set_level(int64_t level) { level_ = level; }
     inline HandlerDesc *get_desc() const { return desc_; }
     inline void set_desc(HandlerDesc *desc) { desc_ = desc; }
     inline bool is_original() const { return OB_INVALID_INDEX == level_; }

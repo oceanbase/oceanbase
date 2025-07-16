@@ -161,7 +161,8 @@ int stop_tx(ObTxDesc &tx);
 int get_read_snapshot(ObTxDesc &tx,
                       const ObTxIsolationLevel isolation_level,
                       const int64_t expire_ts,
-                      ObTxReadSnapshot &snapshot);
+                      ObTxReadSnapshot &snapshot,
+                      const bool is_for_sslog = false);
 
 /**
  * get_ls_read_snapshot - get a read snapshot which can be used to read

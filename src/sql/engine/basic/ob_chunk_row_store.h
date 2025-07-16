@@ -398,7 +398,7 @@ public:
   inline int64_t get_mem_used() const { return mem_used_; }
   inline int64_t get_max_hold_mem() const { return max_hold_mem_; }
   inline int64_t get_file_fd() const { return io_.fd_; }
-  inline int64_t get_file_dir_id() const { return io_.dir_id_; }
+  inline int64_t get_file_dir_id() const { return dir_id_; }
   inline int64_t get_file_size() const { return file_size_; }
   inline int64_t min_blk_size(const int64_t row_store_size)
   {
@@ -417,7 +417,7 @@ public:
   void reset_callback() { callback_ = nullptr; }
   int dump(bool reuse, bool all_dump);
   // 目前dir id 的策略是上层逻辑（一般是算子）统一申请，然后再set过来
-  void set_dir_id(int64_t dir_id) { io_.dir_id_ = dir_id; }
+  void set_dir_id(int64_t dir_id) { dir_id_ = dir_id; }
   int alloc_dir_id();
   uint64_t get_tenant_id() { return tenant_id_; }
   const char *get_label() { return label_; }
@@ -495,6 +495,7 @@ private:
 
   //int fd_;
   tmp_file::ObTmpFileIOInfo io_;
+  int64_t dir_id_;
   int64_t file_size_;
   int64_t n_block_in_file_;
 

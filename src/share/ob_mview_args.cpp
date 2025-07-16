@@ -45,6 +45,8 @@ void ObMViewCompleteRefreshArg::reset()
   last_refresh_scn_.reset();
   tz_info_.reset();
   tz_info_wrap_.reset();
+  select_sql_.reset();
+  target_data_sync_scn_.reset();
   for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
     nls_formats_[i].reset();
   }
@@ -67,6 +69,8 @@ int ObMViewCompleteRefreshArg::assign(const ObMViewCompleteRefreshArg &other)
       sql_mode_ = other.sql_mode_;
       last_refresh_scn_ = other.last_refresh_scn_;
       parent_task_id_ = other.parent_task_id_;
+      target_data_sync_scn_ = other.target_data_sync_scn_;
+      select_sql_ = other.select_sql_;
       if (OB_FAIL(tz_info_.assign(other.tz_info_))) {
         LOG_WARN("fail to assign tz info", KR(ret), "tz_info", other.tz_info_);
       } else if (OB_FAIL(tz_info_wrap_.deep_copy(other.tz_info_wrap_))) {
@@ -102,6 +106,8 @@ OB_DEF_SERIALIZE(ObMViewCompleteRefreshArg)
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ENCODE, parent_task_id_);
+    LST_DO_CODE(OB_UNIS_ENCODE, target_data_sync_scn_);
+    LST_DO_CODE(OB_UNIS_ENCODE, select_sql_);
   }
   return ret;
 }
@@ -136,6 +142,8 @@ OB_DEF_DESERIALIZE(ObMViewCompleteRefreshArg)
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE, parent_task_id_);
+    LST_DO_CODE(OB_UNIS_DECODE, target_data_sync_scn_);
+    LST_DO_CODE(OB_UNIS_DECODE, select_sql_);
   }
   return ret;
 }
@@ -161,6 +169,8 @@ OB_DEF_SERIALIZE_SIZE(ObMViewCompleteRefreshArg)
   }
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, parent_task_id_);
+    LST_DO_CODE(OB_UNIS_ADD_LEN, target_data_sync_scn_);
+    LST_DO_CODE(OB_UNIS_ADD_LEN, select_sql_);
   }
   if (OB_FAIL(ret)) {
     len = -1;
@@ -187,6 +197,8 @@ void ObMViewRefreshInfo::reset()
   refresh_scn_.reset();
   start_time_ = OB_INVALID_TIMESTAMP;
   is_mview_complete_refresh_ = false;
+  mview_target_data_sync_scn_.reset();
+  select_sql_.reset();
 }
 
 int ObMViewRefreshInfo::assign(const ObMViewRefreshInfo &other)
@@ -198,6 +210,8 @@ int ObMViewRefreshInfo::assign(const ObMViewRefreshInfo &other)
     refresh_scn_ = other.refresh_scn_;
     start_time_ = other.start_time_;
     is_mview_complete_refresh_ = other.is_mview_complete_refresh_;
+    mview_target_data_sync_scn_ = other.mview_target_data_sync_scn_;
+    select_sql_ = other.select_sql_;
   }
   return ret;
 }
@@ -207,7 +221,9 @@ OB_SERIALIZE_MEMBER(ObMViewRefreshInfo,
                     last_refresh_scn_,
                     refresh_scn_,
                     start_time_,
-                    is_mview_complete_refresh_);
+                    is_mview_complete_refresh_,
+                    mview_target_data_sync_scn_,
+                    select_sql_);
 
 bool ObAlterMViewArg::is_valid() const
 {
@@ -219,6 +235,8 @@ bool ObAlterMViewArg::is_valid() const
   } else if (is_alter_refresh_start_ && !start_time_.is_timestamp()) {
     is_valid = false;
   } else if (is_alter_refresh_next_ && next_time_expr_.empty()) {
+    is_valid = false;
+  } else if (is_alter_nested_refresh_mode_ && ObMVNestedRefreshMode::MAX <= nested_refresh_mode_) {
     is_valid = false;
   }
   return is_valid;
@@ -239,6 +257,8 @@ void ObAlterMViewArg::reset()
   start_time_.reset();
   is_alter_refresh_next_ = false;
   next_time_expr_.reset();
+  is_alter_nested_refresh_mode_ = false;
+  nested_refresh_mode_ = ObMVNestedRefreshMode::MAX;
 }
 
 int ObAlterMViewArg::assign(const ObAlterMViewArg &other)
@@ -258,6 +278,8 @@ int ObAlterMViewArg::assign(const ObAlterMViewArg &other)
     start_time_ = other.start_time_;
     is_alter_refresh_next_ = other.is_alter_refresh_next_;
     next_time_expr_ = other.next_time_expr_;
+    is_alter_nested_refresh_mode_ = other.is_alter_nested_refresh_mode_;
+    nested_refresh_mode_ = other.nested_refresh_mode_;
   }
   return ret;
 }
@@ -275,7 +297,9 @@ OB_SERIALIZE_MEMBER(ObAlterMViewArg,
                     is_alter_refresh_start_,
                     start_time_,
                     is_alter_refresh_next_,
-                    next_time_expr_);
+                    next_time_expr_,
+                    is_alter_nested_refresh_mode_,
+                    nested_refresh_mode_);
 
 bool ObAlterMLogArg::is_valid() const
 {

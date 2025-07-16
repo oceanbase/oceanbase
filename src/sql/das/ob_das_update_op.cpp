@@ -471,6 +471,7 @@ int ObDASUpdateOp::open_op()
   upd_adaptor.tablet_id_ = tablet_id_;
   upd_adaptor.ls_id_ = ls_id_;
   upd_adaptor.related_tablet_ids_ = &related_tablet_ids_;
+  upd_adaptor.is_do_gts_opt_ = das_gts_opt_info_.use_specify_snapshot_;
   upd_adaptor.das_allocator_ = &op_alloc_;
   upd_adaptor.ft_doc_word_infos_ = &doc_word_infos;
   if (OB_FAIL(ObDASDomainUtils::build_ft_doc_word_infos(ls_id_, trans_desc_, snapshot_, related_ctdefs_, related_tablet_ids_,

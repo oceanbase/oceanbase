@@ -34,105 +34,6 @@ typedef lib::ObLockGuard<lib::ObMutex> LockGuard;
 
 class JniWriter: public ObJniConnector {
 public:
-enum OdpsType {
-  /**
-   * 8字节有符号整型
-   */
-  BIGINT,
-  /**
-   * 双精度浮点
-   */
-  DOUBLE,
-  /**
-   * 布尔型
-   */
-  BOOLEAN,
-  /**
-   * 日期类型
-   */
-  DATETIME,
-  /**
-   * 字符串类型
-   */
-  STRING,
-  /**
-   * 精确小数类型
-   */
-  DECIMAL,
-  /**
-   * MAP类型
-   */
-  MAP,
-  /**
-   * ARRAY类型
-   */
-  ARRAY,
-  /**
-   * 空
-   */
-  VOID,
-  /**
-   * 1字节有符号整型
-   */
-  TINYINT,
-  /**
-   * 2字节有符号整型
-   */
-  SMALLINT,
-  /**
-   * 4字节有符号整型
-   */
-  INT,
-  /**
-   * 单精度浮点
-   */
-  FLOAT,
-  /**
-   * 固定长度字符串
-   */
-  CHAR,
-  /**
-   * 可变长度字符串
-   */
-  VARCHAR,
-  /**
-   * 时间类型
-   */
-  DATE,
-  /**
-   * 时间戳
-   */
-  TIMESTAMP,
-  /**
-   * 字节数组
-   */
-  BINARY,
-  /**
-   * 日期间隔
-   */
-  INTERVAL_DAY_TIME,
-  /**
-   * 年份间隔
-   */
-  INTERVAL_YEAR_MONTH,
-  /**
-   * 结构体
-   */
-  STRUCT,
-  /**
-   * JSON类型
-   */
-  JSON,
-  /**
-   * 时区无关的时间戳
-   */
-  TIMESTAMP_NTZ,
-  /**
-   * Unsupported types from external systems
-   */
-  UNKNOWN
-};
-public:
   JniWriter(ObString factory_class, int64_t batch_size = DEFAULT_BATCH_SIZE)
       : params_created_(false), is_opened_(false), jni_writer_factory_class_(factory_class)
   {}
@@ -146,7 +47,8 @@ public:
   int do_write_next_brs(void *brs, int batch_size);
   int get_current_block_addr();
   int finish_write();
-  int commit_session();
+  int append_block_id(int64_t block_id);
+  int commit_session(int64_t block_num);
   int do_close();
   intptr_t get_schema_ptr() { return schema_ptr_; }
   intptr_t get_array_ptr() { return array_ptr_; }
@@ -176,6 +78,7 @@ private:
   jmethodID jni_get_array_address_ = nullptr;
   jmethodID jni_get_export_schema_address_ = nullptr;
   jmethodID jni_writer_get_odps_schema_ = nullptr;
+  jmethodID jni_append_block_id_ = nullptr;
   jmethodID jni_commit_session_ = nullptr;
 
   lib::ObMutex lock_;

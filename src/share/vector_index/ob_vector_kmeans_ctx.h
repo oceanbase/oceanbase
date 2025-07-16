@@ -44,7 +44,10 @@ public:
       sample_vectors_()
   {}
 
-  ~ObKmeansCtx() { destroy(); }
+  virtual ~ObKmeansCtx()
+  {
+    destroy();
+  }
   void destroy();
   int init(
     const int64_t tenant_id,
@@ -65,7 +68,10 @@ public:
                K(tenant_id_),
                K(max_sample_count_),
                K(total_scan_count_),
-               K(dist_algo_));
+               K(dist_algo_),
+               K(sample_dim_),
+               KP(norm_info_),
+               K(sample_vectors_.count()));
 
 public:
   bool is_inited_;
@@ -105,6 +111,7 @@ public:
   ObCentersBuffer<float> &get_cur_centers() { return centers_[cur_idx_]; }
 
   VIRTUAL_TO_STRING_KV(K(is_inited_),
+               KP(kmeans_ctx_),
                KPC(kmeans_ctx_),
                K(cur_idx_),
                KP(weight_),
@@ -175,7 +182,7 @@ public:
   virtual int append_sample_vector(float* vector);
   bool is_empty() { return ctx_.is_empty(); }
 
-  TO_STRING_KV(K(is_inited_),
+  VIRTUAL_TO_STRING_KV(K(is_inited_),
                K(ctx_));
 
 protected:
@@ -208,9 +215,7 @@ public:
   int64_t get_centers_dim() const;
   float *get_center(const int64_t pos);
 
-  TO_STRING_KV(K(is_inited_),
-               K(ctx_),
-               K(algo_));
+  TO_STRING_KV(KP(algo_), KPC(algo_));
 
 private:
   ObKmeansAlgo *algo_;
@@ -292,7 +297,7 @@ public:
   virtual int init_kmeans_ctx(const int64_t dim);
   ObSingleKmeansExecutor *get_kmeans_ctx() { return executor_; }
 
-  TO_STRING_KV(K_(tenant_id), K_(ref_cnt), KP_(allocator), KP_(executor), K_(param));
+  TO_STRING_KV(K_(tenant_id), K_(ref_cnt), KP_(allocator), KP_(executor), K_(param), KPC_(executor));
 private:
   ObSingleKmeansExecutor *executor_; // for build centers
   ObVectorNormalizeInfo norm_info_;
@@ -379,7 +384,7 @@ public:
     }
     return ret;
   }
-  TO_STRING_KV(KPC_(helper));
+  TO_STRING_KV(KP_(helper), KPC_(helper));
 
 private:
   ObIvfBuildHelper *helper_;

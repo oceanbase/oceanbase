@@ -562,9 +562,10 @@ int ObTableMergeOp::do_update()
     } else {
       if (need_delete) {
         // 此处调用dml_service的delete相关的处理接口
-        if (OB_FAIL(process_update_before_delete())) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(process_update_before_delete())) {
           LOG_WARN("fail to process update before delete", K(ret));
-        } else if (OB_SUCC(ret) && OB_FAIL(delete_row_das())) {
+        } else if (OB_FAIL(delete_row_das())) {
           LOG_WARN("fail to update row by das ", K(ret));
         }
       } else {

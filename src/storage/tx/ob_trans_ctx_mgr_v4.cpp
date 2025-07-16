@@ -781,8 +781,10 @@ int ObLSTxCtxMgr::try_wait_gts_and_inc_max_commit_ts_()
   if (!is_leader_serving_) {
     SCN gts;
     MonotonicTs receive_gts_ts(0);
+    const bool is_sslog = is_tenant_sslog_ls(tenant_id_, ls_id_);
+    const uint64_t gts_tenant_id = !is_sslog ? tenant_id_ : get_sslog_gts_tenant_id(tenant_id_);
 
-    if (OB_FAIL(ts_mgr_->get_gts(tenant_id_,
+    if (OB_FAIL(ts_mgr_->get_gts(gts_tenant_id,
                                  leader_takeover_ts_,
                                  nullptr,
                                  gts,
@@ -798,12 +800,18 @@ int ObLSTxCtxMgr::try_wait_gts_and_inc_max_commit_ts_()
         ret = OB_NOT_MASTER;
       } else {
         is_leader_serving_ = true;
-        txs_->get_tx_version_mgr().update_max_commit_ts(gts, false);
+        if (!is_sslog) {
+          txs_->get_tx_version_mgr().update_max_commit_ts(gts, false);
+        } else {
+          // for sslog
+          txs_->get_tx_version_mgr_for_sslog().update_max_commit_ts(gts, false);
+          TRANS_LOG(INFO, "update max commit ts for sslog", K(gts), K_(ls_id));
+        }
         TRANS_LOG(INFO, "skip waiting gts when takeover",
             K(ls_id_), K(tenant_id_), K(max_replay_commit_version_), K(gts));
       }
     }
-    TRANS_LOG(INFO, "try wait gts", KR(ret), K_(ls_id), K_(tenant_id),
+    TRANS_LOG(INFO, "try wait gts", KR(ret), K_(ls_id), K_(tenant_id), K(gts_tenant_id),
         K_(max_replay_commit_version), K(gts));
   }
   return ret;

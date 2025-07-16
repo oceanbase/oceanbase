@@ -16,7 +16,7 @@
 #include "common/object/ob_object.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_udf.h"
+#include "sql/engine/expr/ob_expr_udf/ob_expr_udf.h"
 #include "share/schema/ob_routine_info.h"
 
 namespace oceanbase

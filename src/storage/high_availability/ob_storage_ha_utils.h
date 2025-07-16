@@ -89,6 +89,9 @@ public:
   static int get_tablet_backup_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &backup_size);
   static int get_tablet_occupy_size_in_bytes(const ObLSID &ls_id, const ObTabletID &tablet_id, int64_t &occupy_size);
   static int deal_compat_with_ls_inner_tablet(const ObLSID &ls_id);
+#ifdef ERRSIM
+  static int is_errsim_transfer_server(bool &is_errsim_server);
+#endif
 private:
   struct TableKeySnapshotVersionComparator final
   {
@@ -98,17 +101,21 @@ private:
   };
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
   static int fetch_src_tablet_meta_info_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
-    const share::ObLSID &ls_id, const common::ObAddr &src_addr, common::ObISQLClient &sql_client,
-    share::SCN &compaction_scn);
+      const share::ObLSID &ls_id, const common::ObAddr &src_addr, common::ObISQLClient &sql_client,
+      share::SCN &compaction_scn);
   static int check_tablet_replica_checksum_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
-    const share::ObLSID &ls_id, const share::SCN &compaction_scn, common::ObISQLClient &sql_client);
+      const share::ObLSID &ls_id, const share::SCN &compaction_scn, common::ObISQLClient &sql_client);
   static int get_readable_scn_(share::SCN &readable_scn);
-  static int get_latest_major_sstable_array_(const ObITable *latest_major, common::ObArray<const ObSSTable *> &major_sstables);
+  static int get_latest_major_sstable_array_(
+      ObTableHandleV2 &latest_major,
+      common::ObArray<ObSSTableWrapper> &major_sstables);
   static int build_reuse_info_(
-    const common::ObArray<const ObSSTable *> &major_sstabls,
-    const ObTabletHandle &tablet_handle,
-    ObMacroBlockReuseMgr &macro_block_reuse_mgr);
-  static int get_latest_available_major_(const storage::ObSSTableArray & major_sstables, ObITable *&latest_major);
+      const common::ObArray<ObSSTableWrapper> &major_sstabls,
+      const ObTabletHandle &tablet_handle,
+      ObMacroBlockReuseMgr &macro_block_reuse_mgr);
+  static int get_latest_available_major_(
+      storage::ObTableStoreIterator &major_sstables_iter,
+      ObTableHandleV2 &latest_major);
   static int create_ls_inner_tablet_for_compat_(
       const common::ObIArray<ObTabletID> &tablet_id_array,
       ObLS *ls);
@@ -207,6 +214,8 @@ public:
       const share::ObLSID &src_ls_id,
       const share::ObLSID &dest_ls_id);
   static bool enable_transfer_dml_ctrl(const uint64_t data_version);
+  static int get_ls_member_list(const share::ObLSID &ls_id, common::ObMemberList &member_list);
+  static int get_ls_leader(const share::ObLSID &ls_id, common::ObAddr &addr);
 private:
   static int get_ls_(
       ObLSHandle &ls_handle,

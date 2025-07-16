@@ -16,12 +16,17 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "common/ob_tablet_id.h"
 
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/share/ob_shared_meta_common.h"
+#endif
+
 namespace oceanbase
 {
 namespace observer
 {
 
 struct VirtualTabletMetaRow {
+  share::SCN reorganization_scn_;
   share::SCN version_;
   common::ObTabletID data_tablet_id_;
   share::SCN create_scn_;
@@ -32,18 +37,32 @@ struct VirtualTabletMetaRow {
   share::SCN ddl_checkpoint_scn_;
   int64_t multi_version_start_;
   int64_t tablet_snapshot_version_;
+  int64_t sstable_op_id_;
+  ObString update_reason_str_; // if update_reason_str_ is not empty str, update_reason_ is invalid.
+#ifdef OB_BUILD_SHARED_STORAGE
+  ObMetaUpdateReason update_reason_;
+#endif
 
   VirtualTabletMetaRow()
-    : version_(), data_tablet_id_(),
+    : reorganization_scn_(), version_(), data_tablet_id_(),
       create_scn_(), start_scn_(), create_schema_version_(0),
       data_checkpoint_scn_(), mds_checkpoint_scn_(), ddl_checkpoint_scn_(),
-      multi_version_start_(0), tablet_snapshot_version_(0) { }
+      multi_version_start_(0), tablet_snapshot_version_(0), sstable_op_id_(0),
+      update_reason_str_()
+#ifdef OB_BUILD_SHARED_STORAGE
+      , update_reason_(ObMetaUpdateReason::INVALID_META_UPDATE_REASON)
+#endif
+      { }
 
-  TO_STRING_KV(K(version_), K(data_tablet_id_),
+  TO_STRING_KV(K(reorganization_scn_), K(version_), K(data_tablet_id_),
                K(create_scn_), K(start_scn_), K(create_schema_version_),
                K(data_checkpoint_scn_), K(mds_checkpoint_scn_),
                K(ddl_checkpoint_scn_), K(multi_version_start_),
-               K(tablet_snapshot_version_));
+               K(tablet_snapshot_version_), K(sstable_op_id_), K(update_reason_str_)
+#ifdef OB_BUILD_SHARED_STORAGE
+               , K(update_reason_)
+#endif
+               );
 };
 
 class ObAllVirtualSSTabletMeta : public common::ObVirtualTableScannerIterator
@@ -76,16 +95,20 @@ private:
 #ifdef OB_BUILD_SHARED_STORAGE
   int get_primary_key_();
   int handle_key_range_(ObNewRange &key_range);
-  int generate_virtual_row_(VirtualTabletMetaRow &row);
-  int fill_in_row_(const VirtualTabletMetaRow &row_data, common::ObNewRow *&row);
+  int generate_virtual_rows_(ObArray<VirtualTabletMetaRow> &row_datas);
+  int fill_in_rows_(const ObArray<VirtualTabletMetaRow> &row_datas);
+  int extract_result_(common::sqlclient::ObMySQLResult &res, VirtualTabletMetaRow &row);
+  int get_virtual_rows_remote_(common::sqlclient::ObMySQLResult &res,
+                              ObArray<VirtualTabletMetaRow> &row_datas);
+  int get_virtual_rows_remote_(const uint64_t tenant_id,
+                               const share::ObLSID &ls_id,
+                               common::ObTabletID &tablet_id,
+                               ObArray<VirtualTabletMetaRow> &row_datas);
 #endif
 private:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
-  share::SCN transfer_scn_;
-
-  VirtualTabletMetaRow tablet_meta_row_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualSSTabletMeta);
 };

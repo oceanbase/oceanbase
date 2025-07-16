@@ -2596,7 +2596,7 @@ int ObStaticEngineCG::prepare_topn_runtime_filter_info(ObLogSort &op, ObOpSpec &
                    op.get_p2p_sequence_id(), effective_sk_cnt, total_sk_cnt, cmp_metas,
                    ObP2PDatahubMsgBase::PD_TOPN_FILTER_MSG, pd_topn_filter_rt_expr->expr_ctx_id_,
                    is_shared_pd_topn_filter, is_shuffle_pd_topn_filter, max_batch_size,
-                   adaptive_filter_ratio))) {
+                   op.enable_runtime_filter_adaptive_apply(), adaptive_filter_ratio))) {
       LOG_WARN("failed to init topn_filter_info");
     }
   }
@@ -2686,7 +2686,7 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortVecSpec &spec, const bo
         spec.has_addon_ = (spec.addon_exprs_.count() != 0);
         spec.enable_encode_sortkey_opt_ = enable_encode_sortkey_opt;
         spec.part_cnt_ = op.get_part_cnt();
-        spec.enable_single_col_compare_opt_ = use_single_col_compare(spec);
+        spec.enable_single_col_compare_opt_ = false;
         LOG_TRACE("trace order by", K(spec.sk_exprs_.count()), K(spec.addon_exprs_.count()),
                   K(spec.sk_exprs_), K(spec.addon_exprs_),
                   K(spec.sk_collations_), K(spec.addon_collations_), K(spec.enable_single_col_compare_opt_));
@@ -3016,15 +3016,23 @@ int ObStaticEngineCG::generate_merge_with_das(ObLogMerge &op,
           find = true;
         }
       }
+      spec.need_foreign_key_check_ |= (upd_ctdef.fk_args_.count() > 0);
+      spec.need_trigger_fire_ |= (upd_ctdef.trig_ctdef_.tg_args_.count() > 0);
     }
 
-    if (OB_SUCC(ret) && !find) {
-      if (OB_NOT_NULL(merge_ctdef->del_ctdef_)) {
-        const ObDelCtDef &del_ctdef = *merge_ctdef->del_ctdef_;
-        if (del_ctdef.fk_args_.count() > 0) {
+    if (OB_SUCC(ret) && OB_NOT_NULL(merge_ctdef->del_ctdef_)) {
+      const ObDelCtDef &del_ctdef = *merge_ctdef->del_ctdef_;
+      if (!find && del_ctdef.fk_args_.count() > 0) {
           find = true;
-        }
       }
+      spec.need_foreign_key_check_ |= del_ctdef.fk_args_.count() > 0;
+      spec.need_trigger_fire_ |= (del_ctdef.trig_ctdef_.tg_args_.count() > 0);
+    }
+
+    if (OB_SUCC(ret) && OB_NOT_NULL(merge_ctdef->ins_ctdef_)) {
+      const ObInsCtDef &ins_ctdef = *merge_ctdef->ins_ctdef_;
+      spec.need_foreign_key_check_ |= ins_ctdef.fk_args_.count() > 0;
+      spec.need_trigger_fire_ |= (ins_ctdef.trig_ctdef_.tg_args_.count() > 0);
     }
 
     if (OB_SUCC(ret)) {
@@ -3138,6 +3146,8 @@ int ObStaticEngineCG::generate_insert_with_das(ObLogInsert &op, ObTableInsertSpe
     } else {
       ins_ctdef->has_instead_of_trigger_ = op.has_instead_of_trigger();
       spec.ins_ctdefs_.at(0).at(i) = ins_ctdef;
+      spec.need_foreign_key_check_ |= (ins_ctdef->fk_args_.count() > 0);
+      spec.need_trigger_fire_ |= (ins_ctdef->trig_ctdef_.tg_args_.count() > 0);
       for (int64_t i = 0; i < ins_ctdef->fk_args_.count() && spec.check_fk_batch_; ++i) {
         const ObForeignKeyArg &fk_arg = ins_ctdef->fk_args_.at(i);
         if (!fk_arg.use_das_scan_) {
@@ -3248,6 +3258,8 @@ int ObStaticEngineCG::generate_delete_with_das(ObLogDelete &op, ObTableDeleteSpe
         LOG_WARN("del_ctdef is null", K(ret));
       } else {
         del_ctdef->has_instead_of_trigger_ = op.has_instead_of_trigger();
+        spec.need_foreign_key_check_ |= (del_ctdef->fk_args_.count() > 0);
+        spec.need_trigger_fire_ |= (del_ctdef->trig_ctdef_.tg_args_.count() > 0);
         ctdefs.at(j) = del_ctdef;
       }
     }  // for index_dml_infos end
@@ -3402,6 +3414,8 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableReplaceSpec &spec, c
       const ObInsCtDef *ins_ctdef = replace_ctdef->ins_ctdef_;
       const ObDelCtDef *del_ctdef = replace_ctdef->del_ctdef_;
       if (OB_NOT_NULL(ins_ctdef) && OB_NOT_NULL(del_ctdef)) {
+        spec.need_foreign_key_check_ |= (del_ctdef->fk_args_.count() > 0 || ins_ctdef->fk_args_.count() > 0);
+        spec.need_trigger_fire_ |= (del_ctdef->trig_ctdef_.tg_args_.count() > 0 || ins_ctdef->trig_ctdef_.tg_args_.count() > 0);
         if (del_ctdef->fk_args_.count() > 0) {
           spec.check_fk_batch_ = false;
         } else {
@@ -3482,6 +3496,8 @@ int ObStaticEngineCG::generate_update_with_das(ObLogUpdate &op, ObTableUpdateSpe
         LOG_WARN("upd_ctdef is null", K(ret));
       } else {
         upd_ctdef->has_instead_of_trigger_ = op.has_instead_of_trigger();
+        spec.need_foreign_key_check_ |= (upd_ctdef->fk_args_.count() > 0);
+        spec.need_trigger_fire_ |= (upd_ctdef->trig_ctdef_.tg_args_.count() > 0);
         ctdefs.at(j) = upd_ctdef;
         for (int64_t j = 0; j < upd_ctdef->fk_args_.count() && !find; ++j) {
           const ObForeignKeyArg &fk_arg = upd_ctdef->fk_args_.at(j);
@@ -3705,35 +3721,10 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
     }
 
     if (OB_SUCC(ret)) {
-      const ObDMLStmt *stmt = nullptr;
-      ObSEArray<uint64_t, 2> auto_inc_cids;
-      const ObInsertUpCtDef *insert_up_ctdef = spec.insert_up_ctdefs_.at(0);
-      if (OB_ISNULL(stmt = op.get_stmt())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret));
-      } else if (!stmt->is_insert_stmt()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret));
-      } else if (stmt->get_autoinc_params().empty()) {
-        // do nothing
-      } else if (OB_FAIL(get_all_auto_inc_cids(stmt->get_autoinc_params(), auto_inc_cids))) {
-        LOG_WARN("fail to get all auto_inc column ids", K(ret));
-      } else {
-        bool founded = false;
-        for (int64_t i = 0; !founded && OB_SUCC(ret) && i < ins_pri_dml_info->rowkey_cnt_; i++) {
-          ObColumnRefRawExpr *col_expr = ins_pri_dml_info->column_exprs_.at(i);
-          ObRawExpr *new_auto_inc_expr = ins_pri_dml_info->column_convert_exprs_.at(i);
-          uint64_t base_cid = OB_INVALID_ID;
-          if (OB_FAIL(dml_cg_service_.get_column_ref_base_cid(op, col_expr, base_cid))) {
-            LOG_WARN("fail to get base cid", K(ret));
-          } else if (!has_exist_in_array(auto_inc_cids, base_cid)) {
-            // do nothing
-          } else if (OB_FAIL(generate_rt_expr(*new_auto_inc_expr, spec.ins_auto_inc_expr_))) {
-            LOG_WARN("fail to cg auto_inc_expr", K(ret));
-          } else {
-            founded = true;
-          }
-        }
+      if (OB_FAIL(generate_ins_auto_inc_expr(op, spec, ins_pri_dml_info))) {
+        LOG_WARN("fail to generate insert auto inc expr", K(ret), KPC(ins_pri_dml_info));
+      } else if (OB_FAIL(generate_upd_auto_inc_expr(op, spec, upd_pri_dml_info))) {
+        LOG_WARN("fail to generate update auto inc expr", K(ret), KPC(upd_pri_dml_info));
       }
     }
   }
@@ -3783,6 +3774,8 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
         LOG_WARN("insert or update ctdef is null", K(ret));
       } else {
         spec.check_fk_batch_ = true;
+        spec.need_foreign_key_check_ |= (ins_ctdef->fk_args_.count() > 0 || upd_ctdef->fk_args_.count() > 0);
+        spec.need_trigger_fire_ |= (ins_ctdef->trig_ctdef_.tg_args_.count() > 0 || upd_ctdef->trig_ctdef_.tg_args_.count() > 0);
         for (int64_t i = 0; i < upd_ctdef->fk_args_.count() && spec.check_fk_batch_; ++i) {
           const ObForeignKeyArg &fk_arg = upd_ctdef->fk_args_.at(i);
           if (!fk_arg.use_das_scan_) {
@@ -3798,6 +3791,94 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableInsertUpSpec &spec, 
     }
   }
 
+  return ret;
+}
+int ObStaticEngineCG::generate_ins_auto_inc_expr(ObLogInsert &op,
+                                                 ObTableInsertUpSpec &spec,
+                                                 const IndexDMLInfo *ins_pri_dml_info)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = nullptr;
+  ObSEArray<uint64_t, 2> auto_inc_cids;
+  if (OB_ISNULL(stmt = op.get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!stmt->is_insert_stmt()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (stmt->get_autoinc_params().empty()) {
+    // do nothing
+  } else if (OB_FAIL(get_all_auto_inc_cids(stmt->get_autoinc_params(), auto_inc_cids))) {
+    LOG_WARN("fail to get all auto_inc column ids", K(ret));
+  } else {
+    bool founded = false;
+    for (int64_t i = 0; !founded && OB_SUCC(ret) && i < ins_pri_dml_info->rowkey_cnt_; i++) {
+      ObColumnRefRawExpr *col_expr = ins_pri_dml_info->column_exprs_.at(i);
+      ObRawExpr *new_auto_inc_expr = ins_pri_dml_info->column_convert_exprs_.at(i);
+      uint64_t base_cid = OB_INVALID_ID;
+      if (OB_FAIL(dml_cg_service_.get_column_ref_base_cid(op, col_expr, base_cid))) {
+        LOG_WARN("fail to get base cid", K(ret));
+      } else if (!has_exist_in_array(auto_inc_cids, base_cid)) {
+        // do nothing
+      } else if (OB_FAIL(generate_rt_expr(*new_auto_inc_expr, spec.ins_auto_inc_expr_))) {
+        LOG_WARN("fail to cg auto_inc_expr", K(ret));
+      } else {
+        founded = true;
+      }
+    }
+  }
+  return ret;
+}
+int ObStaticEngineCG::generate_upd_auto_inc_expr(ObLogInsert &op,
+                                                 ObTableInsertUpSpec &spec,
+                                                 const IndexDMLInfo *upd_pri_dml_info)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = nullptr;
+  ObSEArray<uint64_t, 2> auto_inc_cids;
+  if (OB_ISNULL(stmt = op.get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!stmt->is_insert_stmt()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (stmt->get_autoinc_params().empty()) {
+    // do nothing
+  } else if (OB_FAIL(get_all_auto_inc_cids(stmt->get_autoinc_params(), auto_inc_cids))) {
+    LOG_WARN("fail to get all auto_inc column ids", K(ret));
+  } else {
+    bool founded = false;
+    const ObAssignments &assigns = upd_pri_dml_info->assignments_;
+    for (int64_t i = 0; !founded && OB_SUCC(ret) && i < assigns.count(); ++i) {
+      uint64_t base_cid = OB_INVALID_INDEX;
+      const ObColumnRefRawExpr *col = assigns.at(i).column_expr_;
+      ObRawExpr *assign_expr = assigns.at(i).expr_;
+      if (OB_FAIL(dml_cg_service_.get_column_ref_base_cid(op, col, base_cid))) {
+        LOG_WARN("fail to get base cid", K(ret));
+      } else if (!has_exist_in_array(auto_inc_cids, base_cid)) {
+        // do nothing
+      } else if (OB_FAIL(generate_rt_expr(*assign_expr, spec.upd_auto_inc_expr_))) {
+        LOG_WARN("fail to cg auto_inc_expr", K(ret));
+      } else {
+        founded = true;
+      }
+    }
+
+    for (int64_t i = 0; !founded && OB_SUCC(ret) && i < upd_pri_dml_info->column_exprs_.count(); ++i) {
+      int64_t assign_idx = OB_INVALID_INDEX;
+      uint64_t base_cid = OB_INVALID_INDEX;
+      const ObColumnRefRawExpr *col = upd_pri_dml_info->column_exprs_.at(i);
+      if (OB_FAIL(dml_cg_service_.get_column_ref_base_cid(op, col, base_cid))) {
+        LOG_WARN("fail to get base cid", K(ret));
+      } else if (!has_exist_in_array(auto_inc_cids, base_cid)) {
+        // do nothing
+      } else if (OB_FAIL(generate_rt_expr(*col, spec.upd_auto_inc_expr_))) {
+        LOG_WARN("fail to cg auto_inc_expr", K(ret));
+      } else {
+        founded = true;
+      }
+    }
+  }
   return ret;
 }
 
@@ -3954,6 +4035,7 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
   spec.set_filter_length(op.get_filter_length());
   spec.set_shared_filter_type(op.get_filter_type());
   spec.is_shuffle_ = op.is_use_filter_shuffle();
+  spec.enable_runtime_filter_adaptive_apply_ = op.enable_runtime_filter_adaptive_apply();
   bool enable_rich_format = spec.use_rich_format_;
   if (enable_rich_format) {
     spec.jf_material_control_info_ = op.get_jf_material_control_info();
@@ -5492,6 +5574,22 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObHashGroupBySpec &spec,
       OB_LOG(WARN, "fail to fill_aggr_infos", K(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    for (int64_t i = 0; i < spec.aggr_infos_.count(); ++i) {
+      const ObAggrInfo &aggr_info = spec.aggr_infos_.at(i);
+      if (T_FUN_GROUP_CONCAT == aggr_info.get_expr_type()
+          || T_FUN_KEEP_WM_CONCAT == aggr_info.get_expr_type()
+          || T_FUN_WM_CONCAT == aggr_info.get_expr_type()
+          || T_FUN_JSON_ARRAYAGG == aggr_info.get_expr_type()
+          || T_FUN_ORA_JSON_ARRAYAGG == aggr_info.get_expr_type()
+          || T_FUN_JSON_OBJECTAGG == aggr_info.get_expr_type()
+          || T_FUN_ORA_JSON_OBJECTAGG == aggr_info.get_expr_type()
+          || T_FUN_ORA_XMLAGG == aggr_info.get_expr_type()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("this aggr func is not supported in hash group by", K(ret), K(aggr_info));
+      }
+    }
+  }
   LOG_DEBUG("succ to generate_spec", K(spec), K(ret), K(spec.distinct_exprs_));
   return ret;
 }
@@ -5832,7 +5930,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
           OZ(ob_write_string(phy_plan_->get_allocator(), ddl_table_schema->get_parser_name_str(), spec.parser_name_));
           OZ(ob_write_string(phy_plan_->get_allocator(), ddl_table_schema->get_parser_property_str(), spec.parser_properties_));
         }
-      } else if (ddl_table_schema->is_index_table()) {
+      } else if (ddl_table_schema->is_index_table() && lib::is_mysql_mode()) {
         const bool is_vec_data_complement = (ddl_table_schema->is_vec_index_snapshot_data_type() ||
                                              ddl_table_schema->is_vec_ivfflat_index() ||
                                              ddl_table_schema->is_vec_ivfsq8_index() ||
@@ -9253,6 +9351,8 @@ int ObStaticEngineCG::generate_insert_all_with_das(ObLogInsertAll &op, ObTableIn
           LOG_WARN("generate insert ctdef failed", K(ret));
         } else {
           spec.ins_ctdefs_.at(i).at(j) = ins_ctdef;
+          spec.need_foreign_key_check_ |= (ins_ctdef->fk_args_.count() > 0);
+          spec.need_trigger_fire_ |= (ins_ctdef->trig_ctdef_.tg_args_.count() > 0);
         }
       }
       if (OB_SUCC(ret)) {
@@ -9839,7 +9939,8 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
       int tmp_ret = OB_SUCCESS;
       bool use_vec_sort = true;
       const ObLogSort &sort_op = static_cast<const ObLogSort &>(log_op);
-      if (NULL != sort_op.get_topn_expr() && sort_op.get_part_cnt() > 0) {
+      if ((1 == sort_op.get_sort_keys().count() && !sort_op.enable_pd_topn_filter())
+          || (NULL != sort_op.get_topn_expr() && sort_op.get_part_cnt() > 0)) {
         use_vec_sort = false;
       }
       tmp_ret = OB_E(EventTable::EN_DISABLE_VEC_SORT) OB_SUCCESS;

@@ -276,7 +276,7 @@ public:
   bool is_inited() { return is_inited_; }
 
 private:
-  JVMFunctionHelper() {
+  JVMFunctionHelper():load_lib_lock_(common::ObLatchIds::JAVA_HELPER_LOCK) {
     int ret = OB_SUCCESS;
     if (is_inited_) {
       // do nothing
@@ -339,7 +339,7 @@ private:
 
 private:
   lib::ObMutex lock_;
-  obsys::ObRWLock load_lib_lock_;
+  obsys::ObRWLock<> load_lib_lock_;
 };
 
 // local object reference guard.

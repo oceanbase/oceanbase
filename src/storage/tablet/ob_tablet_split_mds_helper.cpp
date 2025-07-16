@@ -268,7 +268,7 @@ int ObTabletSplitMdsArg::init_split_start_src(
     } else if (!src_table_schema->is_aux_lob_table()
             && OB_FAIL(get_partkey_projector(*new_data_table_schema, *src_table_schema, partkey_projector))) {
       LOG_WARN("failed to get parkey projector", K(ret));
-    } else if (OB_FAIL(data.init_range_part_split_src(dst_tablet_ids.at(i), partkey_projector, *src_table_schema, is_oracle_mode))) {
+    } else if (OB_FAIL(data.init_range_part_split_src(dst_tablet_ids.at(i), partkey_projector, *src_table_schema, is_oracle_mode, tenant_id))) {
       LOG_WARN("failed to set data", K(ret));
     } else if (OB_FAIL(split_data_tablet_ids_.push_back(src_tablet_id))) {
       LOG_WARN("failed to push back", K(ret));
@@ -736,7 +736,7 @@ int ObTabletSplitMdsHelper::get_is_spliting(const ObTablet &tablet, bool &is_spl
   int ret = OB_SUCCESS;
   const ObTabletMeta &tablet_meta = tablet.get_tablet_meta();
   is_split_dst = false;
-  if (OB_UNLIKELY(!tablet_meta.table_store_flag_.with_major_sstable() && tablet_meta.split_info_.get_split_src_tablet_id().is_valid())) {
+  if (OB_UNLIKELY(tablet_meta.split_info_.is_data_incomplete() && !tablet_meta.table_store_flag_.with_major_sstable() && tablet_meta.split_info_.get_split_src_tablet_id().is_valid())) {
     is_split_dst = true;
   } else if (OB_UNLIKELY(!tablet_meta.table_store_flag_.with_major_sstable())) {
     const int64_t timeout = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : ObTabletCommon::DEFAULT_GET_TABLET_DURATION_10_S;

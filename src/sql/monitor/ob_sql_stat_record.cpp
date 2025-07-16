@@ -186,7 +186,8 @@ ObExecutingSqlStatRecord::ObExecutingSqlStatRecord()
 
 #define RECORD_ITEM(se, di)                                                                        \
   do {                                                                                             \
-    elapsed_time_##se##_ = rdtsc() * 1000 / OBSERVER.get_cpu_frequency_khz();                      \
+    elapsed_time_##se##_ = static_cast<int64_t>(                                                   \
+      static_cast<double>(rdtsc()) / OBSERVER_FREQUENCE.get_cpu_frequency_khz() * 1000);           \
     if (OB_NOT_NULL(di)) {                                                                         \
       ObStatEventAddStatArray &arr = di->get_add_stat_stats();                                     \
       disk_reads_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_COUNT);                     \

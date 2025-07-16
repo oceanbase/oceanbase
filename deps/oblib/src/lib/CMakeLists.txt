@@ -473,9 +473,8 @@ if(OB_BUILD_CLOSE_MODULES)
   )
 endif()
 
-if(CPP_STANDARD_20)
-  target_compile_options(oblib_lib PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
-endif()
+target_compile_options(oblib_lib PUBLIC -D_GLIBCXX_USE_CXX11_ABI=0)
+
 target_link_libraries(oblib_lib
   PUBLIC ob_malloc compress restore
   ${DEP_DIR}/lib/libxml2.a

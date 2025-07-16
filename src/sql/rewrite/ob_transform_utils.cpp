@@ -259,6 +259,14 @@ int ObTransformUtils::is_simple_correlated_pred(const ObIArray<ObExecParamRawExp
         OB_ISNULL(right = cond->get_param_expr(1))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", K(ret), K(left), K(right));
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(left, left, true, true)) ||
+                OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(right, right, true, true))) {
+      LOG_WARN("failed to get expr without lossless cast", K(ret));
+    } else if ((OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(left, left)) ||
+                OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(right, right)))) {
+      LOG_WARN("failed to get column expr without nvl", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::eliminate_implicit_cast_for_range(left, right, cond->get_expr_type()))) {
+      LOG_WARN("failed to eliminate implicit cast for range", K(ret));
     } else if (left->is_column_ref_expr() &&
                right->is_const_expr()) {
       col_expr = static_cast<ObColumnRefRawExpr *>(left);
@@ -3046,6 +3054,8 @@ int ObTransformUtils::get_simple_filter_column(const ObDMLStmt *stmt,
                    (OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(left, left)) ||
                     OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(right, right)))) {
           LOG_WARN("failed to get column expr without nvl", K(ret));
+        } else if (OB_FAIL(ObOptimizerUtil::eliminate_implicit_cast_for_range(left, right, expr->get_expr_type()))) {
+          LOG_WARN("failed to eliminate implicit cast for range", K(ret));
         } else if (left->is_column_ref_expr() &&
                    table_id == static_cast<ObColumnRefRawExpr*>(left)->get_table_id()) {
           if (right->get_relation_ids().has_member(stmt->get_table_bit_index(table_id))) {
@@ -3268,6 +3278,17 @@ int ObTransformUtils::get_simple_filter_column_in_parent_stmt(const ObDMLStmt *r
         if (OB_ISNULL(sel_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpect null expr", K(ret));
+        } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(sel_expr, sel_expr))) {
+          LOG_WARN("failed to get expr without lossless cast", K(ret));
+        } else if (OB_NOT_NULL(sel_expr) &&
+                  T_FUN_SYS_CAST == sel_expr->get_expr_type() &&
+                  OB_NOT_NULL(sel_expr->get_param_expr(0)) &&
+                  ObOptimizerUtil::is_type_for_extact_implicit_cast_range(sel_expr->get_param_expr(0)->get_result_type()) &&
+                  OB_FALSE_IT(sel_expr = sel_expr->get_param_expr(0))) {
+          // To handle cases where ranges can be extracted from implicit type conversions,
+          // we separate the upper-level cast here.
+          // Note: This may result in some false positives (col with cast that can't extract query range),
+          // since whether implicit cast range can be extracted also depends on the compare type and result type of other cmp expr.
         } else if (!sel_expr->is_column_ref_expr()) {
           //do nothing
         } else if (OB_FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr*>(sel_expr))) {
@@ -3401,6 +3422,17 @@ int ObTransformUtils::check_select_item_match_index(const ObDMLStmt *root_stmt,
       if (OB_ISNULL(sel_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(sel_expr, sel_expr))) {
+        LOG_WARN("failed to get expr without lossless cast", K(ret));
+      } else if (OB_NOT_NULL(sel_expr) &&
+                 T_FUN_SYS_CAST == sel_expr->get_expr_type() &&
+                 OB_NOT_NULL(sel_expr->get_param_expr(0)) &&
+                 ObOptimizerUtil::is_type_for_extact_implicit_cast_range(sel_expr->get_param_expr(0)->get_result_type()) &&
+                 OB_FALSE_IT(sel_expr = sel_expr->get_param_expr(0))) {
+        // To handle cases where ranges can be extracted from implicit type conversions,
+        // we separate the upper-level cast here.
+        // Note: This may result in some false positives (col with cast that can't extract query range),
+        // since whether implicit cast range can be extracted also depends on the compare type and result type of other cmp expr.
       } else if (!sel_expr->is_column_ref_expr()) {
         //do nothing
       } else if (OB_FALSE_IT(col = static_cast<ObColumnRefRawExpr*>(sel_expr))) {
@@ -3548,6 +3580,53 @@ int ObTransformUtils::check_index_extract_query_range(const ObDMLStmt *stmt,
   return ret;
 }
 
+int ObTransformUtils::preprocess_index_cols_for_index_match(ObSqlSchemaGuard *schema_guard,
+                                                            const int64_t table_id,
+                                                            ObIArray<uint64_t> &index_cols)
+{
+  ObSEArray<uint64_t, 4> index_cols_tmp;
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(schema_guard));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_cols.count(); ++i) {
+    uint64_t idx_col_id = index_cols.at(i);
+    uint64_t new_col_id = idx_col_id;
+    const ObColumnSchemaV2 *idx_col_schema = NULL;
+    if (OB_FAIL(schema_guard->get_column_schema(table_id, idx_col_id, idx_col_schema))) {
+      LOG_WARN("failed to get column schema", K(ret), K(table_id), K(idx_col_id));
+    } else if (OB_ISNULL(idx_col_schema)) {
+      // index column cannot be found in table schema, skip (e.g. shadow pk for unique index)
+    } else if (idx_col_schema->is_prefix_column()) {
+      // convert prefix index column to its reference column
+      const ColumnReferenceSet *col_ref_set = NULL;
+      int64_t ref_col_id = -1;
+      if (OB_ISNULL(col_ref_set = idx_col_schema->get_column_ref_set())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column reference set is null", K(ret));
+      } else if (OB_FAIL(col_ref_set->find_first(ref_col_id))) {
+        // there should be only one 1 bit that indicates the referenced column
+        // in the column_ref_idxs_ of the prefix index column
+        LOG_WARN("failed to find reference column for prefix index", K(ret));
+      } else if (OB_UNLIKELY(-1 == ref_col_id)) {
+        // should not be here
+      } else {
+        new_col_id = ref_col_id + OB_APP_MIN_COLUMN_ID;
+      }
+    } else { /* do nothing */ }
+    // it's necessary to de-duplicate index columns
+    // or else initialization of query range extraction check would fail
+    if (OB_SUCC(ret) && OB_FAIL(add_var_to_array_no_dup(index_cols_tmp, new_col_id))) {
+      LOG_WARN("failed to add var to array no dup", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(index_cols.assign(index_cols_tmp))) {
+    LOG_WARN("failed to assign index cols", K(ret));
+  }
+  return ret;
+}
+
 int ObTransformUtils::is_match_index(ObSqlSchemaGuard *schema_guard,
                                      const ObDMLStmt *stmt,
                                      const ObColumnRefRawExpr *col_expr,
@@ -3573,7 +3652,7 @@ int ObTransformUtils::is_match_index(ObSqlSchemaGuard *schema_guard,
   } else if (!table_item->is_basic_table()) {
     // do nothing
   } else if (OB_FAIL(get_valid_index_id(schema_guard, stmt, table_item, index_ids))) {
-    LOG_WARN("fail to get vaild index id", K(ret), K(table_item->ref_id_));
+    LOG_WARN("fail to get valid index id", K(ret), K(table_item->ref_id_));
   } else {
     ObSEArray<uint64_t, 8> index_cols;
     const ObTableSchema *index_schema = NULL;
@@ -3605,6 +3684,8 @@ int ObTransformUtils::is_match_index(ObSqlSchemaGuard *schema_guard,
         LOG_WARN("failed to get domain index cols", K(ret));
       } else if (OB_FAIL(index_schema->get_rowkey_info().get_column_ids(index_cols))) {
         LOG_WARN("failed to get index cols", K(ret));
+      } else if (OB_FAIL(preprocess_index_cols_for_index_match(schema_guard, table_item->ref_id_, index_cols))) {
+        LOG_WARN("failed to preprocess index cols for index match", K(ret));
       } else if (OB_FAIL(is_match_index(stmt,
                                         index_cols,
                                         col_expr,
@@ -4195,12 +4276,19 @@ int ObTransformUtils::check_exprs_unique_on_table_items(const ObDMLStmt *stmt,
     check_helper.session_info_ = session_info;
     UniqueCheckInfo res_info;
     ObRelIds all_tables;
+    ObSEArray<ObRawExpr*, 1> dummy_conds;
     if (OB_FAIL(compute_tables_property(stmt, check_helper, table_items, conditions, res_info))) {
       LOG_WARN("failed to compute tables property", K(ret));
     } else if (OB_FAIL(get_rel_ids_from_tables(stmt, table_items, all_tables))) {
       LOG_WARN("failed to add members", K(ret));
+    } else if (!is_strict && OB_FAIL(append(res_info.not_null_, exprs))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (!is_strict && OB_FAIL(ObOptimizerUtil::enhance_fd_item_set(dummy_conds,
+                                                                          res_info.candi_fd_sets_,
+                                                                          res_info.fd_sets_,
+                                                                          res_info.not_null_))) {
+      LOG_WARN("failed to enhance fd item set", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(exprs, all_tables, res_info.fd_sets_,
-                                                        is_strict ? NULL : &res_info.candi_fd_sets_,
                                                         res_info.equal_sets_,
                                                         res_info.const_exprs_,
                                                         is_unique))) {
@@ -4311,12 +4399,19 @@ int ObTransformUtils::check_stmt_unique(const ObSelectStmt *stmt,
     check_helper.session_info_ = session_info;
     UniqueCheckInfo res_info;
     ObRelIds all_tables;
+    ObSEArray<ObRawExpr*, 1> dummy_conds;
     if (OB_FAIL(compute_stmt_property(stmt, check_helper, res_info, extra_flags))) {
       LOG_WARN("failed to compute stmt property", K(ret));
     } else if (OB_FAIL(stmt->get_from_tables(all_tables))) {
       LOG_WARN("failed to get from tables", K(ret));
+    } else if (!is_strict && OB_FAIL(append(res_info.not_null_, exprs))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (!is_strict && OB_FAIL(ObOptimizerUtil::enhance_fd_item_set(dummy_conds,
+                                                                          res_info.candi_fd_sets_,
+                                                                          res_info.fd_sets_,
+                                                                          res_info.not_null_))) {
+      LOG_WARN("failed to enhance fd item set", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(exprs, all_tables, res_info.fd_sets_,
-                                                        is_strict ? NULL : &res_info.candi_fd_sets_,
                                                         res_info.equal_sets_,
                                                         res_info.const_exprs_, is_unique))) {
       LOG_WARN("failed to check is exprs unique", K(ret));
@@ -16226,11 +16321,11 @@ int ObTransformUtils::check_table_with_fts_or_multivalue_recursively(TableItem *
                                                  table->ref_id_,
                                                  table_schema))) {
       LOG_WARN("failed to get table schema", K(ret));
-    } else if (OB_FAIL(table_schema->check_has_fts_index(*schema_checker->get_schema_guard(),
+    } else if (OB_FAIL(table_schema->check_has_fts_index_aux(*schema_checker->get_schema_guard(),
                                                          has_fts_or_multivalue_index))) {
       LOG_WARN("failed to check has fts index", K(ret));
     } else if (has_fts_or_multivalue_index) {
-    } else if (OB_FAIL(table_schema->check_has_multivalue_index(*schema_checker->get_schema_guard(),
+    } else if (OB_FAIL(table_schema->check_has_multivalue_index_aux(*schema_checker->get_schema_guard(),
                                                                 has_fts_or_multivalue_index))) {
       LOG_WARN("failed to check has multivalue.", K(ret));
     }

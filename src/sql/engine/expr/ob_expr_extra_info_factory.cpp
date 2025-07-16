@@ -21,7 +21,7 @@
 #include "sql/engine/expr/ob_expr_subquery_ref.h"
 #include "sql/engine/expr/ob_expr_pl_get_cursor_attr.h"
 #include "sql/engine/expr/ob_expr_pl_integer_checker.h"
-#include "sql/engine/expr/ob_expr_udf.h"
+#include "sql/engine/expr/ob_expr_udf/ob_expr_udf.h"
 #include "sql/engine/expr/ob_expr_object_construct.h"
 #include "sql/engine/expr/ob_expr_coll_pred.h"
 #include "sql/engine/expr/ob_expr_output_pack.h"

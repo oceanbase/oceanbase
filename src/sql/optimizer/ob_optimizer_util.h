@@ -623,17 +623,6 @@ public:
                              const ObIArray<ObFdItem *> &fd_item_set,
                              const EqualSets &equal_sets,
                              const ObIArray<ObRawExpr *> &const_exprs,
-                             bool &is_unique)
-  {
-    return is_exprs_unique(exprs, all_tables, fd_item_set, NULL, equal_sets, const_exprs, is_unique);
-  }
-
-  static int is_exprs_unique(const ObIArray<ObRawExpr *> &exprs,
-                             const ObRelIds &all_tables,
-                             const ObIArray<ObFdItem *> &fd_item_set,
-                             const ObIArray<ObFdItem *> *candi_fd_item_set,
-                             const EqualSets &equal_sets,
-                             const ObIArray<ObRawExpr *> &const_exprs,
                              bool &is_unique);
 
   static int is_exprs_unique(const ObIArray<ObRawExpr *> &exprs,
@@ -642,8 +631,7 @@ public:
                              const ObIArray<ObRawExpr *> &const_exprs,
                              bool &is_unique);
 
-  static int is_exprs_unique(const ObIArray<ObRawExpr *> *exprs,
-                             ObIArray<ObRawExpr *> &extend_exprs,
+  static int is_exprs_unique(ObIArray<ObRawExpr *> &extend_exprs,
                              ObRelIds &remain_tables,
                              const ObIArray<ObFdItem *> &fd_item_set,
                              ObIArray<ObRawExpr *> &fd_set_parent_exprs,
@@ -1101,12 +1089,14 @@ public:
   static int gen_set_target_list(ObIAllocator *allocator,
                                  ObSQLSessionInfo *session_info,
                                  ObRawExprFactory *expr_factory,
-                                 ObSelectStmt *select_stmt);
+                                 ObSelectStmt *select_stmt,
+                                 const bool need_merge_type = true);
   static int try_add_cast_to_select_list(ObIAllocator *allocator,
                                          ObSQLSessionInfo *session_info,
                                          ObRawExprFactory *expr_factory,
                                          const int64_t column_cnt,
                                          const bool is_set_distinct,
+                                         const bool need_merge_type,
                                          ObIArray<ObRawExpr*> &select_exprs,
                                          ObIArray<ObRawExprResType> *res_types);
   static int add_cast_to_set_select_expr(ObSQLSessionInfo *session_info,
@@ -1121,6 +1111,7 @@ public:
                                        bool &skip_add_cast);
   static int get_set_res_types(ObIAllocator *allocator,
                                ObSQLSessionInfo *session_info,
+                               const bool need_merge_type,
                                ObIArray<ObSelectStmt*> &child_querys,
                                ObIArray<ObExprResType> &res_types);
 
@@ -1131,7 +1122,8 @@ public:
                                             ObIArray<ObSelectStmt*> &left_stmts,
                                             ObIArray<ObSelectStmt*> &right_stmts,
                                             const bool is_mysql_recursive_union = false,
-                                            ObIArray<ObString> *rcte_col_name = NULL);
+                                            ObIArray<ObString> *rcte_col_name = NULL,
+                                            const bool need_merge_type = true);
   static int try_add_cast_to_set_child_list(ObIAllocator *allocator,
                                             ObSQLSessionInfo *session_info,
                                             ObRawExprFactory *expr_factory,
@@ -1139,7 +1131,8 @@ public:
                                             ObIArray<ObSelectStmt*> &left_stmts,
                                             ObSelectStmt *right_stmt,
                                             const bool is_mysql_recursive_union = false,
-                                            ObIArray<ObString> *rcte_col_name = NULL);
+                                            ObIArray<ObString> *rcte_col_name = NULL,
+                                            const bool need_merge_type = true);
 
   static int check_oracle_mode_set_type_validity(bool is_ps_prepare_stage,
                                                  const ObExprResType &left_type,
@@ -1627,7 +1620,23 @@ public:
                                       uint64_t &table_id,
                                       uint64_t &index_id,
                                       double &range_row_count);
+  static int flatten_multivalue_index_exprs(ObRawExpr* expr, ObIArray<ObRawExpr*> &exprs);
+  static int preprocess_multivalue_range_exprs(ObIAllocator &allocator,
+                                               const ObIArray<ObRawExpr*> &range_exprs,
+                                               ObIArray<ObRawExpr*> &out_range_exprs);
 
+  static int can_extract_implicit_cast_range(ObItemType cmp_type,
+                                            const ObColumnRefRawExpr &column_expr,
+                                            const ObRawExpr &const_expr,
+                                            bool &can_extract);
+
+  static int is_implicit_collation_range_valid(ObItemType cmp_type,
+                                              ObCollationType l_collation,
+                                              ObCollationType r_collation,
+                                              bool &is_valid);
+
+  static int eliminate_implicit_cast_for_range(ObRawExpr *&left, ObRawExpr *&right, ObItemType cmp_type);
+  static bool is_type_for_extact_implicit_cast_range(const ObRawExprResType &res_type);
   template<typename T>
   static int choose_random_members(const uint64_t seed,
                                    const ObIArray<T> &input_array,

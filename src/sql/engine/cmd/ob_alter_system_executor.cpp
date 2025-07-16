@@ -431,6 +431,34 @@ int ObFlushCacheExecutor::execute(ObExecContext &ctx, ObFlushCacheStmt &stmt)
         }
         break;
       }
+      case CACHE_TYPE_RESULT: {
+        if (0 == tenant_num) {
+          common::ObArray<uint64_t> tenant_ids;
+          if (OB_ISNULL(GCTX.omt_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null of GCTX.omt_", K(ret));
+          } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+            LOG_WARN("fail to get_mtl_tenant_ids", K(ret));
+          } else {
+            for (int64_t i = 0; i < tenant_ids.size(); i++) {
+              MTL_SWITCH(tenant_ids.at(i)) {
+                ObPlanCache* plan_cache = MTL(ObPlanCache*);
+                ret = plan_cache->flush_result_cache();
+              }
+              // ignore errors at switching tenant
+              ret = OB_SUCCESS;
+            }
+          }
+        } else {
+          for (int64_t i = 0; i < tenant_num; i++) { // ignore internal err code
+            MTL_SWITCH(stmt.flush_cache_arg_.tenant_ids_.at(i)) {
+              ObPlanCache* plan_cache = MTL(ObPlanCache*);
+              ret = plan_cache->flush_result_cache();
+            }
+          }
+        }
+        break;
+      }
       case CACHE_TYPE_PS_OBJ: {
         if (0 == tenant_num) {
           common::ObArray<uint64_t> tenant_ids;

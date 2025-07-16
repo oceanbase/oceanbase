@@ -39,5 +39,17 @@ bool is_hardcode_schema_table(const uint64_t tid)
   return is_shared_storage_sslog_table(tid) || share::OB_ALL_CORE_TABLE_TID == tid;
 }
 
+bool is_tenant_sslog_ls(const uint64_t tenant_id, const share::ObLSID &ls_id)
+{
+  return GCTX.is_shared_storage_mode()
+      && ls_id.is_sslog_ls()
+      && (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id));
+}
+
+bool is_tenant_has_sslog(const uint64_t tenant_id)
+{
+  return GCTX.is_shared_storage_mode() && (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id));
+}
+
 }
 } // namespace oceanbase

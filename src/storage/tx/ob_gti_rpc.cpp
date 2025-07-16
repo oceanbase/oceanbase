@@ -130,9 +130,6 @@ int ObGtiRequestRpc::post(const ObGtiRequest &msg)
   int ret = OB_SUCCESS;
   ObAddr server;
   ObLSID ls_id = GTI_LS;
-  if (GCTX.is_shared_storage_mode() && is_meta_tenant(msg.get_tenant_id())) {
-    ls_id = SSLOG_LS;
-  }
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "gti request rpc not inited", KR(ret));

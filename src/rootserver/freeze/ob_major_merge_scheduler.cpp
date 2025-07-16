@@ -17,10 +17,6 @@
 #include "share/ob_service_epoch_proxy.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
 #include "share/ob_global_merge_table_operator.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "rootserver/ob_ls_merge_progress_checker.h"
-#include "observer/sys_table/ob_all_tablet_checksum_error_info_operator.h"
-#endif
 
 namespace oceanbase
 {
@@ -96,15 +92,6 @@ int ObMajorMergeScheduler::init(
     LOG_WARN("invalid tenant id", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(merge_strategy_.init(tenant_id_, &merge_info_mgr.get_zone_merge_mgr()))) {
     LOG_WARN("fail to init tenant zone merge strategy", KR(ret), K_(tenant_id));
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode()) {
-    if (OB_ISNULL(buf = common::ob_malloc(sizeof(ObLSMergeProgressChecker), ObMemAttr(tenant_id_, "mrg_prog_cker")))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc memory", KR(ret), K_(tenant_id));
-    } else {
-      progress_checker_ = new(buf) ObLSMergeProgressChecker(tenant_id_, stop_);
-    }
-#endif
   } else {
     if (OB_ISNULL(buf = common::ob_malloc(sizeof(ObMajorMergeProgressChecker), ObMemAttr(tenant_id_, "mrg_prog_cker")))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -322,20 +309,19 @@ int ObMajorMergeScheduler::do_before_major_merge(const int64_t expected_epoch, c
 {
   int ret = OB_SUCCESS;
   share::SCN global_broadcast_scn;
+  share::ObFreezeInfo freeze_info;
   global_broadcast_scn.set_min();
   FREEZE_TIME_GUARD;
   if (OB_FAIL(merge_info_mgr_->get_zone_merge_mgr().get_global_broadcast_scn(global_broadcast_scn))) {
     LOG_WARN("fail to get global broadcast scn", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(progress_checker_->set_basic_info(global_broadcast_scn, expected_epoch))) {
+  } else if (OB_FAIL(merge_info_mgr_->get_freeze_info_mgr().get_freeze_info(global_broadcast_scn, freeze_info))) {
+    LOG_WARN("fail to get freeze info", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(progress_checker_->set_basic_info(freeze_info, expected_epoch))) {
     LOG_WARN("failed to set basic info of progress checker", KR(ret), K(global_broadcast_scn), K(expected_epoch));
   } else if (start_merge) {
     if (OB_FAIL(ObColumnChecksumErrorOperator::delete_column_checksum_err_info(
         *sql_proxy_, tenant_id_, global_broadcast_scn))) {
       LOG_WARN("fail to delete column checksum error info", KR(ret), K(global_broadcast_scn));
-#ifdef OB_BUILD_SHARED_STORAGE
-    } else if (OB_FAIL(ObTabletCkmErrorInfoOperator::delete_ckm_error_info(tenant_id_, global_broadcast_scn.get_val_for_tx()))) {
-      LOG_WARN("fail to delete tablet checksum error info", KR(ret), K(global_broadcast_scn));
-#endif
     }
   }
   return ret;

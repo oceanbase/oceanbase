@@ -92,7 +92,7 @@ int ObBackupCleanTaskMgr::init(
     backup_service_ = &backup_service;
     is_inited_ = true;
   }
-  // TODO(xingzhi): integrate sql_proxy and lease_service 4.4
+  // TODO(lyh444845): integrate sql_proxy and lease_service 4.4.1
   return ret;
 }
 
@@ -385,8 +385,23 @@ int ObBackupCleanTaskMgr::persist_ls_tasks_()
         } 
       }
     }
+    bool has_complement_log = task_attr_.is_delete_backup_set_task() && backup_set_info_.plus_archivelog_;
     if (OB_FAIL(ret)) {
-    } else if (FALSE_IT(task_attr_.total_ls_count_ = ls_ids.count())) {
+    } else if (has_complement_log) {
+      // Generate a special ls task to delete the complement log (the special ls_id is 0)
+      ObBackupCleanLSTaskAttr new_ls_attr;
+      if (OB_FAIL(generate_ls_task_(ObLSID(0), new_ls_attr))) {
+        LOG_WARN("failed to generate backup delete complement log task", K(ret), K(ls_ids));
+      } else if (FALSE_IT(new_ls_attr.task_type_ = ObBackupCleanTaskType::BACKUP_COMPLEMENT_LOG)) {
+      } else if (OB_FAIL(backup_service_->check_leader())) {
+        LOG_WARN("failed to check leader", K(ret));
+      } else if (OB_FAIL(ObBackupCleanLSTaskOperator::insert_ls_task(trans, new_ls_attr))) {
+        LOG_WARN("failed to insert backup delete complement log task", K(ret), K(new_ls_attr));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (FALSE_IT(task_attr_.total_ls_count_ = ls_ids.count() + (has_complement_log ? 1 : 0))) {
     } else if (OB_FAIL(advance_task_status_(trans, next_status, task_attr_.result_, task_attr_.end_ts_))) {
       LOG_WARN("failed to advance status to DOING", K(ret), K(ls_ids));
     } else if (OB_FAIL(ObBackupCleanTaskOperator::update_ls_count(trans, task_attr_, true/*is_total*/))) {
@@ -598,7 +613,7 @@ int ObBackupCleanTaskMgr::get_ls_ids_from_traverse_(const ObBackupPath &path, Ob
     LOG_WARN("failed to set log stream prefix", K(ret));  
   } else if (OB_FAIL(prefix_op.init(logstream_prefix, strlen(logstream_prefix)))) {
     LOG_WARN("failed to init dir prefix", K(ret), K(logstream_prefix));
-  // TODO(xingzhi) iterate dir sequentially 4.4
+  // TODO(lyh444845) iterate dir sequentially 4.4.1
   } else if (OB_FAIL(util.list_directories(path.get_obstr(), backup_dest_.get_storage_info(), prefix_op))) {
     LOG_WARN("failed to list files", K(ret));
   } else {
@@ -810,7 +825,7 @@ int ObBackupCleanTaskMgr::delete_data_info_turn_files_(const ObBackupPath &infos
   ObDirPrefixEntryNameFilter prefix_op(d_entrys);
   if (OB_FAIL(prefix_op.init(info_turn_prefix, strlen(info_turn_prefix)))) {
     LOG_WARN("failed to init dir prefix", K(ret), K(info_turn_prefix));
-  // TODO(xingzhi) iterate dir sequentially 4.4
+  // TODO(lyh444845) iterate dir sequentially 4.4.1
   } else if (OB_FAIL(util.list_directories(infos_path.get_obstr(), backup_dest_.get_storage_info(), prefix_op))) {
     LOG_WARN("failed to list directories", K(ret));
   } else {

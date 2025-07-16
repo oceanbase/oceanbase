@@ -118,7 +118,7 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
     }
   }
 
-  if (OB_SUCC(ret) && !has_tg) {
+  if (OB_SUCC(ret) && !has_tg && !is_prepare_stage_) {
     // 解析级联更新的列
     if (OB_FAIL(resolve_additional_assignments(tables_assign,
                                                T_UPDATE_SCOPE))) {
@@ -146,7 +146,7 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
 
   // 3. resolve other clauses
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(try_add_remove_const_expr_for_assignments())) {
+    if (!is_prepare_stage_ && OB_FAIL(try_add_remove_const_expr_for_assignments())) {
       LOG_WARN("failed to add remove const expr", K(ret));
     } else if (OB_FAIL(resolve_update_constraints())) {
       LOG_WARN("failed to resolve check exprs", K(ret));

@@ -376,11 +376,11 @@ static int acceptfd_handle_first_readable_event(acceptfd_sk_t *s)
                      errno);
     } else {
       if (is_local_ip_address(src_addr)) {
-        //TODO fix me
-        //if observer use local loop ip to start service, there will be error here
         err = EUCLEAN;
-        s->fd_info.client_gid = UINT64_MAX;
-        ussl_log_info("local ip address:%s, dispatch after consume", src_addr);
+        negotiation_message_t *nego_message = (typeof(nego_message))(h + 1);
+        s->fd_info.client_gid = nego_message->client_gid;
+        ussl_log_info("local ip address:%s, accept connection regardless of the server_auth_methods",
+                      src_addr);
       } else {
         negotiation_message_t *nego_message = (typeof(nego_message))(h + 1);
         s->fd_info.client_gid = nego_message->client_gid;

@@ -74,6 +74,7 @@ int ObInMemoryLSTable::get(
     LOG_WARN("get through inmemory with invalid cluster_id or not local cluster_id or invalid mode",
              KR(ret), K(cluster_id), K(local_cluster_id), K(mode));
   } else if (!is_sys_tenant(tenant_id) || !ls_id.is_sys_ls()) {
+    // only surport SYS LS, not surport SSLOG LS
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument for sys tenant's sys ls", KR(ret), KT(tenant_id), K(ls_id));
   } else {
@@ -118,7 +119,7 @@ int ObInMemoryLSTable::update(
     LOG_WARN("not init", KR(ret));
   } else if (!replica.is_valid()
       || !is_sys_tenant(replica.get_tenant_id())
-      || !replica.get_ls_id().is_sys_ls()
+      || !replica.get_ls_id().is_sys_ls() // only surport SYS LS, not surport SSLOG LS
       || inner_table_only) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(replica), "tenant_id", replica.get_tenant_id(),
@@ -246,7 +247,7 @@ int ObInMemoryLSTable::remove(
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (OB_UNLIKELY(!is_sys_tenant(tenant_id)
-      || !ls_id.is_sys_ls()
+      || !ls_id.is_sys_ls() // only surport SYS LS, not surport SSLOG LS
       || !server.is_valid())
       || inner_table_only) {
     ret = OB_INVALID_ARGUMENT;

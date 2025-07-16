@@ -258,6 +258,14 @@ int ObSrvNetworkFrame::reload_config()
   int32_t tcp_keepintvl     = static_cast<int>(GCONF.tcp_keepintvl);
   int32_t tcp_keepcnt       = static_cast<int>(GCONF.tcp_keepcnt);
   int32_t user_timeout      = static_cast<int>(GCONF.dead_socket_detection_timeout);
+  int32_t rpc_thread_count  = static_cast<int>(GCONF.net_thread_count);
+  if (0 == rpc_thread_count) {
+    rpc_thread_count = get_default_net_thread_count();
+    if (2 == rpc_thread_count) {
+      // Decrease the rpc thread count when net_thread_count = 2 for performance optimization
+      rpc_thread_count = 1;
+    }
+  }
 
   if (GCONF._enable_easy_keepalive) {
     enable_easy_keepalive = 1;
@@ -287,6 +295,13 @@ int ObSrvNetworkFrame::reload_config()
                                                                         tcp_keepidle, tcp_keepintvl,
                                                                         tcp_keepcnt))) {
     LOG_WARN("Failed to set sql tcp keepalive parameters for sql nio server", K(ret));
+  } else if (OB_FAIL(obrpc::global_poc_server.update_thread_count(rpc_thread_count))) {
+    if (OB_NOT_SUPPORTED == ret) {
+      LOG_WARN("it is not supported for reducing rpc_thread_count dynamically, and it will take effect after restarting observer",
+                K(rpc_thread_count));
+    } else {
+      LOG_WARN("Failed to set rpc net thread count", K(rpc_thread_count));
+    }
   }
   return ret;
 }
@@ -687,8 +702,8 @@ void ObSrvNetworkFrame::wait()
   if (NULL != obmysql::global_sql_nio_server) {
     obmysql::global_sql_nio_server->wait();
   }
-  obrpc::global_poc_server.wait();
   ussl_wait();
+  obrpc::global_poc_server.wait();
 }
 
 int ObSrvNetworkFrame::stop()

@@ -529,7 +529,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
             }
       }
     }
-    //resolve if_not_exists
+    //resolve if_not_exists, mysql模式支持
     if (OB_SUCC(ret)) {
       if (NULL != create_table_node->children_[1]) {
         if (T_IF_NOT_EXISTS != create_table_node->children_[1]->type_) {
@@ -935,6 +935,13 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
       ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
       if (OB_FAIL(check_create_stmt_storage_cache_policy(table_schema.get_storage_cache_policy(), &table_schema))) {
         LOG_WARN("fail to check storage cache policy", K(ret), K(table_schema.get_storage_cache_policy()));;
+      }
+    }
+
+    if (OB_SUCC(ret) && create_table_stmt->get_create_table_arg().schema_.is_external_table()) {
+      ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+      if (OB_FAIL(ObSQLUtils::check_location_constraint(table_schema))) {
+        LOG_WARN("fail to check location constraint", K(ret), K(table_schema));
       }
     }
 
@@ -3504,16 +3511,18 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
           ObExternalFileFormat format;
           have_external_file_format = T_EXTERNAL_FILE_FORMAT == option_node->type_;
           have_external_properties = T_EXTERNAL_PROPERTIES == option_node->type_;
+          ObResolverUtils::FileFormatContext ff_ctx;
           for (int32_t j = 0; OB_SUCC(ret) && j < option_node->num_child_; ++j) {
             if (OB_NOT_NULL(option_node->children_[j])
                 && T_EXTERNAL_FILE_FORMAT_TYPE == option_node->children_[j]->type_) {
-              if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node->children_[j], format, params_))) {
+              if (OB_FAIL(ObResolverUtils::resolve_file_format(option_node->children_[j], format, params_, ff_ctx))) {
                 LOG_WARN("fail to resolve file format", K(ret));
               } else {
                 external_table_format_type_ = format.format_type_;
               }
             }
           }
+
         }
       }
       if (OB_SUCC(ret) && have_external_file_format && have_external_properties) {

@@ -39,7 +39,7 @@ public:
   int init()
   {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(tx_data_allocator_.init("TX_DATA_SLICE"))) {
+    if (OB_FAIL(tx_data_allocator_.init("TX_DATA_SLICE", &share_resource_throttle_tool_))) {
       SHARE_LOG(ERROR, "init tx data allocator failed", KR(ret));
     } else if (OB_FAIL(memstore_allocator_.init())) {
       SHARE_LOG(ERROR, "init memstore allocator failed", KR(ret));
@@ -69,6 +69,14 @@ public:
   ObTenantMdsAllocator &mds_allocator() { return mds_allocator_; }
   TxShareThrottleTool &share_resource_throttle_tool() { return share_resource_throttle_tool_; }
   ObTenantTxDataOpAllocator &tx_data_op_allocator() { return tx_data_op_allocator_; }
+
+  TO_STRING_KV(K(tenant_id_),
+               KP(this),
+               KP(&memstore_allocator_),
+               KP(&tx_data_allocator_),
+               KP(&mds_allocator_),
+               KP(&share_resource_throttle_tool_),
+               KP(&tx_data_op_allocator_));
 
 private:
   void update_share_throttle_config_(const int64_t total_memory, omt::ObTenantConfigGuard &config);

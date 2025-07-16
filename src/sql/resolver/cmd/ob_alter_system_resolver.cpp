@@ -29,6 +29,9 @@
 #include "observer/mysql/ob_query_response_time.h"
 #include "share/restore/ob_import_util.h"
 #include "share/table/ob_table_config_util.h"
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "close_modules/shared_log_service/logservice/libpalf/libpalf_env_ffi_instance.h"
+#endif
 
 namespace oceanbase
 {
@@ -557,10 +560,7 @@ int ObFreezeResolver::resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support to specify ls to major freeze", K(ret), "ls_id", freeze_stmt->get_ls_id());
   } else if (freeze_stmt->get_tablet_id().is_valid()) { // tablet major freeze
-    if (GCTX.is_shared_storage_mode()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not allowed to schedule tablet major for shared storage mode", KR(ret));
-    } else if (T_TABLET_ID == opt_tenant_list_or_tablet_id->type_) {
+    if (T_TABLET_ID == opt_tenant_list_or_tablet_id->type_) {
       if (OB_UNLIKELY(0 != freeze_stmt->get_tenant_ids().count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tenant ids should be empty for type T_TABLET_ID", K(ret));
@@ -2153,6 +2153,27 @@ int check_backup_zone(const ObString &backup_zone)
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+static int do_encrypt_logservice_access_point(ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  if (0 == STRCASECMP(item.name_.ptr(), LOGSERVICE_ACCESS_POINT)) {
+    int64_t out_len = 0;
+    if (OB_FAIL(libpalf::LibPalfEnvFFIInstance::encrypt_logservice_access_point(
+      item.value_.ptr(),
+      item.value_.size(),
+      item.value_.ptr(),
+      item.value_.capacity(),
+      out_len
+    ))) {
+      LOG_WARN("encrypt_logservice_access_point failed", KR(ret));
+    } else {
+      LOG_INFO("encrypt logservice access point success", K(out_len));
+    }
+  } else {} // do nothing
+  return ret;
+}
+#endif
 static int alter_system_set_reset_constraint_check_and_add_item_mysql_mode(obrpc::ObAdminSetConfigArg &rpc_arg, ObAdminSetConfigItem &item, ObSQLSessionInfo *& session_info)
 {
   int ret = OB_SUCCESS;
@@ -2177,6 +2198,14 @@ static int alter_system_set_reset_constraint_check_and_add_item_mysql_mode(obrpc
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup configuration items cannot be set together with non data backup configuration items");
     LOG_WARN("backup configuration items cannot be set together with non data backup configuration items", K(ret));
   }
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(do_encrypt_logservice_access_point(item))) {
+    LOG_WARN("do encrypt logservice access point failed", KR(ret));
+  } else {} // do nothing
+#endif
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(rpc_arg.items_.push_back(item))) {
     LOG_WARN("add config item failed", K(ret), K(item));
@@ -2298,6 +2327,13 @@ static int alter_system_set_reset_constraint_check_and_add_item_oracle_mode(obrp
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup configuration items cannot be set together with non data backup configuration items");
     LOG_WARN("backup configuration items cannot be set together with non data backup configuration items", K(ret));
   }
+
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(do_encrypt_logservice_access_point(item))) {
+    LOG_WARN("do encrypt logservice access point failed", KR(ret));
+  } else {} // do nothing
+#endif
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(set_reset_check_param_valid_oracle_mode(
@@ -3698,7 +3734,11 @@ int ObAddArbitrationServiceResolver::resolve(const ParseNode &parse_tree)
   LOG_WARN("not supported in CE version", KR(ret));
   LOG_USER_ERROR(OB_NOT_SUPPORTED, "add arbitration service in CE version");
 #else
-  if (OB_UNLIKELY(T_ADD_ARBITRATION_SERVICE != parse_tree.type_)) {
+  if (GCONF.enable_logservice) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("add arbitration service in log service is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Adding arbitration service in log service mode is");
+  } else if (OB_UNLIKELY(T_ADD_ARBITRATION_SERVICE != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("type is not T_ADD_ARBITRATION_SERVICE", "type", get_type_name(parse_tree.type_));
   } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
@@ -7292,8 +7332,9 @@ int resolve_transfer_partition_to_ls(
   return ret;
 }
 
-int get_and_verify_tenant_name(
+int ObAlterSystemResolverUtil::get_and_verify_tenant_name(
     const ParseNode *parse_node,
+    const bool allow_sys_meta_tenant,
     const uint64_t exec_tenant_id,
     uint64_t &target_tenant_id,
     const char * const op_str)
@@ -7335,7 +7376,7 @@ int get_and_verify_tenant_name(
       ret = OB_TENANT_NOT_EXIST;
       LOG_USER_ERROR(OB_TENANT_NOT_EXIST, tenant_name.length(), tenant_name.ptr());
     }
-  } else if (OB_UNLIKELY(!is_user_tenant(target_tenant_id))) {
+  } else if (!allow_sys_meta_tenant && !is_user_tenant(target_tenant_id)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("only support user tenant", KR(ret), K(target_tenant_id));
     if (OB_TMP_FAIL(databuff_printf(comment, COMMENT_LENGTH, pos,
@@ -7370,8 +7411,9 @@ int ret = OB_SUCCESS;
   } else if (OB_ISNULL(parse_tree.children_[0])) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("parse node is null", KR(ret),  KP(parse_tree.children_[0]));
-  } else if (OB_FAIL(get_and_verify_tenant_name(
+  } else if (OB_FAIL(Util::get_and_verify_tenant_name(
       parse_tree.children_[1],
+      false, /* allow_sys_meta_tenant */
       session_info_->get_effective_tenant_id(),
       target_tenant_id, "Transfer partition"))) {
     LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
@@ -7458,8 +7500,9 @@ int ret = OB_SUCCESS;
   } else if (OB_ISNULL(parse_tree.children_[0])) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("parse node is null", KR(ret),  KP(parse_tree.children_[0]));
-  } else if (OB_FAIL(get_and_verify_tenant_name(
+  } else if (OB_FAIL(Util::get_and_verify_tenant_name(
       parse_tree.children_[1],
+      false, /* allow_sys_meta_tenant */
       session_info_->get_effective_tenant_id(),
       target_tenant_id, "Cancel transfer partition"))) {
     LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
@@ -7508,8 +7551,9 @@ int ret = OB_SUCCESS;
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid parse tree or session info", KR(ret), "num_child", parse_tree.num_child_,
         KP(session_info_));
-  } else if (OB_FAIL(get_and_verify_tenant_name(
+  } else if (OB_FAIL(Util::get_and_verify_tenant_name(
       parse_tree.children_[0],
+      false, /* allow_sys_meta_tenant */
       session_info_->get_effective_tenant_id(),
       target_tenant_id, "Cancel balance job"))) {
     LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
@@ -7543,8 +7587,9 @@ int ObServiceNameResolver::resolve(const ParseNode &parse_tree)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid parse tree or session info", KR(ret), "num_child", parse_tree.num_child_,
         KP(parse_tree.children_[0]), KP(parse_tree.children_[1]), KP(session_info_));
-  } else if (OB_FAIL(get_and_verify_tenant_name(
+  } else if (OB_FAIL(Util::get_and_verify_tenant_name(
       parse_tree.children_[2],
+      false, /* allow_sys_meta_tenant */
       session_info_->get_effective_tenant_id(),
       target_tenant_id,
       "Service name related command"))) {

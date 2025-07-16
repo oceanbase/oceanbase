@@ -4,3 +4,4 @@
 bquery/*
 obclient
 obclient.down
+oblogservice_test.yaml

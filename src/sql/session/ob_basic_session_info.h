@@ -486,6 +486,8 @@ public:
   void set_valid(const bool valid) {is_valid_ = valid;};
   int set_client_version(const common::ObString &client_version);
   int set_driver_version(const common::ObString &driver_version);
+  int set_diagnosis_log_file(const common::ObString &diagnosis_log_file);
+  int set_diagnosis_bad_file(const common::ObString &diagnosis_bad_file);
   int64_t get_sys_vars_encode_max_size() { return sys_vars_encode_max_size_; }
   void set_sys_vars_encode_max_size(int64_t size) { sys_vars_encode_max_size_ = size; }
   void set_sql_mode(const ObSQLMode sql_mode)
@@ -655,6 +657,9 @@ public:
   const common::ObLogIdLevelMap *get_log_id_level_map() const;
   const common::ObString &get_client_version() const { return client_version_; }
   const common::ObString &get_driver_version() const { return driver_version_; }
+  ObDiagnosisInfo &get_diagnosis_info() { return diagnosis_info_; }
+  const ObDiagnosisInfo &get_diagnosis_info() const { return diagnosis_info_; }
+  void reset_diagnosis_info() { diagnosis_info_.reset(); }
   void destory_json_pl_mngr();
   intptr_t get_json_pl_mngr();
   int get_tx_timeout(int64_t &tx_timeout) const
@@ -1350,14 +1355,7 @@ public:
   void set_enable_mysql_compatible_dates(const bool enable_mysql_compatible_dates) {
     enable_mysql_compatible_dates_ = enable_mysql_compatible_dates;
   }
-  bool is_diagnosis_enabled() const { return is_diagnosis_enabled_; }
-  void set_diagnosis_enabled(const bool is_diagnosis_enabled) {
-    is_diagnosis_enabled_ = is_diagnosis_enabled;
-  }
-  void set_diagnosis_limit_num(const int64_t diagnosis_limit_num) {
-    diagnosis_limit_num_ = diagnosis_limit_num;
-  }
-  int64_t get_diagnosis_limit_num() const { return diagnosis_limit_num_; }
+  bool is_diagnosis_enabled() const { return diagnosis_info_.is_enabled_; }
   int reset_tx_variable_if_remote_trans(const ObPhyPlanType& type);
   int check_tx_read_only_privilege(const ObSqlTraits &sql_traits);
   int get_group_concat_max_len(uint64_t &group_concat_max_len) const;

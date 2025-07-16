@@ -20,6 +20,7 @@
 #include "lib/xml/ob_xml_parser.h"
 #include "lib/xml/ob_xml_util.h"
 #include "sql/resolver/mv/ob_alter_mview_utils.h"
+#include "share/external_table/ob_external_table_utils.h"
 
 namespace oceanbase
 {
@@ -218,6 +219,8 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         OZ (alter_schema.set_external_file_location(table_schema_->get_external_file_location()));
         OZ (alter_schema.set_external_file_location_access_info(table_schema_->get_external_file_location_access_info()));
         OZ (alter_schema.set_external_file_pattern(table_schema_->get_external_file_pattern()));
+        alter_schema.set_external_location_id(table_schema_->get_external_location_id());
+        OZ (alter_schema.set_external_sub_path(table_schema_->get_external_sub_path()));
         if (OB_SUCC(ret) && table_schema_->is_user_specified_partition_for_external_table()) {
           alter_schema.set_user_specified_partition_for_external_table();
         }
@@ -386,6 +389,13 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("failed to deep copy string in part expr");
       }
     }
+    if (OB_SUCC(ret) && alter_table_stmt->get_alter_table_arg().alter_table_schema_.is_external_table()) {
+      ObTableSchema &table_schema = alter_table_stmt->get_alter_table_arg().alter_table_schema_;
+      if (OB_FAIL(ObSQLUtils::check_location_constraint(table_schema))) {
+        LOG_WARN("fail to check location constraint", K(ret), K(table_schema));
+      }
+    }
+
   }
   DEBUG_SYNC(HANG_BEFORE_RESOLVER_FINISH);
   return ret;
@@ -704,7 +714,11 @@ int ObAlterTableResolver::resolve_add_external_partition(const ParseNode &part_e
       ObString tmp_str = ObString(location_element.str_len_, location_element.str_value_);
       OZ (ob_write_string(*allocator_, tmp_str, external_location));
       ObSqlString full_path;
-      OZ (full_path.append(table_schema_->get_external_file_location()));
+      ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+      ObString file_location;
+      CK (OB_NOT_NULL(schema_guard));
+      OZ (ObExternalTableUtils::get_external_file_location(*table_schema_, *schema_guard, *allocator_, file_location));
+      OZ (full_path.append(file_location));
       if (OB_SUCC(ret)) {
         if (full_path.length() == 0) {
           ret = OB_INVALID_ARGUMENT;
@@ -714,7 +728,7 @@ int ObAlterTableResolver::resolve_add_external_partition(const ParseNode &part_e
         }
       }
       OZ (full_path.append(external_location));
-      OZ (alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_external_file_location(full_path.string()));
+      OZ (alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_external_file_location(table_schema_->get_external_file_location()));
       alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_table_type(EXTERNAL_TABLE);
       partition.set_external_location(external_location);
       partition.set_is_empty_partition_name(true);
@@ -6504,6 +6518,8 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode &node)
           LOG_WARN("can't set primary key nullable", K(ret));
         } else if (OB_FAIL(check_alter_geo_column_allowed(alter_column_schema, *origin_col_schema))) {
           LOG_WARN("modify geo column not allowed", K(ret));
+        } else if (OB_FAIL(check_alter_rb_column_allowed(alter_column_schema, *origin_col_schema))) {
+          LOG_WARN("modify roaringbitmap column not allowed", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
@@ -6683,6 +6699,27 @@ int ObAlterTableResolver::check_alter_geo_column_allowed(const share::schema::Al
   return ret;
 }
 
+int ObAlterTableResolver::check_alter_rb_column_allowed(const share::schema::AlterColumnSchema &alter_column_schema,
+                                                        const share::schema::ObColumnSchemaV2 &origin_col_schema)
+{
+  int ret = OB_SUCCESS;
+  if (origin_col_schema.get_data_type() == ObRoaringBitmapType
+      && alter_column_schema.get_data_type() != ObRoaringBitmapType
+      && !ob_is_string_type(alter_column_schema.get_data_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify roaringbitmap to other type except string");
+    LOG_WARN("can't not modify roaringbitmap type", K(ret),
+            K(origin_col_schema.get_data_type()), K(alter_column_schema.get_data_type()));
+  } else if (alter_column_schema.get_data_type() == ObRoaringBitmapType
+             && origin_col_schema.get_data_type() != ObRoaringBitmapType) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify other type to roaringbitmap");
+    LOG_WARN("can't not modify other type to roaringbitmap type", K(ret),
+            K(origin_col_schema.get_data_type()), K(alter_column_schema.get_data_type()));
+  }
+  return ret;
+}
+
 int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
                                                 bool &is_modify_column_visibility,
                                                 ObReducedVisibleColSet &reduced_visible_col_set)
@@ -6849,19 +6886,8 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify geometry srid");
             LOG_WARN("can't not modify geometry srid", K(ret),
                     K(origin_col_schema->get_srid()), K(alter_column_schema.get_srid()));
-          } else if (origin_col_schema->get_data_type() == ObRoaringBitmapType
-                     && alter_column_schema.get_data_type() != ObRoaringBitmapType
-                     && !ob_is_string_type(alter_column_schema.get_data_type())) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify roaringbitmap to other type except string");
-            LOG_WARN("can't not modify roaringbitmap type", K(ret),
-                    K(origin_col_schema->get_data_type()), K(alter_column_schema.get_data_type()));
-          } else if (alter_column_schema.get_data_type() == ObRoaringBitmapType
-                     && origin_col_schema->get_data_type() != ObRoaringBitmapType) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify other type to roaringbitmap");
-            LOG_WARN("can't not modify other type to roaringbitmap type", K(ret),
-                    K(origin_col_schema->get_data_type()), K(alter_column_schema.get_data_type()));
+          } else if (OB_FAIL(check_alter_rb_column_allowed(alter_column_schema, *origin_col_schema))) {
+            LOG_WARN("modify roaringbitmap column not allowed", K(ret));
           }
         }
       }
@@ -6979,27 +7005,38 @@ int ObAlterTableResolver::resolve_drop_column(
       } else if (OB_FAIL(alter_column_schema.set_column_name(alter_column_schema.get_origin_column_name()))) {
       } else {
         ObString column_name = alter_column_schema.get_column_name();
-        if (GCONF._enable_pseudo_partition_id &&
-          ObResolverUtils::is_pseudo_partition_column_name(column_name)) {
-          // check table_schema has the partition column or not,
-          // if has drop normally, if not return OB_ERR_COLUMN_DUPLICATE
-          bool is_exist = false;
-          if (OB_ISNULL(params_.schema_checker_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("params_.schema_checker_ is null", K(ret));
-          } else if (OB_ISNULL(params_.session_info_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("params_.session_info_ is null", K(ret));
-          } else if (OB_FAIL(params_.schema_checker_->check_column_exists(
-                params_.session_info_->get_effective_tenant_id(), table_schema_->get_table_id(),
-                column_name, is_exist))) {
-            LOG_WARN("check column exists failed", K(ret), K(column_name));
-          } else if (!is_exist) {
-            ret = OB_ERR_BAD_FIELD_ERROR;
-            LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
-              table_schema_->get_table_name_str().length(),
-              table_schema_->get_table_name_str().ptr());
-            LOG_WARN("invalid partition pseudo column", K(ret), K(column_name));
+        const ObColumnSchemaV2 *origin_col_schema = nullptr;
+        if (nullptr == (origin_col_schema = table_schema_->get_column_schema(column_name))) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
+            table_schema_->get_table_name_str().length(),
+            table_schema_->get_table_name_str().ptr());
+          LOG_WARN("column does not exist", K(ret), K(column_name));
+        } else {
+          alter_column_schema.set_charset_type(origin_col_schema->get_charset_type());
+          alter_column_schema.set_collation_type(origin_col_schema->get_collation_type());
+          if (GCONF._enable_pseudo_partition_id &&
+            ObResolverUtils::is_pseudo_partition_column_name(column_name)) {
+            // check table_schema has the partition column or not,
+            // if has drop normally, if not return OB_ERR_COLUMN_DUPLICATE
+            bool is_exist = false;
+            if (OB_ISNULL(params_.schema_checker_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("params_.schema_checker_ is null", K(ret));
+            } else if (OB_ISNULL(params_.session_info_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("params_.session_info_ is null", K(ret));
+            } else if (OB_FAIL(params_.schema_checker_->check_column_exists(
+                  params_.session_info_->get_effective_tenant_id(), table_schema_->get_table_id(),
+                  column_name, is_exist))) {
+              LOG_WARN("check column exists failed", K(ret), K(column_name));
+            } else if (!is_exist) {
+              ret = OB_ERR_BAD_FIELD_ERROR;
+              LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
+                table_schema_->get_table_name_str().length(),
+                table_schema_->get_table_name_str().ptr());
+              LOG_WARN("invalid partition pseudo column", K(ret), K(column_name));
+            }
           }
         }
         if (OB_SUCC(ret)) {

@@ -20,6 +20,7 @@
 #include "storage/slog_ckpt/ob_server_checkpoint_writer.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
+#include "storage/meta_store/ob_storage_meta_io_util.h"
 #include "storage/tx_storage/ob_tablet_gc_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_file_manager.h"
@@ -611,29 +612,50 @@ int ObServerCheckpointSlogHandler::replay_over()
 int ObServerCheckpointSlogHandler::write_checkpoint(bool is_force)
 {
   int ret = OB_SUCCESS;
+    int tmp_ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    bool is_writing_checkpoint_set = false;
+    while (!ATOMIC_BCAS(&is_writing_checkpoint_, false, true)) {
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
+        LOG_INFO("wait until last checkpoint finished");
+      }
+      ob_usleep(100 * 1000); // 100ms
+    }
+    is_writing_checkpoint_set = true;
+    if (OB_FAIL(gc_checkpoint_file())) {
+      LOG_WARN("fail to gc checkpoint file", K(ret));
+    } else if (OB_FAIL(inner_write_checkpoint(is_force))) {
+      LOG_WARN("fail to write checkpoint", K(ret), K(is_force));
+    }
+    // Regard the checkpoint is written successfully or not, gc the checkpoint file.
+    if (OB_TMP_FAIL(gc_checkpoint_file())) {
+      LOG_WARN("fail to gc checkpoint file", K(ret), K(tmp_ret));
+    }
+    if (is_writing_checkpoint_set) {
+      ATOMIC_STORE(&is_writing_checkpoint_, false);
+    }
+  }
+  return ret;
+}
 
+int ObServerCheckpointSlogHandler::inner_write_checkpoint(bool is_force)
+{
+  int ret = OB_SUCCESS;
   static int64_t last_write_time_ = 0;
   static ObLogCursor last_slog_cursor_;
 
   ObLogCursor cur_cursor;
   int64_t alert_interval = ObWriteCheckpointTask::FAIL_WRITE_CHECKPOINT_ALERT_INTERVAL;
   int64_t min_interval = ObWriteCheckpointTask::RETRY_WRITE_CHECKPOINT_MIN_INTERVAL;
-  bool is_writing_checkpoint_set = false;
   const int64_t start_time = ObTimeUtility::current_time();
   int64_t cost_time = 0;
-
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if(!ATOMIC_BCAS(&is_writing_checkpoint_, false, true)) {
-    ret = OB_NEED_WAIT;
-    LOG_WARN("is writing checkpoint, need wait", K(ret));
-  } else {
-    is_writing_checkpoint_set = true;
-  }
-  if (OB_FAIL(ret)) {
-    // do nothing
   } else if (OB_FAIL(server_slogger_->get_active_cursor(cur_cursor))) {
     LOG_WARN("get server slog current cursor fail", K(ret));
   } else if (OB_UNLIKELY(!cur_cursor.is_valid())) {
@@ -660,11 +682,85 @@ int ObServerCheckpointSlogHandler::write_checkpoint(bool is_force)
     LOG_INFO("finish write server checkpoint", K(ret), K(last_slog_cursor_), K(cur_cursor),
         K_(last_write_time), K(start_time), K(is_force), K(cost_time));
   }
+  return ret;
+}
 
-  if (is_writing_checkpoint_set) {
-    ATOMIC_STORE(&is_writing_checkpoint_, false);
+int ObServerCheckpointSlogHandler::gc_checkpoint_file()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObServerCheckpointSlogHandler not init", K(ret));
+  } else if (!GCTX.is_shared_storage_mode()) {
+    // nothing to do
+  } else {
+    const ObServerSuperBlock &super_block = OB_STORAGE_OBJECT_MGR.get_server_super_block();
+    if (OB_FAIL(gc_min_checkpoint_file(super_block.min_file_id_))) {
+      LOG_WARN("fail to gc min checkpoint file", K(ret), K(super_block));
+    } else if (OB_FAIL(gc_max_checkpoint_file(super_block.max_file_id_))) {
+      LOG_WARN("fail to gc max checkpoint file", K(ret), K(super_block));
+    }
   }
+  return ret;
+}
 
+int ObServerCheckpointSlogHandler::gc_min_checkpoint_file(const int64_t min_file_id)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  int64_t min_exist_file_id = min_file_id - 1;
+  bool is_exist = true;
+  for (; OB_SUCC(ret) && min_exist_file_id >= 0; --min_exist_file_id) {
+    ObStorageObjectOpt opt;
+    opt.set_private_ckpt_opt(OB_SERVER_TENANT_ID, 0/*tenant epoch id*/, min_exist_file_id);
+    if (OB_FAIL(ObStorageMetaIOUtil::check_meta_existence(opt, 0/*do not need ls_epoch*/, is_exist))) {
+      LOG_WARN("fail to check slog checkpoint file exist", K(ret), K(opt));
+    } else if (!is_exist) {
+      ++min_exist_file_id;
+      break;
+    }
+  }
+  for (; OB_SUCC(ret) && min_exist_file_id >= 0 && min_exist_file_id < min_file_id; ++min_exist_file_id) {
+    MacroBlockId macro_id;
+    ObStorageObjectOpt opt;
+    opt.set_private_ckpt_opt(OB_SERVER_TENANT_ID, 0/*tenant epoch id*/, min_exist_file_id);
+    if (OB_FAIL(OB_STORAGE_OBJECT_MGR.ss_get_object_id(opt, macro_id))) {
+      LOG_WARN("fail to get object id", K(ret), K(opt), K(macro_id));
+    } else if (OB_FAIL(OB_SERVER_FILE_MGR.delete_file(macro_id, 0/*do not need ls_epoch*/))) {
+      LOG_WARN("fail to delete file", K(ret), K(macro_id));
+    }
+  }
+#endif
+  return ret;
+}
+
+int ObServerCheckpointSlogHandler::gc_max_checkpoint_file(const int64_t max_file_id)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_SHARED_STORAGE
+  int64_t max_exist_file_id = max_file_id + 1;
+  bool is_exist = true;
+  for (; OB_SUCC(ret) && max_exist_file_id < INT64_MAX; ++max_exist_file_id) {
+    ObStorageObjectOpt opt;
+    opt.set_private_ckpt_opt(OB_SERVER_TENANT_ID, 0/*tenant epoch id*/, max_exist_file_id);
+    if (OB_FAIL(ObStorageMetaIOUtil::check_meta_existence(opt, 0/*do not need ls_epoch*/, is_exist))) {
+      LOG_WARN("fail to check slog checkpoint file exist", K(ret), K(opt));
+    } else if (!is_exist) {
+      --max_exist_file_id;
+      break;
+    }
+  }
+  for (; OB_SUCC(ret) && max_exist_file_id < INT64_MAX && max_exist_file_id > max_file_id; --max_exist_file_id) {
+    MacroBlockId macro_id;
+    ObStorageObjectOpt opt;
+    opt.set_private_ckpt_opt(OB_SERVER_TENANT_ID, 0/*tenant epoch id*/, max_exist_file_id);
+    if (OB_FAIL(OB_STORAGE_OBJECT_MGR.ss_get_object_id(opt, macro_id))) {
+      LOG_WARN("fail to get object id", K(ret), K(opt), K(macro_id));
+    } else if (OB_FAIL(OB_SERVER_FILE_MGR.delete_file(macro_id, 0/*do not need ls_epoch*/))) {
+      LOG_WARN("fail to delete file", K(ret), K(macro_id));
+    }
+  }
+#endif
   return ret;
 }
 

@@ -456,8 +456,8 @@ int ObCGPrefetcher::prefetch_micro_data()
     LOG_WARN("Unexpected prefetch status", K(ret), K_(cur_level), K_(index_tree_height),
              K_(micro_data_prefetch_idx), K_(cur_micro_data_read_idx), K_(max_micro_handle_cnt));
   } else if (micro_data_prefetch_idx_ - cur_micro_data_read_idx_ == max_micro_handle_cnt_ ||
-             (use_multi_block_prefetch_ && prefetch_depth_ > MIN_DATA_READ_BATCH_COUNT &&
-              (max_micro_handle_cnt_ - (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_)) < MIN_DATA_READ_BATCH_COUNT)) {
+             (use_multi_block_prefetch_ && prefetch_depth_ > multi_block_prefetch_batch_count_ &&
+              (max_micro_handle_cnt_ - (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_)) < multi_block_prefetch_batch_count_)) {
     // DataBlock ring buf full
   } else if (OB_FAIL(get_prefetch_depth(prefetch_depth, micro_data_prefetch_idx_))) {
     LOG_WARN("Fail to get prefetch depth", K(ret));

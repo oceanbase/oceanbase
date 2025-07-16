@@ -190,7 +190,8 @@ int ObHashGroupByOp::inner_open()
     } else if (FALSE_IT(estimate_mem_size = est_hash_mem_size + MY_SPEC.width_ * est_group_cnt)) {
     } else if (OB_FAIL(sql_mem_processor_.init(&mem_context_->get_malloc_allocator(),
                                                ctx_.get_my_session()->get_effective_tenant_id(),
-                                               estimate_mem_size,
+                                               MY_SPEC.by_pass_enabled_ ?
+                                                  min(estimate_mem_size, ADAPTIVE_GBY_MEM_ESTIMATE_SIZE) : estimate_mem_size,
                                                MY_SPEC.type_,
                                                MY_SPEC.id_,
                                                &ctx_))) {

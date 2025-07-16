@@ -1955,6 +1955,9 @@ public:
   int sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRecord& executing_sqlstat);
   dbms_scheduler::ObDBMSSchedJobInfo *get_job_info() const { return job_info_; }
   void set_job_info(dbms_scheduler::ObDBMSSchedJobInfo *job_info) { job_info_ = job_info; }
+  void *get_external_resource_schema_cache() { return external_resource_schema_cache_; }
+  void set_external_resource_schema_cache(void *cache) { external_resource_schema_cache_ = cache; }
+
 private:
   transaction::ObTxnFreeRouteCtx txn_free_route_ctx_;
   //save the current sql exec context in session
@@ -1993,6 +1996,7 @@ private:
   common::ObString audit_filter_name_;
   ObExecutingSqlStatRecord executing_sql_stat_record_;
   uint64_t unit_gc_min_sup_proxy_version_;
+  void *external_resource_schema_cache_;
 };
 
 

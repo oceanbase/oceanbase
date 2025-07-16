@@ -16,6 +16,7 @@
 
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_disk_space_manager.h"
+#include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
 #endif
 
 using namespace oceanbase::storage;
@@ -63,7 +64,9 @@ int ObAllVirtualSSLocalCacheInfo::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(execute(row))) {
-    SERVER_LOG(WARN, "execute fail", KR(ret));
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      SERVER_LOG(WARN, "execute fail", KR(ret));
+    }
   }
   return ret;
 }
@@ -148,45 +151,22 @@ int ObAllVirtualSSLocalCacheInfo::add_tmpfile_cache_inst_()
     inst.cache_name_ = OB_SS_LOCAL_CACHE_TMPFILE_NAME;
     inst.priority_ = OB_LOCAL_CACHE_TMPFILE_PRIORITY;
 
-    // tmp file cache_hit_bytes/cache_miss_bytes has no stat event, thus get from disk_space_mgr
-    ObTenantDiskSpaceManager *disk_space_mgr = nullptr;
-    if (OB_ISNULL(disk_space_mgr = MTL(ObTenantDiskSpaceManager *))) {
+    ObSSMacroCacheMgr *macro_cache_mgr = nullptr;
+    if (OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
       ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "disk sapce manager is null", KR(ret));
+      SERVER_LOG(WARN, "macro cache mgr is null", KR(ret));
     } else {
-      inst.total_hit_bytes_ = disk_space_mgr->get_tmp_file_cache_stat().cache_hit_bytes_;
-      inst.total_miss_bytes_ = disk_space_mgr->get_tmp_file_cache_stat().cache_miss_bytes_;
-    }
-    inst.hold_size_ = 0;
-    inst.used_mem_size_ = 0;
-
-    int64_t tmp_file_used_disk_size_r = 0;
-    int64_t tmp_file_used_disk_size_w = 0;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(tenant_di_info_.get_stat(ObStatEventIds::SS_TMPFILE_CACHE_HIT,
-                                                inst.total_hit_cnt_))) {
-      SERVER_LOG(WARN, "fail to get tmp file cache hit cnt",
-          KR(ret), K(ObStatEventIds::SS_TMPFILE_CACHE_HIT));
-    } else if (OB_FAIL(tenant_di_info_.get_stat(ObStatEventIds::SS_TMPFILE_CACHE_MISS,
-                                                inst.total_miss_cnt_))) {
-      SERVER_LOG(WARN, "fail to get tmp file cache miss cnt",
-          KR(ret), K(ObStatEventIds::SS_TMPFILE_CACHE_MISS));
-    } else if (OB_FAIL(tenant_di_info_.get_stat(ObStatEventIds::SS_LOCAL_CACHE_TMPFILE_ALLOC_SIZE,
-                                                inst.alloc_disk_size_))) {
-      SERVER_LOG(WARN, "fail to get tmp file cache alloc disk size",
-          KR(ret), K(ObStatEventIds::SS_LOCAL_CACHE_TMPFILE_ALLOC_SIZE));
-    } else if (OB_FAIL(tenant_di_info_.get_stat(ObStatEventIds::SS_LOCAL_CACHE_TMPFILE_USED_DISK_SIZE_R,
-                                                tmp_file_used_disk_size_r))) {
-      SERVER_LOG(WARN, "fail to get tmp file cache used disk size for read",
-          KR(ret), K(ObStatEventIds::SS_LOCAL_CACHE_TMPFILE_USED_DISK_SIZE_R));
-    } else if (OB_FAIL(tenant_di_info_.get_stat(ObStatEventIds::SS_LOCAL_CACHE_TMPFILE_USED_DISK_SIZE_W,
-                                                tmp_file_used_disk_size_w))) {
-      SERVER_LOG(WARN, "fail to get tmp file cache used disk size for write",
-          KR(ret), K(ObStatEventIds::SS_LOCAL_CACHE_TMPFILE_USED_DISK_SIZE_W));
-    } else {
-      inst.used_disk_size_ = tmp_file_used_disk_size_r + tmp_file_used_disk_size_w;
-      const int64_t total_hit_num = inst.total_hit_cnt_ + inst.total_miss_cnt_;
-      inst.hit_ratio_ = ((total_hit_num <= 0) ? 0 : (double)inst.total_hit_cnt_ / (double)total_hit_num);
+      ObLocalCacheHitStat hit_stat;
+      if (OB_FAIL(macro_cache_mgr->get_macro_cache_hit_stat_by_cache_type(ObSSMacroCacheType::TMP_FILE, hit_stat))) {
+        SERVER_LOG(WARN, "fail to get macro cache hit stat by cache type", KR(ret));
+      } else {
+        inst.total_hit_cnt_ = hit_stat.cache_hit_cnt_;
+        inst.total_hit_bytes_ = hit_stat.cache_hit_bytes_;
+        inst.total_miss_cnt_ = hit_stat.cache_miss_cnt_;
+        inst.total_miss_bytes_ = hit_stat.cache_miss_bytes_;
+        const int64_t total_access_cnt = inst.total_hit_cnt_ + inst.total_miss_cnt_;
+        inst.hit_ratio_ = ((total_access_cnt <= 0) ? 0 : ((double)inst.total_hit_cnt_ / (double)total_access_cnt));
+      }
     }
 
     if (FAILEDx(inst_list_.push_back(inst))) {
@@ -198,51 +178,35 @@ int ObAllVirtualSSLocalCacheInfo::add_tmpfile_cache_inst_()
   return ret;
 }
 
-int ObAllVirtualSSLocalCacheInfo::add_major_macro_cache_inst_()
+int ObAllVirtualSSLocalCacheInfo::add_shared_macro_cache_inst_()
 {
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_SHARED_STORAGE
   if (oceanbase::lib::is_diagnose_info_enabled()) {
     ObSSLocalCacheInfoInst inst;
-    inst.cache_name_ = OB_SS_LOCAL_CACHE_MAJOR_MACRO_NAME;
-    inst.priority_ = OB_LOCAL_CACHE_MAJOR_MACRO_PRIORITY;
+    inst.cache_name_ = OB_SS_LOCAL_CACHE_SHARED_MACRO_NAME;
+    inst.priority_ = OB_LOCAL_CACHE_SHARED_MACRO_PRIORITY;
 
-    // major macro cache_hit_bytes/cache_miss_bytes has no stat event, thus get from disk_space_mgr
-    ObTenantDiskSpaceManager *disk_space_mgr = nullptr;
-    if (OB_ISNULL(disk_space_mgr = MTL(ObTenantDiskSpaceManager *))) {
+    ObSSMacroCacheMgr *macro_cache_mgr = nullptr;
+    if (OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
       ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "disk sapce manager is null", KR(ret));
+      SERVER_LOG(WARN, "macro cache mgr is null", KR(ret));
     } else {
-      inst.total_hit_bytes_ = disk_space_mgr->get_major_macro_cache_stat().cache_hit_bytes_;
-      inst.total_miss_bytes_ = disk_space_mgr->get_major_macro_cache_stat().cache_miss_bytes_;
-    }
-    inst.hold_size_ = 0;
-    inst.used_mem_size_ = 0;
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(tenant_di_info_.get_stat(ObStatEventIds::SS_MAJOR_MACRO_CACHE_HIT,
-                                                inst.total_hit_cnt_))) {
-      SERVER_LOG(WARN, "fail to get major macro cache hit cnt",
-          KR(ret), K(ObStatEventIds::SS_MAJOR_MACRO_CACHE_HIT));
-    } else if (OB_FAIL(tenant_di_info_.get_stat(ObStatEventIds::SS_MAJOR_MACRO_CACHE_MISS,
-                                                inst.total_miss_cnt_))) {
-      SERVER_LOG(WARN, "fail to get major macro cache miss cnt",
-          KR(ret), K(ObStatEventIds::SS_MAJOR_MACRO_CACHE_MISS));
-    } else if (OB_FAIL(tenant_di_info_.get_stat(ObStatEventIds::SS_LOCAL_CACHE_TMPFILE_ALLOC_SIZE,
-                                                inst.alloc_disk_size_))) {
-      SERVER_LOG(WARN, "fail to get major macro cache alloc disk size",
-          KR(ret), K(ObStatEventIds::SS_LOCAL_CACHE_TMPFILE_ALLOC_SIZE));
-    } else if (OB_FAIL(tenant_di_info_.get_stat(ObStatEventIds::SS_LOCAL_CACHE_MAJOR_MACRO_USED_DISK_SIZE,
-                                                inst.used_disk_size_))) {
-      SERVER_LOG(WARN, "fail to get major macro cache used disk size",
-          KR(ret), K(ObStatEventIds::SS_LOCAL_CACHE_MAJOR_MACRO_USED_DISK_SIZE));
-    } else {
-      const int64_t total_hit_num = inst.total_hit_cnt_ + inst.total_miss_cnt_;
-      inst.hit_ratio_ = ((total_hit_num <= 0) ? 0 : (double)inst.total_hit_cnt_ / (double)total_hit_num);
+      ObLocalCacheHitStat hit_stat;
+      if (OB_FAIL(macro_cache_mgr->get_macro_cache_hit_stat_by_block_type(ObSSMacroBlockType::SHARED_MACRO, hit_stat))) {
+        SERVER_LOG(WARN, "fail to get macro cache hit stat by block type", KR(ret));
+      } else {
+        inst.total_hit_cnt_ = hit_stat.cache_hit_cnt_;
+        inst.total_hit_bytes_ = hit_stat.cache_hit_bytes_;
+        inst.total_miss_cnt_ = hit_stat.cache_miss_cnt_;
+        inst.total_miss_bytes_ = hit_stat.cache_miss_bytes_;
+        const int64_t total_access_cnt = inst.total_hit_cnt_ + inst.total_miss_cnt_;
+        inst.hit_ratio_ = ((total_access_cnt <= 0) ? 0 : ((double)inst.total_hit_cnt_ / (double)total_access_cnt));
+      }
     }
 
     if (FAILEDx(inst_list_.push_back(inst))) {
-      SERVER_LOG(WARN, "fail to push back major macro cache inst",
+      SERVER_LOG(WARN, "fail to push back shared macro cache inst",
           KR(ret), K(inst), K(inst_list_.count()));
     }
   }
@@ -259,23 +223,22 @@ int ObAllVirtualSSLocalCacheInfo::add_private_macro_cache_inst_()
     inst.cache_name_ = OB_SS_LOCAL_CACHE_PRIVATE_MACRO_NAME;
     inst.priority_ = OB_LOCAL_CACHE_PRIVATE_MACRO_PRIORITY;
 
-    ObTenantDiskSpaceManager *disk_space_mgr = nullptr;
-    if (OB_ISNULL(disk_space_mgr = MTL(ObTenantDiskSpaceManager *))) {
+    ObSSMacroCacheMgr *macro_cache_mgr = nullptr;
+    if (OB_ISNULL(macro_cache_mgr = MTL(ObSSMacroCacheMgr *))) {
       ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "disk sapce manager is null", KR(ret));
+      SERVER_LOG(WARN, "macro cache mgr is null", KR(ret));
     } else {
-      const ObLocalCacheHitStat cache_stat = disk_space_mgr->get_private_macro_cache_stat();
-      inst.hold_size_ = 0;
-      inst.used_mem_size_ = 0;
-      inst.total_hit_bytes_ = cache_stat.cache_hit_bytes_;
-      inst.total_miss_bytes_ = cache_stat.cache_miss_bytes_;
-      inst.total_hit_cnt_ = cache_stat.cache_hit_cnt_;
-      inst.total_miss_cnt_ = cache_stat.cache_miss_cnt_;
-      inst.alloc_disk_size_ = 0; // TODO(binifei.bnf): cannot get private_macro alloc and used size
-      inst.used_disk_size_ = 0;
-
-      const int64_t total_req_cnt = inst.total_hit_cnt_ + inst.total_miss_cnt_;
-      inst.hit_ratio_ = (total_req_cnt <= 0) ? 0 : (static_cast<double>(inst.total_hit_cnt_) / total_req_cnt);
+      ObLocalCacheHitStat hit_stat;
+      if (OB_FAIL(macro_cache_mgr->get_macro_cache_hit_stat_by_block_type(ObSSMacroBlockType::PRIVATE_MACRO, hit_stat))) {
+        SERVER_LOG(WARN, "fail to get macro cache hit stat by block type", KR(ret));
+      } else {
+        inst.total_hit_cnt_ = hit_stat.cache_hit_cnt_;
+        inst.total_hit_bytes_ = hit_stat.cache_hit_bytes_;
+        inst.total_miss_cnt_ = hit_stat.cache_miss_cnt_;
+        inst.total_miss_bytes_ = hit_stat.cache_miss_bytes_;
+        const int64_t total_access_cnt = inst.total_hit_cnt_ + inst.total_miss_cnt_;
+        inst.hit_ratio_ = ((total_access_cnt <= 0) ? 0 : ((double)inst.total_hit_cnt_ / (double)total_access_cnt));
+      }
     }
 
     if (FAILEDx(inst_list_.push_back(inst))) {
@@ -299,8 +262,8 @@ int ObAllVirtualSSLocalCacheInfo::set_local_cache_insts_()
     SERVER_LOG(WARN, "fail to add micro cache inst", KR(ret));
   } else if (OB_FAIL(add_tmpfile_cache_inst_())) {
     SERVER_LOG(WARN, "fail to add tmp file cache inst", KR(ret));
-  } else if (OB_FAIL(add_major_macro_cache_inst_())) {
-    SERVER_LOG(WARN, "fail to add major macro cache inst", KR(ret));
+  } else if (OB_FAIL(add_shared_macro_cache_inst_())) {
+    SERVER_LOG(WARN, "fail to add shared macro cache inst", KR(ret));
   } else if (OB_FAIL(add_private_macro_cache_inst_())) {
     SERVER_LOG(WARN, "fail to add private macro cache inst", KR(ret));
   }

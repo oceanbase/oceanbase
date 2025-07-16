@@ -111,35 +111,44 @@ int ObDataAccessService::execute_das_task(
   return ret;
 }
 
-int ObDataAccessService::get_das_task_id(int64_t &das_id)
+int ObDataAccessService::get_das_task_id(int64_t &das_id, const share::ObLSID target_ls_id)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(get_das_id);
-  const int MAX_RETRY_TIMES = 50;
-  int64_t tmp_das_id = 0;
-  bool force_renew = false;
-  int64_t total_sleep_time = 0;
-  int64_t cur_sleep_time = 1000; // 1ms
-  int64_t max_sleep_time = ObDASIDCache::OB_DAS_ID_RPC_TIMEOUT_MIN * 2; // 200ms
-  do {
-    if (OB_SUCC(id_cache_.get_das_id(tmp_das_id, force_renew))) {
-    } else if (OB_EAGAIN == ret) {
-      if (total_sleep_time >= max_sleep_time) {
-        // TODO chenxuan change error code
-        ret = OB_GTI_NOT_READY;
-        LOG_WARN("get das id not ready", K(ret), K(total_sleep_time), K(max_sleep_time));
-      } else {
-        force_renew = true;
-        ob_usleep(cur_sleep_time);
-        total_sleep_time += cur_sleep_time;
-        cur_sleep_time = cur_sleep_time * 2;
-      }
+  if (is_tenant_sslog_ls(MTL_ID(), target_ls_id)) {
+    int64_t tmp_unique_id = 0;
+    if (OB_FAIL(MTL(ObTransService*)->get_unique_id_for_sslog(tmp_unique_id))) {
+      LOG_WARN("get unique id for sslog failed", K(ret));
     } else {
-      LOG_WARN("get das id failed", K(ret));
+      das_id = tmp_unique_id;
     }
-  } while (OB_EAGAIN == ret);
-  if (OB_SUCC(ret)) {
-    das_id = tmp_das_id;
+  } else {
+    const int MAX_RETRY_TIMES = 50;
+    int64_t tmp_das_id = 0;
+    bool force_renew = false;
+    int64_t total_sleep_time = 0;
+    int64_t cur_sleep_time = 1000; // 1ms
+    int64_t max_sleep_time = ObDASIDCache::OB_DAS_ID_RPC_TIMEOUT_MIN * 2; // 200ms
+    do {
+      if (OB_SUCC(id_cache_.get_das_id(tmp_das_id, force_renew))) {
+      } else if (OB_EAGAIN == ret) {
+        if (total_sleep_time >= max_sleep_time) {
+          // TODO chenxuan change error code
+          ret = OB_GTI_NOT_READY;
+          LOG_WARN("get das id not ready", K(ret), K(total_sleep_time), K(max_sleep_time));
+        } else {
+          force_renew = true;
+          ob_usleep(cur_sleep_time);
+          total_sleep_time += cur_sleep_time;
+          cur_sleep_time = cur_sleep_time * 2;
+        }
+      } else {
+        LOG_WARN("get das id failed", K(ret));
+      }
+    } while (OB_EAGAIN == ret);
+    if (OB_SUCC(ret)) {
+      das_id = tmp_das_id;
+    }
   }
   return ret;
 }
@@ -220,7 +229,7 @@ int ObDataAccessService::refresh_task_location_info(ObDASRef &das_ref, ObIDASTas
     task_op.set_ls_id(tablet_loc->ls_id_);
     if (!task_op.is_local_task()) {
       int64_t task_id;
-      if (OB_FAIL(MTL(ObDataAccessService*)->get_das_task_id(task_id))) {
+      if (OB_FAIL(MTL(ObDataAccessService*)->get_das_task_id(task_id, tablet_loc->ls_id_))) {
         LOG_WARN("retry get das task id failed", KR(ret));
       } else {
         task_op.set_task_id(task_id);

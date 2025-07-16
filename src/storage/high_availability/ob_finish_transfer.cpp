@@ -1,3 +1,4 @@
+
 /**
  * Copyright (c) 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -17,7 +18,7 @@
 #include "storage/high_availability/ob_transfer_lock_utils.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
-#include "storage/member_table/ob_member_table_operation.h"
+#include "storage/reorganization_info_table/ob_tablet_reorg_info_table_operation.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -113,6 +114,7 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
   ObLSLocation ls_location;
   bool is_leader = false;
   bool is_ready = false;
+  bool src_is_ready = false;
   ObTransferService *transfer_service = NULL;
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L;
   ObLSHandle ls_handle;
@@ -164,6 +166,15 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
   } else if (!is_ready) {
     LOG_INFO("transfer in tablet not ready", K(ret), K(tenant_id), K(dest_ls_id));
     transfer_service->wakeup();
+  // precheck all src tablet status has beed set to transfer out deleted (only in ss mode)
+  // won't lock src member list
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (OB_FAIL(check_src_ls_tablet_status_(tenant_id, dest_ls_id, src_ls_id, tablet_list, start_scn, src_is_ready))) {
+    LOG_WARN("failed to check src ls tablet status", K(ret), K(tenant_id), K(dest_ls_id), K(src_ls_id), K(tablet_list));
+  } else if (!src_is_ready) {
+    LOG_INFO("src transfer out tablet not ready", K(ret), K(tenant_id), K(src_ls_id));
+    transfer_service->wakeup();
+#endif
   } else if (OB_FAIL(get_ls_handle_(tenant_id, dest_ls_id_, ls_handle))) {
     LOG_WARN("failed to get ls handle", K(ret));
   } else {
@@ -298,7 +309,7 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
           process_perf_diagnose_info_(ObStorageHACostItemName::UNLOCK_TABLET_FOR_LOCK,
               0/*start_ts*/, tablet_list.count(), round_, false/*is_report*/);
           if (OB_FAIL(
-                      unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, lock_status, CONFIG_CHANGE_TIMEOUT))) {
+                      unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, lock_status, true/*need_check_palf_leader*/, dest_ls_id, CONFIG_CHANGE_TIMEOUT))) {
             diagnose_result_msg_ = share::ObStorageHACostItemName::UNLOCK_LS_MEMBER_LIST;
             LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(dest_ls_id), K(member_list));
           } else {
@@ -378,11 +389,12 @@ int ObTxFinishTransfer::unlock_src_and_dest_ls_member_list_(const uint64_t tenan
   if (!src_ls_id.is_valid() || !dest_ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(src_ls_id), K(dest_ls_id));
-  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, src_ls_id, member_list, start_status, lock_timeout))) {
+  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, src_ls_id, member_list, start_status, false/*need_check_palf_leader*/, dest_ls_id, lock_timeout))) {
+    // this will unlock the *lock* obtained in start status, so no need to check palf leader
     LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
-  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, start_status, lock_timeout))) {
+  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, start_status, true/*need_check_palf_leader*/, dest_ls_id, lock_timeout))) {
     LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
-  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, doing_status, lock_timeout))) {
+  } else if (OB_FAIL(unlock_ls_member_list_(tenant_id, dest_ls_id, member_list, doing_status, true/*need_check_palf_leader*/, dest_ls_id, lock_timeout))) {
     LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(src_ls_id), K(dest_ls_id));
   } else {
     LOG_INFO(
@@ -600,6 +612,79 @@ int ObTxFinishTransfer::inner_check_ls_logical_table_replaced_(const uint64_t te
   }
   return ret;
 }
+
+#ifdef OB_BUILD_SHARED_STORAGE
+int ObTxFinishTransfer::check_src_ls_tablet_status_(const uint64_t tenant_id, const share::ObLSID &dest_ls_id,
+    const share::ObLSID &src_ls_id, const common::ObArray<share::ObTransferTabletInfo> &tablet_list,
+    const share::SCN &transfer_scn, bool &all_transfer_out_deleted)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  bool is_leader = false;
+  const int64_t cluster_id = GCONF.cluster_id;
+  ObLSLocation ls_location;
+  ObArray<ObAddr> addr_array;
+  bool is_shared_storage = GCTX.is_shared_storage_mode();
+  common::ObMemberList src_member_list;
+
+  if (!is_shared_storage) {
+    // sn mode won't check src tablet status, skip
+    all_transfer_out_deleted = true;
+  } else if (OB_FAIL(check_self_ls_leader_(dest_ls_id, is_leader))) {
+    LOG_WARN("failed to check self ls leader", K(ret), K(dest_ls_id));
+  } else if (!is_leader) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("self is not leader", K(ret), K(src_ls_id));
+  } else if (OB_FAIL(ObTransferUtils::get_ls_member_list(src_ls_id, src_member_list))) {
+    LOG_WARN("failed to get src ls member list", K(ret), K(src_ls_id));
+  } else if (OB_FAIL(src_member_list.get_addr_array(addr_array))) {
+    LOG_WARN("failed to get addr array", K(ret), K(src_member_list));
+  } else if (OB_FAIL(inner_check_src_ls_tablet_status_(
+                 tenant_id, src_ls_id, addr_array, tablet_list, transfer_scn, all_transfer_out_deleted))) {
+    LOG_WARN("failed to inner check majority backfilled", K(ret), K(tenant_id), K(src_ls_id), K(addr_array));
+  } else {
+    LOG_INFO("check ls logical table replace", K(tenant_id), K(src_ls_id), K(addr_array), K(tablet_list), K(all_transfer_out_deleted));
+  }
+  // TODO(jyx441808): add perf diagnose info
+  return ret;
+}
+
+int ObTxFinishTransfer::inner_check_src_ls_tablet_status_(const uint64_t tenant_id, const share::ObLSID &src_ls_id,
+      const common::ObArray<common::ObAddr> &member_addr_list,
+      const common::ObArray<share::ObTransferTabletInfo> &tablet_list,
+      const share::SCN &transfer_scn, bool &all_transfer_out_deleted)
+{
+  int ret = OB_SUCCESS;
+  all_transfer_out_deleted = true;
+  storage::ObCheckTransferOutTabletStatusProxy batch_rpc_proxy(
+      *(GCTX.storage_rpc_proxy_), &obrpc::ObStorageRpcProxy::check_transfer_out_tablet_status);
+  ObHAAsyncRpcArg async_rpc_arg;
+  ObArray<obrpc::ObCheckTransferOutTabletStatusRes> responses;
+  const int64_t rpc_timeout = GCONF.rpc_timeout;
+  const uint64_t group_id = share::OBCG_STORAGE;
+  ObCheckTransferOutTabletStatusArg arg;
+  arg.tenant_id_ = tenant_id;
+  arg.ls_id_ = src_ls_id;
+  arg.transfer_scn_ = transfer_scn;
+  if (OB_FAIL(arg.tablet_list_.assign(tablet_list))) {
+    LOG_WARN("failed to assign tablet array", K(ret), K(tablet_list));
+  } else if (OB_FAIL(async_rpc_arg.set_ha_async_arg(tenant_id, group_id, rpc_timeout, member_addr_list))) {
+    LOG_WARN("failed to set ha async arg", K(ret), K(tenant_id), K(group_id), K(rpc_timeout), K(member_addr_list));
+  } else if (OB_FAIL(ObHAAsyncRpc::send_async_rpc(async_rpc_arg, arg, batch_rpc_proxy, responses))) {
+    LOG_WARN("failed to send async rpc", K(ret), K(async_rpc_arg), K(arg));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < responses.count(); ++i) {
+      const obrpc::ObCheckTransferOutTabletStatusRes &res = responses.at(i);
+      if (!res.is_transfer_out_deleted_) {
+        all_transfer_out_deleted = false;
+        LOG_INFO("src tablet has not beed set to transfer out deleted", K(i), K(member_addr_list));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+#endif
 
 int ObTxFinishTransfer::do_tx_finish_transfer_in_(const ObTransferTaskID &task_id, const uint64_t tenant_id,
     const share::ObLSID &src_ls_id, const share::ObLSID &dest_ls_id, const SCN &start_scn,
@@ -833,11 +918,13 @@ int ObTxFinishTransfer::check_same_member_list_(
 }
 
 int ObTxFinishTransfer::unlock_ls_member_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const common::ObMemberList &member_list, const ObTransferLockStatus &status, const int64_t lock_timeout)
+    const common::ObMemberList &member_list, const ObTransferLockStatus &status,
+    const bool need_check_palf_leader, const share::ObLSID &need_check_palf_leader_ls_id, const int64_t lock_timeout)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObMemberListLockUtils::unlock_ls_member_list(
-      tenant_id, ls_id, task_id_.id(), member_list, status, share::OBCG_STORAGE, *sql_proxy_))) {
+      tenant_id, ls_id, task_id_.id(), member_list, status, share::OBCG_STORAGE,
+      need_check_palf_leader, need_check_palf_leader_ls_id, *sql_proxy_))) {
     LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(ls_id), K_(task_id), K(status));
   }
   return ret;
@@ -848,7 +935,7 @@ int ObTxFinishTransfer::lock_ls_member_list_(const uint64_t tenant_id, const sha
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObMemberListLockUtils::lock_ls_member_list(
-      tenant_id, ls_id, task_id_.id(), member_list, status, share::OBCG_STORAGE, *sql_proxy_))) {
+      tenant_id, ls_id, task_id_.id(), member_list, status, share::OBCG_STORAGE, ls_id, *sql_proxy_))) {
     LOG_WARN("failed to unlock ls member list", K(ret), K(ls_id), K(member_list));
   } else {
 #ifdef ERRSIM

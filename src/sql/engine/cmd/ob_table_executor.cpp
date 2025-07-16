@@ -580,15 +580,21 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
   if (OB_FAIL(ret)) {
   } else if (table_schema.is_external_table() && !table_schema.is_user_specified_partition_for_external_table()) {
     ObExprRegexpSessionVariables regexp_vars;
-    if (ObSQLUtils::is_external_files_on_local_disk(table_schema.get_external_file_location())) {
-      OZ (ObSQLUtils::check_location_access_priv(table_schema.get_external_file_location(), my_session));
+    ObString file_location;
+    ObString access_info;
+    CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
+    OZ (ObExternalTableUtils::get_external_file_location(table_schema, *(ctx.get_sql_ctx()->schema_guard_), ctx.get_allocator(), file_location));
+    OZ (ObExternalTableUtils::get_external_file_location_access_info(table_schema, *(ctx.get_sql_ctx()->schema_guard_), access_info));
+    if (ObSQLUtils::is_external_files_on_local_disk(file_location)) {
+      OZ (ObSQLUtils::check_location_access_priv(file_location, my_session));
     }
     ObSqlString tmp;
     OZ (my_session->get_regexp_session_vars(regexp_vars));
     OZ (ObExternalTableUtils::collect_external_file_list(
+              ctx.get_my_session(),
               table_schema.get_tenant_id(), -1 /*table id(UNUSED)*/,
-              table_schema.get_external_file_location(),
-              table_schema.get_external_file_location_access_info(),
+              file_location,
+              access_info,
               table_schema.get_external_file_pattern(),
               table_schema.get_external_properties(),
               table_schema.is_partitioned_table(),
@@ -897,12 +903,17 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
         || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == alter_table_arg.alter_part_type_
         || obrpc::ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
         || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_)) {
-      common::ObSArray<ObAlterTableResArg> &res_array = res.res_arg_array_;
-      for (int64_t i = 0; OB_SUCC(ret) && i < res_array.size(); ++i) {
+      const ObIArray<ObAlterTableResArg> &res_array = res.res_arg_array_;
+      const ObIArray<obrpc::ObDDLRes> &ddl_res_array = res.ddl_res_array_;
+      if (OB_UNLIKELY(res_array.count() != ddl_res_array.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("res_array and ddl_res_array count mismatch", K(ret), K(res_array.count()), K(ddl_res_array.count()));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < res_array.count(); ++i) {
         SMART_VAR(obrpc::ObCreateIndexArg, create_index_arg) {
           create_index_arg.index_schema_.set_table_id(res_array.at(i).schema_id_);
           create_index_arg.index_schema_.set_schema_version(res_array.at(i).schema_version_);
-          if (OB_FAIL(create_index_executor.sync_check_index_status(*my_session, *common_rpc_proxy, create_index_arg, res, allocator))) {
+          if (OB_FAIL(create_index_executor.sync_check_index_status(*my_session, *common_rpc_proxy, create_index_arg, ddl_res_array.at(i).task_id_, allocator))) {
             LOG_WARN("failed to sync_check_index_status", KR(ret), K(create_index_arg), K(i));
           }
         }
@@ -910,6 +921,8 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
     } else if (is_create_index(res.ddl_type_) || DDL_NORMAL_TYPE == res.ddl_type_) {
       // TODO(shuangcan): alter table create index returns DDL_NORMAL_TYPE now, check if we can fix this later
       // 同步等索引建成功
+      const ObIArray<ObAlterTableResArg> &res_array = res.res_arg_array_;
+      const ObIArray<obrpc::ObDDLRes> &ddl_res_array = res.ddl_res_array_;
       for (int64_t i = 0; OB_SUCC(ret) && i < add_index_arg_list.size(); ++i) {
         obrpc::ObIndexArg *index_arg = add_index_arg_list.at(i);
         obrpc::ObCreateIndexArg *create_index_arg = NULL;
@@ -932,7 +945,10 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
           create_index_arg->index_schema_.set_table_id(res.res_arg_array_.at(i).schema_id_);
           create_index_arg->index_schema_.set_schema_version(res.res_arg_array_.at(i).schema_version_);
           // 只考虑非备份恢复时的索引同步检查
-          if (OB_FAIL(create_index_executor.sync_check_index_status(*my_session, *common_rpc_proxy, *create_index_arg, res, allocator))) {
+          if (OB_UNLIKELY(i >= ddl_res_array.count())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("ddl_res_array count mismatch", K(ret), K(i), K(ddl_res_array.count()));
+          } else if (OB_FAIL(create_index_executor.sync_check_index_status(*my_session, *common_rpc_proxy, *create_index_arg, ddl_res_array.at(i).task_id_, allocator))) {
             failed_index_no = i;
             LOG_WARN("failed to sync_check_index_status", KR(ret), K(*create_index_arg), K(i));
           }
@@ -1015,17 +1031,30 @@ int ObAlterTableExecutor::execute_alter_external_table(ObExecContext &ctx, ObAlt
       ObArray<int64_t> file_sizes;
       ObExprRegexpSessionVariables regexp_vars;
       CK (ctx.get_my_session());
-      if (OB_SUCC(ret) && ObSQLUtils::is_external_files_on_local_disk(arg.alter_table_schema_.get_external_file_location())) {
-        OZ (ObSQLUtils::check_location_access_priv(arg.alter_table_schema_.get_external_file_location(), ctx.get_my_session()));
+      // 此处的ctx.get_sql_ctx()->schema_guard_没初始化
+      ObSchemaGetterGuard schema_guard;
+      if (OB_ISNULL(GCTX.schema_service_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pointer is null", K(ret), KP(GCTX.schema_service_));
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(arg.alter_table_schema_.get_tenant_id(), schema_guard))) {
+        LOG_WARN("get schema guard failed", K(ret));
+      }
+      ObString file_location;
+      ObString access_info;
+      OZ (ObExternalTableUtils::get_external_file_location(arg.alter_table_schema_, schema_guard, ctx.get_allocator(), file_location));
+      OZ (ObExternalTableUtils::get_external_file_location_access_info(arg.alter_table_schema_, schema_guard, access_info));
+      if (OB_SUCC(ret) && ObSQLUtils::is_external_files_on_local_disk(file_location)) {
+        OZ (ObSQLUtils::check_location_access_priv(access_info, ctx.get_my_session()));
       }
       ObSqlString full_path;
       CK (GCTX.location_service_);
       OZ (ctx.get_my_session()->get_regexp_session_vars(regexp_vars));
       OZ (ObExternalTableUtils::collect_external_file_list(
+                  ctx.get_my_session(),
                   stmt.get_tenant_id(),
                   arg.alter_table_schema_.get_table_id(),
-                  arg.alter_table_schema_.get_external_file_location(),
-                  arg.alter_table_schema_.get_external_file_location_access_info(),
+                  file_location,
+                  access_info,
                   arg.alter_table_schema_.get_external_file_pattern(),
                   arg.alter_table_schema_.get_external_properties(),
                   arg.alter_table_schema_.is_partitioned_table(),
@@ -1153,14 +1182,39 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
           CK (alter_table_arg.alter_table_schema_.get_part_array());
           CK (alter_table_arg.alter_table_schema_.get_partition_num() > 0);
           OZ (full_path.append(alter_table_arg.alter_table_schema_.get_part_array()[0]->get_external_location()));
-          if (ObSQLUtils::is_external_files_on_local_disk(alter_table_arg.alter_table_schema_.get_external_file_location())) {
-            OZ (ObSQLUtils::check_location_access_priv(alter_table_arg.alter_table_schema_.get_external_file_location(), ctx.get_my_session()));
+          ObString file_location;
+          ObString access_info;
+          // 此处的ctx.get_sql_ctx()->schema_guard_没初始化
+          ObSchemaGetterGuard schema_guard;
+          if (OB_ISNULL(GCTX.schema_service_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("pointer is null", K(ret), KP(GCTX.schema_service_));
+          } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(alter_table_arg.alter_table_schema_.get_tenant_id(), schema_guard))) {
+            LOG_WARN("get schema guard failed", K(ret));
+          }
+          OZ (ObExternalTableUtils::get_external_file_location(alter_table_arg.alter_table_schema_, schema_guard, ctx.get_allocator(), file_location));
+          ObSqlString full_file_location;
+          full_file_location.append(file_location);
+          if (OB_SUCC(ret)) {
+            if (full_file_location.length() == 0) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("full path length should not be zero", K(ret));
+            } else if (*(full_file_location.ptr() + full_file_location.length() - 1) != '/') {
+              OZ (full_file_location.append("/"));
+            }
+          }
+          OZ (full_file_location.append(full_path.string()));
+
+          OZ (ObExternalTableUtils::get_external_file_location_access_info(alter_table_arg.alter_table_schema_, schema_guard, access_info));
+          if (ObSQLUtils::is_external_files_on_local_disk(file_location)) {
+            OZ (ObSQLUtils::check_location_access_priv(file_location, ctx.get_my_session()));
           }
           OZ (my_session->get_regexp_session_vars(regexp_vars));
           OZ (ObExternalTableUtils::collect_external_file_list(
+                    ctx.get_my_session(),
                     alter_table_arg.alter_table_schema_.get_tenant_id(), alter_table_arg.alter_table_schema_.get_table_id(),
-                    alter_table_arg.alter_table_schema_.get_external_file_location(),
-                    alter_table_arg.alter_table_schema_.get_external_file_location_access_info(),
+                    full_file_location.string(),
+                    access_info,
                     alter_table_arg.alter_table_schema_.get_external_file_pattern(),
                     alter_table_arg.alter_table_schema_.get_external_properties(),
                     alter_table_arg.alter_table_schema_.is_partitioned_table(),

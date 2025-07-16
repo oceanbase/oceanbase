@@ -32,6 +32,7 @@
   RPC_S(PRD set_comment, obrpc::OB_PARALLEL_SET_COMMENT, (ObSetCommentArg), ObParallelDDLRes);
   RPC_S(PRD split_global_index_tablet, obrpc::OB_SPLIT_GLOBAL_INDEX_TABLET, (ObAlterTableArg));
   RPC_S(PRD create_hidden_table, obrpc::OB_CREATE_HIDDEN_TABLE, (obrpc::ObCreateHiddenTableArg), ObCreateHiddenTableRes);
+  RPC_S(PRD create_hidden_table_v2, obrpc::OB_CREATE_HIDDEN_TABLE_V2, (obrpc::ObCreateHiddenTableArgV2), ObCreateHiddenTableRes);
   RPC_S(PRD alter_database, obrpc::OB_ALTER_DATABASE, (ObAlterDatabaseArg));
   RPC_S(PRD drop_database, obrpc::OB_DROP_DATABASE, (ObDropDatabaseArg), ObDropDatabaseRes);
   RPC_S(PRD drop_tablegroup, obrpc::OB_DROP_TABLEGROUP, (ObDropTablegroupArg));
@@ -80,6 +81,7 @@
   RPC_S(PRD revoke_table, obrpc::OB_REVOKE_TABLE, (ObRevokeTableArg));
   RPC_S(PRD revoke_routine, obrpc::OB_REVOKE_ROUTINE, (ObRevokeRoutineArg));
   RPC_S(PRD revoke_sys_priv, obrpc::OB_REVOKE_SYSPRIV, (ObRevokeSysPrivArg));
+  RPC_S(PRD revoke_object, obrpc::OB_REVOKE_OBJECT, (ObRevokeObjMysqlArg));
   RPC_S(PRD alter_user_profile, obrpc::OB_ALTER_USER_PROFILE, (ObAlterUserProfileArg));
   RPC_S(PRD handle_security_audit, obrpc::OB_SECURITY_AUDIT, (ObSecurityAuditArg));
   //----End of definitions for managing privileges----
@@ -286,6 +288,11 @@
   RPC_S(PR5 admin_sync_rewrite_rules, obrpc::OB_ADMIN_SYNC_REWRITE_RULES, (ObSyncRewriteRuleArg));
   //----End of Definitions for sync rewrite rules----
 
+  //----Definitions for location object----
+  RPC_S(PRD create_location, obrpc::OB_CREATE_LOCATION, (ObCreateLocationArg));
+  RPC_S(PRD drop_location, obrpc::OB_DROP_LOCATION, (ObDropLocationArg));
+  //----End of definitions for location object----
+
 #ifdef OB_BUILD_ARBITRATION
   RPC_S(PR5 admin_add_arbitration_service, obrpc::OB_ADMIN_ADD_ARBITRATION_SERVICE, (ObAdminAddArbitrationServiceArg));
   RPC_S(PR5 admin_remove_arbitration_service, obrpc::OB_ADMIN_REMOVE_ARBITRATION_SERVICE, (ObAdminRemoveArbitrationServiceArg));
@@ -311,3 +318,8 @@
   //Rebuild Tablet
   RPC_S(PR5 root_rebuild_tablet, obrpc::OB_ROOT_REBUILD_TABLET, (ObRebuildTabletArg));
   RPC_S(PRD force_drop_lonely_lob_aux_table, OB_FORCE_DROP_LONELY_LOB_AUX_TABLE, (obrpc::ObForceDropLonelyLobAuxTableArg));
+
+  //----Functions for managing external resource----
+  RPC_S(PRD create_external_resource, obrpc::OB_CREATE_EXTERNAL_RESOURCE, (ObCreateExternalResourceArg), obrpc::ObCreateExternalResourceRes);
+  RPC_S(PRD drop_external_resource, obrpc::OB_DROP_EXTERNAL_RESOURCE, (ObDropExternalResourceArg), obrpc::ObDropExternalResourceRes);
+  //----End of functions for managing external resource----

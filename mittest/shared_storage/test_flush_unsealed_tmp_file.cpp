@@ -26,6 +26,7 @@
 #include "storage/shared_storage/ob_ss_object_access_util.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache.h"
+#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #undef private
 #undef protected
 
@@ -123,6 +124,7 @@ void TestFlushUnsealedFile::SetUpTestCase()
   MTL(tmp_file::ObTenantTmpFileManager *)->stop();
   MTL(tmp_file::ObTenantTmpFileManager *)->wait();
   MTL(tmp_file::ObTenantTmpFileManager *)->destroy();
+  ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
 }
 
 void TestFlushUnsealedFile::TearDownTestCase()

@@ -503,6 +503,7 @@ int TriggerHandle::calc_trigger_routine(
   int ret = OB_SUCCESS;
   ObArray<int64_t> path;
   ObArray<int64_t> nocopy_params;
+  ObCacheObjGuard cacheobj_guard(PL_ROUTINE_HANDLE);
   trigger_id = ObTriggerInfo::get_trigger_spec_package_id(trigger_id);
   bool old_flag = false;
   common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "TriggerExec"));
@@ -511,7 +512,7 @@ int TriggerHandle::calc_trigger_routine(
   OX (exec_ctx.get_my_session()->set_for_trigger_package(true));
   OV (OB_NOT_NULL(exec_ctx.get_pl_engine()));
   OZ (exec_ctx.get_pl_engine()->execute(
-    exec_ctx, tmp_allocator, trigger_id, routine_id, path, params, nocopy_params, result),
+    exec_ctx, tmp_allocator, trigger_id, routine_id, path, params, nocopy_params, result, cacheobj_guard),
       trigger_id, routine_id, params);
   CK (OB_NOT_NULL(exec_ctx.get_my_session()));
   OZ (exec_ctx.get_my_session()->reset_all_package_state_by_dbms_session(true));

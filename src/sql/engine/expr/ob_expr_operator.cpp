@@ -3730,7 +3730,7 @@ int ObRelationalExprOperator::eval_compare_composite(CollectionPredRes &cmp_resu
       cmp_result = COLL_PRED_NULL;
     } else if (OB_FAIL(params.at(0).get_bool(tmp_result))) {
       LOG_WARN("failed to get result",
-               K(ret), K(obj1), K(obj2), K(params), K(result), K(tmp_result));
+               K(ret), K(obj1), K(obj2), K(params), K(result), K(tmp_result), K(CMP_EQ_PL));
     } else if (CO_EQ == cmp_op) {
       cmp_result = tmp_result ? COLL_PRED_TRUE : COLL_PRED_FALSE;
     } else if (CO_NE == cmp_op) {

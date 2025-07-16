@@ -116,16 +116,8 @@ if((ENABLE_BOLT OR (NOT DEFINED ENABLE_BOLT AND ENABLE_BOLT_AUTO)) AND NOT OB_BU
   endif()
 endif()
 
-ob_define(CPP_STANDARD_20 OFF)
-if(CPP_STANDARD_20)
-  message(STATUS "Using C++20 standard")
-  set(CMAKE_CXX_FLAGS "-std=gnu++20")
-  ob_define(CPP_STANDARD_20 ON)
-  add_definitions(-DCPP_STANDARD_20)
-else()
-  message(STATUS "Using C++17 standard")
-  set(CMAKE_CXX_FLAGS "-std=gnu++17")
-endif()
+message(STATUS "Using C++17 standard")
+set(CMAKE_CXX_FLAGS "-std=gnu++17")
 
 if(OB_DISABLE_PIE)
   message(STATUS "build without pie")
@@ -268,23 +260,15 @@ if (OB_USE_CLANG)
   if (OB_CC)
     message(STATUS "Using OB_CC compiler: ${OB_CC}")
   else()
-    find_program(OB_CC clang
+    find_program(OB_CC clang-17
     "${DEVTOOLS_DIR}/bin"
       NO_DEFAULT_PATH)
-  endif()
-
-  if(CPP_STANDARD_20)
-    execute_process(COMMAND ${OB_CC} --version OUTPUT_VARIABLE CLANG_VERSION_STRING)
-    string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" CLANG_VERSION ${CLANG_VERSION_STRING})
-    if(CLANG_VERSION VERSION_LESS "17.0.0")
-      message(FATAL_ERROR "Clang version must be at least 17.0.0 if CPP_STANDARD_20 is ON, Please run the cmake process with '-DCPP_STANDARD_20=ON --init'")
-    endif()
   endif()
 
   if (OB_CXX)
     message(STATUS "Using OB_CXX compiler: ${OB_CXX}")
   else()
-    find_program(OB_CXX clang++
+    find_program(OB_CXX clang++-17
     "${DEVTOOLS_DIR}/bin"
       NO_DEFAULT_PATH)
   endif()

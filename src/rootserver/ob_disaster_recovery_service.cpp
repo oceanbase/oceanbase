@@ -160,7 +160,7 @@ int ObDRService::try_single_replica_dr_task_(
   int tmp_ret = OB_SUCCESS;
   ObArray<uint64_t> tenant_id_array;
   if (is_dr_worker_thread_(get_thread_idx())) {
-    if (!ObRootUtils::if_deployment_mode_match()) {
+    if (!ObRootUtils::is_dr_replace_deployment_mode_match()) {
       LOG_TRACE("can not do single replace");
     } else if (OB_FAIL(get_tenant_for_single_replica_task_(tenant_id_array))) {
       LOG_WARN("fail to get tenant id array", KR(ret));

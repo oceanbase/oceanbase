@@ -218,9 +218,14 @@ public:
   int64_t get_total_br_count() const { return ATOMIC_LOAD(&total_br_count_); }
   void inc_total_br_count_() { ATOMIC_INC(&total_br_count_); }
   void set_total_br_count(const int64_t total_br_count) { ATOMIC_SET(&total_br_count_, total_br_count); }
-  bool is_all_br_committed() const { return is_trans_sorted() && (ATOMIC_LOAD(&total_br_count_) == ATOMIC_LOAD(&committed_br_count_)); }
-  void inc_committed_br_count() { ATOMIC_INC(&committed_br_count_); }
-  int get_committed_br_count() const { return ATOMIC_LOAD(&committed_br_count_); }
+  OB_INLINE bool is_all_br_committed() const
+  {
+    MEM_BARRIER();
+    return ATOMIC_LOAD(&total_br_count_) == ATOMIC_LOAD(&committed_br_count_);
+  }
+  OB_INLINE void inc_committed_br_count() { ATOMIC_INC(&committed_br_count_); }
+  OB_INLINE int64_t get_committed_br_count() const { return ATOMIC_LOAD(&committed_br_count_); }
+  OB_INLINE bool is_trans_commit_finish() const { return is_trans_sorted() && is_all_br_committed(); }
   int64_t get_valid_part_trans_task_count() const { return ATOMIC_LOAD(&valid_part_trans_task_count_); }
   void set_valid_part_trans_task_count(const int64_t valid_part_trans_task_count) { ATOMIC_SET(&valid_part_trans_task_count_, valid_part_trans_task_count); }
 
@@ -240,9 +245,9 @@ public:
   int64_t get_revertable_participant_count() const;
   int set_ready_participant_objs(PartTransTask *part_trans_task);
   int append_sorted_br(ObLogBR *br);
-  void set_trans_redo_dispatched() { ATOMIC_SET(&is_trans_redo_dispatched_, true); }
-  bool is_trans_sorted() const { return ATOMIC_LOAD(&is_trans_sorted_); }
-  void set_trans_sorted() { ATOMIC_SET(&is_trans_sorted_, true); }
+  OB_INLINE void set_trans_redo_dispatched() { ATOMIC_SET(&is_trans_redo_dispatched_, true); }
+  OB_INLINE bool is_trans_sorted() const { return ATOMIC_LOAD(&is_trans_sorted_); }
+  OB_INLINE void set_trans_sorted() { ATOMIC_SET(&is_trans_sorted_, true); }
   /// check if trans has valid br
   /// note: call this function before any br output
   /// @retval OB_SUCCESS      trans has valid br to output

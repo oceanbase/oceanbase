@@ -1107,9 +1107,7 @@ int ObIMicroBlockRowScanner::check_can_group_by(
   int ret = OB_SUCCESS;
   row_cnt = reader_->row_count();
   read_cnt = last_ - current_ + 1;
-  if (param_->has_lob_column_out() && reader_->has_lob_out_row()) {
-    can_group_by = false;
-  } else if (OB_FAIL(reader_->get_distinct_count(group_by_col, distinct_cnt))) {
+  if (OB_FAIL(reader_->get_distinct_count(group_by_col, distinct_cnt))) {
     if (OB_UNLIKELY(OB_NOT_SUPPORTED != ret)) {
       LOG_WARN("Failed to get distinct cnt", K(ret));
     } else {
@@ -2010,7 +2008,9 @@ int ObMultiVersionMicroBlockRowScanner::check_foreign_key(
   ObStoreRowLockState lock_state;
   const int64_t snapshot_version = context_->trans_version_range_.snapshot_version_;
   memtable::ObMvccAccessCtx &acc_ctx = context_->store_ctx_->mvcc_acc_ctx_;
-  if (context_->query_flag_.is_for_foreign_key_check() &&
+  bool is_plain_insert_gts_opt = context_->query_flag_.is_plain_insert_gts_opt();
+  bool is_for_fk_check = context_->query_flag_.is_for_foreign_key_check();
+  if ((is_plain_insert_gts_opt || is_for_fk_check) &&
       OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_sstable(
               acc_ctx.get_tx_table_guards(),
               acc_ctx.get_tx_id(),

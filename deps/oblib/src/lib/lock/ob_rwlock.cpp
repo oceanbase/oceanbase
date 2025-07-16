@@ -12,55 +12,128 @@
 
 #include "ob_rwlock.h"
 #include "lib/allocator/ob_malloc.h"
+#include "lib/stat/ob_diagnose_info.h"
 
 using namespace oceanbase;
 using namespace obsys;
 
-int ObRLock::lock() const
+template <class T>
+int ObRLock<T>::lock() const
 {
+  return rlock_->rdlock(latch_id_);
+}
+
+template <>
+int ObRLock<pthread_rwlock_t>::lock() const
+{
+  oceanbase::common::ObWaitEventGuard guard(latch_id_);
   return pthread_rwlock_rdlock(rlock_);
 }
 
-int ObRLock::trylock() const
+template <class T>
+int ObRLock<T>::trylock() const
+{
+  return rlock_->try_rdlock(latch_id_);
+}
+
+template<>
+int ObRLock<pthread_rwlock_t>::trylock() const
 {
   return pthread_rwlock_tryrdlock(rlock_);
 }
 
-int ObRLock::unlock() const
+template <class T>
+int ObRLock<T>::unlock() const
+{
+  return rlock_->unlock();
+}
+
+template<>
+int ObRLock<pthread_rwlock_t>::unlock() const
 {
   return pthread_rwlock_unlock(rlock_);
 }
 
-int ObWLock::lock() const
+template <class T>
+void ObRLock<T>::set_latch_id(uint32_t latch_id)
 {
+  latch_id_ = latch_id;
+}
+
+template <class T>
+int ObWLock<T>::lock() const
+{
+  return wlock_->wrlock(latch_id_);
+}
+
+template<>
+int ObWLock<pthread_rwlock_t>::lock() const
+{
+  oceanbase::common::ObWaitEventGuard guard(latch_id_);
   return pthread_rwlock_wrlock(wlock_);
 }
 
-int ObWLock::trylock() const
+template <class T>
+int ObWLock<T>::trylock() const
+{
+  return wlock_->try_wrlock(latch_id_);
+}
+
+template<>
+int ObWLock<pthread_rwlock_t>::trylock() const
 {
   return pthread_rwlock_trywrlock(wlock_);
 }
 
-int ObWLock::unlock() const
+template<class T>
+int ObWLock<T>::unlock() const
+{
+  return wlock_->unlock();
+}
+
+template<>
+int ObWLock<pthread_rwlock_t>::unlock() const
 {
   return pthread_rwlock_unlock(wlock_);
 }
 
-ObRWLock::ObRWLock(LockMode lockMode)
-  : rlock_(&rwlock_),
-    wlock_(&rwlock_)
+
+template<class T>
+void ObWLock<T>::set_latch_id(uint32_t latch_id)
 {
-  pthread_rwlockattr_t attr;
-  pthread_rwlockattr_init(&attr);
-  if (lockMode == READ_PRIORITY) {
-    pthread_rwlockattr_setkind_np(&attr, PTHREAD_RWLOCK_PREFER_READER_NP);
-  } else if (lockMode == WRITE_PRIORITY) {
-    pthread_rwlockattr_setkind_np(&attr, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
-  }
-  pthread_rwlock_init(&rwlock_, &attr);
+  latch_id_ = latch_id;
 }
 
-ObRWLock::~ObRWLock()
+
+template <LockMode lockMode>
+void ObRWLock<lockMode>::set_latch_id(uint32_t latch_id)
 {
-  pthread_rwlock_destroy(&rwlock_);
+  rlock_.set_latch_id(latch_id);
+  wlock_.set_latch_id(latch_id);
 }
+
+template <class T>
+inline ObLockGuardBase<T>::ObLockGuardBase(const T& lock, bool block) : lock_(lock)
+{
+    acquired_ = !(block ? lock_.lock() : lock_.trylock());
+}
+
+template<class T>
+inline ObLockGuardBase<T>::~ObLockGuardBase()
+{
+  if (acquired_) {
+    lock_.unlock();
+  }
+}
+
+template class obsys::ObRWLock<NO_PRIORITY>;
+template class obsys::ObRWLock<READ_PRIORITY>;
+template class obsys::ObRLock<ObLatch>;
+template class obsys::ObRLock<pthread_rwlock_t>;
+template class obsys::ObWLock<ObLatch>;
+template class obsys::ObWLock<pthread_rwlock_t>;
+
+template class obsys::ObLockGuardBase<obsys::ObRLock<ObLatch>>;
+template class obsys::ObLockGuardBase<obsys::ObRLock<pthread_rwlock_t>>;
+template class obsys::ObLockGuardBase<obsys::ObWLock<ObLatch>>;
+template class obsys::ObLockGuardBase<obsys::ObWLock<pthread_rwlock_t>>;

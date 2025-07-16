@@ -81,6 +81,8 @@ ob_set_subtarget(ob_share ALONE
   ob_ddl_args.cpp
   ob_mview_args.cpp
   ob_lonely_table_clean_rpc_struct.cpp
+  ob_create_hidden_tablev2_rpc_struct.cpp
+  ob_external_resource_rpc_struct.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
@@ -225,6 +227,7 @@ ob_set_subtarget(ob_share common
   ob_server_status.cpp
   ob_server_struct.cpp
   ob_server_table_operator.cpp
+  ob_server_check_utils.cpp
   ob_service_epoch_proxy.cpp
   ob_share_util.cpp
   ob_simple_batch.cpp
@@ -281,6 +284,9 @@ ob_set_subtarget(ob_share common
   ob_timezone_importer.cpp
   ob_srs_importer.cpp
   ob_compute_property.cpp
+  ob_perf_stat.cpp
+  ob_flashback_standby_log_struct.cpp
+  ob_flashback_log_scn_table_operator.cpp
 )
 
 ob_set_subtarget(ob_share common_mixed
@@ -342,6 +348,7 @@ ob_set_subtarget(ob_share common_mixed
   sequence/ob_sequence_dml_proxy.cpp
   sequence/ob_sequence_option.cpp
   sequence/ob_sequence_option_builder.cpp
+  shared_storage/ob_ss_local_cache_control_mode.cpp
   system_variable/ob_nls_system_variable.cpp
   system_variable/ob_system_variable.cpp
   system_variable/ob_system_variable_factory.cpp
@@ -462,7 +469,6 @@ ob_set_subtarget(ob_share redolog
   redolog/ob_clog_switch_write_callback.cpp
   redolog/ob_log_file_group.cpp
   redolog/ob_log_file_handler.cpp
-  redolog/ob_log_file_reader.cpp
   redolog/ob_log_policy.cpp
 )
 
@@ -500,8 +506,12 @@ ob_set_subtarget(ob_share schema
   schema/ob_keystore_sql_service.cpp
   schema/ob_label_se_policy_mgr.cpp
   schema/ob_label_se_policy_sql_service.cpp
+  schema/ob_location_mgr.cpp
+  schema/ob_location_schema_struct.cpp
+  schema/ob_location_sql_service.cpp
   schema/ob_mock_fk_parent_table_mgr.cpp
   schema/ob_multi_version_schema_service.cpp
+  schema/ob_objpriv_mysql_schema_struct.cpp
   schema/ob_outline_mgr.cpp
   schema/ob_outline_sql_service.cpp
   schema/ob_package_info.cpp
@@ -523,6 +533,7 @@ ob_set_subtarget(ob_share schema
   schema/ob_schema_mgr.cpp
   schema/ob_schema_mgr_cache.cpp
   schema/ob_schema_printer.cpp
+  schema/ob_schema_printer_external_table.cpp
   schema/ob_schema_retrieve_utils.ipp
   schema/ob_schema_service.cpp
   schema/ob_schema_service_rpc_proxy.cpp
@@ -560,6 +571,8 @@ ob_set_subtarget(ob_share schema
   schema/ob_ddl_epoch.cpp
   schema/ob_ddl_trans_controller.cpp
   schema/ob_schema_getter_guard.cpp
+  schema/ob_schema_getter_guard_location.cpp
+  schema/ob_schema_getter_guard_objpriv_mysql.cpp
   schema/ob_schema_getter_guard_priv.cpp
   schema/ob_schema_struct.cpp
   schema/ob_sequence_sql_service.cpp
@@ -574,6 +587,11 @@ ob_set_subtarget(ob_share schema
   schema/ob_catalog_schema_struct.cpp
   schema/ob_catalog_mgr.cpp
   schema/ob_catalog_sql_service.cpp
+  schema/ob_external_resource_mgr.cpp
+  schema/ob_external_resource_schema_struct.cpp
+  schema/ob_external_resource_sql_service.cpp
+  schema/ob_location_schema_struct.cpp
+  schema/ob_schema_getter_guard_location.cpp
 )
 
 ob_set_subtarget(ob_share stat
@@ -714,6 +732,7 @@ ob_set_subtarget(ob_share vector_index
   vector_index/ob_tenant_vector_index_async_task.cpp
   vector_index/ob_vector_index_async_task.cpp
   vector_index/ob_vector_index_async_task_util.cpp
+  vector_index/ob_vector_index_param.cpp
 )
 
 ob_set_subtarget(ob_share vector_type
@@ -734,6 +753,7 @@ ob_set_subtarget(ob_share domain_id
 
 ob_set_subtarget(ob_share semistruct
   semistruct/ob_sub_column_path.cpp
+  semistruct/ob_semistruct_properties.cpp
 )
 
 ob_add_new_object_target(ob_share ob_share)

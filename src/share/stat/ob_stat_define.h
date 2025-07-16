@@ -135,7 +135,8 @@ enum ColumnAttrFlag
   IS_HIDDEN_COL     = 1 << 1,
   IS_UNIQUE_COL     = 1 << 2,
   IS_NOT_NULL_COL   = 1 << 3,
-  IS_TEXT_COL       = 1 << 4
+  IS_TEXT_COL       = 1 << 4,
+  IS_VIRTUAL_COL    = 1 << 5
 };
 
 enum ColumnGatherFlag
@@ -455,9 +456,12 @@ struct ObColumnStatParam {
   inline bool is_index_column() const { return column_attribute_ & ColumnAttrFlag::IS_INDEX_COL; }
   inline bool is_hidden_column() const { return column_attribute_ & ColumnAttrFlag::IS_HIDDEN_COL; }
   inline bool is_unique_column() const { return column_attribute_ & ColumnAttrFlag::IS_UNIQUE_COL; }
+  inline bool is_virtual_column() const { return column_attribute_ & ColumnAttrFlag::IS_VIRTUAL_COL; }
+
   inline bool is_not_null_column() const { return column_attribute_ & ColumnAttrFlag::IS_NOT_NULL_COL; }
   inline bool is_text_column() const { return column_attribute_ & ColumnAttrFlag::IS_TEXT_COL; }
   inline void unset_text_column() { column_attribute_ &= ~ColumnAttrFlag::IS_TEXT_COL; }
+  inline void set_is_virtual_col() { column_attribute_ |= ColumnAttrFlag::IS_VIRTUAL_COL; }
   inline void set_valid_opt_col() { gather_flag_ |= ColumnGatherFlag::VALID_OPT_COL; }
   inline void set_need_basic_stat() { gather_flag_ |= ColumnGatherFlag::NEED_BASIC_STAT; }
   inline void set_need_avg_len() { gather_flag_ |= ColumnGatherFlag::NEED_AVG_LEN; }

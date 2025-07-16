@@ -434,7 +434,7 @@ int ObDASIterUtils::set_index_merge_related_ids(const ObDASBaseCtDef *attach_ctd
           if (OB_FAIL(merge_iter->set_ls_tablet_ids(ls_id, related_tablet_ids))) {
             LOG_WARN("failed to set related tablet ids", K(ret));
           }
-          need_set_child = false;
+          need_set_child = true;
         }
         break;
       }
@@ -1168,6 +1168,7 @@ int ObDASIterUtils::create_text_retrieval_sub_tree(const ObLSID &ls_id,
   } else if (BOOLEAN_MODE == mode && merge_iter_param.query_tokens_.count() > OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("boolean mode with too many tokens not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,"Boolean mode with more than 256 tokens is");
   } else if ((is_func_lookup && merge_iter_param.query_tokens_.count() > OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT) ||
               (!is_func_lookup && (merge_iter_param.query_tokens_.count() > OB_MAX_TEXT_RETRIEVAL_TOKEN_CNT || !ir_scan_ctdef->need_proj_relevance_score()))) {
     need_inv_idx_agg_reset = true;
@@ -2956,6 +2957,8 @@ if (OB_ISNULL(ctdef) || OB_ISNULL(rtdef) || ctdef->op_type_ != DAS_OP_INDEX_MERG
     if (OB_SUCC(ret)) {
       ObDASIndexMergeIterParam merge_param;
       ObDASIndexMergeIter *merge_iter = nullptr;
+      ObDASIndexMergeAndIter *merge_and_iter = nullptr;
+      ObDASIndexMergeOrIter *merge_or_iter = nullptr;
       merge_param.max_size_ = merge_rtdef->eval_ctx_->is_vectorized() ?
           merge_rtdef->eval_ctx_->max_batch_size_ : 1;
       merge_param.eval_ctx_ = merge_rtdef->eval_ctx_;
@@ -2970,8 +2973,24 @@ if (OB_ISNULL(ctdef) || OB_ISNULL(rtdef) || ctdef->op_type_ != DAS_OP_INDEX_MERG
       merge_param.snapshot_ = snapshot;
       merge_param.is_reverse_ = merge_ctdef->is_reverse_;
       merge_param.rowkey_exprs_ = &merge_ctdef->rowkey_exprs_;
-      if (OB_FAIL(create_das_iter(alloc, merge_param, merge_iter))) {
-        LOG_WARN("failed to create das index merge iter", K(ret));
+      if (merge_ctdef->merge_type_ == INDEX_MERGE_UNION) {
+        if (OB_FAIL(create_das_iter(alloc, merge_param, merge_or_iter))) {
+          LOG_WARN("failed to create das index merge or iter", K(ret));
+        } else {
+          merge_iter = static_cast<ObDASIndexMergeIter*>(merge_or_iter);
+        }
+      } else if (merge_ctdef->merge_type_ == INDEX_MERGE_INTERSECT) {
+        if (OB_FAIL(create_das_iter(alloc, merge_param, merge_and_iter))) {
+          LOG_WARN("failed to create das index merge and iter", K(ret));
+        } else {
+          merge_iter = static_cast<ObDASIndexMergeIter*>(merge_and_iter);
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(merge_iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr", K(ret), K(merge_ctdef->merge_type_));
       } else if (OB_FAIL(merge_iter->set_ls_tablet_ids(scan_param.ls_id_, related_tablet_ids))) {
         LOG_WARN("failed to set ls tablet ids", K(ret));
       } else if (OB_FAIL(create_iter_children_array(children_cnt, alloc, merge_iter))) {

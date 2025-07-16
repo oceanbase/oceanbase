@@ -398,7 +398,8 @@ public:
       const share::schema::ObColumnSchemaV2 &column,
       common::ObObjCastParams &params, common::ObObj &def_val);
   int check_partition_name_duplicate(ParseNode *node, bool is_oracle_modle = false);
-  static int verify_hbase_table_part_keys(const ObIArray<ObString> &part_keys);
+  static int check_hbase_tbl_auto_partkey(const ObIArray<ObString> &part_keys);
+  static int check_hbase_tbl_auto_partkey(const ObTableSchema &table_schema);
   static int check_text_column_length_and_promote(share::schema::ObColumnSchemaV2 &column,
                                                   int64_t table_id,
                                                   const bool is_byte_length = false);
@@ -487,6 +488,11 @@ public:
   static int resolve_external_file_location(ObResolverParams &params,
                                             ObTableSchema &table_schema,
                                             common::ObString table_location);
+
+  static int resolve_external_file_location_object(ObResolverParams &params,
+                                                  ObTableSchema &table_schema,
+                                                  common::ObString location_obj,
+                                                  common::ObString sub_path);
 
   static int mask_properties_sensitive_info(const ParseNode *node,
                                             ObString &ddl_sql,

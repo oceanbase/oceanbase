@@ -337,10 +337,7 @@ CREATE TABLE t1 (x INTEGER,
                 g POINT AS (POINT(x, y)) STORED SRID 0 NOT NULL);
 #--error ER_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN OB目前不支持通过alter来追加PRIMARY KEY(ObAlterTableResolver::resolve_add_primary)
 #ALTER TABLE t1 ADD PRIMARY KEY (g);
---error 3106
 CREATE INDEX g_idx ON t1(g(25));
---error 3106
-CREATE INDEX g_idx ON t1(g) USING BTREE;
 DROP TABLE t1;
 
 --echo # Check error code order

@@ -70,9 +70,6 @@ public:
   // * const_datum -> VEC_UNIFORM
   static int expand_const_datum(const common::ObDatum &const_datum, ObIVector *dest_vec, const int64_t batch_size);
 
-  // 按需实现, 目前只支持VEC_FIXED, VEC_CONTINUOUS, VEC_DISCRETE
-  static int set_vector_all_null(ObIVector *vector, const int64_t batch_size);
-
   static int get_payload(ObIVector *vector, const int64_t idx, bool &is_null, const char *&payload,
                          ObLength &len);
 

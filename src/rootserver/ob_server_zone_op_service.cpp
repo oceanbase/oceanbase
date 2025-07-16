@@ -250,7 +250,7 @@ int ObServerZoneOpService::prepare_server_for_adding_server_(const ObAddr &serve
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_tenant_data_version))) {
     LOG_WARN("fail to get sys tenant's min data version", KR(ret));
 #ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode()) {
+  } else {
     ObRootKey root_key;
     if (OB_FAIL(get_and_check_storage_infos_by_zone_(picked_zone, zone_storage_infos))) {
       LOG_WARN("failed to get storage infos", KR(ret), K(picked_zone));
@@ -302,6 +302,8 @@ int ObServerZoneOpService::prepare_server_for_adding_server_(const ObAddr &serve
     PRINT_NON_EMPTY_SERVER_ERR_MSG(server);
   } else if (OB_FAIL(check_startup_mode_match_(rpc_result.get_startup_mode()))) {
     LOG_WARN("failed to check_startup_mode_match", KR(ret), K(rpc_result.get_startup_mode()));
+  } else if (OB_FAIL(check_logservice_deployment_mode_(rpc_result.get_enable_logservice()))) {
+    LOG_WARN("failed to check logservice", KR(ret), K(rpc_result));
   } else if (OB_FAIL(zone_checking_for_adding_server_(rpc_result.get_zone(), picked_zone))) {
     LOG_WARN("failed to get picked_zone from rpc result", KR(ret));
   }
@@ -354,7 +356,7 @@ int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers,
       } else if (OB_FAIL(prepare_server_for_adding_server_(addr, ctx, is_bootstrap, picked_zone, rpc_arg, rpc_result))) {
         LOG_WARN("failed to set server id", KR(ret), K(addr), K(timeout), K(zone), K(is_bootstrap), K(rpc_arg));
 #ifdef OB_BUILD_TDE_SECURITY
-      } else if (!is_bootstrap && OB_FAIL(master_key_checking_for_adding_server(addr, picked_zone, wms_in_sync_arg))) {
+      } else if (!is_bootstrap && OB_FAIL(handle_master_key_for_adding_server(addr, picked_zone, wms_in_sync_arg))) {
         LOG_WARN("master key checking for adding server is failed", KR(ret), K(addr), K(picked_zone));
 #endif
       } else if (OB_FAIL(add_server_(
@@ -555,7 +557,23 @@ int ObServerZoneOpService::start_servers(
   return ret;
 }
 #ifdef OB_BUILD_TDE_SECURITY
-int ObServerZoneOpService::master_key_checking_for_adding_server(
+int ObServerZoneOpService::handle_master_key_for_adding_server(
+    const common::ObAddr &server,
+    const ObZone &zone,
+    obrpc::ObWaitMasterKeyInSyncArg &wms_in_sync_arg)
+{
+  int ret = OB_SUCCESS;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_0_0) {
+    if (OB_FAIL(send_master_key_for_adding_server(server))) {
+      LOG_WARN("fail to send master key for adding server", KR(ret), K(server));
+    }
+  } else if (OB_FAIL(check_master_key_for_adding_server(server, zone, wms_in_sync_arg))){
+    LOG_WARN("fail to check master key for adding server", KR(ret), K(server), K(zone));
+  }
+  return ret;
+}
+
+int ObServerZoneOpService::check_master_key_for_adding_server(
     const common::ObAddr &server,
     const ObZone &zone,
     obrpc::ObWaitMasterKeyInSyncArg &wms_in_sync_arg)
@@ -608,6 +626,33 @@ int ObServerZoneOpService::master_key_checking_for_adding_server(
   }
   return ret;
 }
+
+int ObServerZoneOpService::send_master_key_for_adding_server(
+    const common::ObAddr &server)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObSetMasterKeyArg all_master_keys;
+  // After version 4.4, we send the master_key stored locally on the RS to the new observer(may not be the latest),
+  // the process of adding a server no longer waits observer to update to the latest version.
+  // Subsequent RS can then notify other observers of the latest version of the tenant's master_key through heartbeat,
+  // the observer can read the inner table to refresh the latest master key.
+  int64_t rpc_timeout = ObServerZoneOpService::OB_SERVER_SEND_MASTER_KEY_TIMEOUT + GCONF.rpc_timeout;
+  const int64_t start_time = ObTimeUtility::fast_current_time();
+  if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("srv_rpc_proxy_ is nullptr", KR(ret), KP(GCTX.srv_rpc_proxy_));
+  } else if (OB_FAIL(ObMasterKeyGetter::instance().get_all_master_keys(all_master_keys))) {
+    LOG_WARN("fail to get all master keys", KR(ret));
+  } else if (0 == all_master_keys.master_key_version_array_.count()) {
+    LOG_INFO("no tenant master key, skip");
+  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(server).timeout(rpc_timeout).set_master_key(all_master_keys))) {
+    LOG_WARN("fail to execute rpc", KR(ret));
+  }
+  const int64_t cost = ObTimeUtility::fast_current_time() - start_time;
+  LOG_INFO("send master_key for adding server", KR(ret), K(cost), K(server), "count", all_master_keys.master_key_version_array_.count());
+  return ret;
+}
+
 #endif
 
 int ObServerZoneOpService::stop_server_precheck(
@@ -692,6 +737,20 @@ int ObServerZoneOpService::check_startup_mode_match_(const share::ObServerMode s
               "current_mode", GCTX.startup_mode_, "added_server_mode", startup_mode);
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "startup mode not match, add server");
     // TODO(cangming.zl): add case
+  }
+  return ret;
+}
+
+int ObServerZoneOpService::check_logservice_deployment_mode_(
+    const bool added_server_logservice)
+{
+  // compatibility is guaranteed
+  int ret = OB_SUCCESS;
+  if (added_server_logservice != GCONF.enable_logservice) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("added server logservice mode not match not allowed",
+            KR(ret), "current_mode", GCONF.enable_logservice, "added_server_mode", added_server_logservice);
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Logservice deployment mode not match, add server");
   }
   return ret;
 }

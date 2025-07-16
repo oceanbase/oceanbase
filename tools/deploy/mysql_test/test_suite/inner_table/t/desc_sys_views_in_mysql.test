@@ -18,6 +18,7 @@ connect (connection_sys,$OBMYSQL_MS0,root,,oceanbase,$OBMYSQL_PORT);
 connect (connection_tenant,$OBMYSQL_MS0,root@mysql,,test,$OBMYSQL_PORT);
 let $query_type_2_str='|KEY_COLUMN_USAGE|';
 let $query_type_3_str='';
+let $query_type_4_str='|V\$OB_SS_SSTABLES|';
 --source mysql_test/test_suite/inner_table/t/desc_all_views.inc
 
 --disable_query_log

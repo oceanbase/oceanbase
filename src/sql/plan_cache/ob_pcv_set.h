@@ -68,7 +68,8 @@ public:
       normal_parse_const_cnt_(0),
       min_cluster_version_(0),
       plan_num_(0),
-      need_check_gen_tbl_col_(false)
+      need_check_gen_tbl_col_(false),
+      expired_time_(0)
   {
   }
   virtual ~ObPCVSet()
@@ -99,6 +100,7 @@ public:
 #ifdef OB_BUILD_SPM
   int get_evolving_evolution_task(EvolutionPlanList &evo_task_list);
 #endif
+  bool set_expired_time();
 
   TO_STRING_KV(K_(is_inited));
 
@@ -132,6 +134,7 @@ private:
   common::ObSEArray<common::ObString, 4> sql_ids_;
   bool need_check_gen_tbl_col_;
   common::ObFixedArray<PCColStruct, common::ObIAllocator> col_field_arr_;
+  int64_t expired_time_;
 };
 
 }

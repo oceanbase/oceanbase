@@ -29,6 +29,9 @@ int ObTenantMutilAllocatorMgr::init()
     for (int64_t i = 0; i < ARRAY_SIZE; ++i) {
       tma_array_[i] = NULL;
     }
+    for(int64_t i = 0; i < ARRAY_SIZE; ++i) {
+      locks_[i].set_latch_id(oceanbase::common::ObLatchIds::TENANT_MUTIL_ALLOCATOR_LOCK);
+    }
     is_inited_ = true;
   }
   return ret;
@@ -76,7 +79,7 @@ int ObTenantMutilAllocatorMgr::get_tenant_mutil_allocator_(const uint64_t tenant
   } else if (tenant_id <= PRESERVED_TENANT_COUNT) {
     // Need rlock
     do {
-      obsys::ObRLockGuard guard(locks_[tenant_id]);
+      obsys::ObRLockGuard<> guard(locks_[tenant_id]);
       out_allocator = ATOMIC_LOAD(&tma_array_[tenant_id]);
     } while(0);
 
@@ -93,7 +96,7 @@ int ObTenantMutilAllocatorMgr::get_tenant_mutil_allocator_(const uint64_t tenant
     bool is_need_create = false;
     do {
       // rdlock
-      obsys::ObRLockGuard guard(locks_[slot]);
+      obsys::ObRLockGuard<> guard(locks_[slot]);
       TMA **cur = &tma_array_[slot];
       while ((NULL != cur) && (NULL != *cur) && (*cur)->get_tenant_id() < tenant_id) {
         cur = &((*cur)->get_next());
@@ -177,7 +180,7 @@ int ObTenantMutilAllocatorMgr::create_tenant_mutil_allocator_(const uint64_t ten
     OB_LOG(WARN, "invalid arguments", K(ret), K(tenant_id));
   } else if (tenant_id <= PRESERVED_TENANT_COUNT) {
     // wlock
-    obsys::ObWLockGuard guard(locks_[tenant_id]);
+    obsys::ObWLockGuard<> guard(locks_[tenant_id]);
     if (NULL != (out_allocator = ATOMIC_LOAD(&tma_array_[tenant_id]))) {
     } else {
       TMA *tmp_tma = NULL;
@@ -198,7 +201,7 @@ int ObTenantMutilAllocatorMgr::create_tenant_mutil_allocator_(const uint64_t ten
     const int64_t slot = get_slot_(tenant_id);
     do {
       // Need lock when modify slog list
-      obsys::ObWLockGuard guard(locks_[slot]);
+      obsys::ObWLockGuard<> guard(locks_[slot]);
       if (NULL == ATOMIC_LOAD(&tma_array_[slot])) {
         // slot's head node is NULL, need construct
         TMA *tmp_tma = NULL;
@@ -263,7 +266,7 @@ int ObTenantMutilAllocatorMgr::delete_tenant_mutil_allocator_(const uint64_t ten
     OB_LOG(WARN, "invalid arguments", K(ret), K(tenant_id));
   } else if (tenant_id <= PRESERVED_TENANT_COUNT) {
     // Need wlock
-    obsys::ObWLockGuard guard(locks_[tenant_id]);
+    obsys::ObWLockGuard<> guard(locks_[tenant_id]);
     TMA *tma_allocator = NULL;
     if (NULL != (tma_allocator = ATOMIC_LOAD(&tma_array_[tenant_id]))) {
       if (NULL != tma_allocator->get_next()) {
@@ -283,7 +286,7 @@ int ObTenantMutilAllocatorMgr::delete_tenant_mutil_allocator_(const uint64_t ten
     const int64_t slot = get_slot_(tenant_id);
     do {
       // wlock
-      obsys::ObWLockGuard guard(locks_[slot]);
+      obsys::ObWLockGuard<> guard(locks_[slot]);
       TMA *prev = NULL;
       TMA *cur = tma_array_[slot];
       while ((NULL != cur) && cur->get_tenant_id() < tenant_id) {

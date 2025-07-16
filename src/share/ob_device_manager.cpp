@@ -13,6 +13,7 @@
 #include "lib/restore/ob_object_device.h"
 #include "ob_device_manager.h"
 #include "share/config/ob_server_config.h"
+#include "share/ob_server_struct.h"
 #include "share/io/ob_io_manager.h"
 #include "share/ob_local_device.h"
 #include "share/external_table/ob_hdfs_table_device.h"
@@ -90,7 +91,7 @@ int ObTenantStsCredentialMgr::check_sts_credential(omt::ObTenantConfigGuard &ten
   return ret;
 }
 
-int ObClusterVersionMgr::is_supported_assume_version() const
+int ObClusterStateMgr::is_supported_assume_version() const
 {
   int ret = OB_SUCCESS;
   uint64 min_cluster_version = GET_MIN_CLUSTER_VERSION();
@@ -103,12 +104,22 @@ int ObClusterVersionMgr::is_supported_assume_version() const
   return ret;
 }
 
+bool ObClusterStateMgr::is_shared_storage_mode() const
+{
+  return GCTX.is_shared_storage_mode();
+}
+
+bool ObClusterStateMgr::is_write_with_if_match() const
+{
+  return (0 == ObString(GCONF._object_storage_condition_put_mode).case_compare("if-match"));
+}
+
 bool ObClusterEnableObdalConfig::is_enable_obdal() const
 {
   return GCONF._enable_obdal;
 }
 
-int ObClusterVersionMgr::is_supported_enable_worm_version() const
+int ObClusterStateMgr::is_supported_enable_worm_version() const
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -151,14 +162,12 @@ int ObDeviceManager::init_devices_env()
       OB_LOG(WARN, "fail to init lock", KR(ret));
     } else if (OB_FAIL(init_oss_env())) {
       OB_LOG(WARN, "fail to init oss storage", K(ret));
-    } else if (OB_FAIL(init_cos_env())) {
-      OB_LOG(WARN, "fail to init cos storage", K(ret));
     } else if (OB_FAIL(init_s3_env())) {
       OB_LOG(WARN, "fail to init s3 storage", K(ret));
     } else if (OB_FAIL(init_obdal_env())) {
       OB_LOG(WARN, "fail to init obdal", K(ret));
-    } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(
-        &ObClusterVersionMgr::get_instance()))) {
+    } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_state_mgr(
+        &ObClusterStateMgr::get_instance()))) {
       OB_LOG(WARN, "fail to register cluster version mgr", K(ret));
     } else if (OB_FAIL(ObStsCredential::register_sts_credential_mgr(
         &ObTenantStsCredentialMgr::get_instance()))) {
@@ -221,7 +230,6 @@ void ObDeviceManager::destroy()
     }
     allocator_.reset();
     fin_oss_env();
-    fin_cos_env();
     fin_s3_env();
     fin_obdal_env();
     lock_.destroy();
@@ -262,10 +270,6 @@ int parse_storage_info(common::ObString storage_type_prefix, ObIODevice*& device
     if (NULL != mem) {new(mem)ObObjectDevice;}
   } else if (storage_type_prefix.prefix_match(OB_OSS_PREFIX)) {
     device_type = OB_STORAGE_OSS;
-    mem = allocator.alloc(sizeof(ObObjectDevice));
-    if (NULL != mem) {new(mem)ObObjectDevice;}
-  } else if (storage_type_prefix.prefix_match(OB_COS_PREFIX)) {
-    device_type = OB_STORAGE_COS;
     mem = allocator.alloc(sizeof(ObObjectDevice));
     if (NULL != mem) {new(mem)ObObjectDevice;}
   } else if (storage_type_prefix.prefix_match(OB_S3_PREFIX)) {

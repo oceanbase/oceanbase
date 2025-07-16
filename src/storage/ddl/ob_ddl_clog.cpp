@@ -514,19 +514,17 @@ int ObDDLFinishLog::init(int64_t tenant_id,
                          const ObITable::TableKey &table_key,
                          const char* buf,
                          const int64_t buf_len,
-                         const blocksstable::MacroBlockId &macro_block_id,
                          const uint64_t data_format_version)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid() ||!table_key.is_valid() ||
-       nullptr == buf || buf_len <= 0  || !macro_block_id.is_valid()) {
+       nullptr == buf || buf_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ls_id), K(table_key), KP(buf), K(buf_len), K(macro_block_id));
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ls_id), K(table_key), KP(buf), K(buf_len));
   } else {
     finish_info_.ls_id_ = ls_id;
     finish_info_.table_key_ = table_key;
     finish_info_.data_buffer_.assign_ptr(buf, buf_len);
-    finish_info_.macro_block_id_ = macro_block_id;
     finish_info_.data_format_version_ = data_format_version;
   }
   return ret;
@@ -629,7 +627,6 @@ bool ObTabletSplitInfo::is_valid() const
   bool is_valid = OB_INVALID_ID != table_id_
       && schema_version_ > 0 && task_id_ > 0
       && source_tablet_id_.is_valid() && dest_tablets_id_.count() > 0
-      && compaction_scn_ > 0
       && data_format_version_ > 0 && consumer_group_id_ >= 0
       && parallel_datum_rowkey_list_.count() > 0;
   if (!lob_col_idxs_.empty()) {

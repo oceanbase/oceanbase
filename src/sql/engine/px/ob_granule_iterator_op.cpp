@@ -33,6 +33,7 @@ ObGIOpInput::ObGIOpInput(ObExecContext &ctx, const ObOpSpec &spec)
     pump_(nullptr),
     px_sequence_id_(OB_INVALID_ID),
     rf_max_wait_time_(0),
+    task_balancer_(nullptr),
     deserialize_allocator_(nullptr)
 {}
 
@@ -97,6 +98,7 @@ OB_DEF_SERIALIZE(ObGIOpInput)
     }
   }
   OB_UNIS_ENCODE(table_location_keys_);
+  OB_UNIS_ENCODE(ser_task_balancer_);
   return ret;
 }
 
@@ -112,6 +114,7 @@ OB_DEF_DESERIALIZE(ObGIOpInput)
     pos = pos + sizeof(pump_);
   }
   OB_UNIS_DECODE(table_location_keys_);
+  OB_UNIS_DECODE(ser_task_balancer_);
   return ret;
 }
 
@@ -122,6 +125,7 @@ OB_DEF_SERIALIZE_SIZE(ObGIOpInput)
   LST_DO_CODE(OB_UNIS_ADD_LEN, parallelism_, worker_id_);
   len += sizeof(pump_);
   OB_UNIS_ADD_LEN(table_location_keys_);
+  OB_UNIS_ADD_LEN(ser_task_balancer_);
   return len;
 }
 
@@ -1027,9 +1031,12 @@ int ObGranuleIteratorOp::get_gi_task_consumer_node(ObOperator *cur,
     if (PHY_TABLE_SCAN == cur->get_spec().type_
         || PHY_BLOCK_SAMPLE_SCAN == cur->get_spec().type_
         || PHY_ROW_SAMPLE_SCAN == cur->get_spec().type_) {
-      consumer = cur;
-      LOG_TRACE("find the gi_task consumer node", K(cur->get_spec().id_),
-                K(cur->get_spec().type_));
+      const ObTableScanSpec &tsc_spec = static_cast<const ObTableScanSpec&>(cur->get_spec());
+      if (!tsc_spec.use_dist_das_) {
+        consumer = cur;
+        LOG_TRACE("find the gi_task consumer node", K(cur->get_spec().id_),
+                  K(cur->get_spec().type_));
+      }
     }
   } else {
     ObOperator *child = nullptr;

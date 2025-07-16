@@ -30,8 +30,19 @@ class ObColumnSchemaV2;
 namespace sql
 {
 class ObDataInFileStruct;
+struct ObODPSGeneralFormatParam {
+  const static ObString TUNNEL_API;
+  const static ObString STORAGE_API;
+  const static ObString BYTE;
+  const static ObString ROW;
+};
 
 struct ObODPSGeneralFormat {
+  enum ApiMode {
+    TUNNEL_API = 0,
+    BYTE,
+    ROW,
+  };
   ObODPSGeneralFormat() :
     access_type_(),
     access_id_(),
@@ -45,10 +56,10 @@ struct ObODPSGeneralFormat {
     quota_(),
     compression_code_(),
     collect_statistics_on_create_(false),
-    region_()
+    region_(),
+    api_mode_(ApiMode::TUNNEL_API)
   {
   }
-
   int deep_copy_str(const ObString &src,
                     ObString &dest);
   int deep_copy(const ObODPSGeneralFormat &src);
@@ -70,6 +81,8 @@ struct ObODPSGeneralFormat {
     "COMPRESSION_CODE",
     "COLLECT_STATISTICS_ON_CREATE",
     "REGION",
+    "API_MODE",
+    "SPLIT_MODE"
   };
   common::ObString access_type_;
   common::ObString access_id_;
@@ -84,12 +97,13 @@ struct ObODPSGeneralFormat {
   common::ObString compression_code_;
   bool collect_statistics_on_create_;
   common::ObString region_;
+  ApiMode api_mode_;
   common::ObArenaAllocator arena_alloc_;
   int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
   TO_STRING_KV(K_(access_type), K_(access_id), K_(access_key), K_(sts_token),
                K_(endpoint), K_(tunnel_endpoint), K_(project), K_(schema), K_(table), K_(quota),
-               K_(compression_code), K_(collect_statistics_on_create), K_(region));
+               K_(compression_code), K_(collect_statistics_on_create), K_(region), K(api_mode_));
   OB_UNIS_VERSION(1);
 };
 
@@ -619,9 +633,15 @@ public:
 
   struct HandleOneLineParam {
     HandleOneLineParam(common::ObIArray<FieldValue> &fields, int field_cnt)
-      : fields_(fields), field_cnt_(field_cnt) {}
+      : fields_(fields), field_cnt_(field_cnt), is_file_end_(false) {}
+
+    HandleOneLineParam(common::ObIArray<FieldValue> &fields, int field_cnt,
+                      ObString line_data, bool is_file_end)
+      : fields_(fields), field_cnt_(field_cnt), line_data_(line_data), is_file_end_(is_file_end) {}
     common::ObIArray<FieldValue> &fields_;
     int field_cnt_;
+    ObString line_data_;
+    bool is_file_end_;
   };
 
 private:
@@ -861,7 +881,9 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
           ret = handle_irregular_line(field_idx, line_no, errors);
         }
         if (OB_SUCC(ret)) {
-          HandleOneLineParam param(fields_per_line_, field_idx);
+          bool is_file_end = str + format_.line_term_str_.length() > end;
+          ObString line_data = ObString(str - line_begin, line_begin);
+          HandleOneLineParam param(fields_per_line_, field_idx, line_data, is_file_end && !find_new_line);
           ret = handle_one_line(param);
         }
       } else {
@@ -956,7 +978,11 @@ int ObCSVGeneralParser::scan_utf8_ex(const char *&str,
           ret = handle_irregular_line(field_idx, line_no, errors);
         }
         if (OB_SUCC(ret)) {
-          HandleOneLineParam param(fields_per_line_, field_idx);
+          bool is_file_end = line_t + format_.line_term_str_.length() > end;
+          int32_t line_len = is_file_end ?  line_t - line_begin :
+                                            line_t - line_begin + format_.line_term_str_.length();
+          ObString line_data = ObString(line_len, line_begin);
+          HandleOneLineParam param(fields_per_line_, field_idx, line_data, is_file_end);
           ret = handle_one_line(param);
         }
       } else {
@@ -1041,6 +1067,8 @@ struct ObExternalFileFormat
     ODPS_FORMAT,
     ORC_FORMAT,
     PLUGIN_FORMAT,
+    ICEBERG_FORMAT,
+    HIVE_FORMAT,
     MAX_FORMAT
   };
 

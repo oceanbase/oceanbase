@@ -20,11 +20,14 @@
 #include "lib/signal/ob_signal_worker.h"
 #include "lib/utility/ob_hang_fatal_error.h"
 #include "common/ob_common_utility.h"
+#include "share/config/ob_server_config.h"
 
 namespace oceanbase
 {
 namespace common
 {
+
+bool need_close_socket_fd_when_core_dump = true;
 
 ObSigFaststack::ObSigFaststack()
     : min_interval_(30 * 60 * 1000 * 1000UL) // 30min
@@ -171,7 +174,15 @@ void coredump_cb(volatile int sig, volatile int sig_code, void* volatile sig_add
   int ret = OB_SUCCESS;
   if (g_coredump_num++ < 1) {
     pid_t pid;
+    // TODO by qingxia: tmp deactivate close_socket_fd() for shared log service
+    // revert it by complete fixing way
+#ifdef FATAL_ERROR_HANG
+    if (need_close_socket_fd_when_core_dump) {
+      close_socket_fd();
+    } else { } // do nothing
+#else
     close_socket_fd();
+#endif
     ret = minicoredump(sig, GETTID(), pid);
     //send_request_and_wait(VERB_LEVEL_2,
     //                      syscall(SYS_gettid)/*exclude_id*/);

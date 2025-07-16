@@ -67,12 +67,15 @@ int ObGtsP::process()
 {
   int ret = OB_SUCCESS;
   ObTimeGuard timeguard("gts_request", 100000);
-  if (arg_.get_tenant_id() != MTL_ID()) {
+  if (!arg_.is_sslog_request() && arg_.get_tenant_id() != MTL_ID()) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "tenant is not match", K(ret), K(arg_));
   }
   if (OB_SUCC(ret)) {
     ObTimestampAccess *timestamp_access = MTL(ObTimestampAccess *);
+    if (arg_.is_sslog_request()) {
+      TRANS_LOG(INFO, "sslog request", K(arg_), K(arg_.is_sslog_request()), K(arg_.get_tenant_id()), K(arg_.get_real_tenant_id()));
+    }
     if (OB_ISNULL(timestamp_access)) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "timestamp access is null", KR(ret), KP(timestamp_access));

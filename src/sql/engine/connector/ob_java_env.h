@@ -28,7 +28,9 @@ namespace sql
 
 class ObJavaEnv {
 public:
-  ObJavaEnv() : is_inited_(false) {}
+  ObJavaEnv() : is_inited_(false), setup_env_lock_(common::ObLatchIds::JAVA_ENV_LOCK) {
+    arena_alloc_.set_attr(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(OB_SYS_TENANT_ID, "JavaHomeEnv")));
+  }
 
 public:
   static ObJavaEnv &getInstance();
@@ -57,7 +59,7 @@ private:
   bool is_inited_conn_path_ = false;
 
 private:
-  obsys::ObRWLock setup_env_lock_;
+  obsys::ObRWLock<> setup_env_lock_;
 
 private:
   const char *JAVA_HOME = "JAVA_HOME";
@@ -69,6 +71,7 @@ private:
   const char *HADOOP_LIB_PATH_PREFIX = "hadoop";
   const char *HADOOP_COMMON_LIB_PREFIX = "common";
   const char *HADOOP_HDFS_LIB_PREFIX = "hdfs";
+  const char *JAVA_UDF_PREFIX = "java-udf";
 
   // Libs path in connector path, current only support ODPS libs
   const char *LIB_PATH_PREFIX = "lib";

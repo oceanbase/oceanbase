@@ -18,7 +18,6 @@ namespace sql
 template <typename Compare, typename Store_Row, bool has_addon>
 void ObSortVecOpImpl<Compare, Store_Row, has_addon>::reset()
 {
-  sql_mem_processor_.unregister_profile();
   reuse();
   all_exprs_.reset();
   sk_vec_ptrs_.reset();
@@ -186,7 +185,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init_temp_row_store(
   ObMemAttr mem_attr(tenant_id_, ObModIds::OB_SQL_SORT_ROW, ObCtxIds::WORK_AREA);
   if (OB_FAIL(row_store.init(exprs, batch_size, mem_attr, mem_limit, enable_dump,
                              extra_size /* row_extra_size */, compress_type, reorder_fixed_expr,
-                             enable_trunc))) {
+                             enable_trunc, tempstore_read_alignment_size_))) {
     SQL_ENG_LOG(WARN, "init row store failed", K(ret));
   } else {
     row_store.set_dir_id(sql_mem_processor_.get_dir_id());
@@ -287,6 +286,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext &ctx
     use_heap_sort_ = is_topn_sort();
     is_fetch_with_ties_ = ctx.is_fetch_with_ties_;
     compress_type_ = ctx.compress_type_;
+    tempstore_read_alignment_size_ = ObTempBlockStore::get_read_alignment_size_config(tenant_id_);
     page_allocator_.set_allocator(&mem_context_->get_malloc_allocator());
     int64_t batch_size = eval_ctx_->max_batch_size_;
     if (OB_FAIL(merge_sk_addon_exprs(sk_exprs_, addon_exprs_))) {
@@ -348,6 +348,20 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext &ctx
     }
     if (OB_SUCC(ret)) {
       inited_ = true;
+      // heap sort will extend rowsize twice to reuse the space
+      int64_t size = OB_INVALID_ID == input_rows_ ? 0 : input_rows_ * input_width_ * (use_heap_sort_ ? 2 : 1);
+      if (OB_FAIL(sql_mem_processor_.init(&mem_context_->get_malloc_allocator(), tenant_id_, size,
+                                          op_monitor_info_.op_type_, op_monitor_info_.op_id_,
+                                          exec_ctx_))) {
+        SQL_ENG_LOG(WARN, "failed to init sql mem processor", K(ret));
+      } else {
+        sk_store_.set_dir_id(sql_mem_processor_.get_dir_id());
+        sk_store_.set_callback(&sql_mem_processor_);
+        sk_store_.set_io_event_observer(io_event_observer_);
+        addon_store_.set_dir_id(sql_mem_processor_.get_dir_id());
+        addon_store_.set_callback(&sql_mem_processor_);
+        addon_store_.set_io_event_observer(io_event_observer_);
+      }
       is_topn_filter_enabled_ = EVENT_CALL(EventTable::EN_SORT_IMPL_TOPN_EAGER_FILTER) == OB_SUCCESS;
       if (!is_topn_sort()) {
         rows_ = &quick_sort_array_;
@@ -1139,13 +1153,6 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::update_max_available_mem_siz
   int ret = OB_SUCCESS;
   if (!got_first_row_) {
     got_first_row_ = true;
-    // heap sort will extend rowsize twice to reuse the space
-    int64_t size = OB_INVALID_ID == input_rows_ ? 0 : input_rows_ * input_width_ * 2;
-    if (OB_FAIL(sql_mem_processor_.init(&mem_context_->get_malloc_allocator(), tenant_id_, size,
-                                        op_monitor_info_.op_type_, op_monitor_info_.op_id_,
-                                        &eval_ctx_->exec_ctx_))) {
-      SQL_ENG_LOG(WARN, "failed to init sql mem processor", K(ret));
-    }
   } else {
     bool updated = false;
     if (OB_FAIL(sql_mem_processor_.update_max_available_mem_size_periodically(
@@ -1264,7 +1271,8 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::preprocess_dump(bool &dumped
       }
       SQL_ENG_LOG(INFO, "trace sort need dump", K(dumped), K(mem_context_->used()),
                   K(get_memory_limit()), K(profile_.get_cache_size()),
-                  K(profile_.get_expect_size()), K(sql_mem_processor_.get_data_size()));
+                  K(profile_.get_expect_size()), K(sql_mem_processor_.get_data_size()),
+                  K(sql_mem_processor_.is_auto_mgr()));
     }
   }
   if (OB_SUCC(ret) && dumped && OB_NOT_NULL(rows_) && rows_->empty()) {
@@ -1758,19 +1766,6 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::before_add_row()
       SQL_ENG_LOG(WARN, "init compare failed", K(ret));
     } else {
       got_first_row_ = true;
-      int64_t size = OB_INVALID_ID == input_rows_ ? 0 : input_rows_ * input_width_;
-      if (OB_FAIL(sql_mem_processor_.init(&mem_context_->get_malloc_allocator(), tenant_id_, size,
-                                          op_monitor_info_.op_type_, op_monitor_info_.op_id_,
-                                          exec_ctx_))) {
-        SQL_ENG_LOG(WARN, "failed to init sql mem processor", K(ret));
-      } else {
-        sk_store_.set_dir_id(sql_mem_processor_.get_dir_id());
-        sk_store_.set_callback(&sql_mem_processor_);
-        sk_store_.set_io_event_observer(io_event_observer_);
-        addon_store_.set_dir_id(sql_mem_processor_.get_dir_id());
-        addon_store_.set_callback(&sql_mem_processor_);
-        addon_store_.set_io_event_observer(io_event_observer_);
-      }
     }
   }
 
@@ -1860,18 +1855,20 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::build_ems_heap(int64_t &merg
       ems_heap_->reset();
     }
     if (OB_SUCC(ret)) {
-      merge_ways = get_memory_limit() / ObTempBlockStore::BLOCK_SIZE;
+      int64_t tempstore_block_size =
+        max(tempstore_read_alignment_size_, ObTempBlockStore::BLOCK_CAPACITY);
+      merge_ways = get_memory_limit() / tempstore_block_size;
       merge_ways = std::max(2L, merge_ways);
       if (merge_ways < max_ways) {
         bool dumped = false;
-        int64_t need_size = max_ways * ObTempBlockStore::BLOCK_SIZE;
+        int64_t need_size = max_ways * tempstore_block_size;
         if (OB_FAIL(sql_mem_processor_.extend_max_memory_size(
               &mem_context_->get_malloc_allocator(),
               [&](int64_t max_memory_size) { return max_memory_size < need_size; }, dumped,
               mem_context_->used()))) {
           SQL_ENG_LOG(WARN, "failed to extend memory size", K(ret));
         }
-        merge_ways = std::max(merge_ways, get_memory_limit() / ObTempBlockStore::BLOCK_SIZE);
+        merge_ways = std::max(merge_ways, get_memory_limit() / tempstore_block_size);
       }
       merge_ways = std::min(merge_ways, max_ways);
       LOG_TRACE("do merge sort ", K(first->level_), K(merge_ways), K(sort_chunks_.get_size()),

@@ -25,6 +25,8 @@
 #include "share/schema/ob_column_schema.h"
 #include "share/schema/ob_routine_info.h"
 #include "share/schema/ob_catalog_schema_struct.h"
+#include "share/schema/ob_location_schema_struct.h"
+#include "share/schema/ob_objpriv_mysql_schema_struct.h"
 
 namespace oceanbase
 {
@@ -46,6 +48,7 @@ class ObRoutineInfo;
 class ObPackageInfo;
 class ObTriggerInfo;
 class ObUDTTypeInfo;
+class ObSimpleExternalResourceSchema;
 
 enum ObSchemaOperationCategory
 {
@@ -376,6 +379,19 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_CREATE_EXTERNAL_RESOURCE, = 2132)                   \
   ACT(OB_DDL_DROP_EXTERNAL_RESOURCE, = 2133)                     \
   ACT(OB_DDL_EXTERNAL_RESOURCE_OPERATION_END, = 2140)            \
+  ACT(OB_DDL_SENSITIVE_RULE_OPERATION_BEGIN, = 2141)             \
+  ACT(OB_DDL_CREATE_SENSITIVE_RULE, = 2142)                      \
+  ACT(OB_DDL_DROP_SENSITIVE_RULE, = 2143)                        \
+  ACT(OB_DDL_ALTER_SENSITIVE_RULE_ADD_COLUMN, = 2144)            \
+  ACT(OB_DDL_ALTER_SENSITIVE_RULE_DROP_COLUMN, = 2145)           \
+  ACT(OB_DDL_ALTER_SENSITIVE_RULE_ENABLE, = 2146)                \
+  ACT(OB_DDL_ALTER_SENSITIVE_RULE_DISABLE, = 2147)               \
+  ACT(OB_DDL_ALTER_SENSITIVE_RULE_SET_PROTECTION_SPEC, = 2148)   \
+  ACT(OB_DDL_SENSITIVE_RULE_OPERATION_END, = 2149)               \
+  ACT(OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_BEGIN, = 2150)        \
+  ACT(OB_DDL_GRANT_REVOKE_SENSITIVE_RULE, = 2151)                \
+  ACT(OB_DDL_DEL_SENSITIVE_RULE_PRIV, = 2152)                    \
+  ACT(OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_END, = 2153)          \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
@@ -419,12 +435,14 @@ IS_DDL_TYPE(SYS_PRIV, sys_priv)
 IS_DDL_TYPE(OBJ_PRIV, obj_priv)
 IS_DDL_TYPE(DBLINK, dblink)
 IS_DDL_TYPE(DIRECTORY, directory)
+IS_DDL_TYPE(LOCATION, location)
 IS_DDL_TYPE(CONTEXT, context)
 IS_DDL_TYPE(MOCK_FK_PARENT_TABLE, mock_fk_parent_table)
 IS_DDL_TYPE(RLS_POLICY, rls_policy)
 IS_DDL_TYPE(RLS_GROUP, rls_group)
 IS_DDL_TYPE(RLS_CONTEXT, rls_context)
 IS_DDL_TYPE(CATALOG, catalog)
+IS_DDL_TYPE(EXTERNAL_RESOURCE, external_resource)
 
 struct ObSchemaOperation
 {
@@ -465,6 +483,7 @@ public:
     uint64_t audit_id_;
     uint64_t dblink_id_;
     uint64_t directory_id_;
+    uint64_t location_id_;
     uint64_t context_id_;
     uint64_t mock_fk_parent_table_id_;
     uint64_t rls_policy_id_;
@@ -488,6 +507,7 @@ public:
     common::ObString routine_name_;
     common::ObString catalog_name_;
     common::ObString obj_name_;
+    common::ObString external_resource_name_;
   };
   ObSchemaOperationType op_type_;
   common::ObString ddl_stmt_str_;
@@ -739,6 +759,7 @@ class ObProfileSchema;
 class ObDbLinkSchema;
 class ObSimpleLinkTableSchema;
 class ObDirectorySchema;
+class ObLocationSchema;
 class ObSimpleMockFKParentTableSchema;
 class ObRlsPolicySchema;
 class ObRlsGroupSchema;
@@ -770,11 +791,13 @@ class ObProfileSqlService;
 class ObErrorSqlService;
 class ObDbLinkSqlService;
 class ObDirectorySqlService;
+class ObLocationSqlService;
 class ObRlsSqlService;
 //table schema service interface layer
 class ObServerSchemaService;
 class ObContextSqlService;
 class ObCatalogSqlService;
+class ObExternalResourceSqlService;
 class ObSchemaService
 {
 public:
@@ -829,10 +852,12 @@ public:
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Audit, audit);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(DbLink, dblink);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Directory, directory);
+  DECLARE_GET_DDL_SQL_SERVICE_FUNC(Location, location);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Context, context);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Rls, rls);
   DECLARE_GET_DDL_SQL_SERVICE_FUNC(Catalog, catalog);
   //DECLARE_GET_DDL_SQL_SERVICE_FUNC(sys_priv, priv);
+  DECLARE_GET_DDL_SQL_SERVICE_FUNC(ExternalResource, external_resource);
 
 
   /* sequence_id related */
@@ -954,6 +979,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(table_priv, ObTablePriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(routine_priv, ObRoutinePriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(column_priv, ObColumnPriv);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(obj_mysql_priv, ObObjMysqlPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(outline, ObSimpleOutlineSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(routine, ObSimpleRoutineSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(synonym, ObSimpleSynonymSchema);
@@ -974,12 +1000,14 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(obj_priv, ObObjPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(dblink, ObDbLinkSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(directory, ObDirectorySchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(location, ObLocationSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(context, ObContextSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(rls_policy, ObRlsPolicySchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(rls_group, ObRlsGroupSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(rls_context, ObRlsContextSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(catalog, ObCatalogSchema);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(external_resource, ObSimpleExternalResourceSchema);
 
   //get tenant increment schema operation between (base_version, new_schema_version]
   virtual int get_increment_schema_operations(const ObRefreshSchemaStatus &schema_status,
@@ -1050,12 +1078,14 @@ public:
   virtual int fetch_new_profile_id(const uint64_t tenant_id, uint64_t &new_profile_id) = 0;
   virtual int fetch_new_audit_id(const uint64_t tenant_id, uint64_t &new_audit_id) = 0;
   virtual int fetch_new_directory_id(const uint64_t tenant_id, uint64_t &new_directory_id) = 0;
+  virtual int fetch_new_location_id(const uint64_t tenant_id, uint64_t &new_location_id) = 0;
   virtual int fetch_new_context_id(const uint64_t tenant_id, uint64_t &new_context_id) = 0;
   virtual int fetch_new_rls_policy_id(const uint64_t tenant_id, uint64_t &new_rls_policy_id) = 0;
   virtual int fetch_new_rls_group_id(const uint64_t tenant_id, uint64_t &new_rls_group_id) = 0;
   virtual int fetch_new_rls_context_id(const uint64_t tenant_id, uint64_t &new_rls_context_id) = 0;
   virtual int fetch_new_priv_id(const uint64_t tenant_id, uint64_t &new_priv_id) = 0;
   virtual int fetch_new_catalog_id(const uint64_t tenant_id, uint64_t &new_catalog_id) = 0;
+  virtual int fetch_new_external_resource_id(const uint64_t tenant_id, uint64_t &new_external_resource_id) = 0;
 
 //------------------For managing privileges-----------------------------//
   #define GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE_PURE_VIRTUAL(SCHEMA, SCHEMA_TYPE)  \
@@ -1103,14 +1133,17 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(audit, ObSAuditSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(sys_priv, ObSysPriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(obj_priv, ObObjPriv);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(obj_mysql_priv, ObObjMysqlPriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(dblink, ObDbLinkSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(directory, ObDirectorySchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(location, ObLocationSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(context, ObContextSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(mock_fk_parent_table, ObSimpleMockFKParentTableSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(rls_policy, ObRlsPolicySchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(rls_group, ObRlsGroupSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(rls_context, ObRlsContextSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(catalog, ObCatalogSchema);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(external_resource, ObSimpleExternalResourceSchema);
 
 
   //--------------For manaing recyclebin -----//
@@ -1249,21 +1282,6 @@ public:
       common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
       int64_t &schema_version) = 0;
-
-  // link table.
-  /**
-   * ObMultiVersionSchemaService::get_link_table_schema() need adjust
-   * schema_version and link_schema_version, so param table_schema should not be const.
-   */
-  virtual int get_link_table_schema(const ObDbLinkSchema *dblink_schema,
-                                    const common::ObString &database_name,
-                                    const common::ObString &table_name,
-                                    common::ObIAllocator &allocator,
-                                    ObTableSchema *&table_schema,
-                                    sql::ObSQLSessionInfo *session_info,
-                                    const common::ObString &dblink_name,
-                                    bool is_reverse_link,
-                                    uint64_t *current_scn) = 0;
 
   static bool is_formal_version(const int64_t schema_version);
   static bool is_sys_temp_version(const int64_t schema_version);

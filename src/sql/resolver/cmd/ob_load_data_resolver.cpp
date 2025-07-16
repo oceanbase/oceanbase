@@ -404,19 +404,72 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
       if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_2) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("load data on error is not supported", K(ret));
-      } else if (T_LOG_ERROR_LIMIT == child_node->type_) {
-        load_stmt->get_load_arguments().is_diagnosis_enabled_ = true;
-        if (OB_UNLIKELY(child_node->num_child_ != 1)
-                  || OB_ISNULL(child_node->children_[0])
-                  || T_INT != child_node->children_[0]->type_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid grand child node", K(ret), K(child_node->num_child_));
-        } else {
-          load_stmt->get_load_arguments().diagnosis_limit_num_ = child_node->children_[0]->value_;
+      } else if (T_LOG_ERROR == child_node->type_ && OB_LIKELY(child_node->num_child_ == 3)) {
+
+        if (OB_NOT_NULL(child_node->children_[0])) {
+          const ParseNode *log_file_node = child_node->children_[0];
+          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("logging errors into files is not supported", K(ret));
+          } else if (OB_UNLIKELY(log_file_node->type_ != T_LOAD_DATA_ERR_FILE)
+              || OB_ISNULL(log_file_node->children_[0])
+              || OB_UNLIKELY(T_VARCHAR != log_file_node->children_[0]->type_
+                            && T_CHAR != log_file_node->children_[0]->type_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid log file node", K(ret), K(log_file_node));
+          } else {
+            ObString file_name(log_file_node->children_[0]->str_len_,
+                              log_file_node->children_[0]->str_value_);
+            load_stmt->get_load_arguments().diagnosis_log_file_ = file_name;
+          }
         }
-      } else if (T_LOG_ERROR_UNLIMITED == child_node->type_) {
-        load_stmt->get_load_arguments().is_diagnosis_enabled_ = true;
-        load_stmt->get_load_arguments().diagnosis_limit_num_ = -1;
+
+        if (OB_SUCC(ret)) {
+          if (OB_NOT_NULL(child_node->children_[1])) {
+            const ParseNode *limit_node = child_node->children_[1];
+            if (T_LOG_ERROR_LIMIT == limit_node->type_) {
+              load_stmt->get_load_arguments().is_diagnosis_enabled_ = true;
+              if (OB_UNLIKELY(limit_node->num_child_ != 1)
+                  || OB_ISNULL(limit_node->children_[0])
+                  || T_INT != limit_node->children_[0]->type_) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("invalid child node", K(ret), K(limit_node->num_child_));
+              } else {
+                load_stmt->get_load_arguments().diagnosis_limit_num_ = limit_node->children_[0]->value_;
+              }
+            } else if (T_LOG_ERROR_UNLIMITED == limit_node->type_) {
+              load_stmt->get_load_arguments().is_diagnosis_enabled_ = true;
+              load_stmt->get_load_arguments().diagnosis_limit_num_ = -1;
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid from spec node", K(ret), K(limit_node->type_));
+            }
+          } else {
+            load_stmt->get_load_arguments().is_diagnosis_enabled_ = true;
+            load_stmt->get_load_arguments().diagnosis_limit_num_ = 0;
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          if (OB_NOT_NULL(child_node->children_[2])) {
+            const ParseNode *bad_file_node = child_node->children_[2];
+            if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("logging errors into files is not supported", K(ret));
+            } else if (OB_UNLIKELY(bad_file_node->type_ != T_LOAD_DATA_BAD_FILE)
+                || OB_ISNULL(bad_file_node->children_[0])
+                || OB_UNLIKELY(T_VARCHAR != bad_file_node->children_[0]->type_
+                              && T_CHAR != bad_file_node->children_[0]->type_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid bad file node", K(ret), K(bad_file_node));
+            } else {
+              ObString bad_file_name(bad_file_node->children_[0]->str_len_,
+                                    bad_file_node->children_[0]->str_value_);
+              load_stmt->get_load_arguments().diagnosis_bad_file_ = bad_file_name;
+            }
+          }
+        }
+
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid from spec node", K(ret), K(child_node->type_));

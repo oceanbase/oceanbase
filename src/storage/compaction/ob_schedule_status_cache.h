@@ -79,6 +79,7 @@ public:
     NO_MAJOR_SSTABLE,
     INVALID_LS_STATE, // for ss
     TENANT_SKIP_MERGE,
+    EXIST_UNFINISH_INC_MAJOR,
     EXECUTE_STATE_MAX,
   };
   static const char *tablet_execute_state_to_str(const TabletExecuteState &state);

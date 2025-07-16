@@ -37,7 +37,11 @@ ObLogRestoreService::ObLogRestoreService() :
   error_reporter_(),
   allocator_(),
   scheduler_(),
-  cond_()
+  cond_(),
+  lock_(),
+  init_transport_(NULL),
+  init_ls_svr_(NULL),
+  init_log_service_(NULL)
 {}
 
 ObLogRestoreService::~ObLogRestoreService()
@@ -78,6 +82,9 @@ int ObLogRestoreService::init(rpc::frame::ObReqTransport *transport,
   } else if (OB_FAIL(scheduler_.init(tenant_id, &allocator_, &fetch_log_worker_))) {
     LOG_WARN("scheduler_ init failed", K(ret));
   } else {
+    init_transport_ = transport;
+    init_ls_svr_ = ls_svr;
+    init_log_service_ = log_service;
     ls_svr_ = ls_svr;
     inited_ = true;
     LOG_INFO("ObLogRestoreService init succ");
@@ -87,11 +94,11 @@ int ObLogRestoreService::init(rpc::frame::ObReqTransport *transport,
 
 void ObLogRestoreService::destroy()
 {
+  stop();
+  wait();
   inited_ = false;
   fetch_log_worker_.destroy();
   writer_.destroy();
-  stop();
-  wait();
   location_adaptor_.destroy();
   archive_driver_.destroy();
   net_driver_.destroy();
@@ -101,8 +108,11 @@ void ObLogRestoreService::destroy()
   allocator_.destroy();
   scheduler_.destroy();
   ls_svr_ = NULL;
+  share::ObThreadPool::destroy();
+  LOG_INFO("ObLogRestoreService destroy succ");
 }
 
+ERRSIM_POINT_DEF(ERRSIM_LOG_RESTORE_SERVICE_RESTART1);
 int ObLogRestoreService::start()
 {
   int ret = OB_SUCCESS;
@@ -112,6 +122,11 @@ int ObLogRestoreService::start()
     LOG_WARN("restore service not init", K(ret), K(inited_));
   } else if (OB_FAIL(fetch_log_worker_.start())) {
     LOG_WARN("fetch_log_worker_ start failed", K(ret));
+  } else if (OB_FAIL(net_driver_.start())) {
+    LOG_WARN("net_driver_ start failed", K(ret));
+  } else if (OB_UNLIKELY(ERRSIM_LOG_RESTORE_SERVICE_RESTART1)) {
+    ret = ERRSIM_LOG_RESTORE_SERVICE_RESTART1;
+    LOG_WARN("ERRSIM_LOG_RESTORE_SERVICE_RESTART1 opened", KR(ret));
   } else if (OB_FAIL(writer_.start())) {
     LOG_WARN("remote_log_writer start failed");
   } else if (OB_FAIL(ObThreadPool::start())) {
@@ -138,6 +153,29 @@ void ObLogRestoreService::wait()
   writer_.wait();
   ObThreadPool::wait();
   LOG_INFO("ObLogRestoreService thread wait", "tenant_id", MTL_ID());
+}
+
+ERRSIM_POINT_DEF(ERRSIM_LOG_RESTORE_SERVICE_RESTART2);
+int ObLogRestoreService::restart()
+{
+  int ret = OB_SUCCESS;
+  // Note that lock cannot prevent restore_service being restarted when unit is in deleting state;
+  // This is the most simple implementation, it's more safe to implement logical_stop;
+
+  ObSpinLockGuard guard(lock_);
+  destroy();
+  if (OB_FAIL(init(init_transport_, init_ls_svr_, init_log_service_))) {
+    LOG_WARN("failed to reinit ObLogRestoreService", KP(init_transport_), KP(init_ls_svr_), KP(init_log_service_));
+  } else if (OB_UNLIKELY(ERRSIM_LOG_RESTORE_SERVICE_RESTART2)) {
+    ret = ERRSIM_LOG_RESTORE_SERVICE_RESTART2;
+    LOG_WARN("ERRSIM_LOG_RESTORE_SERVICE_RESTART2 opened", KR(ret));
+  } else if (OB_FAIL(start())) {
+    LOG_WARN("failed to start ObLogService");
+  } else {
+    LOG_INFO("ObLogRestoreService restart succ", KP(init_transport_), KP(init_ls_svr_), KP(init_log_service_));
+  }
+
+  return ret;
 }
 
 void ObLogRestoreService::signal()

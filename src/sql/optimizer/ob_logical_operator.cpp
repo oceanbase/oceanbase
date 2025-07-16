@@ -3668,8 +3668,7 @@ void ObLogicalOperator::do_project_pruning(ObIArray<ObRawExpr *> &exprs, PPDeps 
   int64_t j = 0;
   LOG_TRACE("start to do project pruning", K(type_), K(exprs), K(deps));
   for (i = 0, j = 0; i < exprs.count(); i++) {
-    if (deps.has_member(static_cast<int32_t>(i))
-        || T_ORA_ROWSCN == exprs.at(i)->get_expr_type()) {
+    if (deps.has_member(static_cast<int32_t>(i))) {
       exprs.at(j++) = exprs.at(i);
     } else {
       LOG_TRACE("project pruning remove expr", K(exprs.at(i)), K(*exprs.at(i)),
@@ -4377,7 +4376,9 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
         gi_op->add_flag(GI_PARTITION_WISE);
       }
       if (LOG_TABLE_SCAN == get_type()) {
-        if (static_cast<ObLogTableScan*>(this)->is_text_retrieval_scan() || static_cast<ObLogTableScan*>(this)->is_vec_idx_scan_post_filter()) {
+        if (static_cast<ObLogTableScan*>(this)->is_text_retrieval_scan() ||
+            static_cast<ObLogTableScan*>(this)->is_vec_idx_scan_post_filter() ||
+            static_cast<ObLogTableScan*>(this)->use_index_merge()) {
           gi_op->add_flag(GI_FORCE_PARTITION_GRANULE);
         }
         if (static_cast<ObLogTableScan *>(this)->get_join_filter_info().is_inited_) {
@@ -5354,6 +5355,8 @@ int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_detail(
             LOG_WARN("failed to has_exec_param");
           } else if (has_exec_param) {
             OPT_TRACE("[TopN Filter] can not pushdown to tsc with exec param");
+          } else if (scan->use_index_merge()) {
+            OPT_TRACE("[TopN Filter] can not pushdown to index merge table scan");
           } else {
             scan_op = op;
             find_table_scan = true;
@@ -5662,6 +5665,8 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
       && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0) {
     can_join_filter_material = true;
   }
+  bool enable_runtime_filter_adaptive_apply =
+      get_plan()->get_optimizer_context().enable_runtime_filter_adaptive_apply();
   int64_t last_valid_join_filter_info_idx = -1;
   if (OB_SUCC(ret)) {
     for (int i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
@@ -5770,9 +5775,16 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
                                                            node, info))) {
           LOG_WARN("failed to prepare_rf_query_range_info");
         }
-        if (OB_SUCC(ret) && LOG_TABLE_SCAN == node->get_type()) {
+        if (OB_FAIL(ret)) {
+        } else if (!enable_runtime_filter_adaptive_apply) {
+          join_filter_use->set_runtime_filter_adaptive_apply(false);
+        } else if (LOG_TABLE_SCAN == node->get_type()) {
           ObLogTableScan *scan = static_cast<ObLogTableScan*>(node);
           scan->set_use_column_store(info.use_column_store_);
+          if (scan->get_scan_order() == common::ObQueryFlag::ScanOrder::NoOrder) {
+            // for table engine delete insert, we should disable runtime filter adaptive apply
+            join_filter_use->set_runtime_filter_adaptive_apply(false);
+          }
         }
 
         if (OB_SUCC(ret) && can_join_filter_material) {

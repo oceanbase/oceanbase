@@ -158,9 +158,14 @@ public:
   void set_need_close_dev_and_fd();
   void set_no_need_close_dev_and_fd();
   bool is_need_close_dev_and_fd() const;
+  void set_buffered_read(const bool is_buffered_read = true);
+  bool is_buffered_read() const;
+  void set_preread();
+  void set_no_preread();
+  bool is_preread() const;
   TO_STRING_KV("mode", common::get_io_mode_string(static_cast<ObIOMode>(mode_)), K(group_id_), K(func_type_),
       K(wait_event_id_), K(is_sync_), K(is_unlimited_), K(is_detect_), K(is_write_through_), K(is_sealed_),
-      K(is_time_detect_), K(need_close_dev_and_fd_), K(reserved_));
+      K(is_time_detect_), K(need_close_dev_and_fd_), K(is_preread_), K(is_buffered_read_), K(reserved_));
 
 private:
   friend struct ObIOResult;
@@ -184,6 +189,8 @@ private:
   // does not need to close device and fd. object storage block io uses ObObjectDevice, which
   // needs to close device and fd.
   static constexpr int64_t IO_CLOSE_DEV_AND_FD_BIT = 1;
+  static constexpr int64_t IO_BUFFERED_READ_BIT = 1; // indicate read mode of the io
+  static constexpr int64_t IO_PREREAD_FLAG_BIT = 1;
   static constexpr int64_t IO_RESERVED_BIT = 64 - IO_MODE_BIT
                                                 - IO_WAIT_EVENT_BIT
                                                 - IO_SYNC_FLAG_BIT
@@ -192,7 +199,9 @@ private:
                                                 - IO_WRITE_THROUGH_BIT
                                                 - IO_SEALED_FLAG_BIT
                                                 - IO_TIME_DETECT_FLAG_BIT
-                                                - IO_CLOSE_DEV_AND_FD_BIT;
+                                                - IO_CLOSE_DEV_AND_FD_BIT
+                                                - IO_BUFFERED_READ_BIT
+                                                - IO_PREREAD_FLAG_BIT;
 
   union { // FARM COMPAT WHITELIST
     int64_t flag_;
@@ -207,6 +216,8 @@ private:
       bool is_sealed_ : IO_SEALED_FLAG_BIT;
       bool is_time_detect_ : IO_TIME_DETECT_FLAG_BIT;
       bool need_close_dev_and_fd_ : IO_CLOSE_DEV_AND_FD_BIT;
+      bool is_buffered_read_ : IO_BUFFERED_READ_BIT;
+      bool is_preread_ : IO_PREREAD_FLAG_BIT;
       int64_t reserved_ : IO_RESERVED_BIT;
     };
   };
@@ -512,6 +523,7 @@ public:
   uint64_t get_sys_module_id() const;
   bool is_sys_module() const;
   int64_t get_data_size() const;
+  int64_t get_user_io_size() const;
   uint64_t get_io_usage_index();
   uint64_t get_tenant_id() const;
   void inc_ref(const char *msg = nullptr);
@@ -705,6 +717,7 @@ public:
   int wait(const int64_t wait_timeout_ms = UINT64_MAX);
   const char *get_buffer();
   int64_t get_data_size() const;
+  int64_t get_user_io_size() const;
   int64_t get_rt() const;
   int get_fs_errno(int &io_errno) const;
   void reset();

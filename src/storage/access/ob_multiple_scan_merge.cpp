@@ -144,7 +144,7 @@ int ObMultipleScanMerge::calc_scan_range()
       if (access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey_.is_min_rowkey())
       {
         cow_range_.start_key_.set_min_rowkey();
-      } else if (curr_rowkey_.is_max_rowkey()) {
+      } else if (!access_ctx_->query_flag_.is_reverse_scan() && curr_rowkey_.is_max_rowkey()) {
         cow_range_.end_key_.set_max_rowkey();
       }
     }
@@ -194,7 +194,7 @@ int ObMultipleScanMerge::construct_iters()
         "di_base_iter cnt", di_base_iters_.count(), "table cnt", tables_.count(), KP(this));
   } else if (tables_.count() > 0) {
     STORAGE_LOG(TRACE, "construct iters begin", K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()),
-                K(access_param_->iter_param_.is_delete_insert_), KPC_(range), KPC_(di_base_range), K_(tables), KPC_(access_param));
+                K(access_param_->iter_param_.is_delete_insert_), KPC_(range), KPC_(di_base_range), K_(access_ctx_->trans_version_range), K_(tables), KPC_(access_param));
     ObITable *table = NULL;
     ObStoreRowIterator *iter = NULL;
     const ObTableIterParam *iter_param = NULL;
@@ -518,7 +518,7 @@ int ObMultipleScanMerge::inner_get_next_row(ObDatumRow &row)
           } else {
             //need retry
             consumer_cnt_ = 1;
-            ++filt_del_count_;
+            INC_AND_CHECK_INTERRUPT_IN_SCAN(access_ctx_, filt_del_count_);
             continue;
           }
         }
@@ -538,12 +538,7 @@ int ObMultipleScanMerge::inner_get_next_row(ObDatumRow &row)
             break;
           } else {
             //need retry
-            ++filt_del_count_;
-            if (0 == (filt_del_count_ % 10000) && !access_ctx_->query_flag_.is_daily_merge()) {
-              if (OB_FAIL(THIS_WORKER.check_status())) {
-                STORAGE_LOG(WARN, "query interrupt, ", K(ret));
-              }
-            }
+            INC_AND_CHECK_INTERRUPT_IN_SCAN(access_ctx_, filt_del_count_);
           }
         }
       }

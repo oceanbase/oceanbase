@@ -50,7 +50,7 @@ public:
   ObTenantTxDataAllocator()
       : is_inited_(false), throttle_tool_(nullptr), block_alloc_(), slice_allocator_() {}
   ~ObTenantTxDataAllocator() { reset(); }
-  int init(const char* label);
+  int init(const char* label, TxShareThrottleTool *throttle_tool);
   void *alloc(const bool enable_throttle = true, const int64_t abs_expire_time = 0);
   void reset();
   int64_t hold() const { return block_alloc_.hold(); }

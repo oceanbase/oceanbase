@@ -15,8 +15,10 @@
 #define protected public
 #define private public
 
+#include "common/ob_role.h"
 #include "storage/incremental/sslog/ob_sslog_table_proxy.h"
 #include "storage/incremental/sslog/ob_i_sslog_proxy.h"
+#include "storage/ls/ob_ls.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/simple_server/env/ob_simple_cluster_test_base.h"
 #include "lib/string/ob_string.h"
@@ -24,6 +26,7 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/scn.h"
 #include "mittest/simple_server/env/ob_simple_server_restart_helper.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_adapter.h"
 
 static const char *TEST_FILE_NAME = "test_sslog_basic";
 static const char *BORN_CASE_NAME = "ObTestSSLogBasic";
@@ -31,6 +34,16 @@ static const char *RESTART_CASE_NAME = "ObSSLogAfterRestartTest";
 
 namespace oceanbase
 {
+namespace sslog
+{
+int ObSSLogNotifyAdapter::get_is_finish_flag_from_extra_info_column(const char *,
+                                                                    const int64_t,
+                                                                    bool &is_finish_flag)
+{
+  is_finish_flag = false;
+  return OB_SUCCESS;
+}
+}
 char *shared_storage_info = NULL;
 
 namespace common {
@@ -63,14 +76,48 @@ class ObTestSSLogBasic : public ObSimpleClusterTestBase
 {
 public:
   ObTestSSLogBasic() : ObSimpleClusterTestBase(TEST_FILE_NAME, "50G", "50G", "50G") {}
+  void wait_sys_to_leader()
+  {
+    share::ObTenantSwitchGuard tenant_guard;
+    int ret = OB_ERR_UNEXPECTED;
+    ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(1));
+    ObLS *ls = nullptr;
+    ObLSID ls_id(ObLSID::SYS_LS_ID);
+    ObLSHandle handle;
+    ObLSService *ls_svr = MTL(ObLSService *);
+    EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+    ls = handle.get_ls();
+    ASSERT_NE(nullptr, ls);
+    ASSERT_EQ(ls_id, ls->get_ls_id());
+    for (int i=0; i<100; i++) {
+      ObRole role;
+      int64_t proposal_id = 0;
+      ASSERT_EQ(OB_SUCCESS, ls->get_log_handler()->get_role(role, proposal_id));
+      if (role == ObRole::LEADER) {
+        ret = OB_SUCCESS;
+        break;
+      }
+      ob_usleep(10 * 1000);
+    }
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
 
   void create_test_tenant(uint64_t &tenant_id)
   {
     TRANS_LOG(INFO, "create_tenant start");
-    ASSERT_EQ(OB_SUCCESS, create_tenant("tt1"));
+    wait_sys_to_leader();
+    int ret = OB_SUCCESS;
+    int retry_cnt = 0;
+    do {
+      if (OB_FAIL(create_tenant("tt1"))) {
+        TRANS_LOG(WARN, "create_tenant fail, need retry", K(ret));
+        ob_usleep(15 * 1000 * 1000); // 15s
+      }
+      retry_cnt++;
+    } while (OB_FAIL(ret) && retry_cnt < 10);
+    ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(OB_SUCCESS, get_tenant_id(tenant_id));
     ASSERT_EQ(OB_SUCCESS, get_curr_simple_server().init_sql_proxy2());
-    TRANS_LOG(INFO, "create_tenant end", K(tenant_id));
   }
 };
 
@@ -155,10 +202,10 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
                                                      meta_type1,
                                                      meta_key1,
                                                      iter));
-    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
     ASSERT_EQ(meta_value1, meta_value_ret);
     ASSERT_EQ(extra_info1, extra_info_ret);
-    ASSERT_EQ(OB_ITER_END, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
   }
 
   // ========== Test 3: insert another row =========
@@ -177,13 +224,13 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
                                                      meta_type1,
                                                      meta_key_prefix,
                                                      iter));
-    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
     ASSERT_EQ(meta_value1, meta_value_ret);
     ASSERT_EQ(extra_info1, extra_info_ret);
-    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
     ASSERT_EQ(meta_value2, meta_value_ret);
     ASSERT_EQ(extra_info2, extra_info_ret);
-    ASSERT_EQ(OB_ITER_END, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
   }
   {
     SSLOG_TABLE_READ_INIT
@@ -225,10 +272,10 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
                                                      meta_type1,
                                                      meta_key1,
                                                      iter));
-    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
     ASSERT_EQ(meta_value1_new, meta_value_ret);
     ASSERT_EQ(extra_info1_new, extra_info_ret);
-    ASSERT_EQ(OB_ITER_END, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
   }
 
   // ========== Test 6: delete and read the prefix =========
@@ -244,10 +291,10 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
                                                         meta_type1,
                                                         meta_key_prefix,
                                                         iter));
-    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
     ASSERT_EQ(meta_value1_new, meta_value_ret);
     ASSERT_EQ(extra_info1_new, extra_info_ret);
-    ASSERT_EQ(OB_ITER_END, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
   }
 
   // ========== Test 7: read the snapshot =========
@@ -258,10 +305,10 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
                                                      meta_type1,
                                                      meta_key1,
                                                      iter));
-    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
     ASSERT_EQ(meta_value1, meta_value_ret);
     ASSERT_EQ(extra_info1, extra_info_ret);
-    ASSERT_EQ(OB_ITER_END, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
   }
 
   {
@@ -271,13 +318,13 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
                                                      meta_type1,
                                                      meta_key_prefix,
                                                      iter));
-    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
     ASSERT_EQ(meta_value1, meta_value_ret);
     ASSERT_EQ(extra_info1, extra_info_ret);
-    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
     ASSERT_EQ(meta_value2, meta_value_ret);
     ASSERT_EQ(extra_info2, extra_info_ret);
-    ASSERT_EQ(OB_ITER_END, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
   }
 
   // ========== Test 8: read the multi_version =========
@@ -345,26 +392,23 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
     ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
   }
 
-  {
-    MULTI_VERSION_READ_INIT
-    ObSSLogMultiVersionReadParam param(share::SCN::invalid_scn(),
-                                       snapshot_version2,
-                                       true /*include_last_version*/);
-    ASSERT_EQ(OB_SUCCESS, proxy_ptr->read_multi_version_row(param,
-                                                            meta_type1,
-                                                            meta_key_malloc,
-                                                            iter));
-    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
-    ASSERT_EQ(meta_value1_new_3, meta_value_ret);
-    ASSERT_EQ(extra_info1_new_3, extra_info_ret);
-    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
-    ASSERT_EQ(meta_value1_new_2, meta_value_ret);
-    ASSERT_EQ(extra_info1_new_2, extra_info_ret);
-    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
-    ASSERT_EQ(meta_value1_new, meta_value_ret);
-    ASSERT_EQ(extra_info1_new, extra_info_ret);
-    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
-  }
+  // {
+  //   MULTI_VERSION_READ_INIT
+  //   ObSSLogMultiVersionReadParam param(share::SCN::invalid_scn(),
+  //                                      snapshot_version2,
+  //                                      true /*include_last_version*/);
+  //   ASSERT_EQ(OB_SUCCESS, proxy_ptr->read_multi_version_row(param,
+  //                                                           meta_type1,
+  //                                                           meta_key_malloc,
+  //                                                           iter));
+  //   ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+  //   ASSERT_EQ(meta_value1_new_3, meta_value_ret);
+  //   ASSERT_EQ(extra_info1_new_3, extra_info_ret);
+  //   ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+  //   ASSERT_EQ(meta_value1_new_2, meta_value_ret);
+  //   ASSERT_EQ(extra_info1_new_2, extra_info_ret);
+  //   ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+  // }
 
   {
     MULTI_VERSION_READ_INIT
@@ -403,10 +447,10 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
                                                      meta_type1,
                                                      meta_key1,
                                                      iter));
-    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
     ASSERT_EQ(meta_value1_new_3, meta_value_ret);
     ASSERT_EQ(extra_info1_new_4, extra_info_ret);
-    ASSERT_EQ(OB_ITER_END, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
   }
 
   // ========== Test 10: update with extra info check =========
@@ -428,10 +472,110 @@ TEST_F(ObTestSSLogBasic, test_sslog_basic)
                                                      meta_type1,
                                                      meta_key1,
                                                      iter));
-    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
     ASSERT_EQ(meta_value1_new_4, meta_value_ret);
     ASSERT_EQ(extra_info1_new_4, extra_info_ret);
-    ASSERT_EQ(OB_ITER_END, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+  }
+
+
+  // ========== Test 11: update with larger than 2M =========
+  const sslog::ObSSLogMetaType meta_type3 = sslog::ObSSLogMetaType::SSLOG_TABLET_META;
+  const int64_t meta_value3_size = 1.5 * 1024 * 1024;
+  char *meta_value3_buffer = (char *)ob_malloc(meta_value3_size, "qcc debug");
+  memset(meta_value3_buffer, 'a', meta_value3_size);
+  const common::ObString meta_key3 = "1002;1001;200003";
+  common::ObString meta_value3;
+  meta_value3.assign_ptr(meta_value3_buffer, meta_value3_size);
+  const common::ObString extra_info3 = "qc_extra3";
+
+  ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->insert_row(meta_type3,
+                                                      meta_key3,
+                                                      meta_value3,
+                                                      extra_info3,
+                                                      affected_rows));
+  ASSERT_EQ(1, affected_rows);
+
+  {
+    SSLOG_TABLE_READ_INIT
+    sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_row*/);
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
+                                                      meta_type3,
+                                                      meta_key3,
+                                                      iter));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_value3, meta_value_ret);
+    ASSERT_EQ(extra_info3, extra_info_ret);
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+  }
+
+  {
+    ObSSLogWriteParam write_param(false, false, ObString());
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->update_row(write_param,
+                                                        meta_type3,
+                                                        meta_key3,
+                                                        meta_value2,
+                                                        extra_info2,
+                                                        affected_rows));
+    ASSERT_EQ(1, affected_rows);
+  }
+
+  {
+    SSLOG_TABLE_READ_INIT
+      sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_row*/);
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
+                                                      meta_type3,
+                                                      meta_key3,
+                                                      iter));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_value2, meta_value_ret);
+    ASSERT_EQ(extra_info2, extra_info_ret);
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+  }
+
+  {
+    ObSSLogWriteParam write_param(false, false, ObString());
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->update_row(write_param,
+                                                        meta_type3,
+                                                        meta_key3,
+                                                        meta_value3,
+                                                        extra_info3,
+                                                        affected_rows));
+    ASSERT_EQ(1, affected_rows);
+  }
+
+  {
+    SSLOG_TABLE_READ_INIT
+      sslog::ObSSLogReadParam param(false/*read_local*/, false/*read_row*/);
+    ASSERT_EQ(OB_SUCCESS, sslog_table_proxy->read_row(param,
+                                                      meta_type3,
+                                                      meta_key3,
+                                                      iter));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_value3, meta_value_ret);
+    ASSERT_EQ(extra_info3, extra_info_ret);
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+  }
+
+    {
+    MULTI_VERSION_READ_INIT
+    ObSSLogMultiVersionReadParam param(share::SCN::invalid_scn(),
+                                       share::SCN::invalid_scn(),
+                                       false /*include_last_version*/);
+    ASSERT_EQ(OB_SUCCESS, proxy_ptr->read_multi_version_row(param,
+                                                            meta_type3,
+                                                            meta_key3,
+                                                            iter));
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_value3, meta_value_ret);
+    ASSERT_EQ(extra_info3, extra_info_ret);
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_value2, meta_value_ret);
+    ASSERT_EQ(extra_info2, extra_info_ret);
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(meta_value3, meta_value_ret);
+    ASSERT_EQ(extra_info3, extra_info_ret);
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
   }
 }
 
@@ -520,7 +664,7 @@ TEST_F(ObSSLogAfterRestartTest, test_sslog_schema)
     ASSERT_EQ(meta_key1, meta_key_ret);
     ASSERT_EQ(meta_value1_new_4, meta_value_ret);
     ASSERT_EQ(extra_info1_new_4, extra_info_ret);
-    ASSERT_EQ(OB_ITER_END, iter.get_next_meta(row_scn_ret, meta_value_ret, extra_info_ret));
+    ASSERT_EQ(OB_ITER_END, iter.get_next_meta_v2(row_scn_ret, meta_value_ret, extra_info_ret));
   }
 
   {

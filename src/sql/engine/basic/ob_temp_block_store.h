@@ -95,10 +95,15 @@ public:
     inline int64_t head_pos() const { return head_; }
     inline int64_t tail_pos() const { return tail_;}
     inline void fast_update_head(const int64_t pos) { head_ = pos; }
+    // for segment alignment read
+    inline void set_offset_length(int64_t offset, int64_t length) { head_ = offset; cap_ = length; }
+    inline bool in_aligned_buff(int64_t offset) const { return offset >= head_ && offset < head_ + cap_; }
+    inline int64_t offset() const { return head_; }
+    inline int64_t end() const { return head_ + cap_; }
     TO_STRING_KV(KP_(data), K_(head), K_(tail), K_(cap));
   private:
     char *data_;
-    int64_t head_;
+    int64_t head_; // used as offset_ in segment alignment read
     int64_t tail_;
     int64_t cap_;
   };
@@ -292,6 +297,12 @@ public:
     inline int64_t get_block_cnt() const { return store_->get_block_cnt(); }
     void set_iteration_age(IterationAge *age) { age_ = age; }
     void set_blk_holder(BlockHolder *holder) { blk_holder_ptr_ = holder; }
+    inline ShrinkBuffer &get_aio_buf() { return aio_buf_[aio_buf_idx_ % BlockReader::AIO_BUF_CNT]; }
+    inline ShrinkBuffer &get_prefetch_aio_buf()
+    {
+      return aio_buf_[(aio_buf_idx_ + 1) % BlockReader::AIO_BUF_CNT];
+    }
+
     int get_read_io_handler(tmp_file::ObTmpFileIOHandle *&read_io_handle)
     {
       int ret = OB_SUCCESS;
@@ -357,9 +368,10 @@ public:
   };
 
 public:
-  const static int64_t BLOCK_SIZE = (64L << 10) - sizeof(LinkNode);
+  const static int64_t BLOCK_SIZE = 64L << 10;
+  const static int64_t BLOCK_CAPACITY = BLOCK_SIZE - sizeof(LinkNode);
   const static int64_t BIG_BLOCK_SIZE = (256L << 10) - sizeof(LinkNode);
-  const static int64_t DEFAULT_BLOCK_CNT = (1L << 20) / BLOCK_SIZE;
+  const static int64_t DEFAULT_BLOCK_CNT = (1L << 20) / BLOCK_CAPACITY;
 
   explicit ObTempBlockStore(common::ObIAllocator *alloc = NULL);
   virtual ~ObTempBlockStore() { reset(); }
@@ -370,7 +382,8 @@ public:
            const char *label,
            common::ObCompressorType compressor_type,
            const bool enable_trunc = false,
-           const bool sequential_read = false);
+           const bool sequential_read = false,
+           const int64_t tempstore_read_alignment_size = 0);
   void reset();
   void reuse();
   void reset_block_cnt();
@@ -391,7 +404,7 @@ public:
   // set iteration age for inner reader.
   void set_allocator(common::ObIAllocator &alloc) { allocator_ = &alloc; }
   void set_inner_allocator_attr(const lib::ObMemAttr &attr) { inner_allocator_.set_attr(attr); }
-  void set_dir_id(int64_t dir_id) { io_.dir_id_ = dir_id; }
+  void set_dir_id(int64_t dir_id) { dir_id_ = dir_id; }
   void set_iteration_age(IterationAge *age) { inner_reader_.set_iteration_age(age); }
   inline void set_mem_used(const int64_t mem_used) { mem_used_ = mem_used; }
   inline void inc_mem_used(const int64_t mem_used) { mem_used_ += mem_used; }
@@ -414,7 +427,7 @@ public:
   inline int64_t get_alloced_mem_size() const { return alloced_mem_size_; }
   inline int64_t get_alloced_mem_cnt() const { return alloced_mem_list_.get_size(); }
   inline int64_t get_file_fd() const { return io_.fd_; }
-  inline int64_t get_file_dir_id() const { return io_.dir_id_; }
+  inline int64_t get_file_dir_id() const { return dir_id_; }
   inline int64_t get_file_size() const { return file_size_; }
   inline int64_t get_max_blk_size() const { return max_block_size_; }
   inline int64_t get_max_hold_mem() const { return max_hold_mem_; }
@@ -439,14 +452,37 @@ public:
   bool is_truncate() { return enable_trunc_; }
   inline int64_t get_cur_file_offset() const { return cur_file_offset_; }
   inline void set_cur_file_offset(int64_t file_offset) { cur_file_offset_ = file_offset; }
+  inline int64_t get_tempsotre_read_alignment_size() const { return tempstore_read_alignment_size_; }
+  inline bool is_segment_read() const { return tempstore_read_alignment_size_ != 0; }
+  inline int64_t alignment_offset(const int64_t offset) const {
+    return offset & ~(tempstore_read_alignment_size_ - 1);
+  }
+  inline int64_t alignment_length(const int64_t length) const {
+    return (length + tempstore_read_alignment_size_ - 1) & ~(tempstore_read_alignment_size_ - 1);
+  }
 
   inline bool is_empty_save_block_cnt() const { return saved_block_id_cnt_ == 0; }
   // include index blocks and data blocks
 
+  static int64_t get_read_alignment_size_config(uint64_t tenant_id) {
+    int64_t tempstore_read_alignment_size = 0;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      tempstore_read_alignment_size = tenant_config->_tempstore_read_alignment_size;
+      if (tempstore_read_alignment_size <= BLOCK_SIZE) {
+        tempstore_read_alignment_size = 0;
+      } else {
+        tempstore_read_alignment_size = next_pow2(tempstore_read_alignment_size);
+      }
+    }
+    return tempstore_read_alignment_size;
+  }
+
   TO_STRING_KV(K_(inited), K_(enable_dump), K_(tenant_id), K_(label), K_(ctx_id),  K_(mem_limit),
-    K_(mem_hold), K_(mem_used), K_(io_.fd), K_(io_.dir_id), K_(file_size), K_(block_cnt),
+    K_(mem_hold), K_(mem_used), K_(io_.fd), K_(dir_id), K_(file_size), K_(block_cnt),
     K_(index_block_cnt), K_(block_cnt_on_disk), K_(block_id_cnt), K_(dumped_block_id_cnt),
-    K_(alloced_mem_size), K_(enable_trunc), K_(last_trunc_offset), K_(cur_file_offset));
+    K_(alloced_mem_size), K_(enable_trunc), K_(last_trunc_offset), K_(cur_file_offset),
+    K_(tempstore_read_alignment_size));
 
   void *alloc(const int64_t size)
   {
@@ -500,8 +536,8 @@ protected:
 
 private:
   int inner_get_block(BlockReader &reader, const int64_t block_id,
-                      const Block *&blk, bool &blk_on_disk);
-  int decompr_block(BlockReader &reader, const Block *&blk);
+                      const Block *&blk, bool &blk_on_disk, int64_t &comp_size);
+  int decompr_block(int64_t &comp_size, BlockReader &reader, const Block *&blk);
   inline static int64_t block_magic(const void *mem)
   {
     return *(static_cast<const int64_t *>(mem));
@@ -529,8 +565,16 @@ private:
   void set_mem_hold(int64_t hold);
   void inc_mem_hold(int64_t hold);
   void free_blk_mem(void *mem, const int64_t size = 0);
-
-  int load_block(BlockReader &reader, const int64_t block_id, const Block *&blk, bool &on_disk);
+  int segment_read_block(BlockReader &reader, const int64_t block_id, const Block *&blk,
+                         bool &blk_on_disk, int64_t &comp_size);
+  int load_block_cross_multi_buffer(BlockReader &reader, const int64_t len1, const int64_t offset1,
+                                    BlockIndex *&bi);
+  int load_block_cross_buffer(BlockReader &reader, BlockIndex *&bi);
+  int load_block_from_seg_buffer(BlockReader &reader, const Block *&blk,
+                            bool &need_prefetch, BlockIndex *&bi);
+  int load_buffer(BlockReader &reader, ShrinkBuffer &buf, int64_t offset,
+                                  int64_t length, const bool is_async);
+  int load_block(BlockReader &reader, const int64_t block_id, ShrinkBuffer &buf, const Block *&blk, bool &on_disk);
   int find_block_idx(BlockReader &reader, const int64_t block_id, BlockIndex *&bi);
   int load_idx_block(BlockReader &reader, IndexBlock *&ib, const BlockIndex &bi);
   int ensure_reader_buffer(BlockReader &reader, ShrinkBuffer &buf, const int64_t size);
@@ -620,10 +664,11 @@ private:
   ObSqlMemoryCallback *mem_stat_;
   ObChunkBlockCompressor compressor_;
   ObIOEventObserver *io_observer_;
-  tmp_file::ObTmpFileIOHandle write_io_handle_;
   tmp_file::ObTmpFileIOInfo io_;
+  int64_t dir_id_;
   bool last_block_on_disk_;
   int64_t cur_file_offset_;
+  int64_t tempstore_read_alignment_size_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTempBlockStore);
 };

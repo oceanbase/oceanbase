@@ -40,7 +40,7 @@ struct ObStorageHATabletsBuilderParam final
   int assign(const ObStorageHATabletsBuilderParam &param);
 
   TO_STRING_KV(K_(tenant_id), KPC_(ls), K_(tablet_id_array), K_(src_info), K_(local_rebuild_seq),
-      K_(need_check_seq), K_(is_leader_restore), K_(need_keep_old_tablet), KP_(ha_table_info_mgr),
+      K_(need_check_seq), K_(is_leader_restore), KP_(ha_table_info_mgr),
       K_(restore_action), KP_(bandwidth_throttle), KP_(svr_rpc_proxy), KP_(storage_rpc));
 
   uint64_t tenant_id_;
@@ -50,7 +50,6 @@ struct ObStorageHATabletsBuilderParam final
   int64_t local_rebuild_seq_;
   bool need_check_seq_;
   bool is_leader_restore_;
-  bool need_keep_old_tablet_;
 
   ObStorageHATableInfoMgr *ha_table_info_mgr_;
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
@@ -158,8 +157,6 @@ private:
   int hold_local_complete_tablet_sstable_(
       ObTablet *tablet,
       ObTablesHandleArray &tables_handle);
-  int remove_uncomplete_tablet_(
-      const common::ObTabletID &tablet_id);
   int modified_tablet_info_(
       obrpc::ObCopyTabletInfo &tablet_info);
 

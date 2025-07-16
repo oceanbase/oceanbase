@@ -13,11 +13,17 @@
 #define USING_LOG_PREFIX CLOG
 #include "ob_admin_dump_block.h"
 #include "logservice/palf/log_meta.h"
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "logservice/libpalf/libpalf_common_define.h"
+#endif
 #define private public
 #include "logservice/archiveservice/ob_archive_define.h"
 #undef private
 #include "../parser/ob_admin_parser_log_entry.h"
 #include "../parser/ob_admin_parser_group_entry.h"
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+#include "palf_ffi.h"
+#endif
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
 #include "logservice/ob_log_compression.h"
 #endif
@@ -26,6 +32,9 @@ namespace oceanbase
 using namespace common;
 using namespace share;
 using namespace palf;
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+using namespace libpalf;
+#endif
 namespace tools
 {
 int ObAdminDumpBlockHelper::mmap_log_file(char *&buf_out,
@@ -407,7 +416,7 @@ int ObAdminDumpBlock::parse_single_group_entry_(const LogGroupEntry &group_entry
       str_arg_.log_stat_->total_log_entry_count_++;
       curr_lsn = curr_lsn + entry.get_serialize_size();
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = parse_single_log_entry_(entry, block_name, lsn))) {
+      if (OB_SUCCESS != (tmp_ret = parse_single_log_entry_(entry, block_name, curr_lsn))) {
         if (OB_ITER_END != tmp_ret) {
           LOG_ERROR("parse_single_log_entry_ failed", K(tmp_ret), K(entry));
           has_encount_error = true;
@@ -428,7 +437,7 @@ int ObAdminDumpBlock::parse_single_log_entry_(const LogEntry &entry,
                                               palf::LSN lsn)
 {
   int ret = OB_SUCCESS;
-  ObAdminParserLogEntry parser_le(entry, block_name, lsn, str_arg_);
+  ObAdminParserLogEntry parser_le(&entry, block_name, lsn, str_arg_);
   if (OB_FAIL(parser_le.parse())) {
     LOG_WARN("ObAdminParserLogEntry failed", K(ret), K(entry), K(block_name), K(lsn));
   } else {
@@ -523,5 +532,231 @@ int ObAdminDumpMetaBlock::do_dump_(ObAdminDumpIterator &iter,
   return ret;
 }
 
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+ObAdminLogServiceDumpBlock::ObAdminLogServiceDumpBlock(const char *block_path,
+                                                       share::ObAdminMutatorStringArg &str_arg)
+    : block_path_(block_path)
+{
+  str_arg_ = str_arg;
+}
+
+int ObAdminLogServiceDumpBlock::mmap_log_file_(char *&mmap_buf,
+                                              const char *block_path_,
+                                              int &fd,
+                                              int64_t &body_size)
+{
+  int ret = OB_SUCCESS;
+  void *buf = NULL;
+  struct stat block_stat;
+  int64_t header_size = 4 * 1024;
+  if (-1 == (fd = ::open(block_path_, O_RDONLY))) {
+    ret = palf::convert_sys_errno();
+    LOG_WARN("open file fail", K(block_path_), K(ret));
+  } else if (-1 == (::fstat(fd, &block_stat))) {
+    ret = palf::convert_sys_errno();
+    LOG_WARN("fstat file fail", K(block_path_), K(ret));
+  } else if (FALSE_IT(body_size = block_stat.st_size - header_size)){
+  } else if (MAP_FAILED == (buf = ::mmap(NULL, block_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0)) || NULL == buf) {
+    ret = palf::convert_sys_errno();
+    LOG_WARN("failed to mmap file", K(block_stat.st_size), K(block_path_), KERRMSG, K(ret), K(fd));
+  } else {
+    mmap_buf = static_cast<char *>(buf);
+    LOG_INFO("map_log_file success", K(block_path_), KP(buf), K(fd), KP(mmap_buf));
+  }
+  return ret;
+}
+
+int ObAdminLogServiceDumpBlock::dump()
+{
+  int ret = OB_SUCCESS;
+  char *block_name = basename((char*)block_path_);
+  if (NULL == block_name) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid block_path", K(block_path_), KP(block_name), K(ret));
+    return ret;
+  }
+  const LibPalfGroupEntryIteratorFFI *iter = NULL;
+  int64_t header_size = 4 * 1024;
+  int64_t body_size = 0;
+  LSN start_lsn(0);
+  size_t pos = 0;
+  struct stat block_stat;
+  int fd = -1;
+  const LibPalfIteratorMemoryStorageFFI *memory_storage = NULL;
+  char *mmap_buf = NULL;
+  char *data_buf = NULL;
+
+  if (OB_FAIL(mmap_log_file_(mmap_buf, block_path_, fd, body_size))) {
+    LOG_WARN("mmap_log_file_ failed", K(ret), K(block_path_), K(fd), K(body_size));
+  } else if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_log_block_header_get_min_lsn(mmap_buf, &pos, &start_lsn.val_)))) {
+    LOG_WARN("failed to get started lsn", K(ret));
+  } else if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_seek_mem_group_log_iterator(start_lsn.val_, &iter, &memory_storage)))) {
+    LOG_WARN("MemoryGroupIteratorStorage seek failed", K(ret), K(block_path_));
+  } else if (FALSE_IT(data_buf = mmap_buf + header_size)) {
+  } else if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_set_memory_storage_buffer(memory_storage, start_lsn.val_, data_buf, body_size)))) {
+    LOG_WARN("MemoryGroupIteratorStorage set failed", K(ret), K(start_lsn), KP(data_buf), K(body_size));
+  } else if (OB_FAIL(do_dump_(iter, block_name))) {
+    LOG_WARN("ObAdminDumpIterator do_dump_ failed", K(ret), K(iter), KP(block_name));
+  } else if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_free_group_log_iterator(iter, memory_storage)))) {
+    LOG_WARN("libpalf_free_group_log_iterator failed", K(ret));
+  } else {
+    LOG_INFO("ObAdminLogServiceDumpBlock dump success", K(ret), K(block_path_), K(start_lsn), K(header_size), K(body_size));
+  }
+  if (NULL != mmap_buf && -1 != fd) {
+    ::munmap(reinterpret_cast<void*>(mmap_buf), header_size + body_size);
+    ::close(fd);
+  }
+  return ret;
+}
+
+int ObAdminLogServiceDumpBlock::do_dump_(const LibPalfGroupEntryIteratorFFI *iter,
+                                         const char *block_name)
+{
+  int ret = OB_SUCCESS;
+  LSN lsn(0);
+  bool has_encount_error = false;
+  const int64_t PADDING_TYPE_MASK = 1ll << 63;
+  share::SCN upper_bound_scn = SCN::max_scn();
+  while (OB_SUCC(LIBPALF_ERRNO_CAST(libpalf_group_iterator_next(iter, upper_bound_scn.get_val_for_logservice())))) {
+    // ((magic, version, data_size, proposal_id, committed_end_lsn, max_scn, acc_crc, log_id, flag), *body)
+    LibPalfLogGroupEntry group_entry = LibPalfLogGroupEntry(LibPalfLogGroupEntryHeader(0/*magic*/,
+        0/*version*/, 0/*data_size*/, 0/*proposal_id*/, 0/*committed_end_lsn*/, 0/*max_scn*/, 0/*acc_crc*/, 0/*log_id*/, 0/*flag*/), NULL/*body*/);
+    if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_group_iterator_get_entry(iter, &lsn.val_, &group_entry)))) {
+      LOG_ERROR("LibPalfGroupEntryIterator get_group_entry failed", K(ret), K(lsn), K(iter));
+      has_encount_error = true;
+    } else if ((group_entry.header.flag & PADDING_TYPE_MASK)!= 0) {
+      LOG_INFO("is_padding_log, no need parse", K(iter));
+    } else {
+      LibPalfLogGroupEntryHeader &header = group_entry.header;
+      str_arg_.log_stat_->total_group_entry_count_++;
+      str_arg_.log_stat_->group_entry_header_size_ += sizeof(LibPalfLogGroupEntryHeader);
+      if (str_arg_.flag_ == LogFormatFlag::NO_FORMAT && str_arg_.flag_ != LogFormatFlag::STAT_FORMAT) {
+        ObCStringHelper helper;
+        LibPalfLogGroupEntryToString group_entry_to_string(header);
+        int64_t total_size = header.data_size + sizeof(LibPalfLogGroupEntryHeader);
+        fprintf(stdout, "BlockID:%s, LSN:%s, SIZE:%ld, GROUP_ENTRY:%s\n",
+                block_name, helper.convert(lsn), total_size, helper.convert(group_entry_to_string));
+      }
+      if (OB_FAIL(LIBPALF_ERRNO_CAST(parse_single_group_entry_(group_entry, has_encount_error, block_name, lsn)))) {
+        LOG_WARN("parse_single_group_entry_ failed", K(ret), K(block_name), K(lsn));
+        has_encount_error = true;
+      } else {
+        LOG_INFO("ObAdminDumpIterator get_group_entry success",
+            K(lsn), K(header.log_id), K(header.data_size), K(header.flag), K(header.magic));
+      }
+    }
+  }
+  if (OB_ITER_END == ret) {
+    ret = OB_SUCCESS;
+  }
+  if (has_encount_error) {
+    fprintf(stderr, "dumping block(%s) encounts error. Retrieve detailed error information from the ob_admin.log.\n", block_name);
+  }
+  return ret;
+}
+
+int ObAdminLogServiceDumpBlock::parse_single_group_entry_(LibPalfLogGroupEntry &group_entry,
+                                                          bool &has_encount_error,
+                                                          const char *block_name,
+                                                          const palf::LSN &lsn)
+{
+  int ret = OB_SUCCESS;
+  const LibPalfLogEntryIteratorFFI *log_iter = NULL;
+  const LibPalfIteratorMemoryStorageFFI *memory_storage = NULL;
+  share::SCN log_upper_bound_scn = SCN::max_scn();
+  uint64_t next_min_scn_val = 0;
+  bool iterate_end_by_upper_bound = false;
+  size_t group_entry_body_size = 0;
+
+  if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_seek_mem_log_iterator(lsn.val_ + sizeof(LibPalfLogGroupEntryHeader),
+      &log_iter, &memory_storage)))) {
+    LOG_WARN("MemoryLogIteratorStorage seek failed", K(ret));
+  } else if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_group_log_entry_get_body_size(&group_entry.header, lsn.val_, &group_entry_body_size)))) {
+    LOG_WARN("get group_entry_body_size failed", K(ret));
+  } else if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_set_memory_storage_buffer(memory_storage,
+      lsn.val_ + sizeof(LibPalfLogGroupEntryHeader), group_entry.body, group_entry_body_size)))) {
+    LOG_WARN("MemoryLogIteratorStorage seek failed", K(ret), K(group_entry_body_size), KP(group_entry.body));
+  } else if (OB_FAIL(extract_log_entries_from_group_entry_(log_iter, log_upper_bound_scn, next_min_scn_val, iterate_end_by_upper_bound, has_encount_error, block_name, lsn))) {
+    LOG_WARN("parse_single_group_entry_ failed", K(ret), K(log_upper_bound_scn), K(next_min_scn_val), K(iterate_end_by_upper_bound), K(has_encount_error));
+  } else if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_free_log_iterator(log_iter, memory_storage)))) {
+    LOG_WARN("libpalf_free_log_iterator failed", K(ret));
+  } else {
+    LOG_INFO("parse_single_group_entry_ success", K(ret), K(log_upper_bound_scn), K(next_min_scn_val), K(iterate_end_by_upper_bound), K(has_encount_error));
+  }
+  if (OB_ITER_END == ret) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int ObAdminLogServiceDumpBlock::extract_log_entries_from_group_entry_(const LibPalfLogEntryIteratorFFI *log_iter,
+                                                                      share::SCN &log_upper_bound_scn,
+                                                                      uint64_t next_min_scn_val,
+                                                                      bool iterate_end_by_upper_bound,
+                                                                      bool &has_encount_error,
+                                                                      const char *block_name,
+                                                                      const palf::LSN &lsn)
+{
+  int ret = OB_SUCCESS;
+  while (OB_SUCC(LIBPALF_ERRNO_CAST(libpalf_log_iterator_next(log_iter,
+    log_upper_bound_scn.get_val_for_logservice(), &next_min_scn_val, &iterate_end_by_upper_bound)))) {
+    LSN log_lsn(0);
+    LibPalfLogEntry log_entry = LibPalfLogEntry(LibPalfLogEntryHeader(0/*magic*/,
+        0/*version*/, 0/*data_size*/, 0/*scn*/, 0/*data_crc*/, 0/*flag*/), NULL/*data_buf*/);
+    if (OB_FAIL(LIBPALF_ERRNO_CAST(libpalf_log_iterator_get_entry(log_iter, &log_lsn.val_, &log_entry)))) {
+      LOG_ERROR("LibPalfLogEntryIterator get_log_entry failed", K(ret), K(log_lsn), K(log_iter));
+      has_encount_error = true;
+    } else {
+      str_arg_.log_stat_->total_log_entry_count_++;
+      str_arg_.log_stat_->log_entry_header_size_ += sizeof(LibPalfLogEntryHeader);
+      if (str_arg_.flag_ == LogFormatFlag::NO_FORMAT && str_arg_.flag_ != LogFormatFlag::STAT_FORMAT ) {
+        logservice::ObLogBaseHeader header;
+        int64_t pos = 0;
+        if (OB_FAIL(header.deserialize(reinterpret_cast<const char*>(log_entry.data_buf), log_entry.header.data_size, pos))) {
+          LOG_WARN("deserialize BaseHeader failed", KP(log_entry.data_buf), K(log_entry.header.data_size), K(pos));
+        } else {
+          ObCStringHelper helper;
+          LibPalfLogEntryToString log_entry_to_string(log_entry.header);
+          fprintf(stdout, "LSN:%s, LOG_ENTRY:%s BaseHeader:%s",
+                  helper.convert(log_lsn), helper.convert(log_entry_to_string), helper.convert(header));
+        }
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = parse_single_log_entry_(log_entry, block_name, log_lsn))) {
+        if (OB_ITER_END != tmp_ret) {
+          LOG_ERROR("parse_single_log_entry_ failed", K(tmp_ret));
+          has_encount_error = true;
+        }
+      }
+    }
+  }
+  if (OB_ITER_END == ret) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int ObAdminLogServiceDumpBlock::parse_single_log_entry_(const LibPalfLogEntry &entry,
+                                                        const char *block_name,
+                                                        const palf::LSN &lsn)
+{
+  int ret = OB_SUCCESS;
+  ObAdminParserLogEntry parser_le(&entry, block_name, lsn, str_arg_);
+  if (OB_FAIL(parser_le.parse())) {
+    LOG_WARN("ObAdminParserLogEntry failed", K(ret), K(block_name), K(lsn));
+  } else {
+    LOG_TRACE("parse_single_log_entry_ success", K(str_arg_));
+  }
+  return ret;
+}
+
+LibPalfLogGroupEntryToString::LibPalfLogGroupEntryToString(libpalf::LibPalfLogGroupEntryHeader &header)
+  : header(header)
+{}
+
+LibPalfLogEntryToString::LibPalfLogEntryToString(libpalf::LibPalfLogEntryHeader &header)
+   : header(header)
+{}
+#endif
 }
 }

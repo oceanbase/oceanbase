@@ -178,7 +178,7 @@ int ObSqlTransControl::explicit_start_trans(ObSQLSessionInfo *session,
     txs->release_tx(*session->get_tx_desc());
     session->get_tx_desc() = NULL;
   }
-  OX (session->get_raw_audit_record().trans_id_ = session->get_tx_id());
+  OX (set_audit_tx_id_(session));
   OX (session->get_raw_audit_record().seq_num_ = ObSequence::get_max_seq_no());
   NG_TRACE_EXT(start_trans, OB_ID(ret), ret,
                OB_ID(trans_id), tx_id.get_id(),
@@ -284,7 +284,7 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
     }
   } else {
     // add tx id to AuditRecord
-    session->get_raw_audit_record().trans_id_ = session->get_tx_id();
+    set_audit_tx_id_(session);
     int64_t expire_ts = get_stmt_expire_ts(NULL, *session);
     if (OB_FAIL(do_end_trans_(session,
                               is_rollback,
@@ -624,6 +624,10 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   OZ (acquire_tx_if_need_(txs, *session));
   OZ (stmt_sanity_check_(session, plan, plan_ctx));
   bool start_hook = false;
+  bool is_for_sslog = false;
+  if (is_tenant_has_sslog(MTL_ID())) {
+    is_for_sslog = is_accessing_sslog(plan);
+  }
   if (!ObSQLUtils::is_nested_sql(&exec_ctx)) {
     OZ (txs->sql_stmt_start_hook(session->get_xid(), *session->get_tx_desc(), session->get_server_sid(), get_real_session_id(*session)));
     if (OB_SUCC(ret)) {
@@ -641,12 +645,14 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   OX (is_plain_select = plan->is_plain_select());
   OX (tx_desc->clear_interrupt());
   if (OB_SUCC(ret) && !is_plain_select) {
-    OZ (stmt_setup_savepoint_(session, das_ctx, plan_ctx, txs, nested_level), session_id, *tx_desc);
+    OZ (stmt_setup_savepoint_(session, das_ctx, plan_ctx, txs, nested_level, is_for_sslog), session_id, *tx_desc);
   }
 
-  OZ (stmt_setup_snapshot_(session, das_ctx, plan, plan_ctx, txs, exec_ctx), session_id, *tx_desc);
-  // add tx id to AuditRecord
-  OX (session->get_raw_audit_record().trans_id_ = session->get_tx_id());
+  if (is_for_sslog) {
+    OZ (stmt_setup_snapshot_for_sslog_(session, das_ctx, plan, plan_ctx, txs, exec_ctx), session_id, *tx_desc);
+  } else {
+    OZ (stmt_setup_snapshot_(session, das_ctx, plan, plan_ctx, txs, exec_ctx), session_id, *tx_desc);
+  }
 
   // add snapshot info to AuditRecord
   if (OB_SUCC(ret)) {
@@ -937,7 +943,8 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
       ret = txs->get_read_snapshot(tx_desc,
                                    session->get_tx_isolation(),
                                    stmt_expire_ts,
-                                   snapshot);
+                                   snapshot,
+                                   false);
     }
     if (OB_FAIL(ret)) {
       LOG_WARN("fail to get snapshot", K(ret), K(local_single_ls_plan), K(first_ls_id), KPC(session));
@@ -993,7 +1000,8 @@ int ObSqlTransControl::set_fk_check_snapshot(ObExecContext &exec_ctx)
         ret = txs->get_read_snapshot(tx_desc,
                                       session->get_tx_isolation(),
                                       stmt_expire_ts,
-                                      snapshot);
+                                      snapshot,
+                                      false);
       }
       if (OB_FAIL(ret)) {
         LOG_WARN("fail to get snapshot", K(ret), K(local_ls_id), KPC(session));
@@ -1053,7 +1061,7 @@ int ObSqlTransControl::get_read_snapshot(ObSQLSessionInfo *session,
   transaction::ObTxDesc &tx_desc = *session->get_tx_desc();
   if (OB_FAIL(get_tx_service(session, txs))) {
     LOG_WARN("failed to get transaction service", K(ret));
-  } else if (OB_FAIL(txs->get_read_snapshot(tx_desc, isolation, expire_ts, snapshot))) {
+  } else if (OB_FAIL(txs->get_read_snapshot(tx_desc, isolation, expire_ts, snapshot, false))) {
     LOG_WARN("failed to set snapshot", K(ret));
   } else if (!snapshot.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
@@ -1088,13 +1096,15 @@ int ObSqlTransControl::stmt_setup_savepoint_(ObSQLSessionInfo *session,
                                              ObDASCtx &das_ctx,
                                              ObPhysicalPlanCtx *plan_ctx,
                                              ObTransService* txs,
-                                             const int64_t nested_level)
+                                             const int64_t nested_level,
+                                             const bool is_for_sslog)
 {
   int ret = OB_SUCCESS;
   ObTxParam &tx_param = plan_ctx->get_trans_param();
   OZ (build_tx_param_(session, tx_param));
   ObTxDesc &tx = *session->get_tx_desc();
   ObTxSEQ savepoint;
+  tx_param.is_for_sslog_ = is_for_sslog;
   OZ (txs->create_implicit_savepoint(tx, tx_param, savepoint, nested_level == 0), tx, tx_param);
   OX (das_ctx.set_savepoint(savepoint));
   return ret;
@@ -1507,6 +1517,9 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback, co
   if (OB_SUCC(ret) && !ObSQLUtils::is_nested_sql(&exec_ctx)) {
     session->reset_reserved_snapshot_version();
   }
+
+  // add tx id to AuditRecord
+  set_audit_tx_id_(session);
 
   bool print_log = false;
 #ifndef NDEBUG
@@ -1972,6 +1985,83 @@ ObSqlTransControl::decide_stmt_rollback_tx_clean_policy_(const int error_code, c
     break;
   }
   return policy;
+}
+
+bool ObSqlTransControl::is_accessing_sslog(const ObPhysicalPlan *plan)
+{
+  bool ret_bool = false;
+#ifdef OB_BUILD_SHARED_STORAGE
+  if (is_tenant_has_sslog(MTL_ID())) {
+    if (NULL != plan) {
+      const ObIArray<ObSchemaObjVersion> *dep_tables = &(plan->get_dependency_table());
+      for (int i = 0; NULL != dep_tables && i < dep_tables->count(); ++i) {
+        const ObSchemaObjVersion &schema_obj = dep_tables->at(i);
+        if (OB_ALL_SSLOG_TABLE_TID == schema_obj.get_object_id()) {
+          ret_bool = true;
+          break;
+        }
+      }
+    }
+  }
+#endif
+  return ret_bool;
+}
+
+int ObSqlTransControl::stmt_setup_snapshot_for_sslog_(ObSQLSessionInfo *session,
+                                                      ObDASCtx &das_ctx,
+                                                      const ObPhysicalPlan *plan,
+                                                      const ObPhysicalPlanCtx *plan_ctx,
+                                                      ObTransService *txs,
+                                                      ObExecContext &exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObConsistencyLevel cl = plan_ctx->get_consistency_level();
+  ObTxReadSnapshot &snapshot = das_ctx.get_snapshot();
+  if (cl == ObConsistencyLevel::WEAK || cl == ObConsistencyLevel::FROZEN) {
+    // for sslog, if weak consistency, snapshot is specified
+  } else {
+    ObTxDesc &tx_desc = *session->get_tx_desc();
+    int64_t stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
+    share::ObLSID first_ls_id = SSLOG_LS;
+    bool local_single_ls_plan = false;
+    const bool local_single_ls_plan_maybe = plan->is_local_plan() &&
+                                            OB_PHY_PLAN_LOCAL == plan->get_location_type();
+    if (local_single_ls_plan_maybe) {
+      if (OB_FAIL(txs->get_ls_read_snapshot(tx_desc,
+                                            session->get_tx_isolation(),
+                                            first_ls_id,
+                                            stmt_expire_ts,
+                                            snapshot))) {
+      } else if (snapshot.snapshot_ls_role_ != ObRole::FOLLOWER) {
+        // performance for single tablet scenario
+        local_single_ls_plan = true;
+      } else {
+        local_single_ls_plan = has_same_lsid(das_ctx, snapshot, first_ls_id);
+      }
+    }
+    if (OB_SUCC(ret) && !local_single_ls_plan) {
+      const bool is_for_sslog = true;
+      ret = txs->get_read_snapshot(tx_desc,
+                                   session->get_tx_isolation(),
+                                   stmt_expire_ts,
+                                   snapshot,
+                                   is_for_sslog);
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("fail to get snapshot for sslog", K(ret), K(local_single_ls_plan),
+          K(first_ls_id), KPC(session));
+    }
+  }
+  return ret;
+}
+
+int ObSqlTransControl::set_audit_tx_id_(ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  if (session->is_in_transaction()) {
+    session->get_raw_audit_record().trans_id_ = session->get_tx_id();
+  }
+  return ret;
 }
 
 }/* ns sql*/

@@ -199,7 +199,8 @@ public:
            const int64_t mem_limit,
            const bool enable_dump,
            const bool reuse_vector_array,
-           const common::ObCompressorType compressor_type);
+           const common::ObCompressorType compressor_type,
+           const int64_t tempstore_read_alignment_size = 0);
   // for vector interface
   int init(const IVectorPtrs &vectors,
            const int64_t max_batch_size,

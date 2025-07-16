@@ -73,9 +73,14 @@ TEST_F(TestBlockIdList, test_id_list)
   ObBlockManager::BlockInfo block_info;
   bool inc_success = false;
 
+  ObLinkedMacroInfoWriteParam write_param;
+  write_param.type_ = ObLinkedMacroBlockWriteType::PRIV_MACRO_INFO;
+  write_param.tablet_id_ = ObTabletID(1001);
+  write_param.tablet_transfer_seq_ = 1;
+  write_param.start_macro_seq_ = 1;
   // empty set
   ASSERT_EQ(OB_SUCCESS, info_set.init());
-  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(1001, 1, 0, 1));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(write_param));
   ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, &linked_writer));
   ASSERT_EQ(0, macro_info.meta_block_info_arr_.cnt_);
   ASSERT_EQ(0, macro_info.data_block_info_arr_.cnt_);
@@ -123,8 +128,13 @@ TEST_F(TestBlockIdList, test_serialize_deep_copy)
   linked_writer.reset();
   ObBlockInfoSet info_set;
   ObTabletMacroInfo macro_info;
+  ObLinkedMacroInfoWriteParam write_param;
+  write_param.type_ = ObLinkedMacroBlockWriteType::PRIV_MACRO_INFO;
+  write_param.tablet_id_ = ObTabletID(1001);
+  write_param.tablet_transfer_seq_ = 1;
+  write_param.start_macro_seq_ = 1;
   ASSERT_EQ(OB_SUCCESS, info_set.init());
-  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(1001, 1, 0, 1));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(write_param));
   for (int64_t i = 0; i < ObTabletMacroInfo::ID_COUNT_THRESHOLD; i++) {
     MacroBlockId tmp_macro_id(i + 1, i + 1, 0);
     ASSERT_EQ(OB_SUCCESS, info_set.data_block_info_set_.set_refactored(tmp_macro_id));
@@ -223,7 +233,8 @@ TEST_F(TestBlockIdList, test_meta_macro_ref_cnt)
   blocksstable::ObStorageObjectOpt default_opt;
 
   // persist 4k tablet
-  const ObTabletPersisterParam param(ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  const ObTabletPersisterParam param(data_version, ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
   ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
   ASSERT_EQ(OB_SUCCESS, meta_service->get_shared_object_reader_writer().switch_object(object_handle, default_opt));
   ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle));
@@ -259,12 +270,17 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObLinkedMacroBlockItemWriter linked_writer;
   ObArenaAllocator allocator;
   ObTabletBlockInfo block_info;
+  ObLinkedMacroInfoWriteParam write_param;
+  write_param.type_ = ObLinkedMacroBlockWriteType::PRIV_MACRO_INFO;
+  write_param.tablet_id_ = ObTabletID(1001);
+  write_param.tablet_transfer_seq_ = 1;
+  write_param.start_macro_seq_ = 1;
 
   // linked macro info
   ObBlockInfoSet info_set;
   ObTabletMacroInfo macro_info;
   ASSERT_EQ(OB_SUCCESS, info_set.init());
-  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(1001, 1, 0, 1));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(write_param));
   ASSERT_EQ(OB_SUCCESS, init_info_set(allocator, TEST_LINKED_NUM, info_set));
   ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, &linked_writer));
   ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, macro_info));
@@ -298,7 +314,7 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObBlockInfoSet info_set_2;
   ObTabletMacroInfo macro_info_2;
   ASSERT_EQ(OB_SUCCESS, info_set_2.init());
-  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(1001, 1, 0, 1));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(write_param));
   ASSERT_EQ(OB_SUCCESS, init_info_set(allocator, 15, info_set_2));
   ASSERT_EQ(OB_SUCCESS, macro_info_2.init(allocator, info_set_2, &linked_writer));
   macro_iter.destroy();
@@ -325,7 +341,7 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObBlockInfoSet info_set_3;
   ObTabletMacroInfo macro_info_3;
   ASSERT_EQ(OB_SUCCESS, info_set_3.init());
-  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(1001, 1, 0, 1));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(write_param));
   ASSERT_EQ(OB_SUCCESS, macro_info_3.init(allocator, info_set_3, &linked_writer));
   macro_iter.destroy();
   ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, macro_info_3));
@@ -336,7 +352,7 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObBlockInfoSet info_set_4;
   ObTabletMacroInfo macro_info_4;
   ASSERT_EQ(OB_SUCCESS, info_set_4.init());
-  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(1001, 1, 0, 1));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(write_param));
   for (int64_t i = 0; i < ObTabletMacroInfo::ID_COUNT_THRESHOLD; i++) {
     MacroBlockId tmp_macro_id(i + 1, i + 1, 0);
     ASSERT_EQ(OB_SUCCESS, info_set_4.data_block_info_set_.set_refactored(tmp_macro_id));
@@ -364,7 +380,7 @@ TEST_F(TestBlockIdList, test_info_iterator)
   ObTabletMacroInfo macro_info_5;
   static const int64_t memory_id_cnt = 100;
   ASSERT_EQ(OB_SUCCESS, info_set_5.init());
-  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(1001, 1, 0, 1));
+  ASSERT_EQ(OB_SUCCESS, linked_writer.init_for_macro_info(write_param));
   for (int64_t i = 0; i < memory_id_cnt; i++) {
     MacroBlockId tmp_macro_id(i + 1, i + 1, 0);
     ASSERT_EQ(OB_SUCCESS, info_set_5.data_block_info_set_.set_refactored(tmp_macro_id));
@@ -393,11 +409,12 @@ TEST_F(TestBlockIdList, test_empty_shell_macro_ref_cnt)
   ObLSService *ls_svr = MTL(ObLSService*);
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
   ObLSTabletService *ls_tablet_svr = ls_handle.get_ls()->get_tablet_svr();
+  const uint64_t data_version = DATA_CURRENT_VERSION;
 
   // create and get empty shell
   ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_, ObTabletStatus::Status::DELETED);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = ls_tablet_svr->update_tablet_to_empty_shell(tablet_id);
+  ret = ls_tablet_svr->update_tablet_to_empty_shell(data_version, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTabletMapKey key(ls_id, tablet_id);
   ObTabletHandle tablet_handle;
@@ -416,7 +433,7 @@ TEST_F(TestBlockIdList, test_empty_shell_macro_ref_cnt)
   ObBlockManager::BlockInfo block_info;
   int64_t ref_cnt = 0;
   ObTabletHandle new_tablet_handle;
-  const ObTabletPersisterParam param(ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
+  const ObTabletPersisterParam param(data_version, ls_id,  ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
   ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle));
   ObTablet *new_tablet = new_tablet_handle.get_obj();
   ASSERT_EQ(OB_SUCCESS, new_tablet->tablet_addr_.get_block_addr(macro_id, offset, size));

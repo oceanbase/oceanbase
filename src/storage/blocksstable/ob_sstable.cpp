@@ -1003,7 +1003,7 @@ int ObSSTable::check_valid_for_reading()
   return ret;
 }
 
-int ObSSTable::serialize_full_table(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObSSTable::serialize_full_table(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   ObSSTableMetaHandle meta_handle;
@@ -1019,20 +1019,23 @@ int ObSSTable::serialize_full_table(char *buf, const int64_t buf_len, int64_t &p
       && SSTABLE_WRITE_BUILDING != meta_handle.get_sstable_meta().get_status())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("non-ready sstable for read can't be serialized.", K(ret), K_(valid_for_reading), K(meta_handle));
+  } else if (OB_UNLIKELY(is_co_sstable() && typeid(*this) != typeid(ObCOSSTableV2))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("co sstable serialization should use ObCOSSTableV2 class", K(ret), KPC(this));
   } else if (FALSE_IT(status.set_with_meta())) {
   } else if (OB_FAIL(ObITable::serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize table key", K(ret), K(buf_len), K(pos));
   } else {
     OB_UNIS_ENCODE(status.pack_);
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(meta_handle.get_sstable_meta().serialize(buf, buf_len, pos))) {
+    } else if (OB_FAIL(meta_handle.get_sstable_meta().serialize(data_version, buf, buf_len, pos))) {
       LOG_WARN("fail to serialize sstable meta", K(ret), K(buf_len), K(pos));
     }
   }
   return ret;
 }
 
-int64_t ObSSTable::get_full_serialize_size() const
+int64_t ObSSTable::get_full_serialize_size(const uint64_t data_version) const
 {
   int64_t len = 0;
   int ret = OB_SUCCESS;
@@ -1043,7 +1046,7 @@ int64_t ObSSTable::get_full_serialize_size() const
   if (OB_FAIL(get_meta(meta_handle))) {
     LOG_WARN("fail to get sstable meta", K(ret));
   } else {
-    sstable_meta_serialize_size = meta_handle.get_sstable_meta().get_serialize_size();
+    sstable_meta_serialize_size = meta_handle.get_sstable_meta().get_serialize_size(data_version);
   }
 
   if (OB_SUCC(ret)) {
@@ -1057,7 +1060,7 @@ int64_t ObSSTable::get_full_serialize_size() const
 }
 
 
-int ObSSTable::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObSSTable::serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   ObSSTableMetaHandle meta_handle;
@@ -1075,6 +1078,9 @@ int ObSSTable::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
   } else if (OB_UNLIKELY(!addr_.is_valid() || (!addr_.is_memory() && !addr_.is_block()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable's addr_ is invalid", K(ret), K(addr_));
+  } else if (OB_UNLIKELY(is_co_sstable() && typeid(*this) != typeid(ObCOSSTableV2))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("co sstable serialization should use ObCOSSTableV2 class", K(ret), KPC(this));
   } else if (OB_FAIL(ObITable::serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize table key", K(ret), K(buf_len), K(pos));
   } else {
@@ -1088,7 +1094,7 @@ int ObSSTable::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
     if (OB_FAIL(ret)) {
     } else if (status.with_fixed_struct() && OB_FAIL(serialize_fixed_struct(buf, buf_len, pos))) {
       LOG_WARN("fail to serialize fix sstable struct", K(ret), K(buf_len), K(pos));
-    } else if (status.with_meta() && OB_FAIL(meta_->serialize(buf, buf_len, pos))) {
+    } else if (status.with_meta() && OB_FAIL(meta_->serialize(data_version, buf, buf_len, pos))) {
       LOG_WARN("fail to serialize sstable meta", K(ret), K(buf_len), K(pos));
     } else if (!lib::is_log_reduction()) {
       LOG_INFO("succeed to serialize sstable", K(status.pack_), KPC(this), K(lbt()));
@@ -1162,7 +1168,7 @@ int ObSSTable::deserialize(common::ObArenaAllocator &allocator,
   return ret;
 }
 
-int64_t ObSSTable::get_serialize_size() const
+int64_t ObSSTable::get_serialize_size(const uint64_t data_version) const
 {
   int ret = OB_SUCCESS;
   int64_t len = 0; // invalid
@@ -1178,7 +1184,7 @@ int64_t ObSSTable::get_serialize_size() const
     fixed_struct_serialize_size = get_sstable_fix_serialize_size();
   } else {
     status.set_with_meta();
-    sstable_meta_serialize_size = meta_->get_serialize_size();
+    sstable_meta_serialize_size = meta_->get_serialize_size(data_version);
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_ADD_LEN(status.pack_);
@@ -1330,7 +1336,13 @@ void ObSSTable::dec_macro_ref() const
     ret = get_meta(meta_handle, &safe_allocator);
   } while (ignore_ret(ret));
   if (OB_FAIL(ret)) {
-    LOG_ERROR("fail to get sstable meta", K(ret));
+    if (OB_STATE_NOT_MATCH == ret) {
+      // When the observer exits, the io manager will stop sending io requests and return a -4109 error.
+      // If the error level is printed, it will affect the graceful exit case in vostest.
+      LOG_WARN("fail to get sstable meta", K(ret));
+    } else {
+      LOG_ERROR("fail to get sstable meta", K(ret));
+    }
   } else if (OB_UNLIKELY(!meta_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("meta handle is invalid", K(ret), K(meta_handle));
@@ -1755,15 +1767,11 @@ int ObSSTable::get_cs_range(
 
 int ObSSTable::persist_linked_block_if_need(
     ObArenaAllocator &allocator,
-    const ObTabletID &tablet_id,
-    const int64_t tablet_transfer_seq,
-    const int64_t snapshot_version,
-    blocksstable::ObIMacroBlockFlushCallback *ddl_redo_cb,
+    const ObLinkedMacroInfoWriteParam &param,
     int64_t &macro_start_seq,
     ObSharedObjectsWriteCtx &linked_block_write_ctx)
 {
   int ret = OB_SUCCESS;
-  ObSSTableLinkBlockWriteInfo link_write_info(macro_start_seq);
 #ifdef ERRSIM
   const int64_t block_cnt_config_value = GCONF.errsim_storage_meta_macro_ids_threshold;
   const int64_t block_cnt_threshold = 0 == block_cnt_config_value ? ObSSTableMacroInfo::BLOCK_CNT_THRESHOLD
@@ -1781,17 +1789,8 @@ int ObSSTable::persist_linked_block_if_need(
   } else if (meta_->macro_info_.get_data_block_count() + meta_->macro_info_.get_other_block_count()
               < block_cnt_threshold) {
     // need not persist linked_block
-  } else if (OB_FAIL(link_write_info.init(ddl_redo_cb))) {
-    LOG_WARN("fail to init link_write_info", K(ret), KP(ddl_redo_cb));
-  } else if (OB_FAIL(meta_->macro_info_.persist_block_ids(tablet_id,
-                                                          tablet_transfer_seq,
-                                                          snapshot_version,
-                                                          allocator,
-                                                          &link_write_info,
-                                                          linked_block_write_ctx))) {
-    LOG_WARN("fail to persist linked_block", K(ret), K(meta_->macro_info_), K(tablet_id), K(snapshot_version), K(link_write_info));
-  } else {
-    macro_start_seq += link_write_info.get_written_macro_cnt();
+  } else if (OB_FAIL(meta_->macro_info_.persist_block_ids(allocator, param, macro_start_seq, linked_block_write_ctx))) {
+    LOG_WARN("fail to persist linked_block", K(ret), K(meta_->macro_info_), K(param));
   }
   return ret;
 }

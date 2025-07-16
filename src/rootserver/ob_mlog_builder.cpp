@@ -176,11 +176,15 @@ int ObMLogBuilder::MLogColumnUtils::add_old_new_column()
 
 int ObMLogBuilder::MLogColumnUtils::add_base_table_pk_columns(
     ObRowDesc &row_desc,
+    share::schema::ObSchemaGetterGuard &schema_guard,
     const ObTableSchema &base_table_schema)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObColDesc> column_ids;
-  if (OB_FAIL(base_table_schema.get_rowkey_column_ids(column_ids))) {
+  ObArray<uint64_t> column_ids;
+  if (OB_FAIL(base_table_schema.get_logic_pk_column_ids(&schema_guard, column_ids))) {
+    LOG_WARN("failed to get rowkey column ids", KR(ret));
+  } else if (base_table_schema.is_table_with_hidden_pk_column() &&
+             OB_FAIL(column_ids.push_back(OB_HIDDEN_PK_INCREMENT_COLUMN_ID))) {
     LOG_WARN("failed to get rowkey column ids", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && (i < column_ids.count()); ++i) {
@@ -189,7 +193,7 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_pk_columns(
       if (OB_FAIL(alloc_column(ref_column))) {
         LOG_WARN("failed to alloc column", KR(ret));
       } else if (OB_ISNULL(rowkey_column =
-          base_table_schema.get_column_schema(column_ids.at(i).col_id_))) {
+          base_table_schema.get_column_schema(column_ids.at(i)))) {
         ret = OB_ERR_COLUMN_NOT_FOUND;
         LOG_WARN("column not exist", KR(ret));
       } else if (OB_FAIL(row_desc.add_column_desc(rowkey_column->get_table_id(),
@@ -208,14 +212,14 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_pk_columns(
         ref_column->set_next_column_id(UINT64_MAX);
         ref_column->set_column_id(ObTableSchema::gen_mlog_col_id_from_ref_col_id(
                                                 rowkey_column->get_column_id()));
-        if (base_table_schema.is_table_without_pk()
+        if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == rowkey_column->get_column_id()
             && OB_FAIL(ref_column->set_column_name(OB_MLOG_ROWID_COLUMN_NAME))) {
           LOG_WARN("failed to set column name", KR(ret));
         } else if (OB_FAIL(mlog_table_column_array_.push_back(ref_column))) {
           LOG_WARN("failed to push back column to mlog table column array",
               KR(ret), KP(ref_column));
         } else {
-          ++rowkey_count_;
+          ref_column->set_rowkey_position(++rowkey_count_);
         }
       }
     }
@@ -747,7 +751,7 @@ int ObMLogBuilder::set_table_columns(
       // the base table pk + the base table part key + the mlog sequence no
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(mlog_column_utils_.add_base_table_pk_columns(
-          row_desc, base_table_schema))) {
+          row_desc, schema_guard, base_table_schema))) {
         LOG_WARN("failed to add base table pk columns", KR(ret));
       } else if (OB_FAIL(mlog_column_utils_.add_base_table_columns(
           create_mlog_arg, row_desc, base_table_schema))) {

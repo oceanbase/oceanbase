@@ -33,6 +33,7 @@ public:
   {
     UNIT_STATUS_ACTIVE = 0,
     UNIT_STATUS_DELETING,
+    UNIT_STATUS_ADDING,   // only as placeholder
     UNIT_STATUS_MAX,
   };
 public:

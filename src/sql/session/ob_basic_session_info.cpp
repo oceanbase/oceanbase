@@ -790,9 +790,9 @@ int ObBasicSessionInfo::set_real_client_ip_and_port(const common::ObString &clie
                                                   client_ip.ptr());
   ObString tmp_string(tmp_buf);
   LockGuard lock_guard(thread_data_mutex_);
-  if (OB_FAIL(sess_level_name_pool_.write_string(client_ip, &thread_data_.client_ip_))) {
+  if (OB_FAIL(sess_level_name_pool_.write_string_reuse_buf(client_ip, &thread_data_.client_ip_))) {
     LOG_WARN("fail to write client_ip to string_buf_", K(client_ip), K(ret));
-  } else if (OB_FAIL(sess_level_name_pool_.write_string(tmp_string,
+  } else if (OB_FAIL(sess_level_name_pool_.write_string_reuse_buf(tmp_string,
                           &thread_data_.user_at_client_ip_))) {
     LOG_WARN("fail to write user_at_host_name to string_buf_", K(tmp_string), K(ret));
   } else {
@@ -922,6 +922,17 @@ int ObBasicSessionInfo::set_default_catalog_db(uint64_t catalog_id,
   }
   return ret;
 }
+int ObBasicSessionInfo::set_diagnosis_log_file(const ObString &diagnosis_log_file)
+{
+  int ret = OB_SUCCESS;
+  if (diagnosis_log_file.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("diagnosis log file is empty", K(diagnosis_log_file), K(ret));
+  } else if (OB_FAIL(sess_level_name_pool_.write_string(diagnosis_log_file, &diagnosis_info_.log_file_))) {
+    LOG_WARN("failed to write diagnosis_log_file to string_buf_", K(ret));
+  }
+  return ret;
+}
 
 int ObBasicSessionInfo::set_internal_catalog_db(share::ObSwitchCatalogHelper* switch_catalog_helper)
 {
@@ -942,6 +953,17 @@ bool ObBasicSessionInfo::is_in_external_catalog()
   return get_current_default_catalog() != OB_INTERNAL_CATALOG_ID;
 }
 
+int ObBasicSessionInfo::set_diagnosis_bad_file(const ObString &diagnosis_bad_file)
+{
+  int ret = OB_SUCCESS;
+  if (diagnosis_bad_file.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("diagnosis bad file is empty", K(diagnosis_bad_file), K(ret));
+  } else if (OB_FAIL(sess_level_name_pool_.write_string(diagnosis_bad_file, &diagnosis_info_.bad_file_))) {
+    LOG_WARN("failed to write diagnosis_bad_file to string_buf_", K(ret));
+  } else {}
+  return ret;
+}
 int ObBasicSessionInfo::set_default_database(const ObString &database_name,
                                              const ObCollationType coll_type/*= CS_TYPE_INVALID */)
 {
@@ -7047,12 +7069,13 @@ void ObExecEnv::reset()
 
 bool ObExecEnv::operator==(const ObExecEnv &other) const
 {
-  return sql_mode_ == other.sql_mode_
-      && charset_client_ == other.charset_client_
-      && collation_connection_ == other.collation_connection_
-      && collation_database_ == other.collation_database_
-      && plsql_ccflags_ == other.plsql_ccflags_
-      && plsql_optimize_level_ == other.plsql_optimize_level_;
+  bool is_mysql_mode = lib::is_mysql_mode();
+  return (is_mysql_mode ? (sql_mode_ == other.sql_mode_) : true)
+      && (charset_client_ == other.charset_client_)
+      && (collation_connection_ == other.collation_connection_)
+      && (collation_database_ == other.collation_database_)
+      && (is_mysql_mode ? true : (plsql_ccflags_ == other.plsql_ccflags_))
+      && (plsql_optimize_level_ == other.plsql_optimize_level_);
 }
 
 bool ObExecEnv::operator!=(const ObExecEnv &other) const

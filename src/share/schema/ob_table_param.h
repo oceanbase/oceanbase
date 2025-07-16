@@ -361,7 +361,8 @@ public:
   static int deserialize_columns(const char *buf, const int64_t data_len,
                                  int64_t &pos, Columns &columns, common::ObIAllocator &allocator);
   static int alloc_column(common::ObIAllocator &allocator, ObColumnParam *& col_ptr);
-  int check_is_safe_filter_with_di(sql::ObPushdownFilterNode &pushdown_filters);
+  int check_is_safe_filter_with_di(common::ObIArray<sql::ObRawExpr *> &exprs,
+                                   sql::ObPushdownFilterNode &pushdown_filters);
 private:
   int construct_columns_and_projector(const ObTableSchema &table_schema,
                                       const common::ObIArray<uint64_t> &output_column_ids,
@@ -438,8 +439,10 @@ private:
   bool is_mlog_table_;
   bool is_enable_semistruct_encoding_;
   bool is_safe_filter_with_di_;
-  common::ObFixedArray<ObAggrParamProperty, common::ObIAllocator> aggregate_param_props_;
   int8_t access_virtual_col_cnt_;
+  common::ObFixedArray<ObAggrParamProperty, common::ObIAllocator> aggregate_param_props_;
+  // whether the whole plan use rich format, table scan may not use new format, but the whole plan uses new format
+  bool plan_enable_rich_format_;
 };
 } //namespace schema
 } //namespace share

@@ -192,7 +192,7 @@ LATCH_DEF(TC_FREE_LIST_LOCK, 165, "tc free list lock", LATCH_FIFO, 2000, 0, true
 LATCH_DEF(DEDUP_QUEUE_LOCK, 166, "dedup queue lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(SLOG_PROCESSING_MUTEX, 167, "slog processing mutex", LATCH_FIFO, INT64_MAX, 0, true)
 LATCH_DEF(TABLET_TABLE_STORE_LOCK, 168, "tablet table store lock", LATCH_FIFO, INT64_MAX, 0, false)
-LATCH_DEF(TMP_FILE_LOCK, 169, "tmp file lock", LATCH_FIFO, INT64_MAX, 0, true)
+LATCH_DEF(TMP_FILE_LOCK, 169, "tmp file lock", LATCH_FIFO, 666, 0, true)
 LATCH_DEF(TMP_FILE_EXTENT_LOCK, 170, "tmp file extent lock", LATCH_FIFO, INT64_MAX, 0, true)
 LATCH_DEF(TMP_FILE_MGR_LOCK, 171, "tmp file manager lock", LATCH_FIFO, INT64_MAX, 0, true)
 LATCH_DEF(TMP_FILE_STORE_LOCK, 172, "tmp file store lock", LATCH_FIFO, INT64_MAX, 0, false)
@@ -389,7 +389,31 @@ LATCH_DEF(STORAGE_CACHE_POLICY_TASK_LOCK, 354, "storage cache policy task lock",
 LATCH_DEF(UNIQUE_CHECKING_CONTEXT_LOCK, 355, "unique checking context lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(TABLET_SPLIT_CONTEXT_LOCK, 356, "tablet split context lock", LATCH_FIFO, 2000, 0, true)
 
-LATCH_DEF(LATCH_END, 357, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OCI_LOAD_LIB_LOCK, 357, "oci load lib lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OCI_ENV_LOCK, 358, "oci env lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(PRIVATE_BLOCK_GC_LOCK, 359, "private block gc lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DBLINK_KEEPER_LOCK, 360, "dblink keeper lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(ISQL_CONNECTION_DBLINK_LOCK, 361, "isql connection dblink lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLE_LOAD_CLIENT_LOCK, 362, "table load client lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLE_LOAD_COORDINATOR_STATUS_LOCK, 363, "table load coordinator status lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLE_LOAD_COORDINATOR_RW_LOCK, 364, "table load read write lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLE_LOAD_STORE_STATUS_LOCK, 365, "table load store status lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLE_LOAD_STORE_RW_LOCK, 366, "table load read write lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLE_LOAD_TRANS_LOCK, 367, "table load trans lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLE_LOAD_RESOURCE_SERVICE_LOCK, 368, "table load resource service lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(JAVA_ENV_LOCK, 369, "java env lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(JAVA_HELPER_LOCK, 370, "java helper lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(MERGE_FROZEN_LOCK, 371, "merge frozen lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TENANT_TABLET_SCHEDUAL_LOCK, 372, "tenant tablet schedual lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLET_EMPTY_SHELL_HANDLER_LOCK, 373, "tablet empty shell handler lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TABLET_GC_WAIT_LOCK, 374, "tablet gc wait lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TEST_LATCH_LOCK, 375, "test latch lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TENANT_MUTIL_ALLOCATOR_LOCK, 376, "tenant mutil allocator lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DEFAULT_RWLOCK, 377, "default latch", LATCH_FIFO, 2000, 0, true)// only use in  ObRWLockWR
+
+LATCH_DEF(EXT_DISK_CACHE_LOCK, 378, "external table disk cache lock", LATCH_FIFO, 2000, 0, true)
+
+LATCH_DEF(LATCH_END, 379, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

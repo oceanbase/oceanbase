@@ -238,7 +238,7 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
 
     //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
     int tmp_ret = OB_SUCCESS;
-    tmp_ret = do_after_process(session, ctx, false); // 不是异步回包
+    tmp_ret = do_after_process(session, false); // 不是异步回包
     UNUSED(tmp_ret);
   }
   return ret;
@@ -714,7 +714,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
               int receive_asr_times = 0;
               while (OB_SUCC(ret) && OB_ISNULL(asr_pkt)) {
                 ++receive_asr_times;
-                usleep(10 * 1000); // Sleep 10 ms at every time trying receive auth-switch-response mysql pkt
+                ob_usleep(10 * 1000); // Sleep 10 ms at every time trying receive auth-switch-response mysql pkt
                 // TO DO:
                 // In most unix system, The max TCP Retransmission Timeout is under 240 seconds,
                 // we need to set a suitable timeout, what should this be?
@@ -1519,17 +1519,11 @@ int ObMPConnect::get_connection_control_stat(const uint64_t tenant_id,
     int64_t current_gmt = ObTimeUtil::current_time();
     if (threshold <= 0 || current_failed_login_num + 1 < threshold) {
       // do nothing
+    } else if (current_failed_login_num + 1 == threshold) {
+      need_lock = true;
     } else {
       delay = MIN(MAX((current_failed_login_num + 1 - threshold) * MSECS_PER_SEC, min_delay), max_delay);
       is_locked = current_gmt <= delay * USECS_PER_MSEC + last_failed_login_timestamp;
-      if (current_failed_login_num + 1 == threshold
-          || (current_failed_login_num + 1 > threshold
-              && current_gmt - last_failed_login_timestamp > USECS_PER_SEC * 10)) {
-        // 1. failed_login_num achieve the threshold exactly
-        // 2. user is unlocked manually need to be locked again, the interval 10s is used to reduce
-        //    concurrent ddl operation
-        need_lock = true;
-      }
     }
   }
   return ret;

@@ -171,7 +171,7 @@ TEST_F(TestStorageFile, test_reader)
   ASSERT_EQ(strlen(test_content), read_size);
   ASSERT_EQ(0, strncmp(test_content, read_buf, read_size));
 
-  ASSERT_EQ(OB_INVALID_ARGUMENT, dev_handle->pread(fd_2, read_size + 1, sizeof(read_buf), read_buf, read_size));
+  ASSERT_EQ(OB_DATA_OUT_OF_RANGE, dev_handle->pread(fd_2, read_size + 1, sizeof(read_buf), read_buf, read_size));
   ASSERT_EQ(OB_INVALID_ARGUMENT, dev_handle->pread(fd_2, -1, sizeof(read_buf), read_buf, read_size));
   ASSERT_EQ(OB_INVALID_ARGUMENT, dev_handle->pread(fd_2, -1, sizeof(read_buf), NULL, read_size));
   ASSERT_EQ(OB_INVALID_ARGUMENT, dev_handle->pread(fd_2, 0, 0, read_buf, read_size));

@@ -86,7 +86,7 @@ TEST(TestCSReplicaMigration, test_group_co_ctx_pretty_print)
   LOG_INFO("print b", K(b));
 
   ObHATabletGroupCOConvertCtx ctx;
-  ObHATabletGroupCtx base_ctx;
+  ObHATabletGroupCtx base_ctx(ObHATabletGroupCtx::TabletGroupCtxType::NORMAL_TYPE);
   ObSEArray<ObLogicTabletID, 8> tablet_id_array;
   ASSERT_EQ(OB_SUCCESS,TestCSReplicaMigration::mock_tablet_id_array(200001, 100, tablet_id_array));
   ASSERT_EQ(OB_SUCCESS, ctx.init(tablet_id_array));

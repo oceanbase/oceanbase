@@ -246,7 +246,8 @@ public:
            uint32_t row_extra_size,
            const common::ObCompressorType compressor_type,
            const bool reorder_fixed_expr = true,
-           const bool enable_trunc = false);
+           const bool enable_trunc = false,
+           int64_t tempstore_read_alignment_size = 0);
 
   int init(const RowMeta &row_meta,
            const int64_t max_batch_size,
@@ -254,7 +255,8 @@ public:
            const int64_t mem_limit,
            bool enable_dump,
            const common::ObCompressorType compressor_type,
-           const bool enable_trunc = false);
+           const bool enable_trunc = false,
+           int64_t tempstore_read_alignment_size = 0);
 
   int init_batch_ctx(const ObExprPtrIArray *exprs = NULL);
 

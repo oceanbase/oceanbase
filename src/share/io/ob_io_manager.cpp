@@ -304,7 +304,7 @@ int ObTrafficControl::calc_clock(const int64_t current_ts, ObIORequest &req, int
   int ret = OB_SUCCESS;
   uint64_t storage_id = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().storage_id_;
   uint8_t mod_id = (uint8_t)((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().storage_used_mod_;
-  ObStorageInfoType table = __storage_table_mapper[mod_id];
+  ObStorageInfoType table = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().get_category();
   ObStorageKey key(storage_id, req.tenant_id_, table);
   if (req.fd_.device_handle_->is_object_device() != true) {
     ret = OB_ERR_UNEXPECTED;
@@ -604,8 +604,7 @@ int ObTrafficControl::register_bucket(ObIORequest &req, const int qid) {
   int ret = OB_SUCCESS;
   if (req.fd_.device_handle_->is_object_device()) {
     uint64_t storage_id = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().storage_id_;
-    uint8_t mod_id = (uint8_t)((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().storage_used_mod_;
-    ObStorageInfoType storage_type = __storage_table_mapper[mod_id];
+    ObStorageInfoType storage_type = ((ObObjectDevice*)(req.fd_.device_handle_))->get_storage_id_mod().get_category();
     ObTrafficControl::ObStorageKey key(storage_id, req.tenant_id_, storage_type);
     ObIOSSGrpKey grp_key(req.tenant_id_, req.get_group_key());
     ObSharedDeviceControlV2 *tc = nullptr;
@@ -956,12 +955,14 @@ void ObIOManager::stop()
   if (OB_NOT_NULL(server_io_manager_)) {
     server_io_manager_->stop();
   }
+  fault_detector_.stop();
   io_scheduler_.stop();
   OB_IO_MANAGER_V2.stop();
 }
 
 void ObIOManager::wait()
 {
+  fault_detector_.wait();
   io_scheduler_.wait();
 }
 
@@ -1728,7 +1729,7 @@ int ObTenantIOManager::calc_io_memory(const uint64_t tenant_id, const int64_t me
     //unlimited，预分配30w个request和result
     request_count_ = 300000;
     result_count_ = 300000;
-    io_memory_limit_ = memory;
+    io_memory_limit_ = memory / 4;
   }
   LOG_INFO("calc tenant io memory success", K(memory), K(io_memory_limit_), K(request_count_), K(request_count_));
   return ret;
@@ -1844,8 +1845,13 @@ int ObTenantIOManager::alloc_req_and_result(const ObIOInfo &info, ObIOHandle &ha
 
   if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(io_request)) {
+      // fd should be closed by caller
+      if (OB_NOT_NULL(io_result)) {
+        io_result->flag_.set_no_need_close_dev_and_fd();
+      }
       //free io_request manually
       io_request->free();
+      io_request = nullptr;
     }
   } else {
     req_holder.hold(io_request);
@@ -1883,6 +1889,10 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
     LOG_WARN("schedule request failed", K(ret), KPC(req));
   }
   if (OB_FAIL(ret)) {
+    // fd should be closed by caller
+    if (OB_NOT_NULL(req) && OB_NOT_NULL(req->io_result_)) {
+      req->io_result_->flag_.set_no_need_close_dev_and_fd();
+    }
     // io callback should be freed by caller
     handle.clear_io_callback();
     handle.reset();
@@ -2824,6 +2834,9 @@ int ObTenantIOManager::print_io_function_status()
                     avg_device_delay,
                     avg_total_delay);
           LOG_INFO("[IO STATUS FUNCTION]", K_(tenant_id), KCSTRING(io_status));
+          if (REACH_TIME_INTERVAL(10 * 1000L * 1000L) && avg_device_delay > 2 * 1000L * 1000L) { // 2s
+            LOG_ERROR_RET(OB_IO_LIMIT, "Disk IO is too slow.", "mode:%s", mode_str, K(tenant_id_), KCSTRING(io_status));
+          }
         }
       }
     }

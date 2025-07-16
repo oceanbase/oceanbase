@@ -35,6 +35,7 @@
 #include "lib/compress/ob_compress_util.h"
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
 #include "storage/ob_micro_block_format_version_helper.h"
+#include "share/semistruct/ob_semistruct_properties.h"
 namespace oceanbase
 {
 
@@ -519,10 +520,6 @@ struct ObSemiStructEncodingType
 {
   OB_UNIS_VERSION(1);
 public:
-  enum Mode {
-    NONE = 0,
-    ENCODING = 1
-  };
 
 public:
   ObSemiStructEncodingType():
@@ -532,7 +529,7 @@ public:
   ~ObSemiStructEncodingType() { reset(); }
 
   void reset() { flags_ = 0;}
-  bool is_enable_semistruct_encoding() const { return ENCODING == mode_; }
+  bool is_enable_semistruct_encoding() const { return ObSemistructProperties::ENCODING == mode_; }
   int64_t get_deep_copy_size() const { return sizeof(ObSemiStructEncodingType); }
 
   union
@@ -686,6 +683,7 @@ public:
   virtual inline int64_t get_progressive_merge_num() const { return INVAID_RET; }
   virtual inline ObMergeEngineType get_merge_engine_type() const { return ObMergeEngineType::OB_MERGE_ENGINE_MAX; }
   virtual inline bool is_delete_insert_merge_engine() const { return false; }
+  virtual inline bool is_insert_only_merge_engine() const { return false; }
   virtual inline ObTableModeFlag get_table_mode_flag() const { return TABLE_MODE_MAX; }
   virtual inline ObTableType get_table_type() const { return MAX_TABLE_TYPE; }
   virtual inline ObTableMode get_table_mode_struct() const = 0;
@@ -769,6 +767,10 @@ public:
   {
     UNUSED(type);
     return common::OB_NOT_SUPPORTED;
+  }
+  virtual const common::ObString& get_semistruct_properties() const
+  {
+    return EMPTY_STRING;
   }
   DECLARE_PURE_VIRTUAL_TO_STRING;
   const static int64_t INVAID_RET = -1;
@@ -895,16 +897,19 @@ public:
   inline bool is_queuing_table() const
   { return is_queuing_table_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_)); }
   // returns true when the primary key in ob contains the hidden column
+  // 返回true: HEAP模式下任意表和index模式的无主键表
   inline bool is_table_with_hidden_pk_column() const
   { return (TOM_HEAP_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.table_organization_mode_ ||
            (TOM_INDEX_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.table_organization_mode_ &&
             TOM_TABLE_WITHOUT_PK == (enum ObTablePrimaryKeyExistsMode)table_mode_.pk_exists_)); }
   // returns true when ob considers the table does not have the user provided primary key and use the
   // hidden pk as ob's primary key
+  // 返回true: 用户没指定主键（IOT模式）或者cluster by列（HEAP模式）
   inline bool is_table_without_pk() const
   { return TOM_TABLE_WITHOUT_PK == (enum ObTablePrimaryKeyExistsMode)table_mode_.pk_exists_; }
   // returns true when ob considers the table has the user provided primary key (order by columns
   // in the heap organized table and primary key columns in the index organized table)
+  // 返回true: 用户明确指定了主键（IOT模式）或者cluster by列（HEAP模式）
   inline bool is_table_with_pk() const
   { return TOM_TABLE_WITH_PK == (enum ObTablePrimaryKeyExistsMode)table_mode_.pk_exists_; }
   // returns true when users define the table organization as heap (by tenant config or table option)
@@ -1489,6 +1494,8 @@ public:
   inline void set_dop(int64_t table_dop) { table_dop_ = table_dop; }
   int set_external_file_location(const common::ObString &location) { return deep_copy_str(location, external_file_location_); }
   int set_external_file_location_access_info(const common::ObString &access_info) { return deep_copy_str(access_info, external_file_location_access_info_); }
+  void set_external_location_id(uint64_t id) { external_location_id_ = id; }
+  int set_external_sub_path(const common::ObString &sub_path) { return deep_copy_str(sub_path, external_sub_path_); }
   int set_external_file_format(const common::ObString &format) { return deep_copy_str(format, external_file_format_); }
   int set_external_file_pattern(const common::ObString &pattern) { return deep_copy_str(pattern, external_file_pattern_); }
   int set_external_properties(const common::ObString &format) { return deep_copy_str(format, external_properties_); }
@@ -1610,6 +1617,7 @@ public:
   inline int64_t get_storage_format_version() const { return storage_format_version_; }
   inline virtual ObMergeEngineType get_merge_engine_type() const override { return merge_engine_type_; }
   inline virtual bool is_delete_insert_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type_; }
+  inline virtual bool is_insert_only_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_INSERT_ONLY == merge_engine_type_; }
   inline const char *get_tablegroup_name_str() const { return extract_str(tablegroup_name_); }
   inline const common::ObString &get_tablegroup_name() const { return tablegroup_name_; }
   inline const char *get_comment() const { return extract_str(comment_); }
@@ -1652,6 +1660,8 @@ public:
   inline uint64_t get_catalog_id() const { return catalog_id_; }
   const ObString &get_external_file_location() const { return external_file_location_; }
   const ObString &get_external_file_location_access_info() const { return external_file_location_access_info_; }
+  uint64_t get_external_location_id() const { return external_location_id_; }
+  const ObString &get_external_sub_path() const { return external_sub_path_; }
   const ObString &get_external_file_format() const { return external_file_format_; }
   const ObString &get_external_file_pattern() const { return external_file_pattern_; }
   const ObString &get_external_properties() const { return external_properties_; }
@@ -1731,7 +1741,9 @@ public:
   inline bool has_generated_column() const { return generated_columns_.num_members() > 0; }
   int has_not_null_unique_key(ObSchemaGetterGuard &schema_guard, bool &bool_result) const;
   // returns true when user defined primary key is given
+  // 返回true: 用户明确指定了主键列（IOT模式和HEAP模式）；
   int is_table_with_logic_pk(ObSchemaGetterGuard &schema_guard, bool &bool_result) const;
+  // 返回用户指定的主键列（IOT模式和HEAP模式）；
   int get_logic_pk_column_ids(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
   int get_heap_table_pk(ObSchemaGetterGuard *schema_guard, ObIArray<uint64_t> &pk_ids) const;
 
@@ -1883,11 +1895,11 @@ public:
   int check_enable_split_partition(bool is_auto_partitioning) const;
   int check_validity_for_auto_partition() const;
   int check_can_do_manual_split_partition() const;
-  ObPartitionLevel get_target_part_level_for_auto_partitioned_table() const;
+  int get_target_part_level_for_auto_partitioned_table(ObPartitionLevel &target_part_level) const;
   int get_part_func_expr_str(ObString &part_func_expr, common::ObIAllocator &allocator,
                              const bool using_auto_partitioned_mode) const;
   int get_presetting_partition_keys(common::ObIArray<uint64_t> &partition_key_ids) const;
-  int get_partition_keys_by_part_func_expr(common::ObString &part_func_expr_str, common::ObIArray<uint64_t> &partition_key_ids) const;
+  int get_partition_keys_by_part_func_expr(const common::ObString &part_func_expr_str, common::ObIArray<uint64_t> &partition_key_ids) const;
   int extract_actual_index_rowkey_columns_name(ObIArray<ObString> &rowkey_columns_name) const;
   int is_presetting_partition_key(const uint64_t partition_key_id, bool &is_presetting_partition_key) const;
   int check_primary_key_cover_partition_column();
@@ -2050,10 +2062,11 @@ public:
   int convert_column_ids_for_ddl(const hash::ObHashMap<uint64_t, uint64_t> &column_id_map);
   int sort_column_array_by_column_id();
   int check_column_array_sorted_by_column_id(const bool skip_rowkey) const;
-  int check_has_local_index(ObSchemaGetterGuard &schema_guard, bool &has_local_index) const;
-  int check_has_fts_index(ObSchemaGetterGuard &schema_guard, bool &has_fts_index) const;
-  int check_has_multivalue_index(ObSchemaGetterGuard &schema_guard, bool &has_multivalue_index) const;
-  int check_has_hnsw_vector_index(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const;
+  int check_has_index_local_storage(ObSchemaGetterGuard &schema_guard, bool &has_local_index) const;
+  int check_has_fts_index_aux(ObSchemaGetterGuard &schema_guard, bool &has_fts_index) const;
+  int check_has_multivalue_index_aux(ObSchemaGetterGuard &schema_guard, bool &has_multivalue_index) const;
+  int check_has_vec_domain_index(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const;
+  int check_has_spatial_index(ObSchemaGetterGuard &schema_guard, bool &has_vector_index) const;
   int is_real_unique_index_column(ObSchemaGetterGuard &schema_guard,
                                   uint64_t column_id,
                                   bool &is_uni) const;
@@ -2156,6 +2169,10 @@ public:
   {
     type = semistruct_encoding_type_;
     return OB_SUCCESS;
+  }
+  virtual const common::ObString& get_semistruct_properties() const override
+  {
+    return semistruct_properties_;
   }
   inline int set_dynamic_partition_policy(const common::ObString &dynamic_partition_policy)
   {
@@ -2387,6 +2404,7 @@ protected:
   uint64_t external_location_id_;
   common::ObString external_sub_path_;
   uint64_t tmp_mlog_tid_;
+  common::ObString semistruct_properties_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

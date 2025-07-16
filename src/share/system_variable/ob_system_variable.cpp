@@ -2966,7 +2966,8 @@ int ObSysVarOnUpdateFuncs::start_trans_by_set_trans_char_(
                 ->get_read_snapshot(*session.get_tx_desc(),
                                     isolation,
                                     stmt_expire_ts,
-                                    snapshot))) {
+                                    snapshot,
+                                    false))) {
       LOG_WARN("fail to get snapshot for serializable / repeatable read", K(ret),
                KPC(session.get_tx_desc()), K(isolation), K(stmt_expire_ts));
       // rollback tx because of prepare snapshot fail

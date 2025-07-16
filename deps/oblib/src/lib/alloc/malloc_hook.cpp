@@ -65,7 +65,7 @@ void *ob_malloc_retry(size_t size, bool &from_malloc_hook)
   do {
     ptr = global_malloc_hook.alloc(size, from_malloc_hook);
     if (OB_ISNULL(ptr)) {
-      ::usleep(10000);  // 10ms
+      ob_usleep(10000);  // 10ms
     }
   } while (OB_ISNULL(ptr) && 0 != size);
   return ptr;

@@ -367,7 +367,8 @@ int ObRestoreCommonUtil::set_tde_parameters(common::ObMySQLProxy *sql_proxy,
   return ret;
 }
 
-int ObRestoreCommonUtil::rebuild_master_key_version(obrpc::ObCommonRpcProxy *rpc_proxy, const uint64_t tenant_id)
+int ObRestoreCommonUtil::rebuild_master_key_version(obrpc::ObCommonRpcProxy *rpc_proxy,
+    const uint64_t tenant_id, bool need_wait)
 {
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_TDE_SECURITY
@@ -386,9 +387,11 @@ int ObRestoreCommonUtil::rebuild_master_key_version(obrpc::ObCommonRpcProxy *rpc
     obrpc::ObReloadMasterKeyArg arg;
     obrpc::ObReloadMasterKeyResult result;
     arg.tenant_id_ = tenant_id;
+    // standby switchover or failover to primary only do reload master key, no need
+    // wait master key active
     if (OB_FAIL(rpc_proxy->timeout(DEFAULT_TIMEOUT).reload_master_key(arg, result))) {
       LOG_WARN("fail to reload master key", KR(ret), K(arg), K(DEFAULT_TIMEOUT));
-    } else if (result.master_key_id_ > 0 ) {
+    } else if (result.master_key_id_ > 0  && need_wait) {
       bool is_active = false;
       const int64_t SLEEP_US = 5 * 1000 * 1000L; // 5s
       const int64_t MAX_WAIT_US = 60 * 1000 * 1000L; // 60s
@@ -406,7 +409,7 @@ int ObRestoreCommonUtil::rebuild_master_key_version(obrpc::ObCommonRpcProxy *rpc
           if (OB_KEYSTORE_OPEN_NO_MASTER_KEY == ret) {
             ret = OB_SUCCESS;
             LOG_INFO("master key is not active, need wait", K(tenant_id));
-            usleep(SLEEP_US);
+            ob_usleep(SLEEP_US);
           } else {
             LOG_WARN("fail to get active master key", KR(ret), K(tenant_id));
           }

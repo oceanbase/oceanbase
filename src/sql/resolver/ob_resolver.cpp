@@ -128,12 +128,17 @@
 #include "sql/resolver/dml/ob_multi_table_insert_resolver.h"
 #include "sql/resolver/ddl/ob_create_directory_resolver.h"
 #include "sql/resolver/ddl/ob_drop_directory_resolver.h"
+#include "sql/resolver/ddl/ob_create_location_resolver.h"
+#include "sql/resolver/ddl/ob_alter_location_resolver.h"
+#include "sql/resolver/ddl/ob_drop_location_resolver.h"
+#include "sql/resolver/cmd/ob_location_utils_resolver.h"
 #include "pl/ob_pl_package.h"
 #include "sql/resolver/ddl/ob_drop_context_resolver.h"
 #include "sql/resolver/cmd/ob_module_data_resolver.h"
 #include "sql/resolver/cmd/ob_tenant_snapshot_resolver.h"
 #include "sql/resolver/cmd/ob_tenant_clone_resolver.h"
 #include "sql/resolver/cmd/ob_olap_async_job_resolver.h"
+#include "sql/resolver/cmd/ob_flashback_standby_log_resolver.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_tablespace_resolver.h"
 #include "sql/resolver/ddl/ob_alter_tablespace_resolver.h"
@@ -151,6 +156,8 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "sql/resolver/cmd/ob_trigger_storage_cache_resolver.h"
 #endif
+#include "sql/resolver/cmd/ob_sys_dispatch_call_resolver.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -791,7 +798,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_CHECK_TABLE:
       case T_SHOW_CREATE_USER:
       case T_SHOW_CATALOGS:
-      case T_SHOW_CREATE_CATALOG: {
+      case T_SHOW_CREATE_CATALOG:
+      case T_SHOW_LOCATIONS:
+      case T_SHOW_CREATE_LOCATION:
+      case T_LOCATION_UTILS_LIST: {
         REGISTER_STMT_RESOLVER(Show);
         break;
       }
@@ -1234,6 +1244,22 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(DropDirectory);
         break;
       }
+      case T_CREATE_LOCATION: {
+        REGISTER_STMT_RESOLVER(CreateLocation);
+        break;
+      }
+      case T_ALTER_LOCATION: {
+        REGISTER_STMT_RESOLVER(AlterLocation);
+        break;
+      }
+      case T_DROP_LOCATION: {
+        REGISTER_STMT_RESOLVER(DropLocation);
+        break;
+      }
+      case T_LOCATION_UTILS: {
+        REGISTER_STMT_RESOLVER(LocationUtils);
+        break;
+      }
       case T_DIAGNOSTICS: {
         REGISTER_STMT_RESOLVER(GetDiagnostics);
         break;
@@ -1369,6 +1395,14 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         break;
       }
 #endif
+      case T_SP_SYS_DISPATCH_CALL: {
+        REGISTER_STMT_RESOLVER(SysDispatchCall);
+        break;
+      }
+      case T_FLASHBACK_STANDBY_LOG: {
+        REGISTER_STMT_RESOLVER(FlashbackStandbyLog);
+        break;
+      }
       default: {
         ret = OB_NOT_SUPPORTED;
         const char *type_name = get_type_name(parse_tree.type_);

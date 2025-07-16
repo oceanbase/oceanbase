@@ -62,6 +62,9 @@
 #endif
 #include "rootserver/ob_catalog_ddl_service.h"
 #include "rootserver/ob_root_rebuild_tablet.h"
+#include "share/ob_create_hidden_tablev2_rpc_struct.h"
+#include "rootserver/ob_location_ddl_service.h"
+#include "rootserver/ob_objpriv_mysql_ddl_service.h"
 
 namespace oceanbase
 {
@@ -240,7 +243,7 @@ public:
   public:
     explicit ObReportCoreTableReplicaTask(ObRootService &root_service);
     virtual ~ObReportCoreTableReplicaTask() {}
-  public:
+    public:
     // interface of AsyncTask
     virtual int process() override;
     virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
@@ -392,6 +395,16 @@ public:
     DISALLOW_COPY_AND_ASSIGN(ObAlterLogExternalTableTask);
   };
 
+  struct ObSetConfigArgAfterBootstrap  final {
+    // config name: the name of config
+    const char* name_;
+    // alter_system_set_value: used for ALTER SYSTEM SET
+    const char* alter_system_set_value_;
+
+    bool is_valid() const { return NULL != name_ && NULL != alter_system_set_value_; }
+
+    TO_STRING_KV(K_(name), K_(alter_system_set_value));
+  };
 public:
   ObRootService();
   virtual ~ObRootService();
@@ -462,7 +475,6 @@ public:
   int check_sys_tenant_initial_master_key_valid();
 #endif
 
-  int check_config_result(const char *name, const char *value);
   int check_ddl_allowed();
 
   int renew_lease(const share::ObLeaseRequest &lease_request,
@@ -521,6 +533,7 @@ public:
   int abort_redef_table(const obrpc::ObAbortRedefTableArg &arg);
   int update_ddl_task_active_time(const obrpc::ObUpdateDDLTaskActiveTimeArg &arg);
   int create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res);
+  int create_hidden_table_v2(const obrpc::ObCreateHiddenTableArgV2 &arg, obrpc::ObCreateHiddenTableRes &res);
   int send_auto_split_tablet_task_request(const obrpc::ObAutoSplitTabletBatchArg &arg, obrpc::ObAutoSplitTabletBatchRes &res);
   int split_global_index_tablet(const obrpc::ObAlterTableArg &arg);
   /**
@@ -600,6 +613,7 @@ public:
   int revoke_database(const obrpc::ObRevokeDBArg &arg);
   int revoke_table(const obrpc::ObRevokeTableArg &arg);
   int revoke_routine(const obrpc::ObRevokeRoutineArg &arg);
+  int revoke_object(const obrpc::ObRevokeObjMysqlArg &arg);
   int revoke_syspriv(const obrpc::ObRevokeSysPrivArg &arg);
   int alter_user_profile(const obrpc::ObAlterUserProfileArg &arg);
   int alter_user_proxy(const obrpc::ObAlterUserProxyArg &arg, obrpc::ObAlterUserProxyRes &res);
@@ -714,6 +728,11 @@ public:
   int drop_directory(const obrpc::ObDropDirectoryArg &arg);
   //----End of functions for directory object----
 
+  //----Functions for location object----
+  int create_location(const obrpc::ObCreateLocationArg &arg);
+  int drop_location(const obrpc::ObDropLocationArg &arg);
+  //----End of functions for location object----
+
   //----Functions for managing row level security----
   int handle_rls_policy_ddl(const obrpc::ObRlsPolicyDDLArg &arg);
   int handle_rls_group_ddl(const obrpc::ObRlsGroupDDLArg &arg);
@@ -723,6 +742,11 @@ public:
   //----Functions for managing catalog----
   int handle_catalog_ddl(const obrpc::ObCatalogDDLArg &arg);
   //----End of functions for managing catalog----
+
+  //----Functions for managing external resource----
+  int create_external_resource(const obrpc::ObCreateExternalResourceArg &arg, obrpc::ObCreateExternalResourceRes &result);
+  int drop_external_resource(const obrpc::ObDropExternalResourceArg &arg, obrpc::ObDropExternalResourceRes &result);
+  //----End of functions for managing external resource----
 
   // server related
   int load_server_manager();
@@ -974,8 +998,11 @@ private:
        const share::ObServerStatus &server_status);
   void update_cpu_quota_concurrency_in_memory_();
   int set_config_after_bootstrap_();
-  int set_static_config_after_bootstrap_();
-  int set_dynamic_config_after_bootstrap_();
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  int set_logservice_access_point_after_bootstrap_(
+    common::ObArray<ObSetConfigArgAfterBootstrap > &configs,
+    ObSqlString &logservice_access_point_with_quota);
+#endif
   int wait_all_rs_in_service_after_bootstrap_(const obrpc::ObServerInfoList &rs_list);
   int try_notify_switch_leader(const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
 

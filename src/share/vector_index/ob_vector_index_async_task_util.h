@@ -34,6 +34,20 @@ typedef common::ObCurTraceId::TraceId TraceId;
 const static int64_t VEC_ASYNC_TASK_DEFAULT_ERR_CODE = -1;
 class ObPluginVectorIndexMgr;
 
+
+#define CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_)  \
+  if (++loop_cnt > 20) { \
+    bool is_cancel = false; \
+    if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_task_is_cancel(ctx_, is_cancel))) { \
+      LOG_WARN("fail to check task is cancel", KPC(ctx_));  \
+    } else if (is_cancel) { \
+      ret = OB_CANCELED;  \
+      LOG_INFO("async task is cancel", KPC(ctx_));  \
+    } else {  \
+      loop_cnt = 0; \
+    } \
+  }
+
 enum ObVecIndexAsyncTaskTriggerType
 {
   OB_VEC_TRIGGER_AUTO = 0,
@@ -159,6 +173,7 @@ public:
 };
 
 typedef common::hash::ObHashMap<common::ObTabletID, ObVecIndexAsyncTaskCtx *> VecIndexAsyncTaskMap;
+typedef common::ObArray<ObVecIndexAsyncTaskCtx*> ObVecIndexTaskCtxArray;
 
 class ObVecIndexAsyncTaskOption
 {
@@ -253,7 +268,7 @@ private:
       storage::ObTableScanIterator *table_scan_iter,
       storage::ObValueRowIterator &delete_row_iter);
   int delete_incr_table_data(ObPluginVectorIndexAdaptor &adaptor, storage::ObDMLBaseParam &dml_param, transaction::ObTxDesc *tx_desc);
-
+  bool check_task_satisfied_memory_limited(ObPluginVectorIndexAdaptor &adaptor);
 private:
   bool is_inited_;
   int task_type_; // 0. built; 1. opt
@@ -296,12 +311,12 @@ public:
       const char *tname,
       const int64_t batch_size,
       common::ObISQLClient &proxy,
-      ObVecIndexTaskStatusArray &task);
+      ObVecIndexTaskCtxArray &task);
   static int batch_insert_vec_task(
       uint64_t tenant_id,
       const char *tname,
       common::ObISQLClient &proxy,
-      ObVecIndexTaskStatusArray &task);
+      ObVecIndexTaskCtxArray &task);
   static int clear_history_expire_task_record(
       const uint64_t tenant_id,
       const int64_t batch_size,
@@ -331,6 +346,7 @@ public:
       const int64_t task_id,
       ObVecIndexFieldArray& task_key);
 
+  static int64_t get_processing_task_cnt(ObVecIndexAsyncTaskOption &task_opt);
   static bool check_can_do_work();
 
   static int fetch_new_task_id(const uint64_t tenant_id, int64_t &new_task_id);
@@ -338,6 +354,7 @@ public:
   static int remove_sys_task(ObVecIndexAsyncTaskCtx *task);
   static int fetch_new_trace_id(const uint64_t basic_num, ObIAllocator *allocator, TraceId &new_trace_id);
   static int in_active_time(const uint64_t tenant_id, bool& is_active_time);
+  static int check_task_is_cancel(ObVecIndexAsyncTaskCtx *task, bool &is_cancel);
 
 private:
   static int construct_read_task_sql(

@@ -581,20 +581,20 @@ private:
                                bool is_global_prefs,
                                ObStatPrefs *&stat_pref);
 
-  static int get_common_table_stale_percent(sql::ObExecContext &ctx,
-                                            const uint64_t tenant_id,
-                                            const share::schema::ObTableSchema &table_schema,
-                                            StatTable &stat_table);
+  static int get_non_partitioned_table_stale_percent(sql::ObExecContext &ctx,
+                                                     const uint64_t tenant_id,
+                                                     const share::schema::ObTableSchema &table_schema,
+                                                     StatTable &stat_table);
 
-  static int get_user_partition_table_stale_percent(sql::ObExecContext &ctx,
-                                                    const uint64_t tenant_id,
-                                                    const share::schema::ObTableSchema &table_schema,
-                                                    const double stale_percent_threshold,
-                                                    StatTable &stat_table);
+  static int get_partition_table_stale_percent(sql::ObExecContext &ctx,
+                                               const uint64_t tenant_id,
+                                               const share::schema::ObTableSchema &table_schema,
+                                               const double stale_percent_threshold,
+                                               StatTable &stat_table);
 
-  static bool is_table_gather_global_stats(const int64_t global_id,
-                                           const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
-                                           int64_t &cur_row_cnt);
+  static bool is_missing_global_stats(const int64_t global_id,
+                                      const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
+                                      int64_t &cur_row_cnt);
 
   static int parse_index_part_info(ObExecContext &ctx,
                                    const ObObjParam &owner,

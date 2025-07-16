@@ -366,8 +366,7 @@ int ObMPStmtPrexecute::before_process()
     if (session != NULL && OB_FAIL(ret)) {
       int tmp_ret = OB_SUCCESS;
       //清空WARNING BUFFER
-      ObSqlCtx sql_ctx; // sql_ctx do nothing in do_after_process
-      tmp_ret = do_after_process(*session, sql_ctx, false/*no asyn response*/);
+      tmp_ret = do_after_process(*session, false/*no asyn response*/);
       UNUSED(tmp_ret);
     }
   }

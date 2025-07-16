@@ -34,6 +34,7 @@ enum ObVidAdaLookupStatus
   STATES_SET_RESULT,
   STATES_ERROR,
   STATES_FINISH,
+  STATES_REFRESH,
 };
 
 enum ObAdaptorIterRowIdx
@@ -248,7 +249,11 @@ private:
                                                     int64_t *&brute_vids, int& brute_cnt, bool& need_complete_data,
                                                     bool check_need_complete_data = true);
   int set_rowkey_by_vid(ObNewRow *row);
-  int post_query_vid_with_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
+  int post_query_vid_with_filter(ObVectorQueryAdaptorResultContext *ada_ctx,
+                                ObPluginVectorIndexAdaptor* adaptor,
+                                int64_t hnsw_max_iter_scan_nums,
+                                int64_t& iter_scan_total_num,
+                                bool is_vectorized);
   int process_adaptor_state_post_filter(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor, bool is_vectorized);
   int process_adaptor_state_post_filter_once(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor);
   int get_single_row_from_data_filter_iter(bool is_vectorized);

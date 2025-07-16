@@ -38,7 +38,7 @@ int ObTableLoadBackupFileUtil::list_directories(const common::ObString &path,
         retry_count++;
         if (retry_count <= MAX_RETRY_COUNT) {
           ret = OB_SUCCESS;
-          usleep(RETRY_INTERVAL);
+          ob_usleep(RETRY_INTERVAL);
         }
       }
     } else {
@@ -63,7 +63,7 @@ int ObTableLoadBackupFileUtil::get_file_length(const common::ObString &path,
         retry_count++;
         if (retry_count <= MAX_RETRY_COUNT) {
           ret = OB_SUCCESS;
-          usleep(RETRY_INTERVAL);
+          ob_usleep(RETRY_INTERVAL);
         }
       }
     } else {
@@ -85,13 +85,13 @@ int ObTableLoadBackupFileUtil::read_single_file(const common::ObString &path,
   ObBackupIoAdapter adapter;
 
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(adapter.read_single_file(path, storage_info, buf, buf_size, read_size, ObStorageIdMod(table::OB_STORAGE_ID_DDL, ObStorageUsedMod::STORAGE_USED_DDL)))) {
+    if (OB_FAIL(adapter.read_single_file(path, storage_info, buf, buf_size, read_size, ObStorageIdMod::get_default_ddl_id_mod()))) {
       LOG_WARN("fail to list directories", K(ret), K(retry_count));
       if (ret == OB_OBJECT_STORAGE_IO_ERROR) {
         retry_count++;
         if (retry_count <= MAX_RETRY_COUNT) {
           ret = OB_SUCCESS;
-          usleep(RETRY_INTERVAL);
+          ob_usleep(RETRY_INTERVAL);
         }
       }
     } else {

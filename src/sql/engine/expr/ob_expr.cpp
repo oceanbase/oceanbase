@@ -1466,6 +1466,9 @@ int eval_assign_question_mark_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
         res_acc.precision_ = expr.datum_meta_.precision_;
         cast_ctx.res_accuracy_ = &res_acc;
       }
+      if (ob_is_string_tc(dst_meta.get_type())) {
+        cast_ctx.dest_max_length_ = expr.max_length_;
+      }
       if (dst_meta.is_collection_sql_type()) {
         dst_obj.meta_.set_meta(dst_meta);
       }

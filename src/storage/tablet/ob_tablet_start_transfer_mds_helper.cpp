@@ -131,7 +131,7 @@ int ObTabletStartTransferOutReplayExecutor::do_replay_(ObTabletHandle &tablet_ha
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_handle));
-  } else if (OB_FAIL(tablet->get_latest_committed(user_data))) {
+  } else if (OB_FAIL(tablet->get_latest_committed_tablet_status(user_data))) {
     LOG_WARN("failed to get tx data", K(ret), KPC(tablet), K(tablet_info_));
   } else {
     user_data.transfer_ls_id_ = dest_ls_id_;
@@ -367,7 +367,7 @@ int ObTabletStartTransferOutHelper::check_src_transfer_tablet_(
   if (!tablet_info.is_valid() || OB_ISNULL(tablet)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check src transfer tablets get invalid argument", K(ret), K(tablet_info), KP(tablet));
-  } else if (CLICK_FAIL(tablet->get_latest_committed(user_data))) {
+  } else if (CLICK_FAIL(tablet->get_latest_committed_tablet_status(user_data))) {
     LOG_WARN("failed to get tx data", K(ret), KPC(tablet), K(tablet_info));
   } else if (ObTabletStatus::NORMAL != user_data.tablet_status_) {
     ret = OB_ERR_UNEXPECTED;
@@ -1089,6 +1089,7 @@ int ObTabletStartTransferInHelper::on_register_success_(
   const share::SCN scn;
   const bool for_replay = false;
   const int64_t start_ts = ObTimeUtil::current_time();
+  const bool check_src_tablet_status = true;
   LOG_INFO("[TRANSFER] start tx start transfer in on_register_success_",
       K(tx_start_transfer_in_info));
   ObTransferUtils::process_start_in_perf_diag_info(tx_start_transfer_in_info,
@@ -1099,7 +1100,7 @@ int ObTabletStartTransferInHelper::on_register_success_(
     LOG_WARN("on register success get invalid argument", K(ret), K(tx_start_transfer_in_info));
   } else if (CLICK_FAIL(check_transfer_dest_tablets_(tx_start_transfer_in_info, for_replay))) {
     LOG_WARN("failed to check transfer dest tablets", K(ret), K(tx_start_transfer_in_info));
-  } else if (CLICK_FAIL(check_transfer_src_tablets_(scn, for_replay, tx_start_transfer_in_info))) {
+  } else if (CLICK_FAIL(check_transfer_src_tablets_(scn, for_replay, tx_start_transfer_in_info, check_src_tablet_status))) {
     LOG_WARN("failed to check transfer src tablets", K(ret), K(tx_start_transfer_in_info));
   } else if (CLICK_FAIL(create_transfer_in_tablets_(scn, for_replay, tx_start_transfer_in_info, ctx))) {
     LOG_WARN("failed to create transfer in tablets", K(ret), K(tx_start_transfer_in_info));
@@ -1215,7 +1216,7 @@ int ObTabletStartTransferInHelper::check_transfer_dest_tablet_(
     } else if (tablet->get_tablet_meta().transfer_info_.transfer_seq_ != tablet_meta.transfer_info_.transfer_seq_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet seq is not match", K(ret), KPC(tablet), K(tablet_meta));
-    } else if (OB_FAIL(tablet->get_latest(user_data,
+    } else if (OB_FAIL(tablet->get_latest_tablet_status(user_data,
         unused_writer, unused_trans_stat, unused_trans_version))) {
       LOG_WARN("failed to get lastest tablet status", K(ret), KPC(tablet), K(tablet_meta));
       if (OB_SNAPSHOT_DISCARDED == ret || OB_ENTRY_NOT_EXIST == ret || OB_EMPTY_RESULT == ret) {
@@ -1291,7 +1292,8 @@ int ObTabletStartTransferInHelper::check_can_skip_replay_(
 int ObTabletStartTransferInHelper::check_transfer_src_tablets_(
     const share::SCN &scn,
     const bool for_replay,
-    const ObTXStartTransferInInfo &tx_start_transfer_in_info)
+    const ObTXStartTransferInInfo &tx_start_transfer_in_info,
+    const bool check_src_tablet_status)
 {
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
@@ -1331,7 +1333,7 @@ int ObTabletStartTransferInHelper::check_transfer_src_tablets_(
     for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.tablet_meta_list_.count(); ++i) {
       MDS_TG(10_ms);
       const ObMigrationTabletParam &tablet_meta = tx_start_transfer_in_info.tablet_meta_list_.at(i);
-      if (CLICK_FAIL(check_transfer_src_tablet_(scn, for_replay, tablet_meta, src_ls))) {
+      if (CLICK_FAIL(check_transfer_src_tablet_(scn, for_replay, tablet_meta, src_ls, check_src_tablet_status))) {
         LOG_WARN("failed to check src tablet", K(ret), K(for_replay), K(tablet_meta));
       }
     }
@@ -1343,7 +1345,8 @@ int ObTabletStartTransferInHelper::check_transfer_src_tablet_(
     const share::SCN &scn,
     const bool for_replay,
     const ObMigrationTabletParam &tablet_meta,
-    ObLS *src_ls)
+    ObLS *src_ls,
+    const bool check_src_tablet_status)
 {
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
@@ -1389,12 +1392,13 @@ int ObTabletStartTransferInHelper::check_transfer_src_tablet_(
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KPC(src_ls), KP(tablet), K(tablet_meta));
-  } else if (CLICK_FAIL(tablet->get_latest(user_data,
+  } else if (CLICK_FAIL(tablet->get_latest_tablet_status(user_data,
       unused_writer, unused_trans_stat, unused_trans_version))) {
     LOG_WARN("failed to get lastest tablet status", K(ret), KPC(tablet), K(tablet_meta));
   } else if (tablet->get_tablet_meta().transfer_info_.transfer_seq_ != tablet_meta.transfer_info_.transfer_seq_ - 1
       || (user_data.tablet_status_ != ObTabletStatus::TRANSFER_OUT
-          && user_data.tablet_status_ != ObTabletStatus::TRANSFER_OUT_DELETED)) {
+          && user_data.tablet_status_ != ObTabletStatus::TRANSFER_OUT_DELETED
+          && check_src_tablet_status)) {
     ret = OB_EAGAIN;
     LOG_WARN("src ls tablet not ready, need retry", K(ret), K(user_data), K(tablet_meta));
     if (OB_SUCCESS != (tmp_ret = set_dest_ls_rebuild_(dest_ls_id, scn, for_replay))) {
@@ -1881,9 +1885,10 @@ int ObTabletStartTransferInHelper::check_transfer_dest_ls_status_(
     LOG_WARN("failed to get migration status", K(ret), K(ls_id));
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_ADD == migration_status
       || ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE == migration_status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_REPLACE == migration_status
       || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD == migration_status) {
     can_skip = true;
-    FLOG_INFO("ls migration status is in add or migrate or rebuild, skip check transfer src ls",
+    FLOG_INFO("ls migration status is in add/migrate/rebuild/replace, skip check transfer src ls",
         K(ret), K(migration_status), KPC(ls));
   }
   return ret;
@@ -2040,6 +2045,7 @@ bool ObTabletStartTransferInHelper::check_can_replay_commit(
   ObTransferService *transfer_service = nullptr;
   bool can_skip_check_src = false;
   ObTransferUtils::set_transfer_module();
+  const bool check_src_tablet_status = true;
 
   LOG_INFO("check can replay start transfer in commit", K(scn));
   if (OB_ISNULL(buf) || len < 0 || !scn.is_valid()) {
@@ -2063,7 +2069,7 @@ bool ObTabletStartTransferInHelper::check_can_replay_commit(
   } else {
     if (OB_FAIL(check_can_skip_check_transfer_src_tablet_(scn, tx_start_transfer_in_info, can_skip_check_src))) {
       LOG_WARN("failed to check can skip check transfer src tablet", K(ret), K(tx_start_transfer_in_info));
-    } else if (!can_skip_check_src && OB_FAIL(check_transfer_src_tablets_(scn, true /* for replay */, tx_start_transfer_in_info))) {
+    } else if (!can_skip_check_src && OB_FAIL(check_transfer_src_tablets_(scn, true /* for replay */, tx_start_transfer_in_info, check_src_tablet_status))) {
       LOG_WARN("failed to check transfer src tablets", K(ret), K(tx_start_transfer_in_info));
     }
     if (OB_FAIL(ret)) {
@@ -2156,6 +2162,7 @@ int ObTabletStartTransferInHelper::do_tx_end_before_commit_(
   ObArray<ObTabletID> tablet_id_list;
   ObTransferService *transfer_service = nullptr;
   bool is_tablet_list_same = false;
+  const bool check_src_tablet_status = false;
 
   if (!tx_start_transfer_in_info.is_valid() || (for_replay && !scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -2197,16 +2204,16 @@ int ObTabletStartTransferInHelper::do_tx_end_before_commit_(
       LOG_ERROR("tx start transfer scn is bigger than transfer meta info scn and tablet list is not same, "
           "unexpected", K(ret), K(transfer_meta_info), K(tx_start_transfer_in_info));
     }
-  } else if (OB_FAIL(check_can_skip_replay_(scn, tx_start_transfer_in_info, skip_replay))) {
-    LOG_WARN("failed to check can skip replay commit", K(ret), K(scn), K(tx_start_transfer_in_info));
-  } else if (skip_replay) {
-    LOG_INFO("skip replay start transfer in commit", K(scn), K(tx_start_transfer_in_info));
   } else {
-    if (OB_FAIL(check_can_skip_check_transfer_src_tablet_(scn, tx_start_transfer_in_info, can_skip_check_src))) {
+    if (OB_FAIL(check_can_skip_replay_(scn, tx_start_transfer_in_info, skip_replay))) {
+      LOG_WARN("failed to check can skip replay commit", K(ret), K(scn), K(tx_start_transfer_in_info));
+    } else if (skip_replay) {
+      LOG_INFO("skip replay start transfer in commit", K(scn), K(tx_start_transfer_in_info));
+    } else if (OB_FAIL(check_can_skip_check_transfer_src_tablet_(scn, tx_start_transfer_in_info, can_skip_check_src))) {
       LOG_WARN("failed to check can skip check transfer src tablet", K(ret), K(tx_start_transfer_in_info));
     } else if (can_skip_check_src) {
       LOG_INFO("skip replay start transfer in commit, because transfer dest tablets are ready ", K(scn), K(tx_start_transfer_in_info));
-    } else if (OB_FAIL(check_transfer_src_tablets_(scn, true /* for replay */, tx_start_transfer_in_info))) {
+    } else if (OB_FAIL(check_transfer_src_tablets_(scn, true /* for replay */, tx_start_transfer_in_info, check_src_tablet_status))) {
       LOG_WARN("failed to check transfer src tablets", K(ret), K(tx_start_transfer_in_info));
     }
 

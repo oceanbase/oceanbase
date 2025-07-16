@@ -11,10 +11,14 @@
  */
 
 #include "ob_sstable_printer.h"
+#include "lib/utility/ob_macro_utils.h"
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "storage/tx_table/ob_tx_table_iterator.h"
 #include "storage/blocksstable/ob_macro_block_meta.h"
 #include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 #include "storage/blocksstable/cs_encoding/ob_column_encoding_struct.h"
+
+#define USING_LOG_PREFIX COMMON
 
 namespace oceanbase
 {
@@ -529,6 +533,8 @@ void ObSSTablePrinter::print_bloom_filter_micro_block(const char* micro_block_bu
   P_END();
 }
 
+
+
 void ObSSTablePrinter::print_store_row(
     const ObDatumRow *row,
     const ObObjMeta *obj_metas,
@@ -548,22 +554,25 @@ void ObSSTablePrinter::print_store_row(
     int64_t pos = 0;
 
     if (OB_LIKELY(tx_id.get_id() != INT64_MAX)) {
-      ObMemAttr mem_attr;
-      mem_attr.label_ = "TX_DATA_TABLE";
-      void *p = op_alloc(ObTenantTxDataAllocator);
-      if (OB_NOT_NULL(p)) {
-        ObTenantTxDataAllocator *tx_data_allocator = new (p) ObTenantTxDataAllocator();
-
-        ObTxData tx_data;
-        tx_data.tx_id_ = tx_id;
-        if (OB_FAIL(tx_data_allocator->init("PRINT_TX_DATA_SST"))) {
-          STORAGE_LOG(WARN, "init tx data allocator failed", KR(ret), K(str));
-        } else if (OB_FAIL(tx_data.deserialize(str.ptr(), str.length(), pos, *tx_data_allocator))) {
-          STORAGE_LOG(WARN, "deserialize tx data failed", KR(ret), K(str));
-          hex_dump(str.ptr(), str.length(), true, OB_LOG_LEVEL_WARN);
-        } else {
-          ObTxData::print_to_stderr(tx_data);
-        }
+      void *slice_ptr = nullptr;
+      ObTxDataGuard tx_data_guard;
+      if (OB_ISNULL(slice_ptr = MTL(ObSharedMemAllocMgr *)->tx_data_allocator().alloc(false, 0))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "allocate memory from slice_allocator fail.", KR(ret), KP(this));
+      } else {
+        ObTxData *tx_data = new (slice_ptr) ObTxData();
+        tx_data->tx_data_allocator_ = &MTL(ObSharedMemAllocMgr *)->tx_data_allocator();
+        tx_data->op_allocator_ = &MTL(share::ObSharedMemAllocMgr *)->tx_data_op_allocator();
+        tx_data_guard.init(tx_data);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(tx_data_guard.tx_data()->deserialize(
+              str.ptr(), str.length(), pos, MTL(ObSharedMemAllocMgr *)->tx_data_allocator()))) {
+        STORAGE_LOG(WARN, "deserialize tx data failed", KR(ret), K(str));
+        hex_dump(str.ptr(), str.length(), true, OB_LOG_LEVEL_WARN);
+      } else {
+        ObTxData::print_to_stderr(*tx_data_guard.tx_data());
+        FLOG_INFO("print TxData", K(tx_data_guard));
       }
     } else {
       // pre-process data for upper trans version calculation
@@ -575,6 +584,7 @@ void ObSSTablePrinter::print_store_row(
         hex_dump(str.ptr(), str.length(), true, OB_LOG_LEVEL_WARN);
       } else {
         ObCommitVersionsArray::print_to_stderr(*commit_versions);
+        FLOG_INFO("print commit versions", KPC(commit_versions));
       }
     }
   } else {

@@ -33,7 +33,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/ob_inner_tablet_access_service.h"
-#include "storage/member_table/ob_member_table_schema_helper.h"
+#include "storage/reorganization_info_table/ob_tablet_reorg_info_table_schema_helper.h"
 #include "share/schema/ob_table_param.h"
 #include "storage/access/ob_dml_param.h"
 
@@ -768,8 +768,8 @@ int ObInnerTabletAccessService::get_table_schema_(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("inner tablet access service do not init", K(ret));
-  } else if (LS_MEMBER_TABLET == tablet_id) {
-    if (OB_ISNULL(table_schema = ObMemberTableSchemaHelper::get_instance().get_table_schema())) {
+  } else if (LS_REORG_INFO_TABLET == tablet_id) {
+    if (OB_ISNULL(table_schema = ObTabletReorgInfoTableSchemaHelper::get_instance().get_table_schema())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("inner tablet table schema is null, unexpected", K(ret), K(tablet_id));
     }
@@ -790,8 +790,8 @@ int ObInnerTabletAccessService::get_column_ids_(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("inner tablet access service do not init", K(ret));
-  } else if (LS_MEMBER_TABLET == tablet_id) {
-    if (OB_FAIL(ObMemberTableSchemaHelper::get_instance().get_column_ids(is_query, column_ids))) {
+  } else if (LS_REORG_INFO_TABLET == tablet_id) {
+    if (OB_FAIL(ObTabletReorgInfoTableSchemaHelper::get_instance().get_column_ids(is_query, column_ids))) {
       LOG_WARN("failed to get column ids", K(ret), K(tablet_id), K(is_query));
     }
   } else {

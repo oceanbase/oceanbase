@@ -24,8 +24,6 @@ using namespace common;
 namespace sql
 {
 
-static constexpr uint64_t OB_STORAGE_ID_EXPORT = 2002;
-
 ObStorageAppender::ObStorageAppender()
     : is_opened_(false),
       offset_(0),
@@ -42,7 +40,7 @@ ObStorageAppender::~ObStorageAppender()
 void ObStorageAppender::reset()
 {
   int ret = OB_SUCCESS;
-  ObBackupIoAdapter adapter;
+  ObExternalIoAdapter adapter;
   if (is_opened_) {
     if (OB_FAIL(adapter.close_device_and_fd(device_handle_, fd_))) {
       LOG_WARN("fail to close device and fd", KR(ret), K_(fd), KP_(device_handle));
@@ -59,7 +57,7 @@ int ObStorageAppender::open(const common::ObObjectStorageInfo *storage_info,
     const ObString &uri, const ObStorageAccessType &access_type)
 {
   int ret = OB_SUCCESS;
-  ObBackupIoAdapter adapter;
+  ObExternalIoAdapter adapter;
   if (OB_UNLIKELY(is_opened_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObStorageAppender has been opened",
@@ -72,7 +70,7 @@ int ObStorageAppender::open(const common::ObObjectStorageInfo *storage_info,
   // The validity of the input parameters is verified by the open_with_access_type function.
   } else if (OB_FAIL(adapter.open_with_access_type(device_handle_, fd_,
       storage_info, uri, access_type,
-      ObStorageIdMod(OB_STORAGE_ID_EXPORT, ObStorageUsedMod::STORAGE_USED_EXPORT)))) {
+      ObStorageIdMod::get_default_export_id_mod()))) {
     LOG_WARN("fail to open appender", KR(ret), KPC(storage_info), K(uri), K(access_type));
   } else {
     offset_ = 0;
@@ -86,7 +84,7 @@ int ObStorageAppender::append(const char *buf, const int64_t size, int64_t &writ
 {
   int ret = OB_SUCCESS;
   write_size = 0;
-  ObBackupIoAdapter adapter;
+  ObExternalIoAdapter adapter;
   CONSUMER_GROUP_FUNC_GUARD(share::PRIO_EXPORT);
   if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_NOT_INIT;
@@ -137,7 +135,7 @@ int ObStorageAppender::close()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObBackupIoAdapter adapter;
+  ObExternalIoAdapter adapter;
   CONSUMER_GROUP_FUNC_GUARD(share::PRIO_EXPORT);
   // ignore error if not opened
   if (OB_LIKELY(is_opened_)) {

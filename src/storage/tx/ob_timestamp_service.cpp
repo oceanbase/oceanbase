@@ -286,5 +286,5 @@ void ObTimestampService::get_virtual_info(int64_t &ts_value, common::ObRole &rol
   TRANS_LOG(INFO, "gts get virtual info", K(ret), K_(last_id), K(ts_value), K(role), K(proposal_id));
 }
 
-}
-}
+} // transaction
+} // oceanbase

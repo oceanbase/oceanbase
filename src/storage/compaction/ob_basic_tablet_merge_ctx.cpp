@@ -42,6 +42,8 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     is_tenant_major_merge_(false),
     is_cs_replica_(false),
     is_backfill_(false),
+    is_delete_insert_merge_(false),
+    is_ha_compeleted_(true),
     for_unittest_(false),
     is_cs_replica_force_full_merge_(false),
     merge_level_(MICRO_BLOCK_MERGE_LEVEL),
@@ -96,6 +98,8 @@ void ObStaticMergeParam::reset()
   rec_scn_.reset();
   for_unittest_ = false;
   is_cs_replica_force_full_merge_ = false;
+  is_delete_insert_merge_ = false;
+  is_ha_compeleted_ = true;
 }
 
 bool ObStaticMergeParam::is_valid() const
@@ -123,6 +127,9 @@ bool ObStaticMergeParam::is_valid() const
   } else if (co_base_snapshot_version_ < 0) {
     bret = false;
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "co_base_snapshot_version is invalid", K_(co_base_snapshot_version));
+  } else if (OB_UNLIKELY(merge_scn_ < scn_range_.end_scn_)) {
+    bret = false;
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "merge scn should not less than end scn", K(ret), K_(merge_scn), K_(scn_range));
   } else {
     bret = true;
   }
@@ -698,11 +705,16 @@ int ObBasicTabletMergeCtx::get_storage_schema()
 {
   int ret  = OB_SUCCESS;
   ObStorageSchema *schema_on_tablet = nullptr;
+  ObTabletHAStatus ha_status = get_tablet()->get_tablet_meta().ha_status_;
   if (OB_FAIL(get_tablet()->load_storage_schema(mem_ctx_.get_allocator(), schema_on_tablet))) {
     LOG_WARN("failed to load storage schema", K(ret), K_(tablet_handle));
+  } else if (OB_UNLIKELY(!ha_status.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid ha status", K(ret), K(ha_status));
   } else {
     static_param_.schema_ = schema_on_tablet;
     static_param_.is_delete_insert_merge_ = schema_on_tablet->is_delete_insert_merge_engine();
+    static_param_.is_ha_compeleted_ = ha_status.is_none();
   }
   return ret;
 }
@@ -1419,7 +1431,6 @@ int ObBasicTabletMergeCtx::get_meta_compaction_info()
   int64_t full_stored_col_cnt = 0;
   int64_t schema_version = 0;
   ObStorageSchema *storage_schema = nullptr;
-  bool is_building_index = false; // placeholder
   uint64_t min_data_version = 0;
 
   if (OB_UNLIKELY(!is_meta_major_merge(get_merge_type())
@@ -1440,8 +1451,7 @@ int ObBasicTabletMergeCtx::get_meta_compaction_info()
                                                                                schema_version,
                                                                                min_data_version,
                                                                                mem_ctx_.get_allocator(),
-                                                                               *storage_schema,
-                                                                               is_building_index))) {
+                                                                               *storage_schema))) {
     if (OB_TABLE_IS_DELETED != ret) {
       LOG_WARN("failed to get table schema", KR(ret), KPC(this));
     }

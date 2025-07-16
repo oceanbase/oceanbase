@@ -59,8 +59,8 @@ int ObDirectLoadInsertLobTabletContext::init(ObDirectLoadInsertLobTableContext *
     pk_tablet_id_ = tablet_id_; // 从目标表取
     tablet_id_in_lob_id_ =
       tablet_id_; // 与ObDirectLoadSliceWriter::fill_lob_into_macro_block中的取值保持一致
-    if (OB_FAIL(start_seq_.set_parallel_degree(param_->reserved_parallel_))) {
-      LOG_WARN("fail to set parallel degree", KR(ret), K(param_->reserved_parallel_));
+    if (OB_FAIL(ObDDLUtil::init_macro_block_seq(param_->reserved_parallel_, start_seq_))) {
+      LOG_WARN("fail to init macro block seq", KR(ret), K(param_->reserved_parallel_));
     } else {
       is_inited_ = true;
     }

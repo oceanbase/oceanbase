@@ -62,3 +62,6 @@ alter system set _max_px_workers_per_cpu = 10 tenant = 'mysql';
 alter system set _force_enable_plan_tracing = false tenant sys;
 alter system set _force_enable_plan_tracing = false tenant all_user;
 alter system set _force_enable_plan_tracing = false tenant all_meta;
+alter system set _enable_sql_audit_query_sql = true tenant sys;
+alter system set _enable_sql_audit_query_sql = true tenant all_user;
+alter system set _enable_sql_audit_query_sql = true tenant all_meta;

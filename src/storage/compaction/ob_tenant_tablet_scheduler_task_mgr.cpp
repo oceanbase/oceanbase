@@ -10,10 +10,6 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "ob_tenant_tablet_scheduler_task_mgr.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction/ob_tenant_compaction_obj_mgr.h"
-#include "storage/compaction/ob_tenant_ls_merge_scheduler.h"
-#endif
 namespace oceanbase
 {
 using namespace storage;
@@ -99,11 +95,6 @@ void ObTenantTabletSchedulerTaskMgr::SSTableGCTask::runTimerTask()
   if (ObBasicMergeScheduler::could_start_loop_task()) {
     // use tenant config to loop minor && medium task
     MTL(ObTenantTabletScheduler *)->reload_tenant_config();
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (GCTX.is_shared_storage_mode()) {
-      MTL(ObTenantLSMergeScheduler *)->reload_tenant_config();
-    }
-#endif
     int64_t cost_ts = ObTimeUtility::fast_current_time();
     ObCurTraceId::init(GCONF.self_addr_);
     if (OB_FAIL(MTL(ObTenantTabletScheduler *)->update_upper_trans_version_and_gc_sstable())) {
@@ -128,11 +119,6 @@ void ObTenantTabletSchedulerTaskMgr::InfoPoolResizeTask::runTimerTask()
   if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->gc_cg_info_array())) {
     LOG_WARN("Fail to gc info", K(ret));
   }
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (GCTX.is_shared_storage_mode()) {
-    MTL(ObTenantLSMergeScheduler *)->refresh_tenant_status();
-  }
-#endif
   if (OB_FAIL(MTL(ObTenantTabletScheduler *)->refresh_tenant_status())) {
     LOG_WARN("Fail to refresh tenant status", K(ret));
   }
@@ -188,8 +174,6 @@ int ObTenantTabletSchedulerTaskMgr::start()
     LOG_WARN("Fail to schedule info pool resize task", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(compaction_refresh_tg_id_, tablet_updater_refresh_task_, TABLET_UPDATER_REFRESH_INTERVAL, repeat))) {
     LOG_WARN("Fail to schedule tablet updater refresh task", K(ret));
-  } else if (GCTX.is_shared_storage_mode()) {
-    LOG_INFO("shared storage mode do not use medium_loop_task to do major merge", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::MediumLoop, medium_loop_tg_id_))) {
     LOG_WARN("failed to create medium loop thread", K(ret));
   } else if (OB_FAIL(TG_START(medium_loop_tg_id_))) {
@@ -209,9 +193,6 @@ int ObTenantTabletSchedulerTaskMgr::restart_scheduler_timer_task(
   if (schedule_interval_ == merge_schedule_interval) {
   } else if (OB_FAIL(restart_schedule_timer_task(merge_schedule_interval, merge_loop_tg_id_, merge_loop_task_))) {
     LOG_WARN("failed to reload new merge schedule interval", K(merge_schedule_interval));
-  } else if (GCTX.is_shared_storage_mode()) {
-    schedule_interval_ = merge_schedule_interval;
-    LOG_INFO("succeeded to reload new merge schedule interval for merge loop task", K(merge_schedule_interval));
   } else if (OB_FAIL(restart_schedule_timer_task(merge_schedule_interval, medium_loop_tg_id_, medium_loop_task_))) {
     LOG_WARN("failed to reload new merge schedule interval", K(merge_schedule_interval));
   } else {

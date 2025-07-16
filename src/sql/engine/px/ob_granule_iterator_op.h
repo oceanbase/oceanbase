@@ -41,6 +41,10 @@ public:
   }
 };
 
+class ObGITaskReBalancer
+{
+};
+
 class ObGIOpInput : public ObOpInput
 {
   OB_UNIS_VERSION_V(1);
@@ -77,6 +81,10 @@ public:
   common::ObSEArray<uint64_t, 2> table_location_keys_;
   int64_t px_sequence_id_;
   int64_t rf_max_wait_time_;
+  union {
+    ObGITaskReBalancer *task_balancer_;
+    uint64_t ser_task_balancer_;
+  };
 private:
   common::ObIAllocator *deserialize_allocator_;
 };

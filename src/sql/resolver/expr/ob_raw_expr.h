@@ -2214,7 +2214,7 @@ public:
   uint64_t get_aggr_type() const { return extra_.aggr_type_; }
   uint64_t get_range_flag() const { return extra_.range_flag_; }
   // extra accesstors end
-  bool need_extra_calc_type() const;
+  bool need_extra_calc_type(const bool is_mysql_number) const;
   int set_extra_calc_type(const ObExprResType &res_type);
   const ObExprCalcType &get_extra_calc_meta() const { return extra_.calc_meta_; }
   ObPrecision get_extra_calc_precision() const { return extra_.calc_precision_; }
@@ -2262,6 +2262,10 @@ public:
            OB_NOT_NULL(get_param_expr(0)) &&
            (get_param_expr(0)->type_ == T_FUN_SYS_JSON_EXTRACT ||
             get_param_expr(0)->type_ == T_FUN_SYS_JSON_VALUE));
+  }
+  bool is_topn_filter() const
+  {
+    return T_OP_PUSHDOWN_TOPN_FILTER == type_;
   }
   bool extract_multivalue_json_expr(const ObRawExpr*& json_expr) const;
   bool is_multivalue_define_json_expr() const;
@@ -4418,13 +4422,15 @@ public:
       is_return_sys_cursor_(false),
       is_aggregate_udf_(false),
       is_aggr_udf_distinct_(false),
+      is_result_cache_(false),
       nocopy_params_(),
       loc_(0),
       is_udt_cons_(false),
       params_name_(),
       params_desc_v2_(),
       dblink_name_(),
-      dblink_id_(common::OB_INVALID_ID) {
+      dblink_id_(common::OB_INVALID_ID),
+      external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE) {
     set_expr_class(EXPR_UDF);
     is_deterministic_ = false;
   }
@@ -4447,13 +4453,15 @@ public:
       is_return_sys_cursor_(false),
       is_aggregate_udf_(false),
       is_aggr_udf_distinct_(false),
+      is_result_cache_(false),
       nocopy_params_(),
       loc_(0),
       is_udt_cons_(false),
       params_name_(),
       params_desc_v2_(),
       dblink_name_(),
-      dblink_id_(common::OB_INVALID_ID) {
+      dblink_id_(common::OB_INVALID_ID),
+      external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE) {
     set_expr_class(EXPR_UDF);
     is_deterministic_ = false;
   }
@@ -4553,6 +4561,9 @@ public:
   inline void set_parallel_enable(bool is_parallel_enable) { is_parallel_enable_ = is_parallel_enable; }
   inline bool is_parallel_enable() const { return is_parallel_enable_; }
 
+  inline void set_result_cache(bool is_result_cache) { is_result_cache_ = is_result_cache; }
+  inline bool is_result_cache() const { return is_result_cache_; }
+
   inline void set_is_udt_udf(bool is_udt_udf) { is_udt_udf_ = is_udt_udf; }
   inline bool get_is_udt_udf() const { return is_udt_udf_; }
   inline void set_is_return_sys_cursor(bool is_ret_cursor) { is_return_sys_cursor_ = is_ret_cursor; }
@@ -4598,6 +4609,9 @@ public:
 
   void set_udf_deterministic(bool is_deterministic);
 
+  inline ObExternalRoutineType get_external_routine_type() const { return external_routine_type_; }
+  inline void set_external_routine_type(ObExternalRoutineType type) { external_routine_type_ = type; }
+
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
@@ -4627,7 +4641,9 @@ public:
                                             K_(dblink_name),
                                             K_(dblink_id),
                                             N_CHILDREN, exprs_,
-                                            K_(expr_hash));
+                                            K_(expr_hash),
+                                            K_(external_routine_type));
+
 private:
   uint64_t udf_id_;
   uint64_t pkg_id_;
@@ -4645,6 +4661,7 @@ private:
   bool is_return_sys_cursor_;
   bool is_aggregate_udf_;
   bool is_aggr_udf_distinct_;
+  bool is_result_cache_;
   common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> nocopy_params_;
   uint64_t loc_; // line 和 column 组合，主要是为call_stack准备
   bool is_udt_cons_;
@@ -4652,6 +4669,7 @@ private:
   common::ObSEArray<ObUDFParamDesc, 5, common::ModulePageAllocator, true> params_desc_v2_;
   common::ObString dblink_name_;
   uint64_t dblink_id_;
+  ObExternalRoutineType external_routine_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUDFRawExpr);
 };

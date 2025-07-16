@@ -70,6 +70,7 @@ const int64_t OB_GROUP_VALIDATE_CONCURRENCY = 1;
 const int64_t OB_MAX_INCREMENTAL_BACKUP_NUM = 64;
 const int64_t OB_MAX_LOG_ARCHIVE_CONCURRENCY = 128;
 const int64_t OB_BACKUP_PIECE_DIR_NAME_LENGTH = 128;
+const int64_t OB_BACKUP_LS_DIR_NAME_LENGTH = 64;
 const int64_t OB_BACKUP_NO_SWITCH_PIECE_ID = 0;
 const int64_t OB_BACKUP_INVALID_PIECE_ID = -1;
 const int64_t OB_BACKUP_SWITCH_BASE_PIECE_ID = 1;
@@ -922,16 +923,31 @@ public:
       const char *authorization,
       const char *extension);
   int set_endpoint(const common::ObStorageType device_type, const char *storage_info);
+  int get_authorization_info(char *authorization, const int64_t length, int64_t &out_len) const;
   int get_authorization_info(char *authorization, const int64_t length) const;
   int get_unencrypted_authorization_info(char *authorization, const int64_t length) const;
+  int get_unencrypted_authorization_info(char *authorization, const int64_t length, int64_t &out_len) const;
 
-private:
+protected:
 #ifdef OB_BUILD_TDE_SECURITY
   virtual int get_access_key_(char *key_buf, const int64_t key_buf_len) const override;
   virtual int parse_storage_info_(const char *storage_info, bool &has_needed_extension) override;
   int encrypt_access_key_(char *encrypt_key, const int64_t length) const;
   int decrypt_access_key_(const char *buf);
 #endif
+};
+
+
+// After removing the cos c sdk, since external table still have the need to access the driver using cos://,
+// this class is specifically provided to convert cos:// to s3://.
+class ObExternalTableStorageInfo : public ObBackupStorageInfo
+{
+public:
+  using ObBackupStorageInfo::set;
+public:
+  ObExternalTableStorageInfo() {}
+  virtual ~ObExternalTableStorageInfo();
+  virtual int set(const char *uri, const char *storage_info) override;
 };
 
 class ObBackupDest final

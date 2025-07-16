@@ -116,21 +116,18 @@ bool ObTabletStat::check_need_report() const
   if (tablet_id.is_ls_inner_tablet()) {
     // do nothing
   } else if (0 < merge_cnt_) { // report by compaction
-    bret = get_total_merge_row_count() >= MERGE_REPORT_MIN_ROW_CNT;
+    bret = get_total_merge_row_count() >= MERGE_MIN_ROW_CNT;
   } else if (0 < query_cnt_) { // only report the slow query
-    const int64_t boost_factor = tablet_id.is_inner_tablet() ? 2 : 1;
-    if (scan_physical_row_cnt_ > 0 &&
-        scan_physical_row_cnt_ >= scan_logical_row_cnt_ * QUERY_REPORT_INEFFICIENT_THRESHOLD * boost_factor) {
+    // if the physical row/micro block count is N times of the logical row/pushdown count, the query is slow
+    const int64_t N_times = tablet_id.is_inner_tablet() ? 6 : 3;
+
+    if (scan_physical_row_cnt_ > QUERY_MIN_SCAN_ROW_CNT &&
+        scan_physical_row_cnt_ >= scan_logical_row_cnt_ * N_times) {
       bret = true;
     }
 
-    if (!bret && scan_micro_block_cnt_ > 0 &&
-        scan_micro_block_cnt_ >= pushdown_micro_block_cnt_ * QUERY_REPORT_INEFFICIENT_THRESHOLD * boost_factor) {
-      bret = true;
-    }
-
-    if (!bret && exist_row_total_table_cnt_ > 0 &&
-        exist_row_total_table_cnt_ >= exist_row_read_table_cnt_ * QUERY_REPORT_INEFFICIENT_THRESHOLD * boost_factor) {
+    if (!bret && scan_micro_block_cnt_ > QUERY_MIN_BLOCK_SCAN_CNT &&
+        scan_micro_block_cnt_ >= pushdown_micro_block_cnt_ * N_times) {
       bret = true;
     }
   }
@@ -222,7 +219,12 @@ ObTabletStatAnalyzer::ObTabletStatAnalyzer()
 
 bool ObTabletStatAnalyzer::is_hot_tablet() const
 {
-  return tablet_stat_.query_cnt_ + tablet_stat_.merge_cnt_ >= ACCESS_FREQUENCY * boost_factor_;
+  // the mini merge count && query count during the past 10 mins
+  static constexpr int64_t MERGE_FREQUENCY = 5;
+  static constexpr int64_t QUERY_FREQUENCY = 20;
+
+  return tablet_stat_.merge_cnt_ >= MERGE_FREQUENCY * boost_factor_
+      || tablet_stat_.query_cnt_ >= QUERY_FREQUENCY * boost_factor_;
 }
 
 bool ObTabletStatAnalyzer::is_insert_mostly() const
@@ -258,13 +260,16 @@ bool ObTabletStatAnalyzer::is_update_or_delete_mostly() const
   return bret;
 }
 
-bool ObTabletStatAnalyzer::has_slow_query() const
+bool ObTabletStatAnalyzer::has_frequent_slow_query() const
 {
   bool bret = false;
-  // all tablet query stats are ineffecient, only check the basic threshold
-  if (tablet_stat_.scan_physical_row_cnt_ >= QUERY_BASIC_ROW_CNT * boost_factor_ ||
-      tablet_stat_.scan_micro_block_cnt_ >= QUERY_BASIC_MICRO_BLOCK_CNT * boost_factor_ ||
-      tablet_stat_.exist_row_total_table_cnt_ >= QUERY_BASIC_ITER_TABLE_CNT * boost_factor_) {
+  const int64_t query_cnt = tablet_stat_.query_cnt_;
+
+  // All tablet query stats collected over the past 10 mins
+  if (query_cnt <= 0) {
+  } else if (tablet_stat_.scan_physical_row_cnt_ >= ObTabletStat::QUERY_MIN_SCAN_ROW_CNT * query_cnt * boost_factor_
+          || tablet_stat_.scan_micro_block_cnt_ >= ObTabletStat::QUERY_MIN_BLOCK_SCAN_CNT * query_cnt * boost_factor_) {
+    // the average query stats over the past 10 mins has reached the threshold
     bret = true;
   }
   return bret;

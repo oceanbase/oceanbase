@@ -22,7 +22,6 @@
 #include "sql/engine/px/ob_px_dtl_msg.h"
 #include "sql/engine/px/ob_granule_util.h"
 #include "sql/engine/ob_engine_op_traits.h"
-#include "sql/engine/connector/ob_jni_scanner.h"
 #include "sql/engine/table/ob_odps_jni_table_row_iter.h"
 
 

@@ -17,6 +17,7 @@
 #include "mittest/mtlenv/mock_tenant_module_env.h"
 #include "mittest/shared_storage/clean_residual_data.h"
 #include "storage/shared_storage/ob_ss_reader_writer.h"
+#include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #undef private
 #undef protected
 
@@ -108,6 +109,7 @@ void TestSSFdCache::SetUpTestCase()
 {
   GCTX.startup_mode_ = observer::ObServerMode::SHARED_STORAGE_MODE;
   EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
+  ASSERT_EQ(OB_SUCCESS, TestSSMacroCacheMgrUtil::wait_macro_cache_ckpt_replay());
 }
 
 void TestSSFdCache::TearDownTestCase()
@@ -163,7 +165,8 @@ TEST_F(TestSSFdCache, cost_time)
   // adjust tenant disk space to ensure private data macro write local. incremental space: 20GB * 0.4 = 8GB
   ObTenantDiskSpaceManager *tenant_disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   int64_t total_disk_size = 20L * 1024L * 1024L * 1024L - ObDiskSpaceManager::DEFAULT_SERVER_TENANT_ID_DISK_SIZE; // 20GB
-  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size(total_disk_size));
+  bool succ_resize = false;
+  ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->resize_total_disk_size(total_disk_size, succ_resize));
   ASSERT_EQ(total_disk_size, tenant_disk_space_mgr->get_total_disk_size());
 
   // prepare file

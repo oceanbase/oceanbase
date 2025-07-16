@@ -178,6 +178,7 @@ struct TableItem
     transpose_table_def_ = NULL;
     // assign default value for compatibility
     catalog_name_ = lib::is_oracle_mode() ? OB_INTERNAL_CATALOG_NAME_UPPER : OB_INTERNAL_CATALOG_NAME;
+    external_location_id_ = common::OB_INVALID_ID;  // 检查权限时临时外表拿不到tableschema
   }
 
   virtual TO_STRING_KV(N_TID, table_id_,
@@ -201,7 +202,7 @@ struct TableItem
                KPC_(function_table_expr),
                K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
                K_(exec_params), KPC_(sample_info), K_(mview_id), K_(need_expand_rt_mv),
-               K_(external_table_partition), K_(catalog_name));
+               K_(external_table_partition), K_(catalog_name), K_(external_location_id));
 
   enum TableType
   {
@@ -358,6 +359,8 @@ struct TableItem
   SampleInfo *sample_info_;
   // transpose table
   TransposeDef *transpose_table_def_;
+  // external location
+  uint64_t external_location_id_;
 };
 
 struct ColumnItem

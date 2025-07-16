@@ -269,7 +269,7 @@ int ObRandomOSSReader::open(const share::ObBackupStorageInfo &storage_info, cons
     ret = OB_INIT_TWICE;
     LOG_WARN("ObRandomOSSReader init twice", KR(ret), KP(this));
   } else if (OB_FAIL(
-        util.get_and_init_device(device_handle_, &storage_info, filename, ObStorageIdMod(table::OB_STORAGE_ID_DDL, ObStorageUsedMod::STORAGE_USED_DDL)))) {
+        util.get_and_init_device(device_handle_, &storage_info, filename, ObStorageIdMod::get_default_ddl_id_mod()))) {
     LOG_WARN("fail to get device manager", KR(ret), K(filename));
   } else if (OB_FAIL(util.set_access_type(&iod_opts, false, 1))) {
     LOG_WARN("fail to set access type", KR(ret));
@@ -505,7 +505,7 @@ int ObPacketStreamFileReader::receive_packet()
       // sleep can reduce cpu usage while the network is not so good.
       // We need not worry about the speed while the speed of load data core is lower than
       // file receiver's.
-      usleep(100 * 1000); // 100 ms
+      ob_usleep(100 * 1000); // 100 ms
       ret = packet_handle_->read_packet(mem_pool, pkt);
       cached_packet_ = static_cast<obmysql::ObMySQLRawPacket *>(pkt);
     }

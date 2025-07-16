@@ -235,7 +235,7 @@ int JVMFunctionHelper::get_lib_path(char *path, uint64_t length, const char* lib
   int ret = OB_SUCCESS;
   const char *env_var_name = "LD_LIBRARY_PATH";
   char *env_str = getenv(env_var_name);
-  LOG_WARN("LD_LIBRARY_PATH: ", K(ObString(env_str)));
+  LOG_INFO("LD_LIBRARY_PATH: ", K(ObString(env_str)));
   bool found = false;
   if (OB_ISNULL(env_str)) {
     ret = OB_ERR_UNEXPECTED;
@@ -497,7 +497,7 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
 int JVMFunctionHelper::load_lib(ObJavaEnvContext &java_env_ctx,
                                 ObHdfsEnvContext &hdfs_env_ctx) {
   int ret = OB_SUCCESS;
-  obsys::ObWLockGuard wg(load_lib_lock_);
+  obsys::ObWLockGuard<> wg(load_lib_lock_);
   if (java_env_ctx.is_valid() && hdfs_env_ctx.is_valid()) {
     // do nothing
     LOG_TRACE("already success to open java and hdfs lib", K(ret));
@@ -647,16 +647,16 @@ bool JVMFunctionHelper::is_valid_loaded_jars_() {
   if (OB_FAIL(ret)) {
     /* do nothing */
   } else if (OB_LIKELY(DATA_VERSION_4_3_5_2 <= data_version)) {
-    if (OB_LIKELY(JAR_VERSION_101 == real_jar_version)) {
+    if (OB_LIKELY(JAR_VERSION_101 <= real_jar_version)) {
       is_valid = true;
     } else {
-      LOG_WARN("current jar version is not 1.0.1", K(ret), K(real_jar_version), K(JAR_VERSION_101));
+      LOG_WARN("current major jar version is not 1.0.1", K(ret), K(real_jar_version), K(JAR_VERSION_101));
     }
   } else if (OB_LIKELY(DATA_VERSION_4_3_5_1 <= data_version)) {
-    if (OB_LIKELY(JAR_VERSION_100 == real_jar_version)) {
+    if (OB_LIKELY(JAR_VERSION_100 <= real_jar_version && real_jar_version < JAR_VERSION_101)) {
       is_valid = true;
     } else {
-      LOG_WARN("current jar version is not 1.0.0", K(ret), K(real_jar_version), K(JAR_VERSION_100));
+      LOG_WARN("current major jar version is not 1.0.0", K(ret), K(real_jar_version), K(JAR_VERSION_100));
     }
   }
   LOG_TRACE("check jar version in detail", K(ret), K(real_jar_version),
@@ -703,10 +703,8 @@ int JVMFunctionHelper::do_init_() {
     LOG_WARN("already inited jni env, but it is null", K(ret));
   } else if (OB_FAIL(init_classes())) {
     LOG_WARN("failed to init useful classes", K(ret));
-  } else { /* do nothing */}
-
-  if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(!is_valid_loaded_jars_())) {
+    ret = OB_JNI_JAVA_EXCEPTION_ERROR;
     LOG_WARN("current env loaded with unexpected jar version", K(ret));
   }
 

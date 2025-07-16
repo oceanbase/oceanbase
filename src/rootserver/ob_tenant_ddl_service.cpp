@@ -1248,8 +1248,10 @@ int ObTenantDDLService::get_root_key_from_primary(const obrpc::ObCreateTenantArg
     } else if (OB_FAIL(root_key_arg.init_for_get(primary_tenant_id))) {
       LOG_WARN("failed to init for get", KR(ret), K(primary_tenant_id));
     }
+    //如果主备租户在同一个单节点的集群，addr里面就会只有一台RS的节点，
+    //skip_call_rs就不能为true。
     if (FAILEDx(notify_root_key(*rpc_proxy_, root_key_arg,
-            addr_list, result, true/*enable_default*/, true/*skip_call_rs*/,
+            addr_list, result, true/*enable_default*/, false/*skip_call_rs*/,
             cluster_id, &allocator))) {
       LOG_WARN("failed to get root key from obs", KR(ret), K(cluster_id),
           K(root_key_arg), K(addr_list));
@@ -1260,7 +1262,7 @@ int ObTenantDDLService::get_root_key_from_primary(const obrpc::ObCreateTenantArg
     if (OB_INVALID_ROOT_KEY == ret) {
       LOG_USER_ERROR(OB_INVALID_ROOT_KEY, "Can not get root key from primary tenant");
     }
-    LOG_INFO("get root key from primary tenant", K(primary_tenant_id), K(tenant_id), K(value),
+    FLOG_INFO("get root key from primary tenant", K(primary_tenant_id), K(tenant_id), K(value),
         K(addr_list), K(key_type), K(key_value), K(cluster_id));
   }
   return ret;
@@ -1318,7 +1320,8 @@ int ObTenantDDLService::notify_root_key(
     int tmp_ret = OB_SUCCESS;
     int return_ret = OB_SUCCESS;
     // need_to_call_rs is true only if skip_call_rs is false and not notify cross-cluster
-    bool need_call_rs = (!skip_call_rs) && (OB_INVALID_CLUSTER_ID == cluster_id);
+    // 存在单机上面既有主库也有备库，cluster_id有效也是要访问RS的
+    bool need_call_rs = !skip_call_rs;
     ObAddr rs_addr = GCONF.self_addr_;
     int64_t timeout = ctx.get_timeout();
     for (int64_t i = 0; OB_SUCC(ret) && i < addrs.count(); i++) {
@@ -1333,7 +1336,8 @@ int ObTenantDDLService::notify_root_key(
         need_call_rs = false;
       }
     } // end for
-    if (OB_FAIL(ret) || !need_call_rs) {
+    if (OB_FAIL(ret) || !need_call_rs || OB_INVALID_CLUSTER_ID != cluster_id) {
+      //如果不是本集群，不需要单独发一遍本集群的RS节点
     } else if (OB_TMP_FAIL(proxy.call(rs_addr, timeout, cluster_id, OB_SYS_TENANT_ID, arg))) {
       has_failed = true;
       return_ret= tmp_ret;
@@ -2168,6 +2172,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_value_system_trig_enabled("false");
   ObString config_name_enable_ps_paramterize("enable_ps_parameterize");
   ObString config_value_enable_ps_paramterize("false");
+  ObString config_name_update_trigger("_update_all_columns_for_trigger");
+  ObString config_value_update_trigger("false");
   if (OB_FAIL(ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(config_value))) {
     LOG_WARN("fail to generate parallel ddl control config value", KR(ret));
   }
@@ -2185,6 +2191,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_system_trig_enabled), K(config_value_system_trig_enabled));
       } else if (OB_FAIL(parallel_table_config.add_config(config_name_enable_ps_paramterize, config_value_enable_ps_paramterize))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_enable_ps_paramterize), K(config_value_enable_ps_paramterize));
+      } else if (OB_FAIL(parallel_table_config.add_config(config_name_update_trigger, config_value_update_trigger))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_update_trigger), K(config_value_update_trigger));
       }
     }
   }

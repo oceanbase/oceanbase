@@ -16,6 +16,7 @@
 #include "share/external_table/ob_external_table_utils.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/ob_diagnosis_manager.h"
 
 namespace oceanbase
 {
@@ -127,6 +128,16 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     int64_t part_id = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
     const ObString &file_url = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_URL].get_string();
     int64_t file_id = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_ID].get_int();
+  }
+
+  ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
+  const ObSQLSessionInfo *session = nullptr;
+  if (OB_ISNULL(session = eval_ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid session", K(ret));
+  } else if (session->is_diagnosis_enabled() &&
+            !session->get_diagnosis_info().bad_file_.empty()) {
+    is_bad_file_enabled_ = true;
   }
 
   return ret;
@@ -320,45 +331,56 @@ void ObCSVTableRowIterator::dump_error_log(ObIArray<ObCSVGeneralParser::LineErrR
   }
 }
 
-int ObCSVTableRowIterator::record_err_for_select_data(int err_ret,
-                                                      const char *message,
-                                                      int64_t limit_num)
-{
-  int ret = OB_SUCCESS;
-  ObWarningBuffer *buffer = ob_get_tsi_warning_buffer();
-
-  if (OB_NOT_NULL(buffer)) {
-    buffer->append_warning(message, err_ret);
-  }
-  if (limit_num >= 0 && buffer->get_total_warning_count() > limit_num) {
-    ret = OB_REACH_DIAGNOSIS_ERROR_LIMIT;
-  }
-  return ret;
-}
-
 int ObCSVTableRowIterator::handle_error_msgs(
                                       common::ObIArray<ObCSVGeneralParser::LineErrRec> &error_msgs)
 {
   int ret = OB_SUCCESS;
-  ObSQLSessionInfo* session_info = scan_param_->op_->get_eval_ctx().exec_ctx_.get_my_session();
+  ObExecContext &exec_ctx = scan_param_->op_->get_eval_ctx().exec_ctx_;
+  ObSQLSessionInfo* session_info = exec_ctx.get_my_session();
+  ObDiagnosisManager& diagnosis_manager = exec_ctx.get_diagnosis_manager();
+
   if (session_info->is_diagnosis_enabled()) {
     for (int i = 0; OB_SUCC(ret) && i < error_msgs.count(); ++i) {
-      ObSqlString err_msg;
-      if (OB_FAIL(err_msg.append_fmt("parse row warning: file_name=%.*s, rownum=%ld, error=%s",
-                      static_cast<int>(state_.cur_file_name_.length()), state_.cur_file_name_.ptr(),
-                      error_msgs.at(i).line_no + 1 + parser_.get_format().skip_header_lines_,
-                      common::ob_strerror(error_msgs.at(i).err_code)))) {
-        LOG_WARN("failed to append error message", K(ret));
-      } else if (OB_FAIL(record_err_for_select_data(error_msgs.at(i).err_code,
-                                                    err_msg.ptr(),
-                                                    session_info->get_diagnosis_limit_num()))) {
-        LOG_WARN("failed to record error", K(ret));
+      int64_t line_num = error_msgs.at(i).line_no + 1 + parser_.get_format().skip_header_lines_;
+      if (OB_FAIL(diagnosis_manager.missing_col_idxs_.push_back(line_num))) {
+        LOG_WARN("failed to push back missing column number into array", K(ret), K(line_num));
       }
     }
   } else {
     dump_error_log(error_msgs);
   }
 
+  return ret;
+}
+
+int ObCSVTableRowIterator::handle_bad_file_line(ObCSVTableRowIterator *csv_iter,
+                                                ObEvalCtx &eval_ctx,
+                                                ObCSVGeneralParser::HandleOneLineParam &param)
+{
+  int ret = OB_SUCCESS;
+  // Add a "line term" at the end to prevent data from being
+  // on the same line with the next line of data
+  if (param.is_file_end_) {
+    ObSqlString line_data_with_term;
+    ObString tmp_str;
+    ObString line_term_str = csv_iter->parser_.get_format().line_term_str_;
+    if (OB_FAIL(line_data_with_term.append(param.line_data_))) {
+      LOG_WARN("failed to append line data", K(ret), K(param.line_data_));
+    } else if (OB_FAIL(line_data_with_term.append(line_term_str))) {
+      LOG_WARN("failed to append line term str", K(ret), K(line_term_str));
+    } else if (OB_FAIL(ob_write_string(csv_iter->arena_alloc_,
+                                      line_data_with_term.string(), tmp_str))) {
+      LOG_WARN("failed to write string", K(ret), K(line_data_with_term));
+    } else {
+      param.line_data_ = tmp_str;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObDiagnosisManager& diagnosis_manager = eval_ctx.exec_ctx_.get_diagnosis_manager();
+    if (OB_FAIL(diagnosis_manager.data_.push_back(param.line_data_))) {
+      LOG_WARN("failed to push back line data into array", K(ret), K(param.line_data_));
+    }
+  }
   return ret;
 }
 
@@ -375,16 +397,18 @@ int ObCSVTableRowIterator::get_next_row()
             const ExprFixedArray &file_column_exprs,
             ObEvalCtx &eval_ctx,
             bool is_oracle_mode,
-            int64_t &returned_row_cnt) :
+            int64_t &returned_row_cnt,
+            bool is_bad_file_enabled) :
             csv_iter_(csv_iter), file_column_exprs_(file_column_exprs), eval_ctx_(eval_ctx),
-            is_oracle_mode_(is_oracle_mode), returned_row_cnt_(returned_row_cnt)
+            is_oracle_mode_(is_oracle_mode), returned_row_cnt_(returned_row_cnt),
+            is_bad_file_enabled_(is_bad_file_enabled)
     {}
     ObCSVTableRowIterator *csv_iter_;
     const ExprFixedArray &file_column_exprs_;
     ObEvalCtx &eval_ctx_;
     bool is_oracle_mode_;
     int64_t &returned_row_cnt_;
-
+    bool is_bad_file_enabled_;
     int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
       int ret = OB_SUCCESS;
       for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); ++i) {
@@ -419,12 +443,19 @@ int ObCSVTableRowIterator::get_next_row()
         }
       }
 
+      if (OB_SUCC(ret) && is_bad_file_enabled_) {
+        if (OB_FAIL(handle_bad_file_line(csv_iter_, eval_ctx_, param))) {
+           LOG_WARN("failed to handle bad file line data", K(ret));
+        }
+      }
+
       returned_row_cnt_++;
       return ret;
     }
   };
 
-  struct Functor handle_one_line(this, file_column_exprs, eval_ctx, is_oracle_mode, returned_row_cnt);
+  struct Functor handle_one_line(this, file_column_exprs, eval_ctx, is_oracle_mode,
+                                returned_row_cnt, is_bad_file_enabled_);
 
   int64_t nrows = 0;
   do {
@@ -506,15 +537,18 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
             const ExprFixedArray &file_column_exprs,
             ObEvalCtx &eval_ctx,
             bool is_oracle_mode,
-            int64_t &returned_row_cnt) :
+            int64_t &returned_row_cnt,
+            bool is_bad_file_enabled) :
             csv_iter_(csv_iter), file_column_exprs_(file_column_exprs), eval_ctx_(eval_ctx),
-            is_oracle_mode_(is_oracle_mode), returned_row_cnt_(returned_row_cnt)
+            is_oracle_mode_(is_oracle_mode), returned_row_cnt_(returned_row_cnt),
+            is_bad_file_enabled_(is_bad_file_enabled)
     {}
     ObCSVTableRowIterator *csv_iter_;
     const ExprFixedArray &file_column_exprs_;
     ObEvalCtx &eval_ctx_;
     bool is_oracle_mode_;
     int64_t &returned_row_cnt_;
+    bool is_bad_file_enabled_;
 
     int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
       int ret = OB_SUCCESS;
@@ -552,6 +586,13 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         }
       }
     }
+
+    if (OB_SUCC(ret) && is_bad_file_enabled_) {
+      if (OB_FAIL(handle_bad_file_line(csv_iter_, eval_ctx_, param))) {
+          LOG_WARN("failed to handle bad file line data", K(ret));
+      }
+    }
+
     returned_row_cnt_++;
     return ret;
     }
@@ -560,7 +601,8 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
     OZ (expand_buf());
     state_.need_expand_buf_ = false;
   }
-  struct Functor handle_one_line(this, file_column_exprs, eval_ctx, is_oracle_mode, returned_row_cnt);
+  struct Functor handle_one_line(this, file_column_exprs, eval_ctx, is_oracle_mode,
+                                returned_row_cnt, is_bad_file_enabled_);
   int64_t nrows = 0;
   if (OB_SUCC(ret)) {
     do {

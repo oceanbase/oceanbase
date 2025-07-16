@@ -159,8 +159,7 @@ const char *exec_mode_to_str(const ObExecMode &exec_mode);
 enum ObGetMacroSeqStage : uint8_t
 {
   BUILD_INDEX_TREE = 0,
-  BUILD_TABLET_META = 1,
-  GET_NEW_ROOT_MACRO_SEQ = 2, // for next major
+  GET_NEW_ROOT_MACRO_SEQ = 1, // for next major
   MACRO_SEQ_TYPE_MAX
 };
 bool is_valid_get_macro_seq_stage(const ObGetMacroSeqStage stage);

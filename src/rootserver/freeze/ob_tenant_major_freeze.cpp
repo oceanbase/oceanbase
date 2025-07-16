@@ -15,9 +15,6 @@
 #include "rootserver/freeze/ob_tenant_major_freeze.h"
 
 #include "share/ob_tablet_meta_table_compaction_operator.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction/ob_tenant_ls_merge_checker.h"
-#endif
 #include "share/schema/ob_mview_info.h"
 
 
@@ -316,23 +313,8 @@ int ObTenantMajorFreeze::clear_merge_error()
     if (-1 == expected_epoch) {
       ret = OB_EAGAIN;
       LOG_WARN("epoch has not been updated, will retry", KR(ret), K_(tenant_id));
-    } else if (!GCTX.is_shared_storage_mode()
-            && OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_status(tenant_id_, expected_epoch))) {
+    } else if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_status(tenant_id_, expected_epoch))) {
       LOG_WARN("fail to batch update status", KR(ret), K_(tenant_id), K(expected_epoch));
-    } else if (GCTX.is_shared_storage_mode()) {
-#ifdef OB_BUILD_SHARED_STORAGE
-      MTL_SWITCH(tenant_id_) {
-        compaction::ObTenantLSMergeChecker *tenant_ls_merge_checker = nullptr;
-        if (OB_ISNULL(tenant_ls_merge_checker = MTL(compaction::ObTenantLSMergeChecker *))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("ls merge checker is unexpected null", K(ret), K_(tenant_id));
-        } else if (OB_FAIL(tenant_ls_merge_checker->clear_merge_error())) {
-          LOG_WARN("failed to clear merge error", K(ret));
-        }
-      } else {
-        LOG_WARN("fail to switch tenant", K(ret), K_(tenant_id));
-      }
-#endif
     }
 
     if (FAILEDx(major_merge_info_mgr_.get_zone_merge_mgr().set_merge_status(error_type, expected_epoch))) {

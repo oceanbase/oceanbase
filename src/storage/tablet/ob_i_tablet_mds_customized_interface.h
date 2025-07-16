@@ -42,8 +42,27 @@ public:
                              share::SCN &trans_version,
                              const int64_t read_seq = 0) const;
 
+  int get_split_info_data(const share::SCN &snapshot,
+                          ObTabletSplitInfoMdsUserData &data,
+                          const int64_t timeout = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US) const;
+  int get_latest_committed_tablet_status(ObTabletCreateDeleteMdsUserData &data) const;
+  int get_latest_binding_info(ObTabletBindingMdsUserData &data,
+    mds::MdsWriter &writer,
+    mds::TwoPhaseCommitState &trans_stat,
+    share::SCN &trans_version) const;
   // customized get_snapshot
   // TODO (jiahua.cjh): move interface from ob_i_tablet_mds_interface to this file
+};
+
+struct ReadSplitInfoDataOp
+{
+public:
+  ReadSplitInfoDataOp(ObTabletSplitInfoMdsUserData &split_ss_data) :  split_ss_data_(split_ss_data) {}
+  int operator() (const ObTabletSplitInfoMdsUserData &ddl_split_ss_data) {
+    return split_ss_data_.assign(ddl_split_ss_data);
+  }
+public:
+  ObTabletSplitInfoMdsUserData &split_ss_data_;
 };
 
 }

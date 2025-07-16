@@ -1,4 +1,4 @@
-# owner: xuwang.txw
+# owner: wx372254
 # owner group: transaction
 # description: this case is used for testing basic transactional deadlock detector case
 

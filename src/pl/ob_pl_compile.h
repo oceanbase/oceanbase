@@ -69,6 +69,8 @@ public:
     schema_guard_(schema_guard),
     package_guard_(package_guard),
     sql_proxy_(sql_proxy) {}
+
+  static ObMutex package_dep_info_lock_;
   virtual ~ObPLCompiler() {}
 
   int compile(const ObStmtNodeTree *block,
@@ -151,8 +153,6 @@ private:
   share::schema::ObSchemaGetterGuard &schema_guard_;
   ObPLPackageGuard &package_guard_;
   common::ObMySQLProxy &sql_proxy_;
-
-  static ObMutex package_dep_info_lock_;
 };
 
 class ObPLCompilerEnvGuard

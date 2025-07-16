@@ -121,11 +121,13 @@ private:
       blocksstable::MacroBlockId &wait_gc_tablet_entry,
       ObSlogCheckpointFdDispenser *fd_dispenser);
   int persist_and_copy_tablet(
+      const uint64_t data_version,
       const ObTabletMapKey &tablet_key,
       const ObMetaDiskAddr &old_addr,
       const int64_t ls_epoch,
       char (&slog_buf)[sizeof(ObUpdateTabletLog)]);
   int copy_tablet(
+      const uint64_t data_version,
       const ObTabletMapKey &tablet_key,
       const int64_t ls_epoch,
       char (&slog_buf)[sizeof(ObUpdateTabletLog)],

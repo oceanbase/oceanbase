@@ -138,7 +138,6 @@ const int64_t ObKVGlobalCache::bucket_num_array_[MAX_BUCKET_NUM_LEVEL] =
       201326611l,   // more than 512G, 2G kvcache meta
       402653189ll   // more than 1024G, 4G kvcache meta
     };
-ObKVGlobalCache ObKVGlobalCache::instance_;
 
 ObKVGlobalCache::ObKVGlobalCache()
     : inited_(false),
@@ -162,6 +161,7 @@ ObKVGlobalCache::~ObKVGlobalCache()
 
 ObKVGlobalCache &ObKVGlobalCache::get_instance()
 {
+  static ObKVGlobalCache instance_;
   return instance_;
 }
 

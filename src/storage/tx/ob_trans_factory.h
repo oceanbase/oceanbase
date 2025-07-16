@@ -25,6 +25,7 @@ namespace obrpc
 {
 class ObGtsRpcProxy;
 class ObGtiRpcProxy;
+class ObSSLogUIDRpcProxy;
 }
 namespace transaction
 {
@@ -47,6 +48,7 @@ class ObDupTableRedoSyncTask;
 class ObGtsRequestRpc;
 class ObGtiRequestRpc;
 class ObTxCommitCallbackTask;
+class ObSSLogUIDRequestRpc;
 
 class ObTransCtxFactory
 {
@@ -189,6 +191,8 @@ MAKE_FACTORY_CLASS_DEFINE_V2(ObGtsRpcProxy, obrpc::ObGtsRpcProxy)
 MAKE_FACTORY_CLASS_DEFINE(ObGtiRequestRpc)
 MAKE_FACTORY_CLASS_DEFINE_V2(ObGtiRpcProxy, obrpc::ObGtiRpcProxy)
 MAKE_FACTORY_CLASS_DEFINE(ObTxCommitCallbackTask)
+MAKE_FACTORY_CLASS_DEFINE(ObSSLogUIDRequestRpc)
+MAKE_FACTORY_CLASS_DEFINE_V2(ObSSLogUIDRpcProxy, obrpc::ObSSLogUIDRpcProxy)
 
 class MultiTxDataFactory
 {

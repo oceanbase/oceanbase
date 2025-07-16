@@ -723,7 +723,8 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
       false/*is_split_dest_tablet*/, ObTabletID()/*split_src_tablet_id*/, false/*micro_index_clustered*/, false/*need_generate_cs_replica_cg_array*/, false/*has_cs_replica*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
-  const ObTabletPersisterParam persist_param(ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
   ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
   ObSArray<MacroBlockId> shared_meta_id_arr;
 
@@ -731,10 +732,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
       *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
-  if (OB_ISNULL(new_handle.get_obj()->macro_info_addr_.get_ptr())) {
-    new_handle.get_obj()->macro_info_addr_.ptr_ = &tablet_macro_info;
-  }
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(new_handle, space_usage));
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ObMetaDiskAddr addr = new_handle.get_obj()->get_tablet_addr();
   ObUpdateTabletPointerParam param;
@@ -830,18 +828,16 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
+  const uint64_t data_version = DATA_CURRENT_VERSION;
   ObTabletHandle new_handle;
-  const ObTabletPersisterParam persist_param(ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
+  const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
   ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
 
   ObSArray<MacroBlockId> shared_meta_id_arr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
       *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
-  if (OB_ISNULL(new_handle.get_obj()->macro_info_addr_.get_ptr())) {
-    new_handle.get_obj()->macro_info_addr_.ptr_ = &tablet_macro_info;
-  }
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(new_handle, space_usage));
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ObMetaDiskAddr addr = new_handle.get_obj()->get_tablet_addr();
 
@@ -948,16 +944,14 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ASSERT_EQ(1, tablet->get_ref());
 
   ObTabletHandle new_handle;
-  const ObTabletPersisterParam persist_param(ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
   ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
   ObSArray<MacroBlockId> shared_meta_id_arr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
       *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
-  if (OB_ISNULL(new_handle.get_obj()->macro_info_addr_.get_ptr())) {
-    new_handle.get_obj()->macro_info_addr_.ptr_ = &tablet_macro_info;
-  }
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(new_handle, space_usage));
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ObUpdateTabletPointerParam param;
   ret = new_handle.get_obj()->get_updating_tablet_pointer_param(param);
@@ -1032,7 +1026,7 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObTabletCreateSSTableParam param;
-  ret = param.init_for_empty_major_sstable(tablet_id, create_tablet_schema, 100, -1, false);
+  ret = param.init_for_empty_major_sstable(tablet_id, create_tablet_schema, 100, -1, false, false);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ret = ObTabletCreateDeleteHelper::create_sstable(param, allocator_, sstable);
@@ -1052,16 +1046,14 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ASSERT_EQ(1, tablet->get_ref());
 
   ObTabletHandle new_handle;
-  const ObTabletPersisterParam persist_param(ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq());
   ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
   ObSArray<MacroBlockId> shared_meta_id_arr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
   ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
       *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
-  if (OB_ISNULL(new_handle.get_obj()->macro_info_addr_.get_ptr())) {
-    new_handle.get_obj()->macro_info_addr_.ptr_ = &tablet_macro_info;
-  }
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(new_handle, space_usage));
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
 
   ObUpdateTabletPointerParam update_pointer_param;
   ret = new_handle.get_obj()->get_updating_tablet_pointer_param(update_pointer_param);

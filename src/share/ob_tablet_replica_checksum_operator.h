@@ -233,40 +233,6 @@ private:
       const int64_t start_idx,
       const int64_t end_idx,
       common::ObISQLClient &sql_client);
-#ifdef OB_BUILD_SHARED_STORAGE
-public:
-  static int batch_select_and_update_with_trans(
-      const uint64_t tenant_id,
-      const common::ObIArray<ObTabletReplicaChecksumItem> &items);
-private:
-  static int inner_batch_select_and_update_by_sql_(
-      const uint64_t tenant_id,
-      const common::ObIArray<ObTabletReplicaChecksumItem> &items,
-      const int64_t start_idx,
-      const int64_t end_idx,
-      common::ObISQLClient &sql_client,
-      ObTabletSimpleCkmInfoMap &map);
-  static int build_ckm_info_map_(
-      const uint64_t tenant_id,
-      const ObIArray<ObTabletReplicaChecksumItem> &items,
-      const int64_t start_idx,
-      const int64_t end_idx,
-      ObISQLClient &sql_client,
-      ObTabletSimpleCkmInfoMap &map);
-  static int update_with_map_(
-    const uint64_t tenant_id,
-    const ObIArray<ObTabletReplicaChecksumItem> &items,
-    const int64_t start_idx,
-    const int64_t end_idx,
-    ObISQLClient &sql_client,
-    ObTabletSimpleCkmInfoMap &map);
-  static int gene_select_sql_(
-      const uint64_t tenant_id,
-      const ObIArray<ObTabletReplicaChecksumItem> &items,
-      const int64_t start_idx,
-      const int64_t end_idx,
-      ObSqlString &sql);
-#endif
   static int inner_batch_remove_by_sql_(
       const uint64_t tenant_id,
       const common::ObIArray<share::ObTabletReplica> &tablet_replicas,

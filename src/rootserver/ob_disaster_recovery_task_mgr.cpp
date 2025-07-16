@@ -14,6 +14,8 @@
 
 #include "ob_disaster_recovery_task_mgr.h"
 #include "ob_disaster_recovery_task.h"
+#include "ob_disaster_recovery_worker.h"
+#include "ob_disaster_recovery_info.h"
 #include "ob_rs_event_history_table_operator.h"
 #include "observer/ob_inner_sql_connection.h"
 #include "rootserver/ob_root_utils.h"
@@ -122,6 +124,7 @@ int ObDRTaskMgr::check_inner_stat_() const
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_META_DISASTER_RECOVERY_POP_AND_EXECUTE_TASK);
 ERRSIM_POINT_DEF(ERRSIM_DISASTER_RECOVERY_POP_AND_EXECUTE_TASK);
 int ObDRTaskMgr::try_pop_and_execute_task(
     const uint64_t table_tenant_id)
@@ -133,6 +136,8 @@ int ObDRTaskMgr::try_pop_and_execute_task(
   if (OB_UNLIKELY(ERRSIM_DISASTER_RECOVERY_POP_AND_EXECUTE_TASK)) {
     // for test, return success, skip pop task
     LOG_INFO("errsim disaster recovery pop and execute task", KR(ret));
+  } else if (is_meta_tenant(table_tenant_id) && OB_UNLIKELY(ERRSIM_META_DISASTER_RECOVERY_POP_AND_EXECUTE_TASK)) {
+    LOG_INFO("errsim meta tenant disaster recovery pop and execute task", KR(ret));
   } else if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("failed to check inner stat", KR(ret));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
@@ -198,6 +203,7 @@ int ObDRTaskMgr::try_clean_and_cancel_task(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_DISASTER_RECOVERY_SKIP_SEND_TASK_RPC);
 int ObDRTaskMgr::execute_task_(
     ObDRTask &task)
 {
@@ -219,6 +225,8 @@ int ObDRTaskMgr::execute_task_(
       LOG_WARN("failed to check before execute dr task", KR(ret), K(task));
     } else if (OB_FAIL(update_task_schedule_status_(task))) {
       LOG_WARN("failed to update task status", KR(ret), K(task));
+    } else if (OB_UNLIKELY(ERRSIM_DISASTER_RECOVERY_SKIP_SEND_TASK_RPC)) {
+      LOG_INFO("errsim disaster recovery skip send task rpc");
     } else if (OB_FAIL(task.execute(*GCTX.srv_rpc_proxy_, ret_comment))) {
       // task can only be executed after task status update success
       LOG_WARN("fail to execute task", KR(ret), K(task));
@@ -360,10 +368,12 @@ int ObDRTaskMgr::check_and_set_parallel_migrate_task_()
 int ObDRTaskMgr::check_clean_and_cancel_task_()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   bool need_cleaning = false;
   bool need_cancel = false;
   ObDRTaskRetComment ret_comment = ObDRTaskRetComment::MAX;
   for (int64_t i = 0; OB_SUCC(ret) && i < dr_tasks_.count(); ++i) {
+    // ignore ret code for isolation different task
     need_cleaning = false;
     need_cancel = false;
     ret_comment = ObDRTaskRetComment::MAX;
@@ -371,23 +381,71 @@ int ObDRTaskMgr::check_clean_and_cancel_task_()
     if (OB_ISNULL(task)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("task is nullptr", KR(ret), KP(task));
-    } else if (!task->get_task_status().is_inprogress_status()) {
-      // skip
-    } else if (OB_FAIL(check_task_need_cleaning_(*task, need_cleaning, ret_comment))) {
-      LOG_WARN("fail to check task need cleaning", KR(ret), KP(task));
-    } else if (need_cleaning ) {
-      LOG_INFO("[DRTASK_NOTICE] need clean migrate task in schedule list", KP(task));
-      if (OB_FAIL(DisasterRecoveryUtils::record_history_and_clean_task(
-                    *task, OB_LS_REPLICA_TASK_RESULT_UNCERTAIN, ret_comment))) {
-        LOG_WARN("failed to remove task and record task history", KR(ret), KP(task));
+    } else {
+      if (task->get_task_status().is_inprogress_status() && OB_TMP_FAIL(check_task_need_cleaning_(*task, need_cleaning, ret_comment))) {
+        LOG_WARN("fail to check task need cleaning", KR(tmp_ret), KP(task));
       }
-    } else if (OB_FAIL(check_need_cancel_migrate_task_(*task, need_cancel))) {
-      LOG_WARN("fail to check need cancel migrate task", KR(ret), KP(task));
-    } else if (need_cancel) {
-      LOG_INFO("[DRTASK_NOTICE] need cancel migrate task in schedule list", KP(task));
-      if (OB_FAIL(DisasterRecoveryUtils::send_rpc_to_cancel_task(*task))) {
-        LOG_WARN("fail to send rpc to cancel migrate task", KR(ret), KP(task));
+      // ignore tmp_ret
+      if (!need_cleaning && OB_TMP_FAIL(check_cleanup_tasks_for_cross_az_dr_(*task, need_cleaning, ret_comment))) {
+        LOG_WARN("failed to cleanup task for cross az dr", KR(tmp_ret), KP(task));
       }
+      if (need_cleaning) {
+        LOG_INFO("[DRTASK_NOTICE] need clean invalid dr task", KPC(task));
+        if (OB_TMP_FAIL(DisasterRecoveryUtils::record_history_and_clean_task(*task, OB_LS_REPLICA_TASK_RESULT_UNCERTAIN, ret_comment))) {
+          LOG_WARN("failed to remove task and record task history", KR(tmp_ret), KP(task));
+        }
+      } else if (task->get_task_status().is_inprogress_status() && OB_TMP_FAIL(check_need_cancel_migrate_task_(*task, need_cancel))) {
+        LOG_WARN("fail to check need cancel migrate task", KR(tmp_ret), KP(task));
+      } else if (need_cancel) {
+        LOG_INFO("[DRTASK_NOTICE] need cancel migrate task in schedule list", KPC(task));
+        if (OB_TMP_FAIL(DisasterRecoveryUtils::send_rpc_to_cancel_task(*task))) {
+          LOG_WARN("fail to send rpc to cancel migrate task", KR(tmp_ret), KP(task));
+        }
+      }
+    } // end else
+  }
+  return ret;
+}
+
+int ObDRTaskMgr::check_cleanup_tasks_for_cross_az_dr_(
+    const ObDRTask &task,
+    bool &need_cleanning,
+    ObDRTaskRetComment &ret_comment)
+{
+  // When the LS needs to perform a replace replica task, other invalid DR tasks need to be cleaned up,
+  // regardless of whether the task status INPROGRESS a or WAITING.
+  int ret = OB_SUCCESS;
+  need_cleanning = false;
+  if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null ptr", KR(ret), KP(GCTX.schema_service_), KP(GCTX.sql_proxy_));
+  } else if (ObDRTaskType::LS_REPLACE_REPLICA == task.get_disaster_recovery_task_type()) {
+    // skip
+  } else if (!ObRootUtils::is_dr_replace_deployment_mode_match()) {
+    LOG_TRACE("no need check for corss az dr");
+  } else {
+    common::ObZone dest_zone; // not used
+    ObServerInfoInTable source_server; // not used
+    palf::LogConfigVersion config_version; // not used
+    ObDRWorker dr_worker;
+    bool found_replace_task = false;
+    ObLSStatusOperator ls_status_operator;
+    ObLSStatusInfo ls_status_info;
+    DRLSInfo dr_ls_info_with_flag(gen_user_tenant_id(task.get_tenant_id()), GCTX.schema_service_);
+    if (OB_FAIL(ls_status_operator.get_ls_status_info(task.get_tenant_id(), task.get_ls_id(), ls_status_info, *GCTX.sql_proxy_))) {
+      LOG_WARN("fail to get ls status info", KR(ret), K(task), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(dr_worker.build_ls_info_for_cross_az_dr(ls_status_info, dr_ls_info_with_flag))) {
+      LOG_WARN("fail to init dr log stream info", KR(ret), K(ls_status_info));
+    } else if (OB_FAIL(dr_worker.check_ls_single_replica_dr_tasks(dr_ls_info_with_flag,
+                                                                  config_version,
+                                                                  source_server,
+                                                                  dest_zone,
+                                                                  found_replace_task))) {
+      LOG_WARN("fail to check ls single replica tasks", KR(ret), K(dr_ls_info_with_flag));
+    } else if (found_replace_task) {
+      need_cleanning = true;
+      ret_comment = ObDRTaskRetComment::CANNOT_EXECUTE_DUE_TO_NEED_GENERATE_REPLACE_REPLACA_TASK;
+      LOG_INFO("need clean for corss az dr has replace replica task");
     }
   }
   return ret;

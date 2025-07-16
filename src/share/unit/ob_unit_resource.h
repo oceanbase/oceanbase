@@ -97,7 +97,7 @@ public:
   static const int64_t META_TENANT_DATA_DISK_SIZE_PERCENTAGE = 10;
   static const int64_t HIDDEN_SYS_TENANT_MIN_DATA_DISK_SIZE = 2LL * GB;  // 2G
   static const int64_t META_TENANT_MIN_DATA_DISK_SIZE = 1LL * GB;  // 1G
-  static const int64_t META_TENANT_MAX_DATA_DISK_SIZE = 4LL * GB;  // 4G
+  static const int64_t META_TENANT_MAX_DATA_DISK_SIZE = 16LL * GB;  // 16G
   static const int64_t USER_TENANT_MIN_DATA_DISK_SIZE = 1LL * GB;  // 1G
   static const int64_t UNIT_MIN_DATA_DISK_SIZE = META_TENANT_MIN_DATA_DISK_SIZE + USER_TENANT_MIN_DATA_DISK_SIZE;  // 2G
   // default factor of mapping MEMORY_SIZE to DATA_DISK_SIZE

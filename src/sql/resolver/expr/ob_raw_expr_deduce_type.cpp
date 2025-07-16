@@ -25,6 +25,12 @@ using namespace common;
 namespace sql
 {
 
+OB_INLINE static ObScale round_up_scale(const ObScale scale)
+{
+  static const ObScale DIV_CALC_SCALE = 9;
+  return static_cast<ObScale>(((scale) + DIV_CALC_SCALE - 1) / DIV_CALC_SCALE * DIV_CALC_SCALE);
+}
+
 int ObRawExprDeduceType::deduce(ObRawExpr &expr)
 {
   return expr.postorder_accept(*this);
@@ -128,7 +134,11 @@ int ObRawExprDeduceType::visit(ObQueryRefRawExpr &expr)
 {
   int ret = OB_SUCCESS;
   if (expr.is_cursor()) {
-    expr.set_data_type(ObExtendType);
+    sql::ObRawExprResType result_type;
+    result_type.reset();
+    result_type.set_ext();
+    result_type.set_extend_type(pl::PL_REF_CURSOR_TYPE);
+    expr.set_result_type(result_type);
   } else if (expr.is_scalar()) {
     expr.set_result_type(expr.get_column_types().at(0));
   } else {
@@ -444,6 +454,14 @@ int ObRawExprDeduceType::push_back_types(const ObRawExpr *param_expr, ObIExprRes
     if (ob_is_decimal_int_tc(param_expr->get_result_type().get_type()) &&
         T_FUN_SYS_CAST == param_expr->get_expr_type()) {
       types.at(idx).add_decimal_int_cast_mode(param_expr->get_cast_mode());
+    }
+    const bool is_mysql_number = lib::is_mysql_mode() && types.at(idx).is_number();
+    if (is_mysql_number && param_expr->need_extra_calc_type(is_mysql_number)) {
+      if (DECIMAL_INT_ADJUST_FLAG == types.at(idx).get_result_flag()) {
+        types.at(idx).set_calc_scale(round_up_scale(types.at(idx).get_scale()));
+      } else {
+        types.at(idx).set_calc_scale(param_expr->get_extra_calc_scale());
+      }
     }
   }
   return ret;
@@ -1741,6 +1759,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           result_type = child_expr->get_result_type();
           ObObjType obj_type = result_type.get_type();
           ObScale scale_increment = 0;
+          ObScale calc_scale = child_expr->get_extra_calc_scale();
           if (T_FUN_AVG == expr.get_expr_type()) {
             int64_t increment = 0;
             if (OB_ISNULL(my_session_)) {
@@ -1869,6 +1888,11 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
               scale_increment_recover = result_type.get_scale();
               result_type.set_scale(static_cast<ObScale>(
                 MIN(OB_MAX_DOUBLE_FLOAT_SCALE, result_type.get_scale() + scale_increment)));
+              result_type.set_calc_scale(
+                static_cast<ObScale>(MIN(OB_MAX_DOUBLE_FLOAT_SCALE, calc_scale + scale_increment)));
+              if (OB_FAIL(set_extra_calc_type_info(expr, result_type))) {
+                LOG_WARN("failed to set extra calc type info", K(ret), K(expr));
+              }
             }
             int64_t precision_increment = scale_increment;
             int16_t result_precision = result_type.get_precision();
@@ -3262,14 +3286,9 @@ int ObRawExprDeduceType::visit(ObMatchFunRawExpr &expr)
 
 int ObRawExprDeduceType::visit(ObUnpivotRawExpr &expr)
 {
+  //result type has been set in resolver
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(expr.get_param_count() <= 0) ||
-      OB_ISNULL(expr.get_param_expr(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected expr", K(expr));
-  } else {
-    expr.set_result_type(expr.get_param_expr(0)->get_result_type());
-  }
+  UNUSED(expr);
   return ret;
 }
 
@@ -4392,7 +4411,7 @@ int ObRawExprDeduceType::try_replace_cast_with_questionmark_ora(ObRawExpr &paren
 int ObRawExprDeduceType::set_extra_calc_type_info(ObRawExpr &expr, const ObExprResType &res_type)
 {
   int ret = OB_SUCCESS;
-  if (expr.need_extra_calc_type()) {
+  if (expr.need_extra_calc_type(lib::is_mysql_mode() && res_type.is_number())) {
     if (OB_FAIL(expr.set_extra_calc_type(res_type))) {
       LOG_WARN("failed to set extra calc type", K(ret));
     }

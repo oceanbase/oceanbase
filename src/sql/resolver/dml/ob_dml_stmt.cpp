@@ -227,6 +227,7 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   //external table
   external_table_partition_ = other.external_table_partition_;
   catalog_name_ = other.catalog_name_;
+  external_location_id_ = other.external_location_id_;
   SampleInfo *buf = NULL;
   if (is_json_table()
       && OB_FAIL(deep_copy_json_table_def(*other.json_table_def_, expr_copier, allocator))) {
@@ -3506,13 +3507,10 @@ int ObDMLStmt::get_table_items(common::ObIArray<int64_t>& table_ids) const
 ColumnItem *ObDMLStmt::get_column_item(uint64_t table_id, const ObString &col_name)
 {
   ColumnItem *item = NULL;
-  common::ObCollationType cs_type = common::CS_TYPE_UTF8MB4_GENERAL_CI;
-  if (lib::is_oracle_mode()) {
-    cs_type = common::CS_TYPE_UTF8MB4_BIN;
-  }
+
   for (int64_t i = 0; i < column_items_.count(); ++i) {
     if (table_id == column_items_[i].table_id_
-        && (0 == ObCharset::strcmp(cs_type, col_name, column_items_[i].column_name_))) {
+        && ObCharset::case_compat_mode_equal(col_name, column_items_[i].column_name_)) {
       item = &column_items_.at(i);
       break;
     }

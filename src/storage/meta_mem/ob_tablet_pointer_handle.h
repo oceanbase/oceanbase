@@ -21,6 +21,7 @@ namespace storage
 {
 
 class ObTabletBasePointer;
+class ObSSTabletDummyPointer;
 class ObTabletPointer;
 class ObTabletPointerMap;
 
@@ -33,9 +34,11 @@ public:
       ObResourceValueStore<ObTabletPointer> *ptr,
       ObTabletPointerMap *map);
   ObTabletPointerHandle(
-    ObResourceValueStore<ObTabletBasePointer> *ptr,
+    ObResourceValueStore<ObSSTabletDummyPointer> *ptr,
     ObIAllocator *alloc):base_pointer_(ptr), base_pointer_alloc_(alloc)
-    {}
+    {
+      base_pointer_->inc_ref_cnt();
+    }
   virtual ~ObTabletPointerHandle();
 
 public:
@@ -43,6 +46,7 @@ public:
   bool is_valid() const;
   int assign(const ObTabletPointerHandle &other);
   ObTabletBasePointer *get_resource_ptr() const;
+  ObTabletPointer *get_tablet_pointer() const;
   TO_STRING_KV("ptr", ObResourceHandle<ObTabletPointer>::ptr_, KP_(map), KPC_(base_pointer), KP_(base_pointer_alloc));
 private:
   int set(
@@ -54,7 +58,7 @@ private:
   // Base_pointer_ is designed for SS_Tablet in local;
   // Allocated by task_allocator(base_pointer_alloc_);
   // should be nullptr for local_tablet (in is_valid());
-  ObResourceValueStore<ObTabletBasePointer> *base_pointer_;
+  ObResourceValueStore<ObSSTabletDummyPointer> *base_pointer_;
   ObIAllocator *base_pointer_alloc_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletPointerHandle);
 };

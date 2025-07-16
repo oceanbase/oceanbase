@@ -727,10 +727,19 @@ private:
         x = x + (in_round_scale_factor_ >> 1);
       }
       if (SCALE_UP_OUT) {
-        x = x / in_round_scale_factor_;
+        if (OB_UNLIKELY(0 == in_round_scale_factor_)) {
+          // overflow, x is always 0
+          x = 0;
+        } else {
+          x = x / in_round_scale_factor_;
+        }
         x = x * out_round_scale_factor_;
       } else {
-        x = x / in_round_scale_factor_;
+        if (OB_UNLIKELY(0 == in_round_scale_factor_)) {
+          x = 0;
+        } else {
+          x = x / in_round_scale_factor_;
+        }
       }
     }
     if (OB_UNLIKELY(INT_BYTES != expected_int_bytes_)) {

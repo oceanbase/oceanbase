@@ -57,7 +57,12 @@ inline bool allow_ddl_thread_rpc_not_match(const obrpc::ObRpcPacketCode pcode)
          || obrpc::OB_SPLIT_RESOURCE_POOL == pcode
          || obrpc::OB_MERGE_RESOURCE_POOL == pcode
          || obrpc::OB_BACKUP_DATABASE == pcode
-         || obrpc::OB_GET_TENANT_SCHEMA_VERSIONS == pcode;
+         || obrpc::OB_GET_TENANT_SCHEMA_VERSIONS == pcode
+         || obrpc::OB_BROADCAST_SCHEMA == pcode
+         || obrpc::OB_PHYSICAL_RESTORE_TENANT == pcode
+         || obrpc::OB_RUN_UPGRADE_JOB == pcode
+         || obrpc::OB_DROP_RESTORE_POINT == pcode
+         || obrpc::OB_CLEAN_SPLITTED_TABLET == pcode;
 }
 
 // precondition: enable_ddl = false
@@ -473,6 +478,7 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_START_REDEF_TABLE, ObRpcStartRedefTableP, star
 
 // ddl rpc processors
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_HIDDEN_TABLE, ObRpcCreateHiddenTableP, create_hidden_table(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_HIDDEN_TABLE_V2, ObRpcCreateHiddenTableV2P, create_hidden_table_v2(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_COMMIT_ALTER_TENANT_LOCALITY, ObRpcCommitAlterTenantLocalityP, commit_alter_tenant_locality(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_TENANT, ObRpcCreateTenantP, create_tenant(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT, ObRpcParallelCreateNormalTenantP, parallel_create_normal_tenant(arg_));
@@ -521,9 +527,10 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_DB, ObRpcRevokeDBP, revoke_database
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_TABLE, ObRpcRevokeTableP, revoke_table(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_ROUTINE, ObRpcRevokeRoutineP, revoke_routine(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_SYSPRIV, ObRpcRevokeSysPrivP, revoke_syspriv(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_OBJECT, ObRpcRevokeObjP, revoke_object(arg_));
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_UPDATE_INDEX_TABLE_STATUS, ObUpdateIndexTableStatusP, update_index_status(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_UPDATE_MVIEW_TABLE_STATUS, ObRpcUpdateMViewTableStatusP, update_mview_status(arg_));
-DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PARALLEL_UPDATE_INDEX_STATUS, ObUpdateIndexStatusP, parallel_update_index_status(arg_, result_));
+DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_PARALLEL_UPDATE_INDEX_STATUS, ObUpdateIndexStatusP, parallel_update_index_status(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_LOB, ObDropLobP, drop_lob(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FLASHBACK_TABLE_FROM_RECYCLEBIN, ObRpcFlashBackTableFromRecyclebinP, flashback_table_from_recyclebin(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FLASHBACK_INDEX, ObRpcFlashBackIndexP, flashback_index(arg_));
@@ -712,6 +719,11 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_RS_FLUSH_OPT_STAT_MONITORING_INFO, ObRpcFlushO
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_DIRECTORY, ObRpcCreateDirectoryP, create_directory(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_DIRECTORY, ObRpcDropDirectoryP, drop_directory(arg_));
 
+// location object
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_LOCATION, ObRpcCreateLocationP, create_location(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_LOCATION, ObRpcDropLocationP, drop_location(arg_));
+
+
 // context object
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DO_CONTEXT_DDL, ObRpcDoContextDDLP, do_context_ddl(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_RECOMPILE_ALL_VIEWS_BATCH, ObRpcRecompileAllViewsBatchP, recompile_all_views_batch(arg_));
@@ -744,6 +756,10 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_CATALOG_DDL, ObRpcHandleCatalogDDLP
 
 // for ob_admin
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FORCE_DROP_LONELY_LOB_AUX_TABLE, ObForceDropLonelyLobAuxTableP, force_drop_lonely_lob_aux_table(arg_));
+
+// external resource ddl
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_EXTERNAL_RESOURCE, ObRpcCreateExternalResourceP, create_external_resource(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_EXTERNAL_RESOURCE, ObRpcDropExternalResourceP, drop_external_resource(arg_, result_));
 
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR

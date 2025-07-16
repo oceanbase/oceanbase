@@ -572,7 +572,10 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_ANY:
         //fall through
       case T_ALL: {
-        if (OB_FAIL(process_any_or_all_node(node, expr))) {
+        if (OB_FAIL(ctx_.parents_expr_info_.add_member(node->type_ == T_ANY ?
+                                                       IS_WITH_ANY : IS_WITH_ALL))) {
+          LOG_WARN("failed to add member", K(ret));
+        } else if (OB_FAIL(process_any_or_all_node(node, expr))) {
           LOG_WARN("fail to process any or all node", K(ret), K(node));
         }
         break;
@@ -1849,11 +1852,6 @@ int ObRawExprResolverImpl::process_remote_sequence_node(const ParseNode *node, O
       LOG_WARN("column ref expr is null");
     } else {
       column_ref.ref_expr_ = b_expr;
-      if (lib::is_mysql_mode()) {
-        column_ref.database_name_ = dblink_schema->get_database_name();
-      } else {
-        column_ref.database_name_ = dblink_schema->get_user_name();
-      }
       if (OB_FAIL(ctx_.columns_->push_back(column_ref))) {
         LOG_WARN("Add column failed", K(ret));
       } else {
@@ -3124,24 +3122,30 @@ int ObRawExprResolverImpl::mock_set_type_info(common::ObIAllocator &allocator, O
 {
   int ret = OB_SUCCESS;
   void *mem = NULL;
-  const uint64_t effective_count = 64;
-  const uint64_t element_num = effective_count - static_cast<uint64_t>(__builtin_clzll(element_val));
-  ObString element_str = ObString();
-  for (int64_t i = 0; OB_SUCC(ret) && i < element_num && i < effective_count; ++i) {
-    if (i == element_num - 1) { //last set element
-      element_str = string;
-    } else if (element_val & 1U) { //this bit has set element
-      element_str = string.split_on(',');
-    } else { //this bit does not have set element
-      element_str = ObString(0, NULL);
+  if (element_val == 0) {
+    if (OB_FAIL(type_info.push_back(ObString(0, NULL)))) {
+      LOG_WARN("fail to push back info", K(ret));
     }
-    ObString temp_str;
-    if (OB_FAIL(ob_write_string(allocator, element_str, temp_str))) {
-      LOG_WARN("fail to write string", K(ret), K(string));
-    } else if (OB_FAIL(type_info.push_back(temp_str))) {
-      LOG_WARN("fail to push back info", K(ret), K(temp_str));
+  } else {
+    const int64_t effective_count = 64;
+    const int64_t element_num = effective_count - static_cast<int64_t>(__builtin_clzll(element_val));
+    ObString element_str = ObString();
+    for (int64_t i = 0; OB_SUCC(ret) && i < element_num && i < effective_count; ++i) {
+      if (i == element_num - 1) { //last set element
+        element_str = string;
+      } else if (element_val & 1U) { //this bit has set element
+        element_str = string.split_on(',');
+      } else { //this bit does not have set element
+        element_str = ObString(0, NULL);
+      }
+      ObString temp_str;
+      if (OB_FAIL(ob_write_string(allocator, element_str, temp_str))) {
+        LOG_WARN("fail to write string", K(ret), K(string), K(i));
+      } else if (OB_FAIL(type_info.push_back(temp_str))) {
+        LOG_WARN("fail to push back info", K(ret), K(temp_str), K(i));
+      }
+      OX (element_val >>= 1);
     }
-    OX (element_val >>= 1);
   }
   return ret;
 }
@@ -4993,6 +4997,12 @@ int ObRawExprResolverImpl::resolve_right_branch_of_in_op(const ParseNode *node,
       }
     }
   /* do as normal process */
+  } else if (node->type_ == T_SELECT
+             && OB_FAIL(ctx_.parents_expr_info_.add_member(op_type == T_OP_IN ? IS_WITH_ANY
+                                                                              : IS_WITH_ALL))) {
+    // [for oracle mode] set IS_WITH_ANY/ALL flag before resolving subquery
+    // for deciding if char data with different lengths should be converted to varchar2 or not
+    LOG_WARN("failed to add member", K(ret));
   } else if (OB_FAIL(SMART_CALL(recursive_resolve(node, right_expr)))) {
     LOG_WARN("resolve left raw expr failed", K(ret));
   } else {/* do nothing */}

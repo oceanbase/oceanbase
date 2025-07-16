@@ -43,41 +43,25 @@ class ObTxTableGuard;
 
 class ObTxTable
 {
-#ifdef OB_BUILD_SHARED_STORAGE
-  struct SSUploadSCNCache
-  {
-    share::SCN tx_table_upload_max_scn_cache_;
-    share::SCN data_upload_min_end_scn_cache_;
-    // we use update ts also as an atomic concurrent variable.
-    int64_t update_ts_;
-
-    SSUploadSCNCache() { reset(); }
-
-    void reset() {
-      tx_table_upload_max_scn_cache_.reset();
-      data_upload_min_end_scn_cache_.reset();
-      update_ts_ = 0;
-    }
-
-    TO_STRING_KV(K(tx_table_upload_max_scn_cache_),
-                 K(data_upload_min_end_scn_cache_),
-                 K(update_ts_));
-  };
-#endif
   struct RecycleRecord
   {
-    share::SCN last_recycle_scn_;
-    int64_t last_recycle_ts_;
+    share::SCN sn_recycled_scn_;
+    int64_t sn_recycled_ts_;
+    share::SCN ss_recycled_scn_;
+    int64_t ss_recycled_ts_;
 
     RecycleRecord() { reset(); }
 
     void reset() {
-      last_recycle_scn_.set_min();
-      last_recycle_ts_ = 0;
+      sn_recycled_scn_.set_min();
+      sn_recycled_ts_ = 0;
+      ss_recycled_scn_.set_min();
+      ss_recycled_ts_ = 0;
     }
 
-    TO_STRING_KV(K(last_recycle_scn_), K(last_recycle_ts_));
+    TO_STRING_KV(K(sn_recycled_scn_), KTIME(sn_recycled_ts_), K(ss_recycled_scn_), KTIME(ss_recycled_ts_));
   };
+
   struct RecycleSCNCache
   {
     share::SCN val_;
@@ -86,11 +70,11 @@ class ObTxTable
     RecycleSCNCache() { reset(); }
 
     void reset() {
-      val_.reset();
+      val_.set_min();
       update_ts_ = 0;
     }
 
-    TO_STRING_KV(K(val_), K(update_ts_));
+    TO_STRING_KV(K(val_), KTIME(update_ts_));
   };
 
   struct CtxMinStartScnInfo
@@ -147,6 +131,7 @@ public:
         mini_cache_hit_cnt_(0),
         kv_cache_hit_cnt_(0),
         read_tx_data_table_cnt_(0),
+        recycle_scn_cache_(),
         recycle_record_(),
         ctx_min_start_scn_info_()
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -165,6 +150,7 @@ public:
         mini_cache_hit_cnt_(0),
         kv_cache_hit_cnt_(0),
         read_tx_data_table_cnt_(0),
+        recycle_scn_cache_(),
         recycle_record_(),
         ctx_min_start_scn_info_()
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -302,8 +288,7 @@ public:
    * @param[out] recycle_scn the tx data whose end_scn is smaller or equals to the recycle_scn can
    * be cleared.
    */
-  int get_recycle_scn(share::SCN &recycle_scn,
-                      const bool is_shared_minor = false);
+  int get_recycle_scn(share::SCN &recycle_scn);
 
   /**
    * @brief Get the upper trans version for each given end_scn
@@ -354,9 +339,8 @@ public:
   /**
    * @brief call this function to record some info to avoid frequently recycle tx data
    *
-   * @param recycle_scn used to recycle tx data
    */
-  void recycle_tx_data_finish(const share::SCN recycle_scn);
+  void record_tx_data_recycle_scn(const share::SCN recycle_scn, const bool is_local_exec_mode);
 
   /**
    * @brief The tx data table may receive freeze request but don't really do freeze because of MIN_FREEZE_TX_DATA_INTERVAL. So TenantFreezer will check if there are some freeze requests which are not executed and retry freeze after a while.
@@ -365,6 +349,8 @@ public:
    * @return false do not need freeze
    */
   bool tx_table_need_re_freeze() { return tx_data_table_.need_re_freeze(); }
+
+  bool can_recycle_tx_data(const share::SCN current_recycle_scn, const bool is_local_exec_mode);
 
   int generate_virtual_tx_data_row(const transaction::ObTransID tx_id, observer::VirtualTxDataRow &row_data);
   int dump_single_tx_data_2_text(const int64_t tx_id_int, const char *fname);
@@ -427,16 +413,11 @@ private:
   int check_tx_data_in_kv_cache_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
   int check_tx_data_in_tables_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
   int put_tx_data_into_kv_cache_(const ObTxData &tx_data);
-  int get_recycle_scn_(const int64_t tx_result_retention_s,
-                       share::SCN &real_recycle_scn,
-                       const bool is_shared_minor);
+  int get_recycle_scn_(const int64_t tx_result_retention_s, share::SCN &real_recycle_scn);
   void check_state_and_epoch_(const transaction::ObTransID tx_id,
                               const int64_t read_epoch,
                               const bool need_log_error,
                               int &ret);
-#ifdef OB_BUILD_SHARED_STORAGE
-  int resolve_shared_storage_upload_info_(share::SCN &tablet_recycle_scn);
-#endif
 private:
   static const int64_t LS_TX_CTX_SCHEMA_VERSION = 0;
   static const int64_t LS_TX_CTX_SCHEMA_ROWKEY_CNT = 1;
@@ -454,9 +435,46 @@ private:
   int64_t mini_cache_hit_cnt_;
   int64_t kv_cache_hit_cnt_;
   int64_t read_tx_data_table_cnt_;
+  RecycleSCNCache recycle_scn_cache_;
   RecycleRecord recycle_record_;
   CtxMinStartScnInfo ctx_min_start_scn_info_;
+
 #ifdef OB_BUILD_SHARED_STORAGE
+private:
+  struct SSUploadSCNCache
+  {
+    share::SCN ss_checkpoint_scn_cache_;
+    share::SCN tx_table_upload_max_scn_cache_;
+    share::SCN data_upload_min_end_scn_cache_;
+    // we use update ts also as an atomic concurrent variable.
+    int64_t update_ts_;
+
+    SSUploadSCNCache() { reset(); }
+
+    void reset() {
+      ss_checkpoint_scn_cache_.reset();
+      tx_table_upload_max_scn_cache_.reset();
+      data_upload_min_end_scn_cache_.reset();
+      update_ts_ = 0;
+    }
+
+    TO_STRING_KV(K(ss_checkpoint_scn_cache_),
+                 K(tx_table_upload_max_scn_cache_),
+                 K(data_upload_min_end_scn_cache_),
+                 K(update_ts_));
+  };
+
+public:
+  /**
+   * @brief only used for shared storage tx_data recycle
+   *
+   */
+  int get_ss_recycle_scn(share::SCN &recycle_scn);
+
+private:
+  int resolve_shared_storage_upload_info_(share::SCN &tablet_recycle_scn);
+
+private:
   // The shared storage upload info cache
   SSUploadSCNCache ss_upload_scn_cache_;
 #endif

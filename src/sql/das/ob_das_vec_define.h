@@ -16,6 +16,7 @@
 #include "ob_das_attach_define.h"
 #include "src/sql/optimizer/ob_join_order.h"
 #include "src/share/vector_index/ob_vector_index_util.h"
+#include "share/vector_index/ob_vector_index_param.h"
 
 namespace oceanbase
 {
@@ -39,7 +40,13 @@ public:
       can_use_vec_pri_opt_(false),
       extra_column_count_(0),
       spiv_scan_docid_col_(nullptr),
-      spiv_scan_value_col_(nullptr) {}
+      spiv_scan_value_col_(nullptr),
+      vector_index_param_(),
+      vec_query_param_(),
+      adaptive_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
+      is_multi_value_index_(false),
+      is_spatial_index_(false),
+      can_extract_range_(false) {}
 
   inline bool is_pre_filter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_;  }
   inline bool is_post_filter() const { return ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER == vec_type_ || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
@@ -92,7 +99,10 @@ public:
 
   INHERIT_TO_STRING_KV("ObDASBaseCtDef", ObDASBaseCtDef,
                        KPC_(inv_scan_vec_id_col), K_(vec_index_param), K_(dim),
-                       K_(vec_type), K_(algorithm_type), K_(selectivity), K_(row_count), K_(extra_column_count));
+                       K_(vec_type), K_(algorithm_type), K_(selectivity), K_(row_count),
+                       K_(extra_column_count), K_(vector_index_param), K_(vec_query_param),
+                       K_(vector_index_param), K_(adaptive_try_path), K_(is_multi_value_index),
+                       K_(is_spatial_index), K_(can_extract_range));
 
   ObExpr *inv_scan_vec_id_col_;
   ObString vec_index_param_;
@@ -106,6 +116,12 @@ public:
   int64_t extra_column_count_; // for hnsw
   ObExpr *spiv_scan_docid_col_;
   ObExpr *spiv_scan_value_col_;
+  ObVectorIndexParam vector_index_param_;
+  ObVectorIndexQueryParam vec_query_param_;
+  ObVecIdxAdaTryPath adaptive_try_path_;
+  bool is_multi_value_index_;
+  bool is_spatial_index_;
+  bool can_extract_range_;
 };
 
 struct ObDASVecAuxScanRtDef : ObDASAttachRtDef
