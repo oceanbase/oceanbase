@@ -931,6 +931,16 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                       package_ast, package_info.is_for_trigger()));
   int64_t resolve_end = ObTimeUtility::current_time();
   FLT_SET_TAG(pl_compile_resolve_time, resolve_end - compile_start);
+
+#ifdef OB_BUILD_ORACLE_PL
+  if (package_info.is_package()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = ObPLPackageType::update_package_type_info(package_info, package_ast, OB_FAIL(ret)))) {
+      LOG_WARN("update package type info failed", K(tmp_ret), K(ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+#endif
   if (OB_SUCC(ret)) {
 #ifdef USE_MCJIT
     HEAP_VAR(ObPLCodeGenerator, cg ,allocator_, session_info_) {
@@ -984,7 +994,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
     // then we no need update system package on no sys tenant compile stage.
     // but for now, package type has no ddl stage, we must update system package here.
     if (OB_SUCC(ret) && package_info.is_package()) {
-      OZ (ObPLPackageType::update_package_type_info(package_info, package_ast));
+      OZ (ObPLPackageType::update_package_type_info(package_info, package_ast, false));
     }
 #endif
   }

@@ -17,6 +17,9 @@
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_compile.h"
 #include "sql/resolver/ddl/ob_create_package_resolver.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/ob_pl_package_type.h"
+#endif
 
 namespace oceanbase
 {
@@ -113,6 +116,14 @@ int ObAlterPackageResolver::analyze_package(ObPLCompiler &compiler,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(compiler.analyze_package(source, parent_ns, package_ast,
                                               false /* is_for_trigger */))) {
+#ifdef OB_BUILD_ORACLE_PL
+    if (package_info->is_package()) {
+      int tmp_ret = ObPLPackageType::update_package_type_info(*package_info, package_ast, true);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("delete package type info failed", K(tmp_ret), K(ret));
+      }
+    }
+#endif
     ObPL::insert_error_msg(ret);
     switch (ret) {
     case OB_ERR_PACKAGE_DOSE_NOT_EXIST:
