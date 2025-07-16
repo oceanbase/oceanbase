@@ -1830,14 +1830,15 @@ int ObTabletPersister::ObSSTablePersistCtx::init(const int64_t ctx_id)
 // NOTICE: is used to persist co_sstable whose serialize_size <= SSTABLE_MAX_SERIALIZE_SIZE, and normal sstable
 int ObTabletPersister::fetch_and_persist_normal_co_and_normal_sstable(
   ObArenaAllocator &allocator,
-  ObITable *table,
+  ObITable *itable,
   ObSSTablePersistCtx &sstable_persist_ctx)
 {
   int ret = OB_SUCCESS;
+  ObSSTable *table = static_cast<ObSSTable *>(itable);
   if (OB_ISNULL(table) || !sstable_persist_ctx.is_inited()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(table), K(sstable_persist_ctx));
-  } else if (table->is_co_sstable() && table->get_serialize_size() <= SSTABLE_MAX_SERIALIZE_SIZE) {
+  } else if (table->is_co_sstable() && table->get_serialize_size(param_.data_version_) <= SSTABLE_MAX_SERIALIZE_SIZE) {
     // normal co sstalbe
     if (OB_FAIL(record_cg_sstables_macro(table, sstable_persist_ctx))) {
       LOG_WARN("fail to record macro_info of small co sstable");
@@ -1862,7 +1863,8 @@ int ObTabletPersister::fetch_and_persist_normal_co_and_normal_sstable(
   } else {
     // not support
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support process exclude small_co_sstable and normal_sstable", K(ret), KPC(table), K(table->get_serialize_size()));
+    LOG_WARN("not support process exclude small_co_sstable and normal_sstable", K(ret), KPC(table),
+      K(table->get_serialize_size(param_.data_version_)));
   }
   return ret;
 }
@@ -1891,7 +1893,7 @@ int ObTabletPersister::fetch_and_persist_sstable(
   write_ctxs.set_attr(lib::ObMemAttr(MTL_ID(), "PerstWriteCtxs", ctx_id));
   ObArenaAllocator tmp_allocator("PersistSSTable", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ctx_id);
   ObSSTablePersistCtx sstable_persist_ctx(block_info_set, sstable_meta_write_ctxs);
-  ObITable *table = nullptr;
+  ObITable *itable = nullptr;
   ObMultiTimeStats::TimeStats *time_stats = nullptr;
 
   if (OB_FAIL(multi_stats_.acquire_stats("fetch_and_persist_sstable", time_stats))) {
@@ -1901,16 +1903,18 @@ int ObTabletPersister::fetch_and_persist_sstable(
   }
 
   if (OB_SUCC(ret)) {
-    while (OB_SUCC(ret) && OB_SUCC(table_iter.get_next(table))) {
-      if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
+    while (OB_SUCC(ret) && OB_SUCC(table_iter.get_next(itable))) {
+      ObSSTable *table = nullptr;
+      if (OB_ISNULL(itable) || OB_UNLIKELY(!itable->is_sstable())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error, table is nullptr", K(ret), KPC(table));
+        LOG_WARN("unexpected error, itable is nullptr", K(ret), KPC(itable));
+      } else if (FALSE_IT(table = static_cast<ObSSTable *>(itable))) {
       } else if (OB_FAIL(persist_sstable_linked_block_if_need(tmp_allocator,
                                                               table,
                                                               cur_macro_seq_,
                                                               sstable_meta_write_ctxs))) {
           LOG_WARN("fail to persist sstable linked_block if need", K(ret), K(param_), KPC(table), K(cur_macro_seq_));
-      } else if (table->is_co_sstable() && table->get_serialize_size() > large_co_sstable_threshold) {
+      } else if (table->is_co_sstable() && table->get_serialize_size(param_.data_version_) > large_co_sstable_threshold) {
         // large co sstable
         if(OB_FAIL(fetch_and_persist_large_co_sstable(tmp_allocator, table, sstable_persist_ctx))) {
           LOG_WARN("fail to fetch and persist large co sstable", K(ret), KPC(table), K(sstable_persist_ctx));

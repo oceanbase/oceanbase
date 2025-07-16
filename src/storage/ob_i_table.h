@@ -75,7 +75,10 @@ struct ObStoreCtx;
 
 class ObITable
 {
-  OB_UNIS_VERSION_V(1);
+protected:
+  OB_DECLARE_UNIS(virtual,);
+  const static int64_t UNIS_VERSION = 1;
+
 public:
 
   // Attention! keep update with table_types in GV$OB_SSTABLES
