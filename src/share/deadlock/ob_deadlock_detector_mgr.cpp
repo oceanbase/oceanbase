@@ -520,7 +520,17 @@ int ObDeadLockDetectorMgr::check_and_report_cycle_(
         DETECT_LOG(INFO, "this cycle may has been reported",
                          KR(ret), K(collect_info_msg), K(cycle_hash));
       } else {
-        get_trans_history_sql_from_audit_(collect_info_msg);
+        const int64_t INSERT_ALL_INFO_TIME = collect_info_msg.get_collected_info().count() * 10_ms;
+        const int64_t MIN_INSERT_ALL_INFO_TIME = 1_s;
+        const int64_t remain_timeout_ts = THIS_WORKER.get_timeout_remain();
+        const int64_t timeout_ts = THIS_WORKER.get_timeout_ts();
+        const int64_t estimate_insert_time = INSERT_ALL_INFO_TIME < MIN_INSERT_ALL_INFO_TIME
+                                          ? MIN_INSERT_ALL_INFO_TIME : INSERT_ALL_INFO_TIME;
+        if (remain_timeout_ts > estimate_insert_time) {
+          THIS_WORKER.set_timeout_ts(timeout_ts - estimate_insert_time);
+          get_trans_history_sql_from_audit_(collect_info_msg);
+          THIS_WORKER.set_timeout_ts(timeout_ts);
+        }
         if (OB_FAIL(ObDeadLockInnerTableService::
                     insert_all(collect_info_msg.get_collected_info()))) {
           DETECT_LOG(WARN, "report inner table failed", KR(ret), K(collect_info_msg));
