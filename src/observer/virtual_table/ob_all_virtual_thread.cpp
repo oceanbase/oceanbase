@@ -131,6 +131,7 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
             case WAIT_EVENT: {
               GET_OTHER_TSI_ADDR(rpc_dest_addr, &Thread::rpc_dest_addr_);
               GET_OTHER_TSI_ADDR(event, &Thread::wait_event_);
+              GET_OTHER_TSI_ADDR(event_no, &Thread::event_no_);
               ObAddr addr;
               struct iovec local_iov = {&addr, sizeof(ObAddr)};
               struct iovec remote_iov = {thread_base + rpc_dest_addr_offset, sizeof(ObAddr)};
@@ -164,13 +165,26 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
               } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_IO_EVENT & event))) {
                 IGNORE_RETURN snprintf(wait_event_, buf_size, "IO events");
               } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_LOCAL_RETRY & event))) {
-                IGNORE_RETURN snprintf(wait_event_, buf_size, "local retry");
+                if (event_no > 0) {
+                  IGNORE_RETURN snprintf(wait_event_, buf_size, "%s", common::OB_WAIT_EVENTS[event_no].event_name_);
+                } else {
+                  IGNORE_RETURN snprintf(wait_event_, buf_size, "local retry");
+                }
               } else if (0 != blocking_ts && (0 != (Thread::WAIT_FOR_PX_MSG & event))) {
                 IGNORE_RETURN snprintf(wait_event_, buf_size, "px message");
               } else if (0 != sleep_us) {
-                IGNORE_RETURN snprintf(wait_event_, buf_size, "%ld us", sleep_us);
+                if (event_no > 0) {
+                  IGNORE_RETURN snprintf(wait_event_, buf_size, "%s, sleep %ld us", common::OB_WAIT_EVENTS[event_no].event_name_, sleep_us);
+                } else {
+                  IGNORE_RETURN snprintf(wait_event_, buf_size, "%ld us", sleep_us);
+                }
               } else if (0 != blocking_ts) {
-                IGNORE_RETURN snprintf(wait_event_, buf_size, "%ld us", common::ObTimeUtility::fast_current_time() - blocking_ts);
+                if (event_no > 0) {
+                  IGNORE_RETURN snprintf(wait_event_, buf_size, "%s, blocked for %ld us", common::OB_WAIT_EVENTS[event_no].event_name_,
+                                         common::ObTimeUtility::fast_current_time() - blocking_ts);
+                } else {
+                  IGNORE_RETURN snprintf(wait_event_, buf_size, "%ld us", common::ObTimeUtility::fast_current_time() - blocking_ts);
+                }
               }
               cells[i].set_varchar(wait_event_);
               cells[i].set_collation_type(

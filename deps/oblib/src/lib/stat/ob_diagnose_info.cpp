@@ -645,6 +645,7 @@ ObWaitEventGuard::ObWaitEventGuard(const int64_t event_no, const uint64_t timeou
       oceanbase::lib::is_diagnose_info_enabled()) {
     need_record_ = true;
     event_no_ = event_no;
+    oceanbase::lib::Thread::event_no_ = event_no;
     di_->begin_wait_event(event_no, timeout_ms, p1, p2, p3);
   } else {
     need_record_ = false;
@@ -661,6 +662,7 @@ ObWaitEventGuard::~ObWaitEventGuard()
     if (OB_NOT_NULL(curr_di)) {
       curr_di->end_wait_event(event_no_, OB_WAIT_EVENTS[event_no_].wait_class_ == ObWaitClassIds::IDLE);
     }
+    oceanbase::lib::Thread::event_no_ = 0;
   }
 }
 

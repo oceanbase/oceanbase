@@ -171,6 +171,7 @@ public:
   static thread_local ObAddr rpc_dest_addr_;
   static thread_local obrpc::ObRpcPacketCode pcode_;
   static thread_local uint8_t wait_event_;
+  static thread_local int64_t event_no_;
 private:
   static void* __th_start(void *th);
   void destroy_stack();

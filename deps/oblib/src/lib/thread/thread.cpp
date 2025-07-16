@@ -32,6 +32,7 @@ thread_local ObAddr Thread::rpc_dest_addr_;
 thread_local obrpc::ObRpcPacketCode Thread::pcode_ = obrpc::ObRpcPacketCode::OB_INVALID_RPC_CODE;
 thread_local uint8_t Thread::wait_event_ = 0;
 thread_local Thread* Thread::current_thread_ = nullptr;
+thread_local int64_t Thread::event_no_ = 0;
 int64_t Thread::total_thread_count_ = 0;
 
 Thread &Thread::current()
