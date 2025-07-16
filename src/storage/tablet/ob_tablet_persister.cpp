@@ -1143,7 +1143,7 @@ int ObTabletPersister::persist_aggregated_meta(
     LOG_WARN("fail to async write", K(ret), K(write_info));
 #ifdef OB_BUILD_SHARED_STORAGE
     /// NOTE: only when _object_storage_condition_put_mode is set to 'if-match'
-    if (OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH == ret) {
+    if (OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH == ret || OB_FILE_ALREADY_EXIST == ret) {
       handle.reset();
       MacroBlockId object_id;
       if (OB_FAIL(OB_STORAGE_OBJECT_MGR.ss_get_object_id(curr_opt, object_id))) {
