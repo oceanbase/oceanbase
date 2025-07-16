@@ -10115,24 +10115,26 @@ public:
       initiator_tenant_id_(common::OB_INVALID_TENANT_ID),
       initiator_job_id_(0),
       type_(share::ObNewBackupCleanType::MAX),
-      value_(0),
+      first_value_(0),
       dest_id_(0),
       description_(),
-      clean_tenant_ids_()
+      clean_tenant_ids_(),
+      value_()
   {
 
   }
   bool is_valid() const;
   int assign(const ObBackupCleanArg &arg);
-  TO_STRING_KV(K_(type), K_(tenant_id), K_(initiator_tenant_id), K_(initiator_job_id), K_(value), K_(dest_id), K_(description), K_(clean_tenant_ids));
+  TO_STRING_KV(K_(type), K_(tenant_id), K_(initiator_tenant_id), K_(initiator_job_id), K_(first_value), K_(dest_id), K_(description), K_(clean_tenant_ids), K_(value));
   uint64_t tenant_id_;
   uint64_t initiator_tenant_id_;
   int64_t initiator_job_id_;
   share::ObNewBackupCleanType::TYPE type_;
-  int64_t value_;
+  int64_t first_value_;
   int64_t dest_id_;
   share::ObBackupDescription description_;
   common::ObSArray<uint64_t> clean_tenant_ids_;
+  common::ObSArray<int64_t> value_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanArg);
 };
