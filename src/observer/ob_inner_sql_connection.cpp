@@ -2057,7 +2057,7 @@ int ObInnerSQLConnection::set_timeout(int64_t &abs_timeout_us)
         LOG_DEBUG("set timeout by worker", K(timeout), K(abs_timeout_us));
         trx_timeout = timeout;
         LOG_DEBUG("set timeout according to THIS_WORKER", K(timeout), K(trx_timeout), K(abs_timeout_us));
-      } else {
+      } else if (THIS_WORKER.is_timeout_ts_valid()) {
         // timeout exceeds 102 years, so set it to 102 years
         timeout = OB_MAX_USER_SPECIFIED_TIMEOUT;
         abs_timeout_us = now + timeout;
