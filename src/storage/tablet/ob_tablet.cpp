@@ -7495,6 +7495,8 @@ int ObTablet::get_table_store_meta_info(ObSSTabletTableStoreMetaInfo &table_stor
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   const ObTabletTableStore *table_store = nullptr;
   bool minor_trans_state_determined = true;
+  share::SCN tx_recycle_scn = share::SCN::min_scn();
+  int64_t last_major_snapshot_version = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -7510,6 +7512,17 @@ int ObTablet::get_table_store_meta_info(ObSSTabletTableStoreMetaInfo &table_stor
         break;
       }
     }
+    if (is_ls_tx_data_tablet()) {
+      if (table_store->get_minor_sstables().count() > 0) {
+        if (table_store->get_minor_sstables().at(0)->is_minor_sstable()) {
+          tx_recycle_scn = table_store->get_minor_sstables().at(0)->get_filled_tx_scn();
+        }
+      }
+    }
+    int major_cnt = table_store->get_major_sstables().count();
+    if (major_cnt > 0) {
+      last_major_snapshot_version = table_store->get_major_sstables().at(major_cnt - 1)->get_snapshot_version();
+    }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(table_store_meta_info.set(
@@ -7518,7 +7531,9 @@ int ObTablet::get_table_store_meta_info(ObSSTabletTableStoreMetaInfo &table_stor
     table_store->get_ddl_sstables().count(),
     table_store->get_mds_sstables().count(),
     table_store->get_meta_major_sstables().count(),
-    minor_trans_state_determined))) {
+    minor_trans_state_determined,
+    last_major_snapshot_version,
+    tx_recycle_scn))) {
     LOG_WARN("set table store meta info failed", K(ret), KPC(this));
   }
   return ret;
