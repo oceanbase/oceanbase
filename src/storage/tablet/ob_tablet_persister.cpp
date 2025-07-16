@@ -572,6 +572,8 @@ int ObTabletPersister::persist_major_sstable_linked_block_if_large(
   } else if (param.snapshot_version_ <= 0 || OB_ISNULL(param.ddl_redo_callback_) || !param.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tablet persist param", K(ret), K(param));
+  } else if (OB_FAIL(block_info_set.init())) {
+    LOG_WARN("fail to init block_info_set", K(ret));
   } else if (OB_FAIL(sstable_persist_ctx.init(ctx_id))) {
     LOG_WARN("fail to init sstable_persist_ctx", K(ret), K(ctx_id), K(sstable_persist_ctx));
   } else if (OB_FAIL(persister.persist_sstable_linked_block_if_need(
