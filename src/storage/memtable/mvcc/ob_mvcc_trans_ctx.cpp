@@ -160,19 +160,21 @@ int ObITransCallback::log_sync_fail_cb()
 // All safety check is in before append
 void ObITransCallback::append(ObITransCallback *node)
 {
+  ObITransCallback *next = this->get_next();
   node->set_prev(this);
-  node->set_next(this->get_next());
-  this->get_next()->set_prev(node);
+  node->set_next(next);
   this->set_next(node);
+  next->set_prev(node);
 }
 
 void ObITransCallback::append(ObITransCallback *head,
                               ObITransCallback *tail)
 {
+  ObITransCallback *next = this->get_next();
   head->set_prev(this);
-  tail->set_next(this->get_next());
-  this->get_next()->set_prev(tail);
+  tail->set_next(next);
   this->set_next(head);
+  next->set_prev(tail);
 }
 
 int ObITransCallback::remove()
@@ -913,6 +915,7 @@ void ObTransCallbackMgr::calc_next_to_fill_log_info_(const ObIArray<RedoLogEpoch
   }
 }
 
+//#pragma clang optimize off
 inline
 int ObTransCallbackMgr::prep_and_fill_from_list_(ObTxFillRedoCtx &ctx,
                                                  ObITxFillRedoFunctor &func,
@@ -972,6 +975,7 @@ int ObTransCallbackMgr::prep_and_fill_from_list_(ObTxFillRedoCtx &ctx,
   }
   return ret;
 }
+//#pragma clang optimize on
 
 bool ObTransCallbackMgr::check_list_has_min_epoch_(const int my_idx,
                                                    const int64_t my_epoch,

@@ -102,7 +102,7 @@ public:
         ctx_.next_epoch_ = callback->get_epoch();
       } else if (callback->get_epoch() < epoch_from) {
         ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(ERROR, "found callback with epoch less than `from`", K(ret), KPC(callback), K(ctx_));
+        TRANS_LOG(ERROR, "found callback with epoch less than `from`", K(ret), K(callback->get_epoch()), KPC(callback), K(ctx_));
 #ifdef ENABLE_DEBUG_LOG
         ob_abort();
 #endif
