@@ -118,9 +118,10 @@ public:
 
   static int add_table_with_check(storage::ObGetMergeTablesResult &result, storage::ObTableHandleV2 &table_handle);
   static int get_result_by_snapshot(
-    storage::ObTablet &tablet,
-    const int64_t snapshot,
-    storage::ObGetMergeTablesResult &result);
+      const storage::ObTablet &tablet,
+      const int64_t snapshot,
+      storage::ObGetMergeTablesResult &result,
+      const bool need_check_tablet);
   static bool is_sstable_count_not_safe(const int64_t minor_table_cnt);
 
 private:
