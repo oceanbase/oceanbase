@@ -464,6 +464,23 @@ int ObTenantInfoLoader::get_readable_scn(share::SCN &readable_scn)
   return ret;
 }
 
+int ObTenantInfoLoader::get_switchover_epoch(int64_t &switchover_epoch)
+{
+  int ret = OB_SUCCESS;
+  share::ObAllTenantInfo tenant_info;
+  if (OB_SYS_TENANT_ID == MTL_ID() || is_meta_tenant(MTL_ID())) {
+    switchover_epoch = 0;
+  } else {
+    // user tenant
+    if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info))) {
+      LOG_WARN("failed to get tenant info", KR(ret));
+    } else {
+      switchover_epoch = tenant_info.get_switchover_epoch();
+    }
+  }
+  return ret;
+}
+
 int ObTenantInfoLoader::check_is_standby_normal_status(bool &is_standby_normal_status)
 {
   int ret = OB_SUCCESS;
