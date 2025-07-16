@@ -988,7 +988,7 @@ int ObMemtableMultiVersionScanIterator::iterate_uncommitted_row_value_(ObDatumRo
 {
   int ret = OB_SUCCESS;
   row.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
-  ObRowReader row_reader;
+  ObCompatRowReader row_reader;
   const void *tnode = NULL;
   const ObMemtableDataHeader *mtd = NULL;
   const ObRowHeader *row_header = nullptr;

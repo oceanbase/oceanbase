@@ -409,8 +409,8 @@ int ObTabletCreateSSTableParam::init_for_transfer_empty_mini_minor_sstable(const
           + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   root_block_addr_.set_none_addr();
   data_block_macro_meta_addr_.set_none_addr();
-  root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
-  latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+  root_row_store_type_ = ObMicroBlockFormatVersionHelper::decide_flat_format(table_schema.get_micro_block_format_version());
+  latest_row_store_type_ = ObMicroBlockFormatVersionHelper::decide_flat_format(table_schema.get_micro_block_format_version());
   data_index_tree_height_ = 0;
   index_blocks_cnt_ = 0;
   data_blocks_cnt_ = 0;

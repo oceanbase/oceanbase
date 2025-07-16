@@ -1767,6 +1767,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
       micro_index_clustered_ = src_schema.micro_index_clustered_;
       enable_macro_block_bloom_filter_ = src_schema.enable_macro_block_bloom_filter_;
+      micro_block_format_version_ = src_schema.micro_block_format_version_;
       mlog_tid_ = src_schema.mlog_tid_;
       catalog_id_ = src_schema.catalog_id_;
       merge_engine_type_ = src_schema.merge_engine_type_;
@@ -7300,7 +7301,8 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(merge_engine_type),
     K_(semistruct_encoding_type),
     K_(dynamic_partition_policy),
-    K_(semistruct_properties));
+    K_(semistruct_properties),
+    K_(micro_block_format_version));
   J_OBJ_END();
 
   return pos;

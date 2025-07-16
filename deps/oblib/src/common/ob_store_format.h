@@ -133,6 +133,10 @@ public:
   {
     return is_store_format_valid(store_format) ? store_format_items[store_format].row_store_type_: MAX_ROW_STORE;
   }
+  static inline bool is_row_store_type_with_flat(const ObRowStoreType type)
+  {
+    return FLAT_ROW_STORE == type || FLAT_OPT_ROW_STORE == type;
+  }
   static inline bool is_row_store_type_with_encoding(const ObRowStoreType type)
   {
     return ENCODING_ROW_STORE == type || SELECTIVE_ENCODING_ROW_STORE == type || CS_ENCODING_ROW_STORE == type;

@@ -2235,16 +2235,45 @@ int ObMacroBlockWriter::calc_micro_column_checksum(const int64_t column_cnt,
   return ret;
 }
 
+template <typename MicroBlockWriterType, typename... Args>
+int ObMacroBlockWriter::inner_build_micro_writer(ObIAllocator &allocator,
+                                                 ObIMicroBlockWriter *&micro_writer,
+                                                 const int64_t verify_level,
+                                                 Args &&... args)
+{
+  int ret = OB_SUCCESS;
+
+  void *buf = nullptr;
+  MicroBlockWriterType *writer = nullptr;
+
+  if (OB_ISNULL(buf = allocator.alloc(sizeof(MicroBlockWriterType)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
+  } else if (OB_ISNULL(writer = new (buf) MicroBlockWriterType())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "fail to new encoding writer", K(ret));
+  } else if (OB_FAIL(writer->init(std::forward<Args>(args)...))) {
+    STORAGE_LOG(WARN, "Fail to init micro block encoder, ", K(ret));
+  } else {
+    writer->set_micro_block_merge_verify_level(verify_level);
+    micro_writer = writer;
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(writer)) {
+    writer->~MicroBlockWriterType();
+    allocator.free(writer);
+  }
+
+  return ret;
+}
+
 int ObMacroBlockWriter::build_micro_writer(const ObDataStoreDesc *data_store_desc,
                                            ObIAllocator &allocator,
                                            ObIMicroBlockWriter *&micro_writer,
                                            const int64_t verify_level)
 {
   int ret = OB_SUCCESS;
-  void *buf = nullptr;
-  ObMicroBlockEncoder *encoding_writer = nullptr;
-  ObMicroBlockCSEncoder *cs_encoding_writer = nullptr;
-  ObMicroBlockWriter *flat_writer = nullptr;
+
   if (data_store_desc->encoding_enabled()) {
     ObMicroBlockEncodingCtx encoding_ctx;
     encoding_ctx.macro_block_size_ = data_store_desc->get_macro_block_size();
@@ -2266,66 +2295,27 @@ int ObMacroBlockWriter::build_micro_writer(const ObDataStoreDesc *data_store_des
       encoding_ctx.minimum_rows_ = 2;
     }
     if (ObStoreFormat::is_row_store_type_with_pax_encoding(data_store_desc->get_row_store_type())) {
-      if (OB_ISNULL(buf = allocator.alloc(sizeof(ObMicroBlockEncoder)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
-      } else if (OB_ISNULL(encoding_writer = new (buf) ObMicroBlockEncoder())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "fail to new encoding writer", K(ret));
-      } else if (OB_FAIL(encoding_writer->init(encoding_ctx))) {
-        STORAGE_LOG(WARN, "Fail to init micro block encoder, ", K(ret));
-      } else {
-        encoding_writer->set_micro_block_merge_verify_level(verify_level);
-        micro_writer = encoding_writer;
+      if (OB_FAIL(inner_build_micro_writer<ObMicroBlockEncoder>(allocator, micro_writer, verify_level, encoding_ctx))) {
+        STORAGE_LOG(WARN, "Fail to init micro block encoder", K(ret));
       }
     } else if (ObStoreFormat::is_row_store_type_with_cs_encoding(data_store_desc->get_row_store_type())) {
-      if (OB_ISNULL(buf = allocator.alloc(sizeof(ObMicroBlockCSEncoder)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
-      } else if (OB_ISNULL(cs_encoding_writer = new (buf) ObMicroBlockCSEncoder())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "fail to cs encoding writer", K(ret));
-      } else if (OB_FAIL(cs_encoding_writer->init(encoding_ctx))) {
-        STORAGE_LOG(WARN, "Fail to init micro block encoder, ", K(ret));
-      } else {
-        cs_encoding_writer->set_micro_block_merge_verify_level(verify_level);
-        micro_writer = cs_encoding_writer;
+      if (OB_FAIL(inner_build_micro_writer<ObMicroBlockCSEncoder>(allocator, micro_writer, verify_level, encoding_ctx))) {
+        STORAGE_LOG(WARN, "Fail to init micro block encoder", K(ret));
       }
     } else {
       ret = OB_INNER_STAT_ERROR;
       LOG_WARN("unknow row store type", K(ret), K(data_store_desc->get_row_store_type()));
     }
-  } else {
-    if (OB_ISNULL(buf = allocator.alloc(sizeof(ObMicroBlockWriter)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
-    } else if (OB_ISNULL(flat_writer = new (buf) ObMicroBlockWriter())) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "fail to new encoding writer", K(ret));
-    } else if (OB_FAIL(flat_writer->init(data_store_desc))) {
-      STORAGE_LOG(WARN, "Fail to init micro block flat writer, ", K(ret));
-    } else {
-      flat_writer->set_micro_block_merge_verify_level(verify_level);
-      micro_writer = flat_writer;
-    }
+  } else if (OB_FAIL(data_store_desc->get_row_store_type() == FLAT_OPT_ROW_STORE
+                         ? inner_build_micro_writer<
+                               ObMicroBlockWriter</* enable new flat format */ true>>(
+                               allocator, micro_writer, verify_level, data_store_desc)
+                         : inner_build_micro_writer<
+                               ObMicroBlockWriter</* enable new flat format */ false>>(
+                               allocator, micro_writer, verify_level, data_store_desc))) {
+    STORAGE_LOG(WARN, "Fail to init micro block flat writer", K(ret));
   }
-  if (OB_FAIL(ret)) {
-    if (OB_NOT_NULL(encoding_writer)) {
-      encoding_writer->~ObMicroBlockEncoder();
-      allocator.free(encoding_writer);
-      encoding_writer = nullptr;
-    }
-    if (OB_NOT_NULL(cs_encoding_writer)) {
-      cs_encoding_writer->~ObMicroBlockCSEncoder();
-      allocator.free(cs_encoding_writer);
-      cs_encoding_writer = nullptr;
-    }
-    if (OB_NOT_NULL(flat_writer)) {
-      flat_writer->~ObMicroBlockWriter();
-      allocator.free(flat_writer);
-      flat_writer = nullptr;
-    }
-  }
+
   return ret;
 }
 

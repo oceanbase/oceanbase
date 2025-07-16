@@ -429,7 +429,6 @@ private:
   const ObBlockCachedDecoderHeader *cached_decoder_;
   ObIRowIndex *row_index_;
   ObColumnDecoder *decoders_;
-  ObRowReader flat_row_reader_;
   ObColumnDecoderCtx *ctxs_;
   static ObNoneExistColumnDecoder none_exist_column_decoder_;
   static ObColumnDecoderCtx none_exist_column_decoder_ctx_;

@@ -46,6 +46,7 @@ struct ObStorageDatum : public common::ObDatum
   ~ObStorageDatum() = default;
   // ext value section
   OB_INLINE void reuse() { ptr_ = buf_; reserved_ = 0; pack_ = 0; }
+  OB_INLINE int read_int(const char *buf, int64_t len);
   OB_INLINE void set_ext_value(const int64_t ext_value)
   { reuse(); set_ext(); no_cv(extend_obj_)->set_ext(ext_value); }
   OB_INLINE void set_nop() { set_ext_value(ObActionFlag::OP_NOP); }
@@ -253,6 +254,29 @@ OB_INLINE int ObStorageDatum::from_buf_enhance(const char *buf, const int64_t bu
     }
   }
 
+  return ret;
+}
+
+OB_INLINE int ObStorageDatum::read_int(const char *buf, int64_t len)
+{
+  int ret = OB_SUCCESS;
+
+  reuse();
+  if (OB_UNLIKELY(nullptr == buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to read int", KR(ret), KP(buf), K(len));
+  } else if (len == 8) {
+    set_uint(*reinterpret_cast<const uint64_t *>(buf));
+  } else if (len == 4) {
+    set_uint(*reinterpret_cast<const uint32_t *>(buf));
+  } else if (len == 2) {
+    set_uint(*reinterpret_cast<const uint16_t *>(buf));
+  } else if (len == 1) {
+    set_uint(*reinterpret_cast<const uint8_t *>(buf));
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Invalid len to read int", KR(ret), KP(buf), K(len));
+  }
 
   return ret;
 }

@@ -327,6 +327,7 @@ int ObTabletMemtableMgr::create_memtable_(const CreateMemtableArg &arg,
              K(arg),
              K(logstream_freeze_clock));
   } else if (FALSE_IT(new_tablet_memtable->set_delete_insert_flag(arg.is_delete_insert_))) {
+  } else if (FALSE_IT(new_tablet_memtable->set_micro_block_format_version(arg.micro_block_format_version_))) {
   } else if (OB_FAIL(resolve_boundary_(new_tablet_memtable, arg))) {
     LOG_WARN("failed to add memtable", K(ret), K(ls_id), K(tablet_id_), K(memtable_handle));
   } else if (FALSE_IT(tg.click("init memtable"))) {

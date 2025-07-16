@@ -212,10 +212,7 @@ protected:
   const ObDatumRange *range_;
   const blocksstable::ObSSTable *sstable_;
   ObIMicroBlockReader *reader_;
-  ObMicroBlockReader *flat_reader_;
-  ObIMicroBlockDecoder *decoder_;
-  ObMicroBlockDecoder *pax_decoder_;
-  ObMicroBlockCSDecoder *cs_decoder_;
+  ObMicroBlockReaderHelper reader_helper_;
   memtable::ObMemtableBlockReader *memtable_reader_;
   const storage::ObTableIterParam *param_;
   storage::ObTableAccessContext *context_;

@@ -114,7 +114,7 @@ void TestRootBlockInfo::prepare_tablet_read_info()
 void TestRootBlockInfo::prepare_block_root()
 {
   const int64_t block_size = 2L * 1024 * 1024L;
-  ObMicroBlockWriter writer;
+  ObMicroBlockWriter<> writer;
   ASSERT_EQ(OB_SUCCESS, writer.init(block_size, ROWKEY_COL_CNT, COLUMN_CNT));
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, COLUMN_CNT));

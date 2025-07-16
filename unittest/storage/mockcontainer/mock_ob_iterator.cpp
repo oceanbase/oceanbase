@@ -2534,6 +2534,7 @@ int ObMockDirectReadIterator::reset_scanner()
   } else {
     current_ = 0;
     end_ = scanner_->last_;
+    reader_ = scanner_->reader_;
   }
 
   return ret;

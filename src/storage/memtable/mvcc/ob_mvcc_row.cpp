@@ -328,7 +328,7 @@ int ObMvccRowFilter::read_row_(
   final_result = false;
   const ObRowHeader *row_header = nullptr;
   const ObMemtableDataHeader *mtd = reinterpret_cast<const ObMemtableDataHeader *>(node.buf_);
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   if (OB_ISNULL(mtd)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), K_(mds_filter), K(node), KP(mtd));
@@ -1266,7 +1266,7 @@ void ObMvccRow::print_row()
 {
   int ret = OB_SUCCESS;
   blocksstable::ObDatumRow datum_row;
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   ObMvccRow *row = this;
   TRANS_LOG(INFO, "qianchen print row", K(*row));
   for (ObMvccTransNode *node = row->get_list_head(); OB_SUCC(ret) && OB_NOT_NULL(node); node = node->prev_) {

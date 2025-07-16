@@ -835,6 +835,10 @@ int ObCreateTableHelper::generate_table_schema_()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("fail to generate schema, not support delete insert merge engine for this version", K(ret), K_(tenant_id), K(compat_version), K_(arg));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support delete insert merge engine");
+  } else if (!ObMicroBlockFormatVersionHelper::check_version_valid(arg_.schema_.get_micro_block_format_version(), compat_version)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support this micro block format version for this version", KR(ret), K_(tenant_id), K(compat_version), K_(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than needed, this micro block format version is");
   } else if (OB_UNLIKELY(OB_INVALID_ID != arg_.schema_.get_table_id())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("create table with table_id in 4.x is not supported",

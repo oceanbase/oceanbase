@@ -428,6 +428,8 @@ public:
   inline bool is_transfer_freeze() const { return ATOMIC_LOAD(&transfer_freeze_flag_); }
   virtual void set_delete_insert_flag(const bool rhs) override { is_delete_insert_table_ = rhs; }
   inline bool is_delete_insert_table() const { return is_delete_insert_table_; }
+  virtual void set_micro_block_format_version(const int64_t rhs) override { micro_block_format_version_ = rhs; }
+  inline int64_t get_micro_block_format_version() const { return micro_block_format_version_; }
   virtual uint32_t get_freeze_flag() override;
   blocksstable::ObDatumRange &m_get_real_range(blocksstable::ObDatumRange &real_range,
                                         const blocksstable::ObDatumRange &range, const bool is_reverse) const;
@@ -464,7 +466,8 @@ public:
                        K_(ls_id),
                        K_(transfer_freeze_flag),
                        K_(recommend_snapshot_version),
-                       K_(is_delete_insert_table));
+                       K_(is_delete_insert_table),
+                       K_(micro_block_format_version));
 private:
   static const int64_t OB_EMPTY_MEMSTORE_MAX_SIZE = 10L << 20; // 10MB
 
@@ -547,7 +550,7 @@ private:
                       const int64_t rowkey_column_cnt,
                       const ObMemtableSetArg &arg,
                       const int64_t index,
-                      blocksstable::ObRowWriter &row_writer,
+                      blocksstable::ObCompatRowWriter &row_writer,
                       ObRowData &old_row_data,
                       ObMemtableData &mtd);
 
@@ -589,6 +592,9 @@ private:
   transaction::ObTxEncryptMeta *encrypt_meta_;
   common::SpinRWLock encrypt_meta_lock_;
   int64_t max_column_cnt_; // record max column count of row
+
+  // only used for decide row writer's compact version
+  int64_t micro_block_format_version_;
 };
 
 }  // namespace memtable

@@ -19,6 +19,7 @@
 #include "common/ob_store_format.h"
 #include "share/ob_ls_id.h"
 #include "share/scn.h"
+#include "storage/ob_micro_block_format_version_helper.h"
 
 namespace oceanbase
 {
@@ -94,7 +95,8 @@ public:
       K_(is_delete_insert_table),
       K_(encoding_granularity),
       K_(reorganization_scn),
-      K_(semistruct_encoding_type));
+      K_(semistruct_encoding_type),
+      K_(micro_block_format_version));
 private:
   OB_INLINE int init_encryption_info(const share::schema::ObMergeSchema &merge_schema);
   OB_INLINE void init_block_size(const share::schema::ObMergeSchema &merge_schema);
@@ -131,6 +133,7 @@ public:
   bool need_submit_io_;
   bool is_delete_insert_table_;
   uint64_t encoding_granularity_;
+  int64_t micro_block_format_version_;
   share::SCN reorganization_scn_;
   share::schema::ObSemiStructEncodingType semistruct_encoding_type_;
 };
@@ -219,7 +222,7 @@ public:
   bool encoding_enabled() const { return ObStoreFormat::is_row_store_type_with_encoding(row_store_type_); }
   void force_flat_store_type()
   {
-    row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
+    row_store_type_ = ObMicroBlockFormatVersionHelper::decide_flat_format(static_desc_->micro_block_format_version_);
     is_force_flat_store_type_ = true;
   }
   bool is_store_type_valid() const;
@@ -273,6 +276,12 @@ public:
   bool is_delete_insert_merge() const
   { return get_is_delete_insert_table() && !is_major_merge_type(); }
   bool enable_macro_block_bloom_filter() const;
+
+  OB_INLINE int64_t get_micro_block_format_version() const
+  {
+    return static_desc_->micro_block_format_version_;
+  }
+
   int update_basic_info_from_macro_meta(const ObSSTableBasicMeta &meta);
   /* GET FUNC */
   #define STORE_DESC_DEFINE_POINT_FUNC(var_type, desc, var_name) \
@@ -341,10 +350,11 @@ private:
   int inner_init(
       const share::schema::ObMergeSchema &schema,
       const ObRowStoreType row_store_type);
-  int cal_row_store_type(
-      const ObRowStoreType row_store_type,
-      const compaction::ObMergeType merge_type);
-  int get_emergency_row_store_type();
+  int cal_row_store_type(const ObMergeSchema &merge_schema,
+                         const ObRowStoreType row_store_type,
+                         const compaction::ObMergeType merge_type);
+  int get_emergency_row_store_type(const ObMergeSchema &merge_schema);
+
 public:
   ObStaticDataStoreDesc *static_desc_;
   ObColDataStoreDesc *col_desc_;

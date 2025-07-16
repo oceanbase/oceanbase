@@ -20,6 +20,7 @@
 #include "share/shared_storage/ob_ss_local_cache_control_mode.h"
 #include "plugin/sys/ob_plugin_load_param.h"
 #include "share/table/ob_table_config_util.h"
+#include "storage/ob_micro_block_format_version_helper.h"
 
 namespace oceanbase
 {
@@ -1793,6 +1794,22 @@ bool ObHNSWIterFilterScanNumChecker::check(const ObConfigItem &t) const
     is_valid = (iter_max_scan_num >= MIN_HNSW_ITER_SCAN_NUMS &&
                 iter_max_scan_num <= MAX_HNSW_ITER_SCAN_NUMS);
   }
+  return is_valid;
+}
+
+bool ObConfigDefaultMicroBlockFormatVersionChecker::check(const ObConfigItem &t) const
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = true;
+  int64_t version = ObConfigIntParser::get(t.str(), is_valid);
+
+  if (version > ObMicroBlockFormatVersionHelper::LATEST_VERSION || version <= 0) {
+    is_valid = false;
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "it's not allowded to set micro block format version to invalid version", K(ret), K(version));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "it's not allowded to set micro block format version to invalid version");
+  }
+
   return is_valid;
 }
 

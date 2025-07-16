@@ -3411,7 +3411,7 @@ int ObDDLUtil::get_temp_store_compress_type(const share::schema::ObTableSchema *
     LOG_WARN("invalid argument", K(ret), KP(table_schema));
   } else {
     ObCompressorType schema_compr_type = table_schema->get_compressor_type();
-    if (NONE_COMPRESSOR == schema_compr_type && table_schema->get_row_store_type() != FLAT_ROW_STORE) { // encoding without compress
+    if (NONE_COMPRESSOR == schema_compr_type && ObStoreFormat::is_row_store_type_with_encoding(table_schema->get_row_store_type())) { // encoding without compress
       schema_compr_type = ZSTD_COMPRESSOR;
     }
     ret = get_temp_store_compress_type(schema_compr_type, parallel, compr_type);

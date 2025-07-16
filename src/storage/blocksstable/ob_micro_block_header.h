@@ -102,6 +102,8 @@ public:
   int deep_copy(char *buf, const int64_t buf_len, int64_t &pos, ObMicroBlockHeader *&new_header) const;
   uint32_t get_serialize_size() const { return get_serialize_size(column_count_, has_column_checksum_); }
 
+  OB_INLINE ObRowStoreType get_row_store_type() const { return static_cast<ObRowStoreType>(row_store_type_); }
+
   static uint32_t get_serialize_size(const int64_t column_count, const bool need_calc_column_chksum) {
     return static_cast<uint32_t>(ObMicroBlockHeader::COLUMN_CHECKSUM_PTR_OFFSET +
         (need_calc_column_chksum ? column_count * sizeof(int64_t) : 0));

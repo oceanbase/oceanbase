@@ -199,7 +199,7 @@ int ObExtInfoCallback::set(
   key_.reset();
   key_obj_.set_uint64(seq_no_cur_.cast_to_int());
   rowkey_.assign(&key_obj_, OB_EXT_INFO_MUTATOR_ROW_KEY_CNT);
-  SMART_VAR(blocksstable::ObRowWriter, row_writer) {
+  SMART_VAR(blocksstable::ObRowWriterV0, row_writer) {
     if (data.empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("data is empty", K(ret));

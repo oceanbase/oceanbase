@@ -2985,6 +2985,34 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         }
         break;
       }
+      case T_MICRO_BLOCK_FORMAT_VERSION: {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (OB_ISNULL(option_node->children_)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "(the children of option_node is null", K(option_node->children_), K(ret));
+        } else {
+          const int64_t micro_block_format_version = static_cast<int64_t>(option_node->children_[0]->value_);
+          if (!ObMicroBlockFormatVersionHelper::check_version_valid(micro_block_format_version, tenant_data_version)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("tenant data version is less than needed, this micro block format version is not supported", K(ret), K(tenant_data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than needed, this micro block format version is");
+          } else if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
+            ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
+            arg.schema_.set_micro_block_format_version(micro_block_format_version);
+          } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+            ObAlterTableArg &arg = static_cast<ObAlterTableStmt*>(stmt_)->get_alter_table_arg();
+            arg.alter_table_schema_.set_micro_block_format_version(micro_block_format_version);
+            if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::MICRO_BLOCK_FORMAT_VERSION))) {
+              LOG_WARN("fail to set micro block format version to bitset in ob ddl resolver", K(ret));
+            }
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+          }
+        }
+        break;
+      }
       case T_EXTERNAL_TABLE_AUTO_REFRESH: {
          if (stmt_->get_stmt_type() == stmt::T_CREATE_TABLE) {
            ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();

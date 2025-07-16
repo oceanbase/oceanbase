@@ -68,6 +68,7 @@ int ObVertialPartitionBuilder::generate_aux_vp_table_schema(
       } else {
         aux_vp_table_schema.set_micro_index_clustered(data_schema.get_micro_index_clustered());
         aux_vp_table_schema.set_enable_macro_block_bloom_filter(data_schema.get_enable_macro_block_bloom_filter());
+        aux_vp_table_schema.set_micro_block_format_version(data_schema.get_micro_block_format_version());
       }
     }
   }

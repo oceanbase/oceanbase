@@ -822,7 +822,6 @@ ObMicroBlockDecoder::ObMicroBlockDecoder()
     cached_decoder_(nullptr),
     row_index_(&var_row_index_),
     decoders_(nullptr),
-    flat_row_reader_(),
     ctxs_(nullptr),
     decoder_allocator_(ObModIds::OB_DECODER_CTX),
     buf_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), "OB_MICB_DECODER")), OB_MALLOC_NORMAL_BLOCK_SIZE),
@@ -1078,7 +1077,6 @@ void ObMicroBlockDecoder::inner_reset()
   row_data_ = NULL;
   ObIMicroBlockReader::reset();
   decoder_allocator_.reuse();
-  flat_row_reader_.reset();
   ctxs_ = nullptr;
 }
 

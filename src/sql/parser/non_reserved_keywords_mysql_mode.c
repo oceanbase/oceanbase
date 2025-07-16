@@ -1166,6 +1166,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"api_mode", API_MODE},
   {"url", URL},
   {"credential", CREDENTIAL},
+  {"micro_block_format_version", MICRO_BLOCK_FORMAT_VERSION},
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

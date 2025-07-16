@@ -442,6 +442,32 @@ int ObCreateTableResolver::set_default_enable_macro_block_bloom_filter_(share::s
   return OB_SUCCESS;
 }
 
+int ObCreateTableResolver::set_default_micro_block_format_version_(share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+
+  uint64_t data_version = 0;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Fail to get tenant id because of empty session info", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version))) {
+    LOG_WARN("Fail to get data version", KR(ret));
+    ret = OB_SUCCESS;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (data_version >= ObMicroBlockFormatVersionHelper::MIN_SUPPORTED_VERSION) {
+    ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
+    table_schema.set_micro_block_format_version(tenant_config.is_valid()
+                                                 ? tenant_config->default_micro_block_format_version
+                                                 : ObMicroBlockFormatVersionHelper::DEFAULT_VERSION);
+  } else {
+    table_schema.set_micro_block_format_version(ObMicroBlockFormatVersionHelper::DEFAULT_VERSION);
+  }
+
+  return ret;
+}
+
 ERRSIM_POINT_DEF(ERRSIM_SET_MERGE_ENGINE_DELETE_INSERT);
 int ObCreateTableResolver::set_default_merge_engine_type_(share::schema::ObTableSchema &table_schema)
 {
@@ -713,6 +739,8 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               SQL_RESV_LOG(WARN, "set table options (micro_index_clustered) failed", K(ret));
             } else if (OB_FAIL(set_default_enable_macro_block_bloom_filter_(table_schema))) {
               SQL_RESV_LOG(WARN, "set table options (enable_macro_block_bloom_filter) failed", K(ret));
+            } else if (OB_FAIL(set_default_micro_block_format_version_(table_schema))) {
+              SQL_RESV_LOG(WARN, "set table options (micro_block_format_version) failed", K(ret));
             } else if (OB_FAIL(set_default_merge_engine_type_(table_schema))) {
               SQL_RESV_LOG(WARN, "set default merge engine type failed", K(ret));
             } else if (OB_FAIL(resolve_table_options(create_table_node->children_[4], false))) {

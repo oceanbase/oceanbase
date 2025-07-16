@@ -3039,7 +3039,9 @@ DEF_TO_STRING(ObTableOption)
        K_(row_store_type),
        K_(store_format),
        K_(enable_macro_block_bloom_filter),
-       K_(storage_cache_policy));
+       K_(storage_cache_policy),
+       K_(micro_block_format_version));
+
   J_OBJ_END();
   return pos;
 }
@@ -3077,7 +3079,8 @@ DEF_TO_STRING(ObIndexOption)
        K_(row_store_type),
        K_(store_format),
        K_(enable_macro_block_bloom_filter),
-       K_(storage_cache_policy));
+       K_(storage_cache_policy),
+       K_(micro_block_format_version));
   J_OBJ_END();
   return pos;
 }

@@ -140,37 +140,6 @@ int ObMicroBlockDesc::deep_copy(
 }
 
  /**
- * -------------------------------------------------------------------ObMicroBufferWriter-------------------------------------------------------------------
- */
-int ObMicroBufferWriter::write_row(const ObDatumRow &row, const int64_t rowkey_cnt, int64_t &size)
-{
-  int ret = OB_SUCCESS;
-  ObRowWriter row_writer;
-
-  if (remain_buffer_size() <= 0 && OB_FAIL(expand(ObCompactionBuffer::size()))) {
-    STORAGE_LOG(WARN, "failed to reserve", K(ret));
-  }
-
-  while (OB_SUCC(ret)) {
-    if (OB_SUCC(row_writer.write(rowkey_cnt, row, current(), remain_buffer_size(), size))) {
-      break;
-    } else {
-      if (OB_UNLIKELY(ret != OB_BUF_NOT_ENOUGH)) {
-        STORAGE_LOG(WARN, "failed to write row", K(ret), KPC(this));
-      } else if (!check_could_expand()) { //break
-      } else if (OB_FAIL(expand(ObCompactionBuffer::size()))) {
-        STORAGE_LOG(WARN, "failed to reserve", K(ret));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    write_nop(size);
-  }
-  return ret;
-}
-
- /**
  * -------------------------------------------------------------------ObIMicroBlockWriter-------------------------------------------------------------------
  */
 int ObIMicroBlockWriter::build_micro_block_desc(ObMicroBlockDesc &micro_block_desc)

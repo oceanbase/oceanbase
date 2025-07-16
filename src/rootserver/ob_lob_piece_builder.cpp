@@ -95,6 +95,7 @@ int ObLobPieceBuilder::generate_aux_lob_piece_schema(
     if (OB_SUCC(ret)) {
       aux_lob_piece_schema.set_micro_index_clustered(data_schema.get_micro_index_clustered());
       aux_lob_piece_schema.set_enable_macro_block_bloom_filter(data_schema.get_enable_macro_block_bloom_filter());
+      aux_lob_piece_schema.set_micro_block_format_version(data_schema.get_micro_block_format_version());
     }
 
   }

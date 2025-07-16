@@ -84,6 +84,7 @@
 #include "rootserver/ob_alter_table_constraint_checker.h"
 #include "share/ob_domain_index_builder_util.h"
 #include "rootserver/ob_objpriv_mysql_ddl_service.h"
+#include "storage/ob_micro_block_format_version_helper.h"
 
 namespace oceanbase
 {
@@ -1324,6 +1325,10 @@ int ObDDLService::generate_schema(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("fail to generate schema, not support delete insert merge engine for this version", K(ret), K(tenant_id), K(compat_version), K(arg));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support delete insert merge engine");
+  } else if (!ObMicroBlockFormatVersionHelper::check_version_valid(arg.schema_.get_micro_block_format_version(), compat_version)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("fail to generate schema, not support this micro block format version for this version", K(ret), K(tenant_id), K(compat_version), K(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than needed, this micro block format version is");
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
     LOG_WARN("get schema guard failed", K(ret));
   } else {
@@ -3074,6 +3079,20 @@ int ObDDLService::set_raw_table_options(
         case ObAlterTableArg::ENABLE_MACRO_BLOCK_BLOOM_FILTER: {
           new_table_schema.set_enable_macro_block_bloom_filter(alter_table_schema.get_enable_macro_block_bloom_filter());
           need_update_index_table = true;
+          break;
+        }
+        case ObAlterTableArg::MICRO_BLOCK_FORMAT_VERSION: {
+          uint64_t compat_version = OB_INVALID_VERSION;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+          } else if (!ObMicroBlockFormatVersionHelper::check_version_valid(alter_table_schema.get_micro_block_format_version(), compat_version)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("micro_block_format_version less than needed version not support", K(ret), K(compat_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "micro_block_format_version less than needed version");
+          } else {
+            new_table_schema.set_micro_block_format_version(alter_table_schema.get_micro_block_format_version());
+            need_update_index_table = true;
+          }
           break;
         }
         case ObAlterTableArg::STORAGE_FORMAT_VERSION: {

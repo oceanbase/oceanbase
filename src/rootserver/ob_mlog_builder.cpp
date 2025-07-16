@@ -611,6 +611,7 @@ int ObMLogBuilder::generate_mlog_schema(
     } else {
       mlog_schema.set_micro_index_clustered(base_table_schema.get_micro_index_clustered());
       mlog_schema.set_enable_macro_block_bloom_filter(base_table_schema.get_enable_macro_block_bloom_filter());
+      mlog_schema.set_micro_block_format_version(base_table_schema.get_micro_block_format_version());
     }
   }
 

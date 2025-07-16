@@ -363,6 +363,7 @@ public:
   OB_INLINE bool is_user_hidden_table() const { return share::schema::TABLE_STATE_IS_HIDDEN_MASK & table_mode_.state_flag_; }
   OB_INLINE bool is_cs_replica_compat() const { return is_cs_replica_compat_; }
   OB_INLINE bool get_enable_macro_block_bloom_filter() const override { return enable_macro_block_bloom_filter_; }
+  OB_INLINE int64_t get_micro_block_format_version() const override { return micro_block_format_version_; }
   int set_storage_schema_version(const uint64_t tenant_data_version);
 
   VIRTUAL_TO_STRING_KV(KP(this), K_(storage_schema_version), K_(version),
@@ -372,7 +373,8 @@ public:
       K_(master_key_id), K_(compressor_type), K_(encryption), K_(encrypt_key),
       "rowkey_cnt", rowkey_array_.count(), K_(rowkey_array), "column_cnt", column_array_.count(), K_(column_array),
       "skip_index_cnt", skip_idx_attr_array_.count(), K_(skip_idx_attr_array),
-      "column_group_cnt", column_group_array_.count(), K_(column_group_array), K_(has_all_column_group), K_(merge_engine_type));
+      "column_group_cnt", column_group_array_.count(), K_(column_group_array), K_(has_all_column_group), K_(merge_engine_type),
+      K_(micro_block_format_version));
 public:
   static int trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum);
 private:
@@ -429,7 +431,7 @@ public:
   static const int64_t STORAGE_SCHEMA_VERSION_V3 = 3; // add for cg_group
   static const int64_t STORAGE_SCHEMA_VERSION_V4 = 4;
   static const int64_t STORAGE_SCHEMA_VERSION_V5 = 5; // add for merge_engine_type_ and semistruct encoding type in 4.3.5 bp2
-  static const int64_t STORAGE_SCHEMA_VERSION_V6 = 6; // add for semistruct properties in 4.4.1 bp1
+  static const int64_t STORAGE_SCHEMA_VERSION_V6 = 6; // add for micro_block_format_version and semistruct properties in 4.4.1 bp1
   static const int64_t STORAGE_SCHEMA_VERSION_LATEST = STORAGE_SCHEMA_VERSION_V6;
   common::ObIAllocator *allocator_;
   int64_t storage_schema_version_;
@@ -460,6 +462,7 @@ public:
   int64_t progressive_merge_round_;
   int64_t progressive_merge_num_;
   uint64_t master_key_id_; // for encryption
+  int64_t micro_block_format_version_;
   ObCompressorType compressor_type_;
   ObString encryption_; // for encryption
   ObString encrypt_key_; // for encryption

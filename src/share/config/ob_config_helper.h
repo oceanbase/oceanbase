@@ -1201,6 +1201,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObHNSWIterFilterScanNumChecker);
 };
 
+class ObConfigDefaultMicroBlockFormatVersionChecker : public ObConfigChecker
+{
+public:
+  ObConfigDefaultMicroBlockFormatVersionChecker() = default;
+
+  virtual ~ObConfigDefaultMicroBlockFormatVersionChecker() = default;
+
+  bool check(const ObConfigItem &t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigDefaultMicroBlockFormatVersionChecker);
+};
 
 } // namespace common
 } // namespace oceanbase

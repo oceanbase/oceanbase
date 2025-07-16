@@ -13,7 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_macro_block_reader.h"
 #include "ob_macro_block_bare_iterator.h"
-#include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
+#include "ob_macro_block_meta.h"
+#include "index_block/ob_index_block_row_struct.h"
 
 namespace oceanbase
 {
@@ -823,7 +824,7 @@ int ObSSTableDataBlockReader::dump_sstable_micro_header(
 
     printer_.print_micro_header(&micro_block_header);
     row_cnt = micro_block_header.row_count_;
-    if (ObRowStoreType::FLAT_ROW_STORE == row_store_type) {
+    if (ObStoreFormat::is_row_store_type_with_flat(row_store_type)) {
     } else if (ObStoreFormat::is_row_store_type_with_pax_encoding(row_store_type)) {
       const ObColumnHeader *encode_col_header = reinterpret_cast<const ObColumnHeader *>(micro_block_buf + pos);
       for (int64_t i = 0; i < macro_header_.fixed_header_.column_count_; ++i) {

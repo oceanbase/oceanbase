@@ -19,7 +19,49 @@ using namespace common;
 using namespace storage;
 namespace blocksstable
 {
-ObMicroBlockWriter::ObMicroBlockWriter()
+/**
+ * ----------------------------------------------------------------ObMicroBufferFlatWriter----------------------------------------------------------------
+ */
+
+template <bool EnableNewFlatFormat>
+int ObMicroBufferFlatWriter<EnableNewFlatFormat>::write_row(const ObDatumRow &row,
+                                                            const int64_t rowkey_cnt,
+                                                            const ObIArray<ObColDesc> *col_descs,
+                                                            int64_t &size)
+{
+  int ret = OB_SUCCESS;
+
+  if (remain_buffer_size() <= 0 && OB_FAIL(expand(ObCompactionBuffer::size()))) {
+    STORAGE_LOG(WARN, "failed to reserve", K(ret));
+  }
+
+  while (OB_SUCC(ret)) {
+    if (OB_SUCC(row_writer_.write(rowkey_cnt,
+                                  row,
+                                  /* update_array */ nullptr,
+                                  col_descs,
+                                  current(),
+                                  remain_buffer_size(),
+                                  size))) {
+      break;
+    } else {
+      if (OB_UNLIKELY(ret != OB_BUF_NOT_ENOUGH)) {
+        STORAGE_LOG(WARN, "failed to write row", K(ret), KPC(this));
+      } else if (!check_could_expand()) { // break
+      } else if (OB_FAIL(expand(ObCompactionBuffer::size()))) {
+        STORAGE_LOG(WARN, "failed to reserve", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    write_nop(size);
+  }
+  return ret;
+}
+
+template<bool EnableNewFlatFormat>
+ObMicroBlockWriter<EnableNewFlatFormat>::ObMicroBlockWriter()
   :micro_block_size_limit_(0),
    column_count_(0),
    rowkey_column_count_(0),
@@ -34,11 +76,13 @@ ObMicroBlockWriter::ObMicroBlockWriter()
 {
 }
 
-ObMicroBlockWriter::~ObMicroBlockWriter()
+template<bool EnableNewFlatFormat>
+ObMicroBlockWriter<EnableNewFlatFormat>::~ObMicroBlockWriter()
 {
 }
 
-int ObMicroBlockWriter::init(const int64_t micro_block_size_limit,
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::init(const int64_t micro_block_size_limit,
                              const int64_t rowkey_column_count,
                              const int64_t column_count)
 {
@@ -65,7 +109,8 @@ int ObMicroBlockWriter::init(const int64_t micro_block_size_limit,
   return ret;
 }
 
-int ObMicroBlockWriter::init(const ObDataStoreDesc *data_store_desc)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::init(const ObDataStoreDesc *data_store_desc)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -108,7 +153,8 @@ int ObMicroBlockWriter::init(const ObDataStoreDesc *data_store_desc)
   return ret;
 }
 
-int ObMicroBlockWriter::inner_init()
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::inner_init()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -139,7 +185,8 @@ int ObMicroBlockWriter::inner_init()
   return ret;
 }
 
-int ObMicroBlockWriter::try_to_append_row()
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::try_to_append_row()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(get_future_block_size() > block_size_upper_bound_)) {
@@ -148,7 +195,8 @@ int ObMicroBlockWriter::try_to_append_row()
   return ret;
 }
 
-int ObMicroBlockWriter::process_out_row_columns(const ObDatumRow &row)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::process_out_row_columns(const ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
 
@@ -183,7 +231,8 @@ int ObMicroBlockWriter::process_out_row_columns(const ObDatumRow &row)
   return ret;
 }
 
-int ObMicroBlockWriter::append_row(const ObDatumRow &row)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::append_row(const ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -202,7 +251,7 @@ int ObMicroBlockWriter::append_row(const ObDatumRow &row)
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "append row column count is not consistent with init column count",
           K(get_header(data_buffer_)->column_count_), K(row.get_column_count()), K(ret));
-    } else if (OB_FAIL(data_buffer_.write_row(row, rowkey_column_count_, pos))) {
+    } else if (OB_FAIL(data_buffer_.write_row(row, rowkey_column_count_, col_desc_array_, pos))) {
       if (OB_BUF_NOT_ENOUGH != ret) {
         STORAGE_LOG(WARN, "row writer fail to write row.", K(ret), K(rowkey_column_count_),
             K(row), K(OB_P(data_buffer_.remain())), K(pos));
@@ -236,7 +285,8 @@ int ObMicroBlockWriter::append_row(const ObDatumRow &row)
   return ret;
 }
 
-int ObMicroBlockWriter::build_block(char *&buf, int64_t &size)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::build_block(char *&buf, int64_t &size)
 {
   int ret = OB_SUCCESS;
   if(!is_inited_){
@@ -281,7 +331,8 @@ int ObMicroBlockWriter::build_block(char *&buf, int64_t &size)
   return ret;
 }
 
-int ObMicroBlockWriter::append_hash_index(ObMicroBlockHashIndexBuilder& hash_index_builder)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::append_hash_index(ObMicroBlockHashIndexBuilder& hash_index_builder)
 {
   int ret = OB_SUCCESS;
   get_header(data_buffer_)->contains_hash_index_ = 0;
@@ -304,7 +355,8 @@ int ObMicroBlockWriter::append_hash_index(ObMicroBlockHashIndexBuilder& hash_ind
   return ret;
 }
 
-void ObMicroBlockWriter::reset()
+template<bool EnableNewFlatFormat>
+void ObMicroBlockWriter<EnableNewFlatFormat>::reset()
 {
   ObIMicroBlockWriter::reset();
   micro_block_size_limit_ = 0;
@@ -319,7 +371,8 @@ void ObMicroBlockWriter::reset()
   is_inited_ = false;
 }
 
-void ObMicroBlockWriter::reuse()
+template<bool EnableNewFlatFormat>
+void ObMicroBlockWriter<EnableNewFlatFormat>::reuse()
 {
   ObIMicroBlockWriter::reuse();
   data_buffer_.reuse();
@@ -331,7 +384,8 @@ void ObMicroBlockWriter::reuse()
   row_count_ = 0;
 }
 
-int ObMicroBlockWriter::finish_row()
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::finish_row()
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -350,7 +404,8 @@ int ObMicroBlockWriter::finish_row()
   return ret;
 }
 
-int ObMicroBlockWriter::reserve_header(
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::reserve_header(
     const int64_t column_count,
     const int64_t rowkey_column_count,
     const bool need_calc_column_chksum)
@@ -371,7 +426,7 @@ int ObMicroBlockWriter::reserve_header(
       header->header_size_ = header_size;
       header->column_count_ = static_cast<int32_t>(column_count);
       header->rowkey_column_count_ = static_cast<int32_t>(rowkey_column_count);
-      header->row_store_type_ = FLAT_ROW_STORE;
+      header->row_store_type_ = EnableNewFlatFormat ? FLAT_OPT_ROW_STORE : FLAT_ROW_STORE;
       header->has_column_checksum_ = need_calc_column_chksum;
       if (need_calc_column_chksum) {
         header->column_checksums_ = reinterpret_cast<int64_t *>(
@@ -383,13 +438,15 @@ int ObMicroBlockWriter::reserve_header(
   return ret;
 }
 
-bool ObMicroBlockWriter::is_exceed_limit()
+template<bool EnableNewFlatFormat>
+bool ObMicroBlockWriter<EnableNewFlatFormat>::is_exceed_limit()
 {
   ObMicroBlockHeader *header = get_header(data_buffer_);
   return header->row_count_ > 0 && get_future_block_size() > micro_block_size_limit_;
 }
 
-int ObMicroBlockWriter::init_hash_index_builder(const ObDataStoreDesc *data_store_desc)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::init_hash_index_builder(const ObDataStoreDesc *data_store_desc)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(data_store_desc) && data_store_desc->get_tablet_id().is_user_tablet()
@@ -403,7 +460,8 @@ int ObMicroBlockWriter::init_hash_index_builder(const ObDataStoreDesc *data_stor
   return ret;
 }
 
-int ObMicroBlockWriter::append_row_to_hash_index(const ObDatumRow &row)
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::append_row_to_hash_index(const ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
   if (hash_index_builder_.is_valid()) {
@@ -422,7 +480,8 @@ int ObMicroBlockWriter::append_row_to_hash_index(const ObDatumRow &row)
   return ret;
 }
 
-int ObMicroBlockWriter::build_hash_index_block()
+template<bool EnableNewFlatFormat>
+int ObMicroBlockWriter<EnableNewFlatFormat>::build_hash_index_block()
 {
   int ret = OB_SUCCESS;
   if (hash_index_builder_.is_valid()) {
@@ -438,6 +497,9 @@ int ObMicroBlockWriter::build_hash_index_block()
   }
   return ret;
 }
+
+template class ObMicroBlockWriter<true>;
+template class ObMicroBlockWriter<false>;
 
 }//end namespace blocksstable
 }//end namespace oceanbase

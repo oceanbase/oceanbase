@@ -108,7 +108,6 @@ public:
     : ObCompactionBuffer("MicroBuffer", page_size)
   {}
   virtual ~ObMicroBufferWriter() { reset(); };
-  int write_row(const ObDatumRow &row, const int64_t rowkey_cnt, int64_t &len);
 };
 
 // Some common interface of ObMicroBlockWriter and ObMicroBlockEncoder, not all features.

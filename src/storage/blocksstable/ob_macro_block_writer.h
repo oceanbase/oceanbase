@@ -183,10 +183,17 @@ public:
   inline ObMacroBlocksWriteCtx &get_macro_block_write_ctx() { return block_write_ctx_; }
   inline int64_t get_last_macro_seq() const { return OB_ISNULL(macro_seq_generator_) ? -1 : macro_seq_generator_->get_current(); } /* save our seq num */
   TO_STRING_KV(K_(block_write_ctx));
+
   static int build_micro_writer(const ObDataStoreDesc *data_store_desc,
                                 ObIAllocator &allocator,
                                 ObIMicroBlockWriter *&micro_writer,
                                 const int64_t verify_level = MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION);
+
+  template <typename MicroBlockWriterType, typename... Args>
+  static int inner_build_micro_writer(ObIAllocator &allocator,
+                                      ObIMicroBlockWriter *&micro_writer,
+                                      const int64_t verify_level = MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION,
+                                      Args &&... args);
   inline int64_t get_macro_data_size() const { return macro_blocks_[current_index_].get_data_size() + micro_writer_->get_block_size(); }
   const compaction::ObMergeBlockInfo& get_merge_block_info() const { return merge_block_info_; }
   ObIMacroBlockFlushCallback *get_flush_callback() { return callback_; }

@@ -2290,7 +2290,8 @@ public:
         || alter_table_schema_.alter_option_bitset_.has_member(PROGRESSIVE_MERGE_ROUND)
         || alter_table_schema_.alter_option_bitset_.has_member(PROGRESSIVE_MERGE_NUM)
         || alter_table_schema_.alter_option_bitset_.has_member(ENCRYPTION)
-        || alter_table_schema_.alter_option_bitset_.has_member(ENABLE_MACRO_BLOCK_BLOOM_FILTER);
+        || alter_table_schema_.alter_option_bitset_.has_member(ENABLE_MACRO_BLOCK_BLOOM_FILTER)
+        || alter_table_schema_.alter_option_bitset_.has_member(MICRO_BLOCK_FORMAT_VERSION);
   }
   bool is_split_partition() const {
     return is_manual_split_partition() ||

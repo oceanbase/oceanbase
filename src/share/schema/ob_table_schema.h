@@ -663,6 +663,7 @@ public:
   virtual inline uint64_t get_master_key_id() const { return OB_INVALID_ID; }
   virtual inline bool is_use_bloomfilter() const { return false; }
   virtual inline bool get_enable_macro_block_bloom_filter() const { return false; }
+  virtual inline int64_t get_micro_block_format_version() const { return storage::ObMicroBlockFormatVersionHelper::DEFAULT_VERSION; }
   virtual inline bool is_primary_aux_vp_table() const { return false; }
   virtual inline bool is_primary_vp_table() const { return false; }
   virtual inline bool is_aux_vp_table() const { return false; }
@@ -1715,6 +1716,11 @@ public:
   inline void set_enable_macro_block_bloom_filter(const bool enable_macro_block_bloom_filter)
   {
     enable_macro_block_bloom_filter_ = enable_macro_block_bloom_filter;
+  }
+  inline int64_t get_micro_block_format_version() const override { return micro_block_format_version_; }
+  inline void set_micro_block_format_version(const int64_t micro_block_format_version)
+  {
+    micro_block_format_version_ = micro_block_format_version;
   }
   inline int64_t get_virtual_column_cnt() const { return virtual_column_cnt_; }
   inline const_column_iterator column_begin() const { return column_array_; }

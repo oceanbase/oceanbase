@@ -2712,8 +2712,8 @@ int ObDataIndexBlockBuilder::init(const ObDataStoreDesc &data_store_desc,
                                                        index_tree_root_ctx_))) {
     LOG_WARN("fail to init referemce pointer members", K(ret));
   } else if (OB_UNLIKELY(index_store_desc->get_row_store_type() != data_store_desc.get_row_store_type()
-                         && (index_store_desc->get_row_store_type() == FLAT_ROW_STORE
-                             || data_store_desc.get_row_store_type() == FLAT_ROW_STORE)
+                         && (ObStoreFormat::is_row_store_type_with_flat(index_store_desc->get_row_store_type())
+                             || ObStoreFormat::is_row_store_type_with_flat(data_store_desc.get_row_store_type()))
                          && !data_store_desc.is_force_flat_store_type_)) {
     // since n-1 micro block should keep format same with data_blocks
     ret = OB_INVALID_ARGUMENT;

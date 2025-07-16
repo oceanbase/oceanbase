@@ -3244,6 +3244,8 @@ int ObTableSqlService::gen_table_dml_without_check(
           && OB_FAIL(dml.add_column("external_location_id", table.get_external_location_id())))
       || (data_version >= DATA_VERSION_4_4_0_0
           && OB_FAIL(dml.add_column("external_sub_path", ObHexEscapeSqlStr(table.get_external_sub_path()))))
+      || (data_version >= DATA_VERSION_4_4_1_0
+          && OB_FAIL(dml.add_column("micro_block_format_version", table.get_micro_block_format_version())))
       ) {
         LOG_WARN("add column failed", K(ret));
       }
@@ -3360,6 +3362,9 @@ int ObTableSqlService::gen_table_dml(
   } else if (data_version < DATA_VERSION_4_3_5_2 && table.is_delete_insert_merge_engine()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("can't set merge_engine_type in current version", KR(ret), K(table));
+  } else if (!ObMicroBlockFormatVersionHelper::check_version_valid(table.get_micro_block_format_version(), data_version)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("can't set micro block format version in current version", KR(ret), K(table));
   } else if (OB_FAIL(gen_table_dml_without_check(exec_tenant_id, table,
           update_object_status_ignore_version, data_version, dml))) {
     LOG_WARN("failed to gen_table_dml_with_data_version", KR(ret), KDV(data_version));

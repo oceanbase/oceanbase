@@ -227,7 +227,7 @@ ObTablet::ObTablet(const bool is_external_tablet)
     is_external_tablet_(is_external_tablet)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  check_size<ObTablet, ObRowkeyReadInfo, 1512>();
+  check_size<ObTablet, ObRowkeyReadInfo, 1520>();
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
@@ -5409,6 +5409,8 @@ int ObTablet::create_memtable(CreateMemtableArg &arg)
     LOG_WARN("invalid schema version", K(ret), K(arg));
   } else if (OB_FAIL(check_is_delete_insert_table(arg.is_delete_insert_))) {
     LOG_WARN("fail to check is delete insert table", K(ret));
+  } else if (OB_FAIL(check_micro_block_format_version(arg.micro_block_format_version_))) {
+    LOG_WARN("fail to check is delete insert table", K(ret));
   } else if (FALSE_IT(time_guard.click("prepare_memtables"))) {
   } else if (OB_FAIL(inner_create_memtable(arg))) {
     if (OB_ENTRY_EXIST == ret) {
@@ -5740,7 +5742,8 @@ int ObTablet::build_read_info(
                                              false /*use_default_compat_version*/,
                                              is_cs_replica_compat,
                                              storage_schema->is_delete_insert_merge_engine(),
-                                             storage_schema->is_global_index_table()))) {
+                                             storage_schema->is_global_index_table(),
+                                             storage_schema->get_micro_block_format_version()))) {
     LOG_WARN("fail to init rowkey read info", K(ret), KPC(storage_schema));
   }
   ObTabletObjLoadHelper::free(allocator, storage_schema);
@@ -6492,6 +6495,22 @@ int ObTablet::check_is_delete_insert_table(bool &is_delete_insert_table) const
     LOG_WARN("get unexpected null rowkey readinfo", K(ret));
   } else {
     is_delete_insert_table = rowkey_read_info_->is_delete_insert_table();
+  }
+  return ret;
+}
+
+
+int ObTablet::check_micro_block_format_version(int64_t &micro_block_format_version) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTablet has not been inited", K(ret));
+  } else if (OB_UNLIKELY(nullptr == rowkey_read_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null rowkey readinfo", K(ret));
+  } else {
+    micro_block_format_version = rowkey_read_info_->get_micro_block_format_version();
   }
   return ret;
 }

@@ -1112,7 +1112,7 @@ int MemtableMutatorRow::parse_cols(
     ret = OB_STATE_NOT_MATCH;
   }
 
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   blocksstable::ObDatumRow datum_row(tenant_id);
 
   // parse value of new column
@@ -1212,7 +1212,7 @@ int MemtableMutatorRow::parse_cols(const ObCDCLobAuxTableSchemaInfo &inner_table
     LOG_ERROR("row has not been deserialized", KR(ret));
   }
 
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   blocksstable::ObDatumRow datum_row(OB_SERVER_TENANT_ID);
 
   // parse value of new column
@@ -1277,7 +1277,7 @@ int MemtableMutatorRow::parse_cols(const ObCDCLobAuxTableSchemaInfo &inner_table
 int MemtableMutatorRow::parse_ext_info_log(ObLobId &lob_id, ObString &ext_info_log)
 {
   int ret = OB_SUCCESS;
-  blocksstable::ObRowReader row_reader;
+  blocksstable::ObCompatRowReader row_reader;
   blocksstable::ObDatumRow datum_row;
   bool is_found = false;
   if (OB_UNLIKELY(cols_parsed_)) {

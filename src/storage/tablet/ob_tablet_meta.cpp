@@ -1983,6 +1983,7 @@ int ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
   storage_schema.master_key_id_ = OB_INVALID_ID;
   storage_schema.compat_mode_ = static_cast<uint32_t>(lib::Worker::get_compatibility_mode());
   storage_schema.is_cs_replica_compat_ = false;
+  storage_schema.micro_block_format_version_ = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION;
 
   ObStorageRowkeyColumnSchema rowkey_schema;
   rowkey_schema.meta_type_.set_tinyint();

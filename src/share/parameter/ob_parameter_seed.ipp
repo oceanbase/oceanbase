@@ -2800,6 +2800,7 @@ DEF_INT(ob_result_cache_evict_percentage, OB_TENANT_PARAMETER, "90", "[0, 100]",
 DEF_CAP(ob_deterministic_udf_cache_max_size, OB_TENANT_PARAMETER, "16M", "[0B,)",
         "deternimistic cache can use max size memory(in bytes). if it's zero, disable cache",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_CAP(_storage_stream_rpc_buffer_size, OB_TENANT_PARAMETER, "2M", "[2M,128M]"
          "the buffer size of storage stream rpc"
          "Range: [2M, 128M]",
@@ -2885,6 +2886,12 @@ DEF_STR(_object_storage_condition_put_mode, OB_CLUSTER_PARAMETER, "none",
         "\"none\": no conditional put."
         "\"if-match\": conditional put with if-match.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE), "none, if-match");
+
+DEF_INT_WITH_CHECKER(default_micro_block_format_version, OB_TENANT_PARAMETER, "1",
+                     common::ObConfigDefaultMicroBlockFormatVersionChecker,
+                     "specify the default micro block format version when create table",
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_prexec_prepare_with_params, OB_TENANT_PARAMETER, "False",
          "Control the prexec protocol prepare with or without parameters during the prepare phase.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

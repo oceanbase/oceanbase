@@ -116,7 +116,6 @@ void TestSchemaPrepare::add_all_and_each_column_group(
   ASSERT_EQ(OB_SUCCESS, table_schema.get_store_column_ids(col_ids));
   ASSERT_EQ(OB_SUCCESS, table_schema.get_store_column_count(store_column_count));
   ASSERT_EQ(store_column_count, col_ids.count());
-  ObRowStoreType row_store_type = FLAT_ROW_STORE;
 
   //add all_cg_schemas
   share::schema::ObColumnGroupSchema cg_1;
@@ -129,7 +128,7 @@ void TestSchemaPrepare::add_all_and_each_column_group(
   }
   cg_1.column_id_arr_ = cg_1_ids;
   cg_1.column_group_name_ = "test_all";
-  cg_1.row_store_type_ = row_store_type;
+  cg_1.row_store_type_ = ObMicroBlockFormatVersionHelper::decide_flat_format(table_schema.get_micro_block_format_version());
   ASSERT_EQ(OB_SUCCESS, table_schema.add_column_group(cg_1));
 
   //add single_cg_schema
@@ -143,7 +142,7 @@ void TestSchemaPrepare::add_all_and_each_column_group(
     cg_2.column_id_arr_capacity_ = 1;
     uint64_t column_ids[1] = {col_ids.at(i).col_id_};
     cg_2.column_id_arr_ = column_ids;
-    cg_2.row_store_type_ = row_store_type;
+    cg_2.row_store_type_ = ObMicroBlockFormatVersionHelper::decide_flat_format(table_schema.get_micro_block_format_version());
     ASSERT_EQ(OB_SUCCESS, table_schema.add_column_group(cg_2));
   }
 
