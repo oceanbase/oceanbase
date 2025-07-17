@@ -31,6 +31,8 @@ void ObTmpFileWriteBlockTimerTask::runTimerTask()
   if (OB_FAIL(flush_task_.write())) {
     LOG_WARN("fail to write block", KR(ret), K(flush_task_));
   }
+  flush_task_.set_write_ret(ret);
+  flush_task_.set_is_written(true);
 }
 
 ObTmpFileFlushTask::ObTmpFileFlushTask()
@@ -221,8 +223,6 @@ int ObTmpFileFlushTask::write()
       LOG_DEBUG("flush task send io succ", KR(ret), K(page_idx_), K(page_cnt_), KPC(this));
     }
   }
-  set_write_ret(ret);
-  set_is_written(true);
   LOG_DEBUG("flush task write end", KR(ret), KPC(this));
   return ret;
 }
