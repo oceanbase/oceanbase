@@ -450,7 +450,10 @@ int ObIDag::add_task(ObITask &task)
   } else {
     ObMutexGuard guard(lock_);
     task.set_status(ObITask::TASK_STATUS_WAITING);
-    if (OB_FAIL(check_cycle())) {
+    if (is_inactive_status()) {
+      ret = OB_CANCELED;
+      LOG_WARN("dag is inactive", K(ret), K_(is_stop), K_(dag_status));
+    } else if (OB_FAIL(check_cycle())) {
       COMMON_LOG(WARN, "check_cycle failed", K(ret), K_(id));
       if (OB_ISNULL(task_list_.remove(&task))) {
         COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "failed to remove task from task_list", K_(id));
@@ -609,13 +612,16 @@ int ObIDag::get_next_ready_task(ObITask *&task)
   return ret;
 }
 
-int ObIDag::finish_task(ObITask &task)
+int ObIDag::finish_task(ObITask *&task)
 {
   int ret = OB_SUCCESS;
   // remove finished task from task list and update indegree
-  {
+  if (OB_ISNULL(task)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid args", K(ret));
+  } else {
     ObMutexGuard guard(lock_);
-    if (OB_ISNULL(task_list_.remove(&task))) {
+    if (OB_ISNULL(task_list_.remove(task))) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "failed to remove finished task from task_list", K(ret));
     } else {
@@ -624,7 +630,7 @@ int ObIDag::finish_task(ObITask &task)
 
     if (OB_SUCC(ret)) {
       if (ObIDag::DAG_STATUS_NODE_RUNNING == dag_status_) {
-        if (OB_FAIL(task.dec_indegree_for_children())) {
+        if (OB_FAIL(task->dec_indegree_for_children())) {
           COMMON_LOG(WARN, "failed to dec indegree for children", K(ret));
         }
       }
@@ -634,13 +640,14 @@ int ObIDag::finish_task(ObITask &task)
   return ret;
 }
 
-void ObIDag::free_task(ObITask &task)
+void ObIDag::free_task(ObITask *&task)
 {
   if (IS_NOT_INIT) {
     COMMON_LOG_RET(WARN, OB_NOT_INIT, "dag is not inited");
   } else {
-    task.~ObITask();
-    allocator_->free(&task);
+    task->~ObITask();
+    allocator_->free(task);
+    task = nullptr;
   }
 }
 
@@ -741,15 +748,20 @@ int ObIDag::gene_warning_info(ObDagWarningInfo &info, ObIAllocator &allocator)
   return ret;
 }
 
+void ObIDag::reset_task_list_for_retry()
+{
+  ObMutexGuard guard(lock_);
+  clear_task_list();
+  clear_running_info();
+}
+
 int ObIDag::reset_status_for_retry()
 {
   int ret = OB_SUCCESS;
-  {
-    ObMutexGuard guard(lock_);
-    clear_task_list();
-    clear_running_info();
-  }
-  if (OB_FAIL(inner_reset_status_for_retry())) { // will call alloc_task()
+  if (OB_UNLIKELY(task_list_.get_size() != 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "dag task list is not empty when retry", K(ret), K_(task_list));
+  } else if (OB_FAIL(inner_reset_status_for_retry())) { // will call alloc_task()
     COMMON_LOG(WARN, "failed to inner reset status", K(ret));
   } else {
     set_dag_status(ObIDag::DAG_STATUS_RETRY);
@@ -1423,6 +1435,7 @@ void ObTenantDagWorker::run1()
   self_ = this;
   int ret = OB_SUCCESS;
   ObIDag *dag = NULL;
+  ObITask *cur_task = NULL;
   lib::set_thread_name("DAG");
   lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
   while (!has_set_stop()) {
@@ -1457,8 +1470,10 @@ void ObTenantDagWorker::run1()
       }
 
       status_ = DWS_FREE;
-      if (OB_FAIL(MTL(ObTenantDagScheduler*)->deal_with_finish_task(*task_, *this, ret/*task error_code*/))) {
-        COMMON_LOG(WARN, "failed to finish task", K(ret), K(*task_));
+      cur_task = task_;
+      task_ = NULL;
+      if (OB_FAIL(MTL(ObTenantDagScheduler*)->deal_with_finish_task(cur_task, dag, *this, ret/*task error_code*/))) {
+        COMMON_LOG(WARN, "failed to finish task", K(ret), KPC(cur_task));
       }
       ObCurTraceId::reset();
       lib::set_thread_name("DAG");
@@ -1678,7 +1693,7 @@ void ObTenantDagScheduler::reset()
             STORAGE_LOG_RET(WARN, tmp_ret, "failed to del sys task", K(tmp_ret), K(cur_dag->get_dag_id()));
           }
         }
-        if (OB_TMP_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, *cur_dag, tmp_dag_net, false/*try_move_child*/))) {
+        if (OB_TMP_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, cur_dag, tmp_dag_net, false/*try_move_child*/))) {
           STORAGE_LOG_RET(WARN, tmp_ret, "failed to abort dag", K(tmp_ret), KPC(cur_dag));
         } else {
           ++abort_dag_cnt;
@@ -2236,7 +2251,7 @@ int ObTenantDagScheduler::check_ls_compaction_dag_exist_with_cancel(
             if (OB_UNLIKELY(nullptr != cancel_dag->get_dag_net())) {
               tmp_ret = OB_ERR_UNEXPECTED;
               COMMON_LOG(WARN, "compaction dag should not in dag net", KR(tmp_ret));
-            } else if (OB_TMP_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, *cancel_dag, unused_erase_dag_net, false/*try_move_child*/))) {
+            } else if (OB_TMP_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, cancel_dag, unused_erase_dag_net, false/*try_move_child*/))) {
               COMMON_LOG(WARN, "failed to erase dag", K(tmp_ret), KPC(cancel_dag));
               ob_abort();
             } else {
@@ -2429,12 +2444,14 @@ int ObTenantDagScheduler::deal_with_fail_task(
   return ret;
 }
 
-int ObTenantDagScheduler::deal_with_fail_dag(ObIDag &dag, bool &retry_flag)
+int ObTenantDagScheduler::deal_with_fail_dag(ObIDag &dag, ObITask *&cur_task, bool &retry_flag)
 {
   int ret = OB_SUCCESS;
   // dag retry is triggered by last finish task
   if (1 == dag.get_running_task_count() && dag.check_can_retry()) {
     COMMON_LOG(INFO, "dag retry", K(ret), K(dag));
+    (void) dag.reset_task_list_for_retry();
+    cur_task = nullptr;
     if (OB_FAIL(dag.reset_status_for_retry())) { // clear task/running_info and init again
       COMMON_LOG(WARN, "failed to reset status for retry", K(ret), K(dag));
     } else if (OB_FAIL(move_dag_to_list_(&dag, READY_DAG_LIST, WAITING_DAG_LIST))) {
@@ -2446,18 +2463,17 @@ int ObTenantDagScheduler::deal_with_fail_dag(ObIDag &dag, bool &retry_flag)
   return ret;
 }
 
-int ObTenantDagScheduler::deal_with_finish_task(ObITask &task, ObTenantDagWorker &worker, int error_code)
+int ObTenantDagScheduler::deal_with_finish_task(ObITask *&task, ObIDag *&dag, ObTenantDagWorker &worker, int error_code)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_ret = OB_SUCCESS;
-  ObIDag *dag = nullptr;
   ObIDagNet *erase_dag_net = nullptr;
   int64_t prio = 0;
   bool finish_task_flag = true;
   bool retry_flag = false;
-  if (OB_ISNULL(dag = task.get_dag())) {
-    ret = OB_ERR_UNEXPECTED;
-    COMMON_LOG(WARN, "dag is null", K(ret));
+  if (OB_ISNULL(task) || OB_ISNULL(dag) || OB_UNLIKELY(task->get_dag() != dag)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid args", K(ret), KPC(task), KPC(dag));
   } else if (OB_UNLIKELY(!dag->is_valid_type())) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(ERROR, "invalid dag", K(ret), K(*dag));
@@ -2466,7 +2482,7 @@ int ObTenantDagScheduler::deal_with_finish_task(ObITask &task, ObTenantDagWorker
     ObThreadCondGuard guard(scheduler_sync_);
 
     if (OB_SUCCESS != error_code) {
-      if (OB_FAIL(deal_with_fail_task(task, *dag, error_code, retry_flag))) {
+      if (OB_FAIL(deal_with_fail_task(*task, *dag, error_code, retry_flag))) {
         COMMON_LOG(WARN, "failed to deal with fail task", K(ret), K(task), KPC(dag));
       }
     }
@@ -2474,7 +2490,8 @@ int ObTenantDagScheduler::deal_with_finish_task(ObITask &task, ObTenantDagWorker
     if (OB_FAIL(ret) || retry_flag) {
     } else if (dag->is_dag_failed()) {
       // dag can retry & this task is the last running task
-      if (OB_FAIL(deal_with_fail_dag(*dag, retry_flag))) {
+      // ATTENTION !! If the dag is reset, the old task list is cleared and current task is invalid and will be set to nullptr, DON'T operate it.
+      if (OB_FAIL(deal_with_fail_dag(*dag, task, retry_flag))) {
         COMMON_LOG(WARN, "failed to deal with fail dag", K(ret), KPC(dag));
       }
     }
@@ -2497,7 +2514,7 @@ int ObTenantDagScheduler::deal_with_finish_task(ObITask &task, ObTenantDagWorker
     }
 
     if (finish_task_flag
-        && OB_FAIL(finish_task_in_dag(task, *dag, erase_dag_net))) {
+        && OB_FAIL(finish_task_in_dag(task, dag, erase_dag_net))) {
       COMMON_LOG(WARN, "failed to finish task", K(ret), KPC(dag));
     }
   }
@@ -2521,26 +2538,33 @@ int ObTenantDagScheduler::deal_with_finish_task(ObITask &task, ObTenantDagWorker
   return ret;
 }
 
-int ObTenantDagScheduler::finish_task_in_dag(ObITask &task, ObIDag &dag, ObIDagNet *&finish_dag_net)
+int ObTenantDagScheduler::finish_task_in_dag(ObITask *&task, ObIDag *&dag, ObIDagNet *&finish_dag_net)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  if (0 == dag.get_task_list_count()) {
-    // dag::task_list is empty means dag have entered retry process, but failed
-  } else if (OB_TMP_FAIL(dag.finish_task(task))) {
-    dag.set_dag_status(ObIDag::DAG_STATUS_NODE_FAILED);
-    dag.set_dag_ret(tmp_ret);
+  if (OB_ISNULL(dag)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid args", K(ret), KP(task), KP(dag));
+  } else if (nullptr == task) {
+    // Means dag have entered retry process, but failed.
+    // It is not enough to judge by task_list_count, since new task may be allocated and added into new task list but inited failed
+    COMMON_LOG(INFO, "dag is reset when retry but failed, directly finish this dag", K(ret), K(dag));
+  } else if (OB_TMP_FAIL(dag->finish_task(task))) {
+    dag->set_dag_status(ObIDag::DAG_STATUS_NODE_FAILED);
+    dag->set_dag_ret(tmp_ret);
     COMMON_LOG(WARN, "failed to finish task", K(tmp_ret));
   } else {
     COMMON_LOG(DEBUG, "success to finish task", K(tmp_ret), K(&dag));
   }
 
-  if (dag.has_finished()) {
+  if (OB_ISNULL(dag)) {
+    // only this condition we don't need to finish dag
+  } else if (dag->has_finished()) {
     ObIDag::ObDagStatus status =
-        dag.is_dag_failed() ? ObIDag::DAG_STATUS_ABORT : ObIDag::DAG_STATUS_FINISH;
+        dag->is_dag_failed() ? ObIDag::DAG_STATUS_ABORT : ObIDag::DAG_STATUS_FINISH;
     if (OB_FAIL(finish_dag_(status, dag, finish_dag_net, true/*try_move_child*/))) {
-      COMMON_LOG(WARN, "failed to finish dag", K(ret), K(dag));
+      COMMON_LOG(WARN, "failed to finish dag", K(ret), KPC(dag));
       ob_abort();
     }
   }
@@ -2577,7 +2601,7 @@ int ObTenantDagScheduler::finish_dag_net(ObIDagNet *dag_net)
 
 int ObTenantDagScheduler::finish_dag_(
     const ObIDag::ObDagStatus status,
-    ObIDag &dag,
+    ObIDag *&dag,
     ObIDagNet *&finish_dag_net,
     const bool try_move_child)
 {
@@ -2585,33 +2609,37 @@ int ObTenantDagScheduler::finish_dag_(
   int tmp_ret = OB_SUCCESS;
   finish_dag_net = nullptr;
 
-  if (OB_FAIL(dag.finish(status))) {
-    COMMON_LOG(WARN, "dag finished failed", K(ret), K(dag), "dag_ret", dag.get_dag_ret());
-  } else if (try_move_child && OB_FAIL(try_move_child_to_ready_list(dag))) {
-    LOG_WARN("failed to try move child to ready list", K(ret), K(&dag));
-  } else if (OB_FAIL(erase_dag_(dag))) {
-    COMMON_LOG(ERROR, "failed to erase dag from dag_map", K(ret), K(dag));
+  if (OB_ISNULL(dag)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid args", K(ret), KP(dag));
+  } else if (OB_FAIL(dag->finish(status))) {
+    COMMON_LOG(WARN, "dag finished failed", K(ret), KPC(dag), "dag_ret", dag->get_dag_ret());
+  } else if (try_move_child && OB_FAIL(try_move_child_to_ready_list(*dag))) {
+    LOG_WARN("failed to try move child to ready list", K(ret), KPC(dag));
+  } else if (OB_FAIL(erase_dag_(*dag))) {
+    COMMON_LOG(ERROR, "failed to erase dag from dag_map", K(ret), KPC(dag));
   } else {
-    LOG_INFO("dag finished", "dag_ret", dag.get_dag_ret(),
-        "runtime", ObTimeUtility::fast_current_time() - dag.start_time_,
-        K_(dag_cnt), K(dag_cnts_[dag.get_type()]), K(&dag), K(dag));
-    if (OB_TMP_FAIL(MTL(ObDagWarningHistoryManager *)->add_dag_warning_info(&dag))) { // ignore failure
+    LOG_INFO("dag finished", "dag_ret", dag->get_dag_ret(),
+        "runtime", ObTimeUtility::fast_current_time() - dag->start_time_,
+        K_(dag_cnt), K(dag_cnts_[dag->get_type()]), KPC(dag), K(dag));
+    if (OB_TMP_FAIL(MTL(ObDagWarningHistoryManager *)->add_dag_warning_info(dag))) { // ignore failure
       COMMON_LOG(WARN, "failed to add dag warning info", K(tmp_ret), K(dag));
     }
-    if (OB_TMP_FAIL(ObSysTaskStatMgr::get_instance().del_task(dag.get_dag_id()))) {
-      STORAGE_LOG(WARN, "failed to del sys task", K(tmp_ret), K(dag.get_dag_id()));
+    if (OB_TMP_FAIL(ObSysTaskStatMgr::get_instance().del_task(dag->get_dag_id()))) {
+      STORAGE_LOG(WARN, "failed to del sys task", K(tmp_ret), K(dag->get_dag_id()));
     }
-    if (OB_TMP_FAIL(dag.report_result())) {
+    if (OB_TMP_FAIL(dag->report_result())) {
       COMMON_LOG(WARN, "failed to report result", K(tmp_ret), K(dag));
     }
 
-    ObIDagNet *dag_net = dag.get_dag_net();
+    ObIDagNet *dag_net = dag->get_dag_net();
     if (OB_ISNULL(dag_net)) {
     } else if (dag_net->check_finished_and_mark_stop()) {
       finish_dag_net = dag_net;
     }
 
-    inner_free_dag(dag); // free after log print
+    inner_free_dag(*dag); // free after log print
+    dag = nullptr;
   }
   return ret;
 }
@@ -2974,7 +3002,7 @@ int ObTenantDagScheduler::pop_task_from_ready_list(
         cur = cur->get_next();
         if (OB_FAIL(tmp_dag->report_result())) {
           LOG_WARN("failed to report reuslt", K(ret), KPC(tmp_dag));
-        } else if (OB_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, *tmp_dag, erase_dag_net, true/*try_move_child*/))) {
+        } else if (OB_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, tmp_dag, erase_dag_net, true/*try_move_child*/))) {
           COMMON_LOG(ERROR, "failed to finish dag", K(ret), KPC(tmp_dag));
           ob_abort();
         } else if (OB_NOT_NULL(erase_dag_net)) {
@@ -3358,7 +3386,7 @@ int ObTenantDagScheduler::cancel_dag(const ObIDag *dag, ObIDag *parent_dag)
           }
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, *cur_dag, erase_dag_net, true/*try_move_child*/))) {
+        } else if (OB_FAIL(finish_dag_(ObIDag::DAG_STATUS_ABORT, cur_dag, erase_dag_net, true/*try_move_child*/))) {
           COMMON_LOG(WARN, "failed to erase dag", K(ret), KPC(cur_dag));
           ob_abort();
         }

@@ -93,7 +93,8 @@ public:
           COMMON_LOG(WARN, "failed to init addtask", K(ret));
         }
         if (OB_FAIL(ret)) {
-          dag->free_task(*ntask);
+          ObITask *tmp_task = ntask;
+          dag->free_task(tmp_task);
         } else {
           next_task = ntask;
         }
@@ -657,7 +658,8 @@ public:
     } else if (OB_FAIL(dag->add_task(*mul_task1))) {
       COMMON_LOG(WARN, "failed to add_task", K(ret));
     } else if (OB_FAIL(dag->add_task(*mul_task))) {
-      dag->free_task(*mul_task);
+      ObITask *tmp_task = mul_task;
+      dag->free_task(tmp_task);
       COMMON_LOG(WARN, "failed to add_task", K(ret));
     }
     return ret;
@@ -890,7 +892,8 @@ TEST_F(TestDagScheduler, baisc_test)
         COMMON_LOG(WARN, "failed to add task", K(ret));
       }
       if (OB_FAIL(ret)) {
-        dag->free_task(*mul_task);
+        ObITask *tmp_task = mul_task;
+        dag->free_task(tmp_task);
       } else {
         if (OB_FAIL(dag->alloc_task(add_task))) {
           COMMON_LOG(WARN, "failed to alloc task", K(ret));
@@ -906,7 +909,8 @@ TEST_F(TestDagScheduler, baisc_test)
             COMMON_LOG(WARN, "failed to add task");
           }
           if (OB_FAIL(ret)) {
-            dag->free_task(*add_task);
+            ObITask *tmp_task = add_task;
+            dag->free_task(tmp_task);
           }
         }
       }
@@ -934,7 +938,8 @@ TEST_F(TestDagScheduler, baisc_test)
         COMMON_LOG(WARN, "failed to add task", K(ret));
       }
       if (OB_FAIL(ret)) {
-        dup_dag->free_task(*mul_task);
+        ObITask *tmp_task = mul_task;
+        dup_dag->free_task(tmp_task);
       }
     }
   }
@@ -1058,7 +1063,8 @@ TEST_F(TestDagScheduler, test_cycle)
         }
         EXPECT_EQ(OB_SUCCESS, dag->add_task(*mul_task));
         EXPECT_EQ(OB_INVALID_ARGUMENT, dag->add_task(*add_task));
-        dag->free_task(*add_task);
+        ObITask *tmp_task = add_task;
+        dag->free_task(tmp_task);
         scheduler->free_dag(*dag, nullptr/*parent_dag*/);
       }
     }

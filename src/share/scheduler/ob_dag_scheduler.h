@@ -279,7 +279,7 @@ public:
   {
     return DAG_STATUS_FINISH == dag_status || DAG_STATUS_ABORT == dag_status;
   }
-  bool has_set_stop() { return ATOMIC_LOAD(&is_stop_); }
+  bool has_set_stop() const { return ATOMIC_LOAD(&is_stop_); }
   void set_stop() { ATOMIC_SET(&is_stop_, true); }
   ObIDagNet *get_dag_net() const { return dag_net_; }
   void set_dag_net(ObIDagNet &dag_net)
@@ -309,6 +309,7 @@ public:
     lib::ObMutexGuard guard(lock_);
     max_retry_times_ = max_retry_times;
   }
+  void reset_task_list_for_retry();
   virtual int inner_reset_status_for_retry()
   { // The internal state(clear all tasks) of Dag needs to be traced back to after init in this func
     return common::OB_NOT_SUPPORTED;
@@ -389,8 +390,8 @@ private:
   friend class ObTenantDagWorker;
   friend ObDagGuard;
 private:
-  void free_task(ObITask &task);
-  int finish_task(ObITask &task);
+  void free_task(ObITask *&task);
+  int finish_task(ObITask *&task);
   bool is_valid();
   bool is_valid_type() const;
   int basic_init(ObIAllocator &allocator);
@@ -404,6 +405,7 @@ private:
   void set_dag_ret(const int ret) { ATOMIC_VCAS(&dag_ret_, common::OB_SUCCESS, ret); }
   void set_dag_status(const ObDagStatus status) { dag_status_ = status; }
   bool is_dag_failed() const { return ObIDag::DAG_STATUS_NODE_FAILED == dag_status_; }
+  bool is_inactive_status() const { return has_set_stop() || is_dag_failed() || is_finish_status(dag_status_); }
   int lock() { return lock_.lock(); }
   int unlock() { return lock_.unlock(); }
   void inc_running_task_cnt() { ++running_task_cnt_; }
@@ -893,12 +895,12 @@ private:
   int loop_blocking_dag_net_list();
   int loop_running_dag_net_map();
   ObFunctionType convert_priority_to_function_type(const int64_t priority);
-  int finish_task_in_dag(ObITask &task, ObIDag &dag, ObIDagNet *&erase_dag_net);
-  int finish_dag_(const ObIDag::ObDagStatus status, ObIDag &dag, ObIDagNet *&erase_dag_net, const bool try_move_child);
+  int finish_task_in_dag(ObITask *&task, ObIDag *&dag, ObIDagNet *&erase_dag_net);
+  int finish_dag_(const ObIDag::ObDagStatus status, ObIDag *&dag, ObIDagNet *&erase_dag_net, const bool try_move_child);
   int finish_dag_net(ObIDagNet *dag_net);
-  int deal_with_finish_task(ObITask &task, ObTenantDagWorker &worker, int error_code);
+  int deal_with_finish_task(ObITask *&task, ObIDag *&dag, ObTenantDagWorker &worker, int error_code);
   int deal_with_fail_task(ObITask &task, ObIDag &dag, const int error_code, bool &retry_flag);
-  int deal_with_fail_dag(ObIDag &dag, bool &retry_flag);
+  int deal_with_fail_dag(ObIDag &dag, ObITask *&cur_task, bool &retry_flag);
   int create_worker();
   int try_reclaim_threads();
   int schedule_one(const int64_t priority);
@@ -993,13 +995,20 @@ int ObIDag::alloc_task(T *&task)
     ntask->set_dag(*this);
     {
       lib::ObMutexGuard guard(lock_);
-      if (!task_list_.add_last(ntask)) {
+      if (is_inactive_status()) {
+        ret = OB_CANCELED;
+        COMMON_LOG(WARN, "dag is inactive", K(ret), K_(is_stop), K_(dag_status));
+      } else if (!task_list_.add_last(ntask)) {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "Failed to add task", K(task), K_(id));
       }
     }
     if (OB_SUCC(ret)) {
       task = ntask;
+    } else {
+      ntask->~T();
+      allocator_->free(ntask);
+      ntask = nullptr;
     }
   }
   return ret;
