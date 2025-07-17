@@ -50,6 +50,7 @@ struct ObTableSingleQueryInfo : public ObTableInfoBase {
     if (OB_NOT_NULL(scan_exexcutor)) {
       scan_exexcutor->~ObTableApiScanExecutor();
     }
+    tb_ctx_.set_sess_guard(nullptr);
   }
 
   int64_t to_string(char *buf, const int64_t len) const {
@@ -192,6 +193,9 @@ public:
     if (OB_NOT_NULL(query_ctx_.sess_guard_)) {
       query_ctx_.sess_guard_->~ObTableApiSessGuard();
       query_ctx_.sess_guard_ = nullptr;
+
+      // multi_cf_infos_ 中tb_ctx的sess_guard就来自于query_ctx_
+      query_ctx_.multi_cf_infos_[0]->tb_ctx_.set_sess_guard(nullptr);
     }
     if (OB_NOT_NULL(req_timeinfo_)) {
       // before update_end_time:

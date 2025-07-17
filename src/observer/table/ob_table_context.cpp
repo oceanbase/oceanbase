@@ -378,6 +378,9 @@ int ObTableCtx::inner_init_common(const ObTabletID &arg_tablet_id,
     tablet_id_ = tablet_id;
     index_tablet_id_ = tablet_id_;
     timeout_ts_ = timeout_ts;
+    exec_ctx_.set_my_session(&get_session_info());
+    typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
+    MyExecCtxSessionRegister ctx_register(get_session_info(), &exec_ctx_);
   }
 
   return ret;

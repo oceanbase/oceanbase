@@ -715,9 +715,11 @@ inline void ObExecContext::reference_my_plan(const ObPhysicalPlan *my_plan)
 inline void ObExecContext::set_my_session(ObSQLSessionInfo *session)
 {
   my_session_ = session;
-  set_mem_attr(ObMemAttr(session->get_effective_tenant_id(),
+  if (OB_NOT_NULL(session)) {
+    set_mem_attr(ObMemAttr(session->get_effective_tenant_id(),
                          ObModIds::OB_SQL_EXEC_CONTEXT,
                          ObCtxIds::EXECUTE_CTX_ID));
+  }
 }
 
 inline ObSQLSessionInfo *ObExecContext::get_my_session() const
