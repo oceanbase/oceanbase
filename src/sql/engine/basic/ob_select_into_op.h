@@ -371,13 +371,6 @@ private:
   int setup_parquet_schema();
   int into_outfile_batch_parquet(const ObBatchRows &brs_, ObExternalFileWriter *data_writer);
   int check_parquet_file_size(ObParquetFileWriter &data_writer);
-  int build_parquet_column_vector(parquet::RowGroupWriter* rg_writer,
-                                  int col_idx,
-                                  const ObBatchRows &brs,
-                                  const ObDatumMeta &datum_meta,
-                                  const ObObjMeta &obj_meta,
-                                  const common::ObIVector* expr_vector,
-                                  int64_t &estimated_bytes);
   int build_parquet_cell(parquet::RowGroupWriter* rg_writer,
                          const ObDatumMeta &datum_meta,
                          const ObObjMeta &obj_meta,
