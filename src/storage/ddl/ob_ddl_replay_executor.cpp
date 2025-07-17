@@ -1099,6 +1099,8 @@ int ObSplitFinishReplayExecutor::modify_tablet_restore_status_if_need(
   int ret = OB_SUCCESS;
   ObTablet *src_tablet;
   ObTabletRestoreStatus::STATUS src_restore_status = ObTabletRestoreStatus::STATUS::RESTORE_STATUS_MAX;
+  ObLSHandle ls_handle;
+  ObLSService *ls_service = nullptr;
   if (OB_UNLIKELY(dest_tablet_ids.count() <= 0 || !src_tablet_handle.is_valid() || OB_ISNULL(ls))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(dest_tablet_ids), K(src_tablet_handle), KP(ls));
@@ -1107,6 +1109,11 @@ int ObSplitFinishReplayExecutor::modify_tablet_restore_status_if_need(
     LOG_WARN("unexpected nullptr of src_tablet", K(ret), KP(src_tablet));
   } else if (OB_FAIL(src_tablet->get_restore_status(src_restore_status))) {
     LOG_WARN("failed to get restore status of tablet", K(ret), K(src_tablet));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr of ls service", K(ret), KPC(ls), K(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(ls->get_ls_id()));
   } else if (ObTabletRestoreStatus::STATUS::UNDEFINED == src_restore_status) {
     /*skip the split, counting on restoring to fill the destination tablet data*/
     ObTabletHandle des_handle;
@@ -1115,8 +1122,8 @@ int ObSplitFinishReplayExecutor::modify_tablet_restore_status_if_need(
     for (int64_t i = 0; OB_SUCC(ret) && i < dest_tablet_ids.count(); ++i) {
       des_handle.reset();
       const ObTabletID &t_id = dest_tablet_ids.at(i);
-      if (OB_FAIL(ls->get_tablet(t_id, des_handle))) {
-        LOG_WARN("failed to get table", K(ret), K(t_id));
+      if ((OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, t_id, des_handle, ObMDSGetTabletMode::READ_ALL_COMMITED)))) {
+        LOG_WARN("get tablet failed", K(ret), K(t_id));
       } else if (OB_ISNULL(tablet = des_handle.get_obj())) {
         ret = OB_NULL_CHECK_ERROR;
         LOG_WARN("unexpected null ptr of tablet", K(ret), KPC(tablet));
