@@ -2210,8 +2210,9 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_value_immediate_check("False");
   ObString config_name_system_trig_enabled("_system_trig_enabled");
   ObString config_value_system_trig_enabled("false");
+  // TODO(fanfangzhou.ffz): temporarily disable config adjustment for ddl thread isolation
   ObString config_name_ddl_thread_isolution("_enable_ddl_worker_isolation");
-  ObString config_value_ddl_thread_isolution("true");
+  ObString config_value_ddl_thread_isolution("false");
 
   if (OB_FAIL(ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(config_value))) {
     LOG_WARN("fail to generate parallel ddl control config value", KR(ret));
