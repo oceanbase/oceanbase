@@ -570,7 +570,8 @@ int ObPartitionPreSplit::check_table_can_do_pre_split(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("[PRE_SPLIT] not support interval partition", K(ret), K(part_option));
   } else if (!part_option.is_range_part()) { // partiton by range/range columns type
-    if (is_global_index_table && part_option.is_hash_part()) {
+    // part_option.get_part_func_expr_str().empty() makes sure the user doesn't specify the part func expr
+    if (is_global_index_table && part_option.is_hash_part() && part_option.get_part_func_expr_str().empty()) {
       /* case: create index idx1 on t1(c1), default partition type is hash */
       LOG_INFO("[pre_split] support global index table without partition by", K(part_option));
     } else {
@@ -1176,7 +1177,12 @@ int ObPartitionPreSplit::get_partition_columns_range(
       ObRowkey high_key_bound;
       if (ori_part_range_cnt > 0) {
         ObNewRange &last_part_range = orig_part_range.at(ori_part_range_cnt - 1);
-        high_key_bound.assign(&last_part_range.end_key_.get_obj_ptr()[i], part_key_length);
+        if (OB_ISNULL(&last_part_range.end_key_.get_obj_ptr()[i])) {
+          ret = OB_NULL_CHECK_ERROR;
+          LOG_WARN("failed to do null ptr check", K(ret), KP(&last_part_range.end_key_.get_obj_ptr()[i]));
+        } else {
+          high_key_bound.assign(&last_part_range.end_key_.get_obj_ptr()[i], part_key_length);
+        }
       } else {
         high_key_bound.set_max_row();
         high_key_bound.set_length(part_key_length);
