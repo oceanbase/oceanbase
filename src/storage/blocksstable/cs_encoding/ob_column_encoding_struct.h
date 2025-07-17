@@ -353,7 +353,6 @@ struct ObColumnCSEncodingCtx
   bool is_wide_int_;
   bool is_semistruct_sub_col_;
   bool has_stored_meta_;
-  bool is_ndv_exceed_threshold_; // only checked when version > 435bp2
 
   uint64_t integer_min_;
   uint64_t integer_max_;
@@ -368,7 +367,6 @@ struct ObColumnCSEncodingCtx
       need_sort_(false), force_raw_encoding_(false),
       has_zero_length_datum_(false), is_wide_int_(0),
       is_semistruct_sub_col_(false), has_stored_meta_(false),
-      is_ndv_exceed_threshold_(false),
       integer_min_(0), integer_max_(0)
   {
   }
@@ -385,7 +383,6 @@ struct ObColumnCSEncodingCtx
                K_(dict_var_data_size), K_(fix_data_size),
                KP_(col_datums), KP_(ht), KP_(encoding_ctx), KP_(semistruct_ctx), K_(max_string_size),
                K_(need_sort), K_(force_raw_encoding), K_(is_semistruct_sub_col), K_(has_stored_meta),
-               K_(is_ndv_exceed_threshold),
                K_(has_zero_length_datum), K_(is_wide_int), K_(integer_min), K_(integer_max));
 };
 

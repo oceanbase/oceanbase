@@ -47,7 +47,6 @@ int ObVecBatchInfo::init(const int32_t row_count,
   return ret;
 }
 
-const int64_t ObMicroBlockCSEncoder::NDV_PERCENT_TO_USE_DICT = 40;
 
 template <typename T>
 T *ObMicroBlockCSEncoder::alloc_encoder_()
@@ -99,9 +98,6 @@ int ObMicroBlockCSEncoder::alloc_and_init_encoder_(const int64_t column_index, O
   }
   return ret;
 }
-  // may append one more batch then encoding_granularity_, so add 256(a normal batch size),
-  // if the node is not enough, the ndv_calculator_ will be recreate when calculate
-#define NDV_CALCULATOR_MAX_INITIAL_NODE_NUM  (65536LL + 256) * NDV_PERCENT_TO_USE_DICT / 100 + 1
 
 ObMicroBlockCSEncoder::ObMicroBlockCSEncoder()
   : allocator_("CSEncAlloc", OB_MALLOC_MIDDLE_BLOCK_SIZE),
@@ -119,7 +115,6 @@ ObMicroBlockCSEncoder::ObMicroBlockCSEncoder()
     hash_tables_unused_times_(0),
     hashtables_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("CSBlkEnc", MTL_ID())),
     hashtable_factory_(),
-    ndv_calculator_(NDV_CALCULATOR_MAX_INITIAL_NODE_NUM),
     col_ctxs_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("CSBlkEnc", MTL_ID())),
     length_(0), is_inited_(false),
     is_all_column_force_raw_(false),
@@ -254,7 +249,6 @@ void ObMicroBlockCSEncoder::reset()
   stream_offsets_.reset();
   hashtables_.reset();
   col_ctxs_.reset();
-  ndv_calculator_.reset();
   length_ = 0;
   is_all_column_force_raw_ = false;
   block_generated_ = false;
@@ -1789,7 +1783,8 @@ int ObMicroBlockCSEncoder::prescan_(const int64_t column_index)
     ObColumnCSEncodingCtx &col_ctx = col_ctxs_.at(column_index);
     col_ctx.col_datums_ = all_col_datums_.at(column_index);
 
-    col_ctx.ht_ = nullptr;
+    ObDictEncodingHashTable *ht = nullptr;
+    ObDictEncodingHashTableBuilder *builder = nullptr;
     bool need_build_hash_table = true;
     ObPreviousColumnEncoding *previous_encoding = ctx_.previous_cs_encoding_.get_column_encoding(column_index);
     if (nullptr != ctx_.column_encodings_
@@ -1806,35 +1801,38 @@ int ObMicroBlockCSEncoder::prescan_(const int64_t column_index)
       } else {
         need_build_hash_table = true;
       }
-    } else { // need redetect
-      if (ctx_.major_working_cluster_version_ > DATA_VERSION_4_3_5_2) {
-        // keep using old encoder detection algorithm for semistruct type
-        if (is_semistruct_store_(store_class, ctx_.is_enable_semistruct_encoding())) {
-          need_build_hash_table = true;
-        } else if (col_ctx.col_datums_->count() < ObCSEncodingUtil::ENCODING_ROW_COUNT_THRESHOLD) {
-          col_ctx.is_ndv_exceed_threshold_ = true;
-          need_build_hash_table = false;
-        } else {
-          if (OB_FAIL(check_if_ndv_exceed_threshold_(column_index))) {
-            LOG_WARN("fail to choose encoder by ndv", K(ret), K(column_index));
-          } else {
-            need_build_hash_table = false;
-          }
+    }
+
+    if (need_build_hash_table) {
+      // next power of 2
+      uint64_t bucket_num = appended_row_count_ << 1;
+      if (0 != (bucket_num & (bucket_num - 1))) {
+        while (0 != (bucket_num & (bucket_num - 1))) {
+          bucket_num = bucket_num & (bucket_num - 1);
         }
+        bucket_num = bucket_num << 1;
+      }
+      const int64_t node_num = appended_row_count_;
+      if (OB_UNLIKELY(node_num != col_ctx.col_datums_->count())) {
+        ret = OB_INNER_STAT_ERROR;
+        LOG_ERROR("row_count and col_datums_count is not requal",
+            K(ret), K(node_num), KPC(col_ctx.col_datums_));
+      } else if (OB_FAIL(hashtable_factory_.create(bucket_num, node_num, ht))) {
+        LOG_WARN("create hashtable failed", K(ret), K(bucket_num), K(node_num));
+      } else if (FALSE_IT(builder = static_cast<ObDictEncodingHashTableBuilder *>(ht))) {
+      } else if (OB_FAIL(builder->build(*col_ctx.col_datums_, col_desc))) {
+        LOG_WARN("build hash table failed", K(ret), K(column_index), K(column_type));
       }
     }
 
-    if (OB_SUCC(ret) && need_build_hash_table) {
-      if(OB_FAIL(build_dict_hash_table_(column_index, col_ctx.ht_))) {
-        LOG_WARN("fail to build dict hash table", K(ret), K(col_ctx));
-      } else if (OB_FAIL(hashtables_.push_back(col_ctx.ht_))) {
+    if (OB_SUCC(ret)) {
+      col_ctx.ht_ = ht;
+      if (OB_FAIL(ObCSEncodingUtil::build_cs_column_encoding_ctx(store_class, precision_bytes, col_ctx))) {
+        LOG_WARN("build_column_encoding_ctx failed", K(ret), KP(ht), K(store_class), K(precision_bytes));
+      } else if (ht != nullptr && OB_FAIL(hashtables_.push_back(ht))) {
         LOG_WARN("failed to push back", K(ret));
       }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObCSEncodingUtil::build_cs_column_encoding_ctx(store_class, precision_bytes, col_ctx))) {
-      LOG_WARN("build_column_encoding_ctx failed", K(ret), KP(col_ctx.ht_), K(store_class), K(precision_bytes));
+      LOG_DEBUG("hash table", K(column_index), KPC(ht), K(col_ctx));
     }
 
     if (OB_SUCC(ret) && is_semistruct_store_(store_class, ctx_.is_enable_semistruct_encoding())) {
@@ -1842,40 +1840,16 @@ int ObMicroBlockCSEncoder::prescan_(const int64_t column_index)
         LOG_WARN("semistruct_scan_ fail", K(ret), K(column_index));
       }
     }
-  }
 
-  return ret;
-}
-
-int ObMicroBlockCSEncoder::build_dict_hash_table_(const int64_t column_index,
-                                                  ObDictEncodingHashTable *&ht)
-{
-  int ret = OB_SUCCESS;
-  ObDictEncodingHashTableBuilder *builder = nullptr;
-  const ObColumnCSEncodingCtx &col_ctx = col_ctxs_.at(column_index);
-  const ObColDesc &col_desc = ctx_.col_descs_->at(column_index);
-  // next power of 2
-  uint64_t bucket_num = appended_row_count_ << 1;
-  if (0 != (bucket_num & (bucket_num - 1))) {
-    while (0 != (bucket_num & (bucket_num - 1))) {
-      bucket_num = bucket_num & (bucket_num - 1);
+    if (OB_FAIL(ret) && ht != nullptr) {
+      // avoid overwirte ret
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = hashtable_factory_.recycle(true, ht))) {
+        LOG_WARN("recycle hashtable failed", K(temp_ret));
+      }
     }
-    bucket_num = bucket_num << 1;
   }
-  const int64_t node_num = appended_row_count_;
-  if (OB_UNLIKELY(node_num != col_ctx.col_datums_->count())) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_ERROR("row_count and col_datums_count is not requal",
-        K(ret), K(node_num), KPC(col_ctx.col_datums_));
-  } else if (OB_UNLIKELY(ht != nullptr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ht has exist", K(ret), KPC(ht));
-  } else if (OB_FAIL(hashtable_factory_.create(bucket_num, node_num, ht))) {
-    LOG_WARN("create hashtable failed", K(ret), K(bucket_num), K(node_num));
-  } else if (FALSE_IT(builder = static_cast<ObDictEncodingHashTableBuilder *>(ht))) {
-  } else if (OB_FAIL(builder->build(*col_ctx.col_datums_, col_desc))) {
-    LOG_WARN("build hash table failed", K(ret), K(col_desc));
-  }
+
   return ret;
 }
 
@@ -1915,13 +1889,6 @@ int ObMicroBlockCSEncoder::encoder_detection_()
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.column_cnt_; ++i) {
       if (OB_FAIL(prescan_(i))) {
         LOG_WARN("failed to prescan", K(ret), K(i));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      // if all column use hashtable, the subsequent ndv calculations will use the hash table.
-      // To save memory, the ndv_calculator_ can be reset
-      if (hashtables_.count() == ctx_.column_cnt_) {
-        ndv_calculator_.reset();
       }
     }
     uint32_t string_data_len = 0;
@@ -1985,19 +1952,6 @@ int ObMicroBlockCSEncoder::fast_encoder_detect_(const int64_t column_idx)
   } else if (previous_encoding->column_encoding_type_can_be_reused()) {
     if (OB_FAIL(use_previous_encoder_(column_idx, store_class, e))) {
       LOG_WARN("fail to use_previous_encoder_", K(column_idx), K(store_class));
-    }
-  } else if (col_ctx.is_ndv_exceed_threshold_) { // valid when version > 435bp2
-    if (is_integer_store_(store_class, col_ctx.is_wide_int_)) {
-      if (OB_FAIL(alloc_and_init_encoder_<ObIntegerColumnEncoder>(column_idx, e))) {
-        LOG_WARN("fail to alloc encoder", K(ret), K(column_idx), K(column_type), K(type_class));
-      }
-    } else if (is_string_store_(store_class, col_ctx.is_wide_int_)) {
-      if (OB_FAIL(alloc_and_init_encoder_<ObStringColumnEncoder>(column_idx, e))) {
-        LOG_WARN("fail to alloc encoder", K(ret), K(column_idx), K(column_type), K(type_class));
-      }
-    } else {
-      ret = OB_INNER_STAT_ERROR;
-      LOG_WARN("not supported store class", K(ret), K(store_class));
     }
   }
 
@@ -2189,81 +2143,14 @@ int ObMicroBlockCSEncoder::choose_encoder_(const int64_t column_idx)
   return ret;
 }
 
-// used when version > DATA_VERSION_4_3_5_2
-int ObMicroBlockCSEncoder::check_if_ndv_exceed_threshold_(const int64_t column_idx)
-{
-  int ret = OB_SUCCESS;
-
-  ObColumnCSEncodingCtx &col_ctx = col_ctxs_.at(column_idx);
-  const int64_t row_count = col_ctx.col_datums_->count();
-  int64_t distinct_cnt = 0;
-  const ObColDesc &col_desc = ctx_.col_descs_->at(column_idx);
-  const ObColDatums &col_datums = *col_ctxs_.at(column_idx).col_datums_;
-  bool is_ndv_over_max = false;
-
-  const int64_t use_dict_max_ndv = row_count * NDV_PERCENT_TO_USE_DICT / 100;
-  ObDictEncodingHashTable *ht = nullptr;
-
-  if (OB_UNLIKELY(col_ctx.ht_ != nullptr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("hashtable has exist", K(ret), K(col_ctx));
-  } else if (hashtable_factory_.has_cached_dict_table()) {
-    if (OB_FAIL(build_dict_hash_table_(column_idx, ht))) {
-      LOG_WARN("fail to build dict hash table", K(ret), K(column_idx));
-    } else {
-      distinct_cnt = ht->distinct_cnt();
-      if (distinct_cnt > use_dict_max_ndv) {
-        col_ctx.is_ndv_exceed_threshold_ = true;
-        // dict don't be used, reycle ht immediately
-        if (OB_FAIL(hashtable_factory_.recycle(true, ht))) {
-          LOG_WARN("recycle hashtable failed", K(ret));
-        }
-      } else if (OB_FAIL(hashtables_.push_back(ht))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else {
-        col_ctx.is_ndv_exceed_threshold_ = false;
-        col_ctx.ht_ = ht;
-      }
-    }
-  } else {
-    // To save memory overhead in scenarios where dictionary encoding is not suitable,
-    // we avoid directly building a hashtable here and instead use a more memory-efficient
-    // structure to calculate ndv (number of distinct values)
-    if (OB_FAIL(ndv_calculator_.calculate(col_datums, col_desc, use_dict_max_ndv, is_ndv_over_max))) {
-      LOG_WARN("fail to calculate ndv", K(ret), K(column_idx));
-    } else if (is_ndv_over_max) {
-      col_ctx.is_ndv_exceed_threshold_ = true; // dict encoding is not suitable
-    } else {
-      col_ctx.is_ndv_exceed_threshold_ = false; // dict encoding may suitable, need to check storage space
-      distinct_cnt = ndv_calculator_.get_ndv();
-      if (OB_FAIL(build_dict_hash_table_(column_idx, ht))) {
-        LOG_WARN("fail to build dict hash table", K(ret), K(column_idx));
-      } else if (OB_FAIL(hashtables_.push_back(ht))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else if (OB_UNLIKELY(ht->distinct_cnt() != distinct_cnt)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("distinct_cnt not equal", K(ret), K(distinct_cnt), K(ht->distinct_cnt()));
-      } else {
-        col_ctx.ht_ = ht;
-      }
-    }
-  }
-  return ret;
-}
-
-
 int ObMicroBlockCSEncoder::choose_encoder_for_integer_(
   const int64_t column_idx, ObIColumnCSEncoder *&e)
 {
   int ret = OB_SUCCESS;
   ObIColumnCSEncoder *integer_encoder = nullptr;
   ObIColumnCSEncoder *dict_encoder = nullptr;
-  ObColumnCSEncodingCtx &col_ctx = col_ctxs_.at(column_idx);
 
-  if (OB_UNLIKELY(ctx_.major_working_cluster_version_ > DATA_VERSION_4_3_5_2 && col_ctx.is_ndv_exceed_threshold_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("encoder must be choosed in fast_encoder_detect_", K(ret), K(col_ctx));
-  } else if (OB_FAIL(alloc_and_init_encoder_<ObIntegerColumnEncoder>(column_idx, integer_encoder))) {
+  if (OB_FAIL(alloc_and_init_encoder_<ObIntegerColumnEncoder>(column_idx, integer_encoder))) {
     LOG_WARN("fail to alloc encoder", K(ret), K(column_idx));
   } else if (OB_FAIL(alloc_and_init_encoder_<ObIntDictColumnEncoder>(column_idx, dict_encoder))) {
     LOG_WARN("fail to alloc encoder", K(ret), K(column_idx));
@@ -2276,11 +2163,9 @@ int ObMicroBlockCSEncoder::choose_encoder_for_integer_(
 
     if (ctx_.major_working_cluster_version_ <= DATA_VERSION_4_3_5_0) {
       use_dict = dict_estimate_size < integer_estimate_size;
-    } else if (ctx_.major_working_cluster_version_ <= DATA_VERSION_4_3_5_2) { // for DATA_VERSION_4_3_5_1 and DATA_VERSION_4_3_5_2
+    } else {
       use_dict = (dict_estimate_size < integer_estimate_size * 70 / 100) ||
           (dict_estimate_size < integer_estimate_size && distinct_cnt < row_count * 50 / 100);
-    } else { // for version > DATA_VERSION_4_3_5_2, ndv has been checked in check_if_ndv_exceed_threshold_
-      use_dict = dict_estimate_size < integer_estimate_size * 70 / 100;
     }
     if (use_dict) {
       e = dict_encoder;
@@ -2314,12 +2199,8 @@ int ObMicroBlockCSEncoder::choose_encoder_for_string_(
   int ret = OB_SUCCESS;
   ObIColumnCSEncoder *string_encoder = nullptr;
   ObIColumnCSEncoder *dict_encoder = nullptr;
-  ObColumnCSEncodingCtx &col_ctx = col_ctxs_.at(column_idx);
 
-  if (OB_UNLIKELY(ctx_.major_working_cluster_version_ > DATA_VERSION_4_3_5_2 && col_ctx.is_ndv_exceed_threshold_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("encoder must be choosed in fast_encoder_detect_", K(ret), K(col_ctx));
-  } else if (OB_FAIL(alloc_and_init_encoder_<ObStringColumnEncoder>(column_idx, string_encoder))) {
+  if (OB_FAIL(alloc_and_init_encoder_<ObStringColumnEncoder>(column_idx, string_encoder))) {
     LOG_WARN("fail to alloc encoder", K(ret), K(column_idx));
   } else if (OB_FAIL(alloc_and_init_encoder_<ObStrDictColumnEncoder>(column_idx, dict_encoder))) {
     LOG_WARN("fail to alloc encoder", K(ret), K(column_idx));
@@ -2332,11 +2213,9 @@ int ObMicroBlockCSEncoder::choose_encoder_for_string_(
 
     if (ctx_.major_working_cluster_version_ <= DATA_VERSION_4_3_5_0) {
       use_dict = dict_estimate_size < string_estimate_size;
-    } else if (ctx_.major_working_cluster_version_ <= DATA_VERSION_4_3_5_2) { // for DATA_VERSION_4_3_5_1 and DATA_VERSION_4_3_5_2
+    } else {
       use_dict = (dict_estimate_size < string_estimate_size * 70 / 100) ||
           (dict_estimate_size < string_estimate_size && distinct_cnt < row_count * 50 / 100);
-    } else { // for version > DATA_VERSION_4_3_5_2, ndv has been checked in check_if_ndv_exceed_threshold_
-      use_dict = dict_estimate_size < string_estimate_size * 70 / 100;
     }
     if (use_dict) {
       e = dict_encoder;

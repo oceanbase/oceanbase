@@ -151,50 +151,6 @@ private:
 };
 
 
-// a simple hashset
-class ObDictNDVCalculator
-{
-public:
-  ObDictNDVCalculator(const int64_t max_initial_node_num);
-  ~ObDictNDVCalculator();
-
-  int calculate(const ObColDatums &col_datums,
-                const ObColDesc &col_desc,
-                const int64_t max_ndv,
-                bool &is_ndv_over_max);
-  void reset();
-
-  OB_INLINE int64_t get_ndv() const { return not_null_ndv_ + has_null_; }
-
-
-  TO_STRING_KV(K_(is_inited), K_(has_null), K_(node_num), K_(bucket_num),
-      K_(not_null_ndv), KP_(buckets), KP_(nodes));
-
-private:
-  int init(const int64_t node_num);
-  void reuse();
-
-  struct HashNode
-  {
-    const ObDatum *datum_;
-    HashNode *next_;
-  };
-  typedef HashNode *HashBucket;
-
-  const int64_t MAX_INITIAL_NODE_NUM_;
-
-  bool is_inited_;
-  bool has_null_;
-  int64_t node_num_;
-  int64_t bucket_num_;
-  int32_t not_null_ndv_;
-  HashBucket *buckets_;
-  HashNode *nodes_;
-  common::ObArenaAllocator alloc_;
-
-  DISALLOW_COPY_AND_ASSIGN(ObDictNDVCalculator);
-};
-
 } // end namespace blocksstable
 } // end namespace oceanbase
 
