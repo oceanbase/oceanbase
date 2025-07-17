@@ -40,6 +40,16 @@ namespace wide
 {
 using namespace std;
 
+static uint64_t calc_nmb_hash(const number::ObNumber &nmb, uint64_t seed)
+{
+  static uint32_t nmb_buf[number::ObNumber::MAX_STORE_LEN + 1] = {0};
+  uint64_t res = seed;
+  nmb_buf[0] = nmb.d_.desc_;
+  MEMCPY(nmb_buf, nmb.get_digits(), nmb.d_.len_ * sizeof(uint32_t));
+  int32_t hash_len = (nmb.d_.len_ + 1) * sizeof(uint32_t);
+  return ObMurmurHash::hash(nmb_buf, hash_len, seed);
+}
+
 struct MockAllocator: public ObIAllocator
 {
   void* alloc(const int64_t size) override
@@ -991,10 +1001,14 @@ public:
     std::ifstream cases("wide_integer_to_number.result");
     ASSERT_TRUE(cases.is_open());
     number::ObNumber nmb;
+    number::ObNumber expect_nmb;
     char data_buf[256] = {0};
     int64_t length = 0;
+    uint64_t seed = 1234598760;
     while (!cases.eof()) {
       cases >> valstr >> precision >> scale;
+      ret = expect_nmb.from(valstr.c_str(), valstr.size(), tmp_alloc);
+      ASSERT_EQ(ret, OB_SUCCESS);
       ret = wide::from_string(valstr.c_str(), valstr.size(), tmp_alloc, scale, precision, int_bytes,
                               decint);
       ASSERT_EQ(ret, 0);
@@ -1004,6 +1018,8 @@ public:
         std::cout << int_bytes << '\n';
       }
       ASSERT_EQ(ret, 0);
+      ASSERT_EQ(expect_nmb, nmb);
+      ASSERT_EQ(calc_nmb_hash(expect_nmb, seed), calc_nmb_hash(nmb, seed));
       int ret = nmb.format_v1(data_buf, sizeof(data_buf), length, scale);
       // std::string nmb_str(fmt_str);
       if (ret != 0) {
@@ -1284,6 +1300,42 @@ void test_small_decint_to_nmb()
       std::cout << "value: " << rand_v_list[i] << ", scale: " << rand_s_list[i] << '\n';
     }
     ASSERT_EQ(expect_nmb, res_nmb);
+    uint64_t rand_seed = rand_value<uint64_t>(1, 1000000000);
+    ASSERT_EQ(calc_nmb_hash(expect_nmb, rand_seed), calc_nmb_hash(res_nmb, rand_seed));
+  }
+
+  const int64_t src_int = 1527200000000000;
+  ret = wide::to_number(src_int, (int16_t)0, (uint32_t *)digits, 3, res_nmb);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ret = expect_nmb.from(src_int, tmp_alloc);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ASSERT_EQ(res_nmb, expect_nmb);
+  uint64_t seed = 123456789;
+  ASSERT_EQ(calc_nmb_hash(res_nmb, seed), calc_nmb_hash(expect_nmb, seed));
+
+  static const uint64_t pows[] = {
+    1,
+    10,
+    100,
+    1000,
+    10000,
+    100000,
+    1000000,
+    10000000,
+    100000000,
+    1000000000,
+  };
+  for (int i = 0; i < test_cases; i++) {
+    int64_t src_int =  rand_value<int64_t>(-1000000000, 1000000000);
+    int16_t src_scale = rand_value<int64_t>(0, 100) % 9;
+    src_int = src_int * pows[src_scale];
+    int ret = wide::to_number(src_int, src_scale, (uint32_t *)digits, 3, res_nmb);
+    ASSERT_EQ(ret, OB_SUCCESS);
+    ret = wide::to_number(src_int, src_scale, tmp_alloc, expect_nmb);
+    ASSERT_EQ(ret, OB_SUCCESS);
+    ASSERT_EQ(expect_nmb, res_nmb);
+    uint64_t rand_seed = rand_value<uint64_t>(1, 1000000000);
+    ASSERT_EQ(calc_nmb_hash(expect_nmb, rand_seed), calc_nmb_hash(res_nmb, rand_seed));
   }
 }
 
