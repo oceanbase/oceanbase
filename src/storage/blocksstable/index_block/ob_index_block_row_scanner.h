@@ -112,8 +112,8 @@ enum class ObIndexFormat {
   RAW_DATA,
   TRANSFORMED,
   BLOCK_TREE,
-  DDL_MERGE
-  //DDL_SLICE
+  DDL_MERGE,
+  DDL_SLICE
 };
 
 class ObIndexBlockIterParam final
