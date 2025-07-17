@@ -153,7 +153,9 @@ private:
   int get_exist_table_size(
       const ObTableSchema &table_schema,
       ObIArray<TabletIDSize> &tablet_size);
-
+  int get_exist_table_size(
+      const ObTableSchema &table_schema,
+      int64_t &table_size);
   int get_table_partition_bounder(
       const ObTableSchema &table_schema,
       const int64_t part_key_length,
