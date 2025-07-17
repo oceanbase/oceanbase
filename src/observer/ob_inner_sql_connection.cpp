@@ -2380,11 +2380,12 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(const bool is_inner_session, common::Ob
       prev_block_sessid_(0),
       prev_info_(nullptr)
 {
+  prev_di_ = ObLocalDiagnosticInfo::get();
   if (is_inner_session_ && OB_NOT_NULL(di) && /*when remote sql or bootstraping, do not record */
-      OB_NOT_NULL(GCTX.omt_) && 0 != di->get_session_id()) {
+      OB_NOT_NULL(GCTX.omt_) && 0 != di->get_session_id() &&
+      prev_di_ != di) {
     inner_session_id_ = di->get_session_id();
     // 1. start inner sql wait event wait event
-    prev_di_ = ObLocalDiagnosticInfo::get();
     prev_info_ = ObQueryRetryAshGuard::get_info_ptr();
 
     if (OB_NOT_NULL(prev_di_)) {
