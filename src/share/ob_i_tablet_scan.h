@@ -72,7 +72,8 @@ struct SampleInfo
     NO_SAMPLE = 0,
     ROW_SAMPLE = 1,
     BLOCK_SAMPLE = 2,
-    HYBRID_SAMPLE = 3
+    HYBRID_SAMPLE = 3,
+    DDL_BLOCK_SAMPLE = 4
   };
   enum SampleScope
   {
