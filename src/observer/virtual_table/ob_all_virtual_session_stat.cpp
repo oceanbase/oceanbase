@@ -73,7 +73,7 @@ int ObAllVirtualSessionStat::get_all_diag_info()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(alloc_wrapper_.get_alloc())) {
-    alloc_wrapper_.set_alloc(allocator_);
+    alloc_wrapper_.set_alloc(&alloc_);
   }
   if (OB_SUCCESS != (ret = share::ObDiagnosticInfoUtil::get_all_diag_info(session_status_, MTL_ID()))) {
     SERVER_LOG(WARN, "Fail to get session status, ", K(ret));
@@ -229,7 +229,7 @@ int ObAllVirtualSessionStatI1::get_all_diag_info()
   uint64_t key = 0;
   typedef std::pair<uint64_t, common::ObDISessionCollect> DiPair;
   if (OB_ISNULL(alloc_wrapper_.get_alloc())) {
-    alloc_wrapper_.set_alloc(allocator_);
+    alloc_wrapper_.set_alloc(&alloc_);
   }
   HEAP_VAR(DiPair, pair)
   {
