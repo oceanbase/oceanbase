@@ -116,6 +116,7 @@ protected:
       const char *clog_buf,
       const int64_t clog_len) = 0;
   virtual void free_struct_in_lock() = 0;
+  virtual int reset_for_retry_in_lock() { return OB_SUCCESS; }
 
   int try_update_with_lock(
       const int64_t update_version,
