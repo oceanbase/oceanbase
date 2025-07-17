@@ -321,6 +321,39 @@ TEST_F(TestDeviceManager, test_device_manager)
   }
 }
 
+TEST_F(TestDeviceManager, test_nfs_and_local_disk)
+{
+  if (false) {
+    // ASSERT_EQ(OB_SUCCESS, ObIOManager::get_instance().init());
+    ObDeviceManager &manager = ObDeviceManager::get_instance();
+    ObString nfs_path = "file:///mnt/nfs_share";
+    ObString nfs_path2 = "file:///mnt/nfs_share/a/b/c/d/e";
+    ObString local_disk_path = "file:///home";
+
+    ObIODevice *nfs_device_handle = nullptr;
+    ObIODevice *nfs_device_handle2 = nullptr;
+    ObIODevice *local_disk_handle = nullptr;
+    ObObjectStorageInfo nfs_storage_info;
+    ObObjectStorageInfo nfs_storage_info2;
+    ObObjectStorageInfo local_disk_info;
+    ObStorageIdMod nfs_storage_id_mod(0, ObStorageUsedMod::STORAGE_USED_DATA);
+    ObStorageIdMod nfs_storage_id_mod2(0, ObStorageUsedMod::STORAGE_USED_DATA);
+    ObStorageIdMod local_disk_id_mod(1, ObStorageUsedMod::STORAGE_USED_DATA);
+    ASSERT_EQ(OB_SUCCESS, manager.get_device(nfs_path, nfs_storage_info, nfs_storage_id_mod, nfs_device_handle));
+    ASSERT_EQ(OB_SUCCESS, manager.get_device(nfs_path2, nfs_storage_info2, nfs_storage_id_mod2, nfs_device_handle2));
+    ASSERT_EQ(OB_SUCCESS, manager.get_device(local_disk_path, local_disk_info, local_disk_id_mod, local_disk_handle));
+
+    ASSERT_TRUE(nfs_device_handle != nullptr);
+    ASSERT_TRUE(nfs_device_handle2 != nullptr);
+    ASSERT_TRUE(local_disk_handle != nullptr);
+    ASSERT_TRUE(nfs_device_handle != local_disk_handle);
+    ASSERT_TRUE(nfs_device_handle == nfs_device_handle);
+    ASSERT_EQ(true, nfs_device_handle->should_limit_net_bandwidth());
+    ASSERT_EQ(true, nfs_device_handle->should_limit_net_bandwidth());
+    ASSERT_EQ(false, local_disk_handle->should_limit_net_bandwidth());
+  }
+}
+
 int main(int argc, char **argv)
 {
   system("rm -f test_storage_device_manager.log");

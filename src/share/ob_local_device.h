@@ -209,6 +209,8 @@ public:
     const bool alarm_if_space_full = true) const override;
   virtual int check_write_limited() const override;
 
+  virtual int64_t get_io_aligned_size() const override { return DIO_ALIGN_SIZE; }
+
 public:
   static const int64_t RESERVED_BLOCK_INDEX = 2; // the first 2 blocks is used for super block
 

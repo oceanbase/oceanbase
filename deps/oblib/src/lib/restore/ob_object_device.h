@@ -47,7 +47,7 @@ there are two read mode, but alse use pread interface(only provide pread interfa
 class ObObjectDevice : public common::ObIODevice
 {
 public:
-  ObObjectDevice();
+  ObObjectDevice(const bool is_local_disk = false);
   virtual ~ObObjectDevice();
  
   /*the interface need override*/
@@ -109,6 +109,10 @@ public:
   // Add new : setup storage info
   virtual int setup_storage_info(const ObIODOpts &opts);
   virtual common::ObObjectStorageInfo &get_storage_info() { return storage_info_; }
+
+  virtual int64_t get_io_aligned_size() const override { return 1; }
+
+  virtual bool should_limit_net_bandwidth() const override { return !is_local_disk_; }
 
 public:
   common::ObFdSimulator& get_fd_mng() {return fd_mng_;}                 
@@ -228,6 +232,10 @@ protected:
     const int64_t required_size,
     const bool alarm_if_space_full = true) const override;
   virtual int check_write_limited() const override;
+private:
+  // This variable is used to identify the local disk. When the path is indicated with the
+  // file:// prefix and the destination is a local disk, ObIOManager does not need to perform rate limiting.
+  const bool is_local_disk_;
 };
 
 

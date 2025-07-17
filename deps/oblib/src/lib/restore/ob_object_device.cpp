@@ -32,9 +32,9 @@ const char *get_storage_access_type_str(const ObStorageAccessType &type)
   return str;
 }
 
-ObObjectDevice::ObObjectDevice()
+ObObjectDevice::ObObjectDevice(const bool is_local_disk)
   : storage_info_(), is_started_(false), lock_(common::ObLatchIds::OBJECT_DEVICE_LOCK),
-    storage_id_mod_()
+    storage_id_mod_(), is_local_disk_(is_local_disk)
 {
   ObMemAttr attr = SET_USE_500("ObjectDevice");
   reader_ctx_pool_.set_attr(attr);
