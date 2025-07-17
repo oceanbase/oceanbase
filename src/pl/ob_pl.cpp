@@ -3254,8 +3254,14 @@ int ObPLExecState::deep_copy_result_if_need(ObIAllocator &allocator)
     CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
     OZ (ObUserDefinedType::deep_copy_obj(ctx_.exec_ctx_->get_allocator(), result_, new_obj, false));
     ObUserDefinedType::destruct_objparam(*get_allocator(), result_, ctx_.exec_ctx_->get_my_session());
-    OZ (ctx_.exec_ctx_->get_pl_ctx()->add(new_obj));
-    OX (result_ = new_obj);
+    if (OB_SUCC(ret)) {
+      OZ (ctx_.exec_ctx_->get_pl_ctx()->add(new_obj));
+      if (OB_FAIL(ret)) {
+        ObUserDefinedType::destruct_obj(new_obj, ctx_.exec_ctx_->get_my_session());
+      } else {
+        result_ = new_obj;
+      }
+    }
   } else if (func_.get_ret_type().is_obj_type() && result_.need_deep_copy()) {
     // basic value, do not need copy when called by function from sql.
     if (!(is_called_from_sql_ && func_.is_function())) {
