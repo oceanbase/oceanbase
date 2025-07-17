@@ -17,6 +17,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "lib/worker.h"
 #include "share/ob_errno.h"
+#include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::number;
@@ -345,14 +346,22 @@ int ObSequenceCache::prefetch_sequence_cache(const ObSequenceSchema &schema,
 int ObSequenceCache::get_item(CacheItemKey &key, ObSequenceCacheItem *&item)
 {
   int ret = OB_SUCCESS;
+  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+  int64_t switchover_epoch = 0;
   if (OB_ENTRY_NOT_EXIST == (ret = sequence_cache_.get(key, item))) {
     lib::ObMutexGuard guard(cache_mutex_); // 加锁再次确认，避免并发加入新节点
     if (OB_ENTRY_NOT_EXIST == (ret = sequence_cache_.get(key, item))) {
       if (OB_FAIL(sequence_cache_.alloc_value(item))) {
         LOG_WARN("fail alloc value", K(ret));
+      } else if (OB_ISNULL(tenant_info_loader)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ObTenantInfoLoader is NULL", K(ret));
+      } else if (OB_FAIL(tenant_info_loader->get_switchover_epoch(switchover_epoch))) {
+        LOG_WARN("fail to get switchover_epoch", K(ret));
       } else if (OB_FAIL(sequence_cache_.insert_and_get(key, item))) {
         LOG_WARN("fail set cache item", K(key), K(ret));
       }
+      item->epoch_version_ = switchover_epoch;
       if (OB_FAIL(ret) && nullptr != item) {
         sequence_cache_.free_value(item);
         item = nullptr;
@@ -404,10 +413,21 @@ int ObSequenceCache::nextval(const ObSequenceSchema &schema,
   bool need_prefetch = false;
   CacheItemKey key(schema.get_tenant_id(), schema.get_sequence_id());
   ObSequenceCacheItem *item = nullptr;
+  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+  int64_t switchover_epoch = 0;
   if (OB_FAIL(get_item(key, item))) {
     LOG_WARN("fail get item", K(key), K(ret));
   } else if (OB_ISNULL(item)) {
     ret = OB_ERR_UNEXPECTED;
+  } else if (OB_ISNULL(tenant_info_loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ObTenantInfoLoader is NULL", K(ret));
+  } else if (OB_FAIL(tenant_info_loader->get_switchover_epoch(switchover_epoch))) {
+    LOG_WARN("fail to get switchover_epoch", K(ret));
+  } else if (item->epoch_version_ != switchover_epoch) {
+    remove(schema.get_tenant_id(), schema.get_sequence_id());
+    ret = OB_AUTOINC_CACHE_NOT_EQUAL;
+    LOG_WARN("cache is out of date, need to be cleared and retry", K(ret));
   } else {
     lib::ObMutexGuard guard(item->alloc_mutex_);
     /* refill_sequence_cache 期间禁止调度器挂起 query */

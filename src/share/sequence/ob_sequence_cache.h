@@ -104,6 +104,7 @@ public:
         base_on_last_number_(false),
         last_refresh_ts_(0),
         alloc_mutex_(common::ObLatchIds::SEQUENCE_VALUE_ALLOC_LOCK),
+        epoch_version_(0),
         last_number_()
   {}
   int combine_prefetch_node()
@@ -140,6 +141,7 @@ public:
   // 记录上次取得的值，用于 cycle 模式下判断下次取值是否需要加上 increment_by
   int64_t last_refresh_ts_;
   lib::ObMutex alloc_mutex_;
+  int64_t epoch_version_;
 private:
   ObSequenceValue last_number_;
 public:
@@ -149,7 +151,8 @@ public:
                K_(with_prefetch_node),
                K_(last_refresh_ts),
                K_(last_number),
-               K_(base_on_last_number));
+               K_(base_on_last_number),
+               K_(epoch_version));
 };
 
 class ObSequenceCache
