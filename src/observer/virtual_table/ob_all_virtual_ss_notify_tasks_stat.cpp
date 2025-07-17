@@ -47,9 +47,13 @@ int ObAllVirtualSSNotifyTasksStat::IterNodeOp::operator()(sslog::ObSSLogNotifyTa
                                                temp_buffer_,
                                                ObAllVirtualSSNotifyTasksStat::BUFFER_SIZE,
                                                this_->cur_row_))) {
-    DETECT_LOG(WARN, "fail to convert node info", K(MTL_ID()), K(notify_task));
+    SSLOG_LOG(WARN, "fail to convert node info", K(ret), K(MTL_ID()), K(notify_task));
   } else if (OB_FAIL(this_->scanner_.add_row(this_->cur_row_))) {
-    DETECT_LOG(WARN, "fail to add_row to scanner_", K(MTL_ID()), K(notify_task));
+    if (OB_SIZE_OVERFLOW == ret) {
+      SSLOG_LOG(INFO, "scanner is full", K(ret), K(MTL_ID()), K(notify_task));
+    } else {
+      SSLOG_LOG(WARN, "fail to add_row to scanner_", K(ret), K(MTL_ID()), K(notify_task));
+    }
   }
 #endif
   return ret;
@@ -62,18 +66,29 @@ int ObAllVirtualSSNotifyTasksStat::IterateTenantOp::operator()()
 #ifdef OB_BUILD_SHARED_STORAGE
   sslog::ObSSLogNotifyService *notify_srv = MTL(sslog::ObSSLogNotifyService *);
   if (OB_NOT_NULL(notify_srv)) {
-    ObByteLockGuard lg1(notify_srv->waiting_queue_.lock_);
-    ObByteLockGuard lg2(notify_srv->ready_queue_.lock_);
-    ObByteLockGuard lg3(notify_srv->retire_queue_.lock_);
-    if (FALSE_IT(for_each_op.state_ = "WAIT")) {
-    } else if (OB_FAIL(notify_srv->waiting_queue_.for_each_(for_each_op))) {
-      SSLOG_LOG(WARN, "failed to do for_each", KR(ret));
-    } else if (FALSE_IT(for_each_op.state_ = "READY")) {
-    } else if (OB_FAIL(notify_srv->ready_queue_.for_each_(for_each_op))) {
-      SSLOG_LOG(WARN, "failed to do for_each", KR(ret));
-    } else if (FALSE_IT(for_each_op.state_ = "RETIRE")) {
-    } else if (OB_FAIL(notify_srv->retire_queue_.for_each_(for_each_op))) {
-      SSLOG_LOG(WARN, "failed to do for_each", KR(ret));
+    // waiting queue
+    {
+      ObByteLockGuard lg1(notify_srv->waiting_queue_.lock_);
+      if (FALSE_IT(for_each_op.state_ = "WAIT")) {
+      } else if (OB_FAIL(notify_srv->waiting_queue_.for_each_(for_each_op))) {
+        SSLOG_LOG(WARN, "failed to do for_each", KR(ret));
+      }
+    }
+    // ready queue
+    {
+      ObByteLockGuard lg2(notify_srv->ready_queue_.lock_);
+      if (FALSE_IT(for_each_op.state_ = "READY")) {
+      } else if (OB_FAIL(notify_srv->ready_queue_.for_each_(for_each_op))) {
+        SSLOG_LOG(WARN, "failed to do for_each", KR(ret));
+      }
+    }
+    // retire queue
+    {
+      ObByteLockGuard lg3(notify_srv->retire_queue_.lock_);
+      if (FALSE_IT(for_each_op.state_ = "RETIRE")) {
+      } else if (OB_FAIL(notify_srv->retire_queue_.for_each_(for_each_op))) {
+        SSLOG_LOG(WARN, "failed to do for_each", KR(ret));
+      }
     }
   }
 #endif
@@ -89,12 +104,21 @@ int ObAllVirtualSSNotifyTasksStat::inner_get_next_row(common::ObNewRow *&row)
     constexpr int64_t BUFFER_SIZE = 32_MB;
     if (OB_ISNULL(temp_buffer = (char *)mtl_malloc(ObAllVirtualSSNotifyTasksStat::BUFFER_SIZE, "VirSSNotify"))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      DETECT_LOG(WARN, "fail to alloc buffer", K(MTL_ID()), K(*this));
+      SSLOG_LOG(WARN, "fail to alloc buffer", K(MTL_ID()), K(*this));
     } else {
       IterateTenantOp func_iterate_tenant(this, temp_buffer);
       if (OB_FAIL(omt_->operate_each_tenant_for_sys_or_self(func_iterate_tenant))) {
-        DETECT_LOG(WARN, "ObMultiTenant operate_each_tenant_for_sys_or_self failed", K(ret), K(*this));
+        if (OB_SIZE_OVERFLOW == ret) {
+          SSLOG_LOG(INFO, "scanner is full", K(ret), K(*this));
+          // rewrite ret to success
+          ret = OB_SUCCESS;
+        } else {
+          SSLOG_LOG(WARN, "ObMultiTenant operate_each_tenant_for_sys_or_self failed", K(ret), K(*this));
+        }
       } else {
+        // do nothing
+      }
+      if (OB_SUCCESS == ret) {
         scanner_it_ = scanner_.begin();
         start_to_read_ = true;
       }
@@ -104,7 +128,7 @@ int ObAllVirtualSSNotifyTasksStat::inner_get_next_row(common::ObNewRow *&row)
   if (OB_SUCC(ret) && true == start_to_read_) {
     if (OB_FAIL(scanner_it_.get_next_row(cur_row_))) {
       if (OB_ITER_END != ret) {
-        DETECT_LOG(WARN, "failed to get_next_row", K(ret), K(*this));
+        SSLOG_LOG(WARN, "failed to get_next_row", K(ret), K(*this));
       }
     } else {
       row = &cur_row_;
