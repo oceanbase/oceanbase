@@ -372,6 +372,9 @@ int ObTableCtx::init_common_without_check(ObTableApiCredential &credential,
     ref_table_id_ = simple_table_schema_->get_table_id();
     index_table_id_ = ref_table_id_;
     timeout_ts_ = timeout_ts;
+    exec_ctx_.set_my_session(&get_session_info());
+    typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
+    MyExecCtxSessionRegister ctx_register(get_session_info(), &exec_ctx_);
   }
 
   return ret;
