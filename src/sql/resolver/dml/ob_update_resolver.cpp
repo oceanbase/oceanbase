@@ -62,10 +62,9 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
     }
   }
 
-  // resolve outline data hints first
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(resolve_outline_data_hints())) {
-      LOG_WARN("resolve outline data hints failed", K(ret));
+    if (OB_FAIL(pre_process_hints(parse_tree))) {
+      LOG_WARN("pre process hints failed", K(ret));
     }
   }
 

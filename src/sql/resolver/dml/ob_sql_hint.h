@@ -82,11 +82,9 @@ struct ObQueryHint {
   const ObHints* get_stmt_id_hints(int64_t stmt_id) const;
   int add_stmt_id_map(const int64_t stmt_id, stmt::StmtType stmt_type);
   int set_stmt_id_map_info(const ObDMLStmt &stmt, ObString &qb_name);
-  int init_query_hint(ObIAllocator *allocator, ObSQLSessionInfo *session_info, ObDMLStmt *stmt);
-  int check_and_set_params_from_hint(const ObResolverParams &params, const ObDMLStmt &stmt) const;
-  int check_ddl_schema_version_from_hint(const ObDMLStmt &stmt) const;
-  int check_ddl_schema_version_from_hint(const ObDMLStmt &stmt,
-                                         const ObDDLSchemaVersionHint& ddlSchemaVersionHint) const;
+  int init_query_hint(ObIAllocator *allocator, ObSQLSessionInfo *session_info, const ObGlobalHint &global_hint, ObDMLStmt *stmt);
+  int set_params_from_hint(const ObResolverParams &params) const;
+  int check_ddl_schema_version_from_hint(TableItem *table_item) const;
   int distribute_hint_to_orig_stmt(ObDMLStmt *stmt);
   int adjust_qb_name_for_stmt(ObIAllocator &allocator,
                               ObDMLStmt &stmt,
@@ -140,9 +138,6 @@ struct ObQueryHint {
   int get_table_item_by_hint_table(const ObDMLStmt &stmt,
                                    const ObTableInHint &table,
                                    TableItem *&table_item) const;
-  int get_basic_table_without_index_by_hint_table(const ObDMLStmt &stmt,
-                                                  const ObTableInHint &table,
-                                                  TableItem *&table_item) const;
   bool has_hint_exclude_concurrent() const {  return !qb_hints_.empty() || !stmt_id_hints_.empty()
                                                      || global_hint_.has_hint_exclude_concurrent(); }
 

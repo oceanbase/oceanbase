@@ -86,7 +86,7 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
 
   // resolve outline data hints first
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(resolve_outline_data_hints())) {
+    if (OB_FAIL(pre_process_hints(parse_tree))) {
       LOG_WARN("resolve outline data hints failed", K(ret));
     } else if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE]))) {
       LOG_WARN("failed to resolve hints", K(ret));

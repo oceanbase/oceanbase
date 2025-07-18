@@ -2157,6 +2157,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
       LOG_WARN("invalid select stmt", K(select_stmt));
     } else if (OB_FAIL(params_.query_ctx_->query_hint_.init_query_hint(allocator_,
                                                                        session_info_,
+                                                                       params_.global_hint_,
                                                                        select_stmt))) {
       LOG_WARN("failed to init query hint.", K(ret));
     } else {

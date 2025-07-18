@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "ob_hint.h"
 #include "sql/optimizer/ob_log_plan.h"
+#include "sql/resolver/expr/ob_raw_expr.h"
 
 namespace oceanbase
 {

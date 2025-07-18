@@ -3254,14 +3254,6 @@ int ObSql::generate_stmt(ParseResult &parse_result,
               const ObGlobalHint &global_hint = resolver_ctx.query_ctx_->get_global_hint();
               result.set_is_calc_found_rows(dml_stmt->is_calc_found_rows());
               plan_ctx->set_is_affect_found_row(dml_stmt->is_affect_found_rows());
-              context.force_print_trace_ = global_hint.force_trace_log_;
-              if (MpQuery == context.exec_type_ && global_hint.log_level_.length() > 0) {
-                const ObString &log_level = global_hint.log_level_;
-                if (OB_UNLIKELY(OB_SUCCESS != process_thread_log_id_level_map(log_level.ptr(),
-                                                                              log_level.length()))) {
-                  LOG_WARN("Failed to process thread log id level map");
-                }
-              }
               ObDelUpdStmt *del_up_stmt = NULL;
               del_up_stmt = dynamic_cast<ObDelUpdStmt *>(dml_stmt);
               if (del_up_stmt != NULL && del_up_stmt->is_returning()) {

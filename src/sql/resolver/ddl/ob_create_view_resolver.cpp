@@ -253,6 +253,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("fail to check auto gen column names", K(ret));
       } else if (OB_FAIL(params_.query_ctx_->query_hint_.init_query_hint(params_.allocator_,
                                                                           params_.session_info_,
+                                                                          params_.global_hint_,
                                                           view_table_resolver.get_select_stmt()))) {
         LOG_WARN("failed to init query hint.", K(ret));
       }

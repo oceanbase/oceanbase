@@ -26,6 +26,7 @@
 #include "sql/plan_cache/ob_plan_cache_struct.h"
 #include "objit/common/ob_item_type.h"
 #include "sql/plan_cache/ob_cache_object_factory.h"
+#include "sql/resolver/dml/ob_hint.h"
 
 namespace oceanbase
 {
@@ -327,6 +328,7 @@ struct ObResolverParams
        secondary_namespace_(NULL),
        session_info_(NULL),
        query_ctx_(NULL),
+       global_hint_(),
        param_list_(NULL),
        select_item_param_infos_(NULL),
        prepare_param_count_(0),
@@ -367,8 +369,6 @@ struct ObResolverParams
        is_resolve_table_function_expr_(false),
        tg_timing_event_(-1),
        is_column_ref_(true),
-       hidden_column_scope_(T_NONE_SCOPE),
-       hidden_column_name_(NULL),
        outline_parse_result_(NULL),
        is_execute_call_stmt_(false),
        enable_res_map_(false),
@@ -392,6 +392,7 @@ public:
   pl::ObPLBlockNS *secondary_namespace_;
   ObSQLSessionInfo *session_info_;
   ObQueryCtx *query_ctx_;
+  ObGlobalHint global_hint_;
   const ParamStore *param_list_;
   const SelectItemParamInfoArray *select_item_param_infos_;
   int64_t prepare_param_count_;
@@ -440,8 +441,6 @@ public:
   bool is_resolve_table_function_expr_;  // used to mark resolve table function expr.
   int64_t tg_timing_event_;      // mysql mode, trigger的触发时机和类型
   bool is_column_ref_;                   // used to mark normal column ref
-  ObStmtScope hidden_column_scope_; // record scope for first hidden column which need check hidden_column_visable in opt_param hint
-  const char *hidden_column_name_;  // record column name for first hidden column which need check hidden_column_visable in opt_param hint
   ParseResult *outline_parse_result_;
   bool is_execute_call_stmt_;
   bool enable_res_map_;

@@ -2729,6 +2729,7 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
   ObColumnRefRawExpr *col_expr = NULL;
   ObSchemaGetterGuard *schema_guard = NULL;
   ColumnItem column_item;
+  ObQueryCtx *query_ctx = NULL;
   if (NULL == stmt) {
     stmt = get_stmt();
   }
@@ -2736,9 +2737,10 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
       || OB_ISNULL(schema_checker_)
       || OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())
       || OB_ISNULL(params_.expr_factory_)
-      || OB_ISNULL(session_info_)) {
+      || OB_ISNULL(session_info_)
+      || OB_ISNULL(query_ctx = stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema checker is null", K(stmt), K_(schema_checker), K_(params_.expr_factory));
+    LOG_WARN("schema checker or query ctx is null", K(stmt), K_(schema_checker), K(query_ctx), K_(params_.expr_factory));
   } else if (OB_UNLIKELY(!table_item.is_link_table() && !table_item.is_basic_table()
                          && !table_item.is_fake_cte_table())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2772,9 +2774,17 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
         include_hidden = true;
       } else {
         include_hidden = true;
-        if (T_NONE_SCOPE == params_.hidden_column_scope_) {
-          params_.hidden_column_scope_ = current_scope_;
-          params_.hidden_column_name_ = OB_HIDDEN_PK_INCREMENT_COLUMN_NAME;
+        const ObGlobalHint &global_hint = query_ctx->get_query_hint().get_global_hint();
+        bool has_enable_param = false;
+        if (OB_FAIL(global_hint.opt_params_.has_enable_opt_param(ObOptParamHint::OptParamType::HIDDEN_COLUMN_VISIBLE, has_enable_param))) {
+          LOG_WARN("failed to check has enable opt param", K(ret));
+        } else if (OB_UNLIKELY(!has_enable_param)) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_WARN("hidden columns not allowed", K(ret));
+          ObString column_name(OB_HIDDEN_PK_INCREMENT_COLUMN_NAME);
+          ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
+          LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
+                                                 scope_name.length(), scope_name.ptr());
         }
       }
     }
@@ -3697,7 +3707,13 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
                  OB_FAIL(resolve_index_hint(*table_item, *index_hint_node))) {
         LOG_WARN("resolve index hint failed", K(ret));
       }
-
+      if (OB_SUCC(ret) && table_item->is_basic_table()) {
+        if (OB_LIKELY(table_item->ddl_table_id_ != OB_INVALID_ID) && OB_UNLIKELY(table_item->ddl_table_id_ != table_item->ref_id_)) {
+          // do nothing
+        } else if (OB_FAIL(params_.query_ctx_->get_query_hint().check_ddl_schema_version_from_hint(table_item))) {
+          LOG_WARN("failed to check ddl schema version from hint", K(ret));
+        }
+      }
       if (OB_SUCC(ret)) {
         table_item->external_location_id_ = table_schema->get_external_location_id();
       }
@@ -14651,10 +14667,20 @@ int ObDMLResolver::resolve_old_new_pseudo_column(const ObQualifiedName &q_name,
     LOG_DEBUG("old_new_expr build success", K(*pseudo_column_expr));
   }
 
-  if (OB_SUCC(ret) && T_NONE_SCOPE == params_.hidden_column_scope_
-      && !(params_.is_for_rt_mv_ || session_info_->get_ddl_info().is_major_refreshing_mview())) {
-    params_.hidden_column_scope_ = current_scope_;
-    params_.hidden_column_name_ = OB_MLOG_OLD_NEW_COLUMN_NAME;
+  if (OB_SUCC(ret) && !(params_.is_for_rt_mv_ || session_info_->get_ddl_info().is_major_refreshing_mview())) {
+    ObQueryCtx *query_ctx = get_stmt()->get_query_ctx();
+    const ObGlobalHint &global_hint = query_ctx->get_query_hint().get_global_hint();
+    bool has_enable_param = false;
+    if (OB_FAIL(global_hint.opt_params_.has_enable_opt_param(ObOptParamHint::OptParamType::HIDDEN_COLUMN_VISIBLE, has_enable_param))) {
+      LOG_WARN("failed to check has enable opt param", K(ret));
+    } else if (OB_UNLIKELY(!has_enable_param)) {
+      ret = OB_ERR_BAD_FIELD_ERROR;
+      LOG_WARN("hidden columns not allowed", K(ret));
+      ObString column_name(OB_MLOG_OLD_NEW_COLUMN_NAME);
+      ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
+      LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
+                                             scope_name.length(), scope_name.ptr());
+    }
   }
   return ret;
 }
@@ -15179,6 +15205,7 @@ int ObDMLResolver::resolve_hints(const ParseNode *node)
     bool filter_embedded_hint = query_hint.has_outline_data() || query_hint.has_user_def_outline();
     if (OB_FAIL(inner_resolve_hints(*node, filter_embedded_hint,
                                     get_outline_data,
+                                    false,
                                     global_hint,
                                     hints,
                                     qb_name))) {
@@ -15191,7 +15218,7 @@ int ObDMLResolver::resolve_hints(const ParseNode *node)
                                                     hints))) {
         LOG_WARN("failed to classify outline hints", K(ret));
       }
-    } else if (OB_FAIL(query_hint.get_global_hint().merge_global_hint(global_hint))) {
+    } else if (OB_FAIL(params_.global_hint_.merge_global_hint(global_hint))) {
       LOG_WARN("failed to merge global hints", K(ret));
     } else if (OB_FAIL(query_hint.append_hints(stmt->get_stmt_id(), hints))) {
       LOG_WARN("failed to append embedded hints", K(ret));
@@ -15214,8 +15241,6 @@ int ObDMLResolver::resolve_outline_data_hints()
   if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(query_ctx = stmt->get_query_ctx())) {
     ret = OB_NOT_INIT;
     LOG_WARN("Stmt and query ctx should not be NULL. ", K(ret), K(stmt), K(query_ctx));
-  } else if (get_parent_namespace_resolver() != NULL) {
-    /* do noting */
   } else if (NULL == (outline_hint_node = get_outline_data_hint_node())) {
     /* do noting */
   } else {
@@ -15226,6 +15251,7 @@ int ObDMLResolver::resolve_outline_data_hints()
     ObString qb_name;
     if (OB_FAIL(inner_resolve_hints(*outline_hint_node, false,
                                     get_outline_data,
+                                    false,
                                     global_hint,
                                     hints,
                                     qb_name))) {
@@ -15244,6 +15270,85 @@ int ObDMLResolver::resolve_outline_data_hints()
                                                          hints))) {
       LOG_WARN("failed to classify outline hints", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObDMLResolver::pre_resolve_global_hints(const ParseNode *node)
+{
+  int ret = OB_SUCCESS;
+  ObQueryCtx *query_ctx = NULL;
+  if (OB_ISNULL(query_ctx = params_.query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Stmt and query ctx should not be NULL. ", K(ret), K(query_ctx));
+  } else if (NULL == node) {
+    /* do nothing */
+  } else {
+    typedef ObSEArray<const void*, 1024> NodesArray;
+    ObQueryHint &query_hint = query_ctx->get_query_hint_for_update();
+    ObGlobalHint global_hint;
+    ObSEArray<ObHint*, 8> hints;
+    bool get_outline_data = false;
+    bool filter_embedded_hint = false;
+    ObString qb_name;
+    const ParseNode* cur_node = NULL;
+    SMART_VAR(NodesArray, nodes) {
+      if (OB_FAIL(nodes.push_back(node))) {
+        LOG_WARN("failed to push back node", K(ret));
+      }
+      while (OB_SUCC(ret) && !get_outline_data && !nodes.empty()) {
+        const void* temp_node = NULL;
+        if (OB_FAIL(nodes.pop_back(temp_node))) {
+          LOG_WARN("failed to pop back node", K(ret));
+        }
+        cur_node = static_cast<const ParseNode*>(temp_node);
+        int32_t num_child = cur_node -> num_child_;
+        for (int32_t i = num_child - 1; OB_SUCC(ret) && !get_outline_data && i >= 0; --i) {
+          const ParseNode *child_node = cur_node -> children_[i];
+          if (NULL == child_node) {
+            // do nothing
+          } else if (T_HINT_OPTION_LIST != child_node -> type_) {
+            if (OB_FAIL(nodes.push_back(static_cast<const void*>(child_node)))) {
+              LOG_WARN("failed to push back node", K(ret));
+            }
+          } else if (OB_FAIL(inner_resolve_hints(*child_node, filter_embedded_hint,
+                                                 get_outline_data,
+                                                 true,
+                                                 global_hint,
+                                                 hints,
+                                                 qb_name))) {
+            LOG_WARN("failed to pre resolve global hints", K(ret));
+          } else if (!get_outline_data && OB_FAIL(query_hint.get_global_hint().merge_global_hint(global_hint))) {
+            LOG_WARN("failed to merge global hints", K(ret));
+          } else if (get_outline_data && OB_FAIL(query_hint.get_global_hint().assign(global_hint))) {
+            LOG_WARN("failed to assign global hints", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::pre_process_hints(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ObQueryCtx* query_ctx = NULL;
+  if (OB_ISNULL(query_ctx = params_.query_ctx_) || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Query ctx and session_info_ should not be NULL. ", K(ret));
+  } else if (OB_FAIL(session_info_->get_collation_type_of_names(OB_TABLE_NAME_CLASS, query_ctx->query_hint_.cs_type_))) {
+    LOG_WARN("fail to get collation type of name", K(OB_TABLE_NAME_CLASS), K(ret));
+  } else if (get_parent_namespace_resolver() != NULL) {
+    /* do noting */
+  } else if (OB_FAIL(resolve_outline_data_hints())) {
+    LOG_WARN("resolve outline data hints failed", K(ret));
+  } else if (OB_FAIL(!query_ctx->query_hint_.has_outline_data() &&
+                     !query_ctx->query_hint_.has_user_def_outline() &&
+                     pre_resolve_global_hints(&parse_tree))) {
+    LOG_WARN("pre resolve global hints failed", K(ret));
+  } else if (OB_FAIL(query_ctx->query_hint_.set_params_from_hint(params_))) {
+    LOG_WARN("failed to set params from hint", K(ret));
   }
   return ret;
 }
@@ -15267,6 +15372,7 @@ const ParseNode *ObDMLResolver::get_outline_data_hint_node()
 int ObDMLResolver::inner_resolve_hints(const ParseNode &node,
                                        const bool filter_embedded_hint,
                                        bool &get_outline_data,
+                                       const bool is_pre_resolve,
                                        ObGlobalHint &global_hint,
                                        ObIArray<ObHint*> &hints,
                                        ObString &qb_name)
@@ -15293,7 +15399,7 @@ int ObDMLResolver::inner_resolve_hints(const ParseNode &node,
       cur_hints.reuse();
       if (OB_ISNULL(hint_node = node.children_[i])) {
         /* do nothing */
-      } else if (T_QB_NAME == hint_node->type_) {
+      } else if (!is_pre_resolve && T_QB_NAME == hint_node->type_) {
         ObString tmp_qb_name;
         if (OB_FAIL(resolve_qb_name_node(hint_node, tmp_qb_name))) {
           LOG_WARN("failed to resolve qb name node", K(ret));
@@ -15329,6 +15435,8 @@ int ObDMLResolver::inner_resolve_hints(const ParseNode &node,
         LOG_WARN("failed to resolve global hint", K(ret));
       } else if (resolved_hint) {
         LOG_DEBUG("resolve global hint node", "type", get_type_name(hint_node->type_), K(in_outline_data));
+      } else if (is_pre_resolve) {
+        // do nothing
       } else if (OB_FAIL(resolve_transform_hint(*hint_node, resolved_hint, cur_hints))) {
         LOG_WARN("failed to resolve transform hint", K(ret));
       } else if (!resolved_hint && OB_FAIL(resolve_optimize_hint(*hint_node, resolved_hint,

@@ -82,7 +82,7 @@ int ObDeleteResolver::resolve(const ParseNode &parse_tree)
 //      delete_stmt->set_ignore(true);
 //      session_info_->set_ignore_stmt(true);
 //    }
-    if (OB_FAIL(resolve_outline_data_hints())) {
+    if (OB_FAIL(pre_process_hints(parse_tree))) {
       LOG_WARN("resolve outline data hints failed", K(ret));
     } else if (is_mysql_mode() && OB_FAIL(resolve_with_clause(parse_tree.children_[WITH_MYSQL]))) {
       LOG_WARN("resolve with clause failed", K(ret));

@@ -1447,10 +1447,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
     if (OB_SUCC(ret) && stmt->is_dml_stmt() && !stmt->is_explain_stmt()) {
       if (OB_FAIL(params_.query_ctx_->query_hint_.init_query_hint(params_.allocator_,
                                                                   params_.session_info_,
+                                                                  params_.global_hint_,
                                                                   static_cast<ObDMLStmt*>(stmt)))) {
         LOG_WARN("failed to init query hint.", K(ret));
-      } else if (OB_FAIL(params_.query_ctx_->query_hint_.check_and_set_params_from_hint(params_,
-                                                         *static_cast<ObDMLStmt*>(stmt)))) {
+      } else if (OB_FAIL(params_.query_ctx_->query_hint_.set_params_from_hint(params_))) {
         LOG_WARN("failed to check and set params from hint", K(ret));
       }
     }

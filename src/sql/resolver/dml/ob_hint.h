@@ -15,7 +15,9 @@
 #include "lib/string/ob_string.h"
 #include "lib/hash_func/ob_hash_func.h"
 #include "lib/container/ob_se_array.h"
-#include "sql/resolver/expr/ob_raw_expr.h"
+#include "share/system_variable/ob_sys_var_class_type.h"
+#include "common/ob_version_def.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
 
 namespace oceanbase
@@ -24,6 +26,11 @@ namespace sql
 {
 struct PlanText;
 struct TableItem;
+class ObRowExpr;
+class ObRawExpr;
+class ObWinFunRawExpr;
+class ObDMLStmt;
+class ObSelectStmt;
 
 #define OB_OUTLINE_DATA_END_STR          " END_OUTLINE_DATA*/"
 
@@ -1082,8 +1089,8 @@ public:
   common::ObIArray<ObTableInHint> &get_mv_list() { return mv_list_; }
   const common::ObIArray<ObTableInHint> &get_mv_list() const { return mv_list_; }
   int check_mv_match_hint(ObCollationType cs_type,
-                          const ObTableSchema *mv_schema,
-                          const ObDatabaseSchema *db_schema,
+                          const share::schema::ObTableSchema *mv_schema,
+                          const share::schema::ObDatabaseSchema *db_schema,
                           bool &is_match) const;
 
   INHERIT_TO_STRING_KV("ObHint", ObHint, K_(mv_list));
@@ -1120,7 +1127,7 @@ public:
                                        T_INDEX_SS_DESC_HINT == get_hint_type(); }
   bool is_match_index(const ObCollationType cs_type,
                       const TableItem &ref_table,
-                      const ObTableSchema &index_schema) const;
+                      const share::schema::ObTableSchema &index_schema) const;
   bool is_asc_hint() const
   {
     return T_INDEX_ASC_HINT == get_hint_type() ||

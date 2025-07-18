@@ -466,11 +466,14 @@ protected:
 public:
   int resolve_hints(const ParseNode *node);
   int resolve_outline_data_hints();
+  int pre_resolve_global_hints(const ParseNode *node);
+  int pre_process_hints(const ParseNode &parse_tree);
 protected:
   const ParseNode *get_outline_data_hint_node();
   int inner_resolve_hints(const ParseNode &node,
                           const bool filter_embedded_hint,
                           bool &get_outline_data,
+                          const bool is_pre_resolve,
                           ObGlobalHint &global_hint,
                           ObIArray<ObHint*> &hints,
                           ObString &qb_name);

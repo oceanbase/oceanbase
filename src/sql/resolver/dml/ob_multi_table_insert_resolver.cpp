@@ -46,8 +46,8 @@ int ObMultiTableInsertResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(insert_all_stmt = create_stmt<ObInsertAllStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create insert stmt failed", K(insert_all_stmt));
-  } else if (OB_FAIL(resolve_outline_data_hints())) {
-    LOG_WARN("resolve outline data hints failed", K(ret));
+  } else if (OB_FAIL(pre_process_hints(parse_tree))) {
+    LOG_WARN("pre process hints failed", K(ret));
   } else if (OB_ISNULL(parse_tree.children_[0])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse tree", K(parse_tree.children_[0]));
