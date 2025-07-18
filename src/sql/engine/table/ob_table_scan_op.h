@@ -477,6 +477,7 @@ public:
   ObCostTableScanSimpleInfo est_cost_simple_info_;
   ExprFixedArray pseudo_column_exprs_;
   int64_t lob_inrow_threshold_;
+  share::ObLakeTableFormat lake_table_format_;
 };
 
 // for random batch_size & skip

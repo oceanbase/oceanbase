@@ -22,6 +22,13 @@ namespace oceanbase
 {
 namespace share
 {
+enum class ObLakeTableFormat
+{
+  INVALID = 0,
+  ICEBERG,
+  HIVE,
+  ODPS
+};
 
 class ObCatalogProperties
 {

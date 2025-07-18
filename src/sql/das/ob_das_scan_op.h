@@ -24,6 +24,7 @@
 #include "share/domain_id/ob_domain_id.h"
 #include "share/external_table/ob_external_table_part_info.h"
 #include "share/external_table/ob_external_object_ctx.h"
+#include "share/catalog/ob_catalog_properties.h"
 
 namespace oceanbase
 {
@@ -99,6 +100,7 @@ public:
       result_output_(alloc),
       is_get_(false),
       is_external_table_(false),
+      lake_table_format_(share::ObLakeTableFormat::INVALID),
       external_file_access_info_(alloc),
       external_file_location_(alloc),
       external_file_pattern_(alloc),
@@ -186,6 +188,7 @@ public:
   sql::ExprFixedArray result_output_;
   bool is_get_;
   bool is_external_table_;
+  share::ObLakeTableFormat lake_table_format_;
   ObExternalFileFormat::StringData external_file_access_info_;
   ObExternalFileFormat::StringData external_file_location_;
   ObExternalFileFormat::StringData external_file_pattern_;

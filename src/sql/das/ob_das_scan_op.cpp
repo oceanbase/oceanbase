@@ -77,7 +77,8 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef,
                     external_file_pattern_,
                     external_object_ctx_,
                     external_pushdown_filters_,
-                    aggregate_param_props_);
+                    aggregate_param_props_,
+                    lake_table_format_);
 
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {

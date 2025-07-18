@@ -603,7 +603,8 @@ ObTableScanSpec::ObTableScanSpec(ObIAllocator &alloc, const ObPhyOperatorType ty
     parser_properties_(),
     est_cost_simple_info_(),
     pseudo_column_exprs_(alloc),
-    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD)
+    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+    lake_table_format_(share::ObLakeTableFormat::INVALID)
 {
 }
 
@@ -632,7 +633,8 @@ OB_SERIALIZE_MEMBER((ObTableScanSpec, ObOpSpec),
                     parser_name_,
                     parser_properties_,
                     pseudo_column_exprs_,
-                    lob_inrow_threshold_);
+                    lob_inrow_threshold_,
+                    lake_table_format_);
 
 DEF_TO_STRING(ObTableScanSpec)
 {
