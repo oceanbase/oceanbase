@@ -807,6 +807,8 @@ protected:
   ObDASTCBMemProfileKey das_tasks_key_;
   ObTSCMonitorInfo tsc_monitor_info_;
   bool need_check_outrow_lob_;
+  ObDasExecuteLocalInfo das_execute_local_info_;
+  ObDasExecuteRemoteInfo das_execute_remote_info_;
 private:
   ObRandScanProcessor rand_scan_processor_;
  };

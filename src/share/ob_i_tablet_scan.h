@@ -268,6 +268,94 @@ struct ObTSCMonitorInfo
   )
 };
 
+struct ObDasExecuteLocalInfo {
+  int64_t das_index_scan_time_;
+  int64_t das_index_scan_rows_;
+  int64_t das_data_scan_time_;
+  int64_t das_data_scan_rows_;
+
+  ObDasExecuteLocalInfo()
+  : das_index_scan_time_(0),
+    das_index_scan_rows_(0),
+    das_data_scan_time_(0),
+    das_data_scan_rows_(0)
+  {}
+
+  void add_das_index_scan_time(int64_t das_index_scan_time) {
+    das_index_scan_time_ += das_index_scan_time;
+  }
+  void add_das_index_scan_rows(int64_t das_index_scan_rows) {
+    das_index_scan_rows_ += das_index_scan_rows;
+  }
+  void add_das_data_scan_time(int64_t das_data_scan_time) {
+    das_data_scan_time_ += das_data_scan_time;
+  }
+  void add_das_data_scan_rows(int64_t das_data_scan_rows) {
+    das_data_scan_rows_ += das_data_scan_rows;
+  }
+  //目前代码不存在子类ObDasExecuteRemoteInfo转为ObDasExecuteLocalInfo的情况
+  //出于性能考虑这里未使用虚函数
+  void reset() {
+    das_index_scan_time_ = 0;
+    das_index_scan_rows_ = 0;
+    das_data_scan_time_ = 0;
+    das_data_scan_rows_ = 0;
+  }
+  TO_STRING_KV(K_(das_index_scan_time),
+               K_(das_index_scan_rows),
+               K_(das_data_scan_time),
+               K_(das_data_scan_rows));
+};
+
+struct ObDasExecuteRemoteInfo : public ObDasExecuteLocalInfo
+{
+  int64_t das_index_rpc_count_;
+  int64_t das_data_rpc_count_;
+  //远程多个分区同时执行das task，在控制端只记录最大时间
+  int64_t max_das_index_scan_time_;
+  int64_t max_das_data_scan_time_;
+  ObDasExecuteRemoteInfo()
+  : ObDasExecuteLocalInfo(),
+    das_index_rpc_count_(0),
+    das_data_rpc_count_(0),
+    max_das_index_scan_time_(0),
+    max_das_data_scan_time_(0)
+  {}
+  void add_das_index_rpc_count(int64_t das_index_rpc_count) {
+    das_index_rpc_count_ += das_index_rpc_count;
+  }
+  void add_das_data_rpc_count(int64_t das_data_rpc_count) {
+    das_data_rpc_count_ += das_data_rpc_count;
+  }
+  void set_max_das_index_scan_time(int64_t max_das_index_scan_time) {
+    if (max_das_index_scan_time > max_das_index_scan_time_) {
+      max_das_index_scan_time_ = max_das_index_scan_time;
+    }
+  }
+  void set_max_das_data_scan_time(int64_t max_das_data_scan_time) {
+    if (max_das_data_scan_time > max_das_data_scan_time_) {
+      max_das_data_scan_time_ = max_das_data_scan_time;
+    }
+  }
+  void reset() {
+    ObDasExecuteLocalInfo::reset();
+    das_index_rpc_count_ = 0;
+    das_data_rpc_count_ = 0;
+    max_das_index_scan_time_ = 0;
+    max_das_data_scan_time_ = 0;
+  }
+
+  TO_STRING_KV(K_(das_index_scan_time),
+               K_(das_index_scan_rows),
+               K_(das_data_scan_time),
+               K_(das_data_scan_rows),
+               K_(das_index_rpc_count),
+               K_(das_data_rpc_count),
+               K_(max_das_index_scan_time),
+               K_(max_das_data_scan_time));
+  OB_UNIS_VERSION(4);
+};
+
 struct ObTableScanStatistic
 {
   //storage access row cnt before filter

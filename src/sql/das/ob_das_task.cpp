@@ -742,7 +742,8 @@ OB_SERIALIZE_MEMBER(ObDASDataFetchRes,
                     io_read_bytes_,
                     ssstore_read_bytes_,
                     ssstore_read_row_cnt_,
-                    memstore_read_row_cnt_);
+                    memstore_read_row_cnt_,
+                    das_execute_remote_info_);
 
 ObDASDataFetchRes::ObDASDataFetchRes()
         : datum_store_("DASDataFetch"),
@@ -754,7 +755,8 @@ ObDASDataFetchRes::ObDASDataFetchRes()
           io_read_bytes_(0),
           ssstore_read_bytes_(0),
           ssstore_read_row_cnt_(0),
-          memstore_read_row_cnt_(0)
+          memstore_read_row_cnt_(0),
+          das_execute_remote_info_()
 {
 }
 

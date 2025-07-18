@@ -222,6 +222,14 @@ public:
   ObFixedArray<share::ObAggrParamProperty, common::ObIAllocator> aggregate_param_props_;
 };
 
+enum class ObDASScanTaskType
+{
+  SCAN = 0,
+  LOCAL_LOOKUP = 1,
+  GLOBAL_LOOKUP_INDEX_SCAN = 2,
+  GLOBAL_LOOKUP_DATA_SCAN = 3
+};
+
 struct ObDASScanRtDef : ObDASBaseRtDef
 {
   OB_UNIS_VERSION(1);
@@ -257,7 +265,10 @@ public:
       row_width_(common::OB_INVALID_ID),
       das_tasks_key_(),
       in_row_cache_threshold_(common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM),
-      row_scan_cnt_(0)
+      row_scan_cnt_(0),
+      task_type_(ObDASScanTaskType::SCAN),
+      das_execute_local_info_(nullptr),
+      das_execute_remote_info_(nullptr)
   { }
 
   virtual ~ObDASScanRtDef();
@@ -317,6 +328,9 @@ public:
   // row_scan_cnt_ indicates the total rows scanned during a table scan, for multi-partition tables, it sums rows
   // from all local partitions and retains its value even after rescan.
   uint64_t row_scan_cnt_;
+  ObDASScanTaskType task_type_;
+  ObDasExecuteLocalInfo *das_execute_local_info_;
+  ObDasExecuteRemoteInfo *das_execute_remote_info_;
 
 private:
   union {
@@ -485,7 +499,8 @@ public:
                        K_(io_read_bytes),
                        K_(ssstore_read_bytes),
                        K_(ssstore_read_row_cnt),
-                       K_(memstore_read_row_cnt));
+                       K_(memstore_read_row_cnt),
+                       K_(das_execute_remote_info));
 private:
   ObChunkDatumStore datum_store_;
   ObChunkDatumStore::Iterator result_iter_;
@@ -500,6 +515,7 @@ private:
   int64_t ssstore_read_bytes_;
   int64_t ssstore_read_row_cnt_;
   int64_t memstore_read_row_cnt_;
+  ObDasExecuteRemoteInfo das_execute_remote_info_;
 };
 
 class ObLocalIndexLookupOp : public common::ObNewRowIterator, public ObIndexLookupOpImpl

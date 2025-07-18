@@ -105,7 +105,8 @@ OB_DEF_SERIALIZE(ObDASScanRtDef)
     scan_rows_size_,
     row_width_,
     das_tasks_key_,
-    row_scan_cnt_);
+    row_scan_cnt_,
+    task_type_);
   return ret;
 }
 
@@ -134,7 +135,8 @@ OB_DEF_DESERIALIZE(ObDASScanRtDef)
     scan_rows_size_,
     row_width_,
     das_tasks_key_,
-    row_scan_cnt_);
+    row_scan_cnt_,
+    task_type_);
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
   }
@@ -166,7 +168,8 @@ OB_DEF_SERIALIZE_SIZE(ObDASScanRtDef)
     scan_rows_size_,
     row_width_,
     das_tasks_key_,
-    row_scan_cnt_);
+    row_scan_cnt_,
+    task_type_);
   return len;
 }
 
@@ -1489,7 +1492,8 @@ ObDASScanResult::ObDASScanResult()
     io_read_bytes_(0),
     ssstore_read_bytes_(0),
     ssstore_read_row_cnt_(0),
-    memstore_read_row_cnt_(0)
+    memstore_read_row_cnt_(0),
+    das_execute_remote_info_()
 {
 }
 
@@ -1647,7 +1651,8 @@ OB_SERIALIZE_MEMBER((ObDASScanResult, ObIDASTaskResult),
                     io_read_bytes_,
                     ssstore_read_bytes_,
                     ssstore_read_row_cnt_,
-                    memstore_read_row_cnt_);
+                    memstore_read_row_cnt_,
+                    das_execute_remote_info_);
 
 ObLocalIndexLookupOp::~ObLocalIndexLookupOp()
 {

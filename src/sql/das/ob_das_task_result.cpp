@@ -49,6 +49,7 @@ ObDASTCB::ObDASTCB()
     ssstore_read_row_cnt_(0),
     memstore_read_row_cnt_(0),
     mem_profile_key_(),
+    das_execute_remote_info_(),
     tcb_lock_()
 {
 }

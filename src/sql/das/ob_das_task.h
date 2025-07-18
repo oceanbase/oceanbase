@@ -143,6 +143,7 @@ public:
   ObDetectableId detectable_id_;
   ObTSCMonitorInfo *tsc_monitor_info_;
   uint64_t stmt_type_;
+  ObDasExecuteLocalInfo *das_execute_local_info_;
 };
 
 class ObIDASTaskOp
@@ -655,6 +656,7 @@ public:
   int64_t ssstore_read_bytes_;
   int64_t ssstore_read_row_cnt_;
   int64_t memstore_read_row_cnt_;
+  ObDasExecuteRemoteInfo das_execute_remote_info_;
 };
 
 class ObDASDataEraseReq

@@ -125,6 +125,7 @@ public:
 
   // for detect & interrupt
   ObDASTCBInterruptInfo interrupt_info_;
+  ObDasExecuteRemoteInfo das_execute_remote_info_;
 private:
   common::ObSpinLock tcb_lock_; //用于控制资源资源释放的时序，保证并发访问的安全
 };
