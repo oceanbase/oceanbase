@@ -469,6 +469,7 @@ ObStorageSchema::ObStorageSchema()
     progressive_merge_round_(0),
     progressive_merge_num_(0),
     master_key_id_(INVALID_ID),
+    micro_block_format_version_(ObMicroBlockFormatVersionHelper::DEFAULT_VERSION),
     compressor_type_(ObCompressorType::NONE_COMPRESSOR),
     encryption_(),
     encrypt_key_(),
@@ -873,6 +874,7 @@ void ObStorageSchema::reset()
   }
   semistruct_encoding_type_.reset();
   semistruct_properties_.reset();
+  micro_block_format_version_ = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION;
   is_inited_ = false;
 }
 
