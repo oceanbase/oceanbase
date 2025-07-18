@@ -255,6 +255,7 @@ public:
   int try_schedule_remaining_tasks(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *current_ctx);
   int generate_vec_idx_memdata_dag(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *task_ctx);
   int get_ls_mgr(ObPluginVectorIndexMgr *&mgr);
+  void refresh_adapter_rb_flag();
 
   // logger interfaces
   int handle_submit_callback(const bool success);

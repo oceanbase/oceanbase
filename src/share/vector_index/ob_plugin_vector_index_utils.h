@@ -55,6 +55,11 @@ public:
                              ObPluginVectorIndexAdaptor *adapter,
                              SCN target_scn,
                              ObIAllocator &allocator);
+  static int refresh_adp_from_table(ObLSID &ls_id,
+                                    ObPluginVectorIndexAdaptor *&adapter,
+                                    const bool create_new_adapter,
+                                    SCN target_scn,
+                                    ObIAllocator &allocator);
   static int release_vector_index_adapter(ObPluginVectorIndexAdaptor* &adapter);
   static int release_vector_index_build_helper(ObIvfBuildHelper* &helper);
   static ObVectorIndexRecordType index_type_to_record_type(schema::ObIndexType type);
@@ -154,7 +159,8 @@ private:
                                                  uint64_t table_id,
                                                  uint32 &col_cnt);
   static int try_sync_snapshot_memdata(ObLSID &ls_id,
-                                       ObPluginVectorIndexAdaptor *adapter,
+                                       ObPluginVectorIndexAdaptor *&adapter,
+                                       const bool create_new_adp,
                                        SCN &target_scn,
                                        ObIAllocator &allocator);
   static int try_sync_vbitmap_memdata(ObLSID &ls_id,

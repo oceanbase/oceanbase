@@ -1252,6 +1252,33 @@ int ObPluginVectorIndexLoadScheduler::replay(const void *buffer,
   return ret;
 }
 
+void ObPluginVectorIndexLoadScheduler::refresh_adapter_rb_flag()
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
+  if (OB_FAIL(vector_index_service_->get_ls_index_mgr_map().get_refactored(ls_->get_ls_id(), index_ls_mgr))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get vector index ls mgr", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+    }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(index_ls_mgr)) {
+    RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
+    FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(), OB_SUCC(ret)) {
+      ObPluginVectorIndexAdaptor *adapter = iter->second;
+      if (OB_ISNULL(adapter->get_snap_data_()) || !adapter->get_snap_data_()->is_inited()) {
+        LOG_INFO("snap_data index is empty or not init, won't set rb_flag");
+      } else {
+        ObVectorIndexMemData *snap_memdata = adapter->get_snap_data_();
+        TCWLockGuard lock_guard(snap_memdata->mem_data_rwlock_);
+        snap_memdata->rb_flag_ = true;
+      }
+    }
+    LOG_INFO("finish refresh adapter rb flag", K(ret), K(tenant_id_), K(ls_->get_ls_id()));
+  }
+}
+
 // checkpoint interfaces
 int ObPluginVectorIndexLoadScheduler::flush(share::SCN &scn)
 {
@@ -1277,6 +1304,9 @@ int ObPluginVectorIndexLoadScheduler::switch_to_leader()
   } else {
     ATOMIC_STORE(&is_leader_, true);
     ATOMIC_STORE(&need_do_for_switch_, true);
+  }
+  if (OB_SUCC(ret)) {
+    refresh_adapter_rb_flag();
   }
   const int64_t cost_us = ObTimeUtility::current_time() - start_time_us;
   FLOG_INFO("vector index scheduler: finish to switch_to_leader", KR(ret), K_(tenant_id), KPC_(ls), K(cost_us));

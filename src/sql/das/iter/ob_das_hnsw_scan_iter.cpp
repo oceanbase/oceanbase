@@ -848,7 +848,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter(
 
     if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(snapshot_iter_) && OB_FALSE_IT(query_cond_.row_iter_ = snapshot_iter_->get_output_result_iter())) {
-    } else if (OB_FAIL(adaptor->query_result(ada_ctx, &query_cond_, adaptor_vid_iter_))) {
+    } else if (OB_FAIL(adaptor->query_result(ls_id_, ada_ctx, &query_cond_, adaptor_vid_iter_))) {
       LOG_WARN("failed to query result.", K(ret));
     }
   }
@@ -1767,7 +1767,7 @@ int ObDASHNSWScanIter::call_pva_interface(const ObVidAdaLookupStatus& cur_state,
     }
     case ObVidAdaLookupStatus::STATES_SET_RESULT: {
       if (OB_NOT_NULL(snapshot_iter_) && OB_FALSE_IT(query_cond_.row_iter_ = snapshot_iter_->get_output_result_iter())) {
-      } else if (OB_FAIL(adaptor.query_result(&ada_ctx, &query_cond_, post_with_filter_ ? tmp_adaptor_vid_iter_ : adaptor_vid_iter_))) {
+      } else if (OB_FAIL(adaptor.query_result(ls_id_, &ada_ctx, &query_cond_, post_with_filter_ ? tmp_adaptor_vid_iter_ : adaptor_vid_iter_))) {
         LOG_WARN("failed to query result.", K(ret));
       }
       break;

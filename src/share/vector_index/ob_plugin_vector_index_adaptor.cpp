@@ -1524,6 +1524,10 @@ int ObPluginVectorIndexAdaptor::set_snapshot_key_prefix(uint64_t tablet_id, uint
     } else if (OB_FAIL(databuff_printf(key_prefix_str, max_length, pos, "%lu_%lu", tablet_id, scn))) {
       LOG_WARN("failed to print key prefix");
     } else {
+      if(!snapshot_key_prefix_.empty()) {
+        allocator_->free(snapshot_key_prefix_.ptr());
+        snapshot_key_prefix_.reset();
+      }
       snapshot_key_prefix_.assign(key_prefix_str, pos);
     }
   }
@@ -2902,7 +2906,8 @@ int ObPluginVectorIndexAdaptor::query_next_result(ObVectorQueryAdaptorResultCont
   return ret;
 }
 
-int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *ctx,
+int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
+                                             ObVectorQueryAdaptorResultContext *ctx,
                                              ObVectorQueryConditions *query_cond,
                                              ObVectorQueryVidIterator *&vids_iter)
 {
@@ -2941,6 +2946,7 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
       LOG_WARN("failed to query vids.", K(ret), K(dim));
     }
   } else if (ctx->flag_ == PVQP_SECOND) {
+    LOG_INFO("load snapshot data from table");
     ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
     ObArenaAllocator allocator;
     if (OB_ISNULL(query_cond->row_iter_) || OB_ISNULL(query_cond->scan_param_)) {
@@ -2959,37 +2965,16 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid row", K(ret), K(row));
       } else if (get_snapshot_key_prefix().empty() ||
-                 !row->storage_datums_[0].get_string().prefix_match(get_snapshot_key_prefix())) {
-        ObVectorIndexAlgorithmType index_type;
-        ObString key_prefix;
-        ObString target_prefix;
-        if (OB_FAIL(ob_write_string(allocator, row->storage_datums_[0].get_string(), key_prefix))) {
-          LOG_WARN("failed to write string", K(ret), K(row->storage_datums_[0].get_string()));
-        } else if (OB_FAIL(ObPluginVectorIndexUtils::iter_table_rescan(*query_cond->scan_param_, table_scan_iter))) {
-          LOG_WARN("failed to rescan", K(ret));
-        } else {
-          ObHNSWDeserializeCallback::CbParam param;
-          param.iter_ = query_cond->row_iter_;
-          param.allocator_ = &tmp_allocator;
-          ObHNSWDeserializeCallback callback(static_cast<void*>(this));
-          ObIStreamBuf::Callback cb = callback;
-          ObVectorIndexSerializer index_seri(tmp_allocator);
-          TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
-          if (!get_snapshot_key_prefix().empty() && key_prefix.prefix_match(get_snapshot_key_prefix()) && !snap_data_->rb_flag_) {
-            // skip deserialize, already been deserialized by other concurrent thread
-          } else if (OB_FAIL(index_seri.deserialize(snap_data_->index_, param, cb, tenant_id_))) {
-            LOG_WARN("serialize index failed.", K(ret));
-          } else if (OB_FALSE_IT(index_type = get_snap_index_type())) {
-          } else if (OB_FAIL(ObPluginVectorIndexUtils::get_split_snapshot_prefix(index_type, key_prefix, target_prefix))) {
-            LOG_WARN("fail to get split snapshot prefix", K(ret));
-          } else if (OB_FAIL(set_snapshot_key_prefix(target_prefix))) {
-            LOG_WARN("fail to set snapshot key prefix", K(ret), K(index_type), K(key_prefix), K(target_prefix));
-          }
+          !row->storage_datums_[0].get_string().prefix_match(get_snapshot_key_prefix()))
+      {
+        ObPluginVectorIndexAdaptor *adapter = this;
+        int64_t current_time = ObTimeUtility::fast_current_time();
+        SCN target_scn;
+        if (OB_FAIL(target_scn.convert_from_ts(current_time))) {
+          LOG_WARN("failed to convert ts to scn", K(current_time));
+        } else if (OB_FAIL(ObPluginVectorIndexUtils::refresh_adp_from_table(ls_id, adapter, false, target_scn, tmp_allocator))) { // TODO: replace adapter with new
+          LOG_WARN("failed to refresh adapter", K(ret), KPC(this));
         }
-      }
-
-      if (OB_SUCC(ret)) {
-        close_snap_data_rb_flag();
       }
     }
 
@@ -2998,6 +2983,10 @@ int ObPluginVectorIndexAdaptor::query_result(ObVectorQueryAdaptorResultContext *
       // do nothing
     } else if (OB_FAIL(vsag_query_vids(ctx, query_cond, dim, query_vector, vids_iter))) {
       LOG_WARN("failed to query vids.", K(ret), K(dim));
+    }
+
+    if (OB_SUCC(ret)) {
+      close_snap_data_rb_flag();
     }
   }
 

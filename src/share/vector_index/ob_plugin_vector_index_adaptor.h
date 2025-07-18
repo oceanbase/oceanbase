@@ -587,7 +587,8 @@ public:
   // Query Processor third
   int check_snapshot_table_wait_status(ObVectorQueryAdaptorResultContext *ctx);
 
-  int query_result(ObVectorQueryAdaptorResultContext *ctx,
+  int query_result(ObLSID &ls_id,
+                   ObVectorQueryAdaptorResultContext *ctx,
                    ObVectorQueryConditions *query_cond,
                    ObVectorQueryVidIterator *&vids_iter);
   int query_next_result(ObVectorQueryAdaptorResultContext *ctx,
