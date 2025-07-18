@@ -1687,8 +1687,10 @@ int ObPL::execute(ObExecContext &ctx,
             if (pl.get_params().at(i).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE
                 && pl.get_params().at(i).get_meta().get_extend_type() != PL_CURSOR_TYPE
                 && pl.get_params().at(i).get_ext() != params->at(i).get_ext()) {
-              OX (params->at(i) = pl.get_params().at(i));
-              params->at(i).set_int(0);
+              if (!pl.param_converted(i)) {
+                OX (params->at(i) = pl.get_params().at(i));
+                OX (params->at(i).set_int(0));
+              }
               OZ (ObUserDefinedType::deep_copy_obj(allocator, pl.get_params().at(i), params->at(i)));
               ObUserDefinedType::destruct_objparam(pl_sym_allocator,
                                                 pl.get_params().at(i),
@@ -3657,7 +3659,7 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
 // to unexpected parameters being passed to the stored procedure, resulting in unknown errors.
 // This function can be removed after the feature of defending the compilation cache of the executing stored procedure
 // from being eliminated on the PL cache side.
-int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type, int64_t param_idx)
+int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type, int64_t param_idx, bool is_anonymous)
 {
   int ret = OB_SUCCESS;
   bool enable_defend = true;
@@ -3673,6 +3675,8 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
     // no actual param type info(eg: out params), skip check
     LOG_TRACE("actual param is null or mock default param, skip check",
               K(actual_param), K(formal_param_type));
+  } else if (is_anonymous && !func_.get_params_info().at(param_idx).flag_.need_to_check_type_) {
+    // anonymous param and not need to check type, skip check
   } else if (!actual_param.is_ext()) {
     if (!formal_param_type.is_obj_type()) {
       ret = OB_INVALID_ARGUMENT;
@@ -3730,6 +3734,7 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
           OX (get_params().at(param_idx) = actual_param);
           OZ (convert_composite(ctx_, get_params().at(param_idx), formal_param_type));
           OX (need_free_.at(param_idx) = get_params().at(param_idx).get_ext() != 0 ? true : false);
+          OX (param_converted_.at(param_idx) = true);
         }
       }
     } else {
@@ -3760,6 +3765,7 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
         OX (get_params().at(param_idx) = actual_param);
         OZ (convert_composite(ctx_, get_params().at(param_idx), formal_param_type));
         OX (need_free_.at(param_idx) = get_params().at(param_idx).get_ext() != 0 ? true : false);
+        OX (param_converted_.at(param_idx) = true);
       }
     }
   }
@@ -3899,6 +3905,7 @@ int ObPLExecState::init_params_simple(const ParamStore *params, bool is_anonymou
        *   else It will directly used by static sql, do not need to check.
        */
       need_free_.push_back(false);
+      param_converted_.push_back(false);
       OX (get_params().at(i) = params->at(i));
   }
   return ret;
@@ -4001,8 +4008,9 @@ do {                                                                  \
        *   else It will directly used by static sql, do not need to check.
        */
       need_free_.push_back(false);
+      param_converted_.push_back(false);
       const ObPLDataType &pl_type = func_.get_variables().at(i);  // formal param type
-      if (OB_FAIL(defend_stored_routine_change(params->at(i), pl_type, i))) {
+      if (OB_FAIL(defend_stored_routine_change(params->at(i), pl_type, i, is_anonymous))) {
         LOG_WARN("param type not match, procedure/function could have been replaced",
                  K(ret), K(i), K(params->at(i)), K(pl_type));
       } else if (func_.get_in_args().has_member(i)) {
@@ -4158,8 +4166,8 @@ do {                                                                  \
                        && pl_type.get_user_type_id() != params->at(i).get_udt_id()
                        && !pl_type.is_generic_type()
                        && !pl_type.is_opaque_type()) {
-              // if need_free is true, means already check is compatible and convert in defend_stored_routine_change
-              if (need_free_.at(i) == false) {
+              // if param_converted_ is true, means already check is compatible and convert in defend_stored_routine_change
+              if (!param_converted_.at(i)) {
                 ObPLComposite *composite = NULL;
                 get_params().at(i) = params->at(i);
                 get_params().at(i).set_udt_id(pl_type.get_user_type_id());
