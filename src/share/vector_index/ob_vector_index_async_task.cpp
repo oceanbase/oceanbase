@@ -255,16 +255,21 @@ int ObVecAsyncTaskExector::update_status_and_ret_code(ObVecIndexAsyncTaskCtx *ta
     ObVecIndexFieldArray update_fields;
     ObVecIndexTaskStatusField task_status;
     ObVecIndexTaskStatusField ret_code;
+    ObVecIndexTaskStatusField target_scn;
 
     task_status.field_name_ = "status";
     task_status.data_.uint_ = task_ctx->task_status_.status_;
     ret_code.field_name_ = "ret_code";
     ret_code.data_.uint_ = task_ctx->task_status_.ret_code_;
+    target_scn.field_name_ = "target_scn";
+    target_scn.data_.int_ = task_ctx->task_status_.target_scn_.convert_to_ts();
 
     if (OB_FAIL(update_fields.push_back(task_status))) {
       LOG_WARN("fail to push back update field", K(ret), K(task_status));
     } else if (OB_FAIL(update_fields.push_back(ret_code))) {
       LOG_WARN("fail to push back update field", K(ret), K(ret_code));
+    } else if (OB_FAIL(update_fields.push_back(target_scn))) {
+      LOG_WARN("fail to push back update field", K(ret), K(target_scn));
     } else {
       ObMySQLTransaction trans;
       if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
