@@ -228,7 +228,7 @@ int ObOptStatService::load_table_stat_and_put_cache(const uint64_t tenant_id,
 int ObOptStatService::batch_load_table_stats_and_put_cache(const uint64_t tenant_id,
                                                            ObIArray<const ObOptTableStat::Key *> &keys,
                                                            ObIArray<ObOptTableStatHandle> &handles,
-                                                           ObSEArray<int64_t, 4> regather_handles_indices)
+                                                           ObIArray<int64_t> &regather_handles_indices)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObOptTableStat*, 4> all_part_stats;
