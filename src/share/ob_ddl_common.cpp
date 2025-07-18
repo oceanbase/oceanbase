@@ -898,8 +898,21 @@ int ObDDLUtil::generate_spatial_index_column_names(const ObTableSchema &dest_tab
     uint64_t geo_col_id = OB_INVALID_ID;
     ObArray<ObColDesc> column_ids;
     const ObColumnSchemaV2 *column_schema = nullptr;
+    if (column_names.count() > select_column_ids.count()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_names.count(); ++i) {
+        if (OB_ISNULL(column_schema = source_table_schema.get_column_schema(column_names.at(i).column_name_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
+        } else if (is_contain(select_column_ids, static_cast<int64_t>(column_schema->get_column_id()))) {
+          // do nothing
+        } else if (OB_FAIL(select_column_ids.push_back(column_schema->get_column_id()))) {
+          LOG_WARN("push back select column id failed", K(ret));
+        }
+      }
+    }
     // get dest table column names
-    if (OB_FAIL(dest_table_schema.get_column_ids(column_ids))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(dest_table_schema.get_column_ids(column_ids))) {
       LOG_WARN("fail to get column ids", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {

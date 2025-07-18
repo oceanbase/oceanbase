@@ -861,3 +861,31 @@ ERROR 0A000: Modify generated column definition not supported
 alter table receivable_items modify `unit_range` geometry GENERATED ALWAYS AS (st_geomfromtext(geo_text, 4326, 'axis-order=long-lat')) srid 0;
 ERROR 0A000: alter geometry srid not supported
 drop table receivable_items;
+drop table if exists t1;
+drop procedure if exists pl1;
+CREATE TABLE t1 (
+id int auto_increment NOT NULL,
+c1 varchar(200),
+c2 json,
+c3 blob,
+c4 geometry not null srid 4326,
+from_unit double NOT NULL,
+to_unit double NOT NULL,
+g geometry GENERATED ALWAYS AS (_st_setsrid(LINESTRING(point(from_unit,30.320965261625222),point(120.34904267189361,to_unit)),4326)) STORED NOT NULL srid 4326,
+SPATIAL KEY `idx_g` (g)
+)partition by hash(id) partitions 3;
+create procedure pl1(ll int)
+begin
+set @x=120.34904267189300;
+set @y=30.320965261625200;
+set @z=1;
+repeat
+insert into t1(c1,c2,c3,c4,from_unit,to_unit) values ('point(120.34904267189361 30.320965261625222)','{"key": "point(120.34904267189361 30.320965261625222)"}','point(120.34904267189361 30.320965261625222)',ST_GeomFromText('point(120.34904267189361 30.320965261625222)',4326, 'axis-order=long-lat'),@x,@y);
+set @x=@x + 1e-14;
+set @y=@y + 1e-14;
+set @z=@z+1;
+until @z>ll end repeat;
+end
+//
+call pl1(100);
+alter table t1 add g2 geometry GENERATED ALWAYS AS (_st_setsrid(LINESTRING(point(from_unit,30.320965261625222),point(120.34904267189361,to_unit)),4326)) STORED  srid 4326;
