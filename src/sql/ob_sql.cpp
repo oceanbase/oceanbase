@@ -466,8 +466,12 @@ int ObSql::fill_result_set(ObResultSet &result_set,
           LOG_WARN("reserve field columns failed", K(ret), K(size));
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+          if (!call_stmt.get_call_proc_info()->is_client_out_param_by_out_param_id(i)) {
+            // only return client out param to client
+            continue;
+          }
           ObCollationType charsetnr;
-          ObDataType *type = call_stmt.get_call_proc_info()->get_out_type().at(i).get_data_type();
+          const ObDataType *type = call_stmt.get_call_proc_info()->get_out_type().at(i).get_data_type();
           ObObjType out_obj_type = call_stmt.get_call_proc_info()->get_out_type().at(i).get_obj_type();
           if (ObUnknownType == out_obj_type
             || ObExtendType == out_obj_type) {
@@ -3027,7 +3031,8 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
                               stmt_ora_need_privs))) {
       LOG_WARN("failed to generate plan", K(ret));
     }
-  } else if (stmt::T_EXECUTE == basic_stmt->get_stmt_type()) {
+  } else if (stmt::T_EXECUTE == basic_stmt->get_stmt_type() &&
+             stmt::T_CALL_PROCEDURE != static_cast<ObExecuteStmt*>(basic_stmt)->get_prepare_type()) {
     if (OB_FAIL(handle_text_execute(basic_stmt, sql_ctx, result))) {
       LOG_WARN("handle_text_execute failed", K(ret));
     }
