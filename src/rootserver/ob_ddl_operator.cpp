@@ -844,6 +844,7 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < udt_ids.count(); ++i) {
         const ObUDTTypeInfo *udt_info = NULL;
+        ObUDTTypeInfo udt;
         const uint64_t udt_id = udt_ids.at(i);
         int64_t new_schema_version = OB_INVALID_VERSION;
         if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
@@ -853,11 +854,19 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
         } else if (OB_ISNULL(udt_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("routine info is NULL", K(ret));
-        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
-          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
-        } else if (OB_FAIL(schema_service_impl->get_udt_sql_service().drop_udt(
-                           *udt_info, new_schema_version, trans))) {
-          LOG_WARN("drop routine failed", "routine_id", udt_info->get_type_id(), K(ret));
+        } else if (OB_FAIL(udt.assign(*udt_info))) {
+          LOG_WARN("assign udt info failed", K(ret));
+        } else if (udt.is_object_type()) {
+          udt.clear_property_flag(ObUDTTypeFlag::UDT_FLAG_OBJECT_TYPE_BODY);
+          udt.set_object_ddl_type(ObUDTTypeFlag::UDT_FLAG_OBJECT_TYPE_SPEC);
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+            LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+          } else if (OB_FAIL(schema_service_impl->get_udt_sql_service().drop_udt(
+                             udt, new_schema_version, trans))) {
+            LOG_WARN("drop routine failed", "routine_id", udt_info->get_type_id(), K(ret));
+          }
         }
         if (OB_SUCC(ret)) {
           uint64_t udt_db_id = udt_info->get_database_id();
