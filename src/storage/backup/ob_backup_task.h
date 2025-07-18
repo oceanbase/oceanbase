@@ -119,7 +119,7 @@ public:
   virtual int start_running() override;
   virtual bool operator==(const share::ObIDagNet &other) const override;
   virtual bool is_valid() const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   share::ObBackupDataType get_backup_data_type() const
@@ -172,7 +172,7 @@ public:
   virtual int start_running() override;
   virtual bool operator==(const share::ObIDagNet &other) const override;
   virtual bool is_valid() const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   INHERIT_TO_STRING_KV("ObIDagNet", share::ObIDagNet, K_(param));
@@ -195,7 +195,7 @@ public:
   virtual bool operator==(const ObIDag &other) const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return true; }
@@ -222,7 +222,7 @@ public:
   virtual bool operator==(const ObIDag &other) const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return true; }
@@ -254,7 +254,7 @@ public:
   virtual bool operator==(const ObIDag &other) const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual bool check_can_schedule() override;
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
@@ -282,7 +282,7 @@ public:
   int provide(const common::ObIArray<ObBackupProviderItem> &items);
   virtual int create_first_task() override;
   virtual bool operator==(const ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
@@ -312,7 +312,7 @@ public:
   virtual ~ObPrefetchBackupInfoDag();
   virtual int create_first_task() override;
   virtual bool operator==(const ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
 
 private:
@@ -330,7 +330,7 @@ public:
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual bool operator==(const ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return true; }

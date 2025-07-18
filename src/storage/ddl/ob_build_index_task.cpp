@@ -780,10 +780,10 @@ int ObUniqueCheckingDag::alloc_global_index_task_callback(
   return ret;
 }
 
-int64_t ObUniqueCheckingDag::hash() const
+uint64_t ObUniqueCheckingDag::hash() const
 {
   int tmp_ret = OB_SUCCESS;
-  int64_t hash_val = 0;
+  uint64_t hash_val = 0;
   if (NULL == index_schema_) {
     tmp_ret = OB_ERR_SYS;
     STORAGE_LOG_RET(ERROR, tmp_ret, "index schema must not be NULL", K(tmp_ret));

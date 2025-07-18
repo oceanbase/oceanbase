@@ -366,10 +366,10 @@ bool ObBackupComplementLogDagNet::is_valid() const
   return ctx_.is_valid();
 }
 
-int64_t ObBackupComplementLogDagNet::hash() const
+uint64_t ObBackupComplementLogDagNet::hash() const
 {
   int ret = OB_SUCCESS;
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   const int64_t type = ObBackupDagNetSubType::LOG_STREAM_BACKUP_COMPLEMENT_LOG_DAG_NET;
   hash_value = common::murmurhash(&type, sizeof(type), hash_value);
   hash_value = ctx_.calc_hash(hash_value);
@@ -496,10 +496,10 @@ bool ObBackupLSLogGroupDag::operator==(const ObIDag &other) const
   return bret;
 }
 
-int64_t ObBackupLSLogGroupDag::hash() const
+uint64_t ObBackupLSLogGroupDag::hash() const
 {
   int ret = OB_SUCCESS;
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (IS_NOT_INIT) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("backup ls group dag do not init", K(ret));
@@ -768,10 +768,10 @@ bool ObBackupLSLogDag::operator==(const ObIDag &other) const
   return bret;
 }
 
-int64_t ObBackupLSLogDag::hash() const
+uint64_t ObBackupLSLogDag::hash() const
 {
   int ret = OB_SUCCESS;
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (IS_NOT_INIT) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("backup ls group dag do not init", K(ret));
@@ -2343,10 +2343,10 @@ bool ObBackupLSLogGroupFinishDag::operator==(const ObIDag &other) const
   return bret;
 }
 
-int64_t ObBackupLSLogGroupFinishDag::hash() const
+uint64_t ObBackupLSLogGroupFinishDag::hash() const
 {
   int ret = OB_SUCCESS;
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (IS_NOT_INIT) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("backup ls group dag do not init", K(ret));

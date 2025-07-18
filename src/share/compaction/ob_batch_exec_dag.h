@@ -109,7 +109,7 @@ public:
   virtual int inner_init() { return OB_SUCCESS; }
   virtual int create_first_task() override;
   virtual bool operator == (const ObIDag &other) const override;
-  virtual int64_t hash() const override { return param_.get_hash(); }
+  virtual uint64_t hash() const override { return param_.get_hash(); }
   virtual int fill_info_param(
       compaction::ObIBasicInfoParam *&out_param,
       ObIAllocator &allocator) const override;

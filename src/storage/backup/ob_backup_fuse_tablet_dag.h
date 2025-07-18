@@ -38,7 +38,7 @@ public:
   virtual bool is_valid() const override;
   virtual int start_running() override;
   virtual bool operator == (const share::ObIDagNet &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   virtual int clear_dag_net_ctx() override;
@@ -63,7 +63,7 @@ public:
   explicit ObBackupTabletGroupFuseDag(const share::ObDagType::ObDagTypeEnum &dag_type);
   virtual ~ObBackupTabletGroupFuseDag();
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const { return compat_mode_; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
@@ -125,7 +125,7 @@ public:
       const ObBackupTabletFuseItem &fuse_item,
       ObBackupTabletGroupFuseCtx &group_ctx);
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;

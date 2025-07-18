@@ -258,7 +258,7 @@ bool ObTabletBackfillTXDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObTabletBackfillTXDag::hash() const
+uint64_t ObTabletBackfillTXDag::hash() const
 {
   int ret = OB_SUCCESS;
   int64_t hash_value = 0;
@@ -1837,7 +1837,7 @@ bool ObFinishBackfillTXDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObFinishBackfillTXDag::hash() const
+uint64_t ObFinishBackfillTXDag::hash() const
 {
   int ret = OB_SUCCESS;
   int64_t hash_value = 0;

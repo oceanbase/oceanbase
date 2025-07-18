@@ -1379,7 +1379,7 @@ bool ObVectorIndexDag::operator==(const ObIDag& other) const
   return is_equal;
 }
 
-int64_t ObVectorIndexDag::hash() const
+uint64_t ObVectorIndexDag::hash() const
 {
   int64_t hash_value = 0;
   if (OB_UNLIKELY(!is_inited_ || !param_.is_valid())) {

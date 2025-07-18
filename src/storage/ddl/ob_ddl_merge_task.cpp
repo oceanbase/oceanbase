@@ -200,7 +200,7 @@ bool ObDDLTableMergeDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObDDLTableMergeDag::hash() const
+uint64_t ObDDLTableMergeDag::hash() const
 {
   return ddl_param_.tablet_id_.hash();
 }

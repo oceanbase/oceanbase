@@ -120,7 +120,7 @@ bool ObDeleteLobMetaRowDag::ignore_warning()
     || OB_TASK_EXPIRED == dag_ret_;
 }
 
-int64_t ObDeleteLobMetaRowDag::hash() const
+uint64_t ObDeleteLobMetaRowDag::hash() const
 {
   int tmp_ret = OB_SUCCESS;
   int64_t hash_val = 0;

@@ -221,7 +221,7 @@ public:
   ~ObComplementDataDag();
   int init(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg);
   int prepare_context();
-  int64_t hash() const;
+  virtual uint64_t hash() const override;
   bool operator ==(const share::ObIDag &other) const;
   bool is_inited() const { return is_inited_; }
   void handle_init_failed_ret_code(int ret) { context_.complement_data_ret_ = ret; }

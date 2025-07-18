@@ -773,7 +773,7 @@ bool ObTransferBackfillTXDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObTransferBackfillTXDagNet::hash() const
+uint64_t ObTransferBackfillTXDagNet::hash() const
 {
   int64_t hash_value = 0;
 
@@ -928,7 +928,7 @@ bool ObBaseTransferBackfillTXDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObBaseTransferBackfillTXDag::hash() const
+uint64_t ObBaseTransferBackfillTXDag::hash() const
 {
   int ret = OB_SUCCESS;
   int64_t hash_value = 0;

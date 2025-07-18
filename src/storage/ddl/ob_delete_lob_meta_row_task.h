@@ -97,7 +97,7 @@ public:
   ObDeleteLobMetaRowDag();
   ~ObDeleteLobMetaRowDag();
   int init(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg);
-  int64_t hash() const override;
+  virtual uint64_t hash() const override;
   bool operator==(const ObIDag& other) const override;
   bool is_inited() const { return is_inited_; }
   int fill_dag_key(char *buf, const int64_t buf_len) const override;

@@ -793,10 +793,10 @@ int ObTabletSplitDag::create_first_task()
   return ret;
 }
 
-int64_t ObTabletSplitDag::hash() const
+uint64_t ObTabletSplitDag::hash() const
 {
   int ret = OB_SUCCESS;
-  int64_t hash_val = 0;
+  uint64_t hash_val = 0;
   if (OB_UNLIKELY(!is_inited_ || !param_.is_valid())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("invalid argument", K(ret), K(is_inited_), K(param_));

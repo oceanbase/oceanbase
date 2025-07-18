@@ -117,7 +117,7 @@ public:
   }
   virtual int start_running() override;
   virtual bool operator == (const share::ObIDagNet &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   virtual int clear_dag_net_ctx() override;
@@ -164,7 +164,7 @@ public:
   ObInitialRebuildTabletDag();
   virtual ~ObInitialRebuildTabletDag();
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
 
@@ -204,7 +204,7 @@ public:
   ObStartRebuildTabletDag();
   virtual ~ObStartRebuildTabletDag();
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
 
@@ -246,7 +246,7 @@ public:
   ObTabletRebuildMajorDag();
   virtual ~ObTabletRebuildMajorDag();
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
   virtual int inner_reset_status_for_retry() override;
@@ -318,7 +318,7 @@ public:
   ObFinishRebuildTabletDag();
   virtual ~ObFinishRebuildTabletDag();
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
 

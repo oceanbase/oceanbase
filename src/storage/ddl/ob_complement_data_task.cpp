@@ -883,10 +883,10 @@ int ObComplementDataDag::prepare_context()
   return ret;
 }
 
-int64_t ObComplementDataDag::hash() const
+uint64_t ObComplementDataDag::hash() const
 {
   int tmp_ret = OB_SUCCESS;
-  int64_t hash_val = 0;
+  uint64_t hash_val = 0;
   if (OB_UNLIKELY(!is_inited_ || !param_.is_valid())) {
     tmp_ret = OB_ERR_SYS;
     LOG_ERROR("table schema must not be NULL", K(tmp_ret), K(is_inited_), K(param_));

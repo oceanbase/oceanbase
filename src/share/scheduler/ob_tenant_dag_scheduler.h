@@ -568,7 +568,7 @@ public:
   DISABLE_COPY_ASSIGN(ObIDag);
 public:
   virtual bool operator == (const ObIDag &other) const = 0;
-  virtual int64_t hash() const = 0;
+  virtual uint64_t hash() const = 0;
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const = 0;
   virtual int init_by_param(const ObIDagInitParam *param)
@@ -718,7 +718,7 @@ public:
   virtual bool is_valid() const = 0;
   virtual int start_running() = 0;
   virtual bool operator == (const ObIDagNet &other) const = 0;
-  virtual int64_t hash() const = 0;
+  virtual uint64_t hash() const = 0;
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const = 0;
   virtual int fill_comment(char *buf, const int64_t buf_len) const = 0;

@@ -140,7 +140,7 @@ int ObTenantSnapshotCreateDag::fill_dag_key(char *buf, const int64_t buf_len) co
   return ret;
 }
 
-int64_t ObTenantSnapshotCreateDag::hash() const
+uint64_t ObTenantSnapshotCreateDag::hash() const
 {
   int64_t ptr = reinterpret_cast<int64_t>(this);
   return common::murmurhash(&ptr, sizeof(ptr), 0);
@@ -334,7 +334,7 @@ int ObTenantSnapshotGCDag::fill_dag_key(char *buf, const int64_t buf_len) const
   return ret;
 }
 
-int64_t ObTenantSnapshotGCDag::hash() const
+uint64_t ObTenantSnapshotGCDag::hash() const
 {
   int64_t ptr = reinterpret_cast<int64_t>(this);
   return common::murmurhash(&ptr, sizeof(ptr), 0);

@@ -79,7 +79,7 @@ public:
   virtual bool is_valid() const override;
   virtual int start_running() override;
   virtual bool operator == (const share::ObIDagNet &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   virtual int clear_dag_net_ctx() override;
@@ -103,7 +103,7 @@ public:
   explicit ObPrepareMigrationDag(const share::ObDagType::ObDagTypeEnum &dag_type);
   virtual ~ObPrepareMigrationDag();
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   int prepare_ctx(share::ObIDagNet *dag_net);
 

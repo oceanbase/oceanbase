@@ -584,9 +584,9 @@ bool ObDataTabletsCheckCOConvertDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObDataTabletsCheckCOConvertDag::hash() const
+uint64_t ObDataTabletsCheckCOConvertDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObMigrationCtx *ctx = nullptr;
   if (IS_NOT_INIT) {
     LOG_ERROR_RET(OB_NOT_INIT, "tablet check convert dag not init");

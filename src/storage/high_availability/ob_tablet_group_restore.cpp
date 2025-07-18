@@ -469,7 +469,7 @@ bool ObTabletGroupRestoreDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObTabletGroupRestoreDagNet::hash() const
+uint64_t ObTabletGroupRestoreDagNet::hash() const
 {
   int64_t hash_value = 0;
   if (OB_ISNULL(ctx_)) {
@@ -630,7 +630,7 @@ bool ObTabletGroupRestoreDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObTabletGroupRestoreDag::hash() const
+uint64_t ObTabletGroupRestoreDag::hash() const
 {
   int64_t hash_value = 0;
   ObTabletGroupRestoreCtx *ctx = get_ctx();
@@ -1886,7 +1886,7 @@ bool ObTabletRestoreDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObTabletRestoreDag::hash() const
+uint64_t ObTabletRestoreDag::hash() const
 {
   int64_t hash_value = 0;
   const ObDagType::ObDagTypeEnum type = get_type();

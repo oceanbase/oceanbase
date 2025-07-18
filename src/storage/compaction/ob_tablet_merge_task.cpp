@@ -439,9 +439,9 @@ bool ObTabletMergeDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObMergeDagHash::inner_hash() const
+uint64_t ObMergeDagHash::inner_hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   // make two merge type same
   hash_value = common::murmurhash(&merge_type_, sizeof(merge_type_), hash_value);
   hash_value = common::murmurhash(&ls_id_, sizeof(ls_id_), hash_value);
@@ -459,7 +459,7 @@ bool ObMergeDagHash::belong_to_same_tablet(const ObMergeDagHash *other) const
   return bret;
 }
 
-int64_t ObTabletMergeDag::hash() const
+uint64_t ObTabletMergeDag::hash() const
 {
   return inner_hash();
 }

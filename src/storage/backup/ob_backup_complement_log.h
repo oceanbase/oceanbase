@@ -126,7 +126,7 @@ public:
   virtual int start_running() override;
   virtual bool operator==(const share::ObIDagNet &other) const override;
   virtual bool is_valid() const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   INHERIT_TO_STRING_KV("ObIDagNet", share::ObIDagNet, K_(ctx));
@@ -144,7 +144,7 @@ public:
   virtual ~ObBackupLSLogGroupDag();
   int init(const share::ObLSID &ls_id, ObBackupComplementLogCtx *ctx, common::ObInOutBandwidthThrottle *bandwidth_throttle);
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
@@ -192,7 +192,7 @@ public:
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual lib::Worker::CompatMode get_compat_mode() const { return lib::Worker::CompatMode::MYSQL; }
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return true; }
@@ -349,7 +349,7 @@ public:
   virtual ~ObBackupLSLogGroupFinishDag();
   int init(ObBackupComplementLogCtx *ctx);
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;

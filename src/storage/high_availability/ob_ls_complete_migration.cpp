@@ -274,7 +274,7 @@ bool ObLSCompleteMigrationDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObLSCompleteMigrationDagNet::hash() const
+uint64_t ObLSCompleteMigrationDagNet::hash() const
 {
   int64_t hash_value = 0;
   int tmp_ret = OB_SUCCESS;
@@ -685,7 +685,7 @@ bool ObCompleteMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObCompleteMigrationDag::hash() const
+uint64_t ObCompleteMigrationDag::hash() const
 {
   int ret = OB_SUCCESS;
   int64_t hash_value = 0;

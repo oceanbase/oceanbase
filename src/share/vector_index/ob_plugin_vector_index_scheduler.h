@@ -408,7 +408,7 @@ public:
   {}
   virtual ~ObVectorIndexDag() {}
   virtual bool operator==(const ObIDag& other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   int init(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *task_ctx);
   virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;

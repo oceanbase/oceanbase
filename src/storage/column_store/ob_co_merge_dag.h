@@ -264,9 +264,9 @@ public:
   virtual bool is_valid() const override;
   virtual int start_running() override;
   virtual bool operator == (const ObIDagNet &other) const override;
-  virtual int64_t hash() const override
+  virtual uint64_t hash() const override
   {
-    int64_t hash_value = ObMergeDagHash::inner_hash();
+    uint64_t hash_value = ObMergeDagHash::inner_hash();
     ObDagNetType::ObDagNetTypeEnum dag_net_type = get_type();
     hash_value = common::murmurhash(
         &dag_net_type, sizeof(dag_net_type), hash_value);

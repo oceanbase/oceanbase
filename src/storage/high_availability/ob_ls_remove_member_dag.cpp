@@ -109,7 +109,7 @@ bool ObLSRemoveMemberDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObLSRemoveMemberDag::hash() const
+uint64_t ObLSRemoveMemberDag::hash() const
 {
   int64_t hash_value = 0;
   if (!is_inited_) {

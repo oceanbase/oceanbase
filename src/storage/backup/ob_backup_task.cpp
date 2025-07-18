@@ -683,9 +683,9 @@ bool ObLSBackupDataDagNet::is_valid() const
   return param_.is_valid();
 }
 
-int64_t ObLSBackupDataDagNet::hash() const
+uint64_t ObLSBackupDataDagNet::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   const int64_t type = ObBackupDagNetSubType::LOG_STREAM_BACKUP_DAG_DAG_NET;
   hash_value = common::murmurhash(&type, sizeof(type), hash_value);
   hash_value = common::murmurhash(&param_, sizeof(param_), hash_value);
@@ -900,9 +900,9 @@ bool ObBackupBuildTenantIndexDagNet::is_valid() const
   return param_.is_valid();
 }
 
-int64_t ObBackupBuildTenantIndexDagNet::hash() const
+uint64_t ObBackupBuildTenantIndexDagNet::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   const int64_t type = ObBackupDagNetSubType::LOG_STREAM_BACKUP_BUILD_INDEX_DAG_NET;
   hash_value = common::murmurhash(&type, sizeof(type), hash_value);
   hash_value = common::murmurhash(&param_, sizeof(param_), hash_value);
@@ -1033,9 +1033,9 @@ int ObLSBackupMetaDag::fill_dag_key(char *buf, const int64_t buf_len) const
   return ret;
 }
 
-int64_t ObLSBackupMetaDag::hash() const
+uint64_t ObLSBackupMetaDag::hash() const
 {
-  int64_t ptr = reinterpret_cast<int64_t>(this);
+  uint64_t ptr = reinterpret_cast<uint64_t>(this);
   return common::murmurhash(&ptr, sizeof(ptr), 0);
 }
 
@@ -1150,9 +1150,9 @@ int ObLSBackupPrepareDag::fill_dag_key(char *buf, const int64_t buf_len) const
   return ret;
 }
 
-int64_t ObLSBackupPrepareDag::hash() const
+uint64_t ObLSBackupPrepareDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   const int64_t type = get_type();
   hash_value = common::murmurhash(&type, sizeof(type), hash_value);
   hash_value = common::murmurhash(&param_, sizeof(param_), hash_value);
@@ -1287,9 +1287,9 @@ int ObLSBackupFinishDag::fill_dag_key(char *buf, const int64_t buf_len) const
   return ret;
 }
 
-int64_t ObLSBackupFinishDag::hash() const
+uint64_t ObLSBackupFinishDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   const int64_t type = get_type();
   hash_value = common::murmurhash(&type, sizeof(type), hash_value);
   hash_value = common::murmurhash(&param_, sizeof(param_), hash_value);
@@ -1412,9 +1412,9 @@ bool ObLSBackupDataDag::operator==(const ObIDag &other) const
   return bret;
 }
 
-int64_t ObLSBackupDataDag::hash() const
+uint64_t ObLSBackupDataDag::hash() const
 {
-  int64_t ptr = reinterpret_cast<int64_t>(this);
+  uint64_t ptr = reinterpret_cast<uint64_t>(this);
   return common::murmurhash(&ptr, sizeof(ptr), 0);
 }
 
@@ -1468,9 +1468,9 @@ bool ObPrefetchBackupInfoDag::operator==(const ObIDag &other) const
   return bret;
 }
 
-int64_t ObPrefetchBackupInfoDag::hash() const
+uint64_t ObPrefetchBackupInfoDag::hash() const
 {
-  int64_t ptr = reinterpret_cast<int64_t>(this);
+  uint64_t ptr = reinterpret_cast<uint64_t>(this);
   return common::murmurhash(&ptr, sizeof(ptr), 0);
 }
 
@@ -1630,7 +1630,7 @@ bool ObLSBackupIndexRebuildDag::operator==(const ObIDag &other) const
   return bret;
 }
 
-int64_t ObLSBackupIndexRebuildDag::hash() const
+uint64_t ObLSBackupIndexRebuildDag::hash() const
 {
   int64_t ptr = reinterpret_cast<int64_t>(this);
   return common::murmurhash(&ptr, sizeof(ptr), 0);

@@ -402,9 +402,9 @@ bool ObMigrationDagNet::operator == (const ObIDagNet &other) const
   return is_same;
 }
 
-int64_t ObMigrationDagNet::hash() const
+uint64_t ObMigrationDagNet::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   if (OB_ISNULL(ctx_)) {
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "migration ctx is NULL", KPC(ctx_));
   } else {
@@ -569,9 +569,9 @@ bool ObInitialMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObInitialMigrationDag::hash() const
+uint64_t ObInitialMigrationDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObMigrationCtx * ctx = get_migration_ctx();
 
   if (OB_ISNULL(ctx)) {
@@ -880,9 +880,9 @@ bool ObStartMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObStartMigrationDag::hash() const
+uint64_t ObStartMigrationDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObMigrationCtx *ctx = get_migration_ctx();
 
   if (NULL != ctx) {
@@ -1901,9 +1901,9 @@ bool ObSysTabletsMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObSysTabletsMigrationDag::hash() const
+uint64_t ObSysTabletsMigrationDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObMigrationCtx *ctx = get_migration_ctx();
 
   if (NULL != ctx) {
@@ -2259,9 +2259,9 @@ bool ObTabletMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObTabletMigrationDag::hash() const
+uint64_t ObTabletMigrationDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObMigrationCtx *ctx = get_migration_ctx();
 
   if (NULL != ctx) {
@@ -3697,9 +3697,9 @@ bool ObDataTabletsMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObDataTabletsMigrationDag::hash() const
+uint64_t ObDataTabletsMigrationDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObMigrationCtx *ctx = nullptr;
 
   if (NULL != ctx) {
@@ -4457,9 +4457,9 @@ bool ObTabletGroupMigrationDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObTabletGroupMigrationDag::hash() const
+uint64_t ObTabletGroupMigrationDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObMigrationCtx *ctx = get_migration_ctx();
   if (NULL != ctx) {
     hash_value = common::murmurhash(
@@ -4992,9 +4992,9 @@ bool ObMigrationFinishDag::operator == (const ObIDag &other) const
   return is_same;
 }
 
-int64_t ObMigrationFinishDag::hash() const
+uint64_t ObMigrationFinishDag::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObMigrationCtx *ctx = get_migration_ctx();
 
   if (NULL != ctx) {

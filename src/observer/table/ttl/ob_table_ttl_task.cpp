@@ -616,9 +616,9 @@ bool ObTableTTLDag::operator==(const ObIDag& other) const
   return is_equal;
 }
 
-int64_t ObTableTTLDag::hash() const
+uint64_t ObTableTTLDag::hash() const
 {
-  int64_t hash_val = 0;
+  uint64_t hash_val = 0;
   if (OB_UNLIKELY(!is_inited_ || !param_.is_valid() || !info_.is_valid())) {
     LOG_ERROR_RET(OB_ERR_SYS, "invalid argument", K(is_inited_), K(param_));
   } else {

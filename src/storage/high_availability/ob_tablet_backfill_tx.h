@@ -107,7 +107,7 @@ public:
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int create_first_task() override;
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   ObBackfillTXCtx *get_backfill_tx_ctx() { return backfill_tx_ctx_; }
   ObBackfillTabletsTableMgr *get_backfill_tablets_table_mgr() { return tablets_table_mgr_; }
   virtual int inner_reset_status_for_retry() override;
@@ -293,7 +293,7 @@ public:
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual bool operator == (const share::ObIDag &other) const override;
-  virtual int64_t hash() const override;
+  virtual uint64_t hash() const override;
   virtual int create_first_task() override;
 
   int init(
