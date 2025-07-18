@@ -30,14 +30,14 @@ namespace common {
                             R3 RAW(1000), CH1 VARCHAR2(1000), CL1 CLOB, BL1 BLOB, OB_SPEC1 NUMBER,\
                             OB_SPEC2 NUMBER, OB_SPEC3 VARCHAR(4096))"
 
-#define CREATE_MYSQL_STAT_TABLE "(STATID VARCHAR(128), TYPE CHAR(1), VERSION DECIMAL,FLAGS DECIMAL,\
+#define CREATE_MYSQL_STAT_TABLE "(STATID VARCHAR(128), TYPE CHAR(1), VERSION DECIMAL(30),FLAGS DECIMAL(30),\
                                   C1 VARCHAR(128),C2 VARCHAR(128), C3 VARCHAR(128),C4 VARCHAR(128),\
-                                  C5 VARCHAR(128), C6 VARCHAR(128), N1 DECIMAL, N2 DOUBLE,\
-                                  N3 DECIMAL, N4 DECIMAL, N5 DECIMAL, N6 DECIMAL, N7 DECIMAL,\
-                                  N8 DECIMAL, N9 DECIMAL, N10 DECIMAL, N11 DECIMAL, N12	DECIMAL,\
-                                  N13 DECIMAL, D1 TIMESTAMP(6), T1 TIMESTAMP, R1 TEXT(1000), \
+                                  C5 VARCHAR(128), C6 VARCHAR(128), N1 DECIMAL(30), N2 DOUBLE,\
+                                  N3 DECIMAL(30), N4 DECIMAL(30), N5 DECIMAL(30), N6 DECIMAL(30), N7 DECIMAL(30),\
+                                  N8 DECIMAL(30), N9 DECIMAL(30), N10 DECIMAL(30), N11 DECIMAL(30), N12	DECIMAL(30),\
+                                  N13 DECIMAL(30), D1 TIMESTAMP(6), T1 TIMESTAMP, R1 TEXT(1000), \
                                   R2 TEXT(1000), R3 TEXT(1000), CH1 VARCHAR(1000), CL1 BLOB,\
-                                  BL1 BLOB, OB_SPEC1 DECIMAL, OB_SPEC2 DECIMAL, OB_SPEC3 VARCHAR(4096))"
+                                  BL1 BLOB, OB_SPEC1 DECIMAL(30), OB_SPEC2 DECIMAL(30), OB_SPEC3 VARCHAR(4096))"
 
 #define CHECK_STAT_SELECT_LIST "select statid, type, version, flags, c1, c2, c3, c4, n1, n2, n3,\
                                 n4, n5,n6, n7, n8, n9, d1, r1, r2, ob_spec1, ob_spec2, ob_spec3 "
