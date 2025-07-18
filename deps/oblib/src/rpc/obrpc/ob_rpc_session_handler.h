@@ -65,7 +65,10 @@ public:
   { max_waiting_thread_count_ = max_wait_count; }
 
 private:
-  enum { MAX_COND_COUNT = common::OB_MAX_CPU_NUM * 32 };
+  enum {
+    MAX_COND_COUNT = common::OB_MAX_CPU_NUM * 32,
+    WAIT_MAP_BUCKET_COUNT = 8192
+  };
   struct WaitObject
   {
     int64_t thid_;
@@ -92,7 +95,7 @@ private:
 
   volatile uint64_t sessid_;
   volatile uint64_t waiting_thread_count_;
-  uint64_t max_waiting_thread_count_;
+  volatile uint64_t max_waiting_thread_count_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcSessionHandler);
 };
