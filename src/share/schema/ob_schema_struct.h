@@ -143,6 +143,7 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_VEC_IVF_CENTER_ID_COLUMN_FLAG (INT64_C(1) << 28)
 #define STRING_LOB_COLUMN_FLAG (INT64_C(1) << 29)
 #define HEAP_TABLE_PRIMARY_KEY_FLAG (INT64_C(1) << 30)
+#define HEAP_TABLE_CLUSTERING_KEY_FLAG (INT64_C(1) << 31)
 
 //the high 32-bit flag isn't stored in __all_column
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)

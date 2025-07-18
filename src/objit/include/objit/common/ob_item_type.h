@@ -958,6 +958,7 @@ typedef enum ObItemType
   T_FUN_SYS_SPIV_VALUE = 1918,
   T_FUN_SYS_CHECK_LOCATION_ACCESS = 1919,
   T_FUN_STARTUP_MODE = 1920,
+  T_FUN_SYS_HIDDEN_CLUSTERING_KEY = 1921,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
@@ -2886,6 +2887,8 @@ typedef enum ObItemType
   T_COLUMN_INDEX_TYPE = 4886,
   T_FREQ_THRESHOLD = 4887,
   T_SEMISTRUCT_PROPERTIES = 4888,
+  T_CLUSTERING_KEY = 4889,
+  T_CLUSTERING_KEY_DROP = 4890,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

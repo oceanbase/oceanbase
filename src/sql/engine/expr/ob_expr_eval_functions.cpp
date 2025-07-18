@@ -1404,6 +1404,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprUDF::eval_external_udf,                                        /* 850 */
   ObExprStartUpMode::eval_startup_mode,                                /* 851 */
   NULL, // ObExprVectorL2Squared::calc_l2_squared,                     /* 852 */
+  NULL, // ObExprHiddenClusteringKey::eval_hidden_clustering_key,      /* 853 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
