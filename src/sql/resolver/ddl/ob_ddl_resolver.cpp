@@ -7413,7 +7413,7 @@ int ObDDLResolver::ob_add_ddl_dependency(const uint64_t schema_id,
           found_same_schema = true;
           // same schema do nothing
         } else {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ERR_PARALLEL_DDL_CONFLICT;
           LOG_WARN("error default dependency item with different schema",
                   K(ret), K(schema_id), K(schema_type), K(schema_tenant_id),
                   K(schema_version), K(info.schema_version_));
