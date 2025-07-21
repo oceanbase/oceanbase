@@ -698,6 +698,7 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
     MEMCPY(audit_record.sql_id_, sql_ctx.sql_id_, (int32_t)sizeof(audit_record.sql_id_));
     audit_record.affected_rows_ = result_set.get_affected_rows();
     audit_record.return_rows_ = result_set.get_return_rows();
+    audit_record.is_batched_multi_stmt_ = sql_ctx.multi_stmt_item_.is_batched_multi_stmt();
     if (NULL != result_set.get_exec_context().get_task_executor_ctx()) {
       audit_record.partition_cnt_ = result_set.get_exec_context()
                                                     .get_das_ctx()
