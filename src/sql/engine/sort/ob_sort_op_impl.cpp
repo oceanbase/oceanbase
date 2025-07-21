@@ -584,7 +584,7 @@ ObSortOpImpl::ObSortOpImpl(ObMonitorNode &op_monitor_info)
 
 ObSortOpImpl::~ObSortOpImpl()
 {
-  reset();
+  destroy();
 }
 
 // Set the note in ObPrefixSortImpl::init(): %sort_columns may be zero, to compatible with
@@ -689,6 +689,18 @@ int ObSortOpImpl::init(
     }
     if (OB_SUCC(ret)) {
       inited_ = true;
+      // heap sort will extend rowsize twice to reuse the space
+      int64_t size = OB_INVALID_ID == input_rows_ ? 0 : input_rows_ * input_width_ * (use_heap_sort_ ? 2 : 1);
+      if (OB_FAIL(sql_mem_processor_.init(
+                  &mem_context_->get_malloc_allocator(),
+                  tenant_id_,
+                  size, op_monitor_info_.op_type_, op_monitor_info_.op_id_, exec_ctx_))) {
+        LOG_WARN("failed to init sql mem processor", K(ret));
+      } else {
+        datum_store_.set_dir_id(sql_mem_processor_.get_dir_id());
+        datum_store_.set_callback(&sql_mem_processor_);
+        datum_store_.set_io_event_observer(io_event_observer_);
+      }
       if (!is_topn_sort()) {
         rows_ = &quick_sort_array_;
       } else {
@@ -759,7 +771,6 @@ void ObSortOpImpl::unregister_profile_if_necessary()
 
 void ObSortOpImpl::reset()
 {
-  sql_mem_processor_.unregister_profile();
   iter_.reset();
   reuse();
   quick_sort_array_.reset();
@@ -983,7 +994,7 @@ int ObSortOpImpl::preprocess_dump(bool &dumped)
       }
       LOG_INFO("trace sort need dump", K(dumped), K(mem_context_->used()), K(get_memory_limit()),
         K(profile_.get_cache_size()), K(profile_.get_expect_size()),
-        K(sql_mem_processor_.get_data_size()));
+        K(sql_mem_processor_.get_data_size()), K(sql_mem_processor_.is_auto_mgr()));
     }
   }
   return ret;
@@ -1003,17 +1014,6 @@ int ObSortOpImpl::before_add_row()
       LOG_WARN("init compare failed", K(ret));
     } else {
       got_first_row_ = true;
-      int64_t size = OB_INVALID_ID == input_rows_ ? 0 : input_rows_ * input_width_;
-      if (OB_FAIL(sql_mem_processor_.init(
-                  &mem_context_->get_malloc_allocator(),
-                  tenant_id_,
-                  size, op_monitor_info_.op_type_, op_monitor_info_.op_id_, exec_ctx_))) {
-        LOG_WARN("failed to init sql mem processor", K(ret));
-      } else {
-        datum_store_.set_dir_id(sql_mem_processor_.get_dir_id());
-        datum_store_.set_callback(&sql_mem_processor_);
-        datum_store_.set_io_event_observer(io_event_observer_);
-      }
     }
   }
 
@@ -1956,13 +1956,6 @@ int ObSortOpImpl::add_heap_sort_row(const common::ObIArray<ObExpr*> &exprs,
     LOG_WARN("mem_context or heap is not initialized", K(ret));
   } else if (!got_first_row_) {
     got_first_row_ = true;
-    // heap sort will extend rowsize twice to reuse the space
-    int64_t size = OB_INVALID_ID == input_rows_ ? 0 : input_rows_ * input_width_ * 2;
-    if (OB_FAIL(sql_mem_processor_.init(
-               &mem_context_->get_malloc_allocator(),
-               tenant_id_, size, op_monitor_info_.op_type_, op_monitor_info_.op_id_, &eval_ctx_->exec_ctx_))) {
-      LOG_WARN("failed to init sql mem processor", K(ret));
-    }
   } else {
     bool updated = false;
     if (OB_FAIL(sql_mem_processor_.update_max_available_mem_size_periodically(

@@ -42,7 +42,12 @@ int ObSqlMemMgrProcessor::init(
     LOG_WARN("unexpected cache size got", K(lbt()), K(cache_size), K(op_id), K(op_type));
     cache_size = DEFAULT_CACHE_SIZE;
   }
-  if (OB_FAIL(alloc_dir_id(dir_id_))) {
+
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get allocator", K(ret));
+  } else if (cache_size < allocator->used() && FALSE_IT(cache_size = allocator->used())) {
+  } else if (OB_FAIL(alloc_dir_id(dir_id_))) {
   } else if (OB_NOT_NULL(sql_mem_mgr)) {
     if (sql_mem_mgr->enable_auto_memory_mgr()) {
       tmp_enable_auto_mem_mgr = true;
@@ -94,9 +99,6 @@ int ObSqlMemMgrProcessor::init(
   } else if (OB_FAIL(ObSqlWorkareaUtil::get_workarea_size(
       profile_.get_work_area_type(), tenant_id_, exec_info, max_mem_size))) {
     LOG_WARN("failed to get workarea size", K(ret), K(tenant_id_), K(max_mem_size));
-  }
-  if (!profile_.get_auto_policy()) {
-    profile_.set_max_bound(max_mem_size);
   }
   // 如果开启了sql memory manager，但由于预估数据量比较少，不需要注册到manager里，这里限制为MAX_SQL_MEM_SIZE
   origin_max_mem_size_ = max_mem_size;

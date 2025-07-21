@@ -494,7 +494,6 @@ int ObTenantSqlMemoryManager::calc_work_area_size_by_profile(
     LOG_WARN("unexpect profile type", K(profile.get_work_area_type()));
   }
   profile.set_global_bound_size(global_bound_size);
-  profile.set_max_bound(min(global_bound_size, profile.get_cache_size()));
   return ret;
 }
 
