@@ -87,6 +87,43 @@ int ObPLExprCopier::do_copy_expr(const ObRawExpr *old_expr,
         LOG_WARN("failed to copy param expr", K(ret));
       }
     }
+    if (OB_FAIL(ret)) {
+    } else if (T_OP_GET_PACKAGE_VAR == new_expr->get_expr_type()
+               || T_OP_GET_SUBPROGRAM_VAR == new_expr->get_expr_type()) {
+      if ((T_OP_GET_PACKAGE_VAR == new_expr->get_expr_type() && new_expr->get_param_count() != 5)
+          || (T_OP_GET_SUBPROGRAM_VAR == new_expr->get_expr_type() && new_expr->get_param_count() != 4)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected param count for get package variables", K(ret), KPC(new_expr));
+      } else {
+        ObRawExpr *&result_type_expr = (T_OP_GET_PACKAGE_VAR == new_expr->get_expr_type())
+                                          ? new_expr->get_param_expr(2) : new_expr->get_param_expr(3);
+        if (OB_ISNULL(result_type_expr)
+            || !result_type_expr->is_const_raw_expr()
+            || result_type_expr->get_expr_type() != static_cast<ObItemType>(ObIntType)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected param type of get package variables", K(ret), KPC(result_type_expr));
+        } else {
+          ObConstRawExpr *const_expr = static_cast<ObConstRawExpr*>(result_type_expr);
+          ObObj value = const_expr->get_value();
+          ObRawExprResType* orig_result_type = reinterpret_cast<ObRawExprResType *>(value.get_int());
+          ObRawExprResType* new_result_type = NULL;
+          if (OB_ISNULL(orig_result_type)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected orig result type pointer", K(ret));
+          } else if (OB_ISNULL(new_result_type
+                                = reinterpret_cast<ObRawExprResType*>(
+                                    expr_factory_.get_allocator().alloc(sizeof(ObRawExprResType))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to alloc memory for new result type", K(ret));
+          } else {
+            new (new_result_type) ObRawExprResType();
+            *new_result_type = *orig_result_type;
+            value.set_int(ObIntType, reinterpret_cast<int64_t>(new_result_type));
+            const_expr->set_value(value);
+          }
+        }
+      }
+    }
   }
   return ret;
 }
