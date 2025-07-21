@@ -26,6 +26,7 @@ enum class WrTaskType : int {
   USER_SNAPSHOT,
   USER_MODIFY_SETTINGS,
   INVALID,
+  SQL_HISTOGRAM_AHEAD,
 };
 
 class ObWrSnapshotArg {

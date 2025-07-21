@@ -170,6 +170,7 @@ private:
       ALL,
       ONLY_COL_NAME,
       ONLY_VALUE,
+      ADD_VALUE,
     };
   };
   // splice columns to sql, e.g:
