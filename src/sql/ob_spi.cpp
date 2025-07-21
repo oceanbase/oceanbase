@@ -3774,7 +3774,7 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
       OZ (ObPLContext::get_subprogram_var_type(ctx->exec_ctx_, package_id, routine_id, formal_param_idxs[i], formal_param_type));
     }
     if (OB_SUCC(ret) && formal_param_type.is_composite_type() && (formal_param_type.get_user_type_id() != dummy_result.get_udt_id())) {
-      OZ (ObPLExecState::convert_composite(*ctx, dummy_result, formal_param_type));
+      OZ (ObPLExecState::convert_composite(*ctx, dummy_result, formal_param_type.get_user_type_id()));
       OX (convert = true);
     }
 
@@ -6410,6 +6410,15 @@ int ObSPIService::spi_copy_datum(ObPLExecCtx *ctx,
         || PL_REF_CURSOR_TYPE == src->get_meta().get_extend_type()) {
       OZ (spi_copy_ref_cursor(ctx, allocator, src, dest));
     } else if (src->is_ext() && OB_NOT_NULL(dest_type) && dest_type->get_meta_type().is_ext()) {
+      ObPLComposite *src_composite = reinterpret_cast<ObPLComposite*>(src->get_ext());
+      if (OB_NOT_NULL(src_composite)
+          && is_mocked_anonymous_array_id(src_composite->get_id())
+          && src_composite->get_id() != OB_INVALID_ID
+          && src_composite->get_id() != dest_type->get_udt_id()) {
+        ObObjParam src_tmp;
+        OX (src_tmp = *src);
+        OZ (ObPLExecState::convert_composite(*ctx, src_tmp, dest_type->get_udt_id()));
+      }
       OZ (ObPLComposite::copy_element(*src, *dest, *copy_allocator, ctx, ctx->exec_ctx_->get_my_session()));
     } else if (OB_NOT_NULL(dest_type) && dest_type->get_meta_type().is_ext()) {
       ret = OB_ERR_EXPRESSION_WRONG_TYPE;
