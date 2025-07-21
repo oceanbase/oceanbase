@@ -380,9 +380,9 @@ STAT_EVENT_ADD_DEF(BACKUP_DELETE_COUNT, "backup delete count", ObStatClassIds::S
 
 STAT_EVENT_ADD_DEF(BACKUP_IO_READ_DELAY, "backup io read delay", ObStatClassIds::STORAGE, 69012, true, true, true)
 STAT_EVENT_ADD_DEF(BACKUP_IO_WRITE_DELAY, "backup io write delay", ObStatClassIds::STORAGE, 69013, true, true, true)
-STAT_EVENT_ADD_DEF(COS_IO_READ_DELAY, "cos io read delay", ObStatClassIds::STORAGE, 69014, true, true, true)
-STAT_EVENT_ADD_DEF(COS_IO_WRITE_DELAY, "cos io write delay", ObStatClassIds::STORAGE, 69015, true, true, true)
-STAT_EVENT_ADD_DEF(COS_IO_LS_DELAY, "cos io list delay", ObStatClassIds::STORAGE, 69016, true, true, true)
+STAT_EVENT_ADD_DEF(COS_IO_READ_DELAY, "cos io read delay", ObStatClassIds::STORAGE, 69014, true, true, false)
+STAT_EVENT_ADD_DEF(COS_IO_WRITE_DELAY, "cos io write delay", ObStatClassIds::STORAGE, 69015, true, true, false)
+STAT_EVENT_ADD_DEF(COS_IO_LS_DELAY, "cos io list delay", ObStatClassIds::STORAGE, 69016, true, true, false)
 STAT_EVENT_ADD_DEF(BACKUP_DELETE_DELAY, "backup delete delay", ObStatClassIds::STORAGE, 69017, true, true, true)
 
 STAT_EVENT_ADD_DEF(BACKUP_IO_LS_COUNT, "backup io list count", ObStatClassIds::STORAGE, 69019, true, true, true)
@@ -394,14 +394,14 @@ STAT_EVENT_ADD_DEF(BACKUP_IO_LS_FAIL_COUNT, "backup io list failed count", ObSta
 STAT_EVENT_ADD_DEF(BACKUP_TAGGING_COUNT, "backup io tagging count", ObStatClassIds::STORAGE, 69024, true, true, true)
 STAT_EVENT_ADD_DEF(BACKUP_TAGGING_FAIL_COUNT, "backup io tagging failed count", ObStatClassIds::STORAGE, 69025, true, true, true)
 
-STAT_EVENT_ADD_DEF(COS_IO_WRITE_BYTES, "cos io write bytes", ObStatClassIds::STORAGE, 69026, true, true, true)
-STAT_EVENT_ADD_DEF(COS_IO_WRITE_COUNT, "cos io write count", ObStatClassIds::STORAGE, 69027, true, true, true)
-STAT_EVENT_ADD_DEF(COS_DELETE_COUNT, "cos delete count", ObStatClassIds::STORAGE, 69028, true, true, true)
-STAT_EVENT_ADD_DEF(COS_DELETE_DELAY, "cos delete delay", ObStatClassIds::STORAGE, 69029, true, true, true)
-STAT_EVENT_ADD_DEF(COS_IO_LS_LIMIT_COUNT, "cos list io limit count", ObStatClassIds::STORAGE, 69030, true, true, true)
-STAT_EVENT_ADD_DEF(COS_IO_LS_COUNT, "cos io list count", ObStatClassIds::STORAGE, 69031, true, true, true)
-STAT_EVENT_ADD_DEF(COS_IO_READ_COUNT, "cos io read count", ObStatClassIds::STORAGE, 69032, true, true, true)
-STAT_EVENT_ADD_DEF(COS_IO_READ_BYTES, "cos io read bytes", ObStatClassIds::STORAGE, 69033, true, true, true)
+STAT_EVENT_ADD_DEF(COS_IO_WRITE_BYTES, "cos io write bytes", ObStatClassIds::STORAGE, 69026, true, true, false)
+STAT_EVENT_ADD_DEF(COS_IO_WRITE_COUNT, "cos io write count", ObStatClassIds::STORAGE, 69027, true, true, false)
+STAT_EVENT_ADD_DEF(COS_DELETE_COUNT, "cos delete count", ObStatClassIds::STORAGE, 69028, true, true, false)
+STAT_EVENT_ADD_DEF(COS_DELETE_DELAY, "cos delete delay", ObStatClassIds::STORAGE, 69029, true, true, false)
+STAT_EVENT_ADD_DEF(COS_IO_LS_LIMIT_COUNT, "cos list io limit count", ObStatClassIds::STORAGE, 69030, true, true, false)
+STAT_EVENT_ADD_DEF(COS_IO_LS_COUNT, "cos io list count", ObStatClassIds::STORAGE, 69031, true, true, false)
+STAT_EVENT_ADD_DEF(COS_IO_READ_COUNT, "cos io read count", ObStatClassIds::STORAGE, 69032, true, true, false)
+STAT_EVENT_ADD_DEF(COS_IO_READ_BYTES, "cos io read bytes", ObStatClassIds::STORAGE, 69033, true, true, false)
 
 // DEBUG
 STAT_EVENT_ADD_DEF(REFRESH_SCHEMA_COUNT, "refresh schema count", ObStatClassIds::DEBUG, 70000, false, true, true)
