@@ -3323,7 +3323,7 @@ const char *ObHAResultInfo::get_failed_type_str() const
 
 bool ObHAResultInfo::is_valid() const
 {
-  return !trace_id_.is_invalid() && addr_.is_valid() &&  MAX_FAILED_TYPE > type_ && ROOT_SERVICE <= type_;
+  return addr_.is_valid() &&  MAX_FAILED_TYPE > type_ && ROOT_SERVICE <= type_;
 }
 
 const char *ObHAResultInfo::get_error_str_() const
@@ -3337,6 +3337,11 @@ const char *ObHAResultInfo::get_error_str_() const
 
     case OB_TOO_MANY_PARTITIONS_ERROR: {
       str = "unit config is too small";
+      break;
+    }
+
+    case OB_CANNOT_ACCESS_BACKUP_SET: {
+      str = "Cannot access backup set file, please check backup media connectivity.";
       break;
     }
 
