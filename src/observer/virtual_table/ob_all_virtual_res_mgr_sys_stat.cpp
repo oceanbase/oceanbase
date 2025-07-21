@@ -103,6 +103,7 @@ int ObAllVirtualResMgrSysStat::update_all_stats_(const int64_t tenant_id, ObStat
     SERVER_LOG(WARN, "Fail to get cache size", K(ret));
   } else {
     int64_t unused = 0;
+    int64_t unused_throttle_trigger = 0;
     //ignore ret
     if (is_virtual_tenant_id(tenant_id)) {
       ObVirtualTenantManager &tenant_mgr = common::ObVirtualTenantManager::get_instance();
@@ -116,7 +117,8 @@ int ObAllVirtualResMgrSysStat::update_all_stats_(const int64_t tenant_id, ObStat
             stat_events.get(ObStatEventIds::TOTAL_MEMSTORE_USED - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_,
             stat_events.get(ObStatEventIds::MAJOR_FREEZE_TRIGGER - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_,
             stat_events.get(ObStatEventIds::MEMSTORE_LIMIT - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_,
-            unused);
+            unused,
+            unused_throttle_trigger);
         freezer->get_tenant_mem_limit(
             stat_events.get(ObStatEventIds::MIN_MEMORY_SIZE - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_,
             stat_events.get(ObStatEventIds::MAX_MEMORY_SIZE - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_);

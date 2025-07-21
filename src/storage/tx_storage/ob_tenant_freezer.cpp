@@ -1073,6 +1073,7 @@ bool ObTenantFreezer::is_replay_pending_log_too_large(const int64_t pending_size
   int64_t total_memstore_used = 0;
   int64_t memstore_limit = 0;
   int64_t unused = 0;
+  int64_t throttle_trigger_percentage = 0;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
@@ -1081,14 +1082,48 @@ bool ObTenantFreezer::is_replay_pending_log_too_large(const int64_t pending_size
                                               unused,
                                               memstore_limit,
                                               unused,
+                                              throttle_trigger_percentage,
                                               false/* not force refresh */))) {
     LOG_WARN("get tenant memstore condition failed", K(ret));
   } else {
-    int64_t memstore_left = memstore_limit - total_memstore_used - REPLAY_RESERVE_MEMSTORE_BYTES;
-    memstore_left = (memstore_left > 0 ? memstore_left : 0);
-    memstore_left >>= 5; // Estimate the size of memstore based on 32 times expansion.
-                         // 16 times for replay and 16 times for replay
-    bool_ret = (pending_size >= memstore_left);
+    const int64_t throttle_trigger = memstore_limit * throttle_trigger_percentage / 100;
+    int64_t throttle_range_clog_pending_limit = 0;
+    int64_t normal_range_clog_pending_limit = 0;
+
+    // If current memtable usage is below throttle threshold, calculate both normal and throttle ranges
+    // Otherwise, only calculate throttle range CLOG capacity
+    if (total_memstore_used < throttle_trigger) {
+      // Normal range uses 32x amplification factor (32MB memtable : 1MB CLOG)
+      normal_range_clog_pending_limit = (throttle_trigger - total_memstore_used) >> 5;
+      throttle_range_clog_pending_limit = memstore_limit - REPLAY_RESERVE_MEMSTORE_BYTES - throttle_trigger;
+    } else {
+      normal_range_clog_pending_limit = 0;
+      throttle_range_clog_pending_limit = memstore_limit - REPLAY_RESERVE_MEMSTORE_BYTES - total_memstore_used;
+    }
+
+    // Throttle range uses larger amplification (64x) to reduce memory explosion risk (64MB memtable : 1MB CLOG)
+    if (throttle_range_clog_pending_limit > 0) {
+      throttle_range_clog_pending_limit >>= 6;
+    } else {
+      throttle_range_clog_pending_limit = 0;
+    }
+
+    bool_ret = (pending_size >= (normal_range_clog_pending_limit + throttle_range_clog_pending_limit));
+    if (bool_ret && TC_REACH_TIME_INTERVAL(1_s)) {
+      LOG_INFO("CLOG pending size in task queue exceeds limit",
+               "Memtable Limit(MB)",
+               memstore_limit / 1024 / 1024,
+               "Memtable Used(MB)",
+               total_memstore_used / 1024 / 1024,
+               "Throttle Trigger(MB)",
+               throttle_trigger / 1024 / 1024,
+               "Already Pending Clog Size(MB)",
+               pending_size / 1024 / 1024,
+               "Normal Range Clog Pending Size(MB)",
+               normal_range_clog_pending_limit / 1024 / 1024,
+               "Throttle Range Clog Pending Size(MB)",
+               throttle_range_clog_pending_limit / 1024 / 1024);
+    }
   }
   return bool_ret;
 }
@@ -1101,6 +1136,8 @@ int ObTenantFreezer::get_tenant_memstore_used(int64_t &total_memstore_used,
   int64_t unused_memstore_freeze_trigger = 0;
   int64_t unused_memstore_limit = 0;
   int64_t unused_freeze_cnt = 0;
+  int64_t unused_throttle_trigger = 0;
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
@@ -1109,6 +1146,7 @@ int ObTenantFreezer::get_tenant_memstore_used(int64_t &total_memstore_used,
                                                unused_memstore_freeze_trigger,
                                                unused_memstore_limit,
                                                unused_freeze_cnt,
+                                               unused_throttle_trigger,
                                                force_refresh))) {
     LOG_WARN("get tenant memstore used failed", K(ret));
   }
@@ -1120,6 +1158,7 @@ int ObTenantFreezer::get_tenant_memstore_cond(int64_t &active_memstore_used,
                                               int64_t &memstore_freeze_trigger,
                                               int64_t &memstore_limit,
                                               int64_t &freeze_cnt,
+                                              int64_t &throttle_trigger_percentage,
                                               const bool force_refresh)
 {
   int ret = OB_SUCCESS;
@@ -1131,6 +1170,7 @@ int ObTenantFreezer::get_tenant_memstore_cond(int64_t &active_memstore_used,
                                                memstore_freeze_trigger,
                                                memstore_limit,
                                                freeze_cnt,
+                                               throttle_trigger_percentage,
                                                force_refresh))) {
     LOG_WARN("get tenant memstore used failed", K(ret));
   }
@@ -1143,6 +1183,7 @@ int ObTenantFreezer::get_tenant_memstore_cond_(
     int64_t &memstore_freeze_trigger,
     int64_t &memstore_limit,
     int64_t &freeze_cnt,
+    int64_t &throttle_trigger_percentage,
     const bool force_refresh)
 {
   int ret = OB_SUCCESS;
@@ -1154,6 +1195,7 @@ int ObTenantFreezer::get_tenant_memstore_cond_(
   RLOCAL(int64_t, last_memstore_freeze_trigger);
   RLOCAL(int64_t, last_memstore_limit);
   RLOCAL(int64_t, last_freeze_cnt);
+  RLOCAL(int64_t, last_throttle_trigger_percentage);
   ObTenantFreezeCtx ctx;
 
   active_memstore_used = 0;
@@ -1168,6 +1210,7 @@ int ObTenantFreezer::get_tenant_memstore_cond_(
     memstore_freeze_trigger = last_memstore_freeze_trigger;
     memstore_limit = last_memstore_limit;
     freeze_cnt = last_freeze_cnt;
+    throttle_trigger_percentage = last_throttle_trigger_percentage;
   } else {
     const uint64_t tenant_id = MTL_ID();
     if (false == tenant_info_.is_loaded_) {
@@ -1184,6 +1227,7 @@ int ObTenantFreezer::get_tenant_memstore_cond_(
       total_memstore_used = ctx.total_memstore_used_;
       memstore_freeze_trigger = ctx.memstore_freeze_trigger_ + ctx.max_cached_memstore_size_;
       freeze_cnt = tenant_info_.freeze_cnt_;
+      throttle_trigger_percentage = get_throttle_trigger_percentage_();
 
       // cache the result
       last_refresh_timestamp = current_time;
@@ -1192,6 +1236,7 @@ int ObTenantFreezer::get_tenant_memstore_cond_(
       last_memstore_freeze_trigger = memstore_freeze_trigger;
       last_memstore_limit = memstore_limit;
       last_freeze_cnt = freeze_cnt;
+      last_throttle_trigger_percentage = throttle_trigger_percentage;
     }
   }
   return ret;
@@ -1485,6 +1530,17 @@ int64_t ObTenantFreezer::get_memstore_limit_percentage_()
     } else {
       percent = LARGE_MEMSTORE_LIMIT_PERCENTAGE;
     }
+  }
+  return percent;
+}
+
+int64_t ObTenantFreezer::get_throttle_trigger_percentage_()
+{
+  static const int64_t DEFAULT_THROTTLE_TRIGGER_PERCENTAGE = 60;
+  int64_t percent = DEFAULT_THROTTLE_TRIGGER_PERCENTAGE;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    percent = tenant_config->writing_throttling_trigger_percentage;
   }
   return percent;
 }

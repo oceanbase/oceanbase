@@ -741,12 +741,14 @@ int ObTabletTTLScheduler::check_tenant_memory()
       int64_t active_memstore_used = 0;
       int64_t memstore_limit = 0;
       int64_t freeze_cnt = 0;
+      int64_t unused_throttle_trigger = 0;
       if (OB_FAIL(MTL(storage::ObTenantFreezer *)->get_tenant_memstore_cond(
                               active_memstore_used,
                               total_memstore_used,
                               minor_freeze_trigger,
                               memstore_limit,
-                              freeze_cnt)) ) {
+                              freeze_cnt,
+                              unused_throttle_trigger)) ) {
         LOG_WARN("fail to get tenant memstore info for tenant ", KR(ret), K_(tenant_id));
       } else if (total_memstore_used > minor_freeze_trigger) {
         local_tenant_task_.ttl_continue_ = false;
