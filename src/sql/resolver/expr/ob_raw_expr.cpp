@@ -1053,6 +1053,7 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || (T_FUN_SYS_LAST_INSERT_ID == type_ && get_param_count() > 0)
       || T_FUN_SYS_TO_BLOB == type_
       || (T_FUN_SYS_SYSDATE == type_ && lib::is_mysql_mode())
+      || T_FUN_TMP_FILE_OPEN == type_
       || (param_need_replace ? is_not_calculable_expr() : cnt_not_calculable_expr())
       || T_FUN_LABEL_SE_SESSION_LABEL == type_
       || T_FUN_LABEL_SE_SESSION_ROW_LABEL == type_

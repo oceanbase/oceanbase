@@ -450,6 +450,10 @@
 #include "ob_expr_current_catalog.h"
 #include "ob_expr_check_catalog_access.h"
 #include "ob_expr_check_location_access.h"
+#include "ob_expr_tmp_file_open.h"
+#include "ob_expr_tmp_file_write.h"
+#include "ob_expr_tmp_file_read.h"
+#include "ob_expr_tmp_file_close.h"
 
 namespace oceanbase
 {
@@ -1404,7 +1408,17 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprUDF::eval_external_udf,                                        /* 850 */
   ObExprStartUpMode::eval_startup_mode,                                /* 851 */
   NULL, // ObExprVectorL2Squared::calc_l2_squared,                     /* 852 */
-  NULL, // ObExprHiddenClusteringKey::eval_hidden_clustering_key,      /* 853 */
+#if defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
+  ObExprTmpFileOpen::eval_tmp_file_open,                              /* 853 */
+  ObExprTmpFileClose::eval_tmp_file_close,                            /* 854 */
+  ObExprTmpFileWrite::eval_tmp_file_write,                            /* 855 */
+  ObExprTmpFileRead::eval_tmp_file_read,                              /* 856 */
+#else
+  NULL,// ObExprTmpFileOpen::eval_tmp_file_open,                      /* 853 */
+  NULL,// ObExprTmpFileClose::eval_tmp_file_close,                    /* 854 */
+  NULL,// ObExprTmpFileWrite::eval_tmp_file_write,                    /* 855 */
+  NULL,// ObExprTmpFileRead::eval_tmp_file_read,                      /* 856 */
+#endif
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1586,7 +1600,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprArrayUnion::eval_array_union_batch,                           /* 175 */
   NULL, // ObExprArrayReplace::eval_array_replace_batch,              /* 176 */
   NULL, // ObExprArrayPopfront::eval_array_popfront_batch,            /* 177 */
-  ObExprUDF::eval_udf_batch                                           /* 178 */
+  ObExprUDF::eval_udf_batch,                                          /* 178 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {

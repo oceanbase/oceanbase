@@ -511,6 +511,10 @@
 #include "sql/engine/expr/ob_expr_current_catalog.h"
 #include "sql/engine/expr/ob_expr_check_catalog_access.h"
 #include "sql/engine/expr/ob_expr_check_location_access.h"
+#include "sql/engine/expr/ob_expr_tmp_file_open.h"
+#include "sql/engine/expr/ob_expr_tmp_file_close.h"
+#include "sql/engine/expr/ob_expr_tmp_file_write.h"
+#include "sql/engine/expr/ob_expr_tmp_file_read.h"
 
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
@@ -1000,6 +1004,12 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprBenchmark);
     REG_OP(ObExprWeightString);
     REG_OP(ObExprCrc32);
+  #if defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
+    REG_OP(ObExprTmpFileOpen);
+    REG_OP(ObExprTmpFileClose);
+    REG_OP(ObExprTmpFileWrite);
+    REG_OP(ObExprTmpFileRead);
+  #endif
     REG_OP(ObExprToBase64);
     REG_OP(ObExprFromBase64);
     REG_OP(ObExprOpSubQueryInPl);
@@ -1629,6 +1639,12 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprCurrentCatalog);
   REG_OP_ORCL(ObExprCheckCatalogAccess);
   REG_OP_ORCL(ObExprStartUpMode);
+#if defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
+  REG_OP_ORCL(ObExprTmpFileOpen);
+  REG_OP_ORCL(ObExprTmpFileClose);
+  REG_OP_ORCL(ObExprTmpFileWrite);
+  REG_OP_ORCL(ObExprTmpFileRead);
+#endif
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

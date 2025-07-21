@@ -959,6 +959,10 @@ typedef enum ObItemType
   T_FUN_SYS_CHECK_LOCATION_ACCESS = 1919,
   T_FUN_STARTUP_MODE = 1920,
   T_FUN_SYS_HIDDEN_CLUSTERING_KEY = 1921,
+  T_FUN_SYS_TMP_FILE_OPEN = 1922,
+  T_FUN_SYS_TMP_FILE_CLOSE = 1923,
+  T_FUN_SYS_TMP_FILE_WRITE = 1924,
+  T_FUN_SYS_TMP_FILE_READ = 1925,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
@@ -1030,6 +1034,10 @@ typedef enum ObItemType
   T_FUN_SYS_INNER_INFO_COLS_COLUMN_KEY_PRINTER = 2075,
   T_FUN_ARG_MIN = 2076,
   T_FUN_ARG_MAX = 2077,
+  T_FUN_TMP_FILE_OPEN = 2078,
+  T_FUN_TMP_FILE_CLOSE = 2079,
+  T_FUN_TMP_FILE_WRITE = 2080,
+  T_FUN_TMP_FILE_READ = 2081,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id

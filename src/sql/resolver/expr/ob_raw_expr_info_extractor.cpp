@@ -547,6 +547,10 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
       if (OB_FAIL(expr.add_flag(IS_RAND_FUNC))) {
         LOG_WARN("failed to add flag IS_RAND_FUNC", K(ret));
       }
+    } else if (T_FUN_TMP_FILE_OPEN == expr.get_expr_type()) {
+      if (OB_FAIL(expr.add_flag(IS_RAND_FUNC))) {
+        LOG_WARN("failed to add flag IS_RAND_FUNC for T_FUN_TMP_FILE_OPEN", K(ret));
+      }
     } else if (T_FUN_SYS_ROWNUM == expr.get_expr_type()) {
       if (OB_FAIL(expr.add_flag(IS_ROWNUM))) {
         LOG_WARN("failed to add flag IS_ROWNUM", K(ret));
