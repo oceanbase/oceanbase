@@ -47,11 +47,22 @@ int ObExternalFileInfo::deep_copy(ObIAllocator &allocator, const ObExternalFileI
     this->file_size_ = other.file_size_;
     this->row_start_ = other.row_start_;
     this->row_count_ = other.row_count_;
+
+    this->pos_del_files_.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.pos_del_files_.count(); ++i) {
+      ObString copied_str;
+      if (OB_FAIL(ob_write_string(allocator, other.pos_del_files_.at(i), copied_str))) {
+        LOG_WARN("fail to write string array element", K(ret), K(i));
+      } else if (OB_FAIL(this->pos_del_files_.push_back(copied_str))) {
+        LOG_WARN("fail to push back string array element", K(ret), K(i));
+      }
+    }
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_, part_id_, row_start_, row_count_, session_id_);
+OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_,
+                    part_id_, row_start_, row_count_, session_id_, pos_del_files_);
 
 int ObExternalTableFilesKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const
 {
