@@ -956,8 +956,7 @@ public:
   inline bool operator==(const ObWhiteFilterParam &other) const
   {
     bool equal_ret = true;
-    if (datum_->is_null() && other.datum_->is_null()) {
-    } else if (datum_->is_null() || other.datum_->is_null()) {
+    if (datum_->is_null() || other.datum_->is_null()) {
       equal_ret = false;
     } else {
       int cmp_ret = 0;
