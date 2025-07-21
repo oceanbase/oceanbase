@@ -916,8 +916,10 @@ int ObVariableSetExecutor::check_and_convert_sys_var(ObExecContext &ctx,
   if (OB_FAIL(ret)) {
   } else if (set_var.var_name_ == OB_SV_DEFAULT_STORAGE_ENGINE) {
     static const common::ObString DEFAULT_VALUE_STORAGE_ENGINE("OceanBase");
+    static const common::ObString INNODB_STORAGE_ENGINE("InnoDB");
     const ObString new_value = out_val.get_string();
-    if (new_value.case_compare(DEFAULT_VALUE_STORAGE_ENGINE) != 0) {
+    if (new_value.case_compare(DEFAULT_VALUE_STORAGE_ENGINE) != 0
+        || new_value.case_compare(INNODB_STORAGE_ENGINE) != 0) {
       ret = OB_ERR_PARAM_VALUE_INVALID;
       LOG_USER_ERROR(OB_ERR_PARAM_VALUE_INVALID);
     }
