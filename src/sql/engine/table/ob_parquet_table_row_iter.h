@@ -191,6 +191,7 @@ private:
   static int to_numeric_hive(const char *str, const int32_t length, char *buf, const int64_t data_len,
                              const ObDatumMeta &meta, common::ObIAllocator &alloc, blocksstable::ObStorageDatum &datum);
   int pre_buffer(std::shared_ptr<parquet::RowGroupReader> rg_reader);
+  int compute_column_id_by_index_type(int index, int &file_col_id);
 private:
   ObParquetIteratorState state_;
   lib::ObMemAttr mem_attr_;

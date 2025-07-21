@@ -338,6 +338,7 @@ private:
     int next_row_range();
     int build_type_name_id_map(const orc::Type* type, ObIArray<ObString> &col_names);
     int prepare_read_orc_file();
+    int compute_column_id_by_index_type(int64_t index, int64_t &orc_col_id);
     int to_dot_column_path(ObIArray<ObString> &col_names, ObString &path);
     int get_data_column_batch_idxs(const orc::Type *type, const int col_id, ObIArray<int> &idxs);
     ObExternalTableAccessOptions& make_external_table_access_options(stmt::StmtType stmt_type);

@@ -153,6 +153,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"collate", COLLATE},
   {"collation", COLLATION},
   {"column_format", COLUMN_FORMAT},
+  {"column_index_type", COLUMN_INDEX_TYPE},
   {"column_name", COLUMN_NAME},
   {"column", COLUMN},
   {"columns", COLUMNS},

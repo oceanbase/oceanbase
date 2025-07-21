@@ -37,6 +37,13 @@ struct ObODPSGeneralFormatParam {
   const static ObString ROW;
 };
 
+enum ColumnIndexType
+{
+  NAME = 0,      // 按列名索引
+  POSITION = 1,  // 按列顺序（位置）索引
+  ID = 2         // 按列id索引
+};
+
 struct ObODPSGeneralFormat {
   enum ApiMode {
     TUNNEL_API = 0,
@@ -225,11 +232,13 @@ struct ObCSVGeneralFormat {
 struct ObParquetGeneralFormat {
   ObParquetGeneralFormat () :
     row_group_size_(256LL * 1024 * 1024), /* default 256 MB */
-    compress_type_index_(0) /* default UNCOMPRESSED */
+    compress_type_index_(0), /* default UNCOMPRESSED */
+    column_index_type_(sql::ColumnIndexType::NAME)
   {}
   static constexpr const char *OPTION_NAMES[] = {
     "ROW_GROUP_SIZE",
-    "COMPRESSION"
+    "COMPRESSION",
+    "COLUMN_INDEX_TYPE"
   };
   static constexpr const char *COMPRESSION_ALGORITHMS[] = {
     "UNCOMPRESSED",
@@ -247,10 +256,10 @@ struct ObParquetGeneralFormat {
 
   int64_t row_group_size_;
   int64_t compress_type_index_;
-
+  sql::ColumnIndexType column_index_type_;
   int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
-  TO_STRING_KV(K_(row_group_size), K_(compress_type_index));
+  TO_STRING_KV(K_(row_group_size), K_(compress_type_index), K_(column_index_type));
   OB_UNIS_VERSION(1);
 };
 
@@ -260,14 +269,16 @@ struct ObOrcGeneralFormat {
     compress_type_index_(0),               /* default UNCOMPRESSED */
     compression_block_size_(256LL * 1024), /* default 256 KB */
     row_index_stride_(10000),
-    column_use_bloom_filter_()
+    column_use_bloom_filter_(),
+    column_index_type_(sql::ColumnIndexType::NAME)
   {}
   static constexpr const char *OPTION_NAMES[] = {
     "STRIPE_SIZE",
     "COMPRESSION",
     "COMPRESSION_BLOCK_SIZE",
     "ROW_INDEX_STRIDE",
-    "COLUMN_USE_BLOOM_FILTER"
+    "COLUMN_USE_BLOOM_FILTER",
+    "COLUMN_INDEX_TYPE"
   };
   static constexpr const char *COMPRESSION_ALGORITHMS[] = {
     "UNCOMPRESSED",
@@ -284,10 +295,12 @@ struct ObOrcGeneralFormat {
   int64_t compression_block_size_;
   int64_t row_index_stride_;
   common::ObArrayWrap<int64_t> column_use_bloom_filter_;
+  sql::ColumnIndexType column_index_type_;
 
   int to_json_kv_string(char* buf, const int64_t buf_len, int64_t &pos) const;
   int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
-  TO_STRING_KV(K(stripe_size_), K(compress_type_index_), K(compression_block_size_), K(row_index_stride_), K(column_use_bloom_filter_));
+  TO_STRING_KV(K(stripe_size_), K(compress_type_index_), K(compression_block_size_),
+              K(row_index_stride_), K(column_use_bloom_filter_), K(column_index_type_));
   OB_UNIS_VERSION(1);
 };
 
@@ -1029,7 +1042,9 @@ int compression_algorithm_from_string(ObString compression_name,
 const char *binary_format_to_string(const ObCSVGeneralFormat::ObCSVBinaryFormat binary_format);
 int binary_format_from_string(const ObString binary_format_str,
                                         ObCSVGeneralFormat::ObCSVBinaryFormat &binary_format);
-
+const char *column_index_type_to_string(const sql::ColumnIndexType column_index_type);
+int column_index_type_from_string(const ObString column_index_type_str,
+                                  sql::ColumnIndexType &column_index_type);
 /**
  * guess compression format from filename suffix
  *

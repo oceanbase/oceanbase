@@ -849,6 +849,8 @@ public:
     ObRawExpr *get_path_expr,
     ObRawExpr *cast_expr,
     const ObColumnSchemaV2 *generated_column,
+    bool is_index_by_pos,
+    uint64_t column_idx,
     ObRawExpr *&expr);
   //only used for DDL resolver, resolve a PSEUDO column expr for validation and printer not for execution
   static int resolve_external_table_column_def(ObRawExprFactory &expr_factory,
@@ -877,6 +879,7 @@ public:
                                              ObExternalFileFormat &format,
                                              ObResolverParams &params);
   static int resolve_binary_format(const ParseNode *node, ObExternalFileFormat &format);
+  static int resolve_column_index_type(const ParseNode *node, ObExternalFileFormat &format);
   static int wrap_csv_binary_format_expr(ObResolverParams &params, const ObCSVGeneralFormat& csv_format, ObRawExpr *&real_ref_expr);
   static int resolve_file_format_string_value(const ParseNode *node,
                                               const ObCharsetType &format_charset,
