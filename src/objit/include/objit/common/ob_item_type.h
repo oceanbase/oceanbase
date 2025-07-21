@@ -2897,6 +2897,12 @@ typedef enum ObItemType
   T_CLUSTERING_KEY = 4889,
   T_CLUSTERING_KEY_DROP = 4890,
 
+  // optimizer hint
+  T_INDEX_MERGE_HINT = 4891,
+  T_NO_INDEX_MERGE_HINT = 4892,
+
+  T_TABLE_FLASHBACK_PROCTIME = 4893,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
