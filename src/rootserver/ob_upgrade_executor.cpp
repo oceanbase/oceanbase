@@ -295,11 +295,13 @@ int ObUpgradeExecutor::execute(
 {
   DEBUG_SYNC(BEFORE_UPGRADE_JOB);
   ObCurTraceId::init(GCONF.self_addr_);
+  ObCurTraceId::TraceId *trace_id = ObCurTraceId::get_trace_id();
   int ret = OB_SUCCESS;
   ObArray<uint64_t> tenant_ids;
   obrpc::ObUpgradeJobArg::Action action = arg.action_;
   int64_t version = arg.version_;
   ObRsJobType job_type = convert_to_job_type_(arg.action_);
+  ROOTSERVICE_EVENT_ADD("upgrade", "begin_upgrade_post", KPC(trace_id), K(action));
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (JOB_TYPE_INVALID == job_type) {
@@ -451,6 +453,7 @@ int ObUpgradeExecutor::execute(
     }
     execute_ = false;
   }
+  ROOTSERVICE_EVENT_ADD("upgrade", "finish_upgrade_post", KPC(trace_id), K(ret));
   return ret;
 }
 
@@ -572,6 +575,8 @@ int ObUpgradeExecutor::run_upgrade_begin_action_(
     for (int64_t i = tenant_ids.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       const uint64_t tenant_id = tenant_ids.at(i);
       int64_t start_ts = ObTimeUtility::current_time();
+      int64_t cost = 0;
+      ROOTSERVICE_EVENT_ADD("upgrade", "begin_upgrade_begin_write_log", K(tenant_id));
       FLOG_INFO("[UPGRADE] start to run upgrade begin action", K(tenant_id));
       if (OB_FAIL(check_stop())) {
         LOG_WARN("executor should stopped", KR(ret));
@@ -579,15 +584,21 @@ int ObUpgradeExecutor::run_upgrade_begin_action_(
         LOG_WARN("fail to upgrade begin action", KR(ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
       }
+      cost = ObTimeUtility::current_time() - start_ts;
       FLOG_INFO("[UPGRADE] finish run upgrade begin action step 1/2, write upgrade barrier log",
-                KR(ret), K(tenant_id), "cost", ObTimeUtility::current_time() - start_ts);
+                KR(ret), K(tenant_id), K(cost));
+      ROOTSERVICE_EVENT_ADD("upgrade", "finish_upgrade_begin_write_log", K(tenant_id),
+          K(ret), K(tmp_ret), K(cost));
     } // end for
     ret = OB_SUCC(ret) ? backup_ret : ret;
     if (OB_SUCC(ret)) {
       int64_t start_ts_step2 = ObTimeUtility::current_time();
+      int64_t cost = 0;
       ret = ObLSServiceHelper::wait_all_tenants_user_ls_sync_scn(tenants_sys_ls_target_scn);
+      cost = ObTimeUtility::current_time() - start_ts_step2;
       FLOG_INFO("[UPGRADE] finish run upgrade begin action step 2/2, wait all tenants' sync_scn",
-          KR(ret), "cost", ObTimeUtility::current_time() - start_ts_step2);
+          KR(ret), K(cost));
+      ROOTSERVICE_EVENT_ADD("upgrade", "finish_upgrade_begin_wait_all", K(ret), K(cost));
     }
   }
   return ret;
@@ -689,6 +700,8 @@ int ObUpgradeExecutor::run_upgrade_system_variable_job_(
     for (int64_t i = tenant_ids.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       const uint64_t tenant_id = tenant_ids.at(i);
       int64_t start_ts = ObTimeUtility::current_time();
+      int64_t cost = 0;
+      ROOTSERVICE_EVENT_ADD("upgrade", "begin_upgrade_system_variable", K(tenant_id));
       FLOG_INFO("[UPGRADE] start to run upgrade system variable job", K(tenant_id));
       DEBUG_SYNC(BEFORE_UPGRADE_SYS_VARIABLE);
       if (OB_FAIL(check_stop())) {
@@ -700,8 +713,9 @@ int ObUpgradeExecutor::run_upgrade_system_variable_job_(
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
       }
       DEBUG_SYNC(AFTER_UPGRADE_SYS_VARIABLE);
-      FLOG_INFO("[UPGRADE] finish run upgrade system variable job",
-                KR(tmp_ret), K(tenant_id), "cost", ObTimeUtility::current_time() - start_ts);
+      cost = ObTimeUtility::current_time() - start_ts;
+      FLOG_INFO("[UPGRADE] finish run upgrade system variable job", KR(tmp_ret), KR(ret), K(tenant_id), K(cost));
+      ROOTSERVICE_EVENT_ADD("upgrade", "finish_upgrade_system_variable", K(tenant_id), K(ret), K(tmp_ret), K(cost));
     } // end for
     ret = OB_SUCC(ret) ? backup_ret : ret;
   }
@@ -866,6 +880,8 @@ int ObUpgradeExecutor::run_upgrade_virtual_schema_job_(
     for (int64_t i = tenant_ids.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       const uint64_t tenant_id = tenant_ids.at(i);
       int64_t start_ts = ObTimeUtility::current_time();
+      int64_t cost = 0;
+      ROOTSERVICE_EVENT_ADD("upgrade", "begin_upgrade_virtual_schema", K(tenant_id));
       FLOG_INFO("[UPGRADE] start to run upgrade virtual schema job", K(tenant_id));
       DEBUG_SYNC(BEFORE_UPGRADE_VIRTUAL_SCHEMA);
       if (OB_FAIL(check_stop())) {
@@ -879,8 +895,9 @@ int ObUpgradeExecutor::run_upgrade_virtual_schema_job_(
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
       }
       DEBUG_SYNC(AFTER_UPGRADE_VIRTUAL_SCHEMA);
-      FLOG_INFO("[UPGRADE] finish run upgrade virtual schema job",
-                KR(tmp_ret), K(tenant_id), "cost", ObTimeUtility::current_time() - start_ts);
+      cost = ObTimeUtility::current_time() - start_ts;
+      FLOG_INFO("[UPGRADE] finish run upgrade virtual schema job", KR(tmp_ret), K(ret), K(tenant_id), K(cost));
+      ROOTSERVICE_EVENT_ADD("upgrade", "finish_upgrade_virtual_schema", K(tenant_id), K(ret), K(tmp_ret), K(cost));
     } // end for
     ret = OB_SUCC(ret) ? backup_ret : ret;
   }
@@ -891,6 +908,9 @@ int ObUpgradeExecutor::run_upgrade_system_package_job_()
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = OB_SYS_TENANT_ID;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  int64_t cost = 0;
+  ROOTSERVICE_EVENT_ADD("upgrade", "begin_upgrade_system_package", K(tenant_id));
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
@@ -904,6 +924,8 @@ int ObUpgradeExecutor::run_upgrade_system_package_job_()
     LOG_WARN("fail to upgrade mysql system package", KR(ret));
 #endif
   }
+  cost = ObTimeUtility::current_time() - start_ts;
+  ROOTSERVICE_EVENT_ADD("upgrade", "finish_upgrade_system_package", K(tenant_id), K(ret), K(cost));
   return ret;
 }
 
@@ -1049,6 +1071,8 @@ int ObUpgradeExecutor::run_upgrade_all_post_action_(
     for (int64_t i = tenant_ids.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       const uint64_t tenant_id = tenant_ids.at(i);
       int64_t start_ts = ObTimeUtility::current_time();
+      int64_t cost = 0;
+      ROOTSERVICE_EVENT_ADD("upgrade", "begin_upgrade_all_post_action", K(tenant_id));
       FLOG_INFO("[UPGRADE] start to run upgrade all post action", K(tenant_id));
       if (OB_FAIL(check_stop())) {
         LOG_WARN("executor should stopped", KR(ret));
@@ -1056,8 +1080,9 @@ int ObUpgradeExecutor::run_upgrade_all_post_action_(
         LOG_WARN("fail to upgrade all post action", KR(ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
       }
-      FLOG_INFO("[UPGRADE] finish run upgrade all post action",
-                KR(ret), K(tenant_id), "cost", ObTimeUtility::current_time() - start_ts);
+      cost = ObTimeUtility::current_time() - start_ts;
+      FLOG_INFO("[UPGRADE] finish run upgrade all post action", KR(ret), KR(tmp_ret), K(tenant_id), K(cost));
+      ROOTSERVICE_EVENT_ADD("upgrade", "finish_upgrade_all_post_action", K(tenant_id), K(ret), K(tmp_ret), K(cost));
     } // end for
     ret = OB_SUCC(ret) ? backup_ret : ret;
   }
@@ -1156,6 +1181,8 @@ int ObUpgradeExecutor::run_upgrade_inspection_job_(
     for (int64_t i = tenant_ids.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       const uint64_t tenant_id = tenant_ids.at(i);
       int64_t start_ts = ObTimeUtility::current_time();
+      int64_t cost = 0;
+      ROOTSERVICE_EVENT_ADD("upgrade", "begin_upgrade_inspectino", K(tenant_id));
       FLOG_INFO("[UPGRADE] start to run upgrade inspection job", K(tenant_id));
       if (OB_FAIL(check_stop())) {
         LOG_WARN("executor should stopped", KR(ret));
@@ -1165,8 +1192,9 @@ int ObUpgradeExecutor::run_upgrade_inspection_job_(
         LOG_WARN("fail to do upgrade inspection", KR(tmp_ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
       }
-      FLOG_INFO("[UPGRADE] finish run upgrade inspection job",
-                KR(tmp_ret), K(tenant_id), "cost", ObTimeUtility::current_time() - start_ts);
+      cost = ObTimeUtility::current_time() - start_ts;
+      FLOG_INFO("[UPGRADE] finish run upgrade inspection job", KR(tmp_ret), KR(ret), K(tenant_id), K(cost));
+      ROOTSERVICE_EVENT_ADD("upgrade", "finish_upgrade_inspectino", K(tenant_id), K(ret), K(tmp_ret), K(cost));
     } // end for
     ret = OB_SUCC(ret) ? backup_ret : ret;
   }
@@ -1187,6 +1215,8 @@ int ObUpgradeExecutor::run_upgrade_end_action_(
     for (int64_t i = tenant_ids.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       const uint64_t tenant_id = tenant_ids.at(i);
       int64_t start_ts = ObTimeUtility::current_time();
+      int64_t cost = 0;
+      ROOTSERVICE_EVENT_ADD("upgrade", "begin_upgrade_end", K(tenant_id));
       FLOG_INFO("[UPGRADE] start to run upgrade end action", K(tenant_id));
       if (OB_FAIL(check_stop())) {
         LOG_WARN("executor should stopped", KR(ret));
@@ -1196,8 +1226,9 @@ int ObUpgradeExecutor::run_upgrade_end_action_(
         LOG_WARN("fail to upgrade end action", KR(ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
       }
-      FLOG_INFO("[UPGRADE] finish run upgrade end action",
-                KR(ret), K(tenant_id), "cost", ObTimeUtility::current_time() - start_ts);
+      cost = ObTimeUtility::current_time() - start_ts;
+      FLOG_INFO("[UPGRADE] finish run upgrade end action", KR(tmp_ret), KR(ret), K(tenant_id), K(cost));
+      ROOTSERVICE_EVENT_ADD("upgrade", "finish_upgrade_end", K(tenant_id), K(ret), K(tmp_ret), K(cost));
     } // end for
     ret = OB_SUCC(ret) ? backup_ret : ret;
   }
