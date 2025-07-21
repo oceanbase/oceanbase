@@ -17521,10 +17521,14 @@ int ObJoinOrder::deduce_const_exprs_and_ft_item_set() {
     LOG_WARN("failed to get column exprs", K(ret));
   } else {
     ObFdItemFactory &fd_item_factory = get_plan()->get_fd_item_factory();
-    ret = fd_item_factory.deduce_fd_item_set(get_output_equal_sets(),
-                                             column_exprs,
-                                             get_output_const_exprs(),
-                                             get_fd_item_set());
+    if (OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("check status failed", K(ret));
+    } else if (OB_FAIL(fd_item_factory.deduce_fd_item_set(get_output_equal_sets(),
+                                                          column_exprs,
+                                                          get_output_const_exprs(),
+                                                          get_fd_item_set()))) {
+      LOG_WARN("failed to deduce fd item set", K(ret));
+    }
   }
   return ret;
 }
