@@ -2406,11 +2406,12 @@ int ObSPIService::spi_build_record_type(common::ObIAllocator &allocator,
         CK (OB_NOT_NULL(user_type));
         OX (pl_type.set_user_type_id(user_type->get_type(), udt_id));
         OX (pl_type.set_type_from(user_type->get_type_from()));
-      } else if (columns->at(i).type_.is_null()) {
+      } else if (columns->at(i).type_.is_null() || (columns->at(i).type_.is_char() && 0 == columns->at(i).accuracy_.get_length())) {
         ObDataType data_type;
         ObCollationType collation_type = session.get_nls_collation();
         ObCharsetType charset_type = ObCharset::charset_type_by_coll(collation_type);
-        data_type.set_obj_type(ObVarcharType);
+        ObObjType obj_type = columns->at(i).type_.is_char() ? ObCharType : ObVarcharType;
+        data_type.set_obj_type(obj_type);
         data_type.set_charset_type(charset_type);
         data_type.set_collation_type(collation_type);
         data_type.meta_.set_collation_level(CS_LEVEL_IMPLICIT);
