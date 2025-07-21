@@ -2489,7 +2489,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
                             ObLLVMType old_condition_type;
                             ObLLVMType old_condition_pointer_type;
                             ObLLVMValue old_condition;
-                            OZ (generator_.get_helper().create_const_gep1_64(ObString("extract_unwind_exception_header"), unwindException, generator_.get_eh_service().pl_exception_base_offset_, old_unwindException_header));
+                            OZ (generator_.get_helper().create_const_gep1_64(ObString("extract_unwind_exception_header"), old_exception, generator_.get_eh_service().pl_exception_base_offset_, old_unwindException_header));
                             OZ (generator_.get_adt_service().get_pl_condition_value(old_condition_type));
                             OZ (condition_type.get_pointer_to(old_condition_pointer_type));
                             OZ (generator_.get_helper().create_pointer_cast(ObString("cast_header"), old_unwindException_header, old_condition_pointer_type, old_condition));
@@ -10819,8 +10819,8 @@ ObPLCGBufferGuard::~ObPLCGBufferGuard()
 
   generator_.set_objparam_buffer_idx(objparam_buffer_idx_);
 
-  // int buffers will never be used recursively, so reset it to 0.
-  generator_.set_int_buffer_idx(0);
+  // int buffers could be used recursively
+  generator_.set_int_buffer_idx(int_buffer_idx_);
 }
 
 } // namespace pl

@@ -985,6 +985,7 @@ struct ObPLCGBufferGuard
 public:
   ObPLCGBufferGuard(ObPLCodeGenerator &generator)
     : generator_(generator),
+      int_buffer_idx_(generator.get_int_buffer_idx()),
       objparam_buffer_idx_(generator.get_objparam_buffer_idx()),
       old_guard_(generator.top_buffer_guard_)
   {
@@ -1049,6 +1050,7 @@ private:
 
 private:
   ObPLCodeGenerator &generator_;
+  int64_t int_buffer_idx_;
   int64_t objparam_buffer_idx_;
   int64_t objparam_count_ = 0;
   ObPLCGBufferGuard *old_guard_ = nullptr;
