@@ -26,7 +26,7 @@ static bool g_malloc_hook_inited = false;
 typedef void* (*MemsetPtr)(void*, int, size_t);
 MemsetPtr memset_ptr = nullptr;
 ObMallocHook &global_malloc_hook = ObMallocHook::get_instance();
-void init_malloc_hook()
+void __attribute__((constructor(0))) init_malloc_hook()
 {
   g_malloc_hook_inited = true;
   memset_ptr = memset;

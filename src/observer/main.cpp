@@ -513,9 +513,6 @@ int inner_main(int argc, char *argv[])
   }
   ObStackHeaderGuard stack_header_guard;
   // just take effect in observer
-#ifndef OB_USE_ASAN
-  init_malloc_hook();
-#endif
   int64_t memory_used = get_virtual_memory_used();
 #ifndef OB_USE_ASAN
   /**
