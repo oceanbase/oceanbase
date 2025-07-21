@@ -1162,7 +1162,7 @@ int ObTabletPersister::persist_aggregated_meta(
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if ((cur_macro_seq_++)) {
+  } else if (FALSE_IT(cur_macro_seq_++)) {
   } else if (OB_FAIL(handle.get_write_ctx(write_ctx))) {
     LOG_WARN("fail to batch get address", K(ret), K(handle));
   } else if (FALSE_IT(new_tablet->set_tablet_addr(write_ctx.addr_))) {
