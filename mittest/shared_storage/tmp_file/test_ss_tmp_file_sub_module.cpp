@@ -68,6 +68,7 @@ TEST_F(TestSSTmpFileSubModule, test_async_remove_task)
   int ret = OB_SUCCESS;
   ObSSTmpFileRemoveManager &remove_mgr = MTL(ObTenantTmpFileManager *)->get_ss_file_manager().remove_mgr_;
   remove_mgr.stop();
+  ATOMIC_SET(&remove_mgr.is_running_, true);
   // all data in wbp, remove with length_ = 0
   {
     int64_t dir = -1;
@@ -402,6 +403,7 @@ TEST_F(TestSSTmpFileSubModule, test_remove_in_destroy)
   MTL(ObTenantFileManager *)->stop();
   MTL(ObTenantTmpFileManager *)->wait();
   MTL(ObTenantFileManager *)->wait();
+  ATOMIC_SET(&(MTL(ObTenantTmpFileManager *)->get_ss_file_manager().remove_mgr_.is_running_), true);
   ASSERT_EQ(1, MTL(ObTenantTmpFileManager *)->get_ss_file_manager().files_.count());
   ASSERT_EQ(0, MTL(ObTenantTmpFileManager *)->get_ss_file_manager().remove_mgr_.get_task_num());
   ASSERT_EQ(OB_SUCCESS, MTL(ObTenantTmpFileManager *)->remove(fd));
