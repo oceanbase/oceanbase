@@ -1186,6 +1186,7 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                                         false);
           const pl::ObUserDefinedType *pl_user_type = NULL;
           const pl::ObCollectionType *coll_type = NULL;
+          bool need_cast = false;
           OZ (pl_resolve_ctx.get_user_type(dst_pl_type.get_user_type_id(), pl_user_type));
           CK (OB_NOT_NULL(coll_type = static_cast<const ObCollectionType *>(pl_user_type)));
           CK (OB_NOT_NULL(src_coll = static_cast<const ObPLCollection *>(src_composite)));
@@ -1204,7 +1205,7 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                                       src_data_type->get_collation_type(),
                                       dst_data_type->get_obj_type(),
                                       dst_data_type->get_collation_type())) {
-              // do nothing
+              need_cast = true;
             } else {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("incorrect argument type, diff type", K(ret));
@@ -1214,6 +1215,7 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
             uint64_t element_type_id = src_coll->get_element_desc().get_udt_id();
             bool is_compatible = element_type_id == coll_type->get_element_type().get_user_type_id();
             if (!is_compatible) {
+              need_cast = true;
               OZ (ObPLResolver::check_composite_compatible(
                 NULL == resolve_ctx.params_.secondary_namespace_
                     ? static_cast<const ObPLINS&>(resolve_ctx)
@@ -1226,7 +1228,7 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                         K(ret), K(element_type_id), K(dst_pl_type), KPC(src_coll));
             }
           }
-          OX (match_info = (ObRoutineMatchInfo::MatchInfo(false, src_type, dst_type)));
+          OX (match_info = (ObRoutineMatchInfo::MatchInfo(need_cast, src_type, dst_type)));
         }
       }
     } else {
