@@ -877,17 +877,22 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
   int64_t start_time_us = ObTimeUtility::current_time_us();
   ASSERT_EQ(OB_SUCCESS, persist_meta_task_->persist_meta_op_.start_op());
   persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.need_ckpt_ = true;
-  // ensure scan reusable blks must invoke
-  persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.prev_scan_blk_time_us_ = TestSSCommonUtil::get_prev_scan_reusable_blk_time_us() - 1000 * 1000;
   ASSERT_EQ(OB_SUCCESS, persist_meta_task_->persist_meta_op_.gen_checkpoint());
   const int64_t micro_exe_time_us = ObTimeUtility::current_time_us() - start_time_us;
   ASSERT_LT(0, phy_blk_mgr_->blk_cnt_info_.meta_blk_.used_cnt_);
-  ASSERT_EQ(alloc_phy_blk_cnt, phy_blk_mgr_->reusable_blks_.size());
   ASSERT_EQ((write_blk_cnt - 1) * 20, persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.ckpt_item_cnt_);
 
   start_time_us = ObTimeUtility::current_time_us();
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task_->ckpt_op_.start_op());
   blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
+  // ensure scan reusable blks must invoke
+  blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.prev_scan_blk_time_us_ = TestSSCommonUtil::get_prev_scan_reusable_blk_time_us();
+  ob_usleep(1000 * 1000);
+  ASSERT_EQ(true, blk_ckpt_task_->ckpt_op_.can_scan_reusable_blocks());
+  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr_->scan_blocks_to_reuse());
+  ASSERT_EQ(alloc_phy_blk_cnt, phy_blk_mgr_->reusable_blks_.size());
+  blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.finish_scan_phy_blk();
+
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task_->ckpt_op_.gen_checkpoint());
   const int64_t blk_exe_time_us = ObTimeUtility::current_time_us() - start_time_us;
   ASSERT_LT(0, phy_blk_mgr_->blk_cnt_info_.phy_ckpt_blk_used_cnt_);
@@ -935,7 +940,7 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_after_restart)
   blk_ckpt_task_->cur_interval_us_ = 3600 * 1000 * 1000L;
   ob_usleep(2 * 1000 * 1000);
 
-  persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.prev_scan_blk_time_us_ = TestSSCommonUtil::get_prev_scan_reusable_blk_time_us();
+  // blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.prev_scan_blk_time_us_ = TestSSCommonUtil::get_prev_scan_reusable_blk_time_us();
   ObSSMicroCacheSuperBlk super_blk2;
   ASSERT_EQ(OB_SUCCESS, super_blk2.assign(phy_blk_mgr_->super_blk_));
 
@@ -1005,12 +1010,12 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_cache_ckpt_persist_many_meta)
   ASSERT_LT(0, cache_stat.task_stat().micro_ckpt_item_cnt_);
 }
 
-/* After persist_meta_task execucte scan_blocks_to_reuse, need_scan_phy_blk() will return false */
-TEST_F(TestSSExecuteCheckpointTask, test_micro_ckpt_task_exec_scan_block)
+/* After persist_meta_task execucte scan_blocks_to_reuse, need_scan_reusable_blk() will return false */
+TEST_F(TestSSExecuteCheckpointTask, test_ckpt_task_exec_scan_block)
 {
-  LOG_INFO("TEST: test_micro_ckpt_task_exec_scan_block");
+  LOG_INFO("TEST: test_ckpt_task_exec_scan_block");
   int ret = OB_SUCCESS;
-  blk_ckpt_task_->is_inited_ = false;
+  persist_meta_task_->is_inited_ = false;
 
   const int64_t block_cnt = 10;
   for (int64_t i = 0; i < block_cnt; i++) {
@@ -1024,10 +1029,10 @@ TEST_F(TestSSExecuteCheckpointTask, test_micro_ckpt_task_exec_scan_block)
   ASSERT_EQ(OB_SUCCESS, phy_blk_mgr_->scan_blocks_to_reuse());
   ASSERT_EQ(block_cnt, phy_blk_mgr_->get_reusable_blocks_cnt());
 
-  persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.prev_scan_blk_time_us_ = TestSSCommonUtil::get_prev_scan_reusable_blk_time_us() - 1000 * 1000L;
-  ASSERT_EQ(true, persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.need_scan_phy_blk());
-  persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.finish_scan_phy_blk();
-  ASSERT_EQ(false, persist_meta_task_->persist_meta_op_.micro_ckpt_ctx_.need_scan_phy_blk());
+  blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.prev_scan_blk_time_us_ = TestSSCommonUtil::get_prev_scan_reusable_blk_time_us() - 1000 * 1000L;
+  ASSERT_EQ(true, blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.need_scan_reusable_blk());
+  blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.finish_scan_phy_blk();
+  ASSERT_EQ(false, blk_ckpt_task_->ckpt_op_.blk_ckpt_ctx_.need_scan_reusable_blk());
 }
 
 /* Test whether extra meta blocks can be dynamically allocated when the number of blocks required
