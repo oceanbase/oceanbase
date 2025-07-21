@@ -2855,17 +2855,7 @@ int ObSchemaChecker::check_exist_same_name_object_with_synonym(const uint64_t te
       if (OB_FAIL(get_package_id(tenant_id, database_name, object_name,
                                   compatible_mode, package_id))) {
         if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
-          if (OB_FAIL(get_package_id(OB_SYS_TENANT_ID,
-                                      OB_SYS_DATABASE_ID,
-                                      object_name,
-                                      compatible_mode,
-                                      package_id))) {
-            if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) {
-              ret = OB_TABLE_NOT_EXIST;
-            }
-          } else {
-            exist = true;
-          }
+          ret = OB_TABLE_NOT_EXIST;
         }
       } else {
         exist = true;
