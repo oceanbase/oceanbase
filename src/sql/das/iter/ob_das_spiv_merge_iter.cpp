@@ -814,6 +814,8 @@ int ObDASSPIVMergeIter::daat_naive(ObIAllocator &allocator, bool is_pre_filter, 
   if (OB_ISNULL(qvec_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("qvec is null", K(ret));
+  } else if (qvec_->size() == 0) {
+    ret = OB_ITER_END;
   } else {
     float *values = reinterpret_cast<float *>(qvec_->get_value_array()->get_data());
     if (OB_FAIL(make_cursors(allocator, is_pre_filter, is_vectorized))) {
