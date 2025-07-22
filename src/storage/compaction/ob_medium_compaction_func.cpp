@@ -218,7 +218,7 @@ int ObMediumCompactionScheduleFunc::choose_major_snapshot(
     schema_version = freeze_info.schema_version_;
   }
 
-  if (FAILEDx(ObPartitionMergePolicy::get_result_by_snapshot(tablet, medium_info.medium_snapshot_, result))) {
+  if (FAILEDx(ObPartitionMergePolicy::get_result_by_snapshot(tablet, medium_info.medium_snapshot_, result, false/*need_check_tablet*/))) {
     LOG_WARN("failed get result for major", K(ret), K(medium_info));
   } else {
     LOG_TRACE("choose_major_snapshot", K(ret), KPC(this), K(medium_info), K(freeze_info), K(result),
@@ -460,7 +460,7 @@ int ObMediumCompactionScheduleFunc::choose_scn_for_user_request(
         LOG_TRACE("exist truncate info, but not reach schedule interval", KR(ret), K(interval), K(last_major_snapshot_version), K(medium_info.medium_snapshot_));
       }
     }
-    if (FAILEDx(ObPartitionMergePolicy::get_result_by_snapshot(*tablet, medium_info.medium_snapshot_, result))) {
+    if (FAILEDx(ObPartitionMergePolicy::get_result_by_snapshot(*tablet, medium_info.medium_snapshot_, result, false/*need_check_tablet*/))) {
       LOG_WARN("failed to get result for major", K(ret), K(last_major_snapshot_version), K(medium_info));
     } else if (OB_FAIL(tablet->get_newest_schema_version(schema_version))) {
       LOG_WARN("failed to get schema version from tablet", K(ret), KPC(tablet));
@@ -699,7 +699,7 @@ int ObMediumCompactionScheduleFunc::errsim_choose_medium_snapshot(
     } else if (medium_info.medium_snapshot_ <= max_sync_medium_scn
         || medium_info.medium_snapshot_ < max_reserved_snapshot) {
       ret = OB_NO_NEED_MERGE;
-    } else if (OB_FAIL(ObPartitionMergePolicy::get_result_by_snapshot(tablet, medium_info.medium_snapshot_, result))) {
+    } else if (OB_FAIL(ObPartitionMergePolicy::get_result_by_snapshot(tablet, medium_info.medium_snapshot_, result, false/*need_check_tablet*/))) {
       LOG_WARN("failed to get result by snapshot", K(ret), K(medium_info), KPC(this));
     } else {
       FLOG_INFO("ERRSIM EN_SCHEDULE_MEDIUM_COMPACTION", KPC(this));
@@ -1718,7 +1718,7 @@ int ObMediumCompactionScheduleFunc::prepare_ls_major_merge_info(
     medium_info.clear_parallel_range();
     medium_info.last_medium_snapshot_ = (0 >= last_major_snapshot) ? -1 : last_major_snapshot;
     LOG_INFO("success to prepare skip medium info", K(tablet_id), K(medium_info)); // debug log, remove later
-  } else if (OB_FAIL(ObPartitionMergePolicy::get_result_by_snapshot(tablet, medium_info.medium_snapshot_, result))) {
+  } else if (OB_FAIL(ObPartitionMergePolicy::get_result_by_snapshot(tablet, medium_info.medium_snapshot_, result, false/*need_check_tablet*/))) {
     LOG_WARN("failed to get result for merge", K(ret), K(merge_version), K(tablet_id), K(medium_info), K(freeze_info));
   } else if (OB_FAIL(prepare_medium_info(result, freeze_info.schema_version_, medium_info))) {
     LOG_WARN("failed to prepare medium info", K(ret), K(tablet_id), K(merge_version), K(medium_info));
