@@ -866,6 +866,9 @@ int ObTmpFileWriteCache::try_to_set_macro_block_idx_(ObTmpFileBlock &block)
       LOG_WARN("fail to set macro block id", KR(ret), K(block));
     }
   }
+  if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
+    set_flush_ret_code_(OB_SERVER_OUTOF_DISK_SPACE);
+  }
   return ret;
 }
 
