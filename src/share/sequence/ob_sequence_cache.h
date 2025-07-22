@@ -117,6 +117,7 @@ public:
         last_refresh_ts_(INITED),
         alloc_mutex_(common::ObLatchIds::SEQUENCE_VALUE_ALLOC_LOCK),
         fetch_(common::ObLatchIds::SEQUENCE_VALUE_FETCH_LOCK),
+        epoch_version_(0),
         last_number_()
   {}
   int combine_prefetch_node()
@@ -154,6 +155,7 @@ public:
   int64_t last_refresh_ts_;
   lib::ObMutex alloc_mutex_;
   lib::ObMutex fetch_;
+  int64_t epoch_version_;
 private:
   ObSequenceValue last_number_;
 public:
@@ -163,7 +165,8 @@ public:
                K_(with_prefetch_node),
                K_(last_refresh_ts),
                K_(last_number),
-               K_(base_on_last_number));
+               K_(base_on_last_number),
+               K_(epoch_version));
 };
 
 class ObSequenceCache
