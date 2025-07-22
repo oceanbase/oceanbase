@@ -78,7 +78,7 @@ public:
 };
 
 
-class ObMajorMergeProgressChecker : public ObBasicMergeProgressChecker
+class ObMajorMergeProgressChecker final : public ObBasicMergeProgressChecker
 {
 public:
   ObMajorMergeProgressChecker(

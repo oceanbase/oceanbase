@@ -275,7 +275,7 @@ int ObChecksumValidator::validate_checksum(
       LOG_WARN("failed to validate cross cluster checksum", K(ret));
     }
     if (OB_FAIL(ret)) {
-    } else if (table_compaction_info_.unfinish_index_cnt_ <= 0
+    } else if (simple_schema_->is_index_table()
       || table_compaction_info_.is_uncompacted()
       || table_compaction_info_.can_skip_verifying()) {
       // not cache index table/uncompacted or skip_verify data table
@@ -363,7 +363,7 @@ int ObChecksumValidator::update_table_compaction_info_by_tablet()
       } else {
         LOG_WARN("fail to get tablet compaction status from map", KR(ret), K(idx));
       }
-    } else if (ObTabletCompactionStatusEnum::INITIAL == tablet_status) {
+    } else if (OB_UNLIKELY(ObTabletCompactionStatusEnum::INITIAL == tablet_status)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid tablet status", KR(ret), K(tablet_status));
     } else if (ObTabletCompactionStatusEnum::CAN_SKIP_VERIFYING == tablet_status) {
@@ -747,7 +747,7 @@ int ObChecksumValidator::handle_index_table(
   } else if (fts_group_array_.need_check_fts() && index_simple_schema.is_fts_or_multivalue_index()) {
     LOG_INFO("skip fts or multivalue index", KR(ret), K(index_table_id), K(index_compaction_info));
   } else {
-      if (index_compaction_info.is_compacted() && data_compaction_info.is_compacted()) {
+    if (index_compaction_info.is_compacted() && data_compaction_info.is_compacted()) {
 #ifdef ERRSIM
         if (OB_SUCC(ret)) {
           ret = OB_E(EventTable::EN_MEDIUM_VERIFY_GROUP_SKIP_SET_VERIFY) OB_SUCCESS;

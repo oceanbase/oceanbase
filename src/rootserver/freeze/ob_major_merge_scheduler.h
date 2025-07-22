@@ -135,7 +135,7 @@ private:
   common::ObServerConfig *config_;
   ObTenantAllZoneMergeStrategy merge_strategy_;
   common::ObMySQLProxy *sql_proxy_;
-  ObBasicMergeProgressChecker *progress_checker_;
+  ObMajorMergeProgressChecker progress_checker_;
   DISALLOW_COPY_AND_ASSIGN(ObMajorMergeScheduler);
 };
 

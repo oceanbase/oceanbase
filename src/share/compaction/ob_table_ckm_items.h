@@ -123,14 +123,6 @@ public:
     common::ObMySQLProxy &sql_proxy,
     share::schema::ObSchemaGetterGuard &schema_guard,
     const compaction::ObTabletLSPairCache &tablet_ls_pair_cache);
-#ifdef OB_BUILD_SHARED_STORAGE
-  int build_for_s2(
-    const uint64_t table_id,
-    const share::SCN &compaction_scn,
-    common::ObMySQLProxy &sql_proxy,
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    const compaction::ObTabletLSPairCache &tablet_ls_pair_cache);
-#endif
   int build_column_ckm_sum_array(
     const bool is_data_table,
     const share::SCN &compaction_scn,

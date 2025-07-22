@@ -262,42 +262,6 @@ int ObTableCkmItems::build(
   return ret;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObTableCkmItems::build_for_s2(
-    const uint64_t table_id,
-    const share::SCN &compaction_scn,
-    common::ObMySQLProxy &sql_proxy,
-    schema::ObSchemaGetterGuard &schema_guard,
-    const compaction::ObTabletLSPairCache &tablet_ls_pair_cache)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObTabletID, 64> tablet_id_array;
-
-  if (OB_FAIL(prepare_build(table_id, schema_guard, tablet_ls_pair_cache, tablet_id_array))) {
-    LOG_WARN("failed to prepare build ckm items", K(ret));
-  } else if (OB_FAIL(ckm_items_.init(tenant_id_, tablet_pairs_.count()))) {
-    STORAGE_LOG(WARN, "failed to init ckm array", K(ret), K_(tenant_id), K(tablet_pairs_.count()));
-  } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id_,
-                                                                tablet_pairs_,
-                                                                compaction_scn,
-                                                                sql_proxy,
-                                                                ckm_items_,
-                                                                true/*include_larger_than*/,
-                                                                share::OBCG_DEFAULT))) {
-    LOG_WARN("failed to get table column checksum items", KR(ret));
-  } else if (!table_schema_->is_index_table() && OB_FAIL(sort_col_id_array_.build(tenant_id_, *table_schema_))) {
-    LOG_WARN("failed to build column id array for data table", KR(ret), KPC(table_schema_));
-  } else {
-    table_id_ = table_id;
-    is_inited_ = true;
-  }
-
-  if (OB_FAIL(ret)) {
-    reset();
-  }
-  return ret;
-}
-#endif
 
 // For partition split ddl, the scenario will generate major sstables with more columns expectedly.
 // 1. multi parts compact with columns cnt A.
@@ -438,7 +402,8 @@ int ObTableCkmItems::validate_column_ckm_sum(
     LOG_WARN("failed to build column ckm sum map for index table", KR(ret));
   } else if (OB_UNLIKELY(data_row_cnt != index_row_cnt)) {
     ret = OB_CHECKSUM_ERROR;
-    LOG_ERROR("sum row count in data & global index is not equal", KR(ret), K(data_row_cnt), K(index_row_cnt));
+    LOG_WARN("sum row count in data & global index is not equal", KR(ret), "data_table_id", data_table_schema->get_table_id(),
+      "index_table_id", index_table_schema->get_table_id(), K(data_row_cnt), K(index_row_cnt));
   } else if (OB_FAIL(compare_ckm_by_column_ids(
                  data_ckm,
                  index_ckm,
