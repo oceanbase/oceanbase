@@ -453,13 +453,14 @@ int ObRebuildIndexTask::create_and_wait_rebuild_task_finish(const ObDDLTaskStatu
   } else if (-1 == index_build_task_id_ && OB_FAIL(rebuild_index())) {
     LOG_WARN("failed to rebuild index", KR(ret));
   } else if (OB_FAIL(check_ddl_task_finish(tenant_id_, index_build_task_id_, state_finished))) {
-    if (OB_CANCELED == ret) {
+    if (state_finished) {
       index_build_task_id_ = -1;
       new_index_id_ = -1;
-      LOG_INFO("create index task is canceled, reset new_index_id_", KR(ret));
+      LOG_INFO("failed to create vec index, reset new_index_id_ to avoid submit drop again", KR(ret));
     }
     LOG_WARN("check ddl task finish failed", K(ret), K(index_build_task_id_));
   }
+
   if (state_finished || OB_FAIL(ret)) {
     DEBUG_SYNC(REBUILD_INDEX_WAIT_CREATE_TASK_FINISH);
     (void)switch_status(new_status, true, ret);
