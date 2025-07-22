@@ -962,10 +962,8 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
         if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
           LOG_WARN("push variable assign filter store non-pushdown filter failed", K(ret), K(i));
         }
-      } else if (has_func_lookup() &&
-          (filters.at(i)->has_flag(CNT_MATCH_EXPR) || !flags.at(i))) {
+      } else if (has_func_lookup() && (filters.at(i)->has_flag(CNT_MATCH_EXPR))) {
         // for filter with match expr in functional lookup, need to be evaluated after func lookup
-        // push-down filter on main-table lookup with functional lookup not supported by executor
         if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
           LOG_WARN("push func-lookup match filter to non-pushdown array failed", K(ret), K(i));
         }
@@ -998,6 +996,11 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
           }
         } else if (OB_FAIL(scan_pushdown_filters.push_back(filters.at(i)))) {
           LOG_WARN("store scan pushdown filter failed", K(ret), K(i));
+        }
+      } else if (has_func_lookup() && !flags.at(i)) {
+        // push-down filter on main-table lookup with functional lookup not supported by executor
+        if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
+          LOG_WARN("push main lookup filter with functional lookup to non-pushdown array failed", K(ret), K(i));
         }
       } else if (OB_FAIL(lookup_pushdown_filters.push_back(filters.at(i)))) {
         LOG_WARN("store lookup pushdown filter failed", K(ret), K(i));
