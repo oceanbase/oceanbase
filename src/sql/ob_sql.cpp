@@ -2220,8 +2220,6 @@ int ObSql::init_execute_params_for_ab(ObIAllocator &allocator,
       } else if (OB_ISNULL(array_obj = reinterpret_cast<const ObSqlArrayObj*>(src_param.get_ext()))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(i), K(src_param));
-      } else {
-        obj_param.set_accuracy(array_obj->element_.get_accuracy());
       }
       obj_param.get_param_flag().is_batch_parameter_ = true;
     }
