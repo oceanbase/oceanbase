@@ -240,6 +240,7 @@ public:
                           ls_id_(ObLSID::INVALID_LS_ID),
                           ctx_(nullptr),
                           vec_idx_mgr_(nullptr),
+                          old_adapter_(nullptr),
                           allocator_(ObMemAttr(MTL_ID(), "VecIdxASyTask"))
   {
   }
@@ -247,6 +248,7 @@ public:
   int init(const uint64_t tenant_id, const ObLSID &ls_id, const int task_type, ObVecIndexAsyncTaskCtx *ctx);
   int get_task_type() { return task_type_; }
   ObVecIndexAsyncTaskCtx *get_task_ctx() { return ctx_; }
+  void set_old_adapter(ObPluginVectorIndexAdaptor* adapter) { old_adapter_ = adapter; }
   int do_work();
 
   TO_STRING_KV(K_(is_inited), K_(task_type), K_(tenant_id), K_(ctx));
@@ -276,6 +278,7 @@ private:
   ObLSID ls_id_;
   ObVecIndexAsyncTaskCtx *ctx_;
   ObPluginVectorIndexMgr *vec_idx_mgr_;
+  ObPluginVectorIndexAdaptor* old_adapter_;
   common::ObArenaAllocator allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObVecIndexAsyncTask);
 };

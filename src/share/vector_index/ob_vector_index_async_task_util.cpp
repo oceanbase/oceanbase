@@ -1102,6 +1102,7 @@ int ObVecIndexAsyncTask::do_work()
   } else if (!check_task_satisfied_memory_limited(*adpt_guard.get_adatper())) {
     ret = OB_EAGAIN; // will retry
     LOG_INFO("skip to do async task due to tenant memory limit", KR(ret), KPC(ctx_));
+  } else if (FALSE_IT(set_old_adapter(adpt_guard.get_adatper()))) {
   } else {
     adpt_buff = vector_index_service->get_allocator().alloc(sizeof(ObPluginVectorIndexAdaptor));
     if (OB_ISNULL(adpt_buff)) {
@@ -1373,6 +1374,7 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
     LOG_WARN("failed to refresh snapshot index data", K(ret));
   }
   RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
+  RWLock::WLockGuard query_lock_guard(old_adapter_->get_query_lock()); // lock for query before end trans
   int tmp_ret = OB_SUCCESS;
   if (trans_start && OB_SUCCESS != (tmp_ret = ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, timeout_us))) {
     ret = tmp_ret;

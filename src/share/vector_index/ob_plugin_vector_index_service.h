@@ -102,7 +102,8 @@ public:
       mem_sync_info_(tenant_id),
       memory_context_(memory_context),
       all_vsag_use_mem_(nullptr),
-      async_task_opt_(tenant_id)
+      async_task_opt_(tenant_id),
+      ls_leader_(false)
   {}
   virtual ~ObPluginVectorIndexMgr();
 
@@ -120,6 +121,8 @@ public:
   void destroy();
 
   void release_all_adapters();
+  bool get_ls_leader() { return ls_leader_; }
+  void set_ls_leader(const bool ls_leader) { ls_leader_ = ls_leader; }
 
   int get_adapter_inst_guard(ObTabletID tablet_id, ObPluginVectorIndexAdapterGuard &adpt_guard);
   int get_build_helper_inst_guard(const ObIvfHelperKey &key, ObIvfBuildHelperGuard &helper_guard);
@@ -218,7 +221,8 @@ private:
   ObVectorIndexMemSyncInfo mem_sync_info_; // handle follower memdata sync
   lib::MemoryContext &memory_context_;
   uint64_t *all_vsag_use_mem_;
-  ObVecIndexAsyncTaskOption async_task_opt_; //
+  ObVecIndexAsyncTaskOption async_task_opt_;
+  bool ls_leader_;
 };
 
 // id to unique identify an vector index adapter

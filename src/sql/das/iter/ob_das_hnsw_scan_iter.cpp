@@ -19,6 +19,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_expr_vector.h"
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "share/vector_index/ob_plugin_vector_index_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -385,7 +386,6 @@ int ObDASHNSWScanIter::save_distance_expr_result(const ObObj& dist_obj)
 int ObDASHNSWScanIter::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
-
   if (limit_param_.limit_ + limit_param_.offset_ == 0) {
     ret = OB_ITER_END;
   } else if (OB_ISNULL(adaptor_vid_iter_)) {
@@ -564,6 +564,7 @@ int ObDASHNSWScanIter::process_adaptor_state_hnsw(ObIAllocator &allocator, bool 
   index_ctx.vbitmap_tablet_id_ = index_id_tablet_id_;
   index_ctx.snapshot_tablet_id_ = snapshot_tablet_id_;
   index_ctx.data_tablet_id_ = com_aux_vec_tablet_id_;
+  bool ls_leader = true;
 
   if (OB_FAIL(vec_index_service->acquire_adapter_guard(ls_id_, index_ctx, adaptor_guard, &vec_index_param_, dim_))) {
     LOG_WARN("failed to get ObPluginVectorIndexAdapter", K(ret), K(ls_id_), K(index_ctx));
@@ -574,14 +575,20 @@ int ObDASHNSWScanIter::process_adaptor_state_hnsw(ObIAllocator &allocator, bool 
       LOG_WARN("shouldn't be null.", K(ret));
     } else if (!query_cond_.is_inited() && OB_FAIL(set_vector_query_condition(query_cond_))) {
       LOG_WARN("failed to set query condition.", K(ret));
-    } else if (is_pre_filter_) {
-      if (OB_FAIL(process_adaptor_state_pre_filter(&ada_ctx, adaptor, is_vectorized))) {
-        LOG_WARN("hnsw pre filter failed to query result.", K(ret));
+    } else if (OB_FAIL(ObPluginVectorIndexUtils::get_ls_leader_flag(ls_id_, ls_leader))) {
+      LOG_WARN("fail to get ls leader flag", K(ret), K(ls_id_));
+    } else if (OB_FALSE_IT(ada_ctx.set_ls_leader(ls_leader))) {
+    } else {
+      RWLock::RLockGuard lock_guard(adaptor->get_query_lock());
+      if (is_pre_filter_) {
+        if (OB_FAIL(process_adaptor_state_pre_filter(&ada_ctx, adaptor, is_vectorized))) {
+          LOG_WARN("hnsw pre filter failed to query result.", K(ret));
+        }
+      // for compatibility, do not check by vec_aux_ctdef.is_post_filter(), use is_pre_filter_ instead
+      // because the vec_type_ is not serialize in the vec_ctdef in version 435, making it impossible to use this flag to check whether it is pre/post
+      } else if (OB_FAIL(process_adaptor_state_post_filter(&ada_ctx, adaptor, is_vectorized))) {
+        LOG_WARN("hnsw post filter failed to query result.", K(ret));
       }
-    // for compatibility, do not check by vec_aux_ctdef.is_post_filter(), use is_pre_filter_ instead
-    // because the vec_type_ is not serialize in the vec_ctdef in version 435, making it impossible to use this flag to check whether it is pre/post
-    } else if (OB_FAIL(process_adaptor_state_post_filter(&ada_ctx, adaptor, is_vectorized))) {
-      LOG_WARN("hnsw post filter failed to query result.", K(ret));
     }
   }
 
@@ -840,7 +847,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter(
   } else {
     if (OB_FAIL(adaptor->set_adaptor_ctx_flag(ada_ctx))) {
       LOG_WARN("failed to set adaptor ctx flag", K(ret));
-    } else if (PVQP_SECOND == ada_ctx->get_flag()) {
+    } else if (PVQP_SECOND == ada_ctx->get_flag() || (!ada_ctx->get_ls_leader())) {
       if (OB_FAIL(do_snapshot_table_scan())) {
         LOG_WARN("failed to do snapshot table scan.", K(ret));
       }
@@ -850,6 +857,12 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter(
     } else if (OB_NOT_NULL(snapshot_iter_) && OB_FALSE_IT(query_cond_.row_iter_ = snapshot_iter_->get_output_result_iter())) {
     } else if (OB_FAIL(adaptor->query_result(ls_id_, ada_ctx, &query_cond_, adaptor_vid_iter_))) {
       LOG_WARN("failed to query result.", K(ret));
+    } else if (PVQ_REFRESH == ada_ctx->get_status()) {
+      if (OB_FAIL(ObPluginVectorIndexUtils::query_need_refresh_memdata(adaptor, ls_id_))) {
+        if (ret != OB_SCHEMA_EAGAIN) {
+          LOG_WARN("fail to refresh memdata in query", K(ret));
+        }
+      }
     }
   }
   return ret;
@@ -1716,6 +1729,7 @@ int ObDASHNSWScanIter::prepare_state(const ObVidAdaLookupStatus& cur_state, ObVe
       }
       break;
     }
+    case ObVidAdaLookupStatus::STATES_REFRESH:
     case ObVidAdaLookupStatus::STATES_SET_RESULT: {
       // do nothing
       break;
@@ -1734,7 +1748,6 @@ int ObDASHNSWScanIter::call_pva_interface(const ObVidAdaLookupStatus& cur_state,
                                           ObPluginVectorIndexAdaptor &adaptor)
 {
   int ret = OB_SUCCESS;
-
   switch(cur_state) {
     case ObVidAdaLookupStatus::STATES_INIT: {
       ObNewRowIterator *real_delta_buf_iter = delta_buf_iter_->get_output_result_iter();
@@ -1767,8 +1780,18 @@ int ObDASHNSWScanIter::call_pva_interface(const ObVidAdaLookupStatus& cur_state,
     }
     case ObVidAdaLookupStatus::STATES_SET_RESULT: {
       if (OB_NOT_NULL(snapshot_iter_) && OB_FALSE_IT(query_cond_.row_iter_ = snapshot_iter_->get_output_result_iter())) {
+      } else if (!ada_ctx.get_ls_leader() && OB_FAIL(prepare_follower_query_cond(query_cond_))) {
+        LOG_WARN("fail to prepare query cond of follower", K(ret));
       } else if (OB_FAIL(adaptor.query_result(ls_id_, &ada_ctx, &query_cond_, post_with_filter_ ? tmp_adaptor_vid_iter_ : adaptor_vid_iter_))) {
         LOG_WARN("failed to query result.", K(ret));
+      }
+      break;
+    }
+    case ObVidAdaLookupStatus::STATES_REFRESH: {        // refresh
+      if (OB_FAIL(ObPluginVectorIndexUtils::query_need_refresh_memdata(&adaptor, ls_id_))) {
+        if (ret != OB_SCHEMA_EAGAIN) {
+          LOG_WARN("fail to refresh memdata in query", K(ret));
+        }
       }
       break;
     }
@@ -1841,6 +1864,14 @@ int ObDASHNSWScanIter::next_state(ObVidAdaLookupStatus& cur_state, ObVectorQuery
       break;
     }
     case ObVidAdaLookupStatus::STATES_SET_RESULT: {
+      if (ada_ctx.get_status() == PluginVectorQueryResStatus::PVQ_REFRESH) {
+        cur_state = ObVidAdaLookupStatus::STATES_REFRESH;
+      } else {
+        cur_state = ObVidAdaLookupStatus::STATES_FINISH;
+      }
+      break;
+    }
+    case ObVidAdaLookupStatus::STATES_REFRESH: {
       cur_state = ObVidAdaLookupStatus::STATES_FINISH;
       break;
     }
@@ -2019,6 +2050,19 @@ int ObDASHNSWScanIter::build_rowkey_obj_from_extra_info(ObObj *extra_info_objs, 
     }
   }
 
+  return ret;
+}
+
+int ObDASHNSWScanIter::prepare_follower_query_cond(ObVectorQueryConditions &query_cond)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(query_cond_.row_iter_)) {
+    if (OB_FAIL(do_snapshot_table_scan())) {
+      LOG_WARN("fail to do snapshot table scan", K(ret));
+    } else if (OB_NOT_NULL(snapshot_iter_)) {
+      query_cond_.row_iter_ = snapshot_iter_->get_output_result_iter();
+    }
+  }
   return ret;
 }
 

@@ -234,7 +234,8 @@ public:
       vec_data_(),
       allocator_(allocator),
       tmp_allocator_(tmp_allocator),
-      batch_allocator_("BATCHALLOC", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()) {};
+      batch_allocator_("BATCHALLOC", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      ls_leader_(true) {};
   ~ObVectorQueryAdaptorResultContext();
   int init_bitmaps();
   int init_prefilter(const int64_t &min, const int64_t &max);
@@ -263,6 +264,8 @@ public:
   void set_vectors(ObObj *vectors) { vec_data_.vectors_ = vectors; }
   int set_extra_info(int64_t index, const ObRowkey &rowkey, const ObIArray<int64_t> &extra_in_rowkey_idxs);
   void set_extra_infos(ObVecExtraInfoObj *extra_info_objs) { vec_data_.extra_info_objs_ = extra_info_objs; }
+  void set_ls_leader(const bool ls_leader) { ls_leader_ = ls_leader; }
+  bool get_ls_leader() { return ls_leader_; }
 
   void do_next_batch()
   {
@@ -282,6 +285,7 @@ private:
   ObIAllocator *allocator_;       // allocator for vec_lookup_op, used to allocate memory for final query result
   ObIAllocator *tmp_allocator_;   // used to temporarily allocate memory during the query process and does not affect the final query results
   ObArenaAllocator batch_allocator_; // Used to complete_delta_buffer_data in batches, reuse after each batch of data is completed
+  bool ls_leader_;
 };
 
 class ObVectorQueryConditions {
@@ -688,8 +692,12 @@ public:
   int set_snapshot_key_prefix(uint64_t tablet_id, uint64_t scn, uint64_t max_length);
   int copy_meta_info(ObPluginVectorIndexAdaptor &other);
 
+  void set_reload_finish(const bool value) { reload_finish_ = value; };
+  bool get_reload_finish() { return reload_finish_; };
   int get_inc_index_row_cnt(int64_t &count);
   int get_snap_index_row_cnt(int64_t &count);
+  common::RWLock& get_query_lock() { return query_lock_; }
+  common::ObSpinLock& get_reload_lock() { return reload_lock_; }
 
   int get_vid_bound(ObVidBound &bound);
 
@@ -789,6 +797,9 @@ private:
   int64_t extra_info_column_count_;
   ObString snapshot_key_prefix_; // name rule: TabletID_SCN
   common::ObSpinLock opt_task_lock_;
+  common::ObSpinLock reload_lock_;  // lock for reload from table
+  RWLock query_lock_;// lock for async task and query
+  bool reload_finish_;
 
   constexpr static uint32_t VEC_INDEX_INCR_DATA_SYNC_THRESHOLD = 100;
   constexpr static uint32_t VEC_INDEX_VBITMAP_SYNC_THRESHOLD = 100;
