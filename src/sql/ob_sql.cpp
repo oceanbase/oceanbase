@@ -5983,6 +5983,8 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
   ObDASCtx &das_ctx = pc_ctx.exec_ctx_.get_das_ctx();
   bool should_reroute = false;
   if (OB_NOT_NULL(plan)) {
+    session.partition_hit().try_set_bool(das_ctx.is_partition_hit());
+
     should_reroute = pc_ctx.sql_ctx_.can_reroute_sql_
       && (OB_PHY_PLAN_REMOTE == plan->get_plan_type()
           || (!das_ctx.is_partition_hit() && !das_ctx.get_table_loc_list().empty()));
