@@ -1161,7 +1161,7 @@ bool ObPartTransCtx::is_in_2pc_() const
 bool ObPartTransCtx::is_in_durable_2pc_() const
 {
   ObTxState state = exec_info_.state_;
-  return state >= ObTxState::PREPARE || (is_sub2pc() && state >= ObTxState::REDO_COMPLETE);
+  return state >= ObTxState::PREPARE || ((is_sub2pc() || exec_info_.is_dup_tx_) && state >= ObTxState::REDO_COMPLETE);
 }
 
 bool ObPartTransCtx::is_logging_() const { return !busy_cbs_.is_empty(); }
@@ -4586,13 +4586,13 @@ int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
     log_block.get_header().set_log_entry_no(exec_info_.next_log_entry_no_);
     if (OB_FAIL(log_block.seal(replay_hint_v, barrier))) {
       TRANS_LOG(WARN, "seal log block fail", K(ret));
-    } else if (OB_SUCC(ls_tx_ctx_mgr_->get_ls_log_adapter()
-                       ->submit_log(log_block.get_buf(),
-                                    log_block.get_size(),
-                                    base_scn,
-                                    log_cb,
-                                    !is_2pc_state_log, /*nonblock*/
-                                    retry_timeout_us))) {
+    } else if (OB_FAIL(log_cb->get_cb_arg_array().assign(log_block.get_cb_arg_array()))) {
+      TRANS_LOG(WARN, "assign cb_arg_array failed", K(ret), K(trans_id_), K(ls_id_), K(log_block),
+                KPC(log_cb));
+    } else if (OB_SUCC(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
+                   log_block.get_buf(), log_block.get_size(), base_scn, log_cb,
+                   !is_2pc_state_log, /*nonblock*/
+                   retry_timeout_us))) {
       busy_cbs_.add_last(log_cb);
       log_cb->set_log_size(log_block.get_size());
       ObTxLogCbPool::start_syncing_with_stat(log_cb->get_group_ptr(), log_block.get_size());
@@ -4783,10 +4783,15 @@ int ObPartTransCtx::after_submit_log_(ObTxLogBlock &log_block,
   if (cb_arg_array.count() == 0) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(*this));
-  } else if (OB_FAIL(log_cb->get_cb_arg_array().assign(cb_arg_array))) {
+  } else if (log_cb->get_cb_arg_array().empty()
+           && OB_FAIL(log_cb->get_cb_arg_array().assign(cb_arg_array))) {
     TRANS_LOG(WARN, "assign cb arg array failed", K(ret));
   } else {
     for (int i = 0; i < cb_arg_array.count(); i++) {
+      if (cb_arg_array[i].get_log_type() != log_cb->get_cb_arg_array()[i].get_log_type()) {
+        TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpectd log type between th log block and the log cb",
+                      K(ret), K(i), KPC(log_cb), K(log_block));
+      }
       bitmap |= (uint64_t)cb_arg_array.at(i).get_log_type();
     }
     if (bitmap_is_contain(ObTxLogType::TX_REDO_LOG) ||
@@ -4854,6 +4859,7 @@ int ObPartTransCtx::after_submit_log_(ObTxLogBlock &log_block,
   if (OB_SUCC(ret) && bitmap_is_contain(ObTxLogType::TX_ABORT_LOG)) {
     sub_state_.set_state_log_submitting();
     sub_state_.set_state_log_submitted();
+    TRANS_LOG(INFO, "AFTER SUBMIT ABORT LOG", K(ret), KPC(log_cb), K(sub_state_),K(exec_info_));
   }
   if (OB_SUCC(ret) && bitmap_is_contain(ObTxLogType::TX_CLEAR_LOG)) {
     sub_state_.set_state_log_submitting();
@@ -4870,7 +4876,7 @@ int ObPartTransCtx::after_submit_log_(ObTxLogBlock &log_block,
     TRANS_LOG(WARN, "after submit log failed", K(ret), K(trans_id_), K(ls_id_), K(exec_info_), K(*log_cb));
   } else {
 #ifndef NDEBUG
-    TRANS_LOG(INFO, "after submit log success", K(ret), K(trans_id_), K(ls_id_), K(exec_info_), K(*log_cb), KPC(this));
+    TRANS_LOG(INFO, "after submit log success", K(ret), K(*log_cb), KPC(this), K(log_block), K(bitmap));
 #endif
   }
   REC_TRANS_TRACE_EXT(tlog_,
@@ -6826,7 +6832,11 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObTxCommitCallback *&cb_list_h
        *   - found the txn has aborted or survived on the new Leader
        *   - detect commit timeout
        */
-      if (exec_info_.state_ < ObTxState::REDO_COMPLETE && !sub_state_.is_info_log_submitted()) {
+      if(is_in_2pc_() && !sub_state_.is_gts_waiting()) {
+        need_submit_log = false;
+        log_type = ObTxLogType::UNKNOWN;
+        // no need to submit info log in 2pc
+      } else if (exec_info_.state_ < ObTxState::REDO_COMPLETE && !sub_state_.is_info_log_submitted()) {
         need_submit_log = true;
         log_type = ObTxLogType::TX_COMMIT_INFO_LOG;
       }
@@ -6887,7 +6897,12 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObTxCommitCallback *&cb_list_h
     TRANS_LOG(WARN, "switch to follower gracefully failed", KR(ret), KPC(this));
   } else {
 #ifndef NDEBUG
-    TRANS_LOG(INFO, "switch to follower gracefully succeed", KPC(this));
+    TRANS_LOG(INFO,
+              "switch to follower gracefully succeed",
+              K(need_submit_log),
+              K(log_type),
+              K(timeguard.get_diff()),
+              KPC(this));
 #endif
   }
 
