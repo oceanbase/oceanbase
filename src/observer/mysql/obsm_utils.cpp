@@ -684,7 +684,7 @@ int ObSMUtils::extend_cell_str(char *buf, const int64_t len,
     OB_LOG(WARN, "size over flow.", K(ret), K(len), K(user_type->get_name()));
   } else {
     ObArenaAllocator alloc;
-    char* tmp_buf = static_cast<char*>(alloc.alloc(len - pos - 12));
+    char* tmp_buf = static_cast<char*>(alloc.alloc(len - pos));
     int64_t tmp_pos = 0;
     MEMCPY(tmp_buf + tmp_pos, user_type->get_name().ptr(), user_type->get_name().length());
     tmp_pos += user_type->get_name().length();
