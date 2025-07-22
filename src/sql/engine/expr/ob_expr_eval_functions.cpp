@@ -1832,6 +1832,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObLocationExprOperator::calc_location_expr_vector,                     /* 225 */
   NULL, // ObExprConvertTZ::calc_convert_tz_vector,                               /* 226 */
   NULL, // ObExprMul::mul_decimalint64_int64_int64_vector,                        /* 227 */
+  NULL, // ObExprHash::calc_hash_value_expr_vector,                               /* 228 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
