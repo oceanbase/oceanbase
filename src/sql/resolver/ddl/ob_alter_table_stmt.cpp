@@ -39,7 +39,13 @@ ObAlterTableStmt::ObAlterTableStmt()
 
 ObAlterTableStmt::~ObAlterTableStmt()
 {
-  index_arg_list_.reuse();
+  for (int64_t i = 0; i < index_arg_list_.count(); ++i) {
+    if (OB_NOT_NULL(index_arg_list_.at(i))) {
+      index_arg_list_.at(i)->~ObCreateIndexArg();
+      index_arg_list_.at(i) = nullptr;
+    }
+  }
+  index_arg_list_.reset();
   fts_arg_allocator_ = nullptr;
 }
 
