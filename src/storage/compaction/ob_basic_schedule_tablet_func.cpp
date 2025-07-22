@@ -19,14 +19,16 @@ namespace compaction
 /********************************************ObBasicScheduleTabletFunc impl******************************************/
 
 ObBasicScheduleTabletFunc::ObBasicScheduleTabletFunc(
-  const int64_t merge_version)
+  const int64_t merge_version,
+  const int64_t loop_cnt)
   : merge_version_(merge_version),
     ls_status_(),
     tablet_cnt_(),
     freeze_param_(),
     ls_could_schedule_new_round_(false),
     ls_could_schedule_merge_(false),
-    is_skip_merge_tenant_(false)
+    is_skip_merge_tenant_(false),
+    loop_cnt_(loop_cnt)
 {
 }
 
@@ -85,6 +87,7 @@ void ObBasicScheduleTabletFunc::schedule_freeze_dag(const bool force)
   if (freeze_param_.tablet_info_array_.empty()) {
   } else if (!force && freeze_param_.tablet_info_array_.count() < SCHEDULE_DAG_THREHOLD) {
   } else {
+    freeze_param_.loop_cnt_ = get_loop_cnt();
     if (OB_TMP_FAIL(ObScheduleDagFunc::schedule_batch_freeze_dag(freeze_param_))) {
       LOG_WARN_RET(tmp_ret, "failed to schedule batch force freeze tablets dag", K(freeze_param_));
       // most tablets will clear failed since the capacity of ObTenantTabletStatMgr is limited

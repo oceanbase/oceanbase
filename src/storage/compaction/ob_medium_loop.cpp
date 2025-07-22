@@ -62,6 +62,7 @@ int ObMediumLoop::loop()
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   ObScheduleTabletFunc func(merge_version_);
+  func.set_loop_cnt(loop_cnt_);
   ObLSID ls_id;
   schedule_stats_.all_ls_weak_read_ts_ready_ = true;
   while (OB_SUCC(ret)) {
