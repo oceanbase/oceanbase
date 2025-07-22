@@ -3079,7 +3079,7 @@ int ObDMLResolver::replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_re
         LOG_WARN("failed to replace ref column", K(ret), KPC(self));
       }
     } else if (real_ref_expr->get_param_expr(0)->is_udf_expr()) {
-      if (OB_FAIL(replace_pl_relative_expr_to_question_mark(real_ref_expr->get_param_expr(0)))) {
+      if (OB_FAIL(SMART_CALL(replace_pl_relative_expr_to_question_mark(real_ref_expr->get_param_expr(0))))) {
         LOG_WARN("failed replace pl relative expr to question mark", K(ret), KPC(real_ref_expr));
       }
     }
