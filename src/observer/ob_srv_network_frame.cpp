@@ -260,6 +260,7 @@ int ObSrvNetworkFrame::reload_config()
   int32_t tcp_keepintvl     = static_cast<int>(GCONF.tcp_keepintvl);
   int32_t tcp_keepcnt       = static_cast<int>(GCONF.tcp_keepcnt);
   int32_t user_timeout      = static_cast<int>(GCONF.dead_socket_detection_timeout);
+  int64_t stream_rpc_max_wait_thread_count = static_cast<int64_t>(GCONF._stream_rpc_max_wait_thread_count);
 
   if (GCONF._enable_easy_keepalive) {
     enable_easy_keepalive = 1;
@@ -289,6 +290,8 @@ int ObSrvNetworkFrame::reload_config()
                                                                         tcp_keepidle, tcp_keepintvl,
                                                                         tcp_keepcnt))) {
     LOG_WARN("Failed to set sql tcp keepalive parameters for sql nio server", K(ret));
+  } else {
+    xlator_.get_session_handler().set_max_wait_thread_count(stream_rpc_max_wait_thread_count);
   }
   return ret;
 }
