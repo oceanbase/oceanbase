@@ -318,8 +318,6 @@ int ObPLCompilerUtils::compile_udt(ObExecContext &ctx,
         OZ (pl::ObPLUDTObjectManager::compile_udt(resolve_ctx,
                                                   spec_id,
                                                   body_id,
-                                                  false,
-                                                  false,
                                                   udt_info,
                                                   obj_spec,
                                                   obj_body));
