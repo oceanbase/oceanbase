@@ -758,6 +758,12 @@ int ObReplaceLSReplicaTask::execute(
     ObDRTaskRetComment &ret_comment) const
 {
   int ret = OB_SUCCESS;
+#ifdef ERRSIM
+  if (GCONF.errsim_migration_ls_id == get_ls_id().id() && is_user_tenant(get_tenant_id())) {
+    LOG_ERROR("errsim skip before replace replica rpc to observer", "ls_id", get_ls_id());
+    DEBUG_SYNC(BEFORE_SCHEDULE_REPLACE_LS);
+  }
+#endif
   ObLSReplaceReplicaArg arg;
   int64_t rpc_timeout = DisasterRecoveryUtils::DR_TASK_RPC_REQUEST_TIMEOUT + GCONF.rpc_timeout;
   if (OB_UNLIKELY(ERRSIM_SKIP_SEND_SINGLE_REPLACE_RPC_TO_OBSERVER)) {
