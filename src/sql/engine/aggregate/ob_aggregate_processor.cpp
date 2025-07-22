@@ -92,6 +92,14 @@ OB_DEF_SERIALIZE(ObAggrInfo)
   } else {
     OB_UNIS_ENCODE(grouping_with_hash_rollup);
   }
+
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              external_routine_type_,
+              external_routine_entry_,
+              external_routine_url_,
+              external_routine_resource_
+  );
+
   return ret;
 }
 
@@ -155,6 +163,14 @@ OB_DEF_DESERIALIZE(ObAggrInfo)
       }
     }
   }
+
+  LST_DO_CODE(OB_UNIS_DECODE,
+              external_routine_type_,
+              external_routine_entry_,
+              external_routine_url_,
+              external_routine_resource_
+  );
+
   return ret;
 }
 
@@ -200,6 +216,14 @@ OB_DEF_SERIALIZE_SIZE(ObAggrInfo)
   if (hash_rollup_info_ != nullptr) {
     OB_UNIS_ADD_LEN(*hash_rollup_info_);
   }
+
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              external_routine_type_,
+              external_routine_entry_,
+              external_routine_url_,
+              external_routine_resource_
+  );
+
   return len;
 }
 
@@ -228,7 +252,11 @@ int64_t ObAggrInfo::to_string(char *buf, const int64_t buf_len) const
        KPC_(item_size_param_expr),
        K_(is_need_deserialize_row),
        K_(pl_agg_udf_type_id),
-       K_(pl_result_type)
+       K_(pl_result_type),
+       K_(external_routine_type),
+       K_(external_routine_entry),
+       K_(external_routine_url),
+       K_(external_routine_resource)
        );
   J_OBJ_END();
   return pos;
@@ -291,6 +319,16 @@ int ObAggrInfo::assign(const ObAggrInfo &rhs)
       LOG_WARN("assign hash rollup info failed", K(ret));
     }
   }
+
+  if (OB_SUCC(ret)) {
+    external_routine_type_ = rhs.external_routine_type_;
+
+    // alloc_ is from rhs, so shallow copy is enough
+    external_routine_entry_ = rhs.external_routine_entry_;
+    external_routine_url_ = rhs.external_routine_url_;
+    external_routine_resource_ = rhs.external_routine_resource_;
+  }
+
   return ret;
 }
 

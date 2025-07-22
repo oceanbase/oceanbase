@@ -170,7 +170,11 @@ public:
     with_unique_keys_(false),
     distinct_hash_funcs_(alloc),
     max_disuse_param_expr_(NULL),
-    hash_rollup_info_(nullptr)
+    hash_rollup_info_(nullptr),
+    external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
+    external_routine_entry_(),
+    external_routine_url_(),
+    external_routine_resource_()
   {}
   virtual ~ObAggrInfo();
 
@@ -257,6 +261,10 @@ public:
   //used for top_k_fre_hist
   ObExpr *max_disuse_param_expr_;
   HashRollupRTInfo *hash_rollup_info_;
+  ObExternalRoutineType external_routine_type_;
+  ObString external_routine_entry_;
+  ObString external_routine_url_;
+  ObString external_routine_resource_;
 };
 
 typedef common::ObFixedArray<ObAggrInfo, common::ObIAllocator> AggrInfoFixedArray;
