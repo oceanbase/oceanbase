@@ -67,7 +67,7 @@ public:
   {}
   virtual ~ObSortVecOpImpl()
   {
-    reset();
+    destroy();
   }
   virtual void reset() override;
   virtual int init(ObSortVecOpContext &context) override;
@@ -88,6 +88,7 @@ public:
   // reset to state before init
   void destroy()
   {
+    sql_mem_processor_.unregister_profile();
     reset();
   }
   int init_pd_topn_filter_msg(ObSortVecOpContext &ctx);
@@ -203,7 +204,7 @@ protected:
   bool need_dump()
   {
     return sql_mem_processor_.get_data_size() > get_tmp_buffer_mem_bound()
-           || get_total_used_size() >= profile_.get_max_bound();
+           || get_total_used_size() >= profile_.get_global_bound_size();
   }
   int64_t get_total_used_size()
   {
