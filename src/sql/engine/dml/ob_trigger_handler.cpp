@@ -214,7 +214,8 @@ int TriggerHandle::init_param_old_row(
       } else if (OB_FAIL(datum->to_obj(result,
           trig_ctdef.old_row_exprs_.at(i)->obj_meta_))) {
         LOG_WARN("failed to datum to obj", K(ret));
-      } else if ((is_udt = ob_is_geometry(trig_ctdef.old_row_exprs_.at(i)->obj_meta_.get_type()))) {
+      } else if (lib::is_oracle_mode()
+                 && (is_udt = ob_is_geometry(trig_ctdef.old_row_exprs_.at(i)->obj_meta_.get_type()))) {
         if (OB_FAIL(OB_ISNULL(eval_ctx.exec_ctx_.get_sql_ctx()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("sql ctx is null", K(ret));
@@ -292,7 +293,8 @@ int TriggerHandle::init_param_new_row(
       } else if (OB_FAIL(datum->to_obj(result,
           trig_ctdef.new_row_exprs_.at(i)->obj_meta_))) {
         LOG_WARN("failed to datum to obj", K(ret));
-      } else if ((is_udt = ob_is_geometry(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type()))) {
+      } else if (lib::is_oracle_mode()
+                 &&(is_udt = ob_is_geometry(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type()))) {
         if (OB_FAIL(OB_ISNULL(eval_ctx.exec_ctx_.get_sql_ctx()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("sql ctx is null", K(ret));
@@ -606,7 +608,8 @@ int TriggerHandle::check_and_update_new_row(
         } else {
           ObObj tmp_obj = new_cells[i];
           ObDatum &write_datum = expr->locate_datum_for_write(eval_ctx);
-          if (ob_is_geometry(expr->obj_meta_.get_type())) {
+          if (lib::is_oracle_mode()
+              && ob_is_geometry(expr->obj_meta_.get_type())) {
             if (OB_FAIL(convert_pl_type_to_sql_type(eval_ctx.exec_ctx_.get_my_session(),
                                                     eval_ctx.exec_ctx_,
                                                     eval_ctx.exec_ctx_.get_allocator(),
