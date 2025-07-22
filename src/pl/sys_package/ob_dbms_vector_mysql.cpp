@@ -383,6 +383,7 @@ int ObDBMSVectorMySql::parse_idx_param(const ObString &idx_type_str,
                                        ObVectorIndexParam &index_param)
 {
   int ret = OB_SUCCESS;
+  const int64_t MAX_DIM_LIMITED = 4096;
   ObArenaAllocator tmp_alloc;
   ObVectorIndexType idx_type = VIT_MAX;
   ObStringBuffer param_str_buf(&tmp_alloc);
@@ -424,6 +425,10 @@ int ObDBMSVectorMySql::parse_idx_param(const ObString &idx_type_str,
     LOG_WARN("unexpected setting of vector index param, distance has not been set",
       K(ret), K(index_param.dist_algorithm_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "the vector index params of distance not set is");
+  } else if (OB_UNLIKELY(dim_count == 0 || dim_count > MAX_DIM_LIMITED)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("vector index dim equal to 0 or larger than 4096 is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "vec index dim equal to 0 or larger than 4096 is");
   } else {
     index_param.dim_ = dim_count;
   }
