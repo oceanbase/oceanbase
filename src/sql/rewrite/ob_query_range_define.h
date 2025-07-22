@@ -264,7 +264,8 @@ struct ObQueryRangeCtx
       can_range_get_(true),
       contail_geo_filters_(false),
       force_no_link_(false),
-      unique_index_column_num_(-1) {}
+      unique_index_column_num_(-1),
+      constraints_expr_factory_(nullptr) {}
   ~ObQueryRangeCtx() {}
   int init(ObPreRangeGraph *pre_range_graph,
            const ObIArray<ColumnItem> &range_columns,
@@ -276,7 +277,8 @@ struct ObQueryRangeCtx
            const int64_t index_prefix,
            const ColumnIdInfoMap *geo_column_id_map,
            const bool force_no_link,
-           const ObTableSchema *index_schema);
+           const ObTableSchema *index_schema,
+           ObRawExprFactory *constraints_expr_factory);
   int64_t column_cnt_;
   // 131 is the next prime number larger than OB_MAX_ROWKEY_COLUMN_NUMBER
   common::hash::ObPlacementHashMap<int64_t, int64_t, 131> range_column_map_;
@@ -309,6 +311,7 @@ struct ObQueryRangeCtx
   bool contail_geo_filters_;
   bool force_no_link_;
   int64_t unique_index_column_num_;
+  ObRawExprFactory *constraints_expr_factory_;
 };
 
 class ObPreRangeGraph : public ObQueryRangeProvider
@@ -360,7 +363,8 @@ public:
                                       const bool ignore_calc_failure = true,
                                       const int64_t index_prefix = -1,
                                       const ObTableSchema *index_schema = NULL,
-                                      const ColumnIdInfoMap *geo_column_id_map = NULL);
+                                      const ColumnIdInfoMap *geo_column_id_map = NULL,
+                                      ObRawExprFactory *constraint_expr_factory = NULL);
   virtual int get_tablet_ranges(common::ObIAllocator &allocator,
                                 ObExecContext &exec_ctx,
                                 ObQueryRangeArray &ranges,

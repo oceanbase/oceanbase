@@ -328,6 +328,12 @@ int ObExprRangeConverter::get_basic_range_node(const ObRawExpr *l_expr,
       if (OB_FAIL(get_rowid_node(*l_expr, *r_expr, cmp_type, range_node))) {
         LOG_WARN("get rowid key part failed.", K(ret));
       }
+    } else if (cmp_type == T_OP_EQ &&
+               ((l_expr->get_expr_type() == T_FUN_SYS_SDO_RELATE && r_expr->is_const_expr()) ||
+                (r_expr->get_expr_type() == T_FUN_SYS_SDO_RELATE && l_expr->is_const_expr()))) {
+      if (OB_FAIL(get_orcl_spatial_range_node(*l_expr, *r_expr, expr_depth, range_node))) {
+        LOG_WARN("failed to get orcl spatial range_node", K(ret));
+      }
     } else if (ObSQLUtils::is_min_cluster_version_ge_425_or_435() &&
                ObSQLUtils::is_opt_feature_version_ge_425_or_435(ctx_.optimizer_features_enable_version_) &&
                ((l_ori_expr->get_expr_type() == T_FUN_SYS_CAST && r_ori_expr->is_const_expr()) ||
@@ -2736,7 +2742,6 @@ int ObExprRangeConverter::convert_geo_expr(const ObRawExpr *geo_expr,
         op_type = (ObDomainOpType::T_GEO_COVERS == op_type ? ObDomainOpType::T_GEO_COVEREDBY :
                   (ObDomainOpType::T_GEO_COVEREDBY == op_type ? ObDomainOpType::T_GEO_COVERS : op_type));
       }
-
       if (OB_ISNULL(column_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to find column item", K(ret), KPC(r_expr), KPC(l_expr));
@@ -2768,7 +2773,7 @@ int ObExprRangeConverter::convert_geo_expr(const ObRawExpr *geo_expr,
 int ObExprRangeConverter::get_geo_range_node(const ObColumnRefRawExpr *column_expr,
                                              common::ObDomainOpType geo_type,
                                              const ObRawExpr* wkb_expr,
-                                             const ObRawExpr *distance_expr,
+                                             const ObRawExpr *extra_expr,
                                              ObRangeNode *&range_node)
 {
   int ret = OB_SUCCESS;
@@ -2816,16 +2821,21 @@ int ObExprRangeConverter::get_geo_range_node(const ObColumnRefRawExpr *column_ex
         // do nothing
       } else if (OB_FAIL(get_final_expr_idx(wkb_expr, nullptr, wkb_val))) {
         LOG_WARN("failed to get final expr idx");
-      } else if (geo_type == ObDomainOpType::T_GEO_DWITHIN ||
-                 geo_type == ObDomainOpType::T_GEO_RELATE) {
-        if (OB_ISNULL(distance_expr)) {
+      } else if (geo_type == ObDomainOpType::T_GEO_RELATE) {
+        if (OB_FAIL(get_orcl_spatial_relationship(extra_expr,
+                                                  can_extract_range,
+                                                  geo_type))) {
+          LOG_WARN("failed to get orcl spatial relationship", K(ret));
+        }
+      } else if (geo_type == ObDomainOpType::T_GEO_DWITHIN ) {
+        if (OB_ISNULL(extra_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(check_calculable_expr_valid(distance_expr, is_valid))) {
+        } else if (OB_FAIL(check_calculable_expr_valid(extra_expr, is_valid))) {
           LOG_WARN("failed to check calculable expr valid", K(ret));
         } else if (!is_valid) {
           // do nothing
-        } else if (OB_FAIL(get_final_expr_idx(distance_expr, nullptr, distance_val))) {
+        } else if (OB_FAIL(get_final_expr_idx(extra_expr, nullptr, distance_val))) {
           LOG_WARN("failed to get final expr idx", K(ret));
         } else {
           can_extract_range = true;
@@ -3888,5 +3898,146 @@ int ObExprRangeConverter::get_implicit_set_collation_in_range(
   }
   return ret;
 }
+
+int ObExprRangeConverter::can_be_extract_orcl_spatial_range(
+                          const ObRawExpr *const_expr,
+                          bool &can_extract)
+{
+  int ret = OB_SUCCESS;
+  ObObj const_val;
+  bool is_valid = false;
+  can_extract = false;
+  if (OB_ISNULL(const_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(get_calculable_expr_val(const_expr, const_val, is_valid))) {
+    LOG_WARN("failed to get calculable expr val", K(ret));
+  } else if (!is_valid || !ob_is_string_type(const_val.get_type())) {
+    can_extract = false;
+  } else {
+    ObString str = const_val.get_string();
+    can_extract = (str.compare("TRUE") == 0);
+    if (can_extract) {
+      if (OB_FAIL(add_string_equal_expr_constraint(const_expr, str))) {
+        LOG_WARN("failed to add string equal expr constraint", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprRangeConverter::get_orcl_spatial_relationship(const ObRawExpr *const_expr,
+                                                        bool &can_extract,
+                                                        ObDomainOpType& real_op_type)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator temp_allocator(lib::ObLabel("GisIndex"));
+  ObObj const_val;
+  bool is_valid = false;
+  char *cmp_str = NULL;
+  ObString upper_str;
+  can_extract = false;
+  if (OB_ISNULL(const_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!const_expr->is_const_expr()) {
+    // do nothing
+  } else if (OB_FAIL(get_calculable_expr_val(const_expr, const_val, is_valid))) {
+    LOG_WARN("failed to get calculable expr val", K(ret));
+  } else if (!is_valid || !ob_is_string_type(const_val.get_type())) {
+    // do nothing
+  } else if (OB_FAIL(ObCharset::toupper(const_expr->get_collation_type(),
+                                        const_val.get_string(),
+                                        upper_str,
+                                        temp_allocator))) {
+    LOG_WARN("failed to get upper string", K(ret));
+  } else if (OB_ISNULL(cmp_str = static_cast<char*>(temp_allocator.alloc(upper_str.length() + 1)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret));
+  } else {
+    cmp_str[upper_str.length()] = '\0';
+    MEMCPY(cmp_str, upper_str.ptr(), upper_str.length());
+    if (nullptr != strstr(cmp_str, "ANYINTERACT")) {
+      real_op_type = ObDomainOpType::T_GEO_INTERSECTS;
+      can_extract = true;
+      if (OB_FAIL(add_string_equal_expr_constraint(const_expr, const_val.get_string()))) {
+        LOG_WARN("failed to add string equal expr constraint", K(ret));
+      }
+    } else {
+      // other spatial relationsh is not supported yet, no need to continue
+      real_op_type = ObDomainOpType::T_DOMAIN_OP_END;
+      can_extract = false;
+    }
+  }
+  return ret;
+}
+
+int ObExprRangeConverter::get_orcl_spatial_range_node(const ObRawExpr &l_expr,
+                                                      const ObRawExpr &r_expr,
+                                                      int64_t expr_depth,
+                                                      ObRangeNode *&range_node)
+{
+  int ret = OB_SUCCESS;
+  const ObRawExpr *inner_expr = nullptr;
+  const ObRawExpr *const_expr = nullptr;
+  bool can_extract = false;
+  if (l_expr.get_expr_type() == T_FUN_SYS_SDO_RELATE && r_expr.is_const_expr()) {
+    inner_expr = &l_expr;
+    const_expr = &r_expr;
+  } else if (r_expr.get_expr_type() == T_FUN_SYS_SDO_RELATE && l_expr.is_const_expr()) {
+    inner_expr = &r_expr;
+    const_expr = &l_expr;
+  }
+
+  if (OB_FAIL(can_be_extract_orcl_spatial_range(const_expr, can_extract))) {
+    LOG_WARN("failed to check can be extract orcl spatial range", K(ret));
+  } else if (!can_extract) {
+    // do nothing
+  } else if (OB_FAIL(convert_geo_expr(inner_expr, expr_depth, range_node))) {
+    LOG_WARN("failed to convert geo expr", K(ret));
+  }
+
+  if (OB_SUCC(ret) && nullptr == range_node) {
+    ctx_.cur_is_precise_ = false;
+    if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
+      LOG_WARN("failed to generate always true or fasle node", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExprRangeConverter::add_string_equal_expr_constraint(const ObRawExpr *const_expr,
+                                                           const ObString &val)
+{
+  int ret = OB_SUCCESS;
+  ObConstRawExpr *val_expr = NULL;
+  ObRawExpr *out_expr = NULL;
+  PreCalcExprExpectResult expect_result = PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE;
+  if (OB_ISNULL(const_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx_.expr_constraints_));
+  } else if (OB_ISNULL(ctx_.constraints_expr_factory_) ||
+             OB_ISNULL(ctx_.expr_constraints_)) {
+    // do nothing
+  } else if (OB_FALSE_IT(const_expr = ObRawExprUtils::skip_inner_added_expr(const_expr))) {
+  } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*ctx_.constraints_expr_factory_,
+                                                             const_expr->get_result_meta().get_type(),
+                                                             val,
+                                                             const_expr->get_result_meta().get_collation_type(),
+                                                             val_expr))) {
+    LOG_WARN("fail to build type expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::create_equal_expr(*ctx_.constraints_expr_factory_,
+                                                       ctx_.session_info_,
+                                                       const_expr,
+                                                       val_expr,
+                                                       out_expr))) {
+    LOG_WARN("failed to create equal expr", K(ret));
+  } else if (OB_FAIL(ctx_.expr_constraints_->push_back(ObExprConstraint(out_expr,
+                                                                        expect_result)))) {
+    LOG_WARN("failed to push back expr constraints", K(ret));
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

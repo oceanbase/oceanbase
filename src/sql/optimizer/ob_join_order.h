@@ -1983,6 +1983,7 @@ struct NullAwareAntiJoinInfo {
     int extract_geo_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
                                               const ObIArray<ObRawExpr*> &predicates,
                                               const ColumnIdInfoMap &column_schema_info,
+                                              ObIArray<ObExprConstraint> &expr_constraints,
                                               ObQueryRangeProvider *&query_range);
 
     int extract_multivalue_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,

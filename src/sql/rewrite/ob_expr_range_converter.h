@@ -232,6 +232,17 @@ private:
                                           const ObExprResType &result_type,
                                           int64_t expr_depth,
                                           ObRangeNode *&range_node);
+  int can_be_extract_orcl_spatial_range(const ObRawExpr *const_expr,
+                                        bool &can_extract);
+  int get_orcl_spatial_range_node(const ObRawExpr &l_expr,
+                                  const ObRawExpr &r_expr,
+                                  int64_t expr_depth,
+                                  ObRangeNode *&range_node);
+  int get_orcl_spatial_relationship(const ObRawExpr *const_expr,
+                                    bool &can_extract,
+                                    ObDomainOpType& real_op_type);
+  int add_string_equal_expr_constraint(const ObRawExpr *const_expr,
+                                       const ObString &val);
 private:
   ObIAllocator &allocator_;
   ObQueryRangeCtx &ctx_;

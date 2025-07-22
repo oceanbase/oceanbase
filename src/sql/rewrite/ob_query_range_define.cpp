@@ -345,7 +345,8 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
                           const int64_t index_prefix,
                           const ColumnIdInfoMap *geo_column_id_map,
                           const bool force_no_link,
-                          const ObTableSchema *index_schema)
+                          const ObTableSchema *index_schema,
+                          ObRawExprFactory *constraints_expr_factory)
 {
   int ret = OB_SUCCESS;
   ObQueryCtx *query_ctx = NULL;
@@ -378,6 +379,7 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
     geo_column_id_map_ = geo_column_id_map;
     is_geo_range_ = geo_column_id_map != NULL;
     force_no_link_ = force_no_link;
+    constraints_expr_factory_ = constraints_expr_factory;
     if (OB_NOT_NULL(index_schema) &&
         index_schema->is_unique_index() &&
         index_schema->get_index_column_num() > 0) {
@@ -625,7 +627,8 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
                                                      const bool ignore_calc_failure,
                                                      const int64_t index_prefix /* =-1*/,
                                                      const ObTableSchema *index_schema /* = NULL*/,
-                                                     const ColumnIdInfoMap *geo_column_id_map /* = NULL*/)
+                                                     const ColumnIdInfoMap *geo_column_id_map /* = NULL*/,
+                                                     ObRawExprFactory *constraint_expr_factory /* = NULL*/)
 {
   int ret = OB_SUCCESS;
   bool force_no_link = false;
@@ -639,7 +642,8 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
   } else if (OB_FAIL(ctx.init(this, range_columns, expr_constraints,
                               params, &expr_factory,
                               phy_rowid_for_table_loc, ignore_calc_failure, index_prefix,
-                              geo_column_id_map, force_no_link, index_schema))) {
+                              geo_column_id_map, force_no_link, index_schema,
+                              constraint_expr_factory))) {
     LOG_WARN("failed to init query range context");
   } else {
     ObExprRangeConverter converter(allocator_, ctx);
@@ -1334,7 +1338,8 @@ int ObPreRangeGraph::get_range_exprs(ObRawExprFactory &expr_factory,
   } else if (OB_FAIL(ctx.init(this, range_columns, expr_constraints,
                               params, &expr_factory,
                               phy_rowid_for_table_loc, ignore_calc_failure, index_prefix,
-                              geo_column_id_map, force_no_link, index_schema))) {
+                              geo_column_id_map, force_no_link, index_schema,
+                              NULL))) {
     LOG_WARN("failed to init query range context");
   } else {
     ObExprRangeConverter converter(allocator_, ctx);
