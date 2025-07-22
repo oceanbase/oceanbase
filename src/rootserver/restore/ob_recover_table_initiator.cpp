@@ -255,7 +255,6 @@ int ObRecoverTableInitiator::fill_recover_database(
     const share::ObImportArg &import_arg,
     share::ObImportTableArg &import_table_arg)
 {
-  //TODO(zeyong) move duplicate item checking logic to ObImportArg internal later.
   int ret = OB_SUCCESS;
   const share::ObImportDatabaseArray &db_array = import_arg.get_import_database_array();
   ARRAY_FOREACH(db_array.get_items(), i) {

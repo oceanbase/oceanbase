@@ -283,8 +283,6 @@ int ObBackupTaskSchedulerQueue::pop_task(ObBackupScheduleTask *&output_task, com
     DLIST_FOREACH(t, wait_list_)
     {
       if (!backup_zone.empty() || !backup_region.empty()) {
-  // TODO(zeyong): when backup zone and backup region scheme is ready, adjust this code in 4.3
-  // only backup ls task need the defensive operation
         ObArray<common::ObAddr> empty_block_server;
         if (!t->can_execute_on_any_server() && BackupJobType::BACKUP_BACKUP_DATA_JOB == t->get_type()) {
           ObBackupDataLSTask *tmp_task = static_cast<ObBackupDataLSTask *>(t);

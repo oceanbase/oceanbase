@@ -706,10 +706,6 @@ int ObLogArchiveDestConfigParser::do_parse_sub_config_(const common::ObString &c
       if (OB_FAIL(do_parse_piece_switch_interval_(token, saveptr))) {
         LOG_WARN("fail to do parse piece switch interval", K(ret), K(token), K(saveptr));
       }
-    } else if (0 == STRCASECMP(token, OB_STR_COMPRESSION)) {
-      if (OB_FAIL(do_parse_compression_(token, saveptr))) {
-        LOG_WARN("fail to do parse compression", K(ret), K(token), K(saveptr));
-      }
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("log archive dest does not has this config", K(ret), K(token));
@@ -785,7 +781,6 @@ int ObLogArchiveDestConfigParser::do_parse_compression_(const common::ObString &
       LOG_WARN("fail to push back pair", K(ret), K(pair));
     }
   } else {
-  // TODO(zeyong): when log archive support compression, remove this in 4.3
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("compression not support value", K(ret), K(value));
   }

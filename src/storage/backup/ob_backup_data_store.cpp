@@ -385,8 +385,7 @@ int ObBackupSetFilter::func(const dirent *entry)
   const char *end_success_str = "end_success";
   const char *backup_set_str = "backup_set";
   const char *find_pos = nullptr;
-  if (backup_set_name_array_.count() >= OB_MAX_BACKUP_SET_NUM) { // list upper limit //TODO(zeyong) add new error code
-  } else if (!bs_placeholder_name.prefix_match(backup_set_str)) {
+  if (!bs_placeholder_name.prefix_match(backup_set_str)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid backup set dier prefix", K(ret), K(bs_placeholder_name));
   } else if (OB_ISNULL(find_pos = STRSTR(bs_placeholder_name.ptr(), end_success_str))) {

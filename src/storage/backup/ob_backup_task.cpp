@@ -4413,7 +4413,7 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
   } else if (OB_FAIL(writer.init(backup_set_dest, param_.ls_id_, param_.turn_id_, param_.retry_id_, param_.dest_id_, false/*is_final_fuse*/, *ls_backup_ctx_->bandwidth_throttle_))) {
     LOG_WARN("failed to init tablet info writer", K(ret));
   } else {
-    const int64_t WAIT_GC_LOCK_TIMEOUT = 30 * 60 * 1000 * 1000; // 30 min TODO(zeyong) optimization timeout later 4.3
+    const int64_t WAIT_GC_LOCK_TIMEOUT = 30 * 60 * 1000 * 1000;
     const int64_t CHECK_GC_LOCK_INTERVAL = 1000000; // 1s
     const int64_t wait_gc_lock_start_ts = ObTimeUtility::current_time();
     int64_t cost_ts = 0;
