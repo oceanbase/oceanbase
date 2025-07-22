@@ -2302,6 +2302,7 @@ int ObInnerSQLConnection::create_session_by_mgr()
     free_session_ctx_.proxy_sessid_ = proxy_sid;
     free_session_ctx_.tenant_id_ = tenant_id;
     inner_session_->set_session_state(QUERY_ACTIVE);
+    inner_session_->set_mysql_cmd(COM_QUERY);
     EVENT_INC(ACTIVE_SESSIONS);
     free_session_ctx_.has_inc_active_num_ = true;
   }
