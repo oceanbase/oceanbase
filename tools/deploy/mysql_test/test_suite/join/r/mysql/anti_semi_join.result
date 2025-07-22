@@ -2635,8 +2635,8 @@ select /*+ use_hash(xy_t2 xy_t1)*/ * from xy_t2 where not exists (select 1 from 
 +------+------+
 | c1   | c2   |
 +------+------+
-|    9 |    9 |
 |    5 |    4 |
+|    9 |    9 |
 +------+------+
 EXPLAIN select /*+ use_merge(xy_t2 xy_t1)*/ * from xy_t2 where not exists (select 1 from xy_t1 where xy_t2.c2 = xy_t1.c2);
 Query Plan

@@ -701,35 +701,6 @@ int HashTable<Bucket, Prober>::project_matched_rows(JoinTableCtx &ctx, OutputInf
   return ret;
 }
 
-template <typename Bucket, typename Prober>
-int HashTable<Bucket, Prober>::get_unmatched_rows(JoinTableCtx &ctx, OutputInfo &output_info)
-{
-  int ret = OB_SUCCESS;
-  ObHJStoredRow *row_ptr = reinterpret_cast<ObHJStoredRow *>(ctx.cur_tuple_);
-  int64_t batch_idx = 0;
-  while (OB_SUCC(ret) && batch_idx < *ctx.max_output_cnt_) {
-    if (END_ROW_PTR != reinterpret_cast<uint64_t>(row_ptr)) {
-      if (!row_ptr->is_match(ctx.build_row_meta_)) {
-        output_info.left_result_rows_[batch_idx] = row_ptr;
-        batch_idx++;
-      }
-      row_ptr = row_ptr->get_next(ctx.build_row_meta_);
-    } else {
-      int64_t bucket_id = ctx.cur_bkid_ + 1;
-      if (bucket_id < nbuckets_) {
-        Bucket &bkt = buckets_->at(bucket_id);
-        row_ptr = bkt.used() ? bkt.get_stored_row() : reinterpret_cast<ObHJStoredRow *>(END_ROW_PTR);
-        ctx.cur_bkid_ = bucket_id;
-      } else {
-        ret = OB_ITER_END;
-      }
-    }
-  }
-  output_info.selector_cnt_ = batch_idx;
-  ctx.cur_tuple_ = row_ptr;
-  return ret;
-}
-
 template<typename Bucket>
 int ProberBase<Bucket>::calc_join_conditions(JoinTableCtx &ctx,
                                            ObHJStoredRow *left_row,

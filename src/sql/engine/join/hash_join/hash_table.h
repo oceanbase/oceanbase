@@ -457,7 +457,6 @@ struct IHashTable {
   virtual int probe_prepare(JoinTableCtx &ctx, OutputInfo &output_info) = 0;
   virtual int probe_batch(JoinTableCtx &ctx, OutputInfo &output_info) = 0;
   virtual int project_matched_rows(JoinTableCtx &ctx, OutputInfo &output_info) = 0;
-  virtual int get_unmatched_rows(JoinTableCtx &ctx, OutputInfo &output_info) = 0;
   virtual void reset() = 0;
   virtual void free(ObIAllocator *alloc) = 0;
 
@@ -516,7 +515,6 @@ struct HashTable : public IHashTable
            : !ctx.need_probe_del_match() ? probe_batch_normal(ctx, output_info, (0 != ctx.other_conds_->count()))
                                          : probe_batch_del_match(ctx, output_info, (0 != ctx.other_conds_->count()));
   }
-  int get_unmatched_rows(JoinTableCtx &ctx, OutputInfo &output_info) override;
   int project_matched_rows(JoinTableCtx &ctx, OutputInfo &output_info) override;
   void reset() override;
   void free(ObIAllocator *alloc);
