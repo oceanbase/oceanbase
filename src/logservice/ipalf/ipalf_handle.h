@@ -34,6 +34,7 @@ class PalfFSCb;
 class PalfRoleChangeCb;
 class PalfLocalityInfoCb;
 class PalfReconfigCheckerCb;
+class PalfLocationCacheCb;
 class PalfBaseInfo;
 class LogConfigVersion;
 namespace election
@@ -267,6 +268,8 @@ public:
 
   virtual int set_election_priority(palf::election::ElectionPriority *priority) = 0;
   virtual int reset_election_priority() = 0;
+  virtual int set_location_cache_cb(palf::PalfLocationCacheCb *lc_cb) = 0;
+  virtual int reset_location_cache_cb() = 0;
   virtual int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb) = 0;
   virtual int reset_locality_cb() = 0;
   virtual int set_reconfig_checker_cb(palf::PalfReconfigCheckerCb *reconfig_checker) = 0;
