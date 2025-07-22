@@ -1141,30 +1141,33 @@ int ObTabletPersister::persist_aggregated_meta(
     LOG_WARN("fail to build tablet meta opt", K(ret), K(param_), KPC(new_tablet), K(curr_opt));
   } else if (OB_FAIL(meta_service->get_shared_object_raw_reader_writer().async_write(write_info, curr_opt, handle))) {
     LOG_WARN("fail to async write", K(ret), K(write_info));
+  } else if (OB_FAIL(handle.get_write_ctx(write_ctx))) {
+    LOG_WARN("fail to batch get address", K(ret), K(handle));
+  }
+
 #ifdef OB_BUILD_SHARED_STORAGE
-    /// NOTE: only when _object_storage_condition_put_mode is set to 'if-match'
-    if (OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH == ret || OB_FILE_ALREADY_EXIST == ret) {
-      handle.reset();
-      MacroBlockId object_id;
-      if (OB_FAIL(OB_STORAGE_OBJECT_MGR.ss_get_object_id(curr_opt, object_id))) {
-        LOG_WARN("fail to check set object_id", K(ret), K(curr_opt), K(object_id));
-      } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.delete_object(object_id, param_.ls_epoch_))) {
-        LOG_WARN("failed to delete tablet meta", K(ret), K(curr_opt), K(object_id));
-      } else {
-        FLOG_INFO("delete tablet meta success", K(ret), K(curr_opt), K(object_id), K(common::lbt()));
-        if (OB_FAIL(meta_service->get_shared_object_raw_reader_writer().async_write(write_info, curr_opt, handle))) {
-          LOG_WARN("fail to async write after delete conflict tablet meta", K(ret), K(write_info));
-        }
+  /// NOTE: only when _object_storage_condition_put_mode is set to 'if-match'
+  if (OB_OBJECT_STORAGE_OVERWRITE_CONTENT_MISMATCH == ret || OB_FILE_ALREADY_EXIST == ret) {
+    handle.reset();
+    MacroBlockId object_id;
+    if (OB_FAIL(OB_STORAGE_OBJECT_MGR.ss_get_object_id(curr_opt, object_id))) {
+      LOG_WARN("fail to check set object_id", K(ret), K(curr_opt), K(object_id));
+    } else if (OB_FAIL(OB_STORAGE_OBJECT_MGR.delete_object(object_id, param_.ls_epoch_))) {
+      LOG_WARN("failed to delete tablet meta", K(ret), K(curr_opt), K(object_id));
+    } else {
+      FLOG_INFO("delete tablet meta success, retry async write", K(ret), K(curr_opt), K(object_id), K(common::lbt()));
+      if (OB_FAIL(meta_service->get_shared_object_raw_reader_writer().async_write(write_info, curr_opt, handle))) {
+        LOG_WARN("fail to async write after delete conflict tablet meta", K(ret), K(write_info));
+      } else if (OB_FAIL(handle.get_write_ctx(write_ctx))) {
+        LOG_WARN("fail to batch get address after delete conflict tablet meta", K(ret), K(handle));
       }
     }
-#endif
   }
+#endif
 
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (FALSE_IT(cur_macro_seq_++)) {
-  } else if (OB_FAIL(handle.get_write_ctx(write_ctx))) {
-    LOG_WARN("fail to batch get address", K(ret), K(handle));
   } else if (FALSE_IT(new_tablet->set_tablet_addr(write_ctx.addr_))) {
   } else if (OB_FAIL(write_ctx.addr_.get_block_addr(macro_id, offset, size))) {
     LOG_WARN("fail to get block addr", K(ret), K(write_ctx));
