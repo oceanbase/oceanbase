@@ -591,7 +591,7 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
 
     int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
       int ret = OB_SUCCESS;
-      for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); ++i) {
+      for (int i = 0; OB_SUCC(ret) && param.batch_size_ > 0 && i < file_column_exprs_.count(); ++i) {
         if (file_column_exprs_.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_URL) {
           ObDatum *datums = file_column_exprs_.at(i)->locate_batch_datums(eval_ctx_);
           if (csv_iter_->file_reader_.get_storage_type() == OB_STORAGE_FILE) {
