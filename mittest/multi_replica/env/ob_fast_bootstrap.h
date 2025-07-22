@@ -182,32 +182,32 @@ int ObDDLService::create_sys_table_schemas(
 
 } // end rootserver
 
-namespace share
-{
-namespace schema
-{
-common::SpinRWLock lock_for_schema_version;
-int ObSchemaServiceSQLImpl::gen_new_schema_version(
-    uint64_t tenant_id,
-    int64_t refreshed_schema_version,
-    int64_t &schema_version)
-{
-  SpinWLockGuard guard(lock_for_schema_version);
-  int ret = OB_SUCCESS;
-  schema_version = OB_INVALID_VERSION;
-  const int64_t version_cnt = 1;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(gen_tenant_new_schema_version_(tenant_id, refreshed_schema_version, version_cnt, schema_version))) {
-    LOG_WARN("fail to gen schema version", KR(ret), K(tenant_id), K(refreshed_schema_version));
-  }
-  if (OB_SUCC(ret)) {
-    LOG_INFO("new schema version", K(tenant_id), K(schema_version));
-  }
-  return ret;
-}
-}
-}
+// namespace share
+// {
+// namespace schema
+// {
+// common::SpinRWLock lock_for_schema_version;
+// int ObSchemaServiceSQLImpl::gen_new_schema_version(
+//     uint64_t tenant_id,
+//     int64_t refreshed_schema_version,
+//     int64_t &schema_version)
+// {
+//   SpinWLockGuard guard(lock_for_schema_version);
+//   int ret = OB_SUCCESS;
+//   schema_version = OB_INVALID_VERSION;
+//   const int64_t version_cnt = 1;
+//   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+//     ret = OB_INVALID_ARGUMENT;
+//     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+//   } else if (OB_FAIL(gen_tenant_new_schema_version_(tenant_id, refreshed_schema_version, version_cnt, schema_version))) {
+//     LOG_WARN("fail to gen schema version", KR(ret), K(tenant_id), K(refreshed_schema_version));
+//   }
+//   if (OB_SUCC(ret)) {
+//     LOG_INFO("new schema version", K(tenant_id), K(schema_version));
+//   }
+//   return ret;
+// }
+// }
+// }
 
 } // end oceanbase

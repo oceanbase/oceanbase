@@ -13,6 +13,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/utility/utility.h"
 #include <gtest/gtest.h>
 #define USING_LOG_PREFIX SERVER
 #define protected public
@@ -98,6 +99,7 @@ static TableBasicArg static_basic_arg_;
 
 const std::string test_dup_table_name = "test_dup_1";
 const std::string test_normal_table_name = "test_normal_1";
+
 TEST_F(GET_ZONE_TEST_CLASS_NAME(1), create_test_env)
 {
   int ret = OB_SUCCESS;
@@ -109,9 +111,16 @@ TEST_F(GET_ZONE_TEST_CLASS_NAME(1), create_test_env)
 
   ACQUIRE_CONN_FROM_SQL_PROXY(test_conn, test_tenant_sql_proxy);
 
+  ACQUIRE_CONN_FROM_SQL_PROXY(sys_conn, get_curr_simple_server().get_sql_proxy());
+
   std::string primary_zone_sql = "ALTER TENANT " + std::string(DEFAULT_TEST_TENANT_NAME)
                                  + " set primary_zone='zone1; zone3; zone2';";
   WRITE_SQL_BY_CONN(test_conn, primary_zone_sql.c_str());
+
+  std::string enable_sql_audit_sql = "ALTER SYSTEM SET enable_sql_audit = true;";
+  std::string adjust_sql_audit_sql = "SET global ob_sql_audit_percentage = 20;";
+  WRITE_SQL_BY_CONN(sys_conn, enable_sql_audit_sql.c_str());
+  WRITE_SQL_BY_CONN(test_conn, adjust_sql_audit_sql.c_str());
 
   unittest::TestEnvTool::create_table_for_test_env(
       test_conn, test_dup_table_name.c_str(), 1, true /*is_dup_table*/,
@@ -136,11 +145,13 @@ TEST_F(GET_ZONE_TEST_CLASS_NAME(1), read_with_one_pre_commit_participant)
   common::ObMySQLProxy &test_tenant_sql_proxy = get_curr_simple_server().get_sql_proxy2();
 
   ACQUIRE_CONN_FROM_SQL_PROXY(test_conn, test_tenant_sql_proxy);
+  ACQUIRE_CONN_FROM_SQL_PROXY(sys_conn, get_curr_simple_server().get_sql_proxy());
 
   BLOCK_PRE_COMMIT = true;
   WRITE_SQL_BY_CONN(test_conn, "set autocommit = false;");
   WRITE_SQL_BY_CONN(test_conn, "begin;");
 
+  int64_t tx_id_num = 0;
   const int64_t DEFAULT_LOAD_ROW_CNT = 10;
   for (int i = 1; i <= DEFAULT_LOAD_ROW_CNT; i++) {
     std::string insert_dup_sql_str =
@@ -149,12 +160,14 @@ TEST_F(GET_ZONE_TEST_CLASS_NAME(1), read_with_one_pre_commit_participant)
         "INSERT INTO " + test_normal_table_name + " VALUES(" + std::to_string(i) + ", 0 , 0)";
     WRITE_SQL_BY_CONN(test_conn, insert_dup_sql_str.c_str());
     WRITE_SQL_BY_CONN(test_conn, insert_normal_sql_str.c_str());
+    if(tx_id_num <= 0)
+   {
+      GET_TX_ID_FROM_SQL_AUDIT(sys_conn, insert_normal_sql_str.c_str(), tx_id_num);
+    }
   }
 
-  int64_t tx_id_num = 0;
   std::string insert_normal_sql_str =
       "INSERT INTO " + test_normal_table_name + " VALUES(" + std::to_string(1) + ", 0 , 0)";
-  GET_TX_ID_FROM_SQL_AUDIT(test_conn, insert_normal_sql_str.c_str(), tx_id_num);
 
   {
     int res_ret = OB_SUCCESS;
@@ -164,7 +177,6 @@ TEST_F(GET_ZONE_TEST_CLASS_NAME(1), read_with_one_pre_commit_participant)
 
   std::string switch_to_standby_sql =
       "ALTER SYSTEM SWITCHOVER TO STANDBY TENANT " + std::string("tt1");
-  ACQUIRE_CONN_FROM_SQL_PROXY(sys_conn, get_curr_simple_server().get_sql_proxy());
 
   WRITE_SQL_BY_CONN(sys_conn, switch_to_standby_sql.c_str());
   {
@@ -177,7 +189,7 @@ TEST_F(GET_ZONE_TEST_CLASS_NAME(1), read_with_one_pre_commit_participant)
   // READ_SQL_BY_CONN(test_conn, tmp_table_info_result, select_dup_sql_str.c_str());
   READ_SQL_BY_CONN(test_conn, table_info_result, select_dup_sql_str.c_str());
 
-  GET_TX_ID_FROM_SQL_AUDIT(test_conn, select_dup_sql_str.c_str(), tx_id_num);
+  // GET_TX_ID_FROM_SQL_AUDIT(test_conn, select_dup_sql_str.c_str(), tx_id_num);
 
   ASSERT_EQ(OB_SUCCESS, table_info_result->next());
   int64_t row_count = 0;
@@ -207,7 +219,7 @@ TEST_F(GET_ZONE_TEST_CLASS_NAME(1), read_with_one_pre_commit_participant)
 
   READ_SQL_BY_CONN(test_conn, table_info_result_2, select_dup_sql_str.c_str());
 
-  GET_TX_ID_FROM_SQL_AUDIT(test_conn, select_dup_sql_str.c_str(), tx_id_num);
+  // GET_TX_ID_FROM_SQL_AUDIT(test_conn, select_dup_sql_str.c_str(), tx_id_num);
 
   ASSERT_EQ(OB_SUCCESS, table_info_result_2->next());
    row_count = 0;
