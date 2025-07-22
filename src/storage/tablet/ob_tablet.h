@@ -608,7 +608,8 @@ public:
   int update_tablet_autoinc_seq(const uint64_t autoinc_seq, const bool is_tablet_creating);
   int get_kept_snapshot_info(
       const int64_t min_reserved_snapshot_on_ls,
-      ObStorageSnapshotInfo &snapshot_info) const;
+      ObStorageSnapshotInfo &snapshot_info,
+      const bool skip_tablet_snapshot_and_undo_retention = false) const;
   int check_schema_version_elapsed(
       const int64_t schema_version,
       const bool need_wait_trans_end,

@@ -116,7 +116,8 @@ public:
   int get_min_reserved_snapshot(
       const ObTabletID &tablet_id,
       const int64_t merged_version,
-      ObStorageSnapshotInfo &snapshot_info);
+      ObStorageSnapshotInfo &snapshot_info,
+      const bool skip_undo_retention = false);
 
   int get_min_dependent_freeze_info(share::ObFreezeInfo &freeze_info);
   int64_t get_snapshot_gc_ts();

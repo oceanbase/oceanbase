@@ -6216,7 +6216,8 @@ int ObTablet::fetch_tablet_autoinc_seq_cache(
 // MIN { ls min_reserved_snapshot, freeze_info, all_acquired_snapshot}
 int ObTablet::get_kept_snapshot_info(
     const int64_t min_reserved_snapshot_on_ls,
-    ObStorageSnapshotInfo &snapshot_info) const
+    ObStorageSnapshotInfo &snapshot_info,
+    const bool skip_tablet_snapshot_and_undo_retention) const
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -6253,7 +6254,7 @@ int ObTablet::get_kept_snapshot_info(
   }
 
   ObStorageSnapshotInfo old_snapshot_info;
-  if (FAILEDx(MTL(ObTenantFreezeInfoMgr*)->get_min_reserved_snapshot(tablet_id, max_merged_snapshot, snapshot_info))) {
+  if (FAILEDx(MTL(ObTenantFreezeInfoMgr*)->get_min_reserved_snapshot(tablet_id, max_merged_snapshot, snapshot_info, skip_tablet_snapshot_and_undo_retention))) {
     LOG_WARN("failed to get multi version from freeze info mgr", K(ret), K(tablet_id));
   } else {
     old_snapshot_info = snapshot_info;
@@ -6279,7 +6280,14 @@ int ObTablet::get_kept_snapshot_info(
       snapshot_info.snapshot_ = get_multi_version_start();
     }
     // snapshot info should smaller than snapshot on tablet
-    snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_ON_TABLET, get_snapshot_version());
+    if (skip_tablet_snapshot_and_undo_retention) {
+      if (!GCTX.is_shared_storage_mode()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("get unexpected argument skip_tablet_snapshot_and_undo_retention", K(ret));
+      }
+    } else {
+      snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_ON_TABLET, get_snapshot_version());
+    }
     const int64_t current_time = common::ObTimeUtility::fast_current_time();
     if (current_time - (snapshot_info.snapshot_ / 1000 /*use microsecond here*/) > 40_min) {
       if (REACH_THREAD_TIME_INTERVAL(10_s)) {
