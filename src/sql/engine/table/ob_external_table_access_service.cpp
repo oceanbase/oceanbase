@@ -884,20 +884,34 @@ int ObExternalTableRowIterator::calc_exprs_for_rowid(const int64_t read_count, O
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
   if (OB_NOT_NULL(file_id_expr_)) {
-    OZ (file_id_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
-    for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
-      ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(file_id_expr_->get_vector(eval_ctx));
-      vec->set_int(i, state.cur_file_id_);
+    if (scan_param_->op_->enable_rich_format_) {
+      OZ (file_id_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
+      for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
+        ObFixedLengthBase* vec = static_cast<ObFixedLengthBase*>(file_id_expr_->get_vector(eval_ctx));
+        vec->set_int(i, state.cur_file_id_);
+      }
+    } else {
+      ObDatum* datums = file_id_expr_->locate_batch_datums(eval_ctx);
+      for (int64_t i = 0; i < read_count; i++) {
+        datums[i].set_int(state.cur_file_id_);
+      }
     }
-    file_id_expr_->set_evaluated_flag(eval_ctx);
+    OX (file_id_expr_->set_evaluated_flag(eval_ctx));
   }
   if (OB_NOT_NULL(line_number_expr_)) {
-    OZ (line_number_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
-    for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
-      ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(line_number_expr_->get_vector(eval_ctx));
-      vec->set_int(i, state.cur_line_number_ + i);
+    if (scan_param_->op_->enable_rich_format_) {
+      OZ (line_number_expr_->init_vector_for_write(eval_ctx, VEC_FIXED, read_count));
+      for (int i = 0; OB_SUCC(ret) && i < read_count; i++) {
+        ObFixedLengthBase* vec = static_cast<ObFixedLengthBase*>(line_number_expr_->get_vector(eval_ctx));
+        vec->set_int(i, state.cur_line_number_ + i);
+      }
+    } else {
+      ObDatum* datums = line_number_expr_->locate_batch_datums(eval_ctx);
+      for (int64_t i = 0; i < read_count; i++) {
+        datums[i].set_int(state.cur_line_number_ + i);
+      }
     }
-    line_number_expr_->set_evaluated_flag(eval_ctx);
+    OX (line_number_expr_->set_evaluated_flag(eval_ctx));
   }
   state.cur_line_number_ += read_count;
   state.batch_first_row_line_num_ = state.cur_line_number_ - read_count;
