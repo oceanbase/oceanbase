@@ -417,6 +417,8 @@ public:
   ObString routine_name_;
 };
 
+typedef common::ObFixedArray<common::ObFixedArray<std::pair<ObString, bool>, common::ObIAllocator>, common::ObIAllocator> TriggerRefColsTable;
+
 class ObPLFunction : public ObPLFunctionBase, public ObPLCompileUnit
 {
 public:
@@ -436,7 +438,8 @@ public:
     is_pipelined_(false),
     name_debuginfo_(),
     function_name_(),
-    has_parallel_affect_factor_(false) { }
+    has_parallel_affect_factor_(false),
+    trigger_ref_cols_(allocator_) { }
   virtual ~ObPLFunction();
 
   inline const common::ObIArray<ObPLDataType> &get_variables() const { return variables_; }
@@ -527,6 +530,8 @@ public:
     return sql_infos_;
   }
 
+  inline TriggerRefColsTable &get_trigger_ref_cols() { return trigger_ref_cols_; }
+
   TO_STRING_KV(K_(ns),
                K_(ref_count),
                K_(tenant_schema_version),
@@ -562,6 +567,7 @@ private:
   common::ObString database_name_;
   common::ObString priv_user_;
   bool has_parallel_affect_factor_;
+  TriggerRefColsTable trigger_ref_cols_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPLFunction);
 };

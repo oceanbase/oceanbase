@@ -79,6 +79,7 @@ protected:
                              ObAssignment &assign);
   int check_need_assignment(const common::ObIArray<ObAssignment> &assigns,
                             uint64_t table_id,
+                            uint64_t ref_table_id,
                             bool before_update_row_trigger_exist,
                             const share::schema::ObColumnSchemaV2 &column,
                             bool &need_assign);

@@ -11107,5 +11107,115 @@ bool ObResolverUtils::is_pseudo_partition_column_name(const ObString name)
           0 == name.case_compare(OB_SUBPART_INDEX_PSEUDO_COLUMN_NAME));
 }
 
+int ObResolverUtils::check_before_update_row_trigger_ref_cols(ObPLPackageGuard &package_guard,
+                                                              common::ObIAllocator &allocator,
+                                                              share::schema::ObSchemaGetterGuard &schema_guard,
+                                                              ObSQLSessionInfo &session_info,
+                                                              common::ObMySQLProxy &sql_proxy,
+                                                              const ObIArray<uint64_t> &trigger_list,
+                                                              const ObString &column_name,
+                                                              bool &need)
+{
+  int ret = OB_SUCCESS;
+  need = false;
+  uint64_t tenant_id = session_info.get_effective_tenant_id();
+  for (int64_t i = 0; !need && OB_SUCC(ret) && i < trigger_list.count(); i++) {
+    const ObTriggerInfo *trg_info = NULL;
+    ObPLPackage *pkg_body = NULL;
+    if (OB_FAIL(schema_guard.get_trigger_info(tenant_id, trigger_list.at(i), trg_info))) {
+      LOG_WARN("failed to get trigger", K(ret), K(trigger_list.at(i)));
+    } else if (OB_ISNULL(trg_info)) {
+      ret = OB_ERR_TRIGGER_NOT_EXIST;
+      LOG_WARN("trigger not exist", K(ret), K(tenant_id), K(trigger_list.at(i)));
+    } else if (!trg_info->is_enable() || trg_info->is_system_type() || trg_info->is_instead_dml_type()) {
+      // do nothing
+    } else if (!(trg_info->has_update_event() && trg_info->has_before_row_point())) {
+    } else if (OB_FAIL(pl::ObPLPackageManager::get_cached_package_body_for_trigger(
+            tenant_id, trigger_list.at(i), package_guard, allocator, schema_guard,
+            session_info, sql_proxy, pkg_body))) {
+      LOG_WARN("failed to get package body", K(ret));
+    } else if (OB_ISNULL(pkg_body)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("package body is NULL", K(ret));
+    } else {
+      int64_t func_idx = lib::is_oracle_mode() ? 3 : 1;
+      ObPLFunction *func = pkg_body->get_routine_table().at(func_idx);
+      if (OB_ISNULL(func)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("func is NULL", K(ret), K(func_idx));
+      } else if (func->get_trigger_ref_cols().count() < 2) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ref cols count error", K(ret), K(func->get_trigger_ref_cols().count()));
+      } else {
+        common::ObIArray<std::pair<ObString, bool>> &func_ref_cols = func->get_trigger_ref_cols().at(1);
+        for (uint64_t col_idx = 0; !need && OB_SUCC(ret) && col_idx < func_ref_cols.count(); ++col_idx) {
+          if (func_ref_cols.at(col_idx).second
+              && 0 == column_name.case_compare(func_ref_cols.at(col_idx).first)) {
+            need = true;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::check_whether_assigned_for_before_update_trigger(ObResolverParams &params,
+                                                                      ObSchemaChecker *schema_checker,
+                                                                      const ObColumnSchemaV2 &column,
+                                                                      uint64_t table_id,
+                                                                      bool &need)
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (OB_UNLIKELY(!tenant_config.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get tenant config", K(ret));
+  } else if (tenant_config->_update_all_columns_for_trigger || params.is_prepare_stage_) {
+    need = true;
+  } else {
+    need = false;
+    ObPLPackageGuard *package_guard = params.package_guard_;
+    if (OB_ISNULL(params.allocator_)
+        || OB_ISNULL(params.session_info_)
+        || OB_ISNULL(params.sql_proxy_)
+        || OB_ISNULL(schema_checker)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("params is NULL", K(ret));
+    } else if (OB_ISNULL(package_guard)) {
+      if (OB_ISNULL(params.session_info_->get_cur_exec_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("exec ctx is NULL", K(ret));
+      } else if (OB_FAIL(params.session_info_->get_cur_exec_ctx()->get_package_guard(package_guard))) {
+        LOG_WARN("failed to get package guard", K(ret));
+      } else if (OB_ISNULL(package_guard)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("package guard is NULL", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      uint64_t tenant_id = params.session_info_->get_effective_tenant_id();
+      const ObTableSchema *table_schema = NULL;
+      ObSchemaGetterGuard *schema_guard = schema_checker->get_schema_guard();
+      if (OB_ISNULL(schema_guard)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema guard is NULL", K(ret));
+      } else if (OB_FAIL(schema_checker->get_table_schema(tenant_id, table_id, table_schema))) {
+        LOG_WARN("failed to get table schema", K(ret), K(table_id));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is NULL", K(ret));
+      } else if (OB_FAIL(ObResolverUtils::check_before_update_row_trigger_ref_cols(
+                        *package_guard, *params.allocator_,
+                        *schema_guard, *params.session_info_, *params.sql_proxy_,
+                        table_schema->get_trigger_list(), column.get_column_name_str(), need))) {
+        LOG_WARN("failed to get ref cols", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase
