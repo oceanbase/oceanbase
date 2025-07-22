@@ -7007,11 +7007,9 @@ int ObAlterTableResolver::resolve_drop_column(
         ObString column_name = alter_column_schema.get_column_name();
         const ObColumnSchemaV2 *origin_col_schema = nullptr;
         if (nullptr == (origin_col_schema = table_schema_->get_column_schema(column_name))) {
-          ret = OB_ERR_BAD_FIELD_ERROR;
-          LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
-            table_schema_->get_table_name_str().length(),
-            table_schema_->get_table_name_str().ptr());
-          LOG_WARN("column does not exist", K(ret), K(column_name));
+          ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
+          LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, column_name.length(), column_name.ptr());
+          LOG_WARN("fail to find old column schema!", K(ret), K(column_name));
         } else {
           alter_column_schema.set_charset_type(origin_col_schema->get_charset_type());
           alter_column_schema.set_collation_type(origin_col_schema->get_collation_type());
