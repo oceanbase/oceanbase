@@ -1956,6 +1956,53 @@ int ObIOChannel::base_init(ObDeviceChannel *device_channel)
   return ret;
 }
 
+
+int ObIOChannel::convert_sys_errno(const int system_errno)
+{
+  int ret = OB_IO_ERROR;
+  // system_errno is a positive number.
+  bool use_warn_log = false;
+  switch (system_errno) {
+    case EACCES:
+      ret = OB_FILE_OR_DIRECTORY_PERMISSION_DENIED;
+      LOG_ERROR("file or directory permission denied", K(ret), K(system_errno));
+      break;
+    case ENOENT:
+      ret = OB_NO_SUCH_FILE_OR_DIRECTORY;
+      LOG_ERROR("no such file or directory", K(ret), K(system_errno));
+      break;
+    case EEXIST:
+    case ENOTEMPTY:
+      ret = OB_FILE_OR_DIRECTORY_EXIST;
+      LOG_ERROR("file or directory exist", K(ret), K(system_errno));
+      break;
+    case ETIMEDOUT:
+      ret = OB_TIMEOUT;
+      LOG_ERROR("io timeout", K(ret), K(system_errno));
+      break;
+    case EAGAIN:
+      ret = OB_EAGAIN;
+      LOG_WARN("io eagain", K(ret), K(system_errno));
+      break;
+    case ENOSPC:
+      ret = OB_SERVER_OUTOF_DISK_SPACE;
+      LOG_ERROR("server out of disk space", K(ret), K(system_errno));
+      break;
+    case EDQUOT:
+      ret = OB_DISK_QUOTA_EXCEEDED;
+      LOG_ERROR("server out of disk quota", K(ret), K(system_errno));
+      break;
+    default:
+      use_warn_log = true;
+      break;
+  }
+  if (use_warn_log) {
+    LOG_INFO("convert sys errno", K(ret), K(system_errno));
+  } else {
+    LOG_WARN("convert sys errno", K(ret), K(system_errno));
+  }
+  return ret;
+}
 /******************             AsyncIOChannel              **********************/
 ObAsyncIOChannel::ObAsyncIOChannel()
   : is_inited_(false),
@@ -2245,14 +2292,15 @@ void ObAsyncIOChannel::get_events()
           }
         } else { // io failed
           ObDIActionGuard("IO failed");
-          LOG_ERROR("io request failed", K(system_errno), K(complete_size), K(*req));
-          if (-EAGAIN == system_errno) { //retry
+          int tmp_ret = convert_sys_errno(system_errno);
+          LOG_ERROR("io request failed", K(ret), K(tmp_ret), K(system_errno), K(complete_size), K(*req));
+          if (EAGAIN == system_errno) { //retry
             if (OB_FAIL(on_full_retry(*req))) {
-              LOG_WARN("retry io request failed", K(ret), K(system_errno), K(*req));
+              LOG_WARN("retry io request failed", K(ret), K(tmp_ret), K(system_errno), K(*req));
             }
           } else {
-            if (OB_FAIL(on_failed(*req, ObIORetCode(OB_IO_ERROR, system_errno)))) {
-              LOG_WARN("process failed io request failed", K(ret), K(*req));
+            if (OB_FAIL(on_failed(*req, ObIORetCode(tmp_ret, system_errno)))) {
+              LOG_WARN("process failed io request failed", K(ret), K(tmp_ret), K(system_errno), K(*req));
             }
           }
         }

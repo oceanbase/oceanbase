@@ -2018,13 +2018,9 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
     }
   } else if (OB_TIMEOUT == ret || OB_IO_TIMEOUT == ret) {
     LOG_WARN("IO wait timeout", K(ret), K(*result_));
+    ret = OB_TIMEOUT;
   }
   estimate();
-
-  // TODO(binifei.bnf) just for debug, remove this log later
-  if (OB_UNLIKELY(NULL != (strstr(GETTNAME(), "DiskCB")))) {
-    FLOG_INFO("wait io in DiskCB thread", K(lbt()));
-  }
 
   return ret;
 }

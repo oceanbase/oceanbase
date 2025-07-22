@@ -414,6 +414,7 @@ public:
   virtual ~ObIOChannel();
 
   int base_init(ObDeviceChannel *device_channel);
+  static int convert_sys_errno(const int system_errno);
   virtual int submit(ObIORequest &req) = 0;
   virtual void cancel(ObIORequest &req) = 0;
   virtual int64_t get_queue_count() const = 0;
