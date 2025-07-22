@@ -535,6 +535,20 @@ int64_t ObTenantIOClock::get_max_proportion_ts()
   }
   return max_proportion_ts;
 }
+int64_t ObTenantIOClock::get_group_clocks_count() {
+  DRWLock::RDLockGuard guard(group_clocks_lock_);
+  return group_clocks_.count();
+}
+int ObTenantIOClock::get_group_limit(const int64_t idx, int64_t &group_limit) {
+  int ret = OB_SUCCESS;
+  DRWLock::RDLockGuard guard(group_clocks_lock_);
+  if (idx >= group_clocks_.count()) {
+    ret = OB_INNER_STAT_ERROR;
+  } else {
+    group_limit = group_clocks_.at(idx).get_limit();
+  }
+  return ret;
+}
 
 int ObTenantIOClock::get_mclock(const int64_t queue_index, ObMClock *&mclock)
 {
