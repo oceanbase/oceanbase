@@ -6647,6 +6647,7 @@ int ObLSTabletService::estimate_block_count_and_row_count_for_split_extra(
     const int64_t split_cnt,
     const ObMDSGetTabletMode mode,
     const int64_t timeout_us,
+    const int64_t snapshot_version_for_tables,
     int64_t &macro_block_count,
     int64_t &micro_block_count,
     int64_t &sstable_row_count,
@@ -6669,7 +6670,7 @@ int ObLSTabletService::estimate_block_count_and_row_count_for_split_extra(
       tablet_id,
       timeout_us,
       INT64_MAX,
-      INT64_MAX,
+      snapshot_version_for_tables,
       tablet_iter,
       true/*allow_no_ready_read*/,
       false/*need_split_src_table*/,
@@ -6790,7 +6791,7 @@ int ObLSTabletService::estimate_block_count_and_row_count(
     if (OB_FAIL(inner_get_read_tables(
               tablet_id,
               timeout_us,
-              snapshot_version_for_tablet,
+              ObTransVersion::MAX_TRANS_VERSION,
               snapshot_version_for_tables,
               tablet_iter,
               false/*allow_no_ready_read*/,
@@ -6808,7 +6809,7 @@ int ObLSTabletService::estimate_block_count_and_row_count(
             cg_micro_cnt_arr))) {
       LOG_WARN("fail to inner estimate block count", K(ret));
     }
-  } else if (OB_REPLICA_NOT_READABLE == ret) {
+  } else if (OB_REPLICA_NOT_READABLE == ret) { // ls migrating or tablet without major
     const int orig_ret = ret;
     ObTabletID src_tablet_id;
     ObTabletSplitMdsUserData split_data;
@@ -6817,7 +6818,12 @@ int ObLSTabletService::estimate_block_count_and_row_count(
     ObTabletHandle src_tablet_handle;
     int64_t split_cnt = 0;
     tablet_iter.reset();
-    if (OB_FAIL(ls_->get_tablet(tablet_id, tablet_handle, timeout_us, ObMDSGetTabletMode::READ_READABLE_COMMITED))) {
+    bool allow_to_read = false;
+    allow_to_read_mgr_.load_allow_to_read_info(allow_to_read);
+    if (!allow_to_read) {
+      ret = OB_REPLICA_NOT_READABLE;
+      LOG_WARN("ls is not allow to read", K(ret), KPC(ls_));
+    } else if (OB_FAIL(ls_->get_tablet(tablet_id, tablet_handle, timeout_us, ObMDSGetTabletMode::READ_READABLE_COMMITED))) {
       LOG_WARN("failed to get tablet", K(ret), K(src_tablet_id));
     } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_split_data(split_data, timeout_us))) {
       LOG_WARN("failed to get split data", K(ret));
@@ -6858,6 +6864,7 @@ int ObLSTabletService::estimate_block_count_and_row_count(
                 split_cnt,
                 ObMDSGetTabletMode::READ_ALL_COMMITED,
                 timeout_us,
+                snapshot_version_for_tables,
                 macro_block_count,
                 micro_block_count,
                 sstable_row_count,

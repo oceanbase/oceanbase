@@ -611,6 +611,7 @@ private:
       const int64_t split_cnt,
       const ObMDSGetTabletMode mode,
       const int64_t timeout_us,
+      const int64_t snapshot_version_for_tables,
       int64_t &macro_block_count,
       int64_t &micro_block_count,
       int64_t &sstable_row_count,
