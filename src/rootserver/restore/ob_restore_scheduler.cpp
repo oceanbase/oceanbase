@@ -421,9 +421,11 @@ int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("fail to restore keystore", K(ret), K(job_info));
   } else if (OB_FAIL(fill_restore_statistics(job_info))) {
     LOG_WARN("fail to fill restore statistics", K(ret), K(job_info));
+  } else if (OB_FAIL(convert_parameters(job_info))) {
+    LOG_WARN("fail to convert parameters", K(ret), K(job_info));
   }
 
-  if (OB_IO_ERROR == ret || OB_SUCC(ret)) {
+  if (OB_IO_ERROR == ret || OB_KMS_SERVER_CONNECT_ERROR == ret || OB_SUCC(ret)) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(try_update_job_status(*sql_proxy_, ret, job_info))) {
       LOG_WARN("fail to update job status", K(ret), K(tmp_ret), K(job_info));
@@ -729,10 +731,6 @@ int ObRestoreScheduler::post_check(const ObPhysicalRestoreJob &job_info)
     } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to_rs(*GCTX.rs_mgr_).broadcast_schema(arg))) {
       LOG_WARN("failed to broadcast schema", KR(ret), K(arg));
     }
-  }
-
-  if (FAILEDx(convert_parameters(job_info))) {
-    LOG_WARN("fail to convert parameters", K(ret), K(job_info));
   }
 
   if (OB_SUCC(ret)) {
