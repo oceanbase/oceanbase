@@ -53,7 +53,9 @@ int ObExprObjectConstruct::calc_result_typeN(ObExprResType &type,
       OZ (schema_guard.get_udt_info(tenant_id, udt_id_, udt_info));
       if (OB_SUCC(ret)) {
         ret = OB_ERR_CALL_WRONG_ARG;
-        LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+        if (OB_NOT_NULL(udt_info)) {
+          LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+        }
       }
       LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret), K(types[i]), K(elem_types_.at(i)), K(i));
     } else {
@@ -92,7 +94,9 @@ int ObExprObjectConstruct::check_types(ObEvalCtx &ctx, const ObObj *objs_stack,
           OZ (schema_guard.get_udt_info(tenant_id, elem_types.at(i).get_udt_id(), udt_info));
           if (OB_SUCC(ret)) {
             ret = OB_ERR_CALL_WRONG_ARG;
-            LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+            if (OB_NOT_NULL(udt_info)) {
+              LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+            }
           }
           LOG_WARN("invalid argument. unexpected obj type", K(ret), KPC(composite), K(elem_types), K(i));
         }
