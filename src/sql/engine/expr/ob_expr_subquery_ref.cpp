@@ -365,6 +365,8 @@ int ObExprSubQueryRef::expr_eval(
     OX (obj->set_extend(reinterpret_cast<int64_t>(cursor), pl::PL_REF_CURSOR_TYPE));
     OX (expr_datum.from_obj(*obj));
     OZ (session->get_tmp_table_size(size));
+    OZ (pl::ObPLCursorInfo::prepare_entity(*session, cursor->get_cursor_entity()));
+    OX (cursor->set_spi_cursor(NULL));
     OZ (cursor->prepare_spi_cursor(spi_cursor,
                                    session->get_effective_tenant_id(),
                                    size,
