@@ -32,7 +32,7 @@ public:
 
 typedef IAlloc IArrayAlloc;
 // it's dangerous to change CPU_NUM, maybe oom
-enum { MAX_THREAD_NUM = OB_MAX_THREAD_NUM, MAX_CPU_NUM = 64};
+enum { MAX_THREAD_NUM = OB_MAX_THREAD_NUM_DO_NOT_USE, MAX_CPU_NUM = 64};
 
 struct EstimateCounter
 {

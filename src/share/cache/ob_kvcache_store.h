@@ -111,7 +111,7 @@ public:
   int print_tenant_memblock_info(ObDLink *link);
   static int64_t compute_mb_handle_num(const int64_t max_cache_size, const int64_t block_size)
   {
-    return max_cache_size / block_size + 2 * (WASH_THREAD_RETIRE_LIMIT + RETIRE_LIMIT * OB_MAX_THREAD_NUM);
+    return max_cache_size / block_size + 2 * (WASH_THREAD_RETIRE_LIMIT + RETIRE_LIMIT * OB_MAX_THREAD_NUM_DO_NOT_USE);
   }
 
 private:
@@ -142,7 +142,7 @@ private:
 
 public:
   static const int64_t MAX_MB_HANDLE_NUM =
-        MAX_MB_NUM + 2 * (ObKVCacheStore::WASH_THREAD_RETIRE_LIMIT + ObKVCacheStore::RETIRE_LIMIT * OB_MAX_THREAD_NUM);
+        MAX_MB_NUM + 2 * (ObKVCacheStore::WASH_THREAD_RETIRE_LIMIT + ObKVCacheStore::RETIRE_LIMIT * OB_MAX_THREAD_NUM_DO_NOT_USE);
 
 private:
 struct WashCallBack {

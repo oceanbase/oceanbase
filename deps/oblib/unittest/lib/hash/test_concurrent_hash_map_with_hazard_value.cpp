@@ -35,7 +35,7 @@ struct Adder
   void operator()(Key k, int64_t* v) { UNUSED(k); UNUSED(v); sum++; }
 };
 
-typedef ObConcurrentHashMapWithHazardValue<Key, int64_t*> HashMap;
+typedef ObConcurrentHashMapDoNotUseWithHazardValue<Key, int64_t*> HashMap;
 
 class ValueAlloc : public HashMap::IValueAlloc
 {
@@ -51,7 +51,7 @@ public:
   int64_t reclaimed_num;
 };
 
-TEST(TestObConcurrentHashMapWithHazardValue, init)
+TEST(TestObConcurrentHashMapDoNotUseWithHazardValue, init)
 {
   HashMap hashmap;
   ASSERT_EQ(OB_SUCCESS, hashmap.init());
@@ -73,7 +73,7 @@ TEST(TestObConcurrentHashMapWithHazardValue, init)
 }
 
 
-TEST(TestObConcurrentHashMapWithHazardValue, hazard_value)
+TEST(TestObConcurrentHashMapDoNotUseWithHazardValue, hazard_value)
 {
   HashMap hashmap;
   ValueAlloc value_alloc;
@@ -157,7 +157,7 @@ private:
   int finished_count;
 };
 
-TEST(TestObConcurrentHashMapWithHazardValue, concurrent)
+TEST(TestObConcurrentHashMapDoNotUseWithHazardValue, concurrent)
 {
   HashMap hashmap;
   ValueAlloc value_alloc;

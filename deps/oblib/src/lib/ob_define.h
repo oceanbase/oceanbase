@@ -1974,7 +1974,7 @@ const int64_t OB_DEFAULT_MAX_TABLET_SIZE = 256 * 1024 * 1024; // 256MB
 const int64_t OB_MAX_MACRO_BLOCK_TYPE = 16;
 const int32_t OB_DEFAULT_CHARACTER_SET = 33; //UTF8
 const int64_t OB_MYSQL_PACKET_BUFF_SIZE = 6 * 1024; //6KB
-const int64_t OB_MAX_THREAD_NUM = 4096;
+const int64_t OB_MAX_THREAD_NUM_DO_NOT_USE = 4096;
 const int64_t OB_RESERVED_THREAD_NUM = 128; // Naked threads created with pthread_create, such as easy
 const int32_t OB_MAX_SYS_BKGD_THREAD_NUM = 64;
 #if __x86_64__

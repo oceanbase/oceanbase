@@ -23,7 +23,7 @@ class HazardRef
 {
 public:
   enum {
-    MAX_THREAD_NUM = OB_MAX_THREAD_NUM,
+    MAX_THREAD_NUM = OB_MAX_THREAD_NUM_DO_NOT_USE,
     THREAD_REF_COUNT_LIMIT = 8,
     TOTAL_REF_COUNT_LIMIT = MAX_THREAD_NUM * THREAD_REF_COUNT_LIMIT
   };
@@ -137,7 +137,7 @@ private:
 class RetireList
 {
 public:
-  enum { MAX_THREAD_NUM = OB_MAX_THREAD_NUM };
+  enum { MAX_THREAD_NUM = OB_MAX_THREAD_NUM_DO_NOT_USE };
   struct ThreadRetireList
   {
     ThreadRetireList() {}
