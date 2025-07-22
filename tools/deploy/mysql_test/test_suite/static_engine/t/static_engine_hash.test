@@ -3,11 +3,7 @@
 --disable_abort_on_error
 --result_format 4
 --disable_warnings
-connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
-connection conn_admin;
-alter system set enable_async_syslog = false;
 --sleep 2
-connection default;
 set @@ob_enable_plan_cache = 0;
 
 drop table if exists t1;
@@ -24,9 +20,6 @@ create table t3(c1 char(10), c2 varchar(10), c3 binary(10), c4 varbinary(10), c5
 insert into t3 values(null,null,null,null,null,null,null,null);
 insert into t3 values('abc', 'abc', 'abc', 'abc', 'abc', 'abc', 'abc', 'abc');
 
-connection conn_admin;
---sleep 2
-connection default;
 
 select c1, partition_key(null), partition_key(c1), partition_key(c2), partition_key(c3), partition_key(c4), partition_key(c5), partition_key(c6), partition_key(c7), partition_key(c8), partition_key(c9), partition_key(c10), partition_key(c11), partition_key(c12), partition_key(c13), partition_key(c14) from t1;
 select partition_key(c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14) from t1;
@@ -34,8 +27,6 @@ select c1, partition_key(c1), partition_key(c2), partition_key(c3), partition_ke
 select partition_key(c1, c2, c3, c4, c5 from t2;
 select c1, partition_key(c1), partition_key(c2), partition_key(c3), partition_key(c4), partition_key(c5), partition_key(c6), partition_key(c7), partition_key(c8) from t3;
 select partition_key(c1, c2, c3, c4, c5, c6, c7, c8) from t3;
-connection conn_admin;
-connection default;
 drop table t1;
 drop table t2;
 drop table t3;
