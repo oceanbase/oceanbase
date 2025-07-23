@@ -136,6 +136,8 @@ private:
                                     const int64_t view_definition_end_pos);
   int collect_dependency_infos(ObQueryCtx *query_ctx,
                                obrpc::ObCreateTableArg &create_arg);
+  int get_child_stmt_without_view(const ObSelectStmt *select_stmt,
+                                  ObIArray<ObSelectStmt*> &child_stmts);
   int get_sel_priv_tables_in_subquery(const ObSelectStmt *child_stmt,
                                       hash::ObHashMap<int64_t, const TableItem *> &select_tables);
   int get_need_priv_tables(ObSelectStmt &select_stmt,

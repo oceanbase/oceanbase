@@ -735,6 +735,42 @@ int ObCreateViewResolver::check_view_columns(ObSelectStmt &select_stmt,
   return ret;
 }
 
+int ObCreateViewResolver::get_child_stmt_without_view(const ObSelectStmt *select_stmt,
+                                                      ObIArray<ObSelectStmt*> &child_stmts)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(select_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("select_stmt is NULL ptr", K(ret));
+  } else if (OB_FAIL(append(child_stmts, select_stmt->get_set_query()))) {
+    LOG_WARN("failed to append child query", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_table_size(); ++i) {
+    const TableItem *table_item = select_stmt->get_table_item(i);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_item is null", K(i));
+    } else if (!table_item->is_view_table_ &&
+               (table_item->is_generated_table() ||
+                table_item->is_lateral_table())) {
+      if (OB_FAIL(child_stmts.push_back(table_item->ref_query_))) {
+        LOG_WARN("store child stmt failed", K(ret));
+      }
+    }
+  }
+  for (int64_t j = 0; OB_SUCC(ret) && j < select_stmt->get_subquery_expr_size(); ++j) {
+    ObQueryRefRawExpr *subquery_ref = select_stmt->get_subquery_exprs().at(j);
+    if (OB_ISNULL(subquery_ref) ||
+        OB_ISNULL(subquery_ref->get_ref_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subquery reference is null", K(subquery_ref));
+    } else if (OB_FAIL(child_stmts.push_back(subquery_ref->get_ref_stmt()))) {
+      LOG_WARN("stored subquery reference stmt failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 // get all tables/view in subquery.
 int ObCreateViewResolver::get_sel_priv_tables_in_subquery(const ObSelectStmt *select_stmt,
                                          hash::ObHashMap<int64_t, const TableItem *> &select_tables)
@@ -771,7 +807,7 @@ int ObCreateViewResolver::get_sel_priv_tables_in_subquery(const ObSelectStmt *se
     if (OB_SUCC(ret)) {
       // subquery + generated table in child_stmts
       ObSEArray<ObSelectStmt *, 4> child_stmts;
-      if (OB_FAIL(select_stmt->get_child_stmts(child_stmts))) {
+      if (OB_FAIL(get_child_stmt_without_view(select_stmt, child_stmts))) {
         LOG_WARN("get child stmt failed", K(ret));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i++) {
@@ -837,7 +873,7 @@ int ObCreateViewResolver::get_need_priv_tables(ObSelectStmt &root_stmt,
   if (OB_SUCC(ret)) {
     // subquery + generated table in child_stmts
     ObSEArray<ObSelectStmt *, 4> child_stmts;
-    if (OB_FAIL(root_stmt.get_child_stmts(child_stmts))) {
+    if (OB_FAIL(get_child_stmt_without_view(&root_stmt, child_stmts))) {
       LOG_WARN("get child stmt failed", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i++) {
