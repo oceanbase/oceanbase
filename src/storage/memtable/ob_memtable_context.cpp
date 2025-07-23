@@ -167,7 +167,7 @@ int64_t ObMemtableCtx::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   common::databuff_printf(buf, buf_len, pos, "{");
-  pos += ObIMvccCtx::to_string(buf + pos, buf_len);
+  pos += ObIMvccCtx::to_string(buf + pos, buf_len - pos);
   common::databuff_printf(buf, buf_len, pos,
                           " end_code=%d tx_status=%ld is_readonly=%s "
                           "ref=%ld", end_code_, tx_status_, STR_BOOL(is_read_only_), ref_);
