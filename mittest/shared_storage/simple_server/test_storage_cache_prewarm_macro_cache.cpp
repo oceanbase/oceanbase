@@ -19,6 +19,11 @@
 using namespace oceanbase::transaction;
 using namespace oceanbase::storage;
 
+const char *get_per_file_test_name()
+{
+    return "test_storage_cache_prewarm_macro_cache_";
+}
+
 namespace oceanbase
 {
 namespace unittest
