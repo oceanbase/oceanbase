@@ -347,12 +347,12 @@ STAT_EVENT_ADD_DEF(MEMSTORE_WRITE_BYTES, "memstore write bytes", ObStatClassIds:
 STAT_EVENT_ADD_DEF(MEMSTORE_WRITE_LOCK_WAKENUP_COUNT, "memstore write lock wakenup count in lock_wait_mgr", ObStatClassIds::STORAGE, 60068, false, true, true)
 
 
-STAT_EVENT_ADD_DEF(EXIST_ROW_EFFECT_READ, "exist row effect read", ObStatClassIds::STORAGE, 60075, false, true, true)
-STAT_EVENT_ADD_DEF(EXIST_ROW_EMPTY_READ, "exist row empty read", ObStatClassIds::STORAGE, 60076, false, true, true)
+STAT_EVENT_ADD_DEF(EXIST_ROW_EFFECT_READ, "exist row effect read", ObStatClassIds::STORAGE, 60075, false, true, false)
+STAT_EVENT_ADD_DEF(EXIST_ROW_EMPTY_READ, "exist row empty read", ObStatClassIds::STORAGE, 60076, false, true, false)
 STAT_EVENT_ADD_DEF(GET_ROW_EFFECT_READ, "get row effect read", ObStatClassIds::STORAGE, 60077, false, true, true)
 STAT_EVENT_ADD_DEF(GET_ROW_EMPTY_READ, "get row empty read", ObStatClassIds::STORAGE, 60078, false, true, true)
-STAT_EVENT_ADD_DEF(SCAN_ROW_EFFECT_READ, "scan row effect read", ObStatClassIds::STORAGE, 60079, false, true, true)
-STAT_EVENT_ADD_DEF(SCAN_ROW_EMPTY_READ, "scan row empty read", ObStatClassIds::STORAGE, 60080, false, true, true)
+STAT_EVENT_ADD_DEF(SCAN_ROW_EFFECT_READ, "scan row effect read", ObStatClassIds::STORAGE, 60079, false, true, false)
+STAT_EVENT_ADD_DEF(SCAN_ROW_EMPTY_READ, "scan row empty read", ObStatClassIds::STORAGE, 60080, false, true, false)
 STAT_EVENT_ADD_DEF(BANDWIDTH_IN_SLEEP_US, "bandwidth in sleep us", ObStatClassIds::STORAGE, 60081, false, true, true)
 STAT_EVENT_ADD_DEF(BANDWIDTH_OUT_SLEEP_US, "bandwidth out sleep us", ObStatClassIds::STORAGE, 60082, false, true, true)
 
