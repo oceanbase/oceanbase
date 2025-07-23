@@ -2044,8 +2044,7 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
           OZ (schema_checker.check_exist_same_name_object_with_synonym(tenant_id,
                                                                         synonym_database_id,
                                                                         pcv_schema->table_name_,
-                                                                        exist,
-                                                                        is_private_syn));
+                                                                        exist));
           if (OB_FAIL(ret)) {
           } else if (exist) {
             ret = OB_OLD_SCHEMA_VERSION;
