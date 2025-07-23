@@ -169,6 +169,15 @@ void ObLSRecoveryReportor::idle_some_time_()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("pointer is null", KR(ret), KP(tenant_info_loader));
   }
+
+  // We use _keepalive_interval here to control report interval;
+  // To minimize the latency, the keepalive_interval in the primary database would be lower down;
+  // And the report interval should also be the same to improve efficiency,
+  // hence we need to concern about only one configuration item in both the primary database
+  // and the standby database, even after switch over, we don't need to adjust the configuration;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  const int64_t STANDBY_IDLE_TIME = tenant_config.is_valid() ?
+      tenant_config->_keepalive_interval : IDLE_TIME;
   while (idle_count < idle_target_cnt && !stop_) {
     bool is_primary_normal_status = true;
     idle_count++;
@@ -180,7 +189,7 @@ void ObLSRecoveryReportor::idle_some_time_()
     } else if (!is_primary_normal_status) {
       idle_target_cnt = 1;
     }
-    idle_wait_us(IDLE_TIME);
+    idle_wait_us(is_primary_normal_status ? IDLE_TIME : STANDBY_IDLE_TIME);
   }
 }
 

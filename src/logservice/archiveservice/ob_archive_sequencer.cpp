@@ -17,6 +17,7 @@
 #include "ob_archive_fetcher.h"           // ObArchiveFetcher
 #include "ob_archive_round_mgr.h"         // ObArchiveRoundMgr
 #include "lib/ash/ob_active_session_guard.h"
+#include "logservice/archiveservice/ob_archive_util.h" // ObArchiveUtil
 
 namespace oceanbase
 {
@@ -123,9 +124,7 @@ void ObArchiveSequencer::run1()
   ARCHIVE_LOG(INFO, "ObArchiveSequencer thread start");
   ObDIActionGuard ag("LogService", "LogArchiveService", "ArchiveSequencer");
   lib::set_thread_name("ArcSeq");
-  const int64_t THREAD_RUN_INTERVAL = 100 * 1000L;
-
-  lib::set_thread_name("ArcSeq");
+  const int64_t thread_run_interval = cal_thread_run_interval();
   ObCurTraceId::init(GCONF.self_addr_);
 
   if (OB_UNLIKELY(! inited_)) {
@@ -135,7 +134,7 @@ void ObArchiveSequencer::run1()
       int64_t begin_tstamp = ObTimeUtility::current_time();
       do_thread_task_();
       int64_t end_tstamp = ObTimeUtility::current_time();
-      int64_t wait_interval = THREAD_RUN_INTERVAL - (end_tstamp - begin_tstamp);
+      int64_t wait_interval = thread_run_interval - (end_tstamp - begin_tstamp);
       if (wait_interval > 0) {
         common::ObBKGDSessInActiveGuard inactive_guard;
         seq_cond_.timedwait(wait_interval);

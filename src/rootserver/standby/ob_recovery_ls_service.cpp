@@ -112,6 +112,8 @@ void ObRecoveryLSService::do_work()
       ObCurTraceId::init(GCONF.self_addr_);
       ObTenantInfoLoader *tenant_info_loader = MTL(ObTenantInfoLoader*);
       ObAllTenantInfo tenant_info;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      idle_time_us = tenant_config.is_valid() ? tenant_config->_keepalive_interval : idle_time_us;
       //two thread for seed log and recovery_ls_manager
       if (!is_user_tenant(tenant_id_)) {
         ret = OB_ERR_UNEXPECTED;

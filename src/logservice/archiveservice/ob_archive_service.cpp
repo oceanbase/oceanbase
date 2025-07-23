@@ -74,7 +74,7 @@ int ObArchiveService::init(logservice::ObLogService *log_service,
   } else if (OB_FAIL(ls_mgr_.init(tenant_id, log_service, ls_svr, &allocator_,
                                   &sequencer_, &archive_round_mgr_, &persist_mgr_))) {
     ARCHIVE_LOG(WARN, "ls mgr init failed", K(ret));
-  } else if (OB_FAIL(sender_.init(tenant_id, &allocator_, &ls_mgr_,
+  } else if (OB_FAIL(sender_.init(tenant_id, &allocator_, &ls_mgr_, &fetcher_,
                                   &persist_mgr_, &archive_round_mgr_))) {
     ARCHIVE_LOG(WARN, "sender init failed", K(ret));
   } else if (OB_FAIL(fetcher_.init(tenant_id, log_service, &allocator_, &sender_,

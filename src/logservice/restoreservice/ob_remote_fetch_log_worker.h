@@ -45,6 +45,7 @@ class ObRemoteSourceGuard;
 class ObRemoteLogParent;
 class ObLogRestoreService;
 class ObLogRestoreAllocator;
+class ObRemoteLogWriter;
 using oceanbase::share::ObLSID;
 using oceanbase::palf::LSN;
 // Remote fetch log worker
@@ -57,7 +58,8 @@ public:
   int init(const uint64_t tenant_id,
       ObLogRestoreAllocator *allocator,
       ObLogRestoreService *restore_service,
-      storage::ObLSService *ls_svr);
+      storage::ObLSService *ls_svr,
+      ObRemoteLogWriter *writer);
   void destroy();
   int start();
   void stop();
@@ -99,6 +101,7 @@ private:
   storage::ObLSService *ls_svr_;
   common::ObLightyQueue task_queue_;
   ObLogRestoreAllocator *allocator_;
+  ObRemoteLogWriter *writer_;
   ObLogExternalStorageHandler log_ext_handler_;
 
   common::ObCond cond_;

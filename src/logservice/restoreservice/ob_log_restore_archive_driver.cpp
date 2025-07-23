@@ -55,6 +55,34 @@ void ObLogRestoreArchiveDriver::destroy()
   worker_ = NULL;
 }
 
+void ObLogRestoreArchiveDriver::print_stat()
+{
+  int ret = OB_SUCCESS;
+  constexpr int64_t PRINT_STAT_INTERVAL = 10 * 1000 * 1000;
+  if (REACH_TIME_INTERVAL_THREAD_LOCAL(PRINT_STAT_INTERVAL)) {
+    ObSharedGuard<ObLSIterator> guard;
+    if (OB_ISNULL(ls_svr_)) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "ls_svr is null, unexpected", KP(ls_svr_));
+    } else if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::LOG_MOD))) {
+      LOG_WARN("failed to get ls iter", KP(ls_svr_));
+    } else {
+      while (OB_SUCC(ret)) {
+        ObLS *ls = nullptr;
+        ObLogRestoreHandler *restore_handler = nullptr;
+        if (OB_FAIL(guard->get_next(ls))) {
+          LOG_WARN("failed to get next ls", KP(ls));
+        } else if (OB_ISNULL(ls)) {
+          LOG_WARN_RET(OB_ENTRY_NOT_EXIST, "get null ls");
+        } else if (OB_ISNULL(restore_handler = ls->get_log_restore_handler())) {
+          LOG_WARN_RET(OB_ERR_UNEXPECTED, "get null restore handler");
+        } else {
+          restore_handler->print_stat();
+        }
+      }
+    }
+  }
+}
+
 int ObLogRestoreArchiveDriver::do_fetch_log_(ObLS &ls)
 {
   int ret = OB_SUCCESS;
@@ -87,7 +115,7 @@ int ObLogRestoreArchiveDriver::do_fetch_log_(ObLS &ls)
   } else {
     LOG_TRACE("do fetch log succ", K(id), K(lsn), K(task_count));
   }
-  LOG_INFO("print do_fetch_log_", K(lsn), K(max_fetch_lsn), K(need_schedule),
+  LOG_TRACE("print do_fetch_log_", K(lsn), K(max_fetch_lsn), K(need_schedule),
       K(proposal_id), K(last_fetch_ts), K(task_count), K(ls));
   return ret;
 }
@@ -121,13 +149,18 @@ int ObLogRestoreArchiveDriver::check_need_schedule_(ObLS &ls,
      K_(context.max_fetch_scn), K_(global_recovery_scn));
   } else if (OB_FAIL(worker_->get_thread_count(fetch_log_worker_count))) {
     LOG_WARN("get_thread_count from worker_ failed", K(ret), K(ls));
-  } else if (FALSE_IT(concurrency = std::min(fetch_log_worker_count, MAX_LS_FETCH_LOG_TASK_CONCURRENCY))) {
+  } else if (FALSE_IT(concurrency = std::max(1L,
+      std::min(fetch_log_worker_count / 2, MAX_LS_FETCH_LOG_TASK_CONCURRENCY)))) {
+  // If the task count in a single ls is same as worker thread num and there are multiple logstreams,
+  // the task would wait in the queue of fetch log worker, which could increase the standby latency.
+  // So we double the worker threads here, which could reduce the latency if there are only 2 logstreams;
   } else if (context.issue_task_num_ >= concurrency) {
     need_schedule = false;
     LOG_TRACE("concurrency not enough check_need_schedule", K_(context.issue_task_num), K(concurrency));
   } else if (OB_FAIL(check_need_delay_(ls.get_ls_id(), need_delay))) {
     LOG_WARN("check need delay failed", K(ret), K(ls));
   } else if (need_delay) {
+    restore_handler->inc_delay_count();
     need_schedule = false;
     LOG_TRACE("need_delay in check_need_schedule", K(need_delay));
   } else {
@@ -273,8 +306,7 @@ int ObLogRestoreArchiveDriver::do_submit_fetch_log_task_(ObLS &ls,
       scheduled = false;
       LOG_ERROR("submit fetch log task failed", K(ret), K(id));
     } else {
-      worker_->signal();
-      LOG_INFO("submit fetch log task succ", K(task),
+      LOG_TRACE("submit fetch log task succ", K(task),
           "id", ls.get_ls_id(), K(scn), K(lsn), K(size), K(proposal_id));
     }
     if (! scheduled && NULL != data) {
