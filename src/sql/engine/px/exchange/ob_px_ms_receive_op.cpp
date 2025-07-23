@@ -175,11 +175,11 @@ int ObPxMSReceiveOp::inner_close()
   if (release_channel_ret != common::OB_SUCCESS) {
     LOG_TRACE("release interm result failed", KR(release_channel_ret));
   }
+  sql_mem_processor_.unregister_profile();
   if (nullptr != mem_context_) {
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = nullptr;
   }
-  sql_mem_processor_.unregister_profile();
   return ret;
 }
 
