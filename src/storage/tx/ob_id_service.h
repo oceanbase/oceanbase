@@ -163,6 +163,9 @@ protected:
   int submit_log_(const int64_t last_id, const int64_t limited_id);
   int submit_log_with_lock_(const int64_t last_id, const int64_t limited_id);
   int64_t max_pre_allocated_id_(const int64_t base_id);
+  int flush_ls_id_meta_for_ss_(
+      const int64_t limited_id,
+      share::SCN latest_log_ts);
 protected:
   ServiceType service_type_;
   //预分配大小
@@ -184,6 +187,7 @@ protected:
   ObPresistIDLogCb cb_;
   common::ObAddr self_;
   common::ObTimeInterval log_interval_;
+  bool is_flushing_;
 };
 
 class ObIDMeta
