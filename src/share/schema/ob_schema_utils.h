@@ -195,6 +195,24 @@ public:
       const common::ObIArray<ObObjectID> &table_ids,
       common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas);
 
+  // batch get table schemas by specified schema_version from cache or inner_table automatically
+  //
+  // @param[in] sql_client: ObISQLClient
+  // @param[in] allocator:  allocator to manage memory of table schemas
+  // @param[in] tenant_id:  target tenant_id
+  // @param[in] schema_version:  specified schema_version
+  // @param[in] table_ids:   target table_id array
+  // @param[out] table_schemas: array of ObSimpleTableSchemaV2 pointers
+  //                           (it's count may be smaller than table_ids when some tables not exist or been deleted)
+  // @return: OB_SUCCESS if success
+  static int batch_get_table_schemas_by_version(
+      common::ObISQLClient &sql_client,
+      common::ObIAllocator &allocator,
+      const uint64_t tenant_id,
+      const int64_t schema_version,
+      const common::ObIArray<ObObjectID> &table_ids,
+      common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas);
+
   // Optimized method to get latest table schema from cache or inner_table automatically.
   //
   // @param[in] sql_client: ObISQLClient
@@ -259,6 +277,7 @@ private:
   static int batch_get_table_schemas_from_cache_(
       common::ObIAllocator &allocator,
       const uint64_t tenant_id,
+      const int64_t specified_schema_version,
       const ObIArray<ObTableLatestSchemaVersion> &table_schema_versions,
       common::ObIArray<SchemaKey> &need_refresh_table_schema_keys,
       common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas);
@@ -266,6 +285,7 @@ private:
       common::ObISQLClient &sql_client,
       common::ObIAllocator &allocator,
       const uint64_t tenant_id,
+      const int64_t schema_version,
       common::ObArray<SchemaKey> &need_refresh_table_schema_keys,
       common::ObIArray<ObSimpleTableSchemaV2 *> &table_schemas);
 
