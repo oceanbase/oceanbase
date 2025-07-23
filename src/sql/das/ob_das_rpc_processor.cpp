@@ -52,7 +52,6 @@ int ObDASBaseAccessP<pcode>::before_process()
   if (OB_NOT_NULL(di)) {
     di->get_ash_stat().in_sql_execution_ = true;
     di->get_ash_stat().in_das_remote_exec_ = true;
-    di->get_ash_stat().tenant_id_ = task.get_task_op()->get_tenant_id();
     di->get_ash_stat().trace_id_ = *ObCurTraceId::get_trace_id();
     di->get_ash_stat().user_id_ = das_remote_info_.user_id_;
     di->get_ash_stat().plan_id_ = das_remote_info_.plan_id_;
