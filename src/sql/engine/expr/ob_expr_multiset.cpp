@@ -249,6 +249,7 @@ int ObExprMultiSet::calc_ms_one_distinct(common::ObIAllocator *coll_allocator,
     }
     CK (res_cnt > 0);
     if (OB_SUCC(ret)) {
+      int64_t n = 0;
       data_arr = static_cast<ObObj *>(coll_allocator->alloc(res_cnt * sizeof(ObObj)));
       if (OB_ISNULL(data_arr)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -264,10 +265,25 @@ int ObExprMultiSet::calc_ms_one_distinct(common::ObIAllocator *coll_allocator,
           } else if (OB_FAIL(deep_copy_obj(*coll_allocator, objs[i], data_arr[i]))) {
             LOG_WARN("copy obobj failed.", K(ret));
           }
+          OX (n++);
         }
       }
       elem_count = res_cnt;
+      if (OB_FAIL(ret) &&
+          OB_NOT_NULL(data_arr)) {
+        int ret = OB_SUCCESS;
+        for (int k = 0; k <= n; k++) {
+          if (OB_FAIL(pl::ObUserDefinedType::destruct_objparam(*coll_allocator, data_arr[k]))) {
+            LOG_WARN("failed to destruct dirty table", K(ret), K(k));
+          }
+        }
+        coll_allocator->free(data_arr);
+        data_arr = nullptr;
+      }
     }
+  }
+  if (dmap_c.created()) {
+    dmap_c.destroy();
   }
   return ret;
 }
