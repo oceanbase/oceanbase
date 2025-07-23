@@ -135,6 +135,19 @@ void ObArchiveRoundMgr::set_archive_suspend(const ArchiveKey &key)
   }
 }
 
+int ObArchiveRoundMgr::get_backup_path_str_(char *buf, const int64_t buf_size) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(rwlock_);
+  if (!backup_dest_.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(WARN, "backup_dest is invalid", KR(ret));
+  } else if (OB_FAIL(backup_dest_.get_backup_path_str(buf, buf_size))) {
+    ARCHIVE_LOG(WARN, "get backup path str failed", KR(ret));
+  }
+  return ret;
+}
+
 int ObArchiveRoundMgr::reset_backup_dest(const ArchiveKey &key)
 {
   int ret = OB_SUCCESS;
@@ -146,16 +159,19 @@ int ObArchiveRoundMgr::reset_backup_dest(const ArchiveKey &key)
   bool is_equal = false;
   if (key != key_) {
     ret = OB_EAGAIN;
-  } else if (OB_ISNULL(sql_proxy) || !backup_dest_.is_valid()) {
+  } else if (OB_ISNULL(sql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
-    ARCHIVE_LOG(WARN, "sql_proxy is null or backup_dest is invalid", K(ret), KP(sql_proxy), K(backup_dest_));
-  } else if (OB_FAIL(backup_dest_.get_backup_path_str(backup_path.ptr(), backup_path.capacity()))) {
-    ARCHIVE_LOG(WARN, "fail to get backup path str", K(ret), K(backup_dest_));
+    ARCHIVE_LOG(WARN, "sql_proxy is null", K(ret), KP(sql_proxy));
+  } else if (OB_FAIL(get_backup_path_str_(backup_path.ptr(), backup_path.capacity()))) {
+    ARCHIVE_LOG(WARN, "fail to get backup path str", K(ret));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy, tenant_id, backup_path, backup_dest))) {
     ARCHIVE_LOG(WARN, "fail to get backup dest", K(ret), K(tenant_id), K(backup_path));
   } else {
     WLockGuard guard(rwlock_);
-    if (OB_FAIL(backup_dest_.is_backup_path_equal(backup_dest, is_equal))) {
+    if (!backup_dest_.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      ARCHIVE_LOG(WARN, "backup_dest is invalid", KR(ret));
+    } else if (OB_FAIL(backup_dest_.is_backup_path_equal(backup_dest, is_equal))) {
       ARCHIVE_LOG(WARN, "fail to compare backup path", K(ret), K(backup_dest), K_(backup_dest), K(is_equal));
     } else if(is_equal) {
       if (OB_FAIL(backup_dest_.deep_copy(backup_dest))) {
