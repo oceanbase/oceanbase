@@ -512,32 +512,35 @@ int ObMViewInfo::update_major_refresh_mview_scn(ObISQLClient &sql_client,
                                                 const uint64_t tenant_id, const share::SCN &scn)
 {
   int ret = OB_SUCCESS;
-
+  uint64_t data_version = 0;
   if (!scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid scn", KR(ret), K(scn));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("fail to get min data version", K(ret));
   } else {
     const uint64_t scn_val = scn.get_val_for_inner_table_field();
     const int64_t last_refresh_type = (int64_t)ObMVRefreshType::FAST;
     int64_t affected_rows = 0;
     ObSqlString sql;
-    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET last_refresh_scn = %lu, \
-                                last_refresh_type = %ld, \
-                                last_refresh_date = now(6) \
-                                WHERE refresh_mode = %ld and \
-                                last_refresh_scn < %lu AND last_refresh_scn > 0",
-                               OB_ALL_MVIEW_TNAME, scn_val, last_refresh_type,
-                               ObMVRefreshMode::MAJOR_COMPACTION,
-                               scn_val))) {
-      LOG_WARN("fail to assign sql", KR(ret));
+    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET last_refresh_scn = %lu, ",
+                                OB_ALL_MVIEW_TNAME, scn_val))) {
+      LOG_WARN("fail to assign sql", K(ret));
+    } else if (data_version >= DATA_VERSION_4_3_5_2 && OB_FAIL(sql.append_fmt(" data_sync_scn = %lu, ", scn_val))) {
+      LOG_WARN("fail to append fmt sql", K(ret));
+    } else if (OB_FAIL(sql.append_fmt(" last_refresh_type = %ld, last_refresh_date = now(6) \
+                                       WHERE refresh_mode = %ld and \
+                                       last_refresh_scn < %lu AND last_refresh_scn > 0",
+                                       last_refresh_type, ObMVRefreshMode::MAJOR_COMPACTION, scn_val))) {
+      LOG_WARN("fail to append fmt sql", K(ret));
     } else if (OB_FAIL(sql_client.write(tenant_id, sql.ptr(), affected_rows))) {
       LOG_WARN("execute sql failed", KR(ret), K(sql));
     } else if (OB_UNLIKELY(affected_rows < 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected affected_rows", K(ret), K(affected_rows));
     }
+    LOG_INFO("update majot refresh scn", K(ret), K(sql));
   }
-
   return ret;
 }
 
