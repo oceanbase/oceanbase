@@ -1373,8 +1373,12 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
   if (OB_SUCC(ret) && OB_FAIL(refresh_snapshot_index_data(adaptor, tx_desc, snapshot))) {
     LOG_WARN("failed to refresh snapshot index data", K(ret));
   }
-  RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
+  /* Warning!!!
+  * In the process of loading data for a query, the query_lock is acquired first, followed by the adapter_map_lock.
+  * Therefore, the order of these two locks must not be reversed;
+  * otherwise, a deadlock could occur between the query and asynchronous tasks. */
   RWLock::WLockGuard query_lock_guard(old_adapter_->get_query_lock()); // lock for query before end trans
+  RWLock::WLockGuard lock_guard(vec_idx_mgr_->get_adapter_map_lock());
   int tmp_ret = OB_SUCCESS;
   if (trans_start && OB_SUCCESS != (tmp_ret = ObInsertLobColumnHelper::end_trans(tx_desc, OB_SUCCESS != ret, timeout_us))) {
     ret = tmp_ret;
