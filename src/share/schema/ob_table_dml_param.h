@@ -164,6 +164,7 @@ private:
   uint64_t vec_vector_col_id_;
   ObMvMode mv_mode_;
   bool is_delete_insert_;
+  ObMergeEngineType merge_engine_type_;
 };
 
 class ObTableDMLParam
