@@ -637,6 +637,9 @@ int ret = OB_SUCCESS;
     for (int i = 0; i < regist_dest_count; i++) {
       ObTimeGuard timeguard_clent_send("net_keepalive_client_send", 100 * 1000);
       struct DestKeepAliveState *rs = ATOMIC_LOAD(&regist_dests_[i]);
+      if (NULL == rs) {
+        continue;
+      }
       if (now - rs->last_access_ts_ > SERVER_EXPIRED_TIME) {
         if (rs->last_write_ts_ > 0) {
           _LOG_INFO("dest has not been accessed by the upper layer for a long time, addr: %s, last_access_time_=%ld", addr_to_string(rs->svr_addr_), rs->last_access_ts_);
