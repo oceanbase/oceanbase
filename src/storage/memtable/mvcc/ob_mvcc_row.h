@@ -208,15 +208,6 @@ public:
     OB_ASSERT(flag_.flag_status_ == TransNodeFlag::F_INIT);
     flag_ = saved_flag;
   }
-  bool need_elr() const
-  {
-    blocksstable::ObDmlFlag dml_type = get_dml_flag();
-    return (dml_type == blocksstable::ObDmlFlag::DF_LOCK
-          || dml_type == blocksstable::ObDmlFlag::DF_UPDATE) &&
-            TransNodeFlag::F_ELR != flag_.flag_status_ &&
-            TransNodeFlag::F_COMMITTED != flag_.flag_status_ &&
-            TransNodeFlag::F_ABORTED != flag_.flag_status_;
-  }
 
   // ===================== ObMvccTransNode Tx Node Meta =====================
   // ObMvccRow records safe_read_barrier and snapshot_version_barrier to detect
