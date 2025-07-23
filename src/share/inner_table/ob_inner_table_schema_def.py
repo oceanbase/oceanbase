@@ -9592,7 +9592,9 @@ def_table_schema(
     ('ccl_rule_id', 'int', 'true'),
     ('ccl_match_time', 'int', 'true'),
     ('insert_duplicate_row_count', 'int', 'true'),
-    ('commit_time', 'int')
+    ('commit_time', 'int'),
+    ('tx_table_read_cnt', 'int', 'true'),
+    ('outrow_lob_cnt', 'int', 'true')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

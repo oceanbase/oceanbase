@@ -1902,7 +1902,7 @@ int ObInnerTableSchema::all_table_schema(ObTableSchema &table_schema)
 
   if (OB_SUCC(ret)) {
     ObObj micro_block_format_version_default;
-    micro_block_format_version_default.set_int(1);
+    micro_block_format_version_default.set_int(ObMicroBlockFormatVersionHelper::DEFAULT_VERSION);
     ADD_COLUMN_SCHEMA_T("micro_block_format_version", //column_name
       ++column_id, //column_id
       0, //rowkey_id

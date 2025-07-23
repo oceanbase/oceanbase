@@ -741,8 +741,8 @@ OB_SERIALIZE_MEMBER(ObDASDataFetchRes,
                     enable_rich_format_, vec_row_store_,
                     io_read_bytes_,
                     ssstore_read_bytes_,
-                    ssstore_read_row_cnt_,
-                    memstore_read_row_cnt_,
+                    ssstore_read_row_cnt_,  // FARM COMPAT WHITELIST
+                    memstore_read_row_cnt_, // FARM COMPAT WHITELIST
                     das_execute_remote_info_);
 
 ObDASDataFetchRes::ObDASDataFetchRes()

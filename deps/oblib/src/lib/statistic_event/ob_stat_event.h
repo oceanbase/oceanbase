@@ -358,9 +358,9 @@ STAT_EVENT_ADD_DEF(BANDWIDTH_OUT_SLEEP_US, "bandwidth out sleep us", ObStatClass
 
 STAT_EVENT_ADD_DEF(MEMSTORE_WRITE_LOCK_WAIT_TIMEOUT_COUNT, "memstore write lock wait timeout count", ObStatClassIds::STORAGE, 60083, false, true, true)
 
-STAT_EVENT_ADD_DEF(DATA_BLOCK_READ_CNT, "accessed data micro block count", ObStatClassIds::STORAGE, 60084, true, true, true)
+STAT_EVENT_ADD_DEF(DATA_BLOCK_READ_CNT, "accessed data micro block count by io", ObStatClassIds::STORAGE, 60084, true, true, true)
 STAT_EVENT_ADD_DEF(DATA_BLOCK_CACHE_HIT, "data micro block cache hit", ObStatClassIds::STORAGE, 60085, true, true, true)
-STAT_EVENT_ADD_DEF(INDEX_BLOCK_READ_CNT, "accessed index micro block count", ObStatClassIds::STORAGE, 60086, true, true, true)
+STAT_EVENT_ADD_DEF(INDEX_BLOCK_READ_CNT, "accessed index micro block count by io", ObStatClassIds::STORAGE, 60086, true, true, true)
 STAT_EVENT_ADD_DEF(INDEX_BLOCK_CACHE_HIT, "index micro block cache hit", ObStatClassIds::STORAGE, 60087, true, true, true)
 STAT_EVENT_ADD_DEF(BLOCKSCAN_BLOCK_CNT, "blockscaned data micro block count", ObStatClassIds::STORAGE, 60088, true, true, true)
 STAT_EVENT_ADD_DEF(BLOCKSCAN_ROW_CNT, "blockscaned row count", ObStatClassIds::STORAGE, 60089, true, true, true)
@@ -370,6 +370,8 @@ STAT_EVENT_ADD_DEF(MAJOR_SSSTORE_READ_ROW_COUNT, "major ssstore read row count",
 STAT_EVENT_ADD_DEF(STORAGE_WRITING_THROTTLE_TIME, "storage waiting throttle time", ObStatClassIds::STORAGE, 60093, true, true, true)
 STAT_EVENT_ADD_DEF(IO_READ_DEVICE_TIME, "io read execute time", ObStatClassIds::STORAGE, 60094, true, true, true)
 STAT_EVENT_ADD_DEF(IO_WRITE_DEVICE_TIME, "io write execute time", ObStatClassIds::STORAGE, 60095, true, true, true)
+STAT_EVENT_ADD_DEF(TX_TABLE_READ_CNT, "read count of transaction status table", ObStatClassIds::STORAGE, 60096, true, true, true)
+STAT_EVENT_ADD_DEF(OUTROW_LOB_CNT, "outrow lob count", ObStatClassIds::STORAGE, 60097, true, false, true)
 
 // backup & restore
 STAT_EVENT_ADD_DEF(BACKUP_IO_READ_COUNT, "backup io read count", ObStatClassIds::STORAGE, 69000, true, true, true)
