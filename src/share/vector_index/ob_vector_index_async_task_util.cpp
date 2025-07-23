@@ -937,7 +937,7 @@ int ObVecIndexAsyncTaskHandler::push_task(
     ObVecIndexAsyncTaskCtx *ctx)
 {
   int ret = OB_SUCCESS;
-  LOG_WARN("push back async task to thread pool", K(ctx->task_status_.tablet_id_), K(ctx->task_status_.task_id_));
+  LOG_INFO("push back async task to thread pool", K(allocator_), K(ctx->task_status_.tablet_id_), K(ctx->task_status_.task_id_));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("handler is not init", KR(ret));
@@ -967,6 +967,10 @@ int ObVecIndexAsyncTaskHandler::push_task(
       async_task->~ObVecIndexAsyncTask();
       allocator_->free(async_task);  // arena need free? no
       async_task = nullptr;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(async_task)) {
+      handle_ls_process_task_cnt(async_task->get_ls_id(), true);
     }
   }
   return ret;
@@ -1007,6 +1011,9 @@ void ObVecIndexAsyncTaskHandler::handle(void *task)
       LOG_WARN("unexpected task type", K(ret), KPC(async_task));
     }
   }
+  if (OB_NOT_NULL(async_task)) {
+    handle_ls_process_task_cnt(async_task->get_ls_id(), false);
+  }
   // !!!!! desc async task ref cnt
   dec_async_task_ref();
   // free memory
@@ -1031,14 +1038,41 @@ void ObVecIndexAsyncTaskHandler::handle_drop(void *task)
     ObVecIndexAsyncTask *async_task = nullptr;
     async_task = static_cast<ObVecIndexAsyncTask *>(task);
     LOG_INFO("finish ObVecIndexAsyncTaskHandler::handle_drop", KPC(async_task));
-    async_task->~ObVecIndexAsyncTask();
-    allocator_->free(async_task);
-    async_task = nullptr;
+    if (OB_NOT_NULL(async_task)) {
+      handle_ls_process_task_cnt(async_task->get_ls_id(), false);
+    }
+    if (OB_NOT_NULL(async_task)) {
+      async_task->~ObVecIndexAsyncTask();
+      allocator_->free(async_task);
+      async_task = nullptr;
+    }
     // !!!!! desc async task ref cnt
     dec_async_task_ref();
   }
 }
 
+void ObVecIndexAsyncTaskHandler::handle_ls_process_task_cnt(const ObLSID &ls_id, const bool is_inc)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
+  ObPluginVectorIndexMgr *vec_idx_mgr = nullptr;
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("[handle ls process task] invalid ls id", K(ret), K(ls_id));
+  } else if (OB_ISNULL(vector_index_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[handle ls process task] unexpected nullptr", K(ret), KP(vector_index_service));
+  } else if (OB_FAIL(vector_index_service->get_ls_index_mgr_map().get_refactored(ls_id, vec_idx_mgr))) {
+    LOG_WARN("[handle ls process task] fail to get vector index ls mgr", KR(ret), K(ls_id));
+  } else if (OB_ISNULL(vec_idx_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[handle ls process task] unexpected nullptr", K(ret), KP(vec_idx_mgr));
+  } else if (is_inc) {
+    vec_idx_mgr->get_async_task_opt().inc_ls_task_cnt();
+  } else {
+    vec_idx_mgr->get_async_task_opt().dec_ls_task_cnt();
+  }
+}
 
 /**************************** ObVecIndexAsyncTask ******************************/
 int ObVecIndexAsyncTask::init(
@@ -1078,7 +1112,7 @@ int ObVecIndexAsyncTask::do_work()
   ObPluginVectorIndexAdapterGuard adpt_guard;
   ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
   ObPluginVectorIndexAdaptor *new_adapter = nullptr;
-  LOG_INFO("start do_work", K(ret), K(ctx_->task_status_));
+  LOG_INFO("start do_work", K(ret), K(ctx_->task_status_), K(ls_id_));
   void *adpt_buff = nullptr;
   DEBUG_SYNC(HANDLE_VECTOR_INDEX_ASYNC_TASK);
   if (IS_NOT_INIT) {

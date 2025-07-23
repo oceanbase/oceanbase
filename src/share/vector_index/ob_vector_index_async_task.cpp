@@ -64,7 +64,7 @@ int ObVecAsyncTaskExector::clear_old_task_ctx_if_need()
         all_task_is_finish = false; // break if has unfinish task
       }
     }
-    if (OB_SUCC(ret) && all_task_is_finish) {
+    if (OB_SUCC(ret) && all_task_is_finish && (0 == task_opt.get_ls_processing_task_cnt())) {
       // all tasks is finish and task record in map should be removed expectedly.
       // when map size > 0, is not expected.
       if (task_opt.get_async_task_map().size() > 0) {
@@ -83,8 +83,13 @@ int ObVecAsyncTaskExector::clear_old_task_ctx_if_need()
         }
       } else {
         index_ls_mgr->get_async_task_opt().get_allocator()->reset();
-        LOG_DEBUG("reset vector async task ctx memory", K(ret), K(all_task_is_finish));
+        LOG_DEBUG("reset vector async task ctx memory", K(ret),
+          K(index_ls_mgr->get_async_task_opt().get_allocator()),
+          K(ls_->get_ls_id()), K(all_task_is_finish));
       }
+    } else {
+      LOG_DEBUG("not reset vector async task ctx memory",
+        K(ret), K(all_task_is_finish), K(task_opt.get_ls_processing_task_cnt()));
     }
   }
   return OB_SUCCESS;
@@ -174,10 +179,10 @@ int ObVecAsyncTaskExector::clear_task_ctxs(
     if (OB_ISNULL(task_ctx)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr", K(ret), KP(task_ctx));
-    } else if (OB_FAIL(clear_task_ctx(task_opt, task_ctx))) {
-      LOG_WARN("fail to clear task map", K(ret), K(task_ctx));
     } else if (OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::remove_sys_task(task_ctx))) { // ignore sys task ret code
       LOG_WARN("remove sys task failed", K(tmp_ret));
+    } else if (OB_FAIL(clear_task_ctx(task_opt, task_ctx))) {
+      LOG_WARN("fail to clear task map", K(ret), K(task_ctx));
     }
   }
   return ret;
@@ -208,6 +213,7 @@ int ObVecAsyncTaskExector::clear_task_ctx(
     task_opt.get_allocator()->free(task_ctx); // arena need free ??
     task_ctx = nullptr;
   }
+  LOG_DEBUG("clear task ctx", K(task_ctx));
   return ret;
 }
 
@@ -319,7 +325,8 @@ int ObVecAsyncTaskExector::check_task_result(ObVecIndexAsyncTaskCtx *task_ctx)
         LOG_WARN("vector index async task is finish and not retry anymore", KR(ret), KPC(task_ctx));
       } else {
         task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
-        LOG_WARN("vector index async task is finish and will do retry", KR(ret), KPC(task_ctx));
+        task_ctx->task_status_.ret_code_ = VEC_ASYNC_TASK_DEFAULT_ERR_CODE;
+        LOG_INFO("vector index async task is finish and will do retry", KR(ret), KPC(task_ctx));
         // check task is canceled
         bool is_cancel = false;
         if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_task_is_cancel(task_ctx, is_cancel))) {
@@ -408,12 +415,12 @@ int ObVecAsyncTaskExector::start_task()
               LOG_DEBUG("task is in thread pool already", KPC(task_ctx));
             } else if (OB_FAIL(task_handle.push_task(tenant_id_, ls_->get_ls_id(), task_ctx))) {
               LOG_WARN("fail to push task to thread pool", K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
+            } else if (FALSE_IT(task_ctx->in_thread_pool_ = true)) {
             } else if (OB_FAIL(update_status_and_ret_code(task_ctx))) {
               LOG_WARN("fail to update task status to inner table",
                 K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
             } else if (task_ctx->sys_task_id_.is_invalid() && OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::add_sys_task(task_ctx))) {
               LOG_WARN("add sys task failed", K(tmp_ret));
-            } else if (FALSE_IT(task_ctx->in_thread_pool_ = true)) {
             }
             break;
           }
