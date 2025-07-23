@@ -279,7 +279,7 @@ int ObTenantConfig::got_version(int64_t version, const bool remove_repeat)
 }
 
 int ObTenantConfig::update_local(int64_t expected_version, ObMySQLProxy::MySQLResult &result,
-                                 bool save2file /* = true */)
+                                 bool save2file /* = true */, bool publish_special_config /* = true*/)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(system_config_.update(result))) {
@@ -300,14 +300,9 @@ int ObTenantConfig::update_local(int64_t expected_version, ObMySQLProxy::MySQLRe
       LOG_ERROR("Read tenant config failed", K_(tenant_id), K(ret));
     } else if (save2file && OB_FAIL(config_mgr_->dump2file_unsafe())) {
       LOG_WARN("Dump to file failed", K(ret));
-    } else if (OB_FAIL(publish_special_config_after_dump())) {
+    } else if (publish_special_config && OB_FAIL(publish_special_config_after_dump())) {
       LOG_WARN("publish special config after dump failed", K(tenant_id_), K(ret));
     }
-#ifdef ERRSIM
-    else if (OB_FAIL(build_errsim_module_())) {
-      LOG_WARN("failed to build errsim module", K(ret), K(tenant_id_));
-    }
-#endif
     print();
   } else {
     LOG_WARN("Read tenant config from inner table error", K_(tenant_id), K(ret));
