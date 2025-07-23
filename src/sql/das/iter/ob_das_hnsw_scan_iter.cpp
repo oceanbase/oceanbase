@@ -919,10 +919,8 @@ int ObDASHNSWScanIter::init_pre_filter(ObPluginVectorIndexAdaptor *adaptor, ObVe
       // check key range
       const ObRangeArray& key_range = rowkey_vid_iter_->get_scan_param().key_ranges_;
       for (int64_t i = 0; i < key_range.count() && OB_SUCC(ret); i++) {
-        const ObNewRange *range = nullptr;
-        if (OB_FAIL(build_extra_info_range(key_range.at(i), range))) {
-          LOG_WARN("failed to build extra info range.", K(ret), K(i));
-        } else if (OB_FAIL(rk_range.push_back(range))) {
+        const ObNewRange *range = &key_range.at(i);
+        if (OB_FAIL(rk_range.push_back(range))) {
           LOG_WARN("fail to push back range", K(ret), K(i));
         }
       }
@@ -930,7 +928,12 @@ int ObDASHNSWScanIter::init_pre_filter(ObPluginVectorIndexAdaptor *adaptor, ObVe
   }
   if (OB_SUCC(ret)) {
     if (init_as_range) {
-      if (OB_FAIL(ada_ctx->init_prefilter(adaptor, selectivity_, rk_range))) {
+      const ObDASScanCtDef *ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(vec_aux_ctdef_->get_rowkey_vid_tbl_idx(),
+                                                                          ObTSCIRScanType::OB_VEC_ROWKEY_VID_SCAN);
+      if (OB_ISNULL(ctdef)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("rowkey vid ctdef is null.", K(ret));
+      } else if (OB_FAIL(ada_ctx->init_prefilter(adaptor, selectivity_, rk_range, ctdef->rowkey_exprs_, extra_in_rowkey_idxs_))) {
         LOG_WARN("init bitmaps failed.", K(ret));
       }
     } else {

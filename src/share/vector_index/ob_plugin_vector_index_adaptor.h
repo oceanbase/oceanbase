@@ -157,13 +157,16 @@ public:
                is_snap_(false),
                tmp_alloc_("extmpalloc", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
                extra_buffer_(nullptr),
-               tmp_objs_(nullptr) {}
+               tmp_objs_(nullptr),
+               extra_in_rowkey_idxs_(nullptr) {}
   ~ObHnswBitmapFilter() {}
   void reset();
   int init(const int64_t &min, const int64_t &max);
   int init(void *adaptor,
            double selectivity,
-           const ObIArray<const ObNewRange*> &range);
+           const ObIArray<const ObNewRange*> &range,
+           const sql::ExprFixedArray& rowkey_exprs,
+           const ObIArray<int64_t> &extra_in_rowkey_idxs);
   bool is_valid() { return OB_NOT_NULL(bitmap_); }
   bool is_range_filter() { return type_ == FilterType::SIMPLE_RANGE; }
   bool test(int64_t id) override;
@@ -185,6 +188,7 @@ public:
     is_snap_ = filter.is_snap_;
     extra_buffer_ = filter.extra_buffer_;
     tmp_objs_ = filter.tmp_objs_;
+    extra_in_rowkey_idxs_ = filter.extra_in_rowkey_idxs_;
   }
   void set_roaring_bitmap(roaring::api::roaring64_bitmap_t *bitmap) {
     type_ = FilterType::ROARING_BITMAP;
@@ -217,6 +221,7 @@ public:
   ObArenaAllocator tmp_alloc_;
   char *extra_buffer_;
   ObObj *tmp_objs_;
+  const ObIArray<int64_t> *extra_in_rowkey_idxs_;
 };
 
 class ObVectorQueryAdaptorResultContext {
@@ -239,7 +244,8 @@ public:
   ~ObVectorQueryAdaptorResultContext();
   int init_bitmaps();
   int init_prefilter(const int64_t &min, const int64_t &max);
-  int init_prefilter( void *adaptor, double selectivity, const ObIArray<const ObNewRange*> &range);
+  int init_prefilter(void *adaptor, double selectivity, const ObIArray<const ObNewRange *> &range,
+                     const sql::ExprFixedArray &rowkey_exprs, const ObIArray<int64_t> &extra_in_rowkey_idxs);
   bool is_bitmaps_valid();
   bool is_prefilter_valid();
   bool is_range_prefilter();
