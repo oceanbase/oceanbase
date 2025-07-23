@@ -48,7 +48,8 @@ enum class ObLSGetMod : int
   SSLOG_MOD = 25,
   SHARED_STORAGE_GC_MOD = 26,
   SS_MICRO_CACHE_MOD = 27,
-  TOTAL_MAX_MOD = 28,
+  SS_MACRO_CACHE_MOD = 28,
+  TOTAL_MAX_MOD = 29,
 };
 
 }

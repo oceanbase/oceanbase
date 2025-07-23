@@ -130,7 +130,7 @@ TEST_F(TestSSPreReadTask, basic_pre_read)
   const int64_t timeout_us = 20 * 1000 * 1000L;
   while ((preread_cache_mgr.preread_queue_.size() != 0) ||
          (preread_task.segment_files_.count() != 0) ||
-         (preread_task.free_list_.get_curr_total() != ObSSPreReadTask::MAX_PRE_READ_PARALLELISM)) {
+         (preread_task.free_list_.get_curr_total() != file_manager->preread_cache_mgr_.preread_task_.max_pre_read_parallelism_)) {
     ob_usleep(1000);
     if (timeout_us + start_us < ObTimeUtility::current_time()) {
       ret = OB_ERR_UNEXPECTED;
@@ -161,7 +161,7 @@ TEST_F(TestSSPreReadTask, basic_pre_read)
   start_us = ObTimeUtility::current_time();
   while ((preread_cache_mgr.preread_queue_.size() != 0) ||
          (preread_task.segment_files_.count() != 0) ||
-         (preread_task.free_list_.get_curr_total() != ObSSPreReadTask::MAX_PRE_READ_PARALLELISM)) {
+         (preread_task.free_list_.get_curr_total() != file_manager->preread_cache_mgr_.preread_task_.max_pre_read_parallelism_)) {
     ob_usleep(1000);
     if (timeout_us + start_us < ObTimeUtility::current_time()) {
       ret = OB_ERR_UNEXPECTED;
@@ -172,7 +172,7 @@ TEST_F(TestSSPreReadTask, basic_pre_read)
     }
   }
 
-  const int64_t max_parallel_cnt = ObSSPreReadTask::MAX_PRE_READ_PARALLELISM;
+  const int64_t max_parallel_cnt = file_manager->preread_cache_mgr_.preread_task_.max_pre_read_parallelism_;
   ASSERT_EQ(max_parallel_cnt, preread_task.free_list_.get_curr_total());
   ASSERT_EQ(0, preread_cache_mgr.preread_queue_.size());
   ASSERT_EQ(0, preread_task.async_read_list_.get_curr_total());
