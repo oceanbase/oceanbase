@@ -1257,7 +1257,9 @@ int ObTransferReplaceTableTask::check_src_memtable_is_valid_(
     ObITable *last_minor_mini_sstable = table_store.get_minor_sstables().get_boundary_table(true /*is_last*/);
     if (OB_FAIL(check_memtable_max_end_scn_(*tablet))) {
       LOG_WARN("failed to check memtable max end scn", K(ret), KPC(tablet));
-    } else if (OB_FAIL(get_transfer_sstables_info_(filled_table_handle_array, filled_max_minor_end_scn))) {
+    } else if (OB_FAIL(get_transfer_sstables_info_(filled_table_handle_array,
+                                                   tablet->get_clog_checkpoint_scn(),
+                                                   filled_max_minor_end_scn))) {
       LOG_WARN("failed to get transfer sstables info", K(ret), KPC(tablet));
     } else if (OB_NOT_NULL(last_minor_mini_sstable) && last_minor_mini_sstable->get_end_scn() > filled_max_minor_end_scn) {
       ret = OB_EAGAIN;
@@ -1913,10 +1915,12 @@ int ObTransferReplaceTableTask::build_transfer_backfill_tablet_param_(
 
 int ObTransferReplaceTableTask::get_transfer_sstables_info_(
     const ObTablesHandleArray &table_handle_array,
+    const share::SCN &tablet_clog_checkpoint_scn,
     share::SCN &max_minor_end_scn)
 {
   int ret = OB_SUCCESS;
   max_minor_end_scn = SCN::min_scn();
+  bool has_minor_sstable = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1930,6 +1934,7 @@ int ObTransferReplaceTableTask::get_transfer_sstables_info_(
       } else if (table->is_major_sstable() || table->is_mds_sstable()) {
         //do nothing
       } else if (table->is_minor_sstable()) {
+        has_minor_sstable = true;
         max_minor_end_scn = SCN::max(table->get_end_scn(), max_minor_end_scn);
       } else {
         ret = OB_ERR_UNEXPECTED;
@@ -1937,6 +1942,13 @@ int ObTransferReplaceTableTask::get_transfer_sstables_info_(
       }
     }
   }
+
+  if (OB_SUCC(ret) && !has_minor_sstable) {
+    LOG_INFO("tablet has no minor sstable, use tablet clog checkpoint scn as max minor end scn",
+      K(tablet_info_), K(table_handle_array), K(tablet_clog_checkpoint_scn));
+    max_minor_end_scn = tablet_clog_checkpoint_scn;
+  }
+
   return ret;
 }
 
