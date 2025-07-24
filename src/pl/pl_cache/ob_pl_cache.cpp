@@ -1530,8 +1530,9 @@ int ObPLCacheCtx::adjust_definer_database_id()
 do {                                                                             \
   OZ(schema_guard_->get_##type##_info(get_tenant_id_by_object_id(key_id),        \
                                       key_id, tmp_##type##_info));               \
-  CK(OB_NOT_NULL(tmp_##type##_info));                                            \
-  if (OB_FAIL(ret)) {                                                            \
+  if (OB_ISNULL(tmp_##type##_info)) {                                            \
+    ret = OB_ERR_INVALID_SCHEMA;                                                 \
+    LOG_WARN("failed to get " #type " info. ", K(ret), K(key_id));               \
   } else if (!tmp_##type##_info->is_invoker_right()) {                           \
     key_.db_id_ = tmp_##type##_info->get_database_id();                          \
   }                                                                              \
