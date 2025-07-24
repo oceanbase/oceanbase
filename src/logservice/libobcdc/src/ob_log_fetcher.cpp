@@ -63,6 +63,7 @@ ObLogFetcher::ObLogFetcher() :
     fs_container_mgr_(),
     dispatcher_(nullptr),
     cluster_id_filter_(),
+    lsn_filter_(),
     misc_tid_(0),
     heartbeat_dispatch_tid_(0),
     last_timestamp_(OB_INVALID_TIMESTAMP),
@@ -143,7 +144,9 @@ int ObLogFetcher::init(
     } else if (OB_FAIL(cluster_id_filter_.init(cfg.cluster_id_black_list.str(),
         cfg.cluster_id_black_value_min, cfg.cluster_id_black_value_max))) {
       LOG_ERROR("init cluster_id_filter fail", KR(ret));
-    } else if (OB_FAIL(part_trans_resolver_factory_.init(*task_pool, *log_entry_task_pool, *dispatcher_, cluster_id_filter_))) {
+    } else if (OB_FAIL(lsn_filter_.init(cfg.lsn_black_list.str()))) {
+      LOG_ERROR("init lsn_black_list failed", KR(ret));
+    } else if (OB_FAIL(part_trans_resolver_factory_.init(*task_pool, *log_entry_task_pool, *dispatcher_, cluster_id_filter_, lsn_filter_))) {
       LOG_ERROR("init part trans resolver factory fail", KR(ret));
     } else if (OB_FAIL(large_buffer_pool_.init("ObLogFetcher", 1L * 1024 * 1024 * 1024))) {
       LOG_ERROR("init large buffer pool failed", KR(ret));
@@ -256,6 +259,7 @@ void ObLogFetcher::destroy()
     part_trans_resolver_factory_.destroy();
     dispatcher_ = nullptr;
     cluster_id_filter_.destroy();
+    lsn_filter_.destroy();
     if (is_integrated_fetching_mode(fetching_mode_)) {
       log_route_service_.wait();
       log_route_service_.destroy();

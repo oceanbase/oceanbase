@@ -55,6 +55,7 @@ ob_set_subtarget(obcdc_object_list common
   ob_log_sys_ls_task_handler.cpp
   ob_log_ddl_processor.cpp
   ob_log_ls_op_processor.cpp
+  ob_log_lsn_filter.cpp
   ob_log_ddl_parser.cpp
   ob_log_dml_parser.cpp
   ob_log_entry_task_pool.cpp

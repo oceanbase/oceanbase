@@ -1529,6 +1529,25 @@ int c_str_to_int(const char *str, int64_t &num)
   return ret;
 }
 
+int c_str_to_uint64(const char *str, uint64_t &num)
+{
+  int ret = OB_SUCCESS;
+  errno = 0;
+  char *end_str = NULL;
+  if (OB_ISNULL(str) || OB_UNLIKELY(0 == strlen(str))) {
+    LOG_ERROR("c_str_to_int str should not null");
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    num = strtoull(str, &end_str, 10);
+    if (errno != 0 || (NULL != end_str && *end_str != '\0')) {
+      LOG_ERROR("strtoll convert string to int value fail", K(str), K(num),
+        "error", strerror(errno), K(end_str));
+      ret = OB_INVALID_DATA;
+    }
+  }
+  return ret;
+}
+
 bool is_ddl_tablet(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id)
 {
   return ls_id.is_sys_ls() && share::OB_ALL_DDL_OPERATION_TID == tablet_id.id();

@@ -574,6 +574,8 @@ int print_serilized_br_value(std::string &key,
 
 int c_str_to_int(const char* str, int64_t &num);
 
+int c_str_to_uint64(const char* str, uint64_t &num);
+
 // for sys_table, table_id == tablet_id
 bool is_ddl_tablet(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id);
 
