@@ -721,11 +721,6 @@ static bool is_gcs_destination(const OutcomeType &outcome)
   return outcome.GetError().ResponseHeaderExists("x-guploader-uploadid");
 }
 
-const int S3_BAD_REQUEST = 400;
-const int S3_PERMISSION_DENIED = 403;
-const int S3_ITEM_NOT_EXIST = 404;
-const int S3_SLOW_DOWN = 503;
-
 static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
 {
   const int http_code = static_cast<int>(s3_err.GetResponseCode());
