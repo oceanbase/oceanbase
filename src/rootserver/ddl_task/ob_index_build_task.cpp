@@ -1209,6 +1209,7 @@ int ObIndexBuildTask::wait_local_index_data_complement()
     if (OB_FAIL(check_build_local_index_single_replica(is_request_end))) {
       LOG_WARN("fail to check build single replica", K(ret));
     } else if (is_request_end) {
+      ret = complete_sstable_job_ret_code_;
       state_finished = true;
     }
   }
@@ -1217,15 +1218,14 @@ int ObIndexBuildTask::wait_local_index_data_complement()
     uint64_t src_table_id = object_id_;
     bool dummy_equal = false;
     bool need_verify_checksum = true;
-    if (share::schema::is_fts_index_aux(create_index_arg_.index_type_) ||
-        share::schema::is_fts_doc_word_aux(create_index_arg_.index_type_)) {
-      need_verify_checksum = false;
-    }
 #ifdef ERRSIM
     // when the major compaction is delayed, skip verify column checksum
     need_verify_checksum = 0 == GCONF.errsim_ddl_major_delay_time;
 #endif
-
+    if (share::schema::is_fts_index_aux(create_index_arg_.index_type_) ||
+        share::schema::is_fts_doc_word_aux(create_index_arg_.index_type_)) {
+      need_verify_checksum = false;
+    }
     ObArray<int64_t> ignore_col_ids;
     const ObTableSchema *data_table_schema = nullptr;
     uint64_t doc_id_col_id = OB_INVALID_ID;
