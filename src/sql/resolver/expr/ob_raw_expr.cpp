@@ -3343,6 +3343,21 @@ int ObPLAssocIndexRawExpr::assign(const ObRawExpr &other)
   return ret;
 }
 
+bool ObPLAssocIndexRawExpr::inner_same_as(const ObRawExpr &expr,
+                                          ObExprEqualCheckContext *check_context) const
+{
+  bool result = false;
+  if (get_expr_type() != expr.get_expr_type()) {
+  } else {
+    const ObPLAssocIndexRawExpr *c_expr = static_cast<const ObPLAssocIndexRawExpr*>(&expr);
+    result = c_expr->parent_type_ == parent_type_
+              && c_expr->for_write_ == for_write_
+              && c_expr->out_of_range_set_err_ == out_of_range_set_err_
+              && c_expr->is_index_by_varchar_ == is_index_by_varchar_;
+  }
+  return result;
+}
+
 int ObObjAccessRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
