@@ -10989,6 +10989,7 @@ gmt_modified	timestamp(6)	NO		NULL
 merge_version	bigint(20)	NO		NULL	
 dll	longblob	NO		NULL	
 stack_size	longblob	YES		NULL	
+extra_info	longblob	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ncomp_dll_v2;
 IF(count(*) >= 0, 1, 0)
 1

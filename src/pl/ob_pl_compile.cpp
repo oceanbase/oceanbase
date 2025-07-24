@@ -558,17 +558,11 @@ int ObPLCompiler::compile(
       uint64_t session_database_id = func_ast.get_compile_flag().compile_with_invoker_right() ? func_ast.get_invoker_db_id() : session_info_.get_database_id();
       ObRoutinePersistentInfo routine_storage(
         MTL_ID(), routine.get_database_id(), session_database_id, func_ast.get_id(), routine.get_tenant_id());
-      bool exist_same_name_obj_with_public_synonym = false;
-      OZ (ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(schema_guard_,
-                                                                            func_ast.get_dependency_table(),
-                                                                            exist_same_name_obj_with_public_synonym,
-                                                                            session_info_));
       bool enable_persistent = GCONF._enable_persistent_compiled_routine
                                && func_ast.get_can_cached()
                                && !func_ast.has_incomplete_rt_dep_error()
                                && !cg.get_debug_mode()
                                && !cg.get_profile_mode()
-                               && !exist_same_name_obj_with_public_synonym
                                && (!func_ast.get_is_all_sql_stmt() || !func_ast.get_obj_access_exprs().empty());
       FLT_SET_TAG(pl_compile_is_persist, enable_persistent);
       OZ (cg.init());
