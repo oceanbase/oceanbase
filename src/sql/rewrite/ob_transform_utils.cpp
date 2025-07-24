@@ -16360,6 +16360,13 @@ bool ObTransformUtils::is_enable_values_table_rewrite(const uint64_t compat_vers
          (compat_version >= COMPAT_VERSION_4_2_2 && compat_version < COMPAT_VERSION_4_3_0);
 }
 
+bool ObTransformUtils::is_enable_hybrid_inlist_rewrite(const uint64_t compat_version)
+{
+  return compat_version >= COMPAT_VERSION_4_4_1 ||
+         (compat_version >= COMPAT_VERSION_4_3_5_BP3 && compat_version < COMPAT_VERSION_4_4_0) ||
+         (compat_version >= COMPAT_VERSION_4_2_5_BP6 && compat_version < COMPAT_VERSION_4_3_0);
+}
+
 int ObTransformUtils::check_need_calc_match_score(ObExecContext *exec_ctx,
                                                   const ObDMLStmt* stmt,
                                                   ObRawExpr* match_expr,
