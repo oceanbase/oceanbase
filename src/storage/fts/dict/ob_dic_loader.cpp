@@ -139,10 +139,17 @@ int ObTenantDicLoader::try_load_dictionary_in_trans(const uint64_t tenant_id)
     LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
   } else {
     if (!is_load_) {
+      ObTimeoutCtx timeout_ctx;
+      const int64_t default_timeout = DEFAULT_TIMEOUT_US;
+      const int64_t timeout = MAX(default_timeout, GCONF.internal_sql_execute_timeout);
       ObMySQLTransaction trans;
       if (OB_ISNULL(GCTX.sql_proxy_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sql proxy is null", K(ret));
+      } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(timeout))) {
+        LOG_WARN("set trx timeout failed", K(ret));
+      } else if (OB_FAIL(timeout_ctx.set_timeout(timeout))) {
+        LOG_WARN("set timeout failed", K(ret));
       } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
         LOG_WARN("failed to start trans", K(ret), K(tenant_id));
       } else if (OB_FAIL(try_load_dictionary_in_trans(tenant_id, trans))) {
