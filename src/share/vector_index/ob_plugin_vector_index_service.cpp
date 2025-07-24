@@ -201,6 +201,19 @@ int ObPluginVectorIndexMgr::get_adapter_inst_guard(ObTabletID tablet_id,  ObPlug
   return ret;
 }
 
+int ObPluginVectorIndexMgr::get_adapter_inst_guard_in_lock(ObTabletID tablet_id, ObPluginVectorIndexAdapterGuard &adpt_guard)
+{
+  int ret = OB_SUCCESS;
+
+  ObPluginVectorIndexAdaptor *index_inst = nullptr;
+  if (OB_FAIL(get_adapter_inst_(tablet_id, index_inst))) {
+    LOG_WARN("failed to get adapter inst", K(tablet_id), KR(ret));
+  } else if (OB_FAIL(adpt_guard.set_adapter(index_inst))) {
+    LOG_WARN("failed to set adapter", K(tablet_id), KR(ret));
+  }
+  return ret;
+}
+
 int ObPluginVectorIndexMgr::get_adapter_inst_(ObTabletID tablet_id, ObPluginVectorIndexAdaptor *&index_inst)
 {
   int ret = OB_SUCCESS;
@@ -1358,10 +1371,19 @@ int ObPluginVectorIndexMgr::replace_with_full_partial_adapter(ObVectorIndexAcqui
                 && OB_FAIL(new_adapter->init(*vec_index_param, dim, memory_context_, all_vsag_use_mem_))) {
       LOG_WARN("failed to init adpt.", K(ret), K(*vec_index_param), K(dim));
     } else {
+      ObPluginVectorIndexAdapterGuard old_inc_adapter_guard;
+      ObPluginVectorIndexAdapterGuard old_bitmap_adapter_guard;
+      ObPluginVectorIndexAdapterGuard old_sn_adapter_guard;
       WLockGuard lock_guard(adapter_map_rwlock_);
       int overwrite = 1;
       // should not fail in followring process
-      if (OB_FAIL(set_partial_adapter_(ctx.inc_tablet_id_, new_adapter, overwrite))) {
+      if (OB_FAIL(get_adapter_inst_guard_in_lock(ctx.inc_tablet_id_, old_inc_adapter_guard))) {
+        LOG_WARN("failed to get adapter", K(ret), K(ctx.inc_tablet_id_));
+      } else if (OB_FAIL(get_adapter_inst_guard_in_lock(ctx.vbitmap_tablet_id_, old_bitmap_adapter_guard))) {
+        LOG_WARN("failed to get adapter", K(ret), K(ctx.vbitmap_tablet_id_));
+      } else if (OB_FAIL(get_adapter_inst_guard_in_lock(ctx.snapshot_tablet_id_, old_sn_adapter_guard))) {
+        LOG_WARN("failed to get adapter", K(ret), K(ctx.snapshot_tablet_id_));
+      } else if (OB_FAIL(set_partial_adapter_(ctx.inc_tablet_id_, new_adapter, overwrite))) {
         LOG_WARN("failed to set new full partial adapter", K(ctx.inc_tablet_id_), KR(ret));
       } else if (OB_FAIL(set_partial_adapter_(ctx.vbitmap_tablet_id_, new_adapter, overwrite))) {
         LOG_WARN("failed to set new full partial adapter", K(ctx.vbitmap_tablet_id_), KR(ret));
@@ -1372,9 +1394,9 @@ int ObPluginVectorIndexMgr::replace_with_full_partial_adapter(ObVectorIndexAcqui
       } else {
         bool set_success = false;
         // release because they are removed from hashmap
-        ObPluginVectorIndexAdaptor *inc_adapter = inc_adapter_guard.get_adatper();
-        ObPluginVectorIndexAdaptor *bitmap_adapter = bitmap_adapter_guard.get_adatper();
-        ObPluginVectorIndexAdaptor *sn_adapter = sn_adapter_guard.get_adatper();
+        ObPluginVectorIndexAdaptor *inc_adapter = old_inc_adapter_guard.get_adatper();
+        ObPluginVectorIndexAdaptor *bitmap_adapter = old_bitmap_adapter_guard.get_adatper();
+        ObPluginVectorIndexAdaptor *sn_adapter = old_sn_adapter_guard.get_adatper();
 
         if (OB_FAIL(ObPluginVectorIndexUtils::release_vector_index_adapter(inc_adapter))) {
           LOG_WARN("fail to release vector index adapter",
