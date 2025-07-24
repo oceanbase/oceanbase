@@ -150,6 +150,12 @@ int ObTransformerImpl::set_transformation_parameters(ObQueryCtx *query_ctx)
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     if (tenant_config.is_valid()) {
       ctx_->complex_cbqt_table_num_ = tenant_config->_complex_cbqt_table_num;
+      ctx_->force_subquery_unnest_ = tenant_config->_force_subquery_unnest;
+      ctx_->nested_loop_join_enabled_ = tenant_config->_nested_loop_join_enabled;
+      if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::NESTED_LOOP_JOIN_ENABLED,
+                                                                              ctx_->nested_loop_join_enabled_))) {
+        LOG_WARN("fail to get bool opt param", K(ret));
+      }
     }
   }
   return ret;
