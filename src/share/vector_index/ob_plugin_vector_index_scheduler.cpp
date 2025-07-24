@@ -1069,7 +1069,6 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
     }
     // Notice: leader write sync log, do memdata_sync only one loop(role changed from follower to leader)
     // explicit cover error code
-    ret = OB_SUCCESS;
 
     // start exec index async task
     int tmp_ret = OB_SUCCESS;
@@ -1078,7 +1077,8 @@ int ObPluginVectorIndexLoadScheduler::check_and_execute_tasks()
       LOG_WARN("fail to start index async task", K(tmp_ret));
     }
     // write tablets need memdata sync to clog
-    if (OB_NOT_NULL(index_ls_mgr)
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(index_ls_mgr)
         && (current_memory_config_ != 0)
         && OB_FAIL(log_tablets_need_memdata_sync(index_ls_mgr))) { // Tips: check if need check to follower
       LOG_WARN("fail to log tablets need memdata sync", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
