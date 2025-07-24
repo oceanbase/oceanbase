@@ -183,12 +183,12 @@ public:
 public:
   static const int64_t MICRO_BLOCK_SIZE = 4 * 1024;
   static const int64_t MACRO_BLOCK_SIZE = 64 * 1024;
-  static const int64_t MAX_MICRO_BLOCK_CNT = 100;
+  static const int64_t MAX_MICRO_BLOCK_CNT = 300;
   static const int64_t MACRO_BLOCK_COUNT = 1000;
   static const int64_t SCHEMA_VERSION = 10;
   static const int64_t TEST_COLUMN_CNT = 6;
   static const int64_t TEST_ROWKEY_COLUMN_CNT = 2;
-  static const int64_t MAX_FILE_SIZE = 256 * 1024 * 1024;
+  static const int64_t MAX_FILE_SIZE = 1024 * 1024 * 1024;
   enum LoadDataType
   {
     ALL_DELETE = 0,
