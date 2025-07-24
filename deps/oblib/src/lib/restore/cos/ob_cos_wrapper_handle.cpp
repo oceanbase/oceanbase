@@ -73,7 +73,7 @@ static void ob_cos_free(void *opaque, void *address)
 /*--------------------------------ObCosWrapperHandle-----------------------------------*/
 ObCosWrapperHandle::ObCosWrapperHandle()
   : is_inited_(false), handle_(nullptr), cos_account_(), sts_token_(), allocator_(),
-    delete_mode_(ObIStorageUtil::DELETE)
+    delete_mode_(ObStorageDeleteMode::STORAGE_DELETE_MODE)
 {}
 
 int ObCosWrapperHandle::init(const ObObjectStorageInfo *storage_info)
@@ -105,7 +105,7 @@ void ObCosWrapperHandle::reset()
 {
   destroy_cos_handle();
   is_inited_ = false;
-  delete_mode_ = ObIStorageUtil::DELETE;
+  delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   // clear memory used by cos account sts token
   cos_account_.clear();
   sts_token_.reset();
@@ -251,9 +251,9 @@ int ObCosWrapperHandle::set_delete_mode(const char *parameter)
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid args", K(ret), KP(parameter));
   } else if (0 == strcmp(parameter, "delete")) {
-    delete_mode_ = ObIStorageUtil::DELETE;
+    delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   } else if (0 == strcmp(parameter, "tagging")) {
-    delete_mode_ = ObIStorageUtil::TAGGING;
+    delete_mode_ = ObStorageDeleteMode::STORAGE_TAGGING_MODE;
   } else {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "delete mode is invalid", K(ret), K(parameter));

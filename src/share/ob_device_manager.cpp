@@ -13,7 +13,9 @@
 #include "common/storage/ob_device_common.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/restore/ob_object_device.h"
+#include "lib/restore/ob_storage_obdal_base.h"
 #include "ob_device_manager.h"
+#include "share/ob_cluster_version.h"
 #include "share/ob_local_device.h"
 #include "logservice/ob_log_device.h"
 
@@ -97,6 +99,30 @@ int ObClusterVersionMgr::is_supported_assume_version() const
   return ret;
 }
 
+int ObClusterVersionMgr::is_supported_azblob_version() const
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  uint64_t min_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, min_data_version))) {
+    OB_LOG(WARN, "fail to get min data version, use cluster version", K(ret), K(tenant_id));
+  }
+  if (OB_SUCC(ret)) {
+    if (min_data_version < DATA_VERSION_4_2_5_6) {
+      ret = OB_NOT_SUPPORTED;
+      OB_LOG(WARN, "data version is too low for azblob", K(ret), K(min_data_version));
+    }
+  } else {
+    ret = OB_SUCCESS;
+    const uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+    if (min_cluster_version < CLUSTER_VERSION_4_2_5_6) {
+      ret = OB_NOT_SUPPORTED;
+      OB_LOG(WARN, "cluster version is too low for azblob", K(ret), K(min_cluster_version));
+    }
+  }
+  return ret;
+}
+
 const int ObDeviceManager::MAX_DEVICE_INSTANCE;
 ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), lock_(ObLatchIds::LOCAL_DEVICE_LOCK), is_init_(false)
 {
@@ -128,6 +154,8 @@ int ObDeviceManager::init_devices_env()
       OB_LOG(WARN, "fail to init cos storage", K(ret));
     } else if (OB_FAIL(init_s3_env())) {
       OB_LOG(WARN, "fail to init s3 storage", K(ret));
+    } else if (OB_FAIL(init_obdal_env())) {
+      OB_LOG(WARN, "fail to init obdal env", K(ret));
     } else if (OB_FAIL(logservice::init_log_store_env())) {
       OB_LOG(WARN, "fail to init s3 storage", K(ret));
     } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(
@@ -184,6 +212,7 @@ void ObDeviceManager::destroy()
     fin_oss_env();
     fin_cos_env();
     fin_s3_env();
+    fin_obdal_env();
     logservice::fin_log_store_env();
     ObDeviceCredentialMgr::get_instance().destroy();
     is_init_ = false;
@@ -230,6 +259,10 @@ int parse_storage_info(common::ObString storage_type_prefix, ObIODevice*& device
     device_type = OB_STORAGE_LOG_STORE;
     mem = allocator.alloc(sizeof(logservice::ObLogDevice));
     if (NULL != mem) {new(mem)logservice::ObLogDevice;}
+  } else if (storage_type_prefix.prefix_match(OB_AZBLOB_PREFIX)) {
+    device_type = OB_STORAGE_AZBLOB;
+    mem = allocator.alloc(sizeof(ObObjectDevice));
+    if (NULL != mem) {new(mem)ObObjectDevice;}
   } else {
     ret = OB_INVALID_BACKUP_DEST;
     OB_LOG(WARN, "invaild device name info!", K(storage_type_prefix));
@@ -379,7 +412,8 @@ int ObDeviceManager::get_device(const common::ObString& storage_info,
     storage_info_tmp.assign_ptr(storage_info.ptr(), storage_info.length());
   } else if (storage_type_prefix.prefix_match(OB_OSS_PREFIX)
             || storage_type_prefix.prefix_match(OB_COS_PREFIX)
-            || storage_type_prefix.prefix_match(OB_S3_PREFIX)) {
+            || storage_type_prefix.prefix_match(OB_S3_PREFIX)
+            || storage_type_prefix.prefix_match(OB_AZBLOB_PREFIX)) {
     if (OB_FAIL(get_device_key(storage_info, storage_type_prefix,
         device_key, OB_MAX_DEVICE_KEY_LENGTH))) {
       OB_LOG(WARN, "fail to get device key!", K(ret), KP(storage_info.ptr()), K(storage_type_prefix));

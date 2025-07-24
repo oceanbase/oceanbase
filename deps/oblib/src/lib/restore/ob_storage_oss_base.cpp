@@ -387,7 +387,7 @@ void ObOssAccount::reset_account()
   memset(oss_domain_, 0, MAX_OSS_ENDPOINT_LENGTH);
   memset(oss_id_, 0, MAX_OSS_ID_LENGTH);
   memset(oss_key_, 0, MAX_OSS_KEY_LENGTH);
-  delete_mode_ = ObIStorageUtil::DELETE;
+  delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   sts_token_.reset();
   is_inited_ = false;
 }
@@ -475,9 +475,9 @@ int ObOssAccount::set_delete_mode(const char *parameter)
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid args", K(ret), KP(parameter));
   } else if (0 == strcmp(parameter, "delete")) {
-    delete_mode_ = ObIStorageUtil::DELETE;
+    delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   } else if (0 == strcmp(parameter, "tagging")) {
-    delete_mode_ = ObIStorageUtil::TAGGING;
+    delete_mode_ = ObStorageDeleteMode::STORAGE_TAGGING_MODE;
   } else {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "delete mode is invalid", K(ret), K(parameter));
@@ -1584,11 +1584,11 @@ int ObStorageOssUtil::del_file(const common::ObString &uri)
     OB_LOG(WARN, "fail to init oss base with account", K(ret), K(uri));
   } else if (OB_FAIL(get_bucket_object_name(uri, bucket_str, object_str, allocator))) {
     OB_LOG(WARN, "bucket or object name is empty", K(ret), K(uri), K(bucket_str), K(object_str));
-  } else if (ObIStorageUtil::DELETE == oss_base.oss_account_.delete_mode_) {
+  } else if (ObStorageDeleteMode::STORAGE_DELETE_MODE == oss_base.oss_account_.delete_mode_) {
     if (OB_FAIL(delete_object_(uri, oss_base, bucket_str, object_str))) {
       OB_LOG(WARN, "failed to delete object", K(ret), K(uri));
     }
-  } else if (ObIStorageUtil::TAGGING == oss_base.oss_account_.delete_mode_) {
+  } else if (ObStorageDeleteMode::STORAGE_TAGGING_MODE == oss_base.oss_account_.delete_mode_) {
     if (OB_FAIL(tagging_object_(uri, oss_base, bucket_str, object_str))) {
       OB_LOG(WARN, "failed to tagging file", K(ret), K(uri));
     }

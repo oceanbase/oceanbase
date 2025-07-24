@@ -134,7 +134,7 @@ int ObArchiveCheckpointMgr::check_is_tagging_(const ObBackupStorageInfo *storage
   if (OB_ISNULL(storage_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("storage info is nullptr", K(ret));
-  } else if (ObIStorageUtil::TAGGING == storage_info->get_delete_mode()) {
+  } else if (ObStorageDeleteMode::STORAGE_TAGGING_MODE == storage_info->get_delete_mode()) {
     is_tagging = true;
   }
   return ret;

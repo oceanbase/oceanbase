@@ -16,6 +16,7 @@
 #include "src/logservice/archiveservice/ob_archive_file_utils.h"
 #include "src/share/backup/ob_backup_path.h"
 #include "src/share/backup/ob_backup_clean_util.h"
+#include "src/share/ob_device_manager.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -46,6 +47,14 @@ int ObAdminTestIODeviceExecutor::execute(int argc, char *argv[])
     OB_LOGGER.set_log_level("WARN");
   } else {
     OB_LOGGER.set_log_level("INFO");
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+    STORAGE_LOG(WARN, "fail to init device env", KR(ret));
+  } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(
+                  &ObClusterVersionBaseMgr::get_instance()))) {
+    STORAGE_LOG(WARN, "fail to register cluster version mgr", KR(ret));
   }
 
   if(OB_FAIL(ret)) {

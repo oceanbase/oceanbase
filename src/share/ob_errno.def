@@ -2284,6 +2284,7 @@ DEFINE_ERROR_DEP(OB_S3_REGION_MISMATCH, -9117, -1, "HY000", "the specified s3_re
 DEFINE_ERROR_DEP(OB_INVALID_OBJECT_STORAGE_ENDPOINT, -9118, -1, "HY000", "object storage endpoint is invalid");
 DEFINE_ERROR_EXT_DEP(OB_RESTORE_SOURCE_NOT_ENOUGH, -9119, -1, "HY000", "do not have enough restore source", "%s");
 
+DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_IO_ERROR, -9129, -1, "HY000", "object storage io error");
 DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_CHECKSUM_ERROR, -9132, -1, "HY000", "object storage data checksum error");
 DEFINE_ERROR_EXT_DEP(OB_BACKUP_ZONE_IDC_REGION_INVALID, -9133, -1, "HY000", "backup zone or backup idc or backup region invalid", "%s");
 DEFINE_ERROR_DEP(OB_TMP_FILE_EXCEED_DISK_QUOTA, -9135, -1, "HY000", "tmp file exceeds disk quota");

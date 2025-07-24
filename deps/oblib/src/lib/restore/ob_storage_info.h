@@ -29,6 +29,7 @@ namespace oceanbase
 namespace common
 {
 
+const int64_t OB_MAX_OBJECT_STORAGE_REGION_LENGTH = 128;
 const int64_t OB_MAX_BACKUP_EXTENSION_LENGTH = 512;
 const int64_t OB_MAX_BACKUP_ENDPOINT_LENGTH = 256;
 const int64_t OB_MAX_BACKUP_ACCESSID_LENGTH = 256;
@@ -109,6 +110,7 @@ enum ObStorageChecksumType
 bool is_oss_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_cos_supported_checksum(const ObStorageChecksumType checksum_type);
 bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type);
+bool is_obdal_supported_checksum(const ObStorageType storage_type, const ObStorageChecksumType checksum_type);
 const char *get_storage_checksum_type_str(const ObStorageChecksumType &type);
 // [Extensions]
 //   load_data_* : sql/engine/cmd/ob_load_data_storage_info.h
@@ -159,11 +161,45 @@ public:
   {
     return OB_SUCCESS;
   };
+  virtual int is_supported_azblob_version() const
+  {
+    return OB_SUCCESS;
+  };
   static ObClusterVersionBaseMgr &get_instance()
   {
     static ObClusterVersionBaseMgr mgr;
     return mgr;
   }
+};
+
+enum ObStorageDeleteMode: uint8_t
+{
+  NONE = 0,
+  STORAGE_DELETE_MODE = 1,
+  STORAGE_TAGGING_MODE = 2,
+  MAX
+};
+
+class ObObjectStorageInfo;
+class ObStorageAccount
+{
+public:
+  ObStorageAccount();
+  virtual ~ObStorageAccount() {};
+  virtual void reset();
+  virtual bool is_valid() const { return is_valid_; }
+  virtual int assign(const ObObjectStorageInfo *storage_info) = 0;
+
+  TO_STRING_KV(K(is_valid_), K(delete_mode_), K(endpoint_), K(access_id_),
+      K(sts_token_), KP(access_key_));
+
+public:
+  bool is_valid_;
+  char endpoint_[OB_MAX_BACKUP_ENDPOINT_LENGTH];
+  char access_id_[OB_MAX_BACKUP_ACCESSID_LENGTH];
+  char access_key_[OB_MAX_BACKUP_ACCESSKEY_LENGTH];
+  ObStorageDeleteMode delete_mode_;
+  ObSTSToken sts_token_;
 };
 
 class ObObjectStorageInfo
@@ -199,6 +235,8 @@ public:
   bool is_assume_role_mode() const;
   static int register_cluster_version_mgr(ObClusterVersionBaseMgr *cluster_version_mgr);
 
+  virtual int to_account(ObStorageAccount &account) const;
+
 protected:
   virtual int get_access_key_(char *key_buf, const int64_t key_buf_len) const;
   virtual int parse_storage_info_(const char *storage_info, bool &has_appid);
@@ -211,7 +249,6 @@ protected:
 
 
 public:
-  int delete_mode_;
   // TODO: Rename device_type_ to storage_protocol_type_ for better clarity
   // Prefix in the storage_info string, such as 's3://', indicates the protocol used to access the
   // target. Currently, both OBS and GCS are accessed via the s3 protocol, hence s3_region is updated
@@ -222,6 +259,9 @@ public:
   // For Object Storage Services accessed via the S3 protocol,
   // OB_NO_CHECKSUM_ALGO is not supported.
   ObStorageChecksumType checksum_type_;
+  ObStorageAddressingModel addressing_model_;
+  ObStorageDeleteMode delete_mode_;
+  char region_[OB_MAX_OBJECT_STORAGE_REGION_LENGTH];
   char endpoint_[OB_MAX_BACKUP_ENDPOINT_LENGTH];
   char access_id_[OB_MAX_BACKUP_ACCESSID_LENGTH];
   char access_key_[OB_MAX_BACKUP_ACCESSKEY_LENGTH];

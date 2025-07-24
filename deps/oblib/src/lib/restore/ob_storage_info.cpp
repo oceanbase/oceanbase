@@ -102,11 +102,29 @@ int ObObjectStorageCredential::assign(const ObObjectStorageCredential &credentia
   return ret;
 }
 
+
+/*-------------------------------- ObStorageAccount --------------------------------*/
+ObStorageAccount::ObStorageAccount()
+{
+  reset();
+}
+
+void ObStorageAccount::reset()
+{
+  is_valid_ = false;
+  MEMSET(endpoint_, 0, sizeof(endpoint_));
+  MEMSET(access_id_, 0, sizeof(access_id_));
+  MEMSET(access_key_, 0, sizeof(access_key_));
+  delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
+  sts_token_.reset();
+}
+
 //***********************ObObjectStorageInfo***************************
 ObObjectStorageInfo::ObObjectStorageInfo()
-  : delete_mode_(ObIStorageUtil::DELETE),
-    device_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
+  : device_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
     checksum_type_(ObStorageChecksumType::OB_NO_CHECKSUM_ALGO),
+    addressing_model_(ObStorageAddressingModel::OB_VIRTUAL_HOSTED_STYLE),
+    delete_mode_(ObStorageDeleteMode::STORAGE_DELETE_MODE),
     is_assume_role_mode_(false)
 {
   endpoint_[0] = '\0';
@@ -124,7 +142,7 @@ ObObjectStorageInfo::~ObObjectStorageInfo()
 
 void ObObjectStorageInfo::reset()
 {
-  delete_mode_ = ObIStorageUtil::DELETE;
+  delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   device_type_ = ObStorageType::OB_STORAGE_MAX_TYPE;
   checksum_type_ = ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
   endpoint_[0] = '\0';
@@ -226,6 +244,16 @@ int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char
   } else if (OB_ISNULL(storage_info) || strlen(storage_info) >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("storage info is invalid", K(ret), KP(storage_info));
+  } else if (OB_STORAGE_AZBLOB == device_type) {
+    if (OB_ISNULL(cluster_version_mgr_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("cluster version mgr is null", K(ret), KP(cluster_version_mgr_));
+    } else if (OB_FAIL(cluster_version_mgr_->is_supported_azblob_version())) {
+      LOG_WARN("azblob is not supported in current cluster version", K(ret), K(device_type));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (FALSE_IT(device_type_ = device_type)) {
   } else if (0 == strlen(storage_info)) {
     if (OB_STORAGE_FILE != device_type_) {
@@ -362,9 +390,10 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
           LOG_WARN("fail to set checksum type into extension", K(ret), K(token));
         }
       } else if (0 == strncmp(ROLE_ARN, token, strlen(ROLE_ARN))) {
-        if (ObStorageType::OB_STORAGE_FILE == device_type_) {
+        if (ObStorageType::OB_STORAGE_FILE == device_type_
+            || ObStorageType::OB_STORAGE_AZBLOB == device_type_) {
           ret = OB_INVALID_BACKUP_DEST;
-          LOG_WARN("OB_STORAGE_FILE don't support assume role yet",
+          LOG_WARN("this device_type don't support assume role yet",
               K(ret), K_(device_type), KP(token));
         } else if (OB_FAIL(set_storage_info_field_(token, role_arn_, sizeof(role_arn_)))) {
           LOG_WARN("failed to set role arn", K(ret), KP(token), KP_(role_arn), K(sizeof(role_arn_)));
@@ -414,9 +443,9 @@ int ObObjectStorageInfo::check_delete_mode_(const char *delete_mode)
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "delete mode is invalid", K(ret), K(delete_mode));
   } else if (0 == strcmp(delete_mode, "delete")) {
-    delete_mode_ = ObIStorageUtil::DELETE;
+    delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   } else {
-    delete_mode_ = ObIStorageUtil::TAGGING;
+    delete_mode_ = ObStorageDeleteMode::STORAGE_TAGGING_MODE;
   }
   return ret;
 }
@@ -453,6 +482,18 @@ bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type)
   return checksum_type == ObStorageChecksumType::OB_CRC32_ALGO
       || checksum_type == ObStorageChecksumType::OB_MD5_ALGO
       || checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
+}
+
+bool is_obdal_supported_checksum(const ObStorageType storage_type, const ObStorageChecksumType checksum_type)
+{
+  bool ret = true;
+  if (storage_type == OB_STORAGE_AZBLOB) {
+    if (checksum_type != ObStorageChecksumType::OB_MD5_ALGO
+        && checksum_type != ObStorageChecksumType::OB_NO_CHECKSUM_ALGO) {
+      ret = false;
+    }
+  }
+  return ret;
 }
 
 int ObObjectStorageInfo::set_checksum_type_(const char *checksum_type_str)
@@ -647,6 +688,42 @@ int ObObjectStorageInfo::get_access_key_(char *key_buf, const int64_t key_buf_le
   } else {
     MEMCPY(key_buf, access_key_, strlen(access_key_));
     key_buf[strlen(access_key_)] = '\0';
+  }
+  return ret;
+}
+
+int ObObjectStorageInfo::to_account(ObStorageAccount &account) const
+{
+  int ret = OB_SUCCESS;
+  account.reset();
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("storage info is invalid", K(ret), K(device_type_), KPC(this));
+  } else if (OB_FAIL(ob_set_field(endpoint_ + strlen(HOST), account.endpoint_, sizeof(account.endpoint_)))) {
+    OB_LOG(WARN, "failed to set endpoint", K(ret), K(endpoint_));
+  } else if (is_assume_role_mode_) {
+    // access by assume role
+    ObObjectStorageCredential credential;
+    if (OB_FAIL(ObDeviceCredentialMgr::get_instance().get_credential(*this, credential))) {
+      OB_LOG(WARN, "failed to get credential", K(ret), KPC(this), K(credential));
+    } else if (OB_FAIL(ob_set_field(credential.access_id_ + strlen(ACCESS_ID), account.access_id_, sizeof(account.access_id_)))) {
+      OB_LOG(WARN, "failed to set access_id", K(ret), K(access_id_));
+    } else if (OB_FAIL(ob_set_field(credential.access_key_ + strlen(ACCESS_KEY), account.access_key_, sizeof(account.access_key_)))) {
+      OB_LOG(WARN, "failed to set access_key", K(ret), K(access_key_));
+    } else if (OB_FAIL(account.sts_token_.assign(credential.sts_token_))) {
+      OB_LOG(WARN, "failed to set sts_token_", K(ret), K(account.sts_token_), K(credential.sts_token_));
+    }
+  } else {
+    if (OB_FAIL(ob_set_field(access_id_ + strlen(ACCESS_ID), account.access_id_, sizeof(account.access_id_)))) {
+      OB_LOG(WARN, "failed to set access_id", K(ret), K(access_id_));
+    } else if (OB_FAIL(ob_set_field(access_key_ + strlen(ACCESS_KEY), account.access_key_, sizeof(account.access_key_)))) {
+      OB_LOG(WARN, "failed to set access_key", K(ret), K(access_key_));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    account.delete_mode_ = delete_mode_;
+    account.is_valid_ = true;
   }
   return ret;
 }

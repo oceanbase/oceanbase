@@ -588,11 +588,11 @@ int ObStorageCosBase::delete_object(const ObString &uri)
     qcloud_cos::CosStringBuffer object_name = qcloud_cos::CosStringBuffer(
         handle_.get_object_name().ptr(), handle_.get_object_name().length());
 
-    if (ObIStorageUtil::DELETE == handle_.get_delete_mode()) {
+    if (ObStorageDeleteMode::STORAGE_DELETE_MODE == handle_.get_delete_mode()) {
       if (OB_FAIL(qcloud_cos::ObCosWrapper::del(handle_.get_ptr(), bucket_name, object_name))) {
         OB_LOG(WARN, "fail to delete object meta", K(ret), K(uri));
       }
-    } else if (ObIStorageUtil::TAGGING == handle_.get_delete_mode()) {
+    } else if (ObStorageDeleteMode::STORAGE_TAGGING_MODE == handle_.get_delete_mode()) {
       if (OB_FAIL(qcloud_cos::ObCosWrapper::tag(handle_.get_ptr(), bucket_name, object_name))) {
         OB_LOG(WARN, "fail to tag object", K(ret), K(uri));
       }

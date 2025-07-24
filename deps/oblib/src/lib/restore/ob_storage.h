@@ -17,6 +17,7 @@
 #include "ob_storage_oss_base.h"
 #include "ob_storage_cos_base.h"
 #include "ob_storage_s3_base.h"
+#include "ob_storage_obdal_base.h"
 
 namespace oceanbase
 {
@@ -261,6 +262,7 @@ private:
   ObStorageOssUtil oss_util_;
   ObStorageCosUtil cos_util_;
   ObStorageS3Util s3_util_;
+  ObStorageObDalUtil obdal_util_;
   ObIStorageUtil* util_;
   common::ObObjectStorageInfo* storage_info_;
   bool init_state;
@@ -285,6 +287,7 @@ protected:
   ObStorageOssReader oss_reader_;
   ObStorageCosReader cos_reader_;
   ObStorageS3Reader s3_reader_;
+  ObStorageObDalReader obdal_reader_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   ObObjectStorageInfo *storage_info_;
@@ -314,6 +317,7 @@ private:
   ObStorageOssReader oss_reader_;
   ObStorageCosReader cos_reader_;
   ObStorageS3Reader s3_reader_;
+  ObStorageObDalReader obdal_reader_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   ObObjectStorageInfo *storage_info_;
@@ -334,6 +338,7 @@ protected:
   ObStorageOssWriter oss_writer_;
   ObStorageCosWriter cos_writer_;
   ObStorageS3Writer s3_writer_;
+  ObStorageObDalWriter obdal_writer_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   ObObjectStorageInfo *storage_info_;
@@ -370,6 +375,7 @@ private:
   ObStorageOssAppendWriter oss_appender_;
   ObStorageCosAppendWriter cos_appender_;
   ObStorageS3AppendWriter s3_appender_;
+  ObStorageObDalAppendWriter obdal_appender_;
   int64_t start_ts_;
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];
@@ -402,6 +408,7 @@ protected:
   ObStorageCosMultiPartWriter cos_multipart_writer_;
   ObStorageOssMultiPartWriter oss_multipart_writer_;
   ObStorageS3MultiPartWriter s3_multipart_writer_;
+  ObStorageObDalMultiPartWriter obdal_multipart_writer_;
   int64_t start_ts_;
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];

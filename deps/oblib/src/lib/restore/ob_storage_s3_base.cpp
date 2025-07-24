@@ -893,7 +893,7 @@ ObS3Account::~ObS3Account()
 void ObS3Account::reset()
 {
   is_valid_ = false;
-  delete_mode_ = ObIStorageUtil::DELETE;
+  delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
   MEMSET(region_, 0, sizeof(region_));
   MEMSET(endpoint_, 0, sizeof(endpoint_));
   MEMSET(access_id_, 0, sizeof(access_id_));
@@ -956,9 +956,9 @@ int ObS3Account::parse_from(const char *storage_info_str, const int64_t size)
         }
       } else if (0 == strncmp(DELETE_MODE, token, strlen(DELETE_MODE))) {
         if (0 == strcmp(token + strlen(DELETE_MODE), "delete")) {
-          delete_mode_ = ObIStorageUtil::DELETE;
+          delete_mode_ = ObStorageDeleteMode::STORAGE_DELETE_MODE;
         } else if (0 == strcmp(token + strlen(DELETE_MODE), "tagging")) {
-          delete_mode_ = ObIStorageUtil::TAGGING;
+          delete_mode_ = ObStorageDeleteMode::STORAGE_TAGGING_MODE;
         } else {
           ret = OB_INVALID_ARGUMENT;
           OB_LOG(WARN, "delete mode is invalid", K(ret), KCSTRING(token));
@@ -1514,7 +1514,7 @@ int ObStorageS3Util::del_file_(const ObString &uri)
     OB_LOG(WARN, "failed to open s3 base", K(ret), K(uri));
   } else {
     const int64_t delete_mode = s3_base.s3_account_.delete_mode_;
-    if (ObIStorageUtil::DELETE == delete_mode) {
+    if (ObStorageDeleteMode::STORAGE_DELETE_MODE == delete_mode) {
       if (OB_FAIL(delete_object_(s3_base))) {
         if (OB_BACKUP_FILE_NOT_EXIST == ret) {
           // Uniform handling of 'object not found' scenarios across different object storage services:
@@ -1527,7 +1527,7 @@ int ObStorageS3Util::del_file_(const ObString &uri)
           OB_LOG(WARN, "failed to delete s3 object", K(ret), K(uri));
         }
       }
-    } else if (ObIStorageUtil::TAGGING == delete_mode) {
+    } else if (ObStorageDeleteMode::STORAGE_TAGGING_MODE == delete_mode) {
       if (OB_FAIL(tagging_object_(s3_base))) {
         OB_LOG(WARN, "failed to tag s3 object", K(ret), K(uri));
       }

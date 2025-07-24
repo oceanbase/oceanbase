@@ -17,6 +17,7 @@
 #include "../dumpsst/ob_admin_dumpsst_print_helper.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "rootserver/backup/ob_backup_table_list_mgr.h"
+#include "src/share/ob_device_manager.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -539,6 +540,10 @@ int ObAdminDumpBackupDataExecutor::execute(int argc, char *argv[])
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
+    STORAGE_LOG(WARN, "init device manager failed", KR(ret));
+  } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_version_mgr(&ObClusterVersionBaseMgr::get_instance()))) {
+    STORAGE_LOG(WARN, "fail to register cluster version mgr", KR(ret));
   } else if (check_exist_) {
     // ob_admin dump_backup -d'xxxxx' -c
     if (OB_FAIL(do_check_exist_())) {

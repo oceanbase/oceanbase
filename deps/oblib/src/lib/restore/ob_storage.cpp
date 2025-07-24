@@ -12,6 +12,7 @@
 
 #include "ob_storage.h"
 #include "lib/restore/ob_i_storage.h"
+#include "lib/restore/ob_storage.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/utility/ob_sort.h"
 #include "lib/stat/ob_diagnose_info.h"
@@ -27,7 +28,7 @@ namespace oceanbase
 namespace common
 {
 
-const char *OB_STORAGE_TYPES_STR[] = {"OSS", "FILE", "COS", "LOCAL", "S3", "LOG"};
+const char *OB_STORAGE_TYPES_STR[] = {"OSS", "FILE", "COS", "LOCAL", "S3", "LOG", "AZBLOB"};
 
 void print_access_storage_log(
     const char *msg,
@@ -61,7 +62,8 @@ int validate_uri_type(const common::ObString &uri)
   if (!uri.prefix_match(OB_OSS_PREFIX) &&
       !uri.prefix_match(OB_COS_PREFIX) &&
       !uri.prefix_match(OB_S3_PREFIX) &&
-      !uri.prefix_match(OB_FILE_PREFIX)) {
+      !uri.prefix_match(OB_FILE_PREFIX) &&
+      !uri.prefix_match(OB_AZBLOB_PREFIX)) {
     ret = OB_INVALID_BACKUP_DEST;
     STORAGE_LOG(ERROR, "invalid backup uri", KR(ret), KS(uri));
   }
@@ -81,6 +83,8 @@ int get_storage_type_from_path(const common::ObString &uri, ObStorageType &type)
     type = OB_STORAGE_S3;
   } else if (uri.prefix_match(OB_FILE_PREFIX)) {
     type = OB_STORAGE_FILE;
+  } else if (uri.prefix_match(OB_AZBLOB_PREFIX)) {
+    type = OB_STORAGE_AZBLOB;
   } else {
     ret = OB_INVALID_BACKUP_DEST;
     STORAGE_LOG(ERROR, "invalid backup uri", KR(ret), KS(uri));
@@ -103,7 +107,8 @@ bool is_storage_type_match(const common::ObString &uri, const ObStorageType &typ
   return (OB_STORAGE_OSS == type && uri.prefix_match(OB_OSS_PREFIX))
       || (OB_STORAGE_COS == type && uri.prefix_match(OB_COS_PREFIX))
       || (OB_STORAGE_S3 == type && uri.prefix_match(OB_S3_PREFIX))
-      || (OB_STORAGE_FILE == type && uri.prefix_match(OB_FILE_PREFIX));
+      || (OB_STORAGE_FILE == type && uri.prefix_match(OB_FILE_PREFIX))
+      || (OB_STORAGE_AZBLOB == type && uri.prefix_match(OB_AZBLOB_PREFIX));
 }
 
 bool is_object_storage_type(const ObStorageType &type)
@@ -112,7 +117,7 @@ bool is_object_storage_type(const ObStorageType &type)
 }
 bool is_io_error(const int result)
 {
-  return OB_IO_ERROR == result || OB_OSS_ERROR == result || OB_COS_ERROR == result || OB_S3_ERROR == result;
+  return OB_IO_ERROR == result || OB_OSS_ERROR == result || OB_COS_ERROR == result || OB_S3_ERROR == result || OB_OBJECT_STORAGE_IO_ERROR == result;
 }
 
 int get_storage_type_from_name(const char *type_str, ObStorageType &type)
@@ -370,6 +375,8 @@ int ObStorageUtil::open(common::ObObjectStorageInfo *storage_info)
     util_ = &s3_util_;
   } else if (OB_STORAGE_FILE == device_type_) {
     util_ = &file_util_;
+  } else if (OB_STORAGE_AZBLOB == device_type_) {
+    util_ = &obdal_util_;
   } else {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid device type", K(ret), K_(device_type));
@@ -486,42 +493,53 @@ int ObStorageUtil::read_seal_meta_if_needed(
                                                   seal_meta_uri, OB_MAX_URI_LENGTH))) {
     OB_LOG(WARN, "fail to construct s3 seal_meta name", K(ret), K(uri));
   } else {
-    ObStorageReader reader;
-    int64_t seal_meta_len = 0;
-    if (OB_FAIL(reader.open(seal_meta_uri, storage_info_))) {
-      if (OB_BACKUP_FILE_NOT_EXIST == ret) {
-        obj_meta.is_exist_ = false;
-        ret = OB_SUCCESS;
-      }
+    ObStorageReader *reader = nullptr;
+    if (OB_ISNULL(reader = static_cast<ObStorageReader *>(allocator.alloc(sizeof(ObStorageReader))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "failed to allocate memory for reader", K(ret));
+    } else if (FALSE_IT(new (reader) ObStorageReader())) {
     } else {
-      // If exist seal meta, directly read it content.
-      seal_meta_len = reader.get_length();
-      if (seal_meta_len > 0) {
-        int64_t read_size = 0;
-        char *buf = NULL;
-        pos = 0;
-        if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(seal_meta_len + 1)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          OB_LOG(WARN, "fail to alloc buf for reading seal meta file", K(ret), K(seal_meta_uri), K(seal_meta_len));
-        } else if (OB_FAIL(reader.pread(buf, seal_meta_len, 0/*offset*/, read_size))) {
-          OB_LOG(WARN, "failed to read seal meta file content", K(ret), K(seal_meta_uri), K(seal_meta_len));
-        } else if (OB_UNLIKELY(seal_meta_len != read_size)) {
-          ret = OB_ERR_UNEXPECTED;
-          OB_LOG(WARN, "fail to read seal meta file entire content",
-              K(ret), K(seal_meta_uri), K(seal_meta_len), K(read_size));
-        } else if (OB_FAIL(obj_meta.deserialize(buf, read_size, pos))) {
-          OB_LOG(WARN, "fail to deserialize storage object meta", K(ret), K(seal_meta_uri), K(read_size), KP(buf));
-        } else {
-          obj_meta.is_exist_ = true;
+      int64_t seal_meta_len = 0;
+      if (OB_FAIL(reader->open(seal_meta_uri, storage_info_))) {
+        if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+          obj_meta.is_exist_ = false;
+          ret = OB_SUCCESS;
         }
       } else {
-        ret = OB_ERR_UNEXPECTED;
-        OB_LOG(WARN, "the seal meta file is empty", K(ret), K(seal_meta_uri));
-      }
+        // If exist seal meta, directly read it content.
+        seal_meta_len = reader->get_length();
+        if (seal_meta_len > 0) {
+          int64_t read_size = 0;
+          char *buf = NULL;
+          pos = 0;
+          if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(seal_meta_len + 1)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            OB_LOG(WARN, "fail to alloc buf for reading seal meta file", K(ret), K(seal_meta_uri), K(seal_meta_len));
+          } else if (OB_FAIL(reader->pread(buf, seal_meta_len, 0/*offset*/, read_size))) {
+            OB_LOG(WARN, "failed to read seal meta file content", K(ret), K(seal_meta_uri), K(seal_meta_len));
+          } else if (OB_UNLIKELY(seal_meta_len != read_size)) {
+            ret = OB_ERR_UNEXPECTED;
+            OB_LOG(WARN, "fail to read seal meta file entire content",
+                K(ret), K(seal_meta_uri), K(seal_meta_len), K(read_size));
+          } else if (OB_FAIL(obj_meta.deserialize(buf, read_size, pos))) {
+            OB_LOG(WARN, "fail to deserialize storage object meta", K(ret), K(seal_meta_uri), K(read_size), KP(buf));
+          } else {
+            obj_meta.is_exist_ = true;
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          OB_LOG(WARN, "the seal meta file is empty", K(ret), K(seal_meta_uri));
+        }
 
-      if (OB_TMP_FAIL(reader.close())) {
-        OB_LOG(WARN, "fail to close reader", K(ret), K(tmp_ret), K(seal_meta_uri));
+        if (OB_TMP_FAIL(reader->close())) {
+          OB_LOG(WARN, "fail to close reader", K(ret), K(tmp_ret), K(seal_meta_uri));
+        }
       }
+    }
+
+    if (OB_NOT_NULL(reader)) {
+      reader->~ObStorageReader();
+      reader = nullptr;
     }
   }
   return ret;
@@ -1446,6 +1464,8 @@ int ObStorageReader::open(const common::ObString &uri, common::ObObjectStorageIn
     reader_ = &s3_reader_;
   } else if (OB_STORAGE_FILE == type) {
     reader_ = &file_reader_;
+  } else if (OB_STORAGE_AZBLOB == type) {
+    reader_ = &obdal_reader_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -1590,6 +1610,8 @@ int ObStorageAdaptiveReader::open(const common::ObString &uri,
     reader_ = &s3_reader_;
   } else if (OB_STORAGE_FILE == type) {
     reader_ = &file_reader_;
+  } else if (OB_STORAGE_AZBLOB == type) {
+    reader_ = &obdal_reader_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -1802,6 +1824,8 @@ int ObStorageWriter::open(const common::ObString &uri, common::ObObjectStorageIn
     writer_ = &s3_writer_;
   } else if (OB_STORAGE_FILE == type) {
     writer_ = &file_writer_;
+  } else if (OB_STORAGE_AZBLOB == type) {
+    writer_ = &obdal_writer_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -1956,6 +1980,8 @@ int ObStorageAppender::open(
     }
   } else if (OB_STORAGE_FILE == type_) {
     appender_ = &file_appender_;
+  } else if (OB_STORAGE_AZBLOB == type_) {
+    appender_ = &obdal_appender_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -2019,31 +2045,35 @@ int ObStorageAppender::repeatable_pwrite_(const char *buf, const int64_t size, c
   int64_t read_buf_size = 0;
   int64_t actual_write_offset = 0;
   char *read_buffer = nullptr;
-  ObStorageReader reader;
+  ObStorageReader *reader = nullptr;
   ObArenaAllocator allocator;
 
   if (OB_ISNULL(appender_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret));
-  } else if (OB_FAIL(reader.open(uri_, storage_info_))) {
+  } else if (OB_ISNULL(reader = static_cast<ObStorageReader *>(allocator.alloc(sizeof(ObStorageReader))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    OB_LOG(WARN, "failed to allocate memory for reader", K(ret));
+  } else if (FALSE_IT(new (reader) ObStorageReader())) {
+  } else if (OB_FAIL(reader->open(uri_, storage_info_))) {
     STORAGE_LOG(WARN, "failed to open reader", K(ret));
-  } else if (reader.get_length() <= offset) {
+  } else if (reader->get_length() <= offset) {
     // This situation also has concurrency issues.
     // The length read by the reader may be old, so offset not match needs to be returned for retry.
     ret = OB_BACKUP_PWRITE_OFFSET_NOT_MATCH;
-    STORAGE_LOG(WARN, "offset is invalid", K(offset), "length", reader.get_length(), K(ret));
-  } else if (OB_FALSE_IT(actual_write_offset = reader.get_length() - offset)) {
+    STORAGE_LOG(WARN, "offset is invalid", K(offset), "length", reader->get_length(), K(ret));
+  } else if (OB_FALSE_IT(actual_write_offset = reader->get_length() - offset)) {
   } else if (OB_FALSE_IT(read_buf_size = std::min(actual_write_offset, size))) {
   } else if (OB_ISNULL(read_buffer = static_cast<char *>(allocator.alloc(read_buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "failed to allocate memory", K(ret), K(size));
-  } else if (OB_FAIL(reader.pread(read_buffer, read_buf_size, offset, read_size))) {
+  } else if (OB_FAIL(reader->pread(read_buffer, read_buf_size, offset, read_size))) {
     STORAGE_LOG(WARN, "failed to pread", K(ret));
   } else if (0 != MEMCMP(buf, read_buffer, read_buf_size)) {
     ret = OB_BACKUP_PWRITE_CONTENT_NOT_MATCH;
     STORAGE_LOG(WARN, "data inconsistent", K(ret));
-  } else if (offset + size > reader.get_length()) {
-    if (OB_FAIL(appender_->pwrite(buf + actual_write_offset, size - actual_write_offset, reader.get_length()))) {
+  } else if (offset + size > reader->get_length()) {
+    if (OB_FAIL(appender_->pwrite(buf + actual_write_offset, size - actual_write_offset, reader->get_length()))) {
       if (OB_BACKUP_PWRITE_OFFSET_NOT_MATCH == ret) {
         ret = OB_IO_ERROR;
         STORAGE_LOG(WARN, "There may be concurrency problems that require the caller to retry", K(ret));
@@ -2051,8 +2081,13 @@ int ObStorageAppender::repeatable_pwrite_(const char *buf, const int64_t size, c
     }
   }
 
-  if (OB_SUCCESS != (tmp_ret = reader.close())) {
-    STORAGE_LOG(WARN, "failed to close reader", K(tmp_ret));
+
+  if (OB_NOT_NULL(reader)) {
+    if (OB_SUCCESS != (tmp_ret = reader->close())) {
+      STORAGE_LOG(WARN, "failed to close reader", K(tmp_ret));
+    }
+    reader->~ObStorageReader();
+    reader = nullptr;
   }
   return ret;
 }
@@ -2260,6 +2295,8 @@ int ObStorageMultiPartWriter::open(
     }
   } else if (OB_STORAGE_FILE == type) {
     multipart_writer_ = &file_multipart_writer_;
+  } else if (OB_STORAGE_AZBLOB == type) {
+    multipart_writer_ = &obdal_multipart_writer_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));

@@ -690,6 +690,8 @@ int get_real_file_path(const common::ObString &uri, char *buf, const int64_t buf
     prefix = OB_S3_PREFIX;
   } else if (OB_STORAGE_FILE == device_type) {
     prefix = OB_FILE_PREFIX;
+  } else if (OB_STORAGE_AZBLOB == device_type) {
+    prefix = OB_AZBLOB_PREFIX;
   } else {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid device type!", K(device_type), K(ret), K(uri));

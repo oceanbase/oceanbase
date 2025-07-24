@@ -19,6 +19,7 @@
 #include "lib/container/ob_se_array.h"
 #include "common/storage/ob_device_common.h"
 #include "ob_storage_info.h"
+#include <opendal.h>
 
 namespace oceanbase
 {
@@ -49,6 +50,8 @@ enum ObStorageObjectMetaType
 
 // check the str is end with '/' or not
 bool is_end_with_slash(const char *str);
+bool is_null_or_end_with_slash(const char *str);
+int get_safe_str_len(const char* str);
 int c_str_to_int(const char *str, int64_t &num);
 int handle_listed_object(ObBaseDirEntryOperator &op,
     const char *obj_name, const int64_t obj_name_len, const int64_t obj_size);
@@ -164,10 +167,11 @@ public:
   bool has_next_; // list result can only return up-to 1000 objects once, thus may need to multi operation.
   bool need_size_; // If true, that means when we list items, we also need to get each item's size
   int64_t *size_arr_; // save all the length of each object/file (the order is the same with name_arr)
+  opendal_lister *opendal_lister_; // The intermediate state of the list is kept in opendal, and we save opendal_lister to access the next page
 
   ObStorageListCtxBase()
     : max_list_num_(0), name_arr_(NULL), max_name_len_(0), rsp_num_(0),
-      has_next_(false), need_size_(false), size_arr_(NULL)
+      has_next_(false), need_size_(false), size_arr_(NULL), opendal_lister_(nullptr)
   {}
 
   virtual ~ObStorageListCtxBase() { reset(); }
@@ -233,12 +237,6 @@ public:
 class ObIStorageUtil
 {
 public:
-  enum {
-    NONE = 0,
-    DELETE = 1,
-    TAGGING = 2,
-    MAX
-  };
   virtual int open(common::ObObjectStorageInfo *storage_info) = 0;
   virtual void close() = 0;
   virtual int is_exist(const common::ObString &uri, bool &exist) = 0;

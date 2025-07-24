@@ -29,6 +29,23 @@ bool is_end_with_slash(const char *str)
   return bret;
 }
 
+bool is_null_or_end_with_slash(const char *str)
+{
+  bool bret = false;
+  if (OB_ISNULL(str)) {
+    bret = true;
+  } else {
+    bret = is_end_with_slash(str);
+  }
+  return bret;
+}
+
+// get the length of a string safely even the it is NULL
+int get_safe_str_len(const char *str)
+{
+  return OB_ISNULL(str) ? 0 : strlen(str);
+}
+
 int c_str_to_int(const char *str, int64_t &num)
 {
   int ret = OB_SUCCESS;
@@ -112,6 +129,8 @@ int get_storage_prefix_from_path(const common::ObString &uri, const char *&prefi
     prefix = OB_COS_PREFIX;
   } else if (uri.prefix_match(OB_S3_PREFIX)) {
     prefix = OB_S3_PREFIX;
+  } else if (uri.prefix_match(OB_AZBLOB_PREFIX)) {
+    prefix = OB_AZBLOB_PREFIX;
   } else if (uri.prefix_match(OB_FILE_PREFIX)) {
     prefix = OB_FILE_PREFIX;
   } else {
