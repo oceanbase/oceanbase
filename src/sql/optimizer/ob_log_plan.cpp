@@ -14074,6 +14074,17 @@ int ObLogPlan::candi_allocate_for_update()
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    const ObDMLStmt *root_stmt = get_root_stmt();
+    if (OB_ISNULL(root_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(root_stmt), K(ret));
+    } else if (root_stmt->is_insert_stmt() || root_stmt->is_update_stmt() || root_stmt->is_delete_stmt()) {
+      if (OB_FAIL(candi_allocate_for_update_material())) {
+        LOG_WARN("failed to candi allocate for update materialization", K(ret));
+      }
+    }
+  }
   return ret;
 }
 

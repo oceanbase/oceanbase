@@ -1232,6 +1232,15 @@ public:
               static_cast<const ObExplainStmt*>(root_stmt)->get_explain_query_stmt() == stmt_)
              || stmt_ == root_stmt);
   }
+  const ObDMLStmt *get_root_stmt() const {
+    const ObDMLStmt *root_stmt = optimizer_context_.get_root_stmt();
+    if (OB_LIKELY(OB_NOT_NULL(root_stmt))) {
+      if (root_stmt->is_explain_stmt()) {
+        root_stmt = static_cast<const ObExplainStmt*>(root_stmt)->get_explain_query_stmt();
+      }
+    }
+    return root_stmt;
+  }
   inline common::ObIArray<ObRawExpr *> &get_const_exprs()
   {
     return const_exprs_;
@@ -1351,6 +1360,8 @@ public:
    * allocate for update operator
    * @return
    */
+
+
   int candi_allocate_for_update();
 
    /** @brief Allcoate a ,for update operator as parent of a path */
