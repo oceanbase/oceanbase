@@ -180,6 +180,7 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
   int64_t threshold = INT64_MAX;
   uint64_t optimizer_features_enable_version = 0;
   bool is_prepare_stmt = false;
+  bool enable_hybrid_inlist = false;
   // 1. check basic requests
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
@@ -227,6 +228,7 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
         LOG_TRACE("check rewrite inlist threshold", K(threshold), K(in_list.num_child_));
       } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0) {
         is_enable = true;
+        enable_hybrid_inlist = optimizer_features_enable_version >= COMPAT_VERSION_4_2_5_BP6;
       }
     }
   }
@@ -282,7 +284,9 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
                                                     is_enable))) {
               LOG_WARN("failed to got const node types", K(ret));
             } else if (!is_enable) {
-            } else if (ObMaxType == param_type_prev.obj_type_) {
+            } else if (param_type_prev == param_type_cur) {
+            } else if (ObMaxType == param_type_prev.obj_type_ ||
+                       (enable_hybrid_inlist && ObNullType == param_type_prev.obj_type_)) {
               param_type_prev = param_type_cur;
               if (lib::is_oracle_mode() && ObCharType == param_type_cur.obj_type_) {
                 // in oracle mode, inlist to values table rewrite may cast char types to varchar2
@@ -293,7 +297,8 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
                          || is_lob_locator(param_type_cur.obj_type_)) {
                 is_enable = false;
               }
-            } else if (param_type_prev == param_type_cur) {
+            } else if (enable_hybrid_inlist && ObNullType == param_type_cur.obj_type_) {
+              // ignore null type
             } else {
               is_enable = false;
             }
