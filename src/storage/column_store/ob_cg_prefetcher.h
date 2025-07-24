@@ -38,7 +38,7 @@ public:
       sstable_index_filter_(nullptr)
   {}
   virtual ~ObCGPrefetcher()
-  {}
+  { ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_); }
   virtual void reset() override;
   virtual void reuse() override;
   int init(
