@@ -2630,7 +2630,7 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObPluginVectorIndexHelper::merge_delta_and_snap_vids(
-                   delta_data, snap_data, query_cond->query_limit_, actual_res_cnt, merge_vids, merge_distance, merge_extra_info_ptr))) {
+                   delta_data, snap_data, max_res_cnt, actual_res_cnt, merge_vids, merge_distance, merge_extra_info_ptr))) {
       LOG_WARN("failed to merge delta and snap vids.", K(ret));
     }
 
