@@ -24,7 +24,9 @@ struct ObScheduleTabletFunc : public ObBasicScheduleTabletFunc
 {
   ObScheduleTabletFunc(
     const int64_t merge_version,
-    const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::NONE);
+    const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::NONE,
+    const int64_t loop_cnt = 0
+    );
   virtual ~ObScheduleTabletFunc() {}
   int schedule_tablet(
     storage::ObTabletHandle &tablet_handle,

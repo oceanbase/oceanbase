@@ -43,15 +43,20 @@ public:
 struct ObBatchFreezeTabletsParam : public ObBatchExecParam<ObTabletSchedulePair>
 {
   ObBatchFreezeTabletsParam()
-    : ObBatchExecParam(BATCH_FREEZE)
+    : ObBatchExecParam(BATCH_FREEZE),
+      loop_cnt_(0)
   {}
   ObBatchFreezeTabletsParam(
     const share::ObLSID &ls_id,
-    const int64_t merge_version)
-    : ObBatchExecParam(BATCH_FREEZE, ls_id, merge_version, DEFAULT_BATCH_SIZE)
+    const int64_t merge_version,
+    const int64_t loop_cnt = 0)
+    : ObBatchExecParam(BATCH_FREEZE, ls_id, merge_version, DEFAULT_BATCH_SIZE),
+      loop_cnt_(loop_cnt)
   {}
   virtual ~ObBatchFreezeTabletsParam() = default;
   static constexpr int64_t DEFAULT_BATCH_SIZE = 32;
+  int64_t loop_cnt_;
+  int64_t to_string(char *buf, const int64_t buf_len) const override;
 };
 class ObBatchFreezeTabletsTask;
 class ObBatchFreezeTabletsDag : public ObBatchExecDag<ObBatchFreezeTabletsTask, ObBatchFreezeTabletsParam>
@@ -62,6 +67,7 @@ public:
   {}
   virtual ~ObBatchFreezeTabletsDag() = default;
   virtual int inner_init();
+  virtual bool operator == (const ObIDag &other) const override;
 public:
   static constexpr int64_t MAX_CONCURRENT_FREEZE_TASK_CNT = 2;
 private:

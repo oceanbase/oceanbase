@@ -69,10 +69,10 @@ int ObMediumLoop::loop()
   if (GCTX.is_shared_storage_mode()) {
     func = MTL_NEW(ObSSScheduleTabletFunc, "SS_ScheTablet", merge_version_, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, true);
   } else {
-    func = MTL_NEW(ObScheduleTabletFunc, "SN_SchedTablet", merge_version_);
+    func = MTL_NEW(ObScheduleTabletFunc, "SN_SchedTablet", merge_version_, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, loop_cnt_);
   }
 #else
-  func = MTL_NEW(ObScheduleTabletFunc, "SN_SchedTablet", merge_version_);
+  func = MTL_NEW(ObScheduleTabletFunc, "SN_SchedTablet", merge_version_, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, loop_cnt_);
 #endif
   if (OB_ISNULL(func)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
