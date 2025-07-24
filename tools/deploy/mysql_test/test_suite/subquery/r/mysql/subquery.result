@@ -587,7 +587,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
-      equal_conds([t1.c1 = t3.c1]), other_conds(nil)
+      equal_conds([t3.c1 = t1.c1]), other_conds(nil)
       merge_directions([ASC])
   1 - output([t3.c1]), filter(nil), rowset=16
       access([t3.c1]), partitions(p0)
