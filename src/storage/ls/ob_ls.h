@@ -636,7 +636,6 @@ public:
   DELEGATE_WITH_RET(ls_tablet_svr_, remove_ls_inner_tablet, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, rebuild_create_tablet, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, update_tablet_ha_data_status, int);
-  DELEGATE_WITH_RET(ls_tablet_svr_, set_tablet_status_to_transfer_out_deleted, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, ha_get_tablet, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, get_tablet_without_memtables, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, ha_get_tablet_without_memtables, int);

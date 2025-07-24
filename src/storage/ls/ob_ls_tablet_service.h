@@ -255,9 +255,6 @@ public:
       const share::SCN &reorg_scn,
       const common::ObTabletID &tablet_id,
       const ObTabletExpectedStatus::STATUS &expected_status);
-  int set_tablet_status_to_transfer_out_deleted(
-      const share::SCN &reorg_scn,
-      const common::ObTabletID &tablet_id);
 #ifdef OB_BUILD_SHARED_STORAGE
   int update_tablet_ss_change_version(
     const share::SCN &reorg_scn,
@@ -522,15 +519,6 @@ private:
     int operator()(const common::ObTabletID &tablet_id);
     common::ObTabletID cur_tablet_id_;
     ObLSTabletService *tablet_svr_;
-  };
-  class ObUpdateTransferOutDeletedStatus final : public ObITabletMetaModifier
-  {
-  public:
-    explicit ObUpdateTransferOutDeletedStatus() {}
-    virtual ~ObUpdateTransferOutDeletedStatus() = default;
-    virtual int modify_tablet_meta(ObTabletMeta &meta) override;
-  private:
-    DISALLOW_COPY_AND_ASSIGN(ObUpdateTransferOutDeletedStatus);
   };
   class ObUpdateRestoreStatus final : public ObITabletMetaModifier
   {

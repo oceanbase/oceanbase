@@ -1905,8 +1905,15 @@ int ObWaitDataReadyTask::change_member_list_()
   int ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtility::current_time();
   const ObMigrationOpType::TYPE op_type = ctx_->arg_.type_;
-
-  DEBUG_SYNC(MEMBERLIST_CHANGE_MEMBER);
+  bool need_enable_debug_sync = true;
+#ifdef ERRSIM
+  if (GCONF.errsim_migration_ls_id != 0 && ctx_->arg_.ls_id_.id() != GCONF.errsim_migration_ls_id) {
+    need_enable_debug_sync = false;
+  }
+#endif
+  if (need_enable_debug_sync) {
+    DEBUG_SYNC(MEMBERLIST_CHANGE_MEMBER);
+  }
 
 #ifdef ERRSIM
   ret = OB_E(EventTable::EN_SET_MEMBER_LIST_FAIL) OB_SUCCESS;

@@ -277,7 +277,6 @@ int ObTabletFinishTransferOutHelper::on_register(
   ObTransferUtils::set_transfer_module();
   const int64_t start_ts = ObTimeUtility::current_time();
   share::ObStorageHACostItemName diagnose_result_msg = share::ObStorageHACostItemName::MAX_NAME;
-  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (OB_ISNULL(buf) || len < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("on register finish transfer out get invalid argument", K(ret), KP(buf), K(len));
@@ -286,7 +285,7 @@ int ObTabletFinishTransferOutHelper::on_register(
   } else if (!tx_finish_transfer_out_info.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx finish transfer out info is unexpected", K(ret), K(tx_finish_transfer_out_info));
-  } else if (!is_shared_storage && CLICK_FAIL(on_register_success_(tx_finish_transfer_out_info, ctx))) {
+  } else if (CLICK_FAIL(on_register_success_(tx_finish_transfer_out_info, ctx))) {
     diagnose_result_msg = share::ObStorageHACostItemName::ON_REGISTER_SUCCESS;
     LOG_WARN("failed to on register", K(ret), K(tx_finish_transfer_out_info));
   } else if (CLICK_FAIL(ObTabletCreateDeleteMdsUserData::set_tablet_empty_shell_trigger(tx_finish_transfer_out_info.src_ls_id_))) {
@@ -484,7 +483,6 @@ int ObTabletFinishTransferOutHelper::on_replay(
   ObTransferUtils::set_transfer_module();
   const int64_t start_ts = ObTimeUtility::current_time();
   share::ObStorageHACostItemName diagnose_result_msg = share::ObStorageHACostItemName::MAX_NAME;
-  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (OB_ISNULL(buf) || len < 0 || !scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("on replay finish transfer out get invalid argument", K(ret), KP(buf), K(len), K(scn));
@@ -493,7 +491,7 @@ int ObTabletFinishTransferOutHelper::on_replay(
   } else if (!tx_finish_transfer_out_info.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx finish transfer out info is unexpected", K(ret), K(tx_finish_transfer_out_info));
-  } else if (!is_shared_storage && CLICK_FAIL(on_replay_success_(scn, tx_finish_transfer_out_info, ctx))) {
+  } else if (CLICK_FAIL(on_replay_success_(scn, tx_finish_transfer_out_info, ctx))) {
     diagnose_result_msg = share::ObStorageHACostItemName::ON_REPLAY_SUCCESS;
     LOG_WARN("failed to do on_replay_success_", K(ret), K(tx_finish_transfer_out_info));
   } else if (CLICK_FAIL(ObTabletCreateDeleteMdsUserData::set_tablet_empty_shell_trigger(tx_finish_transfer_out_info.src_ls_id_))) {

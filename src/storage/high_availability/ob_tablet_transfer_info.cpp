@@ -23,7 +23,7 @@ ObTabletTransferInfo::ObTabletTransferInfo()
     transfer_start_scn_(),
     transfer_seq_(-1),
     has_transfer_table_(false),
-    is_transfer_out_deleted_(false),
+    unused_is_transfer_out_deleted_(false),
     src_reorganization_scn_()
 {
 }
@@ -35,7 +35,7 @@ int ObTabletTransferInfo::init()
   transfer_start_scn_.set_min();
   transfer_seq_ = TRANSFER_INIT_SEQ;
   has_transfer_table_ = false;
-  is_transfer_out_deleted_ = false;
+  unused_is_transfer_out_deleted_ = false;
   src_reorganization_scn_.set_min();
   return ret;
 }
@@ -59,7 +59,7 @@ int ObTabletTransferInfo::init(
     transfer_start_scn_ = transfer_start_scn;
     transfer_seq_ = transfer_seq;
     has_transfer_table_ = true;
-    is_transfer_out_deleted_ = false;
+    unused_is_transfer_out_deleted_ = false;
     src_reorganization_scn_ = src_reorganization_scn;
   }
   return ret;
@@ -71,7 +71,7 @@ void ObTabletTransferInfo::reset()
   transfer_start_scn_.reset();
   transfer_seq_ = -1;
   has_transfer_table_ = false;
-  is_transfer_out_deleted_ = false;
+  unused_is_transfer_out_deleted_ = false;
   src_reorganization_scn_.reset();
 }
 
@@ -96,8 +96,8 @@ void ObTabletTransferInfo::reset_transfer_table()
 
 bool ObTabletTransferInfo::is_transfer_out_deleted() const
 {
-  return is_transfer_out_deleted_;
+  return unused_is_transfer_out_deleted_;
 }
 
 OB_SERIALIZE_MEMBER(ObTabletTransferInfo, ls_id_, transfer_start_scn_, transfer_seq_, has_transfer_table_,
-  is_transfer_out_deleted_, src_reorganization_scn_);
+  unused_is_transfer_out_deleted_, src_reorganization_scn_);

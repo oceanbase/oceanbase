@@ -116,31 +116,6 @@ private:
   int check_all_ls_replica_replay_scn_(const share::ObTransferTaskID &task_id, const uint64_t tenant_id,
       const share::ObLSID &ls_id, const common::ObIArray<common::ObAddr> &total_addr_list, const share::SCN &finish_scn,
       ObTimeoutCtx &timeout_ctx, common::ObIArray<common::ObAddr> &finished_addr_list);
-
-#ifdef OB_BUILD_SHARED_STORAGE
-  // check src tablet status has been set to transfer out deleted
-  // @param[in]: tenant_id
-  // @param[in]: dest_ls_id
-  // @param[in]: src_ls_id
-  // @param[in]: member_list
-  // @param[in]: tablet_list
-  // @param[in]: transfer_scn
-  // @param[in/out]: all_transfer_out_deleted
-  int check_src_ls_tablet_status_(const uint64_t tenant_id, const share::ObLSID &dest_ls_id, const share::ObLSID &src_ls_id,
-      const common::ObArray<share::ObTransferTabletInfo> &tablet_list, const share::SCN &transfer_scn, bool &all_transfer_out_deleted);
-
-  // inner check src tablet status has been set to transfer out deleted
-  // @param[in]: tenant_id
-  // @param[in]: src_ls_id
-  // @param[in]: member_addr_list
-  // @param[in]: tablet_list
-  // @param[in]: transfer_scn
-  // @param[in/out]: all_transfer_out_deleted
-  int inner_check_src_ls_tablet_status_(const uint64_t tenant_id, const share::ObLSID &dest_ls_id,
-      const common::ObArray<common::ObAddr> &member_addr_list,
-      const common::ObArray<share::ObTransferTabletInfo> &tablet_list,
-      const share::SCN &transfer_scn, bool &all_transfer_out_deleted);
-#endif
 private:
   /* helper functions */
 

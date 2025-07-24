@@ -184,17 +184,6 @@ int ObTabletMeta::update_for_share_storage(const ObTabletMeta &new_tablet_meta)
       if (!last_split_info.can_not_gc_macro_blks() && new_split_info.can_not_gc_macro_blks()) {
         split_info_.set_can_not_gc_data_blks(true/*can_not_gc_data_blks*/);
       }
-    } else if (ObTabletStatus::TRANSFER_OUT == origin_status) {
-      // update transfer info
-      bool old_is_transfer_out_deleted = transfer_info_.is_transfer_out_deleted();
-      bool new_is_transfer_out_deleted = new_tablet_meta.transfer_info_.is_transfer_out_deleted();
-
-      if (!old_is_transfer_out_deleted && new_is_transfer_out_deleted) {
-        transfer_info_.is_transfer_out_deleted_ = new_is_transfer_out_deleted;
-      } else {
-        ret = OB_STATE_NOT_MATCH;
-        LOG_WARN("update transfer out deleted state not match", K(ret), K(transfer_info_), K(new_is_transfer_out_deleted));
-      }
     }
   }
   return ret;

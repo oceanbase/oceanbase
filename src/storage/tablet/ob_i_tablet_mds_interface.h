@@ -227,9 +227,6 @@ protected:// implemented by ObTablet
              Value &&mds,
              mds::MdsCtx &ctx,
              const share::SCN &scn);
-  int get_tablet_status_for_transfer(
-      const mds::TwoPhaseCommitState &trans_stat,
-      ObTabletCreateDeleteMdsUserData &tablet_status) const;
 private:
   template <typename Key, typename Value>
   int replay_remove(const Key &key,
