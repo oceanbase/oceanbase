@@ -1423,6 +1423,7 @@ inline bool ob_is_json_tc(ObObjType type) { return ObJsonTC == ob_obj_type_class
 inline bool ob_is_geometry_tc(ObObjType type) { return ObGeometryTC == ob_obj_type_class(type); }
 inline bool ob_is_decimal_int_tc(ObObjType type) { return ObDecimalIntTC == ob_obj_type_class(type); }
 inline bool ob_is_roaringbitmap_tc(ObObjType type) { return ObRoaringBitmapTC == ob_obj_type_class(type); }
+inline bool ob_is_extend_tc(ObObjType type) { return ObExtendTC == ob_obj_type_class(type); }
 
 inline bool is_lob(ObObjType type) { return ob_is_text_tc(type); }
 inline bool is_lob_locator(ObObjType type) { return ObLobType == type; }

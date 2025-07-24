@@ -76,12 +76,24 @@ public:
                                     bool need_set_ps_out = false,
                                     bool ps_cursor_execute = false,
                                     sql::ObResultSet *result = NULL);
-  int convert_string_value_charset(common::ObObj& value, sql::ObResultSet &result, ObCharsetType charset_type, ObCharsetType nchar);
-  int convert_lob_value_charset(common::ObObj& value, sql::ObResultSet &result, ObCharsetType charset_type, ObCharsetType nchar);
-  int convert_text_value_charset(common::ObObj& value, sql::ObResultSet &result, ObCharsetType charset_type, ObCharsetType nchar);
+  int convert_string_value_charset(common::ObObj& value, sql::ObResultSet &result,
+                                   ObCharsetType charset_type, ObCharsetType nchar,
+                                   common::ObIAllocator *alloc = NULL);
+  int convert_lob_value_charset(common::ObObj& value, sql::ObResultSet &result,
+                                ObCharsetType charset_type, ObCharsetType nchar,
+                                common::ObIAllocator *alloc = NULL);
+  int convert_text_value_charset(common::ObObj& value, sql::ObResultSet &result,
+                                 ObCharsetType charset_type, ObCharsetType nchar,
+                                 common::ObIAllocator *alloc = NULL);
+  int convert_extend_value_charset(common::ObObj& value, sql::ObResultSet &result,
+                                   ObCharsetType charset_type, ObCharsetType nchar);
+  int convert_value_charset(common::ObObj& value, sql::ObResultSet &result,
+                            ObCharsetType charset_type, ObCharsetType nchar,
+                            common::ObIAllocator *alloc = NULL);
 
   int convert_lob_locator_to_longtext(common::ObObj& value, sql::ObResultSet &result);
-  int process_lob_locator_results(common::ObObj& value, sql::ObResultSet &result);
+  int process_lob_locator_results(common::ObObj& value, sql::ObResultSet &result,
+                                  common::ObIAllocator *alloc = NULL);
   static int convert_lob_locator_to_longtext(common::ObObj& value, 
                                              bool is_use_lob_locator, 
                                              common::ObIAllocator *allocator);
