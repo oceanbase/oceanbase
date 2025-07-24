@@ -1004,7 +1004,8 @@ private:
   int get_const_expr_value(const ObRawExpr *expr, uint64_t &val);
   int check_variable_accessible(const ObPLBlockNS &ns,
                                 const ObIArray<ObObjAccessIdx>& access_idxs,
-                                bool for_write);
+                                bool for_write,
+                                bool is_inout_param = false);
   int check_variable_accessible(ObRawExpr *expr, bool for_write);
   int get_subprogram_var(
     ObPLBlockNS &ns, uint64_t subprogram_id, int64_t var_idx, const ObPLVar *&var);

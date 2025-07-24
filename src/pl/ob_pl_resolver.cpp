@@ -11432,7 +11432,7 @@ int ObPLResolver::resolve_inner_call(
         ObPLDataType *type = NULL;
         int64_t expr_idx = OB_INVALID_INDEX, x = OB_INVALID_INDEX, y = OB_INVALID_INDEX;
         // for now, support extend,delete only, need check readonly prop
-        OZ (check_variable_accessible(current_block_->get_namespace(), access_idxs, true));
+        OZ (check_variable_accessible(current_block_->get_namespace(), access_idxs, true, true));
         OZ (make_var_from_access(access_idxs, expr_factory_,
                      &resolve_ctx_.session_info_, &resolve_ctx_.schema_guard_,
                      get_current_namespace(), expr, false));
@@ -13962,7 +13962,10 @@ int ObPLResolver::check_package_variable_read_only(uint64_t package_id, uint64_t
 }
 
 int ObPLResolver::check_variable_accessible(
-        const ObPLBlockNS &ns, const ObIArray<ObObjAccessIdx>& access_idxs, bool for_write)
+        const ObPLBlockNS &ns,
+        const ObIArray<ObObjAccessIdx>& access_idxs,
+        bool for_write,
+        bool is_inout_param)
 {
   int ret = OB_SUCCESS;
   CK (!access_idxs.empty());
@@ -13972,7 +13975,7 @@ int ObPLResolver::check_variable_accessible(
       OZ (check_update_column(ns, access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_, access_idxs));
       OZ (check_local_variable_read_only(
         ns, access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_
-        /*access_idxs.at(access_idxs.count() - 1).var_index_*/), access_idxs);
+        /*access_idxs.at(access_idxs.count() - 1).var_index_*/, is_inout_param), access_idxs);
     } else {
       ObPLVar *var = NULL;
       const ObPLSymbolTable *symbol_table = NULL;
