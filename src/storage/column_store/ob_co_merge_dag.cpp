@@ -1516,6 +1516,8 @@ int ObCOMergeDagNet::swap_tablet_after_minor()
 {
   int ret = OB_SUCCESS;
   ObGetMergeTablesResult tmp_result;
+  // ATTENTION: must reset tables_handle_ before swap_tablet !!!
+  co_merge_ctx_->static_param_.tables_handle_.reset();
   if (OB_FAIL(co_merge_ctx_->swap_tablet())) {
     LOG_WARN("failed to get tablet without memtables", K(ret));
   } else if (OB_FAIL(ObPartitionMergePolicy::get_result_by_snapshot(
@@ -1524,7 +1526,11 @@ int ObCOMergeDagNet::swap_tablet_after_minor()
     tmp_result,
     false/*need_check_tablet*/))) {
     LOG_WARN("failed to get result by snapshot", K(ret));
-  } else if (OB_FAIL(co_merge_ctx_->static_param_.tables_handle_.assign(tmp_result.handle_))) {
+  }
+#ifdef ERRSIM
+  DEBUG_SYNC(MAJOR_MERGE_PREPARE);
+#endif
+  if (FAILEDx(co_merge_ctx_->static_param_.tables_handle_.assign(tmp_result.handle_))) {
     LOG_WARN("failed to assign tables handle", K(ret), K(tmp_result));
   } else {
     LOG_INFO("success to swap tablet after minor", K(ret), K(tmp_result),
