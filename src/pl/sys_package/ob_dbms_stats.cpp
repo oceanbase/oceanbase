@@ -3737,7 +3737,8 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
           }
         }
       }
-      if (col->is_virtual_generated_column()) {
+      if (col->is_virtual_generated_column() && !col->is_column_stored_in_sstable() && !col->is_tbl_part_key_column() &&
+          !col->is_part_key_column() && !col->is_subpart_key_column()) {
         col_param.set_is_virtual_col();
       }
       if (col->is_rowkey_column() && table_schema.is_table_with_pk()) {
