@@ -419,7 +419,8 @@ struct EstimateCostInfo {
         server_list_(),
         is_pipelined_path_(false),
         is_nl_style_pipelined_path_(false),
-        inherit_sharding_index_(-1)
+        inherit_sharding_index_(-1),
+        is_valid_inner_path_(false)
     {  }
     virtual ~Path() {}
     int assign(const Path &other, common::ObIAllocator *allocator);
@@ -550,7 +551,8 @@ struct EstimateCostInfo {
                  K_(is_pipelined_path),
                  K_(is_nl_style_pipelined_path),
                  K_(ambient_card),
-                 K_(inherit_sharding_index));
+                 K_(inherit_sharding_index),
+                 K_(is_valid_inner_path));
   public:
     /**
      * 表示当前join order最终的父join order节点
@@ -594,6 +596,8 @@ struct EstimateCostInfo {
     common::ObSEArray<double, 8, common::ModulePageAllocator, true> ambient_card_;
     //Used to indicate which child node the current sharding inherits from
     int64_t inherit_sharding_index_;
+    // mark this access path is inner path and contribute query range
+    bool is_valid_inner_path_;
 
   private:
     DISALLOW_COPY_AND_ASSIGN(Path);
@@ -644,8 +648,7 @@ struct EstimateCostInfo {
         use_skip_scan_(OptSkipScanState::SS_UNSET),
         index_prefix_(-1),
         can_batch_rescan_(false),
-        can_das_dynamic_part_pruning_(-1),
-        is_valid_inner_path_(false)
+        can_das_dynamic_part_pruning_(-1)
     {
     }
     virtual ~AccessPath() {
@@ -734,8 +737,6 @@ struct EstimateCostInfo {
     {
       return 1 == est_cost_info_.ranges_.count() && est_cost_info_.ranges_.at(0).is_false_range();
     }
-    // compute current path is inner path and contribute query ranges
-    int compute_valid_inner_path();
 
     int compute_access_path_batch_rescan();
     bool is_rescan_path() const { return est_cost_info_.is_rescan_; }
@@ -770,8 +771,7 @@ struct EstimateCostInfo {
                  K_(use_das),
                  K_(use_skip_scan),
                  K_(can_batch_rescan),
-                 K_(can_das_dynamic_part_pruning),
-                 K_(is_valid_inner_path));
+                 K_(can_das_dynamic_part_pruning));
   public:
     //member variables
     uint64_t table_id_;
@@ -803,8 +803,6 @@ struct EstimateCostInfo {
     int64_t index_prefix_;
     bool can_batch_rescan_;
     int64_t can_das_dynamic_part_pruning_;
-    // mark this access path is inner path and contribute query range
-    bool is_valid_inner_path_;
   private:
     DISALLOW_COPY_AND_ASSIGN(AccessPath);
   };
@@ -2609,6 +2607,9 @@ struct NullAwareAntiJoinInfo {
   private:
     int compute_cost_and_prune_access_path(PathHelper &helper,
                                            ObIArray<AccessPath *> &access_paths);
+
+    int prune_none_range_path(ObIArray<Path*> &inner_paths);
+
     int revise_output_rows_after_creating_path(PathHelper &helper,
                                                ObIArray<AccessPath *> &access_paths);
     int create_plan_for_path_with_subq(Path *path);
@@ -2765,13 +2766,19 @@ struct NullAwareAntiJoinInfo {
                                       const ObIArray<ObRawExpr*> &pushdown_quals,
                                       InnerPathInfo &inner_path_info);
 
-
     int generate_force_inner_path(const ObIArray<ObRawExpr *> &join_conditions,
                                   const ObRelIds join_relids,
                                   ObJoinOrder &right_tree,
                                   InnerPathInfo &inner_path_info);
 
     int copy_path(const Path& src_path, Path* &dst_path);
+
+    int compute_valid_inner_path(ObIArray<Path*> &inner_paths,
+                                 const ObIArray<ObRawExpr*> &pushdown_quals);
+    int compute_valid_inner_path(Path *inner_path,
+                                 const ObIArray<ObRawExpr*> &pushdown_quals);
+    int extract_range_filters(Path *inner_path, ObIArray<ObRawExpr*> &all_range_filters);
+    int extract_range_filters(ObLogicalOperator *root, ObIArray<ObRawExpr*> &all_range_filters);
 
     int check_and_fill_inner_path_info(PathHelper &helper,
                                        const ObDMLStmt &stmt,
@@ -2849,9 +2856,6 @@ struct NullAwareAntiJoinInfo {
                                   ObRawExpr *&new_pred,
                                   PathHelper &helper);
 
-    int get_range_params(const Path *path,
-                         ObIArray<ObRawExpr*> &range_exprs,
-                         ObIArray<ObRawExpr*> &all_table_filters);
 
     int find_best_inner_nl_path(const ObIArray<Path*> &inner_paths,
                                 Path *&best_nl_path);
