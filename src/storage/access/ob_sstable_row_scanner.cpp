@@ -228,7 +228,7 @@ int ObSSTableRowScanner<PrefetchType>::inner_get_next_row(const ObDatumRow *&sto
         continue;
       } else if (OB_FAIL(fetch_row(prefetcher_.current_read_handle(), store_row))) {
         if (OB_LIKELY(OB_ITER_END == ret)) {
-          if (prefetcher_.cur_range_fetch_idx_ < prefetcher_.prefetching_range_idx() || prefetcher_.is_prefetch_end_) {
+          if (prefetcher_.is_current_range_prefetch_finished()) {
             ++prefetcher_.cur_range_fetch_idx_;
           }
           ret = OB_SUCCESS;
@@ -363,7 +363,7 @@ int ObSSTableRowScanner<PrefetchType>::get_next_rows()
         continue;
       } else if (OB_FAIL(fetch_rows(prefetcher_.current_read_handle()))) {
         if (OB_ITER_END == ret) {
-          if (prefetcher_.cur_range_fetch_idx_ < prefetcher_.prefetching_range_idx() || prefetcher_.is_prefetch_end_) {
+          if (prefetcher_.is_current_range_prefetch_finished()) {
             ++prefetcher_.cur_range_fetch_idx_;
           }
           ret = OB_SUCCESS;

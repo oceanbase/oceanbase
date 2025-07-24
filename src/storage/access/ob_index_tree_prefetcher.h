@@ -358,6 +358,18 @@ public:
     return 0 == cur_level_ ? cur_range_prefetch_idx_ - 1 :
         tree_handles_[cur_level_].current_block_read_handle().index_info_.range_idx();
   }
+  OB_INLINE bool is_current_range_prefetch_finished()
+  {
+    bool is_finished = false;
+    if (is_prefetch_end_) {
+      is_finished = true;
+    } else if (cur_range_fetch_idx_ < prefetching_range_idx()) {
+      if (cur_level_ == index_tree_height_ - 1 || !tree_handles_[cur_level_ + 1].is_prefetching_range(cur_range_fetch_idx_)) {
+        is_finished = true;
+      }
+    }
+    return is_finished;
+  }
   OB_INLINE bool read_wait()
   {
     return !is_prefetch_end_ &&
@@ -518,12 +530,22 @@ private:
     { return is_prefetch_end_; }
     OB_INLINE void set_prefetch_end()
     { is_prefetch_end_ = true; }
-    OB_INLINE bool reach_scanner_end()
+    OB_INLINE bool reach_scanner_end() const
     { return index_scanner_.end_of_block(); }
     OB_INLINE ObIndexBlockReadHandle &current_block_read_handle()
     {
       OB_ASSERT(0 <= fetch_idx_);
       return index_block_read_handles_[fetch_idx_ % INDEX_TREE_PREFETCH_DEPTH];
+    }
+    OB_INLINE bool is_prefetching_range(const int64_t range_idx) const
+    {
+      bool is_prefetching = false;
+      if (prefetch_idx_ >= 0 && (fetch_idx_ < prefetch_idx_ || !reach_scanner_end())) {
+        int8_t fetch_idx = reach_scanner_end() ? (fetch_idx_ + 1) % INDEX_TREE_PREFETCH_DEPTH :
+            fetch_idx_ % INDEX_TREE_PREFETCH_DEPTH;
+        is_prefetching = (range_idx == index_block_read_handles_[fetch_idx].index_info_.range_idx());
+      }
+      return is_prefetching;
     }
     int prefetch(
         const int64_t level,
