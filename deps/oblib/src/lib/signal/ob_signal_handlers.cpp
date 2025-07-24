@@ -58,7 +58,7 @@ static constexpr char FASTSTACK_SCRIPT[] =
 "  path_to_obstack=$(command -v obstack)\n"
 "fi\n"
 "if [ -x \"$path_to_obstack\" ]; then\n"
-"  $path_to_obstack `cat $(pwd)/run/observer.pid` > stack.`cat $(pwd)/run/observer.pid`.`date +%Y%m%d%H%M%S`\n"
+"  $path_to_obstack -o `cat $(pwd)/run/observer.pid` > stack.`cat $(pwd)/run/observer.pid`.`date +%Y%m%d%H%M%S`\n"
 "fi\n"
 "[ $(ls -1 stack.* 2>/dev/null | wc -l) -gt 100 ] && ls -1 stack.* -t | tail -n 1 | xargs rm -f";
 const char *const FASTSTACK_SCRIPT_ARGV[] = {"/bin/sh", "-c", FASTSTACK_SCRIPT, NULL};
