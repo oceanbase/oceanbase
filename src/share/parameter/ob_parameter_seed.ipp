@@ -2289,3 +2289,6 @@ DEF_STR_WITH_CHECKER(zone_deploy_mode, OB_TENANT_PARAMETER, "homo",
 DEF_BOOL(_update_all_columns_for_trigger, OB_TENANT_PARAMETER, "True",
          "control the switch determining whether the UPDATE statement always updates all columns when the table contains a row-level BEFORE UPDATE trigger.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ob_enable_pl_dynamic_stack_check, OB_CLUSTER_PARAMETER, "False",
+         "Enable or disable dynamic stack check when executing PL.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

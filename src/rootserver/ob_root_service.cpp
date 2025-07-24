@@ -10632,12 +10632,30 @@ int ObRootService::set_enable_trace_log_()
 
 int ObRootService::set_cpu_quota_concurrency_config_()
 {
-  int64_t affected_rows = 0;
   int ret = OB_SUCCESS;
-  if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET cpu_quota_concurrency = 10;", affected_rows))) {
-    LOG_WARN("update cpu_quota_concurrency failed", K(ret));
-  } else if (OB_FAIL(check_config_result("cpu_quota_concurrency", "10"))) {
-    LOG_WARN("failed to check config same", K(ret));
+  int64_t affected_rows = 0;
+  ObSqlString sql;
+  const char* configs[][2] = {
+    {"cpu_quota_concurrency", "10"},
+    {"_ob_enable_pl_dynamic_stack_check", "true"},
+  };
+  if (OB_FAIL(sql.assign("ALTER SYSTEM SET"))) {
+    LOG_WARN("failed to assign sql string", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(configs); i++) {
+      if (OB_FAIL(sql.append_fmt("%c %s = %s", (i == 0 ? ' ' : ','), configs[i][0], configs[i][1]))) {
+        LOG_WARN("failed to append_fmt", KR(ret), K(sql), K(configs[i][0]), K(configs[i][1]));
+      }
+    }
+    if (FAILEDx(sql_proxy_.write(sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to set configs", KR(ret), K(sql));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(configs); i++) {
+        if (OB_FAIL(check_config_result(configs[i][0], configs[i][1]))) {
+          LOG_WARN("failed to check_config_result", KR(ret), K(configs[i][0]), K(configs[i][1]));
+        }
+      }
+    }
   }
   return ret;
 }

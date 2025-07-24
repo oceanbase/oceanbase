@@ -9159,6 +9159,7 @@ int ObPLCodeGenerator::generate_normal(ObPLFunction &pl_func)
       pl_func.set_is_all_sql_stmt(get_ast().get_is_all_sql_stmt());
       pl_func.set_has_parallel_affect_factor(get_ast().has_parallel_affect_factor());
       pl_func.set_has_incomplete_rt_dep_error(get_ast().has_incomplete_rt_dep_error());
+      pl_func.set_stack_size(stack_size);
     }
   }
   if (debug_mode_) {

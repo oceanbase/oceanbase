@@ -274,8 +274,15 @@ public:
   OB_INLINE void set_profiler_unit_info(uint64_t unit_id, ObProcType type) { profiler_unit_info_ = std::make_pair(unit_id, type); }
   OB_INLINE void set_profiler_unit_info(const std::pair<uint64_t, ObProcType> &unit_info) { profiler_unit_info_ = unit_info; }
 
-  TO_STRING_KV(K_(routine_table), K_(can_cached),
-               K_(tenant_schema_version), K_(sys_schema_version), K_(stat));
+  OB_INLINE int32_t get_stack_size() const { return stack_size_; }
+  OB_INLINE void set_stack_size(int64_t stack_size) { stack_size_ = stack_size; }
+
+  TO_STRING_KV(K_(routine_table),
+               K_(can_cached),
+               K_(tenant_schema_version),
+               K_(sys_schema_version),
+               K_(stat),
+               K_(stack_size));
 
 protected:
 
@@ -292,6 +299,8 @@ protected:
   sql::ObExecEnv exec_env_;
 
   std::pair<uint64_t, ObProcType> profiler_unit_info_;
+
+  int32_t stack_size_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPLCompileUnit);
 };
@@ -534,7 +543,8 @@ public:
                K_(default_idxs),
                K_(function_name),
                K_(priv_user),
-               K_(stat));
+               K_(stat),
+               K_(stack_size));
 
 private:
   //符号表信息

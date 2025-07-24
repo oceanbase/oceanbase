@@ -7323,6 +7323,7 @@ all_ncomp_dll_v2 = dict(
   normal_columns = [
     ('merge_version', 'int'),
     ('dll', 'longblob', 'false'),
+    ('stack_size', 'longblob', 'true'),
   ],
 )
 def_table_schema(**all_ncomp_dll_v2)

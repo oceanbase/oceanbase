@@ -4647,6 +4647,8 @@ int ObPLExecState::check_pl_priv(
 int ObPLExecState::execute()
 {
   int ret = OB_SUCCESS;
+  int32_t pl_stack_size = func_.get_stack_size();
+
   if (OB_ISNULL(get_allocator())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is NULL", K(ret));
@@ -4681,18 +4683,44 @@ int ObPLExecState::execute()
         }
       }
     }
+#define PL_DYNAMIC_STACK_CHECK()                                               \
+  do {                                                                         \
+    bool is_overflow = false;                                                  \
+    int64_t stack_used = OB_INVALID_SIZE;                                      \
+    if (OB_FAIL(ret)) {                                                        \
+    } else if (!GCONF._ob_enable_pl_dynamic_stack_check) {                     \
+    } else if (OB_UNLIKELY(0 > pl_stack_size)) {                               \
+    } else if (OB_FAIL(check_stack_overflow(                                   \
+                         is_overflow,                                          \
+                         pl_stack_size + get_reserved_stack_size(),            \
+                         &stack_used))) {                                      \
+      LOG_WARN("failed to check_stack_overflow", K(ret));                      \
+    } else if (is_overflow) {                                                  \
+      ret = OB_SIZE_OVERFLOW;                                                  \
+      LOG_WARN("stack size is not enough to execute PL",                       \
+               K(ret),                                                         \
+               K(is_overflow),                                                 \
+               K(stack_used),                                                  \
+               K(pl_stack_size),                                               \
+               K(get_reserved_stack_size()),                                   \
+               K(func_));                                                      \
+    }                                                                          \
+  } while (0)
     if (OB_SUCC(ret)) {
       if (inner_call_) {
         _Unwind_Exception *eptr = nullptr;
         ret = SMART_CALL([&]() {
-                           int ret = OB_SUCCESS;
-                           try {
-                             ret = fp(&ctx_, func_.get_arg_count(), argv);
-                           } catch(...) {
-                             eptr = tl_eptr;
-                           }
-                           return ret;
-                         }());
+                          int ret = OB_SUCCESS;
+                          PL_DYNAMIC_STACK_CHECK();
+                          if (OB_SUCC(ret)) {
+                            try {
+                              ret = fp(&ctx_, func_.get_arg_count(), argv);
+                            } catch(...) {
+                              eptr = tl_eptr;
+                            }
+                          }
+                          return ret;
+                        }());
         if (eptr != nullptr) {
           ret = OB_SUCCESS == ret ? (NULL != ctx_.status_ ? *ctx_.status_ : OB_ERR_UNEXPECTED)
               : ret;
@@ -4702,14 +4730,17 @@ int ObPLExecState::execute()
       } else {
         bool has_exception = false;
         ret = SMART_CALL([&]() {
-                           int ret = OB_SUCCESS;
-                           try {
-                             ret = fp(&ctx_, func_.get_arg_count(), argv);
-                           } catch(...) {
-                             has_exception = true;
-                           }
-                           return ret;
-                         }());
+                          int ret = OB_SUCCESS;
+                          PL_DYNAMIC_STACK_CHECK();
+                          if (OB_SUCC(ret)) {
+                            try {
+                              ret = fp(&ctx_, func_.get_arg_count(), argv);
+                            } catch(...) {
+                              has_exception = true;
+                            }
+                          }
+                          return ret;
+                        }());
         if (has_exception) {
           if (OB_ISNULL(ctx_.status_)) {
             ret = OB_ERR_UNEXPECTED;
@@ -4750,6 +4781,7 @@ int ObPLExecState::execute()
         }
       } else { /*do nothing*/ }
     }
+#undef PL_DYNAMIC_STACK_CHECK
 
     if (top_call_
         && ctx_.exec_ctx_->get_my_session()->is_track_session_info()
@@ -4885,7 +4917,8 @@ ObPLCompileUnit::ObPLCompileUnit(sql::ObLibCacheNameSpace ns,
       can_cached_(true),
       has_incomplete_rt_dep_error_(false),
       exec_env_(),
-      profiler_unit_info_(std::make_pair(OB_INVALID_ID, INVALID_PROC_TYPE))
+      profiler_unit_info_(std::make_pair(OB_INVALID_ID, INVALID_PROC_TYPE)),
+      stack_size_(OB_INVALID_SIZE)
 {
 #ifndef USE_MCJIT
   int ret = OB_SUCCESS;
