@@ -427,15 +427,15 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(FlushIlogCache);
         break;
       }
-      case T_FLUSH_SS_MICRO_CACHE: {
-        REGISTER_STMT_RESOLVER(FlushSSMicroCache);
-        break;
-      }
       case T_FLUSH_DAG_WARNINGS: {
         REGISTER_STMT_RESOLVER(FlushDagWarnings);
         break;
       }
 #ifdef OB_BUILD_SHARED_STORAGE
+      case T_FLUSH_SS_MICRO_CACHE: {
+        REGISTER_STMT_RESOLVER(FlushSSMicroCache);
+        break;
+      }
        case T_TRIGGER_STORAGE_CACHE: {
         REGISTER_STMT_RESOLVER(TriggerStorageCache);
         break;

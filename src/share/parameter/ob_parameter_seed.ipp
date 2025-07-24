@@ -1074,8 +1074,7 @@ DEF_BOOL(_enable_ss_replica_prewarm, OB_TENANT_PARAMETER, "True",
          "Value: True:turned on;  False: turned off",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_ss_micro_cache_memory_percentage, OB_TENANT_PARAMETER, "20", "[1,50]",
-        "the percentage of tenant memory size used by microblock_cache in shared_stoarge mode, 0 means follow the "
-        "adjusting value. Range: [1, 50]",
+        "the percentage of tenant memory size used by microblock_cache in shared_stoarge mode, Range: [1, 50]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //background limit config
 DEF_TIME(_data_storage_io_timeout, OB_CLUSTER_PARAMETER, "10s", "[1s,600s]",

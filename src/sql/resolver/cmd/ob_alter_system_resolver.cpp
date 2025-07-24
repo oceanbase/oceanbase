@@ -1155,7 +1155,7 @@ int ObFlushSSMicroCacheResolver::resolve(const ParseNode &parse_tree)
     ObFlushSSMicroCacheStmt *stmt = create_stmt<ObFlushSSMicroCacheStmt>();
     if (NULL == stmt) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("create ObFlushKVCacheStmt failed");
+      LOG_ERROR("create ObFlushSSMicroCacheStmt failed");
     } else {
       stmt_ = stmt;
       if (OB_UNLIKELY(NULL == parse_tree.children_)) {
