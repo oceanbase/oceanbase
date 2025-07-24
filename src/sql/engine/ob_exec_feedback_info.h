@@ -33,14 +33,14 @@ public:
       ssstore_read_row_count_(0), memstore_read_row_count_(0),  das_local_index_scan_time_(0),
       das_local_index_scan_rows_(0), das_local_data_scan_time_(0), das_local_data_scan_rows_(0),
       das_remote_index_scan_time_(0), das_remote_index_scan_rows_(0), das_remote_data_scan_time_(0),
-      das_remote_data_scan_rows_(0), das_index_rpc_count_(0), das_data_rpc_count_(0) {}
+      das_remote_data_scan_rows_(0), das_index_rpc_count_(0), das_data_rpc_count_(0), is_table_scan_op_(false) {}
   ObExecFeedbackNode() : op_id_(OB_INVALID_ID), output_row_count_(0),
       op_open_time_(INT64_MAX), op_close_time_(0), op_first_row_time_(INT64_MAX),
       op_last_row_time_(0), db_time_(0),  block_time_(0), worker_count_(0), pdml_op_write_rows_(0),
       ssstore_read_row_count_(0), memstore_read_row_count_(0),  das_local_index_scan_time_(0),
       das_local_index_scan_rows_(0), das_local_data_scan_time_(0), das_local_data_scan_rows_(0),
       das_remote_index_scan_time_(0), das_remote_index_scan_rows_(0), das_remote_data_scan_time_(0),
-      das_remote_data_scan_rows_(0), das_index_rpc_count_(0), das_data_rpc_count_(0) {}
+      das_remote_data_scan_rows_(0), das_index_rpc_count_(0), das_data_rpc_count_(0), is_table_scan_op_(false) {}
   ~ObExecFeedbackNode() {}
   TO_STRING_KV(K_(op_id), K_(output_row_count), K_(op_open_time),
                K_(op_close_time), K_(op_first_row_time), K_(op_last_row_time),
@@ -48,7 +48,7 @@ public:
                K_(memstore_read_row_count), K_(das_local_index_scan_time), K_(das_local_index_scan_rows),
                K_(das_local_data_scan_time), K_(das_local_data_scan_rows), K_(das_remote_index_scan_time),
                K_(das_remote_index_scan_rows), K_(das_remote_data_scan_time), K_(das_remote_data_scan_rows),
-               K_(das_index_rpc_count), K_(das_data_rpc_count));
+               K_(das_index_rpc_count), K_(das_data_rpc_count), K_(is_table_scan_op));
 public:
   int64_t op_id_;
   int64_t output_row_count_;
@@ -72,6 +72,7 @@ public:
   int64_t das_remote_data_scan_rows_;
   int64_t das_index_rpc_count_;
   int64_t das_data_rpc_count_;
+  bool is_table_scan_op_;
 };
 
 class ObExecFeedbackInfo final
