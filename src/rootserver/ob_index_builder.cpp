@@ -474,8 +474,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
             res.task_id_ = task_record.task_id_;
           }
           if (OB_FAIL(ret)) {
-          } else if (index_table_schema->is_vec_index() &&
-                     arg.is_vec_inner_drop_ &&
+          } else if (((index_table_schema->is_vec_index() && arg.is_vec_inner_drop_) || (index_table_schema->is_mlog_table() && arg.is_drop_in_rebuild_task_)) &&
                      OB_FAIL(ObDDLTaskRecordOperator::update_parent_task_message(tenant_id,
                         arg.task_id_, *index_table_schema, res.task_id_, res.task_id_,
                         ObDDLUpdateParentTaskIDType::UPDATE_VEC_REBUILD_DROP_INDEX_TASK_ID, allocator, trans))) {
