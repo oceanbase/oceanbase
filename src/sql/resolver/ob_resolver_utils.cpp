@@ -917,11 +917,12 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
         LOG_WARN("PLS-00382: expression is of wrong type",
                  K(ret), K(src_type_id), K(dst_pl_type), K(src_type));
       }
-    } else if (((ObLobType == src_type || ObLongTextType == src_type)\
+    } else if (lib::is_oracle_mode()
+              && (((ObLobType == src_type || ObLongTextType == src_type)\
                  && CS_TYPE_BINARY == src_coll_type)
               || ((ObLobType == dst_pl_type.get_obj_type()
                    || ObLongTextType == dst_pl_type.get_obj_type())
-                  && CS_TYPE_BINARY == dst_pl_type.get_meta_type()->get_collation_type())) {
+                  && CS_TYPE_BINARY == dst_pl_type.get_meta_type()->get_collation_type()))) {
       if (ObRawType == src_type || ObRawType == dst_pl_type.get_obj_type()) {
         // Raw and Blob can matched!
         OX (match_info =
