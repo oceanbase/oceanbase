@@ -643,6 +643,7 @@ int ObMLogBuilder::replace_mlog(ObSchemaGetterGuard &schema_guard,
   const ObDatabaseSchema *database_schema = nullptr;
   ObArenaAllocator allocator("DdlTaskTmp");
   ObDDLTaskRecord task_record;
+  bool has_mlog_task = false;
   ObDDLSQLTransaction trans(&ddl_service_.get_schema_service());
 
   if (data_version < DATA_VERSION_4_3_5_3) {
@@ -674,6 +675,15 @@ int ObMLogBuilder::replace_mlog(ObSchemaGetterGuard &schema_guard,
   } else if (OB_FAIL(
                  trans.start(&ddl_service_.get_sql_proxy(), tenant_id, refreshed_schema_version))) {
     LOG_WARN("failed to start trans", KR(ret), K(tenant_id), K(refreshed_schema_version));
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
+                trans, *orig_mlog_schema, tenant_id, base_table_schema->get_table_id(), has_mlog_task))) {
+    LOG_WARN("fail to check has index task", KR(ret), K(tenant_id),
+            K(base_table_schema->get_table_id()), K(orig_mlog_schema->get_table_id()));
+  } else if (has_mlog_task) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("replacing a building or dropping mlog table is not supported", KR(ret), K(tenant_id),
+            K(base_table_schema->get_table_id()), K(orig_mlog_schema->get_table_id()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "replacing a building or dropping mlog table is");
   } else {
     ObTableLockOwnerID owner_id;
     const int64_t old_index_table_id = OB_INVALID_ID;

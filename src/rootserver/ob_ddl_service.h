@@ -2178,6 +2178,7 @@ private:
                                              const ObTableSchema *table_schema,
                                              bool is_oracle_mode,
                                              share::schema::ObSchemaGetterGuard &schema_guard,
+                                             ObMySQLTransaction &trans,
                                              const obrpc::ObRenameTableItem &rename_item,
                                              common::ObArenaAllocator &allocator,
                                              ObIArray<obrpc::ObRenameTableItem> &full_rename_items);
