@@ -2565,6 +2565,12 @@ int ObSyncIOChannel::submit(ObIORequest &req)
         }
       }
     }
+    if (REACH_TIME_INTERVAL(5 * 1000 * 1000L)) {
+      const int64_t cost_us = ObTimeUtility::current_time() - current_ts;
+      if (cost_us > 100 * 1000L) { // 100ms
+        LOG_WARN("slow sync io submit", K(ret), K(cost_us), K(req));
+      }
+    }
   }
   return ret;
 }

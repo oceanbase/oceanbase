@@ -30,7 +30,6 @@ int QSchedCallback::handle(TCRequest* tc_req)
 {
   int ret = OB_SUCCESS;
   ObDeviceChannel *device_channel = nullptr;
-  ObTimeGuard time_guard("submit_req", 100000); //100ms
   ObIORequest& req = *CONTAINER_OF(tc_req, ObIORequest, qsched_req_);
   ObIOResult* result = req.io_result_;
   if (OB_UNLIKELY(stop_submit_)) {
@@ -48,20 +47,17 @@ int QSchedCallback::handle(TCRequest* tc_req)
       LOG_ERROR("fail to guard master condition", K(ret));
     } else if (OB_FAIL(req.prepare())) {
       LOG_WARN("prepare io request failed", K(ret), K(req));
-    } else if (FALSE_IT(time_guard.click("prepare_req"))) {
     } else if (OB_FAIL(OB_IO_MANAGER.get_device_channel(req, device_channel))) {
       LOG_WARN("get device channel failed", K(ret), K(req));
     } else if (FALSE_IT(result->time_log_.dequeue_ts_ = ObTimeUtility::fast_current_time())) {
     } else if (OB_FAIL(device_channel->submit(req))) {
       LOG_WARN("submit io to device failed");
-    } else {
-      time_guard.click("device_submit");
+    } else if (REACH_TIME_INTERVAL(5 * 1000L * 1000L)) {
+      const int64_t submit_cost = ObTimeUtility::fast_current_time() - result->time_log_.dequeue_ts_;
+      if (submit_cost > 100 * 1000) {// 100ms
+        LOG_INFO("submit_request cost too much time", K(ret), K(req), K(submit_cost));
+      }
     }
-  }
-
-  if (time_guard.get_diff() > 100000) {// 100ms
-    //print req
-    LOG_INFO("submit_request cost too much time", K(ret), K(time_guard), K(req));
   }
   if (OB_FAIL(ret)) {
     if (ret == OB_EAGAIN) {
