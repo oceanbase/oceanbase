@@ -1193,7 +1193,7 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
           if (OB_FAIL(ret)) {
           } else if (coll_type->get_element_type().is_obj_type() ^
                      src_coll->get_element_desc().is_obj_type()) {
-            ret = OB_INVALID_ARGUMENT;
+            ret = OB_ERR_EXPRESSION_WRONG_TYPE;
             LOG_WARN("incorrect argument type, diff type",
                           K(ret), K(coll_type->get_element_type()), K(src_coll->get_element_desc()));
           } else if (coll_type->get_element_type().is_obj_type()) { // basic data type
@@ -1207,7 +1207,7 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                                       dst_data_type->get_collation_type())) {
               need_cast = true;
             } else {
-              ret = OB_INVALID_ARGUMENT;
+              ret = OB_ERR_EXPRESSION_WRONG_TYPE;
               LOG_WARN("incorrect argument type, diff type", K(ret));
             }
           } else {
@@ -1223,7 +1223,7 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                 element_type_id, coll_type->get_element_type().get_user_type_id(), is_compatible));
             }
             if (OB_SUCC(ret) && !is_compatible) {
-              ret = OB_INVALID_ARGUMENT;
+              ret = OB_ERR_EXPRESSION_WRONG_TYPE;
               LOG_WARN("incorrect argument type",
                         K(ret), K(element_type_id), K(dst_pl_type), KPC(src_coll));
             }
