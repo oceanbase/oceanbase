@@ -520,7 +520,7 @@ int ObMPStmtExecute::save_exception_for_arraybinding(
 int ObMPStmtExecute::after_do_process_for_arraybinding(ObMySQLResultSet &result)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(result.get_physical_plan())) {
+  if (ObStmt::is_dml_write_stmt(stmt_type_) && OB_ISNULL(result.get_physical_plan())) {
     ret = OB_NOT_INIT;
     LOG_WARN("should have set plan to result set", K(ret));
   } else if (OB_FAIL(result.open())) {
