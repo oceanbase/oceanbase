@@ -26,6 +26,76 @@ namespace oceanbase
 {
 using namespace common;
 
+//Mock
+
+void ObFIFOAllocator::reset()
+{
+  ObLockGuard<ObSpinLock> guard(lock_);
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT || OB_ISNULL(allocator_)) {
+    // do nothing
+  } else {
+    DLIST_FOREACH_REMOVESAFE_NORET(iter, free_page_list_) {
+      auto *page = iter->get_data();
+      free_page_list_.remove(iter);
+      allocator_->free(page);
+    }
+
+    // check if there is some pages using ?
+    if (OB_ISNULL(current_using_)) {
+      // reset already.
+    } else if (OB_LIKELY(1 == current_using_->ref_count_)) {
+      allocator_->free(current_using_);
+    } else {
+      STORAGE_LOG(ERROR, "current_using_ is still used now, ref_count = ", K(current_using_->ref_count_), KP(current_using_));
+      throw std::runtime_error("memory leak detected");
+    }
+    DLIST_FOREACH_NORET(iter, using_page_list_) {
+      auto *page = iter->get_data();
+      STORAGE_LOG(ERROR, "dump using page list:  ", KP(page));
+      throw std::runtime_error("memory leak detected");
+    }
+    DLIST_FOREACH_NORET(iter, special_page_list_) {
+      auto *page = iter->get_data();
+      STORAGE_LOG(ERROR, "dump special page list:  ", KP(page));
+      throw std::runtime_error("memory leak detected");
+    }
+    using_page_list_.clear();
+    current_using_ = nullptr;
+    special_page_list_.clear();
+    normal_used_ = 0;
+    special_total_ = 0;
+    is_inited_ = false;
+  }
+}
+
+void ObIndexBlockTreePath::reset()
+{
+  item_stack_.reset();
+  next_item_ = nullptr;
+  path_.reset();
+  try {
+    allocator_.reset();
+  } catch (const std::runtime_error &e) {
+    std::cerr << "运行时错误: " << e.what() << std::endl;
+    ob_abort();
+  } catch (...) {
+    std::cerr << "未知异常类型" << std::endl;
+    ob_abort();
+  }
+}
+
+ObFIFOAllocator::~ObFIFOAllocator()
+{
+  try {
+    reset();
+  } catch (...) {
+    // do nothing
+  }
+  allocator_ = nullptr;
+  is_inited_ = false;
+}
+
 namespace blocksstable
 {
 
@@ -39,6 +109,7 @@ public:
 
   virtual void SetUp();
   virtual void TearDown();
+  void allocate_memory(ObIAllocator &allocator, const char *&dst_buf, int64_t &dst_buf_size);
 };
 
 TestIndexBlockTreeCursor::TestIndexBlockTreeCursor()
@@ -74,6 +145,14 @@ void TestIndexBlockTreeCursor::TearDown()
   TestIndexBlockDataPrepare::TearDown();
 }
 
+void TestIndexBlockTreeCursor::allocate_memory(ObIAllocator &allocator, const char *&dst_buf, int64_t &dst_buf_size)
+{
+  const int allocate_size = 32;
+  dst_buf = reinterpret_cast<char *>(allocator.alloc(allocate_size));
+  dst_buf_size = allocate_size;
+  ASSERT_NE(nullptr, dst_buf);
+}
+
 TEST_F(TestIndexBlockTreeCursor, test_path)
 {
   ObIndexBlockTreePath tree_path;
@@ -90,6 +169,30 @@ TEST_F(TestIndexBlockTreeCursor, test_path)
     ASSERT_EQ(OB_SUCCESS, tree_path.get_next_item_ptr(curr_item));
   }
   ASSERT_EQ(OB_ERR_UNEXPECTED, tree_path.pop(curr_item));
+}
+
+TEST_F(TestIndexBlockTreeCursor, test_tree_path_memory_leak)
+{
+  STORAGE_LOG(INFO, "tree path memory leak test start");
+  int64_t item_cnt_upper_bound = ObIndexBlockTreePath::PathItemStack::MAX_TREE_FIX_BUF_LENGTH + 1;
+  for (int item_cnt = 0; item_cnt <= item_cnt_upper_bound; ++item_cnt) {
+    ObIndexBlockTreePath tree_path;
+    ObIndexBlockTreePathItem *curr_item;
+    ASSERT_EQ(OB_SUCCESS, tree_path.init());
+    ASSERT_EQ(OB_SUCCESS, tree_path.get_next_item_ptr(curr_item));
+    // tree_path.idx_ = 0 now.
+    for (int64_t i = 0; i < item_cnt; ++i) {
+      allocate_memory(tree_path.allocator_, curr_item->block_data_.get_buf(), curr_item->block_data_.get_buf_size());
+      curr_item->is_block_allocated_ = true;
+      ASSERT_EQ(OB_SUCCESS, tree_path.push(curr_item));
+      ASSERT_EQ(OB_SUCCESS, tree_path.get_next_item_ptr(curr_item));
+    }
+    // tree_path.idx_ = item_cnt now.
+    allocate_memory(tree_path.allocator_, curr_item->block_data_.get_buf(), curr_item->block_data_.get_buf_size());
+    curr_item->is_block_allocated_ = true;
+    tree_path.reset();
+  }
+  STORAGE_LOG(INFO, "tree path memory leak test end");
 }
 
 TEST_F(TestIndexBlockTreeCursor, test_normal)
@@ -128,7 +231,9 @@ TEST_F(TestIndexBlockTreeCursor, test_normal)
       all_range, allocator_, endkeys, index_infos, hold_item));
   STORAGE_LOG(DEBUG, "Endkeys: ", K(endkeys));
   STORAGE_LOG(DEBUG, "Micro index infos:", K(index_infos));
-
+  if (hold_item.is_block_allocated_) {
+    tree_cursor.cursor_path_.get_allocator()->free(const_cast<char *>(hold_item.block_data_.buf_));
+  }
 
   ASSERT_EQ(OB_SUCCESS, tree_cursor.pull_up_to_root());
   ASSERT_EQ(OB_SUCCESS, tree_cursor.drill_down(
@@ -331,7 +436,7 @@ TEST_F(TestIndexBlockTreeCursor, test_bare_micro_block_iterator)
 int main(int argc, char **argv)
 {
   system("rm -f test_index_block_tree_cursor.log*");
-  OB_LOGGER.set_file_name("test_index_block_tree_cursor.log");
+  OB_LOGGER.set_file_name("test_index_block_tree_cursor.log", true);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
