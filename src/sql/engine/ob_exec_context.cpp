@@ -126,7 +126,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     dblink_snapshot_map_(),
     cur_row_num_(-1),
     is_online_stats_gathering_(false),
-    lob_access_ctx_(nullptr)
+    lob_access_ctx_(nullptr),
+    deterministic_udf_cache_allocator_("UDFCACHE", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
 {
 }
 
@@ -230,6 +231,8 @@ void ObExecContext::reset_op_ctx()
 {
   reset_expr_op();
   op_kit_store_.destroy();
+
+  deterministic_udf_cache_allocator_.reset();
 }
 
 void ObExecContext::reset_op_env()

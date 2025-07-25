@@ -189,6 +189,7 @@ net_thread_count
 obconfig_url
 observer_id
 ob_compaction_schedule_interval
+ob_deterministic_udf_cache_max_size
 ob_enable_batched_multi_statement
 ob_event_history_recycle_interval
 ob_proxy_readonly_transaction_routing_policy

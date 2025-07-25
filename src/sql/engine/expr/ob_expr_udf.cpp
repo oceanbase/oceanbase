@@ -749,6 +749,16 @@ int ObExprUDF::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObEx
     OZ(info->from_raw_expr(fun_sys));
     info->is_called_in_sql_ = is_called_in_sql();
     rt_expr.extra_info_ = info;
+    if (OB_SUCC(ret)) {
+      if (lib::is_mysql_mode()) {
+        info->is_deterministic_ = false;
+      } else {
+        bool is_cursor_type = ObExtendType == info->result_type_.get_type() &&
+                              (pl::PL_CURSOR_TYPE == info->result_type_.get_extend_type() ||
+                              pl::PL_REF_CURSOR_TYPE == info->result_type_.get_extend_type());
+        info->is_deterministic_ &= !is_cursor_type;
+      }
+    }
   }
   rt_expr.eval_func_ = eval_udf;
   return ret;
@@ -773,6 +783,7 @@ int ObExprUDF::ObExprUDFCtx::init_param_store(ObIAllocator &allocator,
 int ObExprUDF::build_udf_ctx(int64_t udf_ctx_id,
                              int64_t param_num,
                              ObExecContext &exec_ctx,
+                             const ObExprUDFInfo &info,
                              ObExprUDFCtx *&udf_ctx)
 {
   int ret = OB_SUCCESS;
@@ -783,9 +794,176 @@ int ObExprUDF::build_udf_ctx(int64_t udf_ctx_id,
     } else if (OB_FAIL(udf_ctx->init_param_store(exec_ctx.get_allocator(), param_num))) {
       LOG_WARN("failed to init param", K(ret));
     }
+    if (OB_SUCC(ret) && info.is_deterministic_) {
+      if (OB_FAIL(udf_ctx->init_row_key(exec_ctx.get_allocator(), param_num, info))) {
+        LOG_WARN("failed to init row key", K(ret));
+      } else if (OB_FAIL(udf_ctx->init_hashmap())) {
+        LOG_WARN("fail to init hash map", K(ret));
+      } else {
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+        if (OB_LIKELY(tenant_config.is_valid())) {
+          udf_ctx->deterministic_udf_cache_max_size_ = tenant_config->ob_deterministic_udf_cache_max_size;
+        }
+        udf_ctx->enable_deterministic_result_cache_ = udf_ctx->deterministic_udf_cache_max_size_ > 0;
+      }
+    }
   } else {
     OX (udf_ctx->reuse());
   }
+  return ret;
+}
+
+bool UDFArgRow::operator==(const UDFArgRow &other) const
+{
+  bool ret = false;
+  if (default_param_bitmap_ == other.default_param_bitmap_) {
+    ret = DatumRow::operator==(other);
+  }
+  return ret;
+}
+
+int UDFArgRow::hash(uint64_t &hash_val, uint64_t seed) const
+{
+  int ret = OB_SUCCESS;
+  ret = DatumRow::hash(hash_val, seed);
+  return ret;
+}
+
+int ObExprUDF::ObExprUDFCtx::init_row_key(ObIAllocator &allocator, int64_t arg_cnt, const ObExprUDFInfo &info)
+{
+  int ret = OB_SUCCESS;
+  row_key_.cnt_ = arg_cnt;
+
+  if (arg_cnt > 0) {
+    if (OB_ISNULL(row_key_.elems_ = static_cast<ObDatum *>(allocator.alloc(arg_cnt * sizeof(ObDatum))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < arg_cnt; ++i) {
+        if (OB_ISNULL(row_key_.elems_[i].ptr_ = reinterpret_cast<char*>(allocator.alloc(OBJ_DATUM_MAX_RES_SIZE)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory", K(ret));
+        } else {
+          if (info.params_type_.at(i).is_null()) {
+            if (OB_FAIL(row_key_.default_param_bitmap_.add_member(i))) {
+              LOG_WARN("fail to add member", K(ret), K(i));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprUDF::construct_hash_key(const ObExpr &expr,
+                                  const ObObj *objs,
+                                  ObEvalCtx &ctx,
+                                  ObExprUDFCtx &udf_ctx)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(udf_ctx.row_level_alloc_));
+  CK (expr.arg_cnt_ == udf_ctx.row_key_.cnt_);
+  for (int64_t i = 0; i < expr.arg_cnt_ && OB_SUCC(ret); ++i) {
+    CK (OB_NOT_NULL(objs));
+    OZ (udf_ctx.row_key_.elems_[i].from_obj(objs[i]));
+  }
+
+  return ret;
+}
+
+int ObExprUDF::get_deterministic_result_cache(ObExprUDFCtx &udf_ctx, ObObj &result, bool &is_find)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(udf_ctx.deterministic_result_cache_.get_refactored(udf_ctx.row_key_, result))) {
+    if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("failed to find in hash map", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  } else {
+    is_find = true;
+  }
+
+  return ret;
+}
+
+int ObExprUDF::add_deterministic_result_cache(ObEvalCtx &ctx, ObExprUDFCtx &udf_ctx, ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  UDFArgRow cache_key;
+  ObObj value;
+  cache_key.cnt_ = udf_ctx.row_key_.cnt_;
+  ObIAllocator &udf_cache_alloc = ctx.exec_ctx_.get_deterministic_udf_cache_allocator();
+  int64_t need_size = sizeof(ObDatum) + sizeof(int64_t);
+  for (int64_t i = 0; i < cache_key.cnt_; ++i) {
+    need_size += (udf_ctx.row_key_.elems_[i].len_ + sizeof(ObDatum));
+  }
+  int used = need_size + udf_cache_alloc.used();
+  if (used >= udf_ctx.deterministic_udf_cache_max_size_) {
+    LOG_TRACE("udf cache reach memory limit", K(udf_ctx.deterministic_udf_cache_max_size_), K(used));
+  } else {
+    if (cache_key.cnt_ > 0 && OB_ISNULL(cache_key.elems_
+              = static_cast<ObDatum *> (udf_cache_alloc.alloc(sizeof(ObDatum) * cache_key.cnt_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for row key", K(ret),  K(cache_key.cnt_));
+    } else {
+      OZ (cache_key.default_param_bitmap_.assign(udf_ctx.row_key_.default_param_bitmap_));
+      for (int64_t i = 0; OB_SUCC(ret) && i < cache_key.cnt_; ++i) {
+        if (OB_FAIL(cache_key.elems_[i].deep_copy(udf_ctx.row_key_.elems_[i], udf_cache_alloc))) {
+          LOG_WARN("failed to copy probe row", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (result.is_pl_extend()) {
+        if (OB_FAIL(pl::ObUserDefinedType::deep_copy_obj(udf_cache_alloc, result, value))) {
+          LOG_WARN("fail to deep copy result", K(result));
+        }
+      } else {
+        if (OB_FAIL(deep_copy_obj(udf_cache_alloc, result, value))) {
+          LOG_WARN("fail to deep copy result", K(result));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(udf_ctx.deterministic_result_cache_.set_refactored(cache_key, value))) {
+        LOG_WARN("fail to add value to hashmap", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObExprUDF::get_udf_cache(const ObExpr &expr,
+                              const ObObj *objs,
+                              ObEvalCtx &ctx,
+                              ObExprUDFCtx &udf_ctx,
+                              ObObj &result,
+                              bool &is_find)
+{
+  int ret = OB_SUCCESS;
+  is_find = false;
+
+  if (udf_ctx.enable_deterministic_result_cache_) {
+    OZ (construct_hash_key(expr, objs, ctx, udf_ctx));
+    OZ (get_deterministic_result_cache(udf_ctx, result, is_find));
+  }
+
+  return ret;
+}
+
+int ObExprUDF::add_udf_cache(ObEvalCtx &ctx,
+                              ObExprUDFCtx &udf_ctx,
+                              ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  if (udf_ctx.enable_deterministic_result_cache_) {
+    OZ (add_deterministic_result_cache(ctx, udf_ctx, result));
+  }
+
   return ret;
 }
 
@@ -801,6 +979,8 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
   ObSQLSessionInfo *session = nullptr;
   ObIAllocator *alloc = &ctx.exec_ctx_.get_allocator();
   pl::ObPLExecCtx *pl_exec_ctx = nullptr;
+  bool is_find = false;
+  ObDatum tmp_res;
   const ObExprUDFInfo *info = static_cast<ObExprUDFInfo *>(expr.extra_info_);
   if (OB_SUCC(ret) && expr.arg_cnt_ != info->params_desc_.count()) {
     ret = OB_ERR_UNEXPECTED;
@@ -815,7 +995,7 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
   CK (OB_NOT_NULL(session = ctx.exec_ctx_.get_my_session()));
   CK (OB_NOT_NULL(pl_engine = session->get_pl_engine()));
   OZ (SMART_CALL(expr.eval_param_value(ctx)));
-  OZ (build_udf_ctx(udf_ctx_id, expr.arg_cnt_, ctx.exec_ctx_, udf_ctx));
+  OZ (build_udf_ctx(udf_ctx_id, expr.arg_cnt_, ctx.exec_ctx_, *info, udf_ctx));
   CK (OB_NOT_NULL(udf_params = udf_ctx->get_param_store()));
   if (OB_SUCC(ret) && OB_NOT_NULL(session->get_pl_context()) && !info->is_called_in_sql_) {
     pl_exec_ctx = session->get_pl_context()->get_current_ctx();
@@ -850,189 +1030,201 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
         LOG_WARN("allocate objs memory failed", K(ret));
       }
       OZ (fill_obj_stack(expr, ctx, objs));
-      OZ (process_in_params(
-        objs, expr.arg_cnt_, info->params_desc_, info->params_type_, *udf_params, *alloc, &deep_in_objs));
     }
-
-    share::schema::ObSchemaGetterGuard schema_guard;
-    ObSqlCtx sql_ctx;
-    OZ (before_calc_result(schema_guard, sql_ctx, ctx.exec_ctx_));
-
-    // restore ctx.exec_ctx_ only when ctx.exec_ctx_ is successfully changed
-    NAMED_DEFER(need_restore_exec_ctx,
-                after_calc_result(schema_guard, sql_ctx, ctx.exec_ctx_));
+    OX (udf_ctx->row_level_alloc_ = &allocator);
+    OZ (get_udf_cache(expr, objs, ctx, *udf_ctx, result, is_find));
     if (OB_FAIL(ret)) {
-      need_restore_exec_ctx.deactivate();
-    }
-
-    if (OB_SUCC(ret) && info->is_udt_cons_) {
-      pl::ObPLUDTNS ns(*ctx.exec_ctx_.get_sql_ctx()->schema_guard_);
-      pl::ObPLDataType pl_type;
-      pl_type.set_user_type_id(pl::PL_RECORD_TYPE, info->udf_package_id_);
-      pl_type.set_type_from(pl::PL_TYPE_UDT);
-      CK (0 < udf_params->count());
-      OZ (ns.init_complex_obj(*alloc, *alloc, pl_type, udf_params->at(0), false, false));
-      OX (need_free_udt = true);
-    }
-    try {
-      int64_t package_id = info->is_udt_udf_ ?
-           share::schema::ObUDTObjectType::mask_object_id(info->udf_package_id_)
-           : info->udf_package_id_;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(pl_engine->execute(ctx.exec_ctx_,
-                            info->is_called_in_sql_ ? allocator
-                                                    : *alloc,
-                            package_id,
-                            info->udf_id_,
-                            info->subprogram_path_,
-                            *udf_params,
-                            info->nocopy_params_,
-                            tmp_result,
-                            nullptr,
-                            false,
-                            true,
-                            info->loc_,
-                            info->is_called_in_sql_,
-                            info->dblink_id_))) {
-        LOG_WARN("fail to execute udf", K(ret), K(info), K(package_id), K(tmp_result));
-        if (info->is_called_in_sql_ && OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
-          ctx.exec_ctx_.get_pl_ctx()->reset_obj_range_to_end(cur_obj_count);
-        }
-        bool has_out_param = false;
-        for (int64_t i = 0; !has_out_param && i < info->params_desc_.count(); ++i) {
-          if (info->params_desc_.at(i).is_out()) {
-            has_out_param = true;
-          }
-        }
-        if (has_out_param) {
-          int tmp = process_out_params(objs,
-                                      expr.arg_cnt_,
-                                      *udf_params,
-                                      *alloc,
-                                      ctx.exec_ctx_,
-                                      info->nocopy_params_,
-                                      info->params_desc_,
-                                      info->params_type_);
-          if (OB_SUCCESS != tmp) {
-            LOG_WARN("fail to process out param", K(tmp), K(ret));
-          }
-        }
+      // do nothing ...
+    } else if (is_find) {
+      OZ (res.from_obj(result, expr.obj_datum_map_));
+      if (is_lob_storage(result.get_type())) {
+        OZ (ob_adjust_lob_datum(result, expr.obj_meta_, expr.obj_datum_map_,
+                              ctx.exec_ctx_.get_allocator(), res));
       }
-    } catch(...) {
-      throw;
-    }
-    if (OB_FAIL(ret)) {
-    } else if (info->is_called_in_sql_) {
-      // memory of ref cursor on session, do not copy it.
-      if (tmp_result.is_pl_extend()
-          && tmp_result.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
-        int tmp_ret = OB_SUCCESS;
-        CK (OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx()));
-        OZ (pl::ObUserDefinedType::deep_copy_obj(*alloc, tmp_result, result, true));
-        if (OB_SUCC(ret)) {
-          ctx.exec_ctx_.get_pl_ctx()->reset_obj_range_to_end(cur_obj_count);
-          OZ (ctx.exec_ctx_.get_pl_ctx()->add(result));
-          if (OB_FAIL(ret)) {
-            if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(result, ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
-              LOG_WARN("failed to destruct result object", K(ret), K(tmp_ret));
+      OZ (expr.deep_copy_datum(ctx, res));
+    } else {
+      OZ (process_in_params(objs, expr.arg_cnt_, info->params_desc_, info->params_type_, *udf_params, *alloc, &deep_in_objs));
+      share::schema::ObSchemaGetterGuard schema_guard;
+      ObSqlCtx sql_ctx;
+      OZ (before_calc_result(schema_guard, sql_ctx, ctx.exec_ctx_));
+
+      // restore ctx.exec_ctx_ only when ctx.exec_ctx_ is successfully changed
+      NAMED_DEFER(need_restore_exec_ctx,
+                  after_calc_result(schema_guard, sql_ctx, ctx.exec_ctx_));
+      if (OB_FAIL(ret)) {
+        need_restore_exec_ctx.deactivate();
+      }
+
+      if (OB_SUCC(ret) && info->is_udt_cons_) {
+        pl::ObPLUDTNS ns(*ctx.exec_ctx_.get_sql_ctx()->schema_guard_);
+        pl::ObPLDataType pl_type;
+        pl_type.set_user_type_id(pl::PL_RECORD_TYPE, info->udf_package_id_);
+        pl_type.set_type_from(pl::PL_TYPE_UDT);
+        CK (0 < udf_params->count());
+        OZ (ns.init_complex_obj(*alloc, *alloc, pl_type, udf_params->at(0), false, false));
+        OX (need_free_udt = true);
+      }
+      try {
+        int64_t package_id = info->is_udt_udf_ ?
+            share::schema::ObUDTObjectType::mask_object_id(info->udf_package_id_)
+            : info->udf_package_id_;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(pl_engine->execute(ctx.exec_ctx_,
+                              info->is_called_in_sql_ ? allocator
+                                                      : *alloc,
+                              package_id,
+                              info->udf_id_,
+                              info->subprogram_path_,
+                              *udf_params,
+                              info->nocopy_params_,
+                              tmp_result,
+                              nullptr,
+                              false,
+                              true,
+                              info->loc_,
+                              info->is_called_in_sql_,
+                              info->dblink_id_))) {
+          LOG_WARN("fail to execute udf", K(ret), K(info), K(package_id), K(tmp_result));
+          if (info->is_called_in_sql_ && OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
+            ctx.exec_ctx_.get_pl_ctx()->reset_obj_range_to_end(cur_obj_count);
+          }
+          bool has_out_param = false;
+          for (int64_t i = 0; !has_out_param && i < info->params_desc_.count(); ++i) {
+            if (info->params_desc_.at(i).is_out()) {
+              has_out_param = true;
+            }
+          }
+          if (has_out_param) {
+            int tmp = process_out_params(objs,
+                                        expr.arg_cnt_,
+                                        *udf_params,
+                                        *alloc,
+                                        ctx.exec_ctx_,
+                                        info->nocopy_params_,
+                                        info->params_desc_,
+                                        info->params_type_);
+            if (OB_SUCCESS != tmp) {
+              LOG_WARN("fail to process out param", K(tmp), K(ret));
             }
           }
         }
-        if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(tmp_result, ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
-          LOG_WARN("failed to destruct tmp result object", K(ret), K(tmp_ret));
-          ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      } catch(...) {
+        throw;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (info->is_called_in_sql_) {
+        // memory of ref cursor on session, do not copy it.
+        if (tmp_result.is_pl_extend()
+            && tmp_result.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+          int tmp_ret = OB_SUCCESS;
+          CK (OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx()));
+          OZ (pl::ObUserDefinedType::deep_copy_obj(*alloc, tmp_result, result, true));
+          if (OB_SUCC(ret)) {
+            ctx.exec_ctx_.get_pl_ctx()->reset_obj_range_to_end(cur_obj_count);
+            OZ (ctx.exec_ctx_.get_pl_ctx()->add(result));
+            if (OB_FAIL(ret)) {
+              if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(result, ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+                LOG_WARN("failed to destruct result object", K(ret), K(tmp_ret));
+              }
+            }
+          }
+          if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(tmp_result, ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+            LOG_WARN("failed to destruct tmp result object", K(ret), K(tmp_ret));
+            ret = OB_SUCCESS == ret ? tmp_ret : ret;
+          }
+        } else {
+          result = tmp_result;
+          if (OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
+            ctx.exec_ctx_.get_pl_ctx()->reset_obj_range_to_end(cur_obj_count);
+          }
         }
       } else {
         result = tmp_result;
-        if (OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx())) {
-          ctx.exec_ctx_.get_pl_ctx()->reset_obj_range_to_end(cur_obj_count);
+      }
+      if (OB_SUCC(ret) && info->is_udt_cons_) {
+        pl::ObPLComposite *obj_self = reinterpret_cast<pl::ObPLRecord *>(udf_params->at(0).get_ext());
+        CK (OB_NOT_NULL(obj_self));
+        if (OB_SUCC(ret) && obj_self->is_record()) {
+          OX (obj_self->set_is_null(false));
         }
       }
-    } else {
-      result = tmp_result;
-    }
-    if (OB_SUCC(ret) && info->is_udt_cons_) {
-      pl::ObPLComposite *obj_self = reinterpret_cast<pl::ObPLRecord *>(udf_params->at(0).get_ext());
-      CK (OB_NOT_NULL(obj_self));
-      if (OB_SUCC(ret) && obj_self->is_record()) {
-        OX (obj_self->set_is_null(false));
-      }
-    }
 
-    if (OB_READ_NOTHING == ret && info->is_called_in_sql_ && lib::is_oracle_mode()) {
-      result.set_null();
-      ret = OB_SUCCESS;
-    }
-    if (OB_SUCC(ret)
-        && info->is_called_in_sql_
-        && result.is_raw() && result.get_raw().length() > OB_MAX_ORACLE_RAW_SQL_COL_LENGTH
-        && lib::is_oracle_mode()) {
-      ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
-      ObString err_msg("raw variable length too long");
-      LOG_WARN("raw variable length too long", K(ret), K(result.get_raw().length()));
-      LOG_USER_ERROR(OB_ERR_NUMERIC_OR_VALUE_ERROR, err_msg.length(), err_msg.ptr());
-    }
-    OZ (process_out_params(objs,
-                           expr.arg_cnt_,
-                           *udf_params,
-                           *alloc,
-                           ctx.exec_ctx_,
-                           info->nocopy_params_,
-                           info->params_desc_,
-                           info->params_type_));
-    if (OB_SUCC(ret)) {
-      if (!result.is_null()
-          && result.get_type() != expr.datum_meta_.type_
-          && ObLobType == expr.datum_meta_.type_) {
-        ObLobLocator *value = nullptr;
-        char *total_buf = NULL;
-        ObString result_data = result.get_string();
+      if (OB_READ_NOTHING == ret && info->is_called_in_sql_ && lib::is_oracle_mode()) {
+        result.set_null();
+        ret = OB_SUCCESS;
+      }
+      if (OB_SUCC(ret)
+          && info->is_called_in_sql_
+          && result.is_raw() && result.get_raw().length() > OB_MAX_ORACLE_RAW_SQL_COL_LENGTH
+          && lib::is_oracle_mode()) {
+        ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
+        ObString err_msg("raw variable length too long");
+        LOG_WARN("raw variable length too long", K(ret), K(result.get_raw().length()));
+        LOG_USER_ERROR(OB_ERR_NUMERIC_OR_VALUE_ERROR, err_msg.length(), err_msg.ptr());
+      }
+      OZ (process_out_params(objs,
+                            expr.arg_cnt_,
+                            *udf_params,
+                            *alloc,
+                            ctx.exec_ctx_,
+                            info->nocopy_params_,
+                            info->params_desc_,
+                            info->params_type_));
+      if (OB_SUCC(ret)) {
+        if (!result.is_null()
+            && result.get_type() != expr.datum_meta_.type_
+            && ObLobType == expr.datum_meta_.type_) {
+          ObLobLocator *value = nullptr;
+          char *total_buf = NULL;
+          ObString result_data = result.get_string();
+          if (is_lob_storage(result.get_type())) {
+            if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator, result, result_data))) {
+              LOG_WARN("failed to get real data for lob", K(ret), K(result));
+            }
+          }
+          const int64_t total_buf_len = sizeof(ObLobLocator) + result_data.length();
+          if (OB_FAIL(ret)) {
+          } else if (OB_ISNULL(total_buf = expr.get_str_res_mem(ctx, total_buf_len))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("Failed to allocate memory for lob locator", K(ret), K(total_buf_len));
+          } else if (FALSE_IT(value = reinterpret_cast<ObLobLocator *> (total_buf))) {
+          } else if (OB_FAIL(value->init(result_data))) {
+            LOG_WARN("Failed to init lob locator", K(ret), K(value));
+          } else {
+            result.set_lob_locator(*value);
+          }
+        } else if (!result.is_null() && result.get_type() != expr.datum_meta_.type_) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("get unexpected result type", K(ret),
+                          K(result.get_type()), K(expr.datum_meta_.type_));
+        }
+        OZ (add_udf_cache(ctx, *udf_ctx, result));
+        OZ(res.from_obj(result, expr.obj_datum_map_));
         if (is_lob_storage(result.get_type())) {
-          if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator, result, result_data))) {
-            LOG_WARN("failed to get real data for lob", K(ret), K(result));
+          OZ(ob_adjust_lob_datum(result, expr.obj_meta_, expr.obj_datum_map_,
+                                ctx.exec_ctx_.get_allocator(), res));
+        }
+        OZ(expr.deep_copy_datum(ctx, res));
+      }
+      if (need_free_udt && info->is_udt_cons_) {
+        int tmp = OB_SUCCESS;
+        tmp = pl::ObUserDefinedType::destruct_obj(udf_params->at(0), ctx.exec_ctx_.get_my_session());
+        if (OB_SUCCESS != tmp) {
+          LOG_WARN("fail to free udt self memory", K(ret), K(tmp));
+        }
+      }
+      if (deep_in_objs.count() > 0) {
+        int tmp = OB_SUCCESS;
+        for (int64_t i = 0; i < deep_in_objs.count(); ++i) {
+          tmp = pl::ObUserDefinedType::destruct_obj(deep_in_objs.at(i), ctx.exec_ctx_.get_my_session());
+          if (OB_SUCCESS != tmp) {
+            LOG_WARN("fail to destruct obj of in param", K(tmp));
           }
         }
-        const int64_t total_buf_len = sizeof(ObLobLocator) + result_data.length();
-        if (OB_FAIL(ret)) {
-        } else if (OB_ISNULL(total_buf = expr.get_str_res_mem(ctx, total_buf_len))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("Failed to allocate memory for lob locator", K(ret), K(total_buf_len));
-        } else if (FALSE_IT(value = reinterpret_cast<ObLobLocator *> (total_buf))) {
-        } else if (OB_FAIL(value->init(result_data))) {
-          LOG_WARN("Failed to init lob locator", K(ret), K(value));
-        } else {
-          result.set_lob_locator(*value);
-        }
-      } else if (!result.is_null() && result.get_type() != expr.datum_meta_.type_) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("get unexpected result type", K(ret),
-                         K(result.get_type()), K(expr.datum_meta_.type_));
       }
-      OZ(res.from_obj(result, expr.obj_datum_map_));
-      if (is_lob_storage(result.get_type())) {
-        OZ(ob_adjust_lob_datum(result, expr.obj_meta_, expr.obj_datum_map_,
-                              ctx.exec_ctx_.get_allocator(), res));
+      if (need_end_stmt) {
+        session->set_end_stmt();
       }
-      OZ(expr.deep_copy_datum(ctx, res));
-    }
-    if (need_free_udt && info->is_udt_cons_) {
-      int tmp = OB_SUCCESS;
-      tmp = pl::ObUserDefinedType::destruct_obj(udf_params->at(0), ctx.exec_ctx_.get_my_session());
-      if (OB_SUCCESS != tmp) {
-        LOG_WARN("fail to free udt self memory", K(ret), K(tmp));
-      }
-    }
-    if (deep_in_objs.count() > 0) {
-      int tmp = OB_SUCCESS;
-      for (int64_t i = 0; i < deep_in_objs.count(); ++i) {
-        tmp = pl::ObUserDefinedType::destruct_obj(deep_in_objs.at(i), ctx.exec_ctx_.get_my_session());
-        if (OB_SUCCESS != tmp) {
-          LOG_WARN("fail to destruct obj of in param", K(tmp));
-        }
-      }
-    }
-    if (need_end_stmt) {
-      session->set_end_stmt();
     }
   }
 
@@ -1066,7 +1258,8 @@ OB_DEF_SERIALIZE(ObExprUDFInfo)
               is_udt_udf_,
               loc_,
               is_udt_cons_,
-              is_called_in_sql_);
+              is_called_in_sql_,
+              is_deterministic_);
   return ret;
 }
 
@@ -1084,7 +1277,8 @@ OB_DEF_DESERIALIZE(ObExprUDFInfo)
               is_udt_udf_,
               loc_,
               is_udt_cons_,
-              is_called_in_sql_);
+              is_called_in_sql_,
+              is_deterministic_);
   return ret;
 }
 
@@ -1102,7 +1296,8 @@ OB_DEF_SERIALIZE_SIZE(ObExprUDFInfo)
               is_udt_udf_,
               loc_,
               is_udt_cons_,
-              is_called_in_sql_);
+              is_called_in_sql_,
+              is_deterministic_);
   return len;
 }
 
@@ -1121,6 +1316,7 @@ int ObExprUDFInfo::deep_copy(common::ObIAllocator &allocator,
   other.is_udt_cons_ = is_udt_cons_;
   other.is_called_in_sql_ = is_called_in_sql_;
   other.dblink_id_ = dblink_id_;
+  other.is_deterministic_ = is_deterministic_;
   OZ(other.subprogram_path_.assign(subprogram_path_));
   OZ(other.params_type_.assign(params_type_));
   OZ(other.params_desc_.assign(params_desc_));
@@ -1144,6 +1340,7 @@ int ObExprUDFInfo::from_raw_expr(RE &raw_expr)
   loc_ = udf_expr.get_loc();
   is_udt_cons_ = udf_expr.get_is_udt_cons();
   dblink_id_ = udf_expr.get_dblink_id();
+  is_deterministic_ = udf_expr.is_deterministic();
   return ret;
 }
 
