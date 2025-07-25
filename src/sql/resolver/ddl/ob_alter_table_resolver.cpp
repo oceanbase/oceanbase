@@ -5966,15 +5966,27 @@ int ObAlterTableResolver::resolve_drop_column(
         LOG_WARN("check column definition ref node failed", K(ret));
       } else if (OB_FAIL(alter_column_schema.set_column_name(alter_column_schema.get_origin_column_name()))) {
       } else {
-        alter_column_schema.alter_type_ = OB_DDL_DROP_COLUMN;
-        const bool is_oracle_mode = lib::is_oracle_mode();
-        ObAlterTableArg::AlterAlgorithm algorithm = ObAlterTableArg::AlterAlgorithm::INPLACE;
-        if (check_can_drop_column_instant(table_schema_->get_tenant_id(), is_oracle_mode, tenant_data_version)) {
-          algorithm = ObAlterTableArg::AlterAlgorithm::INSTANT;
+        ObString column_name = alter_column_schema.get_column_name();
+        const ObColumnSchemaV2 *origin_col_schema = nullptr;
+        if (nullptr == (origin_col_schema = table_schema_->get_column_schema(column_name))) {
+          ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
+          LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, column_name.length(), column_name.ptr());
+          LOG_WARN("fail to find old column schema!", K(ret), K(column_name));
         } else {
-          algorithm = ObAlterTableArg::AlterAlgorithm::INPLACE;
+          alter_column_schema.set_charset_type(origin_col_schema->get_charset_type());
+          alter_column_schema.set_collation_type(origin_col_schema->get_collation_type());
         }
-        alter_table_stmt->get_alter_table_arg().alter_algorithm_ = algorithm;
+        if (OB_SUCC(ret)) {
+          alter_column_schema.alter_type_ = OB_DDL_DROP_COLUMN;
+          const bool is_oracle_mode = lib::is_oracle_mode();
+          ObAlterTableArg::AlterAlgorithm algorithm = ObAlterTableArg::AlterAlgorithm::INPLACE;
+          if (check_can_drop_column_instant(table_schema_->get_tenant_id(), is_oracle_mode, tenant_data_version)) {
+            algorithm = ObAlterTableArg::AlterAlgorithm::INSTANT;
+          } else {
+            algorithm = ObAlterTableArg::AlterAlgorithm::INPLACE;
+          }
+          alter_table_stmt->get_alter_table_arg().alter_algorithm_ = algorithm;
+        }
       }
       if (OB_SUCC(ret)) {
         ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
