@@ -218,7 +218,7 @@ void ObIndexBlockTreePath::PathItemStack::reset()
       release_item_memory(fix_buf_[i]);
       fix_buf_[i].reset();
     }
-    for (int64_t i = 0; i < idx_ - MAX_TREE_FIX_BUF_LENGTH; ++i) {
+    for (int64_t i = 0; i <= idx_ - MAX_TREE_FIX_BUF_LENGTH; ++i) {
       release_item_memory(var_buf_[i]);
       var_buf_[i].reset();
     }

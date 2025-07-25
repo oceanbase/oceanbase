@@ -36,6 +36,45 @@ bool ObDataStoreDesc::micro_index_clustered() const
   return ::mock_micro_index_clustered_result;
 }
 
+void ObFIFOAllocator::reset()
+{
+  ObLockGuard<ObSpinLock> guard(lock_);
+  if (IS_NOT_INIT || OB_ISNULL(allocator_)) {
+    // do nothing
+  } else {
+    DLIST_FOREACH_REMOVESAFE_NORET(iter, free_page_list_) {
+      auto *page = iter->get_data();
+      free_page_list_.remove(iter);
+      allocator_->free(page);
+    }
+
+    // check if there is some pages using ?
+    if (OB_ISNULL(current_using_)) {
+      // reset already.
+    } else if (OB_LIKELY(1 == current_using_->ref_count_)) {
+      allocator_->free(current_using_);
+    } else {
+      LOG_ERROR_RET(OB_ERROR, "current_using_ is still used now",
+                "ref_count", current_using_->ref_count_, KP(current_using_));
+      ob_abort();
+    }
+    DLIST_FOREACH_NORET(iter, using_page_list_) {
+      auto *page = iter->get_data();
+      LOG_ERROR_RET(OB_ERROR, "dump using page list:  ", KP(page));
+    }
+    DLIST_FOREACH_NORET(iter, special_page_list_) {
+      auto *page = iter->get_data();
+      LOG_ERROR_RET(OB_ERROR, "dump special page list:  ", KP(page));
+    }
+    using_page_list_.clear();
+    current_using_ = nullptr;
+    special_page_list_.clear();
+    normal_used_ = 0;
+    special_total_ = 0;
+    is_inited_ = false;
+  }
+}
+
 namespace blocksstable
 {
 
@@ -49,6 +88,7 @@ public:
 
   virtual void SetUp();
   virtual void TearDown();
+  void allocate_memory(ObIAllocator &allocator, const char *&dst_buf, int64_t &dst_buf_size);
 };
 
 TestIndexBlockTreeCursor::TestIndexBlockTreeCursor()
@@ -84,6 +124,14 @@ void TestIndexBlockTreeCursor::TearDown()
   TestIndexBlockDataPrepare::TearDown();
 }
 
+void TestIndexBlockTreeCursor::allocate_memory(ObIAllocator &allocator, const char *&dst_buf, int64_t &dst_buf_size)
+{
+  const int allocate_size = 32;
+  dst_buf = reinterpret_cast<char *>(allocator.alloc(allocate_size));
+  dst_buf_size = allocate_size;
+  ASSERT_NE(nullptr, dst_buf);
+}
+
 TEST_F(TestIndexBlockTreeCursor, test_path)
 {
   ObIndexBlockTreePath tree_path;
@@ -100,6 +148,30 @@ TEST_F(TestIndexBlockTreeCursor, test_path)
     ASSERT_EQ(OB_SUCCESS, tree_path.get_next_item_ptr(curr_item));
   }
   ASSERT_EQ(OB_ERR_UNEXPECTED, tree_path.pop(curr_item));
+}
+
+TEST_F(TestIndexBlockTreeCursor, test_tree_path_memory_leak)
+{
+  STORAGE_LOG(INFO, "tree path memory leak test start");
+  int64_t item_cnt_upper_bound = ObIndexBlockTreePath::PathItemStack::MAX_TREE_FIX_BUF_LENGTH + 1;
+  for (int item_cnt = 0; item_cnt <= item_cnt_upper_bound; ++item_cnt) {
+    ObIndexBlockTreePath tree_path;
+    ObIndexBlockTreePathItem *curr_item;
+    ASSERT_EQ(OB_SUCCESS, tree_path.init());
+    ASSERT_EQ(OB_SUCCESS, tree_path.get_next_item_ptr(curr_item));
+    // tree_path.idx_ = 0 now.
+    for (int64_t i = 0; i < item_cnt; ++i) {
+      allocate_memory(tree_path.allocator_, curr_item->block_data_.get_buf(), curr_item->block_data_.get_buf_size());
+      curr_item->is_block_allocated_ = true;
+      ASSERT_EQ(OB_SUCCESS, tree_path.push(curr_item));
+      ASSERT_EQ(OB_SUCCESS, tree_path.get_next_item_ptr(curr_item));
+    }
+    // tree_path.idx_ = item_cnt now.
+    allocate_memory(tree_path.allocator_, curr_item->block_data_.get_buf(), curr_item->block_data_.get_buf_size());
+    curr_item->is_block_allocated_ = true;
+    tree_path.reset();
+  }
+  STORAGE_LOG(INFO, "tree path memory leak test end");
 }
 
 TEST_F(TestIndexBlockTreeCursor, test_normal)
