@@ -3310,26 +3310,70 @@ update gf_ar_mthly_bill
 
 EXPLAIN BASIC select * from gf_ar_mthly_bill;
 Query Plan
-=========================================================================
-|ID|OPERATOR                   |NAME                                    |
--------------------------------------------------------------------------
-|0 |DISTRIBUTED TABLE FULL SCAN|gf_ar_mthly_bill(uk_tnt_inst_id_rcrd_id)|
-=========================================================================
+===============================================
+|ID|OPERATOR                 |NAME            |
+-----------------------------------------------
+|0 |PX COORDINATOR           |                |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000        |
+|2 |  └─PX PARTITION ITERATOR|                |
+|3 |    └─TABLE FULL SCAN    |gf_ar_mthly_bill|
+===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id],
-       [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp], [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt],
-       [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt], [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac],
-       [gf_ar_mthly_bill.pay_way], [gf_ar_mthly_bill.pay_orig], [gf_ar_mthly_bill.clcn_bsc_amt], [gf_ar_mthly_bill.clcn_bsc_tp], [gf_ar_mthly_bill.clcn_mthd],
-       [gf_ar_mthly_bill.chrg_itm_code], [gf_ar_mthly_bill.ccy], [gf_ar_mthly_bill.bill_amt], [gf_ar_mthly_bill.adj_amt], [gf_ar_mthly_bill.rcvd_amt], [gf_ar_mthly_bill.tax_tp],
-       [gf_ar_mthly_bill.tax_rate], [gf_ar_mthly_bill.tax_amt], [gf_ar_mthly_bill.exn_inf], [gf_ar_mthly_bill.anl_dmsn1], [gf_ar_mthly_bill.anl_dmsn2], [gf_ar_mthly_bill.anl_dmsn3],
-       [gf_ar_mthly_bill.anl_dmsn4], [gf_ar_mthly_bill.wrtof_dtl_cnt], [gf_ar_mthly_bill.to_wrtof_dtl_cnt], [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.last_moder],
-       [gf_ar_mthly_bill.gmt_create], [gf_ar_mthly_bill.gmt_modified], [gf_ar_mthly_bill.charge_tp], [gf_ar_mthly_bill.stl_ip_role_id], [gf_ar_mthly_bill.svc_amt],
-       [gf_ar_mthly_bill.inved_amt], [gf_ar_mthly_bill.chk_st], [gf_ar_mthly_bill.acnt_day], [gf_ar_mthly_bill.inv_amt], [gf_ar_mthly_bill.rel_inv_amt], [gf_ar_mthly_bill.tp],
-       [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id], [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt],
-       [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt], [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source],
-       [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone], [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth],
-       [gf_ar_mthly_bill.auto_writeoff_group_no], [column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,substr(gf_ar_mthly_bill.bill_no, 23, 2))]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(gf_ar_mthly_bill.tnt_inst_id, gf_ar_mthly_bill.bill_no, gf_ar_mthly_bill.ip_id, gf_ar_mthly_bill.ip_role_id, gf_ar_mthly_bill.inst_id,
+       gf_ar_mthly_bill.pd_code, gf_ar_mthly_bill.ar_no, gf_ar_mthly_bill.bill_tp, gf_ar_mthly_bill.setl_tp, gf_ar_mthly_bill.bill_st, gf_ar_mthly_bill.bill_strt_dt,
+       gf_ar_mthly_bill.bill_end_dt, gf_ar_mthly_bill.bill_mth, gf_ar_mthly_bill.acrd_dt, gf_ar_mthly_bill.gmt_pay, gf_ar_mthly_bill.payee_ac, gf_ar_mthly_bill.payer_ac,
+       gf_ar_mthly_bill.pay_way, gf_ar_mthly_bill.pay_orig, gf_ar_mthly_bill.clcn_bsc_amt, gf_ar_mthly_bill.clcn_bsc_tp, gf_ar_mthly_bill.clcn_mthd, gf_ar_mthly_bill.chrg_itm_code,
+       gf_ar_mthly_bill.ccy, gf_ar_mthly_bill.bill_amt, gf_ar_mthly_bill.adj_amt, gf_ar_mthly_bill.rcvd_amt, gf_ar_mthly_bill.tax_tp, gf_ar_mthly_bill.tax_rate,
+       gf_ar_mthly_bill.tax_amt, gf_ar_mthly_bill.exn_inf, gf_ar_mthly_bill.anl_dmsn1, gf_ar_mthly_bill.anl_dmsn2, gf_ar_mthly_bill.anl_dmsn3, gf_ar_mthly_bill.anl_dmsn4,
+       gf_ar_mthly_bill.wrtof_dtl_cnt, gf_ar_mthly_bill.to_wrtof_dtl_cnt, gf_ar_mthly_bill.rcrd_id, gf_ar_mthly_bill.last_moder, gf_ar_mthly_bill.gmt_create, 
+      gf_ar_mthly_bill.gmt_modified, gf_ar_mthly_bill.charge_tp, gf_ar_mthly_bill.stl_ip_role_id, gf_ar_mthly_bill.svc_amt, gf_ar_mthly_bill.inved_amt, gf_ar_mthly_bill.chk_st,
+       gf_ar_mthly_bill.acnt_day, gf_ar_mthly_bill.inv_amt, gf_ar_mthly_bill.rel_inv_amt, gf_ar_mthly_bill.tp, gf_ar_mthly_bill.payer_ip_role_id, gf_ar_mthly_bill.sgn_ip_id,
+       gf_ar_mthly_bill.sgn_ip_role_id, gf_ar_mthly_bill.chking_amt, gf_ar_mthly_bill.frz_amt, gf_ar_mthly_bill.chked_amt, gf_ar_mthly_bill.writingoff_amt, gf_ar_mthly_bill.svc_bill_amt,
+       gf_ar_mthly_bill.svc_ccy, gf_ar_mthly_bill.env_source, gf_ar_mthly_bill.metadata_source, gf_ar_mthly_bill.setl_time_zone, gf_ar_mthly_bill.actg_time_zone,
+       gf_ar_mthly_bill.inter_trade_flag, gf_ar_mthly_bill.actg_bill_mth, gf_ar_mthly_bill.auto_writeoff_group_no, column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,
+      substr(gf_ar_mthly_bill.bill_no, 23, 2)))]), filter(nil), rowset=16
+  1 - output([INTERNAL_FUNCTION(gf_ar_mthly_bill.tnt_inst_id, gf_ar_mthly_bill.bill_no, gf_ar_mthly_bill.ip_id, gf_ar_mthly_bill.ip_role_id, gf_ar_mthly_bill.inst_id,
+       gf_ar_mthly_bill.pd_code, gf_ar_mthly_bill.ar_no, gf_ar_mthly_bill.bill_tp, gf_ar_mthly_bill.setl_tp, gf_ar_mthly_bill.bill_st, gf_ar_mthly_bill.bill_strt_dt,
+       gf_ar_mthly_bill.bill_end_dt, gf_ar_mthly_bill.bill_mth, gf_ar_mthly_bill.acrd_dt, gf_ar_mthly_bill.gmt_pay, gf_ar_mthly_bill.payee_ac, gf_ar_mthly_bill.payer_ac,
+       gf_ar_mthly_bill.pay_way, gf_ar_mthly_bill.pay_orig, gf_ar_mthly_bill.clcn_bsc_amt, gf_ar_mthly_bill.clcn_bsc_tp, gf_ar_mthly_bill.clcn_mthd, gf_ar_mthly_bill.chrg_itm_code,
+       gf_ar_mthly_bill.ccy, gf_ar_mthly_bill.bill_amt, gf_ar_mthly_bill.adj_amt, gf_ar_mthly_bill.rcvd_amt, gf_ar_mthly_bill.tax_tp, gf_ar_mthly_bill.tax_rate,
+       gf_ar_mthly_bill.tax_amt, gf_ar_mthly_bill.exn_inf, gf_ar_mthly_bill.anl_dmsn1, gf_ar_mthly_bill.anl_dmsn2, gf_ar_mthly_bill.anl_dmsn3, gf_ar_mthly_bill.anl_dmsn4,
+       gf_ar_mthly_bill.wrtof_dtl_cnt, gf_ar_mthly_bill.to_wrtof_dtl_cnt, gf_ar_mthly_bill.rcrd_id, gf_ar_mthly_bill.last_moder, gf_ar_mthly_bill.gmt_create, 
+      gf_ar_mthly_bill.gmt_modified, gf_ar_mthly_bill.charge_tp, gf_ar_mthly_bill.stl_ip_role_id, gf_ar_mthly_bill.svc_amt, gf_ar_mthly_bill.inved_amt, gf_ar_mthly_bill.chk_st,
+       gf_ar_mthly_bill.acnt_day, gf_ar_mthly_bill.inv_amt, gf_ar_mthly_bill.rel_inv_amt, gf_ar_mthly_bill.tp, gf_ar_mthly_bill.payer_ip_role_id, gf_ar_mthly_bill.sgn_ip_id,
+       gf_ar_mthly_bill.sgn_ip_role_id, gf_ar_mthly_bill.chking_amt, gf_ar_mthly_bill.frz_amt, gf_ar_mthly_bill.chked_amt, gf_ar_mthly_bill.writingoff_amt, gf_ar_mthly_bill.svc_bill_amt,
+       gf_ar_mthly_bill.svc_ccy, gf_ar_mthly_bill.env_source, gf_ar_mthly_bill.metadata_source, gf_ar_mthly_bill.setl_time_zone, gf_ar_mthly_bill.actg_time_zone,
+       gf_ar_mthly_bill.inter_trade_flag, gf_ar_mthly_bill.actg_bill_mth, gf_ar_mthly_bill.auto_writeoff_group_no, column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,
+      substr(gf_ar_mthly_bill.bill_no, 23, 2)))]), filter(nil), rowset=16
+      dop=1
+  2 - output([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,substr(gf_ar_mthly_bill.bill_no,
+       23, 2))], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id], [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp],
+       [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt], [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt],
+       [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac], [gf_ar_mthly_bill.pay_way], [gf_ar_mthly_bill.pay_orig], [gf_ar_mthly_bill.clcn_bsc_amt],
+       [gf_ar_mthly_bill.clcn_bsc_tp], [gf_ar_mthly_bill.clcn_mthd], [gf_ar_mthly_bill.chrg_itm_code], [gf_ar_mthly_bill.ccy], [gf_ar_mthly_bill.bill_amt], [gf_ar_mthly_bill.adj_amt],
+       [gf_ar_mthly_bill.rcvd_amt], [gf_ar_mthly_bill.tax_tp], [gf_ar_mthly_bill.tax_rate], [gf_ar_mthly_bill.tax_amt], [gf_ar_mthly_bill.exn_inf], [gf_ar_mthly_bill.anl_dmsn1],
+       [gf_ar_mthly_bill.anl_dmsn2], [gf_ar_mthly_bill.anl_dmsn3], [gf_ar_mthly_bill.anl_dmsn4], [gf_ar_mthly_bill.wrtof_dtl_cnt], [gf_ar_mthly_bill.to_wrtof_dtl_cnt],
+       [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.last_moder], [gf_ar_mthly_bill.gmt_create], [gf_ar_mthly_bill.gmt_modified], [gf_ar_mthly_bill.charge_tp],
+       [gf_ar_mthly_bill.stl_ip_role_id], [gf_ar_mthly_bill.svc_amt], [gf_ar_mthly_bill.inved_amt], [gf_ar_mthly_bill.chk_st], [gf_ar_mthly_bill.acnt_day], [gf_ar_mthly_bill.inv_amt],
+       [gf_ar_mthly_bill.rel_inv_amt], [gf_ar_mthly_bill.tp], [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id],
+       [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt], [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt],
+       [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source], [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone],
+       [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth], [gf_ar_mthly_bill.auto_writeoff_group_no]), filter(nil), rowset=16
+      force partition granule
+  3 - output([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,substr(gf_ar_mthly_bill.bill_no,
+       23, 2))], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id], [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp],
+       [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt], [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt],
+       [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac], [gf_ar_mthly_bill.pay_way], [gf_ar_mthly_bill.pay_orig], [gf_ar_mthly_bill.clcn_bsc_amt],
+       [gf_ar_mthly_bill.clcn_bsc_tp], [gf_ar_mthly_bill.clcn_mthd], [gf_ar_mthly_bill.chrg_itm_code], [gf_ar_mthly_bill.ccy], [gf_ar_mthly_bill.bill_amt], [gf_ar_mthly_bill.adj_amt],
+       [gf_ar_mthly_bill.rcvd_amt], [gf_ar_mthly_bill.tax_tp], [gf_ar_mthly_bill.tax_rate], [gf_ar_mthly_bill.tax_amt], [gf_ar_mthly_bill.exn_inf], [gf_ar_mthly_bill.anl_dmsn1],
+       [gf_ar_mthly_bill.anl_dmsn2], [gf_ar_mthly_bill.anl_dmsn3], [gf_ar_mthly_bill.anl_dmsn4], [gf_ar_mthly_bill.wrtof_dtl_cnt], [gf_ar_mthly_bill.to_wrtof_dtl_cnt],
+       [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.last_moder], [gf_ar_mthly_bill.gmt_create], [gf_ar_mthly_bill.gmt_modified], [gf_ar_mthly_bill.charge_tp],
+       [gf_ar_mthly_bill.stl_ip_role_id], [gf_ar_mthly_bill.svc_amt], [gf_ar_mthly_bill.inved_amt], [gf_ar_mthly_bill.chk_st], [gf_ar_mthly_bill.acnt_day], [gf_ar_mthly_bill.inv_amt],
+       [gf_ar_mthly_bill.rel_inv_amt], [gf_ar_mthly_bill.tp], [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id],
+       [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt], [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt],
+       [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source], [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone],
+       [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth], [gf_ar_mthly_bill.auto_writeoff_group_no]), filter(nil), rowset=16
       access([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id],
        [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp], [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt],
        [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt], [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac],
@@ -3342,10 +3386,9 @@ Outputs & filters:
        [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id], [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt],
        [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt], [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source],
        [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone], [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth],
-       [gf_ar_mthly_bill.auto_writeoff_group_no]), partitions(p0)
-      is_index_back=true, is_global_index=true, 
-      range_key([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.shadow_pk_0], [gf_ar_mthly_bill.shadow_pk_1]), range(MIN,MIN,
-      MIN,MIN ; MAX,MAX,MAX,MAX)always true
+       [gf_ar_mthly_bill.auto_writeoff_group_no]), partitions(p[0-8])
+      is_index_back=false, is_global_index=false, 
+      range_key([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no]), range(MIN,MIN ; MAX,MAX)always true
 select * from gf_ar_mthly_bill;
 +-------------+------------------------------------+-------+------------+---------+---------+-------+---------+---------+---------+--------------+-------------+----------+---------+----------------------------+----------+----------+---------+----------+--------------+-------------+-----------+---------------+-----+----------+---------+----------+--------+------------+---------+---------+-----------+-----------+-----------+-----------+---------------+------------------+---------+------------+----------------------------+----------------------------+-----------+----------------+---------+-----------+--------+----------+---------+-------------+------+------------------+-----------+----------------+------------+---------+-----------+----------------+--------------+---------+------------+-----------------+----------------+----------------+------------------+---------------+------------------------+--------------+
 | tnt_inst_id | bill_no                            | ip_id | ip_role_id | inst_id | pd_code | ar_no | bill_tp | setl_tp | bill_st | bill_strt_dt | bill_end_dt | bill_mth | acrd_dt | gmt_pay                    | payee_ac | payer_ac | pay_way | pay_orig | clcn_bsc_amt | clcn_bsc_tp | clcn_mthd | chrg_itm_code | ccy | bill_amt | adj_amt | rcvd_amt | tax_tp | tax_rate   | tax_amt | exn_inf | anl_dmsn1 | anl_dmsn2 | anl_dmsn3 | anl_dmsn4 | wrtof_dtl_cnt | to_wrtof_dtl_cnt | rcrd_id | last_moder | gmt_create                 | gmt_modified               | charge_tp | stl_ip_role_id | svc_amt | inved_amt | chk_st | acnt_day | inv_amt | rel_inv_amt | tp   | payer_ip_role_id | sgn_ip_id | sgn_ip_role_id | chking_amt | frz_amt | chked_amt | writingoff_amt | svc_bill_amt | svc_ccy | env_source | metadata_source | setl_time_zone | actg_time_zone | inter_trade_flag | actg_bill_mth | auto_writeoff_group_no | partition_id |
@@ -3487,26 +3530,70 @@ update gf_ar_mthly_bill
 
 EXPLAIN BASIC select * from gf_ar_mthly_bill;
 Query Plan
-=========================================================================
-|ID|OPERATOR                   |NAME                                    |
--------------------------------------------------------------------------
-|0 |DISTRIBUTED TABLE FULL SCAN|gf_ar_mthly_bill(uk_tnt_inst_id_rcrd_id)|
-=========================================================================
+===============================================
+|ID|OPERATOR                 |NAME            |
+-----------------------------------------------
+|0 |PX COORDINATOR           |                |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000        |
+|2 |  └─PX PARTITION ITERATOR|                |
+|3 |    └─TABLE FULL SCAN    |gf_ar_mthly_bill|
+===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id],
-       [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp], [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt],
-       [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt], [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac],
-       [gf_ar_mthly_bill.pay_way], [gf_ar_mthly_bill.pay_orig], [gf_ar_mthly_bill.clcn_bsc_amt], [gf_ar_mthly_bill.clcn_bsc_tp], [gf_ar_mthly_bill.clcn_mthd],
-       [gf_ar_mthly_bill.chrg_itm_code], [gf_ar_mthly_bill.ccy], [gf_ar_mthly_bill.bill_amt], [gf_ar_mthly_bill.adj_amt], [gf_ar_mthly_bill.rcvd_amt], [gf_ar_mthly_bill.tax_tp],
-       [gf_ar_mthly_bill.tax_rate], [gf_ar_mthly_bill.tax_amt], [gf_ar_mthly_bill.exn_inf], [gf_ar_mthly_bill.anl_dmsn1], [gf_ar_mthly_bill.anl_dmsn2], [gf_ar_mthly_bill.anl_dmsn3],
-       [gf_ar_mthly_bill.anl_dmsn4], [gf_ar_mthly_bill.wrtof_dtl_cnt], [gf_ar_mthly_bill.to_wrtof_dtl_cnt], [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.last_moder],
-       [gf_ar_mthly_bill.gmt_create], [gf_ar_mthly_bill.gmt_modified], [gf_ar_mthly_bill.charge_tp], [gf_ar_mthly_bill.stl_ip_role_id], [gf_ar_mthly_bill.svc_amt],
-       [gf_ar_mthly_bill.inved_amt], [gf_ar_mthly_bill.chk_st], [gf_ar_mthly_bill.acnt_day], [gf_ar_mthly_bill.inv_amt], [gf_ar_mthly_bill.rel_inv_amt], [gf_ar_mthly_bill.tp],
-       [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id], [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt],
-       [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt], [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source],
-       [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone], [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth],
-       [gf_ar_mthly_bill.auto_writeoff_group_no], [column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,substr(gf_ar_mthly_bill.bill_no, 23, 2))]), filter(nil), rowset=16
+  0 - output([INTERNAL_FUNCTION(gf_ar_mthly_bill.tnt_inst_id, gf_ar_mthly_bill.bill_no, gf_ar_mthly_bill.ip_id, gf_ar_mthly_bill.ip_role_id, gf_ar_mthly_bill.inst_id,
+       gf_ar_mthly_bill.pd_code, gf_ar_mthly_bill.ar_no, gf_ar_mthly_bill.bill_tp, gf_ar_mthly_bill.setl_tp, gf_ar_mthly_bill.bill_st, gf_ar_mthly_bill.bill_strt_dt,
+       gf_ar_mthly_bill.bill_end_dt, gf_ar_mthly_bill.bill_mth, gf_ar_mthly_bill.acrd_dt, gf_ar_mthly_bill.gmt_pay, gf_ar_mthly_bill.payee_ac, gf_ar_mthly_bill.payer_ac,
+       gf_ar_mthly_bill.pay_way, gf_ar_mthly_bill.pay_orig, gf_ar_mthly_bill.clcn_bsc_amt, gf_ar_mthly_bill.clcn_bsc_tp, gf_ar_mthly_bill.clcn_mthd, gf_ar_mthly_bill.chrg_itm_code,
+       gf_ar_mthly_bill.ccy, gf_ar_mthly_bill.bill_amt, gf_ar_mthly_bill.adj_amt, gf_ar_mthly_bill.rcvd_amt, gf_ar_mthly_bill.tax_tp, gf_ar_mthly_bill.tax_rate,
+       gf_ar_mthly_bill.tax_amt, gf_ar_mthly_bill.exn_inf, gf_ar_mthly_bill.anl_dmsn1, gf_ar_mthly_bill.anl_dmsn2, gf_ar_mthly_bill.anl_dmsn3, gf_ar_mthly_bill.anl_dmsn4,
+       gf_ar_mthly_bill.wrtof_dtl_cnt, gf_ar_mthly_bill.to_wrtof_dtl_cnt, gf_ar_mthly_bill.rcrd_id, gf_ar_mthly_bill.last_moder, gf_ar_mthly_bill.gmt_create, 
+      gf_ar_mthly_bill.gmt_modified, gf_ar_mthly_bill.charge_tp, gf_ar_mthly_bill.stl_ip_role_id, gf_ar_mthly_bill.svc_amt, gf_ar_mthly_bill.inved_amt, gf_ar_mthly_bill.chk_st,
+       gf_ar_mthly_bill.acnt_day, gf_ar_mthly_bill.inv_amt, gf_ar_mthly_bill.rel_inv_amt, gf_ar_mthly_bill.tp, gf_ar_mthly_bill.payer_ip_role_id, gf_ar_mthly_bill.sgn_ip_id,
+       gf_ar_mthly_bill.sgn_ip_role_id, gf_ar_mthly_bill.chking_amt, gf_ar_mthly_bill.frz_amt, gf_ar_mthly_bill.chked_amt, gf_ar_mthly_bill.writingoff_amt, gf_ar_mthly_bill.svc_bill_amt,
+       gf_ar_mthly_bill.svc_ccy, gf_ar_mthly_bill.env_source, gf_ar_mthly_bill.metadata_source, gf_ar_mthly_bill.setl_time_zone, gf_ar_mthly_bill.actg_time_zone,
+       gf_ar_mthly_bill.inter_trade_flag, gf_ar_mthly_bill.actg_bill_mth, gf_ar_mthly_bill.auto_writeoff_group_no, column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,
+      substr(gf_ar_mthly_bill.bill_no, 23, 2)))]), filter(nil), rowset=16
+  1 - output([INTERNAL_FUNCTION(gf_ar_mthly_bill.tnt_inst_id, gf_ar_mthly_bill.bill_no, gf_ar_mthly_bill.ip_id, gf_ar_mthly_bill.ip_role_id, gf_ar_mthly_bill.inst_id,
+       gf_ar_mthly_bill.pd_code, gf_ar_mthly_bill.ar_no, gf_ar_mthly_bill.bill_tp, gf_ar_mthly_bill.setl_tp, gf_ar_mthly_bill.bill_st, gf_ar_mthly_bill.bill_strt_dt,
+       gf_ar_mthly_bill.bill_end_dt, gf_ar_mthly_bill.bill_mth, gf_ar_mthly_bill.acrd_dt, gf_ar_mthly_bill.gmt_pay, gf_ar_mthly_bill.payee_ac, gf_ar_mthly_bill.payer_ac,
+       gf_ar_mthly_bill.pay_way, gf_ar_mthly_bill.pay_orig, gf_ar_mthly_bill.clcn_bsc_amt, gf_ar_mthly_bill.clcn_bsc_tp, gf_ar_mthly_bill.clcn_mthd, gf_ar_mthly_bill.chrg_itm_code,
+       gf_ar_mthly_bill.ccy, gf_ar_mthly_bill.bill_amt, gf_ar_mthly_bill.adj_amt, gf_ar_mthly_bill.rcvd_amt, gf_ar_mthly_bill.tax_tp, gf_ar_mthly_bill.tax_rate,
+       gf_ar_mthly_bill.tax_amt, gf_ar_mthly_bill.exn_inf, gf_ar_mthly_bill.anl_dmsn1, gf_ar_mthly_bill.anl_dmsn2, gf_ar_mthly_bill.anl_dmsn3, gf_ar_mthly_bill.anl_dmsn4,
+       gf_ar_mthly_bill.wrtof_dtl_cnt, gf_ar_mthly_bill.to_wrtof_dtl_cnt, gf_ar_mthly_bill.rcrd_id, gf_ar_mthly_bill.last_moder, gf_ar_mthly_bill.gmt_create, 
+      gf_ar_mthly_bill.gmt_modified, gf_ar_mthly_bill.charge_tp, gf_ar_mthly_bill.stl_ip_role_id, gf_ar_mthly_bill.svc_amt, gf_ar_mthly_bill.inved_amt, gf_ar_mthly_bill.chk_st,
+       gf_ar_mthly_bill.acnt_day, gf_ar_mthly_bill.inv_amt, gf_ar_mthly_bill.rel_inv_amt, gf_ar_mthly_bill.tp, gf_ar_mthly_bill.payer_ip_role_id, gf_ar_mthly_bill.sgn_ip_id,
+       gf_ar_mthly_bill.sgn_ip_role_id, gf_ar_mthly_bill.chking_amt, gf_ar_mthly_bill.frz_amt, gf_ar_mthly_bill.chked_amt, gf_ar_mthly_bill.writingoff_amt, gf_ar_mthly_bill.svc_bill_amt,
+       gf_ar_mthly_bill.svc_ccy, gf_ar_mthly_bill.env_source, gf_ar_mthly_bill.metadata_source, gf_ar_mthly_bill.setl_time_zone, gf_ar_mthly_bill.actg_time_zone,
+       gf_ar_mthly_bill.inter_trade_flag, gf_ar_mthly_bill.actg_bill_mth, gf_ar_mthly_bill.auto_writeoff_group_no, column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,
+      substr(gf_ar_mthly_bill.bill_no, 23, 2)))]), filter(nil), rowset=16
+      dop=1
+  2 - output([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,substr(gf_ar_mthly_bill.bill_no,
+       23, 2))], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id], [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp],
+       [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt], [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt],
+       [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac], [gf_ar_mthly_bill.pay_way], [gf_ar_mthly_bill.pay_orig], [gf_ar_mthly_bill.clcn_bsc_amt],
+       [gf_ar_mthly_bill.clcn_bsc_tp], [gf_ar_mthly_bill.clcn_mthd], [gf_ar_mthly_bill.chrg_itm_code], [gf_ar_mthly_bill.ccy], [gf_ar_mthly_bill.bill_amt], [gf_ar_mthly_bill.adj_amt],
+       [gf_ar_mthly_bill.rcvd_amt], [gf_ar_mthly_bill.tax_tp], [gf_ar_mthly_bill.tax_rate], [gf_ar_mthly_bill.tax_amt], [gf_ar_mthly_bill.exn_inf], [gf_ar_mthly_bill.anl_dmsn1],
+       [gf_ar_mthly_bill.anl_dmsn2], [gf_ar_mthly_bill.anl_dmsn3], [gf_ar_mthly_bill.anl_dmsn4], [gf_ar_mthly_bill.wrtof_dtl_cnt], [gf_ar_mthly_bill.to_wrtof_dtl_cnt],
+       [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.last_moder], [gf_ar_mthly_bill.gmt_create], [gf_ar_mthly_bill.gmt_modified], [gf_ar_mthly_bill.charge_tp],
+       [gf_ar_mthly_bill.stl_ip_role_id], [gf_ar_mthly_bill.svc_amt], [gf_ar_mthly_bill.inved_amt], [gf_ar_mthly_bill.chk_st], [gf_ar_mthly_bill.acnt_day], [gf_ar_mthly_bill.inv_amt],
+       [gf_ar_mthly_bill.rel_inv_amt], [gf_ar_mthly_bill.tp], [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id],
+       [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt], [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt],
+       [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source], [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone],
+       [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth], [gf_ar_mthly_bill.auto_writeoff_group_no]), filter(nil), rowset=16
+      force partition granule
+  3 - output([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [column_conv(VARCHAR,utf8mb4_bin,length:4,NULL,substr(gf_ar_mthly_bill.bill_no,
+       23, 2))], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id], [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp],
+       [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt], [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt],
+       [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac], [gf_ar_mthly_bill.pay_way], [gf_ar_mthly_bill.pay_orig], [gf_ar_mthly_bill.clcn_bsc_amt],
+       [gf_ar_mthly_bill.clcn_bsc_tp], [gf_ar_mthly_bill.clcn_mthd], [gf_ar_mthly_bill.chrg_itm_code], [gf_ar_mthly_bill.ccy], [gf_ar_mthly_bill.bill_amt], [gf_ar_mthly_bill.adj_amt],
+       [gf_ar_mthly_bill.rcvd_amt], [gf_ar_mthly_bill.tax_tp], [gf_ar_mthly_bill.tax_rate], [gf_ar_mthly_bill.tax_amt], [gf_ar_mthly_bill.exn_inf], [gf_ar_mthly_bill.anl_dmsn1],
+       [gf_ar_mthly_bill.anl_dmsn2], [gf_ar_mthly_bill.anl_dmsn3], [gf_ar_mthly_bill.anl_dmsn4], [gf_ar_mthly_bill.wrtof_dtl_cnt], [gf_ar_mthly_bill.to_wrtof_dtl_cnt],
+       [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.last_moder], [gf_ar_mthly_bill.gmt_create], [gf_ar_mthly_bill.gmt_modified], [gf_ar_mthly_bill.charge_tp],
+       [gf_ar_mthly_bill.stl_ip_role_id], [gf_ar_mthly_bill.svc_amt], [gf_ar_mthly_bill.inved_amt], [gf_ar_mthly_bill.chk_st], [gf_ar_mthly_bill.acnt_day], [gf_ar_mthly_bill.inv_amt],
+       [gf_ar_mthly_bill.rel_inv_amt], [gf_ar_mthly_bill.tp], [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id],
+       [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt], [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt],
+       [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source], [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone],
+       [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth], [gf_ar_mthly_bill.auto_writeoff_group_no]), filter(nil), rowset=16
       access([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no], [gf_ar_mthly_bill.ip_id], [gf_ar_mthly_bill.ip_role_id], [gf_ar_mthly_bill.inst_id],
        [gf_ar_mthly_bill.pd_code], [gf_ar_mthly_bill.ar_no], [gf_ar_mthly_bill.bill_tp], [gf_ar_mthly_bill.setl_tp], [gf_ar_mthly_bill.bill_st], [gf_ar_mthly_bill.bill_strt_dt],
        [gf_ar_mthly_bill.bill_end_dt], [gf_ar_mthly_bill.bill_mth], [gf_ar_mthly_bill.acrd_dt], [gf_ar_mthly_bill.gmt_pay], [gf_ar_mthly_bill.payee_ac], [gf_ar_mthly_bill.payer_ac],
@@ -3519,10 +3606,9 @@ Outputs & filters:
        [gf_ar_mthly_bill.payer_ip_role_id], [gf_ar_mthly_bill.sgn_ip_id], [gf_ar_mthly_bill.sgn_ip_role_id], [gf_ar_mthly_bill.chking_amt], [gf_ar_mthly_bill.frz_amt],
        [gf_ar_mthly_bill.chked_amt], [gf_ar_mthly_bill.writingoff_amt], [gf_ar_mthly_bill.svc_bill_amt], [gf_ar_mthly_bill.svc_ccy], [gf_ar_mthly_bill.env_source],
        [gf_ar_mthly_bill.metadata_source], [gf_ar_mthly_bill.setl_time_zone], [gf_ar_mthly_bill.actg_time_zone], [gf_ar_mthly_bill.inter_trade_flag], [gf_ar_mthly_bill.actg_bill_mth],
-       [gf_ar_mthly_bill.auto_writeoff_group_no]), partitions(p0)
-      is_index_back=true, is_global_index=true, 
-      range_key([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.rcrd_id], [gf_ar_mthly_bill.shadow_pk_0], [gf_ar_mthly_bill.shadow_pk_1]), range(MIN,MIN,
-      MIN,MIN ; MAX,MAX,MAX,MAX)always true
+       [gf_ar_mthly_bill.auto_writeoff_group_no]), partitions(p[0-8])
+      is_index_back=false, is_global_index=false, 
+      range_key([gf_ar_mthly_bill.tnt_inst_id], [gf_ar_mthly_bill.bill_no]), range(MIN,MIN ; MAX,MAX)always true
 select * from gf_ar_mthly_bill;
 +-------------+------------------------------------+-------+------------+---------+---------+-------+---------+---------+---------+--------------+-------------+----------+---------+----------------------------+----------+----------+---------+----------+--------------+-------------+-----------+---------------+-----+----------+---------+----------+--------+------------+---------+---------+-----------+-----------+-----------+-----------+---------------+------------------+---------+------------+----------------------------+----------------------------+-----------+----------------+---------+-----------+--------+----------+---------+-------------+------+------------------+-----------+----------------+------------+---------+-----------+----------------+--------------+---------+------------+-----------------+----------------+----------------+------------------+---------------+------------------------+--------------+
 | tnt_inst_id | bill_no                            | ip_id | ip_role_id | inst_id | pd_code | ar_no | bill_tp | setl_tp | bill_st | bill_strt_dt | bill_end_dt | bill_mth | acrd_dt | gmt_pay                    | payee_ac | payer_ac | pay_way | pay_orig | clcn_bsc_amt | clcn_bsc_tp | clcn_mthd | chrg_itm_code | ccy | bill_amt | adj_amt | rcvd_amt | tax_tp | tax_rate   | tax_amt | exn_inf | anl_dmsn1 | anl_dmsn2 | anl_dmsn3 | anl_dmsn4 | wrtof_dtl_cnt | to_wrtof_dtl_cnt | rcrd_id | last_moder | gmt_create                 | gmt_modified               | charge_tp | stl_ip_role_id | svc_amt | inved_amt | chk_st | acnt_day | inv_amt | rel_inv_amt | tp   | payer_ip_role_id | sgn_ip_id | sgn_ip_role_id | chking_amt | frz_amt | chked_amt | writingoff_amt | svc_bill_amt | svc_ccy | env_source | metadata_source | setl_time_zone | actg_time_zone | inter_trade_flag | actg_bill_mth | auto_writeoff_group_no | partition_id |
