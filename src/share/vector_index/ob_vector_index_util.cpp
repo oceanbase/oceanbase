@@ -4538,7 +4538,8 @@ int ObVecExtraInfo::extra_infos_to_buf(ObIAllocator &allocator, const ObVecExtra
   return ret;
 }
 
-int ObVecExtraInfo::extra_buf_to_obj(const char *buf, int64_t data_len, int64_t extra_column_count, ObObj *obj)
+int ObVecExtraInfo::extra_buf_to_obj(const char *buf, int64_t data_len, int64_t extra_column_count, ObObj *obj,
+                                     const ObIArray<int64_t> *extra_in_rowkey_idxs_ /*nullptr*/)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || OB_ISNULL(obj)) {
@@ -4547,6 +4548,9 @@ int ObVecExtraInfo::extra_buf_to_obj(const char *buf, int64_t data_len, int64_t 
   } else if (extra_column_count <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(extra_column_count));
+  } else if (OB_NOT_NULL(extra_in_rowkey_idxs_) && extra_in_rowkey_idxs_->count() != extra_column_count) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(extra_in_rowkey_idxs_->count()), K(extra_column_count));
   } else {
     int64_t pos = 0;
     uint32_t len = 0;
@@ -4559,25 +4563,26 @@ int ObVecExtraInfo::extra_buf_to_obj(const char *buf, int64_t data_len, int64_t 
       }
     }
     for (int64_t i = 0; i < extra_column_count && OB_SUCC(ret); ++i) {
-      if (OB_ISNULL(obj + i)) {
+      int64_t real_idx = OB_ISNULL(extra_in_rowkey_idxs_) ? i : extra_in_rowkey_idxs_->at(i);
+      if (real_idx >= extra_column_count || OB_ISNULL(obj + real_idx)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("obj is null", K(ret), KP(obj + i));
+        LOG_WARN("obj is null or real_idx invalid", K(ret), K(real_idx), K(extra_in_rowkey_idxs_));
       } else {
-        common::ObObjDatumMapType obj_map_type = ObDatum::get_obj_datum_map_type(obj[i].get_type());
-        if (OB_UNLIKELY(!is_obj_type_supported(obj[i].get_type()))) {
+        common::ObObjDatumMapType obj_map_type = ObDatum::get_obj_datum_map_type(obj[real_idx].get_type());
+        if (OB_UNLIKELY(!is_obj_type_supported(obj[real_idx].get_type()))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("obj type not supported", K(ret), K(obj[i].get_type()));
+          LOG_WARN("obj type not supported", K(ret), K(obj[real_idx].get_type()));
         } else if (obj_map_type == common::ObObjDatumMapType::OBJ_DATUM_8BYTE_DATA ||
                    obj_map_type == common::ObObjDatumMapType::OBJ_DATUM_4BYTE_DATA ||
                    obj_map_type == common::ObObjDatumMapType::OBJ_DATUM_1BYTE_DATA) {
           len = ObDatum::get_reserved_size(obj_map_type);
-          memcpy(&obj[i].v_.uint64_, buf + pos, len);
+          memcpy(&obj[real_idx].v_.uint64_, buf + pos, len);
           pos += len;
         } else if (obj_map_type == common::ObObjDatumMapType::OBJ_DATUM_STRING) {
           len = *(int32_t *)(buf + pos);
           pos += sizeof(len);
-          obj[i].v_.string_ = buf + pos;
-          obj[i].val_len_ = len;
+          obj[real_idx].v_.string_ = buf + pos;
+          obj[real_idx].val_len_ = len;
           pos += len;
         }
       }
