@@ -78,6 +78,7 @@ enum ObVectorIndexRecordType
   VIRT_BITMAP,
   VIRT_SNAP, // snapshot index
   VIRT_DATA, // data tablet/table
+  VIRT_EMBEDDED, // embedded table
   VIRT_MAX
 };
 

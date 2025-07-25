@@ -108,6 +108,16 @@ constexpr const static char* const VEC_INDEX_ALGTH[ObVectorIndexDistAlgorithm::V
   "cosine",
 };
 
+enum ObVectorIndexSyncIntervalType
+{
+  VSIT_IMMEDIATE = 0,  // 'immediate'
+  VSIT_MANUAL = 1,     // 'manual'
+  VSIT_NUMERIC = 2,    // numeric value (seconds)
+  VSIT_MAX
+};
+
+static const int64_t OB_MAX_ENDPOINT_LENGTH = 512;
+
 struct ObIvfConstant {
   static const int SQ8_META_STEP_SIZE = 255;
   static const int SQ8_META_ROW_COUNT = 3; // max, min, step
@@ -132,8 +142,10 @@ struct ObVectorIndexParam
     type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0),
     nlist_(0), sample_per_nlist_(0), extra_info_max_size_(0), extra_info_actual_size_(0),
     refine_type_(0), bq_bits_query_(DEFAULT_BQ_BITS_QUERY),
-    refine_k_(DEFAULT_REFINE_K), bq_use_fht_(false)
-  {}
+    refine_k_(DEFAULT_REFINE_K), bq_use_fht_(false), sync_interval_type_(VSIT_MAX), sync_interval_value_(0)
+  {
+    MEMSET(endpoint_, 0, sizeof(endpoint_));
+  }
   void reset() {
     type_ = VIAT_MAX;
     lib_ = VIAL_MAX;
@@ -150,6 +162,9 @@ struct ObVectorIndexParam
     bq_bits_query_ = DEFAULT_BQ_BITS_QUERY;
     refine_k_= DEFAULT_REFINE_K;
     bq_use_fht_ = false;
+    sync_interval_type_ = VSIT_MAX;
+    sync_interval_value_ = 0;
+    MEMSET(endpoint_, 0, sizeof(endpoint_));
   };
   ObVectorIndexAlgorithmType type_;
   ObVectorIndexAlgorithmLib lib_;
@@ -168,11 +183,14 @@ struct ObVectorIndexParam
   int16_t bq_bits_query_;
   float refine_k_;
   bool bq_use_fht_;
+  ObVectorIndexSyncIntervalType sync_interval_type_;
+  int64_t sync_interval_value_;  // used when sync_interval_type_ is VSIT_NUMERIC
+  char endpoint_[OB_MAX_ENDPOINT_LENGTH];
   OB_UNIS_VERSION(1);
 public:
   TO_STRING_KV(K_(type), K_(lib), K_(dist_algorithm), K_(dim), K_(m), K_(ef_construction), K_(ef_search),
     K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size),
-    K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht));
+    K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht), K_(sync_interval_type), K_(sync_interval_value), K_(endpoint));
 };
 
 class ObExprVecIvfCenterIdCache
