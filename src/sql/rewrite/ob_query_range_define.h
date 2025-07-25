@@ -533,10 +533,11 @@ private:
   union {
     uint32_t flags_;
     struct {
-      uint32_t contain_geo_filters_  :  1;
-      uint32_t fast_nlj_range_       :  1;
-      uint32_t general_nlj_range_    :  1;
-      uint32_t reserved_             : 29;
+      uint32_t contain_geo_filters_    :  1;
+      uint32_t fast_nlj_range_         :  1;
+      uint32_t general_nlj_range_      :  1;
+      uint32_t enable_new_false_range_ :  1;
+      uint32_t reserved_               : 28;
     };
   };
 };

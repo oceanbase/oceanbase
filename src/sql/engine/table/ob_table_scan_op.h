@@ -241,7 +241,8 @@ public:
       uint64_t is_das_keep_order_            : 1; // whether das need keep ordering
       uint64_t use_index_merge_              : 1; // whether use index merge
       uint64_t ordering_used_by_parent_      : 1; // whether tsc ordering used by parent
-      uint64_t reserved_                     : 61;
+      uint64_t enable_new_false_range_       : 1; // whether use new false range
+      uint64_t reserved_                     : 60;
     };
   };
 };
