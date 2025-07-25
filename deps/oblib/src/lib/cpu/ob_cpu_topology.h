@@ -22,9 +22,6 @@ namespace oceanbase
 namespace common
 {
 int64_t get_cpu_count();
-
-bool cpu_have_avx();
-
 } // namespace common
 } // namespace oceanbase
 
