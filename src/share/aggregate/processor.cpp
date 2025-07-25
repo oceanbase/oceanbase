@@ -1321,6 +1321,7 @@ int Processor::ReuseAggCellMgr::save(RuntimeContext &agg_ctx, const char *agg_ro
     // do nothing
   } else {
     for (int i = 0; OB_SUCC(ret) && i < agg_ctx.aggr_infos_.count(); i++) {
+      if (agg_ctx.aggr_infos_.at(i).is_implicit_first_aggr()) { continue; }
       ObExprOperatorType expr_type = agg_ctx.aggr_infos_.at(i).get_expr_type();
       switch (expr_type) {
       case T_FUN_MIN:
@@ -1373,6 +1374,7 @@ int Processor::ReuseAggCellMgr::restore(RuntimeContext &agg_ctx, char *agg_row)
     // do nothing
   } else {
     for (int i = 0; OB_SUCC(ret) && i < agg_ctx.aggr_infos_.count(); i++) {
+      if (agg_ctx.aggr_infos_.at(i).is_implicit_first_aggr()) { continue; }
       ObExprOperatorType expr_type = agg_ctx.aggr_infos_.at(i).get_expr_type();
       switch(expr_type) {
       case T_FUN_MIN:
