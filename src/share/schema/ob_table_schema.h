@@ -2718,7 +2718,8 @@ inline bool ObSimpleTableSchemaV2::is_domain_index(const ObIndexType index_type)
          share::schema::is_vec_ivfflat_centroid_index(index_type) ||
          share::schema::is_vec_ivfpq_centroid_index(index_type) ||
          share::schema::is_vec_ivfsq8_centroid_index(index_type) ||
-         share::schema::is_vec_dim_docid_value_type(index_type);
+         share::schema::is_vec_dim_docid_value_type(index_type) ||
+         share::schema::is_hybrid_vec_index(index_type);
 }
 
 inline bool ObSimpleTableSchemaV2::is_fts_or_multivalue_index() const

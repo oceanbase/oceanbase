@@ -963,6 +963,7 @@ typedef enum ObItemType
   T_FUN_SYS_TMP_FILE_CLOSE = 1923,
   T_FUN_SYS_TMP_FILE_WRITE = 1924,
   T_FUN_SYS_TMP_FILE_READ = 1925,
+  T_FUN_SYS_HYBRID_VEC_CHUNK = 1926, // hybrid vector index
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,

@@ -170,6 +170,7 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_VEC_SPIV_DIM_COLUMN_FLAG (INT64_C(1) << 51)
 #define GENERATED_VEC_SPIV_VALUE_COLUMN_FLAG (INT64_C(1) << 52)
 #define GENERATED_VEC_SPIV_VEC_COLUMN_FLAG (INT64_C(1) << 53)
+#define GENERATED_HYBRID_VEC_CHUNK_COLUMN_FLAG (INT64_C(1) << 54)
 #define SPATIAL_COLUMN_SRID_MASK (0xffffffffffffffe0L)
 
 #define STORED_COLUMN_FLAGS_MASK 0xFFFFFFFF
@@ -405,12 +406,15 @@ enum ObIndexType
   INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY = 41,
   // sparse vector inverted index
   INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL = 42,
+  // hybrid vec
+  INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL = 43,
+  INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL = 44,
 
   /*
   * Attention!!! when add new index type,
   * need update func ObSimpleTableSchemaV2::should_not_validate_data_index_ckm()
   */
-  INDEX_TYPE_MAX = 43,
+  INDEX_TYPE_MAX = 45,
 };
 
 bool is_support_split_index_type(const ObIndexType index_type);
@@ -837,6 +841,16 @@ inline bool is_vec_ivfpq_rowkey_cid_index(const ObIndexType index_type)
   return index_type == INDEX_TYPE_VEC_IVFPQ_ROWKEY_CID_LOCAL;
 }
 
+inline bool is_hybrid_vec_index_log_type(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL;
+}
+
+inline bool is_hybrid_vec_index_embedded_type(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL;
+}
+
 inline bool is_local_vec_ivfflat_index(const ObIndexType index_type)
 {
   return is_vec_ivfflat_centroid_index(index_type) ||
@@ -900,7 +914,15 @@ inline bool is_local_vec_hnsw_index(const ObIndexType index_type)
          is_vec_vid_rowkey_type(index_type) ||
          is_vec_delta_buffer_type(index_type) ||
          is_vec_index_id_type(index_type) ||
-         is_vec_index_snapshot_data_type(index_type);
+         is_vec_index_snapshot_data_type(index_type) ||
+         is_hybrid_vec_index_log_type(index_type) ||
+         is_hybrid_vec_index_embedded_type(index_type);
+}
+
+inline bool is_local_hybrid_vec_index(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL ||
+         index_type == INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL;
 }
 
 inline bool is_doc_rowkey_aux(const ObIndexType index_type)
@@ -994,6 +1016,12 @@ inline bool is_vec_spiv_index_aux(const ObIndexType index_type)
   return index_type == INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL;
 }
 
+inline bool is_hybrid_vec_index(const ObIndexType index_type)
+{
+  return is_hybrid_vec_index_log_type(index_type)
+         || is_hybrid_vec_index_embedded_type(index_type);
+}
+
 inline bool is_built_in_multivalue_index(const ObIndexType index_type)
 {
   return is_rowkey_doc_aux(index_type)
@@ -1072,7 +1100,8 @@ inline bool is_vec_domain_index(const ObIndexType index_type)
 inline bool is_vec_index(const ObIndexType index_type)
 {
   return is_vec_domain_index(index_type) ||
-         is_built_in_vec_index(index_type);
+         is_built_in_vec_index(index_type) ||
+         is_hybrid_vec_index(index_type);
 }
 
 
