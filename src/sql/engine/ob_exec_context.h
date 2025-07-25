@@ -597,6 +597,7 @@ public:
   }
 
   ObDiagnosisManager& get_diagnosis_manager() { return diagnosis_manager_; }
+  common::ObArenaAllocator &get_deterministic_udf_cache_allocator() { return deterministic_udf_cache_allocator_; }
 
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
@@ -788,6 +789,7 @@ protected:
   AutoDopHashMap auto_dop_map_;
   bool force_local_plan_;
   ObDiagnosisManager diagnosis_manager_;
+  common::ObArenaAllocator deterministic_udf_cache_allocator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

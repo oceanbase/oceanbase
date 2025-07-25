@@ -19,6 +19,7 @@
 #include "sql/engine/expr/ob_i_expr_extra_info.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "sql/engine/subquery/ob_subplan_filter_op.h"
 
 namespace oceanbase
 {
@@ -32,6 +33,20 @@ class ObSchemaGetterGuard;
 namespace sql
 {
 typedef common::ParamStore ParamStore;
+
+class UDFArgRow : public DatumRow
+{
+public:
+  UDFArgRow() :
+    DatumRow(),
+    default_param_bitmap_()
+  {}
+
+  bool operator==(const UDFArgRow &other) const;
+  int hash(uint64_t &hash_val, uint64_t seed=0) const;
+
+  ObBitSet<> default_param_bitmap_;
+};
 
 // struct ObSqlCtx;
 struct ObExprUDFInfo : public ObIExprExtraInfo
@@ -77,13 +92,32 @@ class ObExprUDF : public ObFuncExprOperator
     public:
     ObExprUDFCtx() :
     ObExprOperatorCtx(),
+    row_level_alloc_(nullptr),
     param_store_buf_(nullptr),
-    params_(nullptr) {}
+    params_(nullptr),
+    row_key_(),
+    deterministic_udf_cache_max_size_(0),
+    enable_deterministic_result_cache_(false) {}
 
-    ~ObExprUDFCtx() {}
+    ~ObExprUDFCtx()
+    {
+      if (deterministic_result_cache_.created()) {
+        for (hash::ObHashMap<UDFArgRow, ObObj, common::hash::NoPthreadDefendMode>::iterator iter = deterministic_result_cache_.begin();
+            iter != deterministic_result_cache_.end();
+            iter++) {
+          if (iter->second.is_pl_extend()) {
+            pl::ObUserDefinedType::destruct_obj(iter->second, nullptr);
+          }
+        }
+        deterministic_result_cache_.destroy();
+      }
+    }
 
     int init_param_store(ObIAllocator &allocator,
                          int param_num);
+
+    int init_row_key(ObIAllocator &allocator, int64_t arg_cnt, const ObExprUDFInfo &info);
+
     void reuse()
     {
       if (OB_NOT_NULL(params_)) {
@@ -93,10 +127,23 @@ class ObExprUDF : public ObFuncExprOperator
 
     ParamStore* get_param_store() { return params_; }
     int64_t get_param_count() { return OB_ISNULL(params_) ? 0 : params_->count(); }
+    UDFArgRow &get_datum_row() { return row_key_; }
 
-    private:
+    int init_hashmap()
+    {
+      int64_t tenant_id = MTL_ID();
+      return deterministic_result_cache_.create(64 * 1024,
+                                                ObMemAttr(tenant_id, "UdfResult", ObCtxIds::DEFAULT_CTX_ID),
+                                                ObMemAttr(tenant_id, "UdfResultNode", ObCtxIds::DEFAULT_CTX_ID));
+    }
+    public:
+    ObIAllocator *row_level_alloc_;
     void* param_store_buf_;
     ParamStore* params_;
+    UDFArgRow row_key_;
+    int64_t deterministic_udf_cache_max_size_;
+    bool enable_deterministic_result_cache_;
+    common::hash::ObHashMap<UDFArgRow, common::ObObj, common::hash::NoPthreadDefendMode> deterministic_result_cache_;
   };
 
   OB_UNIS_VERSION(1);
@@ -116,7 +163,27 @@ public:
   static int build_udf_ctx(int64_t udf_ctx_id,
                            int64_t param_num,
                            ObExecContext &exec_ctx,
+                           const ObExprUDFInfo &info,
                            ObExprUDFCtx *&udf_ctx);
+
+  static int get_udf_cache(const ObExpr &expr,
+                            const ObObj *objs,
+                            ObEvalCtx &ctx,
+                            ObExprUDFCtx &udf_ctx,
+                            ObObj &result,
+                            bool &is_find);
+
+  static int add_udf_cache(ObEvalCtx &ctx,
+                            ObExprUDFCtx &udf_ctx,
+                            ObObj &result);
+
+  static int construct_hash_key(const ObExpr &expr,
+                                const ObObj *objs,
+                                ObEvalCtx &ctx,
+                                ObExprUDFCtx &udf_ctx);
+
+  static int get_deterministic_result_cache(ObExprUDFCtx &udf_ctx, ObObj &result, bool &is_find);
+  static int add_deterministic_result_cache(ObEvalCtx &ctx, ObExprUDFCtx &udf_ctx, ObObj &result);
 
   virtual inline void reset();
   virtual int assign(const ObExprOperator &other);
