@@ -1251,23 +1251,11 @@ int ObPLCompiler::generate_package_cursors(
         OZ (row_desc->deep_copy(package.get_allocator(), *(ast_cursor->get_row_desc()), false));
       }
       OZ (cursor_type.deep_copy(package.get_allocator(), ast_cursor->get_cursor_type()));
-      //Sql参数表达式,需要Copy下
-      ObSEArray<int64_t, 4> sql_params;
-      for (int64_t i = 0; OB_SUCC(ret) && i < ast_cursor->get_sql_params().count(); ++i) {
-        ObRawExpr *expr = NULL;
-        CK (OB_NOT_NULL(package_ast.get_expr(ast_cursor->get_sql_params().at(i))));
-        OZ (ObPLExprCopier::copy_expr(package.get_expr_factory(),
-                                      package_ast.get_expr(ast_cursor->get_sql_params().at(i)),
-                                      expr));
-        CK (OB_NOT_NULL(expr));
-        //不再构造Exprs,直接将表达式存在int64的数组上
-        OZ (sql_params.push_back(reinterpret_cast<int64_t>(expr)));
-      }
       OZ (cursor_table.add_cursor(ast_cursor->get_package_id(),
                                   ast_cursor->get_routine_id(),
-                                  ast_cursor->get_index(),//代表在Package符号表中的位置
-                                  sql,//Cursor Sql
-                                  sql_params,//Cursor参数表达式
+                                  ast_cursor->get_index(),
+                                  sql,
+                                  ast_cursor->get_sql_params(),
                                   ps_sql,
                                   ast_cursor->get_stmt_type(),
                                   ast_cursor->is_for_update(),
@@ -1278,7 +1266,9 @@ int ObPLCompiler::generate_package_cursors(
                                   cursor_type,
                                   ast_cursor->get_formal_params(),
                                   ast_cursor->get_state(),
-                                  ast_cursor->is_dup_column()));
+                                  ast_cursor->is_dup_column(),
+                                  ast_cursor->is_skip_locked(),
+                                  ast_cursor->get_package_body_id()));
     }
   }
   return ret;

@@ -319,7 +319,8 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
                                 const common::ObIArray<int64_t> &formal_params, //cursor的形参
                                 ObPLCursor::CursorState state,
                                 bool has_dup_column_name,
-                                bool skip_locked)
+                                bool skip_locked,
+                                uint64_t package_body_id)
 {
   int ret = OB_SUCCESS;
   // CK (OB_LIKELY(cursors_.count() < FUNC_MAX_CURSORS));
@@ -343,6 +344,7 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
       cursor->set_state(state);
       cursor->set_rowid_table_id(rowid_table_id);
       cursor->set_skip_locked(skip_locked);
+      cursor->set_package_body_id(package_body_id);
       if (has_dup_column_name) {
         cursor->set_dup_column();
       }
