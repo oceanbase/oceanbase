@@ -570,7 +570,7 @@ void ObArchiveLSMgr::gc_stale_ls_task_(const ArchiveKey &key, const bool is_in_d
   if (OB_FAIL(ls_map_.remove_if(functor))) {
     ARCHIVE_LOG(WARN, "ls_map for each failed", KR(ret));
   } else {
-    ARCHIVE_LOG(INFO, "gc stale ls task succ");
+    ARCHIVE_LOG(TRACE, "gc stale ls task succ");
   }
 }
 
