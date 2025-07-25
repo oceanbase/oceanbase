@@ -27,6 +27,7 @@
 #include "sql/ob_sql_utils.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
 #include "sql/udr/ob_udr_struct.h"
+#include "sql/plan_cache/ob_plan_cache_param_constraint.h"
 
 namespace oceanbase
 {
@@ -405,7 +406,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       is_arraybinding_(false),
       exist_local_plan_(false),
       compare_plan_(nullptr),
-      flag_(0)
+      flag_(0),
+      params_constraint_(allocator)
   {
     fp_result_.pc_key_.mode_ = mode_;
   }
@@ -483,7 +485,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(is_batch_insert_opt_),
     K(is_arraybinding_),
     K(exist_local_plan_),
-    K(flag_)
+    K(flag_),
+    K(params_constraint_)
     );
   PlanCacheMode mode_; //control use which variables to do match
 
@@ -565,6 +568,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     };
     uint16_t flag_;
   };
+  common::ObFixedArray<ObPCParamConstraint *, common::ObIAllocator> params_constraint_;
 };
 
 struct ObPlanCacheStat

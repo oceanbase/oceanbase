@@ -179,7 +179,8 @@ public:
         can_skip_params_match_(false),
         can_delay_init_datum_store_(false),
         resource_map_rule_(),
-        is_cli_return_rowid_(false)
+        is_cli_return_rowid_(false),
+        params_constraint_(alloc_)
   {}
   virtual ~ObPlanSet();
 
@@ -316,6 +317,7 @@ public:
   //variable for resource map rule
   ObPCResourceMapRule resource_map_rule_;
   bool is_cli_return_rowid_;
+  common::ObFixedArray<ObPCParamConstraint *, common::ObIAllocator> params_constraint_;
 };
 
 class ObSqlPlanSet : public ObPlanSet
