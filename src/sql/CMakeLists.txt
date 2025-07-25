@@ -1243,6 +1243,7 @@ ob_set_subtarget(ob_sql plan_cache
   plan_cache/ob_plan_match_helper.cpp
   plan_cache/ob_values_table_compression.cpp
   plan_cache/ob_adaptive_auto_dop.cpp
+  plan_cache/ob_plan_cache_param_constraint.cpp
 )
 
 ob_set_subtarget(ob_sql printer

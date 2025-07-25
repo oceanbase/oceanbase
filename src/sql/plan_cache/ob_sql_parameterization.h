@@ -25,6 +25,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/plan_cache/ob_id_manager_allocator.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
+#include "sql/plan_cache/ob_plan_cache_param_constraint.h"
 
 namespace oceanbase
 {
@@ -91,6 +92,7 @@ struct SqlInfo: public ParameterizationHashValue
   bool ps_need_parameterized_;
   common::ObSEArray<ObPCParseInfo, 4> parse_infos_;
   bool need_check_fp_;
+  common::ObSEArray<ObPCParamConstraint *, 4> params_constraint_;
 
   SqlInfo();
 };
@@ -231,7 +233,7 @@ private:
                        const bool *mark_arr,
                        int64_t arg_num,
                        SqlInfo &sql_info);
-  static int mark_tree(ParseNode *tree, SqlInfo &sql_info);
+  static int mark_tree(TransformTreeCtx &ctx, ParseNode *tree, SqlInfo &sql_info);
   static int get_related_user_vars(const ParseNode *tree, common::ObIArray<common::ObString> &user_vars);
 
   static int get_select_item_param_info(const common::ObIArray<ObPCParam *> &raw_params,

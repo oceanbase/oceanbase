@@ -198,6 +198,10 @@ int ObPlanSet::match_params_info(const ParamStore *params,
       OC( (match_constraint)(*params, is_same) );
     }
 
+    for (int i = 0; OB_SUCC(ret) && is_same && i < params_constraint_.count(); ++i) {
+      OZ((params_constraint_.at(i)->match(*params, NULL, is_same)));
+    }
+
     if (OB_SUCC(ret) && is_same) {
       if (OB_FAIL(match_multi_stmt_info(*params, multi_stmt_rowkey_pos_, is_same))) {
         LOG_WARN("failed to match multi stmt info", K(ret));
@@ -211,7 +215,7 @@ int ObPlanSet::match_params_info(const ParamStore *params,
       LOG_TRACE("after match param result", K(ret), K(is_same), K(params_info_));
     }
   }
-  LOG_DEBUG("after match param result", K(ret), K(is_same), K(params_info_));
+  LOG_DEBUG("after match param result", K(ret), K(is_same), K(params_info_), K(params_constraint_));
   return ret;
 }
 
@@ -617,6 +621,9 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
         const ParamStore &params = pc_ctx.exec_ctx_.get_physical_plan_ctx()->get_param_store();
         OC( (match_constraint)(params, is_same));
         OC( (match_cons)(pc_ctx, is_same));
+        for (int i = 0; OB_SUCC(ret) && is_same && i < params_constraint_.count(); ++i) {
+          OZ((params_constraint_.at(i)->match(params, NULL, is_same)));
+        }
       }
     }
   }
@@ -680,6 +687,7 @@ void ObPlanSet::reset()
   all_priv_constraints_.reset();
   can_skip_params_match_ = false;
   can_delay_init_datum_store_ = false;
+  params_constraint_.reset();
   alloc_.reset();
 }
 
@@ -838,6 +846,15 @@ int ObPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
     if (OB_SUCC(ret) && sql_ctx.is_do_insert_batch_opt()) {
       can_skip_params_match_ = can_skip_params_match();
       can_delay_init_datum_store_ = can_delay_init_datum_store();
+    }
+
+    if (OB_SUCC(ret) && pc_ctx.params_constraint_.count() > 0) {
+      OZ(params_constraint_.reserve(pc_ctx.params_constraint_.count()));
+      for (int i = 0; OB_SUCC(ret) && i < pc_ctx.params_constraint_.count(); ++i) {
+        ObPCParamConstraint *constraint = nullptr;
+        OZ(pc_ctx.params_constraint_.at(i)->deep_copy(alloc_, constraint));
+        OZ(params_constraint_.push_back(constraint));
+      }
     }
   }
 
