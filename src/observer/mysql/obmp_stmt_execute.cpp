@@ -2395,7 +2395,7 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
       {
         MEMCPY(&value, data, sizeof(value));
         data += sizeof(value);
-        if (lib::is_mysql_mode()) {
+        if (lib::is_mysql_mode() || is_complex_element) {
           param.set_double(value);
         } else {
           if (OB_ISNULL(session)) {
