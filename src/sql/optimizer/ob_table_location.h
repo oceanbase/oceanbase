@@ -618,10 +618,6 @@ public:
   }
   virtual ~ObTableLocation() { reset(); }
 
-  ObTableLocation(const ObTableLocation &other);
-
-  ObTableLocation &operator=(const ObTableLocation &other);
-
   int assign(const ObTableLocation &other);
 
   void reset();
@@ -1276,6 +1272,8 @@ public:
   {
     return part_hint_ids_;
   }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTableLocation);
 private:
   bool inited_;
   bool is_partitioned_;
