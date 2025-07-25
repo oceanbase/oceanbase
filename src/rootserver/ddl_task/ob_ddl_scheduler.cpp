@@ -1215,16 +1215,12 @@ void ObDDLScheduler::do_work()
   }
 }
 
-int ObDDLScheduler::check_conflict_with_upgrade(
-    const uint64_t tenant_id)
+int ObDDLScheduler::check_conflict_with_upgrade()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLScheduler has not been inited", K(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(tenant_id));
   } else if (GCONF.in_upgrade_mode()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Ddl task is disallowed to create when upgrading", K(ret));
@@ -1248,7 +1244,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLScheduler has not been inited", K(ret));
-  } else if (OB_FAIL(check_conflict_with_upgrade(param.tenant_id_))) {
+  } else if (OB_FAIL(check_conflict_with_upgrade())) {
     LOG_WARN("conflict with upgrade", K(ret), K(param));
   } else if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1763,6 +1759,8 @@ int ObDDLScheduler::schedule_auto_split_task()
     LOG_WARN("fail to pop tasks from auto_split_task_tree");
   } else if (task_array.count() == 0) {
     //do nothing
+  } else if (OB_FAIL(check_conflict_with_upgrade())) {
+    LOG_WARN("check conflict with upgrade failed", K(ret));
   } else {
     ObAutoSplitArgBuilder split_helper;
     ObArray<ObAutoSplitTask> failed_task;
