@@ -2769,6 +2769,8 @@ int ObMemtable::lock_(
     // Step5.2: record the latest schema info on the memtable
     set_max_data_schema_version(ctx.table_version_);
     set_max_column_cnt(column_cnt);
+    // for elr optimization
+    mem_ctx->set_row_updated();
 
     TRANS_LOG(TRACE, "lock end, success",
               "ret", ret,
@@ -2793,10 +2795,6 @@ int ObMemtable::lock_(
           ret = OB_TRANS_CANNOT_SERIALIZE;
         }
       }
-    }
-    if (OB_SUCC(ret)) {
-      // for elr optimization
-      mem_ctx->set_row_updated();
     }
   }
 
