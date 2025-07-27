@@ -1039,6 +1039,9 @@ typedef enum ObItemType
   T_FUN_TMP_FILE_CLOSE = 2079,
   T_FUN_TMP_FILE_WRITE = 2080,
   T_FUN_TMP_FILE_READ = 2081,
+  T_FUN_SYS_AI_COMPLETE = 2082,
+  T_FUN_SYS_AI_EMBED = 2083,
+  T_FUN_SYS_AI_RERANK = 2084,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
