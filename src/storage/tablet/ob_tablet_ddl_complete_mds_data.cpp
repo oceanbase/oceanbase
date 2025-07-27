@@ -17,6 +17,7 @@
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ddl/ob_direct_load_struct.h"
+#include "storage/multi_data_source/mds_key_serialize_util.h"
 
 #define USING_LOG_PREFIX MDS
 
@@ -25,8 +26,63 @@ using namespace oceanbase::transaction;
 
 namespace oceanbase
 {
+using namespace mds;
 namespace storage
 {
+/*
+ * ObTabletDDLCompleteMdsUserDataKey
+ */
+OB_SERIALIZE_MEMBER_SIMPLE(
+    ObTabletDDLCompleteMdsUserDataKey,
+    trans_id_);
+
+int ObTabletDDLCompleteMdsUserDataKey::mds_serialize(
+    char *buf,
+    const int64_t buf_len,
+    int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (pos >= buf_len) {
+    ret = OB_BUF_NOT_ENOUGH;
+  } else {
+    buf[pos++] = MAGIC_NUMBER;
+    ret = ObMdsSerializeUtil::mds_key_serialize(trans_id_, buf, buf_len, pos);
+  }
+  return ret;
+}
+
+int ObTabletDDLCompleteMdsUserDataKey::mds_deserialize(
+    const char *buf,
+    const int64_t buf_len,
+    int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp = 0;
+  uint8_t magic_number = 0;
+  if (pos >= buf_len) {
+    ret = OB_BUF_NOT_ENOUGH;
+  } else {
+    magic_number = buf[pos++];
+    if (magic_number != MAGIC_NUMBER) {
+      ob_abort();// compat case, just abort for fast fail
+    } else {
+      ret = ObMdsSerializeUtil::mds_key_deserialize(buf, buf_len, pos, tmp);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    trans_id_ = tmp;
+  }
+  return ret;
+}
+
+int64_t ObTabletDDLCompleteMdsUserDataKey::mds_get_serialize_size() const
+{
+  return sizeof(MAGIC_NUMBER) + ObMdsSerializeUtil::mds_key_get_serialize_size(trans_id_);
+}
+
+/*
+ * ObTabletDDLCompleteMdsUserData
+ */
 ObTabletDDLCompleteMdsUserData::ObTabletDDLCompleteMdsUserData():
     has_complete_(false), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID), data_format_version_(0), snapshot_version_(0), table_key_()
 {}

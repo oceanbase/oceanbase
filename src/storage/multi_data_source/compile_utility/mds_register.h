@@ -308,9 +308,9 @@ _GENERATE_MDS_UNIT_(KEY_TYPE, VALUE_TYPE, NEED_MULTI_VERSION)
   GENERATE_MDS_UNIT(::oceanbase::storage::ObTruncateInfoKey,\
                     ::oceanbase::storage::ObTruncateInfo,\
                     false)
-  GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
+  GENERATE_MDS_UNIT(::oceanbase::storage::ObTabletDDLCompleteMdsUserDataKey,\
                     ::oceanbase::storage::ObTabletDDLCompleteMdsUserData,\
-                    false)
+                    false) // FARM COMPAT WHITELIST
   GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
                     ::oceanbase::storage::ObTabletSplitInfoMdsUserData,\
                     false)
