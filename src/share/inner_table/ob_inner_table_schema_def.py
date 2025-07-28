@@ -8263,6 +8263,13 @@ def_table_schema(**gen_history_table_def(555, all_external_resource))
 # 560: __all_sensitive_rule_privilege
 # 561: __all_sensitive_rule_privilege_history
 # 562: __wr_sql_histogram
+# 563: __all_backup_validate_job
+# 564: __all_backup_validate_job_history
+# 565: __all_backup_validate_task
+# 566: __all_backup_validate_task_history
+# 567: __all_backup_validate_ls_task
+# 568: __all_backup_validate_ls_task_history
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -16828,6 +16835,12 @@ def_table_schema(
 # 12560: __all_virtual_sensitive_rule_privilege_history
 # 12561: __all_virtual_sql_histogram_cache
 # 12562: __all_virtual_wr_sql_histogram
+# 12563: __all_virtual_backup_validate_job
+# 12564: __all_virtual_backup_validate_job_history
+# 12565: __all_virtual_backup_validate_task
+# 12566: __all_virtual_backup_validate_task_history
+# 12567: __all_virtual_backup_validate_ls_task
+# 12568: __all_virtual_backup_validate_ls_task_history
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -17394,6 +17407,10 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15523', all_def_keyword
 # 15524: ALL_VIRTUAL_UNIT_SYS_AGENT
 # 15525: __all_virtual_sql_histogram_cache
 # 15526: __all_virtual_wr_sql_histogram
+# 15527: __all_virtual_backup_validate_job
+# 15528: __all_virtual_backup_validate_job_history
+# 15529: __all_virtual_backup_validate_task
+# 15530: __all_virtual_backup_validate_task_history
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -42890,6 +42907,14 @@ FROM
 # 21670: V$OB_SQL_HISTOGRAM
 # 21671: CDB_WR_SQL_HISTOGRAM
 # 21672: DBA_WR_SQL_HISTOGRAM
+# 21673: CDB_OB_BACKUP_VALIDATE_JOBS
+# 21674: CDB_OB_BACKUP_VALIDATE_JOB_HISTORY
+# 21675: CDB_OB_BACKUP_VALIDATE_TASKS
+# 21676: CDB_OB_BACKUP_VALIDATE_TASK_HISTORY
+# 21677: DBA_OB_BACKUP_VALIDATE_JOBS
+# 21678: DBA_OB_BACKUP_VALIDATE_JOB_HISTORY
+# 21679: DBA_OB_BACKUP_VALIDATE_TASKS
+# 21680: DBA_OB_BACKUP_VALIDATE_TASK_HISTORY
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -64994,6 +65019,11 @@ def_table_schema(
     AND C.IN_RECYCLEBIN = 0;
 """.replace("\n", " ")
 )
+
+# 25311: DBA_OB_BACKUP_VALIDATE_JOBS
+# 25312: DBA_OB_BACKUP_VALIDATE_JOB_HISTORY
+# 25313: DBA_OB_BACKUP_VALIDATE_TASKS
+# 25314: DBA_OB_BACKUP_VALIDATE_TASK_HISTORY
 
 #
 # 余留位置（此行之前占位）
