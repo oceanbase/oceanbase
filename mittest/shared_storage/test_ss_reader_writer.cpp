@@ -188,8 +188,10 @@ void TestSSReaderWriter::exhaust_tmp_file_disk_size(int64_t &avail_size)
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
   avail_size = disk_space_manager->get_macro_cache_free_size();
-  ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(avail_size, ObSSMacroCacheType::TMP_FILE)) << "call_times: " << call_times;
-  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192, ObSSMacroCacheType::TMP_FILE)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(avail_size,
+            ObSSMacroCacheType::TMP_FILE, false/*is_for_dir*/)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192,
+            ObSSMacroCacheType::TMP_FILE, false/*is_for_dir*/)) << "call_times: " << call_times;
 }
 
 void TestSSReaderWriter::alloc_tmp_file_disk_size(const int64_t disk_size)
@@ -198,8 +200,10 @@ void TestSSReaderWriter::alloc_tmp_file_disk_size(const int64_t disk_size)
   call_times++;
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
-  ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(disk_size, ObSSMacroCacheType::TMP_FILE)) << "call_times: " << call_times;
-  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192, ObSSMacroCacheType::TMP_FILE)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SUCCESS, disk_space_manager->alloc_file_size(disk_size,
+            ObSSMacroCacheType::TMP_FILE, false/*is_for_dir*/)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, disk_space_manager->alloc_file_size(8192,
+            ObSSMacroCacheType::TMP_FILE, false/*is_for_dir*/)) << "call_times: " << call_times;
 }
 
 void TestSSReaderWriter::release_tmp_file_disk_size(const int64_t avail_size)
@@ -208,7 +212,8 @@ void TestSSReaderWriter::release_tmp_file_disk_size(const int64_t avail_size)
   call_times++;
   ObTenantDiskSpaceManager *disk_space_manager = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_manager) << "call_times: " << call_times;
-  ASSERT_EQ(OB_SUCCESS, disk_space_manager->free_file_size(avail_size, ObSSMacroCacheType::TMP_FILE)) << "call_times: " << call_times;
+  ASSERT_EQ(OB_SUCCESS, disk_space_manager->free_file_size(avail_size,
+            ObSSMacroCacheType::TMP_FILE, false/*is_for_dir*/)) << "call_times: " << call_times;
 }
 
 void TestSSReaderWriter::check_tmp_file_disk_size_enough(const int64_t size)
