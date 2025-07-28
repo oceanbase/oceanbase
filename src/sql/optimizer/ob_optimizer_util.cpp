@@ -7978,39 +7978,6 @@ int ObOptimizerUtil::check_sharding_set_left_dominate(const ObIArray<ObShardingI
   return ret;
 }
 
-int ObOptimizerUtil::get_range_params(ObLogicalOperator *root,
-                                      ObIArray<ObRawExpr*> &range_exprs,
-                                      ObIArray<ObRawExpr*> &all_table_filters)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(root)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null logical operator", K(ret));
-  } else if (log_op_def::LOG_TABLE_SCAN == root->get_type()) {
-    ObLogTableScan *scan = static_cast<ObLogTableScan *>(root);
-    const ObCostTableScanInfo *info = scan->get_est_cost_info();
-    if (NULL != info && info->pushdown_prefix_filters_.count() > 0) {
-      if (OB_FAIL(append(range_exprs, info->pushdown_prefix_filters_))) {
-        LOG_WARN("failed to append range exprs", K(ret));
-      } else if (OB_FAIL(append(all_table_filters, info->pushdown_prefix_filters_))) {
-        LOG_WARN("failed to append pushdown prefix filters", K(ret));
-      } else if (OB_FAIL(append(all_table_filters, info->postfix_filters_))) {
-        LOG_WARN("failed to append pushdown prefix filters", K(ret));
-      } else if (OB_FAIL(append(all_table_filters, info->table_filters_))) {
-        LOG_WARN("failed to append pushdown prefix filters", K(ret));
-      }
-    }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < root->get_num_of_child(); ++i) {
-      ObLogicalOperator *child = root->get_child(i);
-      if (OB_FAIL(SMART_CALL(get_range_params(child, range_exprs, all_table_filters)))) {
-        LOG_WARN("failed to get range params", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObOptimizerUtil::check_basic_sharding_info(const ObAddr &local_addr,
                                                const ObIArray<ObLogicalOperator *> &child_ops,
                                                bool &is_basic)
