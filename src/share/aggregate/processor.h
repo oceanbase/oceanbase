@@ -182,8 +182,12 @@ public:
     for (int i = 0; supported && i < aggr_exprs.count(); i++) {
       ObAggFunRawExpr *agg_expr = static_cast<ObAggFunRawExpr *>(aggr_exprs.at(i));
       OB_ASSERT(agg_expr != NULL);
-      supported = aggregate::supported_aggregate_function(agg_expr->get_expr_type(),
-                                                          use_hash_rollup, has_rollup);
+      if (agg_expr->is_param_distinct() && (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_3_0)) {
+        supported = false;
+      } else {
+        supported = aggregate::supported_aggregate_function(agg_expr->get_expr_type(),
+							    use_hash_rollup, has_rollup);
+      }
     }
     return supported;
   }
