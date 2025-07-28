@@ -50,8 +50,7 @@ OB_INLINE int ip_distance_normal(const float *a, const float *b, const int64_t l
   return ret;
 }
 
-#if defined(__SSE2__) || defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__) || defined(__AVX512BW__)
-// SSE
+OB_DECLARE_SSE_AND_AVX_CODE(
 OB_INLINE static int ip_distance_simd4_avx128(const float *a, const float *b, const int64_t len, double &distance)
 {
   int ret = OB_SUCCESS;
@@ -85,8 +84,10 @@ OB_INLINE static int ip_distance_simd4_avx128_extra(const float *a, const float 
   }
   return ret;
 }
+)
 
-OB_INLINE static int ip_distance_avx128(const float *a, const float *b, const int64_t len, double &distance)
+OB_DECLARE_SSE42_SPECIFIC_CODE(
+inline static int ip_distance(const float *a, const float *b, const int64_t len, double &distance)
 {
   int ret = OB_SUCCESS;
   distance = 0;
@@ -99,10 +100,9 @@ OB_INLINE static int ip_distance_avx128(const float *a, const float *b, const in
   }
   return ret;
 }
-#endif
+)
 
-#if defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__) || defined(__AVX512BW__)
-// AVX2
+OB_DECLARE_AVX_ALL_CODE(
 OB_INLINE static int ip_distance_simd8_avx256(const float *a, const float *b, const int64_t len, double &distance)
 {
   int ret = OB_SUCCESS;
@@ -135,8 +135,10 @@ OB_INLINE static int ip_distance_simd8_avx256_extra(const float *a, const float 
   }
   return ret;
 }
+)
 
-OB_INLINE static int ip_distance_avx256(const float *a, const float *b, const int64_t len, double &distance)
+OB_DECLARE_AVX_AND_AVX2_CODE(
+inline static int ip_distance(const float *a, const float *b, const int64_t len, double &distance)
 {
   int ret = OB_SUCCESS;
   distance = 0;
@@ -153,10 +155,9 @@ OB_INLINE static int ip_distance_avx256(const float *a, const float *b, const in
   }
   return ret;
 }
-#endif
+)
 
-#if defined(__AVX512F__) || defined(__AVX512BW__)
-// AVX512
+OB_DECLARE_AVX512_SPECIFIC_CODE(
 OB_INLINE static int ip_distance_simd16_avx512(const float *a, const float *b, const int64_t len, double &distance)
 {
   int ret = OB_SUCCESS;
@@ -190,7 +191,7 @@ OB_INLINE static int ip_distance_simd16_avx512_extra(const float *a, const float
   return ret;
 }
 
-OB_INLINE static int ip_distance_avx512(const float *a, const float *b, const int64_t len, double &distance)
+inline static int ip_distance(const float *a, const float *b, const int64_t len, double &distance)
 {
   int ret = OB_SUCCESS;
   distance = 0;
@@ -211,50 +212,12 @@ OB_INLINE static int ip_distance_avx512(const float *a, const float *b, const in
   }
   return ret;
 }
-#endif
+)
 
 OB_DECLARE_DEFAULT_CODE (
 inline static int ip_distance(const float *a, const float *b, const int64_t len, double &distance)
 {
-  int ret = OB_SUCCESS;
-  #if defined(__SSE2__)
-  ret = ip_distance_avx128(a, b, len, distance);
-  #else
-  ret = ip_distance_normal(a, b, len, distance);
-  #endif
-  return ret;
-}
-)
-
-OB_DECLARE_AVX2_SPECIFIC_CODE (
-inline static int ip_distance(const float *a, const float *b, const int64_t len, double &distance)
-{
-  int ret = OB_SUCCESS;
-  #if defined(__AVX__) || defined(__AVX2__)
-  ret = ip_distance_avx256(a, b, len, distance);
-  #elif defined(__SSE2__)
-  ret = ip_distance_avx128(a, b, len, distance);
-  #else
-  ret = ip_distance_normal(a, b, len, distance);
-  #endif
-  return ret;
-}
-)
-
-OB_DECLARE_AVX512_SPECIFIC_CODE (
-inline static int ip_distance(const float *a, const float *b, const int64_t len, double &distance)
-{
-  int ret = OB_SUCCESS;
-  #if defined(__AVX512F__) || defined(__AVX512BW__)
-  ret = ip_distance_avx512(a, b, len, distance);
-  #elif defined(__AVX__) || defined(__AVX2__)
-  ret = ip_distance_avx256(a, b, len, distance);
-  #elif defined(__SSE2__)
-  ret = ip_distance_avx128(a, b, len, distance);
-  #else
-  ret = ip_distance_normal(a, b, len, distance);
-  #endif
-  return ret;
+  return ip_distance_normal(a, b, len, distance);
 }
 )
 

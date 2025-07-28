@@ -1310,15 +1310,14 @@ int ObDASIvfScanIter::parse_cid_vec_datum(
 template <typename T>
 int ObDASIvfScanIter::get_rowkeys_to_heap(const ObString &cid_str, int64_t cid_vec_pri_key_cnt,
                                           int64_t cid_vec_column_count, int64_t rowkey_cnt, bool is_vectorized,
-                                          ObVectorCenterClusterHelper<T, ObRowkey> &nearest_rowkey_heap)
+                                          ObVectorCenterClusterHelper<T, ObRowkey> &nearest_rowkey_heap,
+                                          bool &is_first_vec, bool &cid_vec_need_norm)
 {
   int ret = OB_SUCCESS;
   const ObDASScanCtDef *cid_vec_ctdef = vec_aux_ctdef_->get_vec_aux_tbl_ctdef(
       vec_aux_ctdef_->get_ivf_cid_vec_tbl_idx(), ObTSCIRScanType::OB_VEC_IVF_CID_VEC_SCAN);
   ObDASScanRtDef *cid_vec_rtdef = vec_aux_rtdef_->get_vec_aux_tbl_rtdef(vec_aux_ctdef_->get_ivf_cid_vec_tbl_idx());
   storage::ObTableScanIterator *cid_vec_scan_iter = nullptr;
-  bool is_first_vec = true;
-  bool cid_vec_need_norm = true;
   if (OB_FAIL(scan_cid_range(cid_str, cid_vec_pri_key_cnt, cid_vec_ctdef, cid_vec_rtdef, cid_vec_scan_iter))) {
     LOG_WARN("fail to scan cid range", K(ret), K(cid_str), K(cid_vec_pri_key_cnt));
   } else if (is_vectorized) {
@@ -1448,18 +1447,23 @@ int ObDASIvfScanIter::get_nearest_limit_rowkeys_in_cids(bool is_vectorized, T *s
   if (near_cid_.count() == 0) {
     // The situation of index creation with table creation
     ObString empty_cid;
+    bool is_first_vec = true;
+    bool cid_vec_need_norm = true;
     if (OB_FAIL(get_rowkeys_to_heap(empty_cid, cid_vec_pri_key_cnt, cid_vec_column_count, rowkey_cnt, is_vectorized,
-                                    nearest_rowkey_heap))) {
+                                    nearest_rowkey_heap, is_first_vec, cid_vec_need_norm))) {
       LOG_WARN("failed to get rowkeys to heap, when near_cid is empty", K(ret));
     }
   } else {
+    // for adaptor old version(< 4353), which cid_vec is not normlized in cosine dis
+    bool is_first_vec = true;
+    bool cid_vec_need_norm = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < near_cid_.count(); ++i) {
       const ObCenterId &cur_cid = near_cid_.at(i);
       if (OB_FALSE_IT(cid_str.assign_buffer(buf, buf_len))) {
       } else if (OB_FAIL(ObVectorClusterHelper::set_center_id_to_string(cur_cid, cid_str))) {
         LOG_WARN("failed to set center_id to string", K(ret), K(cur_cid), K(cid_str));
       } else if (OB_FAIL(get_rowkeys_to_heap(cid_str, cid_vec_pri_key_cnt, cid_vec_column_count, rowkey_cnt,
-                                             is_vectorized, nearest_rowkey_heap))) {
+                                             is_vectorized, nearest_rowkey_heap, is_first_vec, cid_vec_need_norm))) {
         LOG_WARN("failed to get rowkeys to heap", K(ret), K(cur_cid));
       }
     }

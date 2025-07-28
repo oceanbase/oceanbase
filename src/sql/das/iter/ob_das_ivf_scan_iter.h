@@ -398,7 +398,8 @@ protected:
   template <typename T>
   int get_rowkeys_to_heap(const ObString &cid_str, int64_t cid_vec_pri_key_cnt, int64_t cid_vec_column_count,
                           int64_t rowkey_cnt, bool is_vectorized,
-                          ObVectorCenterClusterHelper<T, ObRowkey> &nearest_rowkey_heap);
+                          ObVectorCenterClusterHelper<T, ObRowkey> &nearest_rowkey_heap, bool &is_first_vec,
+                          bool &cid_vec_need_norm);
   template <typename T>
   int get_nearest_limit_rowkeys_in_cids(bool is_vectorized, T *serch_vec);
   virtual int process_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorized);

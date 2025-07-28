@@ -21,10 +21,15 @@ int ObVectorIpDistance<float>::ip_distance_func(const float *a, const float *b, 
 {
   int ret = OB_SUCCESS;
 #if OB_USE_MULTITARGET_CODE
-  if (common::is_arch_supported(ObTargetArch::AVX512)) {
-    ret = common::specific::avx512::ip_distance(a, b, len, distance);
-  } else if (common::is_arch_supported(ObTargetArch::AVX2)) {
+  // if (common::is_arch_supported(ObTargetArch::AVX512)) {
+  //   ret = common::specific::avx512::ip_distance(a, b, len, distance);
+  // } else
+  if (common::is_arch_supported(ObTargetArch::AVX2)) {
     ret = common::specific::avx2::ip_distance(a, b, len, distance);
+  } else if (common::is_arch_supported(ObTargetArch::AVX)) {
+    ret = common::specific::avx::ip_distance(a, b, len, distance);
+  } else if (common::is_arch_supported(ObTargetArch::SSE42)) {
+    ret = common::specific::sse42::ip_distance(a, b, len, distance);
   } else {
     ret = common::specific::normal::ip_distance(a, b, len, distance);
   }
