@@ -55,10 +55,6 @@ public:
       const bool force_alloc_new,
       ObITabletFilterOp *op);
   int try_get_in_memory_meta_obj(const ObTabletMapKey &key, bool &success, ObMetaObjGuard<ObTablet> &guard);
-  int try_get_in_memory_meta_obj_and_addr(
-      const ObTabletMapKey &key,
-      ObMetaDiskAddr &addr,
-      ObMetaObjGuard<ObTablet> &guard);
   int get_meta_addr(const ObTabletMapKey &key, ObMetaDiskAddr &addr);
   int set_meta_obj(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet> &guard);
   int get_attr_for_obj(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet> &guard);
@@ -111,6 +107,12 @@ private:
       ObTablet *&t);
   int load_and_hook_meta_obj(const ObTabletMapKey &key, ObTabletPointerHandle &ptr_hdl, ObMetaObjGuard<ObTablet> &guard);
   int try_get_in_memory_meta_obj(
+      const ObTabletMapKey &key,
+      ObTabletPointerHandle &ptr_hdl,
+      ObMetaObjGuard<ObTablet> &guard,
+      bool &is_in_memory);
+
+  int try_get_in_memory_meta_obj_without_lock(
       const ObTabletMapKey &key,
       ObTabletPointerHandle &ptr_hdl,
       ObMetaObjGuard<ObTablet> &guard,
