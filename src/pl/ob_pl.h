@@ -757,13 +757,13 @@ public:
     pure_plsql_exec_time_(0),
     pure_sub_plsql_exec_time_(0),
     profiler_time_stack_(nullptr),
-    need_free_()
+    need_free_(),
+    param_converted_()
   { }
   virtual ~ObPLExecState();
 
   int init(const ParamStore *params = NULL, bool is_anonymous = false);
-  int defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type);
-  int check_routine_param_legal(ParamStore *params = NULL);
+  int defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type, int64_t param_idx, bool is_anonymous);
   int check_anonymous_collection_compatible(const ObPLComposite &composite, const ObPLDataType &dest_type, bool &need_cast);
   int convert_composite(ObObjParam &param, const ObPLDataType &dest_type);
   int init_params(const ParamStore *params = NULL, bool is_anonymous = false);
@@ -837,6 +837,10 @@ public:
   {
     return need_free_.count() > i ? need_free_.at(i) : false;
   }
+  bool param_converted(int64_t i)
+  {
+    return param_converted_.count() > i ? param_converted_.at(i) : false;
+  }
   ObPLContext *get_top_pl_context() { return top_context_; }
   ExecCtxBak &get_exec_ctx_bak() { return self_exec_ctx_bak_; }
 
@@ -871,6 +875,7 @@ private:
   int64_t pure_sub_plsql_exec_time_;
   ObPLProfilerTimeStack *profiler_time_stack_;
   common::ObSEArray<bool,8> need_free_;
+  common::ObSEArray<bool,8> param_converted_;
 };
 
 class ObPLCallStackTrace;

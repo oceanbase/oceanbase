@@ -1676,8 +1676,10 @@ int ObPL::execute(ObExecContext &ctx,
             if (pl.get_params().at(i).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE
                 && pl.get_params().at(i).get_meta().get_extend_type() != PL_CURSOR_TYPE
                 && pl.get_params().at(i).get_ext() != params->at(i).get_ext()) {
-              OX (params->at(i) = pl.get_params().at(i));
-              params->at(i).set_int(0);
+              if (!pl.param_converted(i)) {
+                OX (params->at(i) = pl.get_params().at(i));
+                OX (params->at(i).set_int(0));
+              }
               OZ (ObUserDefinedType::deep_copy_obj(allocator, pl.get_params().at(i), params->at(i)));
               ObUserDefinedType::destruct_objparam(pl_sym_allocator,
                                                 pl.get_params().at(i),
@@ -3527,7 +3529,7 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
 // to unexpected parameters being passed to the stored procedure, resulting in unknown errors.
 // This function can be removed after the feature of defending the compilation cache of the executing stored procedure
 // from being eliminated on the PL cache side.
-int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type)
+int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type, int64_t param_idx, bool is_anonymous)
 {
   int ret = OB_SUCCESS;
   bool enable_defend = true;
@@ -3543,6 +3545,8 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
     // no actual param type info(eg: out params), skip check
     LOG_TRACE("actual param is null or mock default param, skip check",
               K(actual_param), K(formal_param_type));
+  } else if (is_anonymous && !func_.get_params_info().at(param_idx).flag_.need_to_check_type_) {
+    // anonymous param and not need to check type, skip check
   } else if (!actual_param.is_ext()) {
     if (!formal_param_type.is_obj_type()) {
       ret = OB_INVALID_ARGUMENT;
@@ -3581,7 +3585,7 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
     if (OB_FAIL(ret)) {
     } else if (OB_INVALID_ID != actual_udt_id && formal_udt_id == actual_udt_id) {
       // skip same valid udt id
-    } else if (OB_INVALID_ID == actual_udt_id
+    } else if (is_mocked_anonymous_array_id(actual_udt_id)
                || (OB_NOT_NULL(actual_composite) && actual_composite->is_collection())) {
       // check compatible for anonymous array which has invalid udt id
       const ObUserDefinedType *formal_type = nullptr;
@@ -3593,9 +3597,15 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
           || formal_type->is_generic_collection_type()) {
         // skip check for generic type
       } else {
-        bool dummy;
+        bool need_cast = false;
         CK (OB_NOT_NULL(actual_composite));
-        OZ (check_anonymous_collection_compatible(*actual_composite, formal_param_type, dummy));
+        OZ (check_anonymous_collection_compatible(*actual_composite, formal_param_type, need_cast));
+        if (OB_SUCC(ret) && need_cast && !formal_param_type.is_generic_type() && !formal_param_type.is_opaque_type() && func_.get_in_args().has_member(param_idx)) { //in arg and need cast add convert_composite
+          OX (get_params().at(param_idx) = actual_param);
+          OZ (convert_composite(get_params().at(param_idx), formal_param_type));
+          OX (need_free_.at(param_idx) = get_params().at(param_idx).get_ext() != 0 ? true : false);
+          OX (param_converted_.at(param_idx) = true);
+        }
       }
     } else {
       const ObUserDefinedType *actual_type = nullptr;
@@ -3621,14 +3631,13 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
       OV (OB_NOT_NULL(formal_type) && OB_NOT_NULL(actual_type), OB_ERR_UNEXPECTED, formal_udt_id, actual_udt_id);
       OZ (ObPLResolver::check_composite_compatible(actual_type, formal_type, is_compatible));
       OV (is_compatible, OB_ERR_SP_WRONG_ARG_NUM, formal_udt_id, actual_udt_id, formal_param_type, actual_param);
+      if (OB_SUCC(ret) && actual_udt_id != formal_udt_id && !formal_param_type.is_generic_type() && !formal_param_type.is_opaque_type() && func_.get_in_args().has_member(param_idx)) { //in arg and need cast add convert_composite
+        OX (get_params().at(param_idx) = actual_param);
+        OZ (convert_composite(get_params().at(param_idx), formal_param_type));
+        OX (need_free_.at(param_idx) = get_params().at(param_idx).get_ext() != 0 ? true : false);
+        OX (param_converted_.at(param_idx) = true);
+      }
     }
-  }
-
-  if (OB_FAIL(ret) && OB_ERR_SP_WRONG_ARG_NUM != ret) {
-    LOG_WARN("param type not match, procedure/function could have been replaced",
-             K(ret), K(actual_param), K(formal_param_type));
-    ret = OB_ERR_UNEXPECTED;  // replace errno, indicating that it's an internal error
-    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "param type not match, procedure/function could have been replaced");
   }
 
   return ret;
@@ -3711,87 +3720,9 @@ int ObPLExecState::convert_composite(ObObjParam &param, const ObPLDataType &dest
     if (OB_FAIL(ret)) {
       ObUserDefinedType::destruct_obj(dst, session);
     }
-    OZ (ObUserDefinedType::destruct_obj(param, session));
     OX (param = dst);
     OX (param.set_param_meta());
     OX (param.set_udt_id(pl_user_type->get_user_type_id()));
-  }
-  return ret;
-}
-
-
-int ObPLExecState::check_routine_param_legal(ParamStore *params)
-{
-  int ret = OB_SUCCESS;
-
-  if ((NULL == params && func_.get_arg_count() != 0) ||
-      (NULL != params && params->count() != func_.get_arg_count())) {
-    ret = OB_ERR_PARAM_SIZE;
-    LOG_WARN("routine parameters is not match", K(ret), K(func_.get_arg_count()), KPC(params));
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && OB_NOT_NULL(params) && i < params->count(); ++i) {
-    const ObPLDataType &dest_type = func_.get_variables().at(i);
-    if (params->at(i).is_null() || params->at(i).is_pl_mock_default_param()) { // use default value
-      // need not check, do nothing ...
-    } else if (!params->at(i).is_ext()) { // basic type, only check dest type is obj type also.
-      if (!dest_type.is_obj_type()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("incorrect argument type, expected complex, but get basic type", K(ret));
-      }
-    } else if (0 == params->at(i).get_ext()) {
-      // null composite through, it same as NULL, do nothing ...
-    } else if ((PL_REF_CURSOR_TYPE == params->at(i).get_meta().get_extend_type()
-                || PL_CURSOR_TYPE == params->at(i).get_meta().get_extend_type())
-              && dest_type.is_cursor_type()) {
-      // cursor input parameter check through, do nothing ...
-    } else if (!dest_type.is_composite_type()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("incorrect argument type", K(ret), K(dest_type), K(params->at(i)), K(i));
-    } else if (!params->at(i).is_pl_extend()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("real parameter is ext ptr, but extend type not set property", K(ret), K(params->at(i)), K(i));
-    } else if (PL_OPAQUE_TYPE == params->at(i).get_meta().get_extend_type()
-              || !is_mocked_anonymous_array_id(params->at(i).get_udt_id())) {
-      if (params->at(i).get_udt_id() != dest_type.get_user_type_id()) {
-        bool is_compatible = false;
-        OZ (ObPLResolver::check_composite_compatible(
-          ctx_, params->at(i).get_udt_id(), dest_type.get_user_type_id(), is_compatible));
-        if (OB_SUCC(ret) && !is_compatible) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("incorrect argument type", K(ret), K(dest_type), K(params->at(i)), K(i));
-        }
-        OZ (convert_composite(params->at(i), dest_type));
-      }
-    } else {
-      ObPLComposite *composite = reinterpret_cast<ObPLComposite *>(params->at(i).get_ext());
-      CK (OB_NOT_NULL(composite));
-      if (OB_FAIL(ret)) {
-      } else if (is_mocked_anonymous_array_id(composite->get_id())) {
-        // anonymous collection, should check element composite.
-        bool need_cast = false;
-        if (!dest_type.is_collection_type()) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("incorrect argument type", K(ret), KPC(composite), K(dest_type), K(i));
-        }
-        CK (composite->is_collection());
-        OZ (check_anonymous_collection_compatible(*composite, dest_type, need_cast));
-        if (OB_SUCC(ret) && need_cast) {
-          OZ (convert_composite(params->at(i), dest_type));
-        }
-      } else if (composite->get_id() != dest_type.get_user_type_id()) {
-        bool is_compatible = false;
-        OZ (ObPLResolver::check_composite_compatible(
-          ctx_, composite->get_id(), dest_type.get_user_type_id(), is_compatible));
-        if (OB_SUCC(ret) && !is_compatible) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("incorrect argument type", K(ret), K(dest_type), K(params->at(i)), K(i));
-        }
-        OZ (convert_composite(params->at(i), dest_type));
-      } else {
-        // same composite id, do nothing ...
-      }
-    }
   }
   return ret;
 }
@@ -3805,9 +3736,6 @@ int ObPLExecState::init_params(const ParamStore *params, bool is_anonymous)
   if (OB_SUCC(ret) && OB_ISNULL(ctx_.exec_ctx_->get_pl_ctx())) {
     OZ (ctx_.exec_ctx_->init_pl_ctx());
     CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
-  }
-  if (OB_SUCC(ret) && top_call_ && ctx_.exec_ctx_->get_sql_ctx()->is_execute_call_stmt_) {
-    OZ (check_routine_param_legal(const_cast<ParamStore *>(params)));
   }
   OZ (get_params().reserve(func_.get_variables().count()));
   ObObjParam param;
@@ -3896,8 +3824,9 @@ do {                                                                  \
        *   else It will directly used by static sql, do not need to check.
        */
       need_free_.push_back(false);
+      param_converted_.push_back(false);
       const ObPLDataType &pl_type = func_.get_variables().at(i);  // formal param type
-      if (lib::is_oracle_mode() && FAILEDx(defend_stored_routine_change(params->at(i), pl_type))) {
+      if (OB_FAIL(defend_stored_routine_change(params->at(i), pl_type, i, is_anonymous))) {
         LOG_WARN("param type not match, procedure/function could have been replaced",
                  K(ret), K(i), K(params->at(i)), K(pl_type));
       } else if (func_.get_in_args().has_member(i)) {
@@ -4053,13 +3982,15 @@ do {                                                                  \
                        && pl_type.get_user_type_id() != params->at(i).get_udt_id()
                        && !pl_type.is_generic_type()
                        && !pl_type.is_opaque_type()) {
-              // same type, we already check this on resolve stage, here directly assign value to symbol.
-              ObPLComposite *composite = NULL;
-              get_params().at(i) = params->at(i);
-              get_params().at(i).set_udt_id(pl_type.get_user_type_id());
-              composite = reinterpret_cast<ObPLComposite *>(params->at(i).get_ext());
-              if (OB_NOT_NULL(composite)) {
-                composite->set_id(pl_type.get_user_type_id());
+              // if param_converted_ is true, means already check is compatible and convert in defend_stored_routine_change
+              if (!param_converted_.at(i)) {
+                ObPLComposite *composite = NULL;
+                get_params().at(i) = params->at(i);
+                get_params().at(i).set_udt_id(pl_type.get_user_type_id());
+                composite = reinterpret_cast<ObPLComposite *>(params->at(i).get_ext());
+                if (OB_NOT_NULL(composite)) {
+                  composite->set_id(pl_type.get_user_type_id());
+                }
               }
             } else if (ObNullType == params->at(i).get_meta().get_type()
                 && (ObCharType == params->at(i).get_param_meta().get_type()
