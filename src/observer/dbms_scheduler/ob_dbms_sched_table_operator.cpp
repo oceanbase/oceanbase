@@ -187,6 +187,22 @@ int ObDBMSSchedTableOperator::_build_job_rollback_start_dml(ObDBMSSchedJobInfo &
   return ret;
 }
 
+int ObDBMSSchedTableOperator::_build_once_job_state_change_dml(int64_t now, ObDBMSSchedJobInfo &job_info, ObSqlString &sql)
+{
+  int ret = OB_SUCCESS;
+  ObDMLSqlSplicer dml;
+  int64_t tenant_id = job_info.tenant_id_;
+  OZ (dml.add_gmt_modified(now));
+  OZ (dml.add_pk_column("tenant_id",
+        ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
+  OZ (dml.add_pk_column("job", job_info.job_));
+  OZ (dml.add_pk_column("job_name", job_info.job_name_));
+  OZ (dml.add_column("state", job_info.state_));
+  OZ (dml.add_column("enabled", false));
+  OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
+  return ret;
+}
+
 int ObDBMSSchedTableOperator::_build_job_log_dml(
   int64_t now, ObDBMSSchedJobInfo &job_info, int err, const ObString &errmsg, ObSqlString &sql)
 {
@@ -275,7 +291,8 @@ int ObDBMSSchedTableOperator::update_for_missed(ObDBMSSchedJobInfo &job_info)
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObMySQLTransaction trans;
-  ObSqlString sql;
+  ObSqlString sql1;
+  ObSqlString sql2;
   int64_t affected_rows = 0;
   const int64_t now = ObTimeUtility::current_time();
   bool need_record = true;
@@ -286,11 +303,22 @@ int ObDBMSSchedTableOperator::update_for_missed(ObDBMSSchedJobInfo &job_info)
   if (OB_SUCC(ret) && OB_TMP_FAIL(_check_need_record(job_info, need_record))) { // need_record is true when check failed
     LOG_WARN("failed to check need record", K(tmp_ret), K(job_info));
   }
-
-  if (OB_SUCC(ret) && need_record) {
-    OZ (_build_job_log_dml(now, job_info, 0, "check job missed", sql));
+  if (OB_SUCC(ret) && job_info.is_once_job()) {
     OZ (trans.start(sql_proxy_, tenant_id, true));
-    OZ (trans.write(tenant_id, sql.ptr(), affected_rows));
+    job_info.state_ = ObString("COMPLETED");
+    if (true == job_info.auto_drop_) {
+      OZ (_build_job_drop_dml(now, job_info, sql1));
+    } else {
+      OZ (_build_once_job_state_change_dml(now, job_info, sql1));
+    }
+    OZ (trans.write(tenant_id, sql1.ptr(), affected_rows));
+  }
+  if (OB_SUCC(ret) && need_record) {
+    if (!trans.is_started()) {
+      OZ (trans.start(sql_proxy_, tenant_id, true));
+    }
+    OZ (_build_job_log_dml(now, job_info, 0, "check job missed", sql2));
+    OZ (trans.write(tenant_id, sql2.ptr(), affected_rows));
   }
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
@@ -410,7 +438,7 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
   }
 
   if (OB_FAIL(ret)) {
-  } else if ((now >= job_info.end_date_ || (job_info.get_interval_ts() == 0 && (job_info.get_repeat_interval().empty() || 0 == job_info.get_repeat_interval().case_compare("null")))) && (true == job_info.auto_drop_)) {
+  } else if ((now >= job_info.end_date_ || job_info.is_once_job()) && (true == job_info.auto_drop_)) {
     job_info.state_ = ObString("COMPLETED");
     OZ (_build_job_drop_dml(now, job_info, sql1));
   } else {
@@ -423,7 +451,7 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
       if (now >= job_info.end_date_) {
         job_info.state_ = ObString("COMPLETED");
       }
-    } else if (now >= job_info.end_date_ || (job_info.get_interval_ts() == 0 && (job_info.get_repeat_interval().empty() || 0 == job_info.get_repeat_interval().case_compare("null")))) {
+    } else if (now >= job_info.end_date_ || job_info.is_once_job()) {
       // when end_date is reach and auto_drop is set false, disable set completed state.
       // for once job, not wait until end date, set completed state when running end
       job_info.state_ = ObString("COMPLETED");
