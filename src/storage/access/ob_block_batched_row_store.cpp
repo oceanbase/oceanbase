@@ -207,7 +207,7 @@ int ObBlockBatchedRowStore::get_row_ids(
       }
       current_row = begin_index + capacity * step;
     } else if (bitmap->is_all_false()) {
-      current_row = begin_index + capacity * step;
+      current_row = end_index;
     } else {
       void *bit_ptr = nullptr;
       if (1 == step && bitmap->get_bit_set(begin_index, row_num, bit_ptr) && nullptr != bit_ptr) {
