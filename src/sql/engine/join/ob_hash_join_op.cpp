@@ -260,6 +260,7 @@ ObHashJoinOp::ObHashJoinOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput 
   skip_left_null_(false),
   skip_right_null_(false),
   cur_row_idx_(0),
+  part_rows_alloc_(nullptr),
   left_part_rows_(nullptr)
 {
   /*
@@ -1187,6 +1188,12 @@ int ObHashJoinOp::reuse_for_next_chunk()
     hash_table.collisions_ = 0;
     hash_table.used_buckets_ = 0;
 
+    left_part_rows_->reuse();
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(left_part_rows_->reserve(row_count))) {
+      LOG_WARN("failed to reserve left part rows", K(ret), K(row_count));
+    }
+
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(init_bloom_filter(mem_context_->get_malloc_allocator(), hash_table_.nbuckets_))) {
       LOG_WARN("failed to create bloom filter", K(ret));
@@ -1228,7 +1235,6 @@ int ObHashJoinOp::build_hash_table_for_nest_loop(int64_t &num_left_rows)
   ObHashJoinBatch *hj_batch = left_batch_;
   const int64_t PREFETCH_BATCH_SIZE = 64;
   const ObHashJoinStoredJoinRow *left_stored_rows[PREFETCH_BATCH_SIZE];
-  int64_t part_rows_idx = 0;
   if (OB_FAIL(load_next())) {
     LOG_WARN("failed to reset info for block", K(ret));
   } else {
@@ -1278,19 +1284,21 @@ int ObHashJoinOp::build_hash_table_for_nest_loop(int64_t &num_left_rows)
           curr_ht_row_cnt += read_size;
           num_left_rows += read_size;
           cur_nth_row_ += read_size;
+          if ((need_left_join() || LEFT_ANTI_JOIN == MY_SPEC.join_type_)) {
+            if (OB_UNLIKELY(OB_ISNULL(left_part_rows_))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("left part rows is null", K(ret), K(MY_SPEC.join_type_));
+            } else {
+              for (int64_t i = 0; OB_SUCC(ret) && i < read_size; i++) {
+                if (OB_FAIL(left_part_rows_->push_back(left_stored_rows[i]))) {
+                  LOG_WARN("failed to push back left part rows", K(ret), K(i));
+                }
+              }
+            }
+          }
           if (curr_ht_row_cnt >= row_bound
               || curr_ht_memory_size >= memory_bound) {
             ret = OB_ITER_END;
-          }
-        }
-      }
-      if (OB_SUCC(ret) && (need_left_join() || LEFT_ANTI_JOIN == MY_SPEC.join_type_)) {
-        if (OB_UNLIKELY(OB_ISNULL(left_part_rows_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("left part rows is null", K(ret), K(MY_SPEC.join_type_));
-        } else {
-          for (int64_t i = 0; OB_SUCC(ret) && i < read_size; i++) {
-            left_part_rows_->at(part_rows_idx++) = left_stored_rows[i];
           }
         }
       }
@@ -1792,7 +1800,7 @@ int ObHashJoinOp::build_hash_table_in_memory(int64_t &num_left_rows)
           LOG_WARN("left part rows is null", K(ret), K(MY_SPEC.join_type_));
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < read_size; i++) {
-            left_part_rows_->at(part_rows_idx++) = left_stored_rows[i];
+            left_part_rows_->push_back(left_stored_rows[i]);
           }
         }
       }
@@ -2993,7 +3001,7 @@ int ObHashJoinOp::build_hash_table_for_recursive()
               LOG_WARN("left part rows is null", K(ret), K(MY_SPEC.join_type_));
             } else {
               for (int64_t i = 0; OB_SUCC(ret) && i < read_size; i++) {
-                left_part_rows_->at(part_rows_idx++) = part_stored_rows[i];
+                left_part_rows_->push_back(part_stored_rows[i]);
               }
             }
           }
@@ -5676,18 +5684,15 @@ int ObHashJoinOp::prepare_part_rows_array(uint64_t row_num)
       part_rows_alloc_ = new (alloc_buf) ModulePageAllocator(allocator);
       part_rows_alloc_->set_label("HtOpAlloc");
       left_part_rows_ = new (array_buf) PartRowsArray(*part_rows_alloc_);
-      if (OB_FAIL(left_part_rows_->init(row_num))) {
+      if (OB_FAIL(left_part_rows_->reserve(row_num))) {
         LOG_WARN("failed to init left_part_rows", K(ret), K(row_num));
       }
     }
   } else {
     left_part_rows_->reuse();
-    if (OB_FAIL(left_part_rows_->init(row_num))) {
+    if (OB_FAIL(left_part_rows_->reserve(row_num))) {
       LOG_WARN("failed to init left_part_rows", K(ret), K(row_num));
     }
-  }
-  if (OB_SUCC(ret)) {
-    left_part_rows_->set_all(nullptr);
   }
   return ret;
 }

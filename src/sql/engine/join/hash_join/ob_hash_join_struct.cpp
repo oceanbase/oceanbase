@@ -137,18 +137,18 @@ int JoinTableCtx::prepare_part_rows_array(uint64_t row_num, ObIAllocator *alloca
       page_alloc_ = new (alloc_buf) ModulePageAllocator(*allocator);
       page_alloc_->set_label("HtOpAlloc");
       left_part_rows_ = new (array_buf) PartRowsArray(*page_alloc_);
-      if (OB_FAIL(left_part_rows_->init(row_num))) {
+      if (OB_FAIL(left_part_rows_->reserve(row_num))) {
         LOG_WARN("failed to init left_part_rows", K(ret), K(row_num));
       }
     }
   } else {
     left_part_rows_->reuse();
-    if (OB_FAIL(left_part_rows_->init(row_num))) {
+    if (OB_FAIL(left_part_rows_->reserve(row_num))) {
       LOG_WARN("failed to init left_part_rows", K(ret), K(row_num));
     }
   }
   if (OB_SUCC(ret)) {
-    left_part_rows_->set_all(nullptr);
+    read_row_idx_ = 0;
   }
   return ret;
 }
@@ -161,7 +161,7 @@ int JoinTableCtx::insert_left_part_rows(uint64_t row_num)
     LOG_WARN("left part rows is null", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < row_num; i++) {
-      left_part_rows_->at(insert_row_idx_++) = stored_rows_[i];
+      left_part_rows_->push_back(stored_rows_[i]);
     }
   }
   return ret;

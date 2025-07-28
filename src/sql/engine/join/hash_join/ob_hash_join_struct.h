@@ -231,11 +231,10 @@ public:
                    del_rows_(NULL), del_sel_(NULL), build_cols_have_null_(NULL), probe_cols_have_null_(NULL),
                    stored_rows_(NULL), max_batch_size_(0), output_info_(NULL), probe_batch_rows_(NULL),
                    build_cmp_funcs_(NULL), probe_cmp_funcs_(NULL),
-                   read_row_idx_(0), insert_row_idx_(0), page_alloc_(NULL), left_part_rows_(NULL)
+                   read_row_idx_(0), page_alloc_(NULL), left_part_rows_(NULL)
   {}
   void reuse() {
     read_row_idx_ = 0;
-    insert_row_idx_ = 0;
   }
   void reset(ObIAllocator *alloc)
   {
@@ -334,7 +333,6 @@ public:
                                                OB_MALLOC_MIDDLE_BLOCK_SIZE,
                                                common::ModulePageAllocator>;
   uint64_t read_row_idx_;
-  uint64_t insert_row_idx_;
   ModulePageAllocator *page_alloc_;
   PartRowsArray *left_part_rows_;
 };
