@@ -1697,6 +1697,7 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
       store_ctx_guard.reset();
     }
   }
+  row_iter.reset();
 
   //delete old data from snapshot index table.
   dml_param.table_param_ = &table_delete_dml_param;
@@ -1707,6 +1708,7 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
   } else if (OB_FAIL(oas->delete_rows(ls_id_, adaptor.get_snap_tablet_id(), *tx_desc, dml_param, dml_column_ids, &delete_row_iter, affected_rows))) {
     LOG_WARN("failed to delete rows from snapshot table", K(ret), K(adaptor.get_snap_tablet_id()));
   }
+  delete_row_iter.reset();
   if (OB_NOT_NULL(oas)) {
     int tmp_ret = OB_SUCCESS;
     if (OB_NOT_NULL(snap_data_iter)) {
@@ -1824,6 +1826,69 @@ int ObVecIndexAsyncTask::get_old_snapshot_data(
   return ret;
 }
 
+int ObVecIndexAsyncTask::delete_tablet_data(
+    ObPluginVectorIndexAdaptor &adaptor,
+    ObTabletID& tablet_id,
+    ObDMLBaseParam &dml_param,
+    transaction::ObTxDesc *tx_desc,
+    ObTableScanIterator *table_scan_iter,
+    ObSEArray<uint64_t, 4> &dml_column_ids)
+{
+  int ret = OB_SUCCESS;
+  int64_t loop_cnt = 0;
+  ObStorageDatumUtils util;
+  bool delete_unfinish = true;
+  int64_t delta_table_affected_rows = 0;
+  storage::ObValueRowIterator row_iter;
+  ObAccessService *oas = MTL(ObAccessService *);
+  if (OB_ISNULL(tx_desc) || OB_ISNULL(oas)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get tx desc or ob access service, get nullptr", K(ret));
+  } else if (OB_ISNULL(table_scan_iter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null table scan iter", K(ret));
+  }
+  while (OB_SUCC(ret) && delete_unfinish) {
+    int cur_row_count = 0;
+    if (OB_FAIL(row_iter.init(false))) {
+      LOG_WARN("fail to init row iter", K(ret));
+    }
+    while (OB_SUCC(ret) && cur_row_count <= BATCH_CNT) {
+      blocksstable::ObDatumRow *datum_row = nullptr;
+      if (OB_FAIL(table_scan_iter->get_next_row(datum_row))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next row failed.", K(ret));
+        }
+      } else if (OB_ISNULL(datum_row) || !datum_row->is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get row invalid.", K(ret));
+      } else if (OB_FAIL(row_iter.add_row(*datum_row, util))) {
+        LOG_WARN("failed to add row to iter", K(ret));
+      } else {
+        cur_row_count += 1;
+      }
+      CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_);
+    }
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (cur_row_count == 0) {
+      delete_unfinish = false;
+    } else if (OB_FAIL(oas->delete_rows(ls_id_, tablet_id, *tx_desc, dml_param, dml_column_ids, &row_iter, delta_table_affected_rows))) {
+      LOG_WARN("failed to delete rows from delta table", K(ret), K(tablet_id));
+    } else if (delta_table_affected_rows != cur_row_count) {
+      LOG_WARN("delete rows count unexpected", K(cur_row_count), K(delta_table_affected_rows));
+    }
+    delta_table_affected_rows = 0;
+    row_iter.reset();
+  }
+  if (ret == OB_ITER_END) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
 int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adaptor, ObDMLBaseParam &dml_param, transaction::ObTxDesc *tx_desc)
 {
   int ret = OB_SUCCESS;
@@ -1841,11 +1906,30 @@ int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adap
   ObStorageDatumUtils util;
   ObAccessService *oas = MTL(ObAccessService *);
   int64_t loop_cnt = 0;
+  const ObTableSchema *delta_table_schema;
+  const ObTableSchema *index_table_schema;
+  share::schema::ObTableDMLParam table_dml_param(allocator_);
+  share::schema::ObTableDMLParam bitmap_table_dml_param(allocator_);
+  ObSchemaGetterGuard schema_guard;
+  int64_t delta_table_affected_rows = 0;
+  int64_t index_table_affected_rows = 0;
   SMART_VARS_2((storage::ObTableScanParam, delta_scan_param),
                (storage::ObTableScanParam, index_scan_param)) {
     if (OB_ISNULL(tx_desc) || OB_ISNULL(oas)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get tx desc or ob access service, get nullptr", K(ret));
+    } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, adaptor.get_inc_table_id(), delta_table_schema))) {
+      LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id_), K(adaptor.get_inc_table_id()));
+    } else if (OB_ISNULL(delta_table_schema) || delta_table_schema->is_in_recyclebin()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("vector index table not exist", K(ret), K(tenant_id_), K(adaptor.get_inc_table_id()));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, adaptor.get_vbitmap_table_id(), index_table_schema))) {
+      LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id_), K(adaptor.get_vbitmap_table_id()));
+    } else if (OB_ISNULL(index_table_schema) || index_table_schema->is_in_recyclebin()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("vector index table not exist", K(ret), K(tenant_id_), K(adaptor.get_vbitmap_table_id()));
     } else if (OB_FAIL(ObPluginVectorIndexUtils::read_local_tablet(ls_id_,
                                   &adaptor,
                                   ctx_->task_status_.target_scn_,
@@ -1870,88 +1954,26 @@ int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adap
                                         &index_dml_column_ids,
                                         true))) {
       LOG_WARN("failed to read data table local tablet.", K(ret));
-    } else if (OB_FAIL(delta_row_iter.init(false))) {
-      LOG_WARN("fail to init row iter", K(ret));
-    } else if (OB_FAIL(index_row_iter.init(false))) {
-      LOG_WARN("fail to init row iter", K(ret));
     } else {
       ObTableScanIterator *delta_scan_iter = static_cast<ObTableScanIterator *>(delta_table_iter);
       ObTableScanIterator *index_scan_iter = static_cast<ObTableScanIterator *>(index_table_iter);
       if (OB_ISNULL(delta_scan_iter) || OB_ISNULL(index_scan_iter)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null table scan iter", K(ret));
-      }
-      while (OB_SUCC(ret)) {
-        blocksstable::ObDatumRow *datum_row = nullptr;
-        if (OB_FAIL(delta_scan_iter->get_next_row(datum_row))) {
-          if (OB_ITER_END != ret) {
-            LOG_WARN("get next row failed.", K(ret));
-          }
-        } else if (OB_ISNULL(datum_row) || !datum_row->is_valid()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get row invalid.", K(ret));
-        } else if (OB_FAIL(delta_row_iter.add_row(*datum_row, util))) {
-          LOG_WARN("failed to add row to iter", K(ret));
-        }
-        CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_);
-      }
-      if (ret == OB_ITER_END) {
-        ret = OB_SUCCESS;
-      }
-      while (OB_SUCC(ret)) {
-        blocksstable::ObDatumRow *datum_row = nullptr;
-        if (OB_FAIL(index_scan_iter->get_next_row(datum_row))) {
-          if (OB_ITER_END != ret) {
-            LOG_WARN("get next row failed.", K(ret));
-          }
-        } else if (OB_ISNULL(datum_row) || !datum_row->is_valid()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get row invalid.", K(ret));
-        } else if (OB_FAIL(index_row_iter.add_row(*datum_row, util))) {
-          LOG_WARN("failed to add row to iter", K(ret));
-        }
-        CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_);
-      }
-      if (ret == OB_ITER_END) {
-        ret = OB_SUCCESS;
+      } else if (OB_FAIL(table_dml_param.convert(delta_table_schema, delta_table_schema->get_schema_version(), delta_dml_column_ids))) {
+        LOG_WARN("failed to convert table dml param.", K(ret));
+      } else if (FALSE_IT(dml_param.schema_version_ = delta_table_schema->get_schema_version())) {
+      } else if (FALSE_IT(dml_param.table_param_ = &table_dml_param)) {
+      } else if (OB_FAIL(delete_tablet_data(adaptor, adaptor.get_inc_tablet_id(), dml_param, tx_desc, delta_scan_iter, delta_dml_column_ids ))) {
+        LOG_WARN("failed to delete delta table data", K(ret));
+      } else if (OB_FAIL(bitmap_table_dml_param.convert(index_table_schema, index_table_schema->get_schema_version(), index_dml_column_ids))) {
+        LOG_WARN("failed to convert table dml param.", K(ret));
+      } else if (FALSE_IT(dml_param.schema_version_ = index_table_schema->get_schema_version())) {
+      } else if (FALSE_IT(dml_param.table_param_ = &bitmap_table_dml_param)) {
+      } else if (OB_FAIL(delete_tablet_data(adaptor, adaptor.get_vbitmap_tablet_id(), dml_param, tx_desc, index_scan_iter, index_dml_column_ids ))) {
+        LOG_WARN("failed to delete index table data", K(ret));
       }
     }
-  }
-
-  const ObTableSchema *delta_table_schema;
-  const ObTableSchema *index_table_schema;
-  share::schema::ObTableDMLParam table_dml_param(allocator_);
-  share::schema::ObTableDMLParam bitmap_table_dml_param(allocator_);
-  ObSchemaGetterGuard schema_guard;
-  int64_t delta_table_affected_rows = 0;
-  int64_t index_table_affected_rows = 0;
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
-    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, adaptor.get_inc_table_id(), delta_table_schema))) {
-    LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id_), K(adaptor.get_inc_table_id()));
-  } else if (OB_ISNULL(delta_table_schema) || delta_table_schema->is_in_recyclebin()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("vector index table not exist", K(ret), K(tenant_id_), K(adaptor.get_inc_table_id()));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, adaptor.get_vbitmap_table_id(), index_table_schema))) {
-    LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id_), K(adaptor.get_vbitmap_table_id()));
-  } else if (OB_ISNULL(index_table_schema) || index_table_schema->is_in_recyclebin()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("vector index table not exist", K(ret), K(tenant_id_), K(adaptor.get_vbitmap_table_id()));
-  } else if (OB_FAIL(table_dml_param.convert(delta_table_schema, delta_table_schema->get_schema_version(), delta_dml_column_ids))) {
-    LOG_WARN("failed to convert table dml param.", K(ret));
-  } else if (FALSE_IT(dml_param.schema_version_ = delta_table_schema->get_schema_version())) {
-  } else if (FALSE_IT(dml_param.table_param_ = &table_dml_param)) {
-  } else if (OB_FAIL(oas->delete_rows(ls_id_, adaptor.get_inc_tablet_id(), *tx_desc, dml_param, delta_dml_column_ids, &delta_row_iter, delta_table_affected_rows))) {
-    LOG_WARN("failed to delete rows from delta table", K(ret), K(adaptor.get_inc_tablet_id()));
-  } else if (OB_FAIL(bitmap_table_dml_param.convert(index_table_schema, index_table_schema->get_schema_version(), index_dml_column_ids))) {
-    LOG_WARN("failed to convert table dml param.", K(ret));
-  } else if (FALSE_IT(dml_param.schema_version_ = index_table_schema->get_schema_version())) {
-  } else if (FALSE_IT(dml_param.table_param_ = &bitmap_table_dml_param)) {
-  } else if (OB_FAIL(oas->delete_rows(ls_id_, adaptor.get_vbitmap_tablet_id(), *tx_desc, dml_param, index_dml_column_ids, &index_row_iter, index_table_affected_rows))) {
-    LOG_WARN("failed to delete rows from delta table", K(ret), K(adaptor.get_inc_tablet_id()));
-  } else {
-    LOG_DEBUG("print del rows", K(delta_table_affected_rows), K(index_table_affected_rows));
   }
 
   if (OB_NOT_NULL(oas)) {
