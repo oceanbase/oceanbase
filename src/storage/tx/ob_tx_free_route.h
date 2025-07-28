@@ -99,6 +99,7 @@ struct ObTxnFreeRouteCtx {
     is_fallbacked_ = false;
     MEMSET(state_sync_infos_, 0, sizeof(state_sync_infos_));
     reset_changed_();
+    calculated_ = true;
     audit_record_.reset();
   }
   void set_sessid(const uint32_t sessid) { session_id_ = sessid; }
