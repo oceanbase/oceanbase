@@ -456,12 +456,16 @@ void ObTenantCtxAllocatorV2::update_wash_stat(int64_t related_chunks, int64_t bl
   (void)ATOMIC_FAA(&washed_size_, size);
 }
 
-void ObTenantCtxAllocator::on_alloc(AObject& obj, const ObMemAttr& attr)
+void ObTenantCtxAllocator::on_alloc(AObject& obj, const ObMemAttr& attr, const bool light_backtrace_allowed)
 {
   obj.set_label(attr.label_.str_);
   if (attr.extra_size_ > 0) {
     void *addrs[100] = {nullptr};
-    ob_backtrace(addrs, ARRAYSIZEOF(addrs));
+    if (light_backtrace_allowed) {
+      light_backtrace(addrs, ARRAYSIZEOF(addrs));
+    } else {
+      ob_backtrace(addrs, ARRAYSIZEOF(addrs));
+    }
     STATIC_ASSERT(AOBJECT_BACKTRACE_SIZE < sizeof(addrs), "AOBJECT_BACKTRACE_SIZE must be less than addrs!");
     MEMCPY(obj.bt(), (char*)addrs, AOBJECT_BACKTRACE_SIZE);
     obj.on_malloc_sample_ = true;
