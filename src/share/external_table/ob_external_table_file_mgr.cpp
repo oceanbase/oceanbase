@@ -40,11 +40,14 @@ int ObExternalFileInfo::deep_copy(ObIAllocator &allocator, const ObExternalFileI
     LOG_WARN("fail to write string", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, other.session_id_, this->session_id_))) {
     LOG_WARN("failed to write session id string", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, other.content_digest_, this->content_digest_))) {
+    LOG_WARN("fail to write string", K(ret));
   } else {
     this->file_id_ = other.file_id_;
     this->part_id_ = other.part_id_;
     this->file_addr_ = other.file_addr_;
     this->file_size_ = other.file_size_;
+    this->modify_time_ = other.modify_time_;
     this->row_start_ = other.row_start_;
     this->row_count_ = other.row_count_;
 
@@ -61,8 +64,9 @@ int ObExternalFileInfo::deep_copy(ObIAllocator &allocator, const ObExternalFileI
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_,
-                    part_id_, row_start_, row_count_, session_id_, pos_del_files_);
+OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_, part_id_,
+                    row_start_, row_count_, session_id_, pos_del_files_, modify_time_,
+                    content_digest_);
 
 int ObExternalTableFilesKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const
 {

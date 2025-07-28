@@ -33,7 +33,9 @@ namespace share {
 
 struct ObExternalFileInfo {
   ObExternalFileInfo() :
-    file_id_(INT64_MAX), part_id_(0), file_size_(0), row_start_(0), row_count_(0), pos_del_files_() {}
+    file_id_(INT64_MAX), part_id_(0), file_size_(0), row_start_(0), row_count_(0), pos_del_files_(),
+    modify_time_(OB_INVALID_TIMESTAMP), content_digest_()
+  {}
   common::ObString file_url_;
   int64_t file_id_;
   int64_t part_id_;
@@ -43,9 +45,12 @@ struct ObExternalFileInfo {
   int64_t row_count_;
   common::ObString session_id_;
   common::ObSEArray<common::ObString, 4> pos_del_files_;
+  int64_t modify_time_;
+  common::ObString content_digest_;
   int deep_copy(ObIAllocator &allocator, const ObExternalFileInfo &other);
   TO_STRING_KV(K_(file_url), K_(file_id), K_(part_id), K_(file_addr), K_(file_size),
-              K_(row_start), K_(row_count), K_(session_id), K_(pos_del_files));
+              K_(row_start), K_(row_count), K_(session_id), K_(pos_del_files),
+              K_(modify_time), K_(content_digest));
   OB_UNIS_VERSION(1);
 };
 
