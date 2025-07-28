@@ -217,6 +217,7 @@ int ObCGIterParamPool::fill_virtual_cg_iter_param(
     cg_param.table_scan_opt_ = row_param.table_scan_opt_;
     cg_param.tablet_handle_ = row_param.tablet_handle_;
     cg_param.vectorized_enabled_ = row_param.vectorized_enabled_;
+    cg_param.plan_enable_rich_format_ = row_param.plan_enable_rich_format_;
   }
   return ret;
 }
@@ -282,6 +283,7 @@ int ObCGIterParamPool::generate_for_column_store(const ObTableIterParam &row_par
       cg_param.pd_storage_flag_ = row_param.pd_storage_flag_;
       cg_param.table_scan_opt_ = row_param.table_scan_opt_;
       cg_param.is_column_replica_table_ = row_param.is_column_replica_table_;
+      cg_param.plan_enable_rich_format_ = row_param.plan_enable_rich_format_;
       if (nullptr != row_param.cg_read_infos_) {
         if (OB_UNLIKELY(nullptr == row_param.cg_read_infos_->at(cg_pos))) {
           ret = OB_ERR_UNEXPECTED;

@@ -474,29 +474,36 @@ Query Plan
 =============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c1)), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)), DECIMAL_INT(20, 0)), DECIMAL(15, 4))],
-       [cast(cast(T_FUN_SUM(T_FUN_SUM(t1.c2)), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)), DECIMAL_INT(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(cast(t1.c3,
-       DOUBLE(-1, -1)))) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=16
+  0 - output([cast(cast(T_FUN_SUM(T_FUN_SUM(T_FUN_SUM(t1.c1))), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))), DECIMAL_INT(20,
+       0)), DECIMAL(15, 4))], [cast(cast(T_FUN_SUM(T_FUN_SUM(T_FUN_SUM(t1.c2))), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2))),
+       DECIMAL_INT(20, 0)), DECIMAL(15, 4))], [cast(T_FUN_SUM(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3,
+       DOUBLE(-1, -1))))), DOUBLE(-1, -1)), DOUBLE(-1, -1))]), filter(nil), rowset=16
       limit(5), offset(nil)
-  1 - output([T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2))],
+  1 - output([T_FUN_SUM(T_FUN_SUM(T_FUN_SUM(t1.c1)))], [T_FUN_COUNT_SUM(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)))], [T_FUN_SUM(T_FUN_SUM(T_FUN_SUM(t1.c2)))],
+       [T_FUN_COUNT_SUM(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)))], [T_FUN_SUM(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))))], [T_FUN_COUNT_SUM(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3,
+       DOUBLE(-1, -1)))))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(T_FUN_SUM(t1.c1)))], [T_FUN_COUNT_SUM(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1)))], [T_FUN_SUM(T_FUN_SUM(T_FUN_SUM(t1.c2)))],
+       [T_FUN_COUNT_SUM(T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2)))], [T_FUN_SUM(T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))))], [T_FUN_COUNT_SUM(T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3,
+       DOUBLE(-1, -1)))))])
+  2 - output([T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2))],
+       [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))], [T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))))]), filter(nil), rowset=16
+  3 - output([T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2))],
+       [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))], [T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))))]), filter(nil), rowset=16
+      dop=1
+  4 - output([T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2))],
        [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))], [T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))))]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(t1.c1))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c1))], [T_FUN_SUM(T_FUN_SUM(t1.c2))], [T_FUN_COUNT_SUM(T_FUN_COUNT(t1.c2))],
        [T_FUN_SUM(T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1))))], [T_FUN_COUNT_SUM(T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1))))])
-  2 - output([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3,
+  5 - output([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3,
        DOUBLE(-1, -1)))]), filter(nil), rowset=16
-  3 - output([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3,
-       DOUBLE(-1, -1)))]), filter(nil), rowset=16
-      dop=1
-  4 - output([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3,
-       DOUBLE(-1, -1)))]), filter(nil), rowset=16
-      group(nil), agg_func([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))],
-       [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))])
-  5 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter(nil), rowset=16
       force partition granule
-  6 - output([t1.c1], [t1.c2], [cast(t1.c3, DOUBLE(-1, -1))]), filter([t1.c2 < 10]), rowset=16
+  6 - output([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))], [T_FUN_COUNT(cast(t1.c3,
+       DOUBLE(-1, -1)))]), filter([t1.c2 < 10]), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p[0-1])
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t1.c1]), range(MIN ; MAX)always true
+      range_key([t1.c1]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(t1.c1)], [T_FUN_COUNT(t1.c1)], [T_FUN_SUM(t1.c2)], [T_FUN_COUNT(t1.c2)], [T_FUN_SUM(cast(t1.c3, DOUBLE(-1, -1)))],
+       [T_FUN_COUNT(cast(t1.c3, DOUBLE(-1, -1)))])
 explain basic select /*+topk(20 6)*/ avg(c1), avg(c2), avg(c3)  from t1 where c2 <10 group by c2 order by avg(c1) limit 5 for update nowait;
 Query Plan
 =======================================================

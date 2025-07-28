@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX STORAGE
+#include "index_block/ob_index_block_row_struct.h"
 #include "ob_macro_block_reader.h"
 #include "ob_macro_block_bare_iterator.h"
 #include "ob_macro_block_meta.h"
@@ -1008,7 +1009,7 @@ int ObSSTableDataBlockReader::dump_column_info(const int64_t col_cnt, const int6
           column_checksum_[i], column_types_[i].get_collation_type());
     }
     for (; i < col_cnt; ++i) {
-      printer_.print_cols_info_line(i, ObUnknownType, ASC,
+      printer_.print_cols_info_line(i, ObUnknownType, ObOrderType::ASC,
           column_checksum_[i], column_types_[i].get_collation_type());
     }
     printer_.print_end_line();

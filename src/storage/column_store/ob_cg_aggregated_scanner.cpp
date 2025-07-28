@@ -158,7 +158,7 @@ int ObCGAggregatedScanner::inner_fetch_rows(const int64_t batch_size, uint64_t &
   UNUSED(datum_offset);
   int ret = OB_SUCCESS;
   int64_t row_cap = 0;
-  if (iter_param_->use_new_format()) {
+  if (iter_param_->plan_use_new_format()) {
     micro_scanner_->reserve_reader_memory(false);
     ObAggGroupVec *agg_group_vec = static_cast<ObAggGroupVec *>(agg_group_);
     const ObCSRange &data_range = prefetcher_.current_micro_info().get_row_range();
@@ -217,7 +217,7 @@ int ObCGAggregatedScanner::inner_fetch_rows(const int64_t batch_size, uint64_t &
                                                         0, /*datum offset*/
                                                         len_array_,
                                                         is_padding_mode_,
-                                                        !access_ctx_->block_row_store_->filter_is_null()))) {
+                                                        !access_ctx_->block_row_store_->filter_is_null() || agg_group_vec->has_aggr_with_expr_))) {
         LOG_WARN("fail to get next rows", K(ret));
       } else if (OB_FAIL(agg_group_vec->eval_batch(iter_param_, access_ctx_, 0/*col_offset*/,
                                                    micro_scanner_->get_reader(), pd_row_id_ctx, false))) {
@@ -261,7 +261,7 @@ int ObCGAggregatedScanner::check_need_access_data(const ObTableIterParam &iter_p
                   0 == iter_param.aggregate_exprs_->count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected aggregated expr count", K(ret), KPC(iter_param.aggregate_exprs_));
-  } else if (iter_param.use_new_format()) {
+  } else if (iter_param.plan_use_new_format()) {
     const sql::ObExpr *output_expr = nullptr;
     ObAggregatedStoreVec *agg_store_vec = static_cast<ObAggregatedStoreVec *>(access_ctx.block_row_store_);
     ObAggGroupVec *agg_group_vec = nullptr;

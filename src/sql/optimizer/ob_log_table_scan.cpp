@@ -315,6 +315,8 @@ int ObLogTableScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, pushdown_aggr_exprs_))) {
     LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(generate_aggr_param_monotonicity())) {
+    LOG_WARN("failed to analyze aggr param monotonicity", K(ret));
   } else if (OB_FAIL(generate_filter_monotonicity())) {
     LOG_WARN("failed to analyze filter monotonicity", K(ret));
   } else if (OB_FAIL(get_filter_assist_exprs(all_exprs))) {
@@ -5099,6 +5101,63 @@ int ObLogTableScan::generate_filter_monotonicity()
   return ret;
 }
 
+int ObLogTableScan::generate_aggr_param_monotonicity()
+{
+  int ret = OB_SUCCESS;
+  ObExecContext *exec_ctx = NULL;
+  const ParamStore *param_store = NULL;
+  ObAggFunRawExpr *aggr_expr = NULL;
+  ObRawExpr *param_expr = NULL;
+  ObRawAggrParamMonotonicity *param_mono = NULL;
+  ObSEArray<ObRawExpr *, 2> col_exprs;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_stmt()) || OB_ISNULL(get_stmt()->get_query_ctx()) ||
+      OB_ISNULL(exec_ctx = get_plan()->get_optimizer_context().get_exec_ctx()) ||
+      OB_ISNULL(param_store = get_plan()->get_optimizer_context().get_params())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("got unexpected NULL ptr", K(ret));
+  } else if (get_stmt()->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_4_1) {
+    aggr_param_mono_.reset();
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_pushdown_aggr_exprs().count(); ++i) {
+      col_exprs.reuse();
+      if (OB_ISNULL(aggr_expr = get_pushdown_aggr_exprs().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("got unexpected NULL param", K(ret), KP(aggr_expr));
+      } else if (aggr_expr->get_real_param_exprs().empty()) {
+        // COUNT(*)
+      } else if (OB_ISNULL(param_expr = aggr_expr->get_param_expr(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("got unexpected NULL param", K(ret), KP(param_expr));
+      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(param_expr, col_exprs))) {
+        LOG_WARN("failed to extract column exprs", K(ret));
+      } else if (1 != col_exprs.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected column expr count", K(ret), K(col_exprs));
+      } else {
+        Monotonicity mono = Monotonicity::NONE_MONO;
+        bool dummy_bool = true;
+        ObPCConstParamInfo const_param_info;
+        if (OB_FAIL(ObOptimizerUtil::get_expr_monotonicity(param_expr, col_exprs.at(0),
+                                                           *exec_ctx, mono, dummy_bool,
+                                                           *param_store, const_param_info))) {
+          LOG_WARN("failed to get expr monotonicity", K(ret));
+        } else if (!const_param_info.const_idx_.empty() &&
+                   OB_FAIL(const_param_constraints_.push_back(const_param_info))) {
+          LOG_WARN("failed to push back const param", K(ret));
+        } else if (OB_ISNULL(param_mono = aggr_param_mono_.alloc_place_holder())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("alloc failed", K(ret));
+        } else {
+          param_mono->param_expr_ = param_expr;
+          param_mono->col_expr_ = static_cast<ObColumnRefRawExpr *>(col_exprs.at(0));
+          param_mono->mono_ = mono;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogTableScan::get_filter_monotonicity(const ObRawExpr *filter,
                                             const ObColumnRefRawExpr *col_expr,
                                             PushdownFilterMonotonicity &mono,
@@ -5120,6 +5179,25 @@ int ObLogTableScan::get_filter_monotonicity(const ObRawExpr *filter,
         LOG_WARN("failed to append");
       }
       break;
+    }
+  }
+  return ret;
+}
+
+int ObLogTableScan::get_aggr_param_monotonicity(const ObRawExpr *param_expr,
+                                                const ObColumnRefRawExpr *col_expr,
+                                                Monotonicity &mono) const
+{
+  int ret = OB_SUCCESS;
+  mono = Monotonicity::NONE_MONO;
+  if (OB_ISNULL(param_expr) || OB_ISNULL(col_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < aggr_param_mono_.count(); ++i) {
+    if (param_expr == aggr_param_mono_.at(i).param_expr_ &&
+        col_expr == aggr_param_mono_.at(i).col_expr_) {
+      mono = aggr_param_mono_.at(i).mono_;
     }
   }
   return ret;

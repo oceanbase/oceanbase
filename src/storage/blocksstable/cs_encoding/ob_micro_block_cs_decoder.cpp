@@ -1736,7 +1736,7 @@ bool ObMicroBlockCSDecoder::can_pushdown_decoder(
   const ObPDAggType agg_type = agg_cell.get_type();
   ObColumnCSDecoder *column_decoder = decoders_ + col_offset;
   if (OB_UNLIKELY(column_decoder->decoder_->is_new_column())) {
-    bret = (PD_MIN == agg_type || PD_MAX == agg_type);
+    bret = (PD_MIN == agg_type || PD_MAX == agg_type || PD_HLL == agg_type);
   } else if (FALSE_IT(bret = !((col_param.get_meta_type().is_lob_storage() && has_lob_out_row())))) {
   } else if (bret) {
     bool can_convert = false;
@@ -1748,7 +1748,7 @@ bool ObMicroBlockCSDecoder::can_pushdown_decoder(
         const ObObjType store_col_type = integer_ctx.col_header_->get_store_obj_type();
         is_consecutive = (nullptr == row_ids || row_cap == std::abs(row_ids[0] - row_ids[row_cap - 1]) + 1);
         can_convert = ObCSDecodingUtil::can_convert_to_integer(store_col_type, is_col_signed);
-        bret = ((PD_MIN == agg_type || PD_MAX == agg_type) && is_consecutive && can_convert);
+        bret = ((agg_cell.is_min_agg() || agg_cell.is_max_agg()) && is_consecutive && can_convert);
         break;
       }
       case ObCSColumnHeader::INT_DICT:
@@ -1760,8 +1760,8 @@ bool ObMicroBlockCSDecoder::can_pushdown_decoder(
         bret = false;
       }
     }
-    LOG_DEBUG("can pushdown decoder", K(bret), K(agg_type), K(column_decoder->ctx_->type_),
-              KP(row_ids), K(is_consecutive), K(row_cap), K(can_convert));
+    LOG_DEBUG("can pushdown decoder", K(bret), K(column_decoder->ctx_->type_),
+      KP(row_ids), K(is_consecutive), K(row_cap), K(can_convert), K(agg_cell));
   }
   return bret;
 }
@@ -1986,7 +1986,8 @@ int ObMicroBlockCSDecoder::get_group_by_aggregate_result(
     const common::ObIArray<blocksstable::ObStorageDatum> &default_datums,
     uint32_t *len_array,
     sql::ObEvalCtx &eval_ctx,
-    storage::ObGroupByCellVec &group_by_cell)
+    storage::ObGroupByCellVec &group_by_cell,
+    const bool enable_rich_format)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -2006,36 +2007,57 @@ int ObMicroBlockCSDecoder::get_group_by_aggregate_result(
           LOG_WARN("Failed to eval batch", K(ret), K(i));
         }
       } else {
+        sql::ObExpr &expr = *(agg_cell->get_project_expr());
+        const bool need_padding = agg_cell->need_padding();
+        const share::schema::ObColumnParam *col_param = agg_cell->get_col_param();
         if (need_get_col) {
-          sql::ObExpr &expr = *(agg_cell->get_project_expr());
-          const bool need_padding = agg_cell->need_padding();
-          const share::schema::ObColumnParam *col_param = agg_cell->get_col_param();
-          if (0 == vec_offset) {
-            const VectorFormat format = need_padding ? VectorFormat::VEC_DISCRETE : expr.get_default_res_format();
-            if (OB_FAIL(storage::init_expr_vector_header(expr, eval_ctx, eval_ctx.max_batch_size_, format))) {
-              LOG_WARN("Failed to init vector", K(ret));
+          if (enable_rich_format) {
+            if (0 == vec_offset) {
+              const VectorFormat format = need_padding ? VectorFormat::VEC_DISCRETE : expr.get_default_res_format();
+              if (OB_FAIL(storage::init_expr_vector_header(expr, eval_ctx, eval_ctx.max_batch_size_, format))) {
+                LOG_WARN("Failed to init vector", K(ret));
+              }
             }
-          }
-          if (OB_SUCC(ret)) {
-            ObVectorDecodeCtx vector_decode_ctx(
-                cell_datas, len_array, row_ids, row_cap, vec_offset, expr.get_vector_header(eval_ctx));
-            if (decoders_[agg_col_offset].decoder_->is_new_column() && OB_FAIL(agg_cell->get_def_datum(vector_decode_ctx.default_datum_))) {
-              LOG_WARN("Failed to get default datum for new column", K(ret), K(vector_decode_ctx));
-            } else if (OB_FAIL(get_col_data(agg_col_offset, vector_decode_ctx))) {
-              LOG_WARN("Failed to get col datums", K(ret), K(i), K(agg_col_offset), K(vector_decode_ctx));
-            } else if (need_padding && OB_FAIL(storage::pad_on_rich_format_columns(
-                col_param->get_accuracy(),
-                col_param->get_meta_type().get_collation_type(),
-                row_cap,
-                vec_offset,
-                decoder_allocator_.get_inner_allocator(),
-                expr,
-                eval_ctx))) {
-              LOG_WARN("Failed pad on rich format columns", K(ret), K(expr));
+            if (OB_SUCC(ret)) {
+              ObVectorDecodeCtx vector_decode_ctx(
+                  cell_datas, len_array, row_ids, row_cap, vec_offset, expr.get_vector_header(eval_ctx));
+              if (decoders_[agg_col_offset].decoder_->is_new_column() && OB_FAIL(agg_cell->get_def_datum(vector_decode_ctx.default_datum_))) {
+                LOG_WARN("Failed to get default datum for new column", K(ret), K(vector_decode_ctx));
+              } else if (OB_FAIL(get_col_data(agg_col_offset, vector_decode_ctx))) {
+                LOG_WARN("Failed to get col datums", K(ret), K(i), K(agg_col_offset), K(vector_decode_ctx));
+              } else if (need_padding && OB_FAIL(storage::pad_on_rich_format_columns(
+                  col_param->get_accuracy(),
+                  col_param->get_meta_type().get_collation_type(),
+                  row_cap,
+                  vec_offset,
+                  decoder_allocator_.get_inner_allocator(),
+                  expr,
+                  eval_ctx))) {
+                LOG_WARN("Failed pad on rich format columns", K(ret), K(expr));
             } else if (iter_param.has_lob_column_out() && has_lob_out_row()
                        && nullptr != col_param && col_param->get_meta_type().is_lob_storage()
                        && OB_FAIL(fill_exprs_lob_locator(iter_param, context, *col_param, expr, eval_ctx, vec_offset, row_cap))) {
               LOG_WARN("Failed to fill lob locator", K(ret), K(i), K(vec_offset), K(row_cap), K(has_lob_out_row()), KPC(col_param), K(iter_param));
+              }
+            }
+          } else {
+            common::ObDatum *col_datums = expr.locate_batch_datums(eval_ctx);
+            if (OB_ISNULL(col_datums)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("Unexpected null col datums", K(ret), K(expr));
+            } else if (OB_FAIL(get_col_datums(agg_col_offset, row_ids, row_cap, col_datums))) {
+              LOG_WARN("Failed to get col datums", K(ret), K(i), K(agg_col_offset), K(row_cap));
+            } else if (need_padding && OB_FAIL(storage::pad_on_datums(
+                col_param->get_accuracy(),
+                col_param->get_meta_type().get_collation_type(),
+                decoder_allocator_.get_inner_allocator(),
+                row_cap,
+                col_datums))) {
+              LOG_WARN("Failed pad on datums", K(ret), K(row_cap), KPC(col_datums), KPC(col_param));
+            } else if (iter_param.has_lob_column_out() && has_lob_out_row()
+                       && nullptr != col_param && col_param->get_meta_type().is_lob_storage()
+                       && OB_FAIL(fill_datums_lob_locator(iter_param, context, *col_param, row_cap, col_datums, false))) {
+              LOG_WARN("Failed to fill lob locator", K(ret), K(i), K(row_cap), K(has_lob_out_row()), KPC(col_param), K(iter_param), KPC(col_datums));
             }
           }
         }

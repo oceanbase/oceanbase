@@ -312,6 +312,7 @@ public:
                   const common::ObIArray<uint64_t> &output_column_ids,
                   const common::ObIArray<uint64_t> &aggregate_column_ids,
                   const common::ObIArray<uint64_t> &group_by_column_ids,
+                  const common::ObIArray<ObAggrParamProperty> &aggregate_param_props,
                   const sql::ObStoragePushdownFlag &pd_pushdown_flag);
   // convert right table scan parameter of join MV scan.
   // (right table index back not supported)
@@ -337,12 +338,15 @@ public:
   inline bool is_normal_cgs_at_the_end() const { return is_normal_cgs_at_the_end_; }
   inline bool is_enable_semistruct_encoding() const { return is_enable_semistruct_encoding_; }
   inline void set_is_enable_semistruct_encoding(const bool v) { is_enable_semistruct_encoding_ = v; }
+  inline void set_plan_enable_rich_format(const bool enable) { plan_enable_rich_format_ = enable; }
+  inline bool plan_enable_rich_format() const { return plan_enable_rich_format_; }
   inline const common::ObIArray<int32_t> &get_rowid_projector() const { return rowid_projector_; }
   inline const common::ObIArray<int32_t> &get_output_projector() const { return output_projector_; }
   inline const common::ObIArray<int32_t> &get_aggregate_projector() const { return aggregate_projector_; }
   inline const common::ObIArray<int32_t> &get_group_by_projector() const { return group_by_projector_; }
   inline const common::ObIArray<bool> &get_output_sel_mask() const { return output_sel_mask_; }
   inline const common::ObIArray<int32_t> &get_pad_col_projector() const { return pad_col_projector_; }
+  inline const common::ObIArray<ObAggrParamProperty> &get_aggr_param_props() const { return aggregate_param_props_; }
   inline void disable_padding() { pad_col_projector_.reset(); }
   inline const storage::ObTableReadInfo &get_read_info() const { return main_read_info_; }
   inline const ObString &get_parser_name() const { return parser_name_; }

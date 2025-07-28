@@ -2282,6 +2282,7 @@ public:
                        N_REL_ID, rel_ids_,
                        K_(reference_type),
                        "extra", extra_.value_,
+                       K_(expr_class),
                        K_(is_called_in_sql),
                        K_(is_calculated),
                        K_(is_deterministic),

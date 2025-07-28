@@ -1178,13 +1178,14 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([subquery(1)]), filter(nil), rowset=16
-      exec_params_([T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1)))(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
-  1 - output([T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1)))]), filter(nil), rowset=16
-      group(nil), agg_func([T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1)))])
-  2 - output([t2.c1]), filter(nil), rowset=16
+      exec_params_([T_FUN_SUM(T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1))))(:0)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  1 - output([T_FUN_SUM(T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1))))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_SUM(T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1))))])
+  2 - output([T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1)))]), filter(nil), rowset=16
       access([t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
-      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_SUM(cast(t2.c1, DOUBLE(-1, -1)))])
   3 - output([T_FUN_SUM(:1)]), filter(nil), rowset=16
       group(nil), agg_func([T_FUN_SUM(:1)])
   4 - output([:1]), filter(nil), rowset=16

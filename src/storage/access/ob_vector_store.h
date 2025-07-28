@@ -69,9 +69,7 @@ protected:
       blocksstable::ObIMicroBlockRowScanner &scanner,
       int64_t &begin_index,
       const int64_t end_index,
-      const ObFilterResult &res,
-      const bool need_set_end = true,
-      const bool need_init_vector = true);
+      const ObFilterResult &res);
   int fill_group_by_rows(
       const int64_t group_idx,
       blocksstable::ObIMicroBlockReader *reader,

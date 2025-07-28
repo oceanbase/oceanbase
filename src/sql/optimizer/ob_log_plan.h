@@ -849,19 +849,21 @@ public:
 
   int check_basic_distinct_pushdown(bool &can_push);
 
-  int check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &distinct_exprs,
+  int check_storage_distinct_pushdown(omt::ObTenantConfigGuard &tenant_config,
+                                      const ObIArray<ObRawExpr*> &distinct_exprs,
                                       bool &can_push);
 
-  int check_aggr_pushdown_enabled(ObSQLSessionInfo &session_info,
+  int check_aggr_pushdown_enabled(omt::ObTenantConfigGuard &tenant_config,
                                   bool &enable_aggr_push_down,
                                   bool &enable_groupby_push_down);
 
-  int check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> &aggrs,
+  int check_storage_groupby_pushdown(omt::ObTenantConfigGuard &tenant_config,
+                                     const ObIArray<ObAggFunRawExpr *> &aggrs,
                                      const ObIArray<ObRawExpr *> &group_exprs,
                                      ObIArray<ObRawExpr *> &pushdown_groupby_columns,
                                      bool &can_push);
 
-  int check_can_scala_storage_pushdown(ObSQLSessionInfo &session_info,
+  int check_can_scala_storage_pushdown(omt::ObTenantConfigGuard &tenant_config,
                                        const ObSelectStmt &stmt,
                                        bool &can_pushdown);
 
@@ -870,16 +872,23 @@ public:
                                                const ObIArray<ObRawExpr *> &pushdown_groupby_columns,
                                                bool &can_push);
 
-  int check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
+  int check_aggr_param_match_pushdown_rule(const uint64_t table_id,
+                                           const ObRawExpr *first_param,
+                                           bool &can_push);
+
+  int check_scalar_aggr_can_storage_pushdown(omt::ObTenantConfigGuard &tenant_config,
+                                             const uint64_t table_id,
                                              const ObIArray<ObAggFunRawExpr *> &aggrs,
                                              ObIArray<ObRawExpr *> &pushdown_groupby_columns,
                                              bool &can_push);
 
-  int check_normal_aggr_can_storage_pushdown(const uint64_t table_id,
+  int check_normal_aggr_can_storage_pushdown(omt::ObTenantConfigGuard &tenant_config,
+                                             const uint64_t table_id,
                                              const ObIArray<ObAggFunRawExpr *> &aggrs,
                                              bool &can_push);
 
-  int check_basic_groupby_pushdown(const ObIArray<ObAggFunRawExpr*> &aggr_items,
+  int check_basic_groupby_pushdown(omt::ObTenantConfigGuard &tenant_config,
+                                   const ObIArray<ObAggFunRawExpr*> &aggr_items,
                                    const EqualSets &equal_sets,
                                    bool &push_group);
 
@@ -1917,7 +1926,7 @@ public:
   int do_alloc_values_table_path(ValuesTablePath *values_table_path,
                                  ObLogValuesTableAccess *&out_access_path_op);
   inline ObRawExprReplacer &gen_col_replacer() { return gen_col_replacer_; }
-  int get_enable_rich_vector_format(bool &enable);
+  int get_enable_rich_vector_format(omt::ObTenantConfigGuard &tenant_config, bool &enable) const;
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;
 protected: // member variable

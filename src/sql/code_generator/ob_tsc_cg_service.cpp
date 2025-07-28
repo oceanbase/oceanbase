@@ -14,6 +14,7 @@
 #include "ob_tsc_cg_service.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "sql/engine/table/ob_table_scan_op.h"
+#include "sql/rewrite/ob_transform_utils.h"
 #include "src/share/vector_index/ob_vector_index_util.h"
 #include "share/domain_id/ob_domain_id.h"
 #include "share/external_table/ob_external_table_utils.h"
@@ -544,9 +545,11 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op,
   ObBasicSessionInfo *session_info = cg_.opt_ctx_->get_session_info();
   int64_t route_policy = 0;
   bool is_cs_replica_query = false;
-  CK(OB_NOT_NULL(schema_guard), OB_NOT_NULL(session_info));
-  if (OB_UNLIKELY(pd_agg && 0 == scan_ctdef.aggregate_column_ids_.count()) ||
-      OB_UNLIKELY(pd_group_by && 0 == scan_ctdef.group_by_column_ids_.count())) {
+  bool plan_enable_rich_format = false;
+  CK(OB_NOT_NULL(schema_guard), OB_NOT_NULL(session_info), OB_NOT_NULL(op.get_plan()));
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(pd_agg && 0 == scan_ctdef.aggregate_column_ids_.count()) ||
+             OB_UNLIKELY(pd_group_by && 0 == scan_ctdef.group_by_column_ids_.count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(pd_agg), K(scan_ctdef.aggregate_column_ids_.count()),
         K(pd_group_by), K(scan_ctdef.group_by_column_ids_.count()));
@@ -558,21 +561,26 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL ptr", K(ret), K(table_schema));
-  } else if (table_schema->is_spatial_index() && FALSE_IT(scan_ctdef.table_param_.set_is_spatial_index(true))) {
-  } else if (table_schema->is_fts_index() && FALSE_IT(scan_ctdef.table_param_.set_is_fts_index(true))) {
-  } else if (table_schema->is_multivalue_index_aux() && FALSE_IT(scan_ctdef.table_param_.set_is_multivalue_index(true))) {
-  } else if (table_schema->is_vec_index() && FALSE_IT(scan_ctdef.table_param_.set_is_vec_index(true))) {
-  } else if (table_schema->get_semistruct_encoding_type().is_enable_semistruct_encoding() && FALSE_IT(scan_ctdef.table_param_.set_is_enable_semistruct_encoding(true))) {
-  } else if (FALSE_IT(scan_ctdef.table_param_.set_is_partition_table(table_schema->is_partitioned_table()))) {
-  } else if (FALSE_IT(scan_ctdef.table_param_.set_is_mlog_table(table_schema->is_mlog_table()))) {
-  } else if (OB_FAIL(extract_das_output_column_ids(op, scan_ctdef, *table_schema, cg_ctx, tsc_out_cols))) {
-    LOG_WARN("extract tsc output column ids failed", K(ret));
-  } else if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
-    LOG_WARN("get route policy failed", K(ret));
   } else {
-    is_cs_replica_query = ObRoutePolicyType::COLUMN_STORE_ONLY == route_policy;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info->get_effective_tenant_id()));
+    if (OB_FAIL(op.get_plan()->get_enable_rich_vector_format(tenant_config, plan_enable_rich_format))) {
+      LOG_WARN("fail to check whether enable rich vector format", K(ret), K(op));
+    } else if (table_schema->is_spatial_index() && FALSE_IT(scan_ctdef.table_param_.set_is_spatial_index(true))) {
+    } else if (table_schema->is_fts_index() && FALSE_IT(scan_ctdef.table_param_.set_is_fts_index(true))) {
+    } else if (table_schema->is_multivalue_index_aux() && FALSE_IT(scan_ctdef.table_param_.set_is_multivalue_index(true))) {
+    } else if (table_schema->is_vec_index() && FALSE_IT(scan_ctdef.table_param_.set_is_vec_index(true))) {
+    } else if (table_schema->get_semistruct_encoding_type().is_enable_semistruct_encoding() && FALSE_IT(scan_ctdef.table_param_.set_is_enable_semistruct_encoding(true))) {
+    } else if (FALSE_IT(scan_ctdef.table_param_.set_is_partition_table(table_schema->is_partitioned_table()))) {
+    } else if (FALSE_IT(scan_ctdef.table_param_.set_is_mlog_table(table_schema->is_mlog_table()))) {
+    } else if (FALSE_IT(scan_ctdef.table_param_.set_plan_enable_rich_format(plan_enable_rich_format))) {
+    } else if (OB_FAIL(extract_das_output_column_ids(op, scan_ctdef, *table_schema, cg_ctx, tsc_out_cols))) {
+      LOG_WARN("extract tsc output column ids failed", K(ret));
+    } else if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
+      LOG_WARN("get route policy failed", K(ret));
+    } else {
+      is_cs_replica_query = ObRoutePolicyType::COLUMN_STORE_ONLY == route_policy;
+    }
   }
-
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(scan_ctdef.table_param_.get_enable_lob_locator_v2()
                           = (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0))) {
@@ -589,6 +597,7 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op,
                                                               scan_ctdef.access_column_ids_,
                                                               scan_ctdef.aggregate_column_ids_,
                                                               scan_ctdef.group_by_column_ids_,
+                                                              scan_ctdef.aggregate_param_props_,
                                                               scan_ctdef.pd_expr_spec_.pd_storage_flag_))) {
     LOG_WARN("convert group by failed", K(ret), K(*table_schema),
              K(scan_ctdef.aggregate_column_ids_), K(scan_ctdef.group_by_column_ids_));
@@ -1445,6 +1454,7 @@ int ObTscCgService::generate_pushdown_aggr_ctdef(const ObLogTableScan &op,
     if (aggregate_output_count > 0) {
       scan_ctdef.pd_expr_spec_.pd_storage_flag_.set_aggregate_pushdown(true);
       OZ(scan_ctdef.aggregate_column_ids_.init(aggregate_output_count));
+      OZ(scan_ctdef.aggregate_param_props_.init(aggregate_output_count));
       if (OB_FAIL(aggregate_output.reserve(aggregate_output_count))) {
         LOG_WARN("init aggregate output array", K(ret), K(aggregate_output_count));
       } else {
@@ -1469,17 +1479,30 @@ int ObTscCgService::generate_pushdown_aggr_ctdef(const ObLogTableScan &op,
         LOG_WARN("aggr expr is null", K(ret));
       } else if (aggr_expr->get_real_param_exprs().empty()) {
         OZ(scan_ctdef.aggregate_column_ids_.push_back(OB_COUNT_AGG_PD_COLUMN_ID));
-      } else if (OB_ISNULL(param_expr = aggr_expr->get_param_expr(0)) ||
-                 OB_UNLIKELY(!param_expr->is_column_ref_expr())) {
+        OZ(scan_ctdef.aggregate_param_props_.push_back(ObAggrParamProperty(Monotonicity::NONE_MONO, true)));
+      } else if (OB_ISNULL(param_expr = aggr_expr->get_param_expr(0))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expected basic column", K(ret), K(param_expr));
-      } else if (OB_FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr *>(param_expr))) {
-      } else if (OB_UNLIKELY(col_expr->get_table_id() != op.get_table_id())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("expected basic column", K(ret), K(col_expr->get_table_id()),
-                                           K(op.get_table_id()));
+        LOG_WARN("unexpected null param expr", K(ret), KP(param_expr));
       } else {
-        OZ(scan_ctdef.aggregate_column_ids_.push_back(col_expr->get_column_id()));
+        ObSEArray<ObRawExpr*, 1> column_exprs;
+        ObAggrParamProperty param_prop;
+        if (OB_FAIL(ObRawExprUtils::extract_column_exprs(param_expr, column_exprs))) {
+          LOG_WARN("fail to extract column expr", K(ret));
+        } else if (OB_UNLIKELY(column_exprs.count() != 1)) {
+          LOG_WARN("unexpcted column expr count", K(ret), K(column_exprs));
+        } else if (OB_FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr *>(column_exprs.at(0)))) {
+        } else if (OB_UNLIKELY(col_expr->get_table_id() != op.get_table_id())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("expected basic column", K(ret), K(col_expr->get_table_id()),
+                                            K(op.get_table_id()));
+        } else if (OB_FAIL(op.get_aggr_param_monotonicity(param_expr, col_expr, param_prop.mono_))) {
+          LOG_WARN("fail to get aggr param monotonicity", K(ret), KPC(param_expr), KPC(col_expr));
+        } else if (OB_FAIL(ObTransformUtils::is_null_propagate_expr(param_expr, col_expr, param_prop.is_null_prop_))) {
+          LOG_WARN("fail to get aggr param null porpagate", K(ret), KPC(param_expr), KPC(col_expr));
+        } else {
+          OZ(scan_ctdef.aggregate_column_ids_.push_back(col_expr->get_column_id()));
+          OZ(scan_ctdef.aggregate_param_props_.push_back(param_prop));
+        }
       }
     }
 
@@ -3425,6 +3448,8 @@ int ObTscCgService::generate_text_ir_pushdown_expr_ctdef(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(scan_ctdef.aggregate_column_ids_.init(agg_expr_arr.count()))) {
       LOG_WARN("failed to init aggregate column ids", K(ret), K(agg_expr_arr.count()));
+    } else if (OB_FAIL(scan_ctdef.aggregate_param_props_.init(agg_expr_arr.count()))) {
+      LOG_WARN("failed to init aggregate param props", K(ret), K(agg_expr_arr.count()));
     } else if (OB_FAIL(scan_ctdef.pd_expr_spec_.pd_storage_aggregate_output_.reserve(agg_expr_arr.count()))) {
       LOG_WARN("failed to reserve memory for aggregate output expr array", K(ret));
     }
@@ -3449,18 +3474,29 @@ int ObTscCgService::generate_text_ir_pushdown_expr_ctdef(
       } else if (OB_UNLIKELY(agg_expr->get_real_param_exprs().empty())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected count all agg expr in text retrieval scan", K(ret));
-      } else if (OB_ISNULL(param_expr = agg_expr->get_param_expr(0))
-          || OB_UNLIKELY(!param_expr->is_column_ref_expr())) {
+      } else if (OB_ISNULL(param_expr = agg_expr->get_param_expr(0))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected agg param expr type", K(ret), KPC(param_expr));
-      } else if (OB_ISNULL(param_col_expr = static_cast<ObColumnRefRawExpr *>(param_expr))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null param column expr", K(ret));
-      } else if (OB_UNLIKELY(param_col_expr->get_table_id() != op.get_table_id() && !param_col_expr->is_doc_id_column())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexoected column to aggregate", K(ret), KPC(param_col_expr), K(op.get_table_id()));
-      } else if (OB_FAIL(scan_ctdef.aggregate_column_ids_.push_back(param_col_expr->get_column_id()))) {
-        LOG_WARN("failed to append aggregate column ids", K(ret));
+      } else {
+        ObSEArray<ObRawExpr*, 1> column_exprs;
+        ObAggrParamProperty param_prop;
+        if (OB_FAIL(ObRawExprUtils::extract_column_exprs(param_expr, column_exprs))) {
+          LOG_WARN("fail to extract column expr", K(ret));
+        } else if (OB_UNLIKELY(column_exprs.count() != 1)) {
+          LOG_WARN("unexpcted column expr count", K(ret), K(column_exprs));
+        } else if (OB_FALSE_IT(param_col_expr = static_cast<ObColumnRefRawExpr *>(column_exprs.at(0)))) {
+        } else if (OB_UNLIKELY(param_col_expr->get_table_id() != op.get_table_id() && !param_col_expr->is_doc_id_column())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("expected basic column", K(ret), K(param_col_expr->get_table_id()), K(op.get_table_id()), KPC(param_col_expr));
+        } else if (OB_FAIL(op.get_aggr_param_monotonicity(param_expr, param_col_expr, param_prop.mono_))) {
+          LOG_WARN("fail to get aggr param monotonicity", K(ret), KPC(param_expr), KPC(param_col_expr));
+        } else if (OB_FAIL(ObTransformUtils::is_null_propagate_expr(param_expr, param_col_expr, param_prop.is_null_prop_))) {
+          LOG_WARN("fail to get aggr param null porpagate", K(ret), KPC(param_expr), KPC(param_col_expr));
+        } else if (OB_FAIL(scan_ctdef.aggregate_column_ids_.push_back(param_col_expr->get_column_id()))) {
+          LOG_WARN("failed to append aggregate column ids", K(ret));
+        } else if (OB_FAIL(scan_ctdef.aggregate_param_props_.push_back(param_prop))) {
+          LOG_WARN("failed to append aggregate param prop", K(ret));
+        }
       }
     }
   }

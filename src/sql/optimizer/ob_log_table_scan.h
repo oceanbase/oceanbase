@@ -97,6 +97,21 @@ struct ObRawFilterMonotonicity
                K_(mono),
                K_(assist_exprs));
 };
+
+struct ObRawAggrParamMonotonicity
+{
+public:
+  ObRawAggrParamMonotonicity()
+    : param_expr_(nullptr),
+      col_expr_(nullptr),
+      mono_(Monotonicity::NONE_MONO) {}
+  TO_STRING_KV(KP_(param_expr), KP_(col_expr), K_(mono));
+
+  ObRawExpr *param_expr_;
+  ObColumnRefRawExpr *col_expr_;
+  Monotonicity mono_;
+};
+
 enum ObVectorAuxTableIdx
 {
   VEC_FIRST_AUX_TBL_IDX = 0,  // HNSW_DELTA_BUF_TABLE  or  IVF_CENTROID_TABLE
@@ -359,7 +374,8 @@ public:
         is_tsc_with_vid_(false),
         rowkey_vid_tid_(common::OB_INVALID_ID),
         index_prefix_(-1),
-        mr_mv_scan_(common::ObQueryFlag::NormalMode)
+        mr_mv_scan_(common::ObQueryFlag::NormalMode),
+        aggr_param_mono_()
   {
   }
 
@@ -965,6 +981,9 @@ public:
                               const ObColumnRefRawExpr *col_expr,
                               PushdownFilterMonotonicity &mono,
                               ObIArray<ObRawExpr *> &assist_exprs) const;
+  int get_aggr_param_monotonicity(const ObRawExpr *param_expr,
+                                  const ObColumnRefRawExpr *col_expr,
+                                  Monotonicity &mono) const;
   void set_mr_mv_scan(const uint64_t mr_mv_flags)
   {
     if (mr_mv_flags & ObQueryFlag::MRMVScanMode::RefreshMode) {
@@ -1030,6 +1049,7 @@ private: // member functions
   int print_text_retrieval_annotation(char *buf, int64_t buf_len, int64_t &pos, ExplainType type);
   int find_nearest_rcte_op(ObLogSet *&rcte_op);
   int generate_filter_monotonicity();
+  int generate_aggr_param_monotonicity();
   int get_filter_assist_exprs(ObIArray<ObRawExpr *> &assist_exprs);
   int prepare_rowkey_domain_id_dep_exprs();
   bool use_query_range() const;
@@ -1214,6 +1234,8 @@ protected: // memeber variables
   int64_t index_prefix_;
   common::ObQueryFlag::MRMVScanMode mr_mv_scan_; // used for major refresh mview fast refresh and real-time mview
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pseudo_columnref_exprs_;
+
+  common::ObSEArray<ObRawAggrParamMonotonicity, 4, common::ModulePageAllocator, true> aggr_param_mono_;
 
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);

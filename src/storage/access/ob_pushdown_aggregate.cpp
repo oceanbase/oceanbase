@@ -22,7 +22,7 @@ using namespace common;
 namespace storage
 {
 ObAggCell::ObAggCell(const ObAggCellBasicInfo &basic_info, common::ObIAllocator &allocator)
-    : ObAggCellBase(allocator),
+    : ObAggCellBase(allocator, share::ObAggrParamProperty(share::Monotonicity::ASC, true)),
       basic_info_(basic_info),
       def_datum_(),
       is_lob_col_(false),
@@ -82,7 +82,16 @@ void ObAggCell::clear_group_by_info()
 int ObAggCell::init(const bool is_group_by, sql::ObEvalCtx *eval_ctx)
 {
   int ret = OB_SUCCESS;
-  if (is_group_by) {
+  if (PD_FIRST_ROW != agg_type_) {
+    if (OB_UNLIKELY(nullptr == basic_info_.agg_expr_->args_ ||
+                    (basic_info_.agg_expr_->arg_cnt_ > 0 &&
+                     (nullptr == basic_info_.agg_expr_->args_[0] ||
+                      basic_info_.agg_expr_->args_[0]->type_ != T_REF_COLUMN)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected aggregate args", K(ret), KPC(basic_info_.agg_expr_));
+    }
+  }
+  if (OB_SUCC(ret) && is_group_by) {
     if (PD_FIRST_ROW != agg_type_) {
       common::ObDatum *result_datums = basic_info_.agg_expr_->locate_batch_datums(*eval_ctx);
       if (OB_ISNULL(result_datums)) {
@@ -91,11 +100,6 @@ int ObAggCell::init(const bool is_group_by, sql::ObEvalCtx *eval_ctx)
       } else if (OB_FAIL(new_group_by_buf(result_datums, basic_info_.batch_size_,
           common::OBJ_DATUM_NUMBER_RES_SIZE, allocator_, group_by_result_datum_buf_))) {
         LOG_WARN("Failed to new buf", K(ret));
-      } else if (OB_UNLIKELY(nullptr == basic_info_.agg_expr_->args_ ||
-          nullptr == basic_info_.agg_expr_->args_[0] ||
-          basic_info_.agg_expr_->args_[0]->type_ != T_REF_COLUMN)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("args is invalid", K(ret), KPC(basic_info_.agg_expr_));
       } else if (OB_ISNULL(col_datums_ = basic_info_.agg_expr_->args_[0]->locate_batch_datums(*eval_ctx))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected null col datums", K(ret));
@@ -444,9 +448,10 @@ int ObCountAggCell::init(const bool is_group_by, sql::ObEvalCtx *eval_ctx)
 int ObCountAggCell::eval(
     blocksstable::ObStorageDatum &datum,
     const int64_t row_count,
-    const int64_t agg_row_idx)
+    const int64_t agg_row_idx,
+    const int64_t agg_batch_size)
 {
-  UNUSED(agg_row_idx);
+  UNUSEDx(agg_row_idx, agg_batch_size);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(row_count < 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -765,9 +770,10 @@ int ObMinAggCell::init(const bool is_group_by, sql::ObEvalCtx *eval_ctx)
 int ObMinAggCell::eval(
     blocksstable::ObStorageDatum &storage_datum,
     const int64_t row_count,
-    const int64_t agg_row_idx)
+    const int64_t agg_row_idx,
+    const int64_t agg_batch_size)
 {
-  UNUSEDx(row_count, agg_row_idx);
+  UNUSEDx(row_count, agg_row_idx, agg_batch_size);
   int ret = OB_SUCCESS;
   int cmp_ret = 0;
   if (OB_UNLIKELY(row_count < 0)) {
@@ -967,9 +973,10 @@ int ObMaxAggCell::init(const bool is_group_by, sql::ObEvalCtx *eval_ctx)
 int ObMaxAggCell::eval(
     blocksstable::ObStorageDatum &storage_datum,
     const int64_t row_count,
-    const int64_t agg_row_idx)
+    const int64_t agg_row_idx,
+    const int64_t agg_batch_size)
 {
-  UNUSEDx(row_count, agg_row_idx);
+  UNUSEDx(row_count, agg_row_idx, agg_batch_size);
   int ret = OB_SUCCESS;
   int cmp_ret = 0;
   if (OB_UNLIKELY(row_count < 0)) {
@@ -1195,9 +1202,10 @@ int ObHyperLogLogAggCell::init(const bool is_group_by, sql::ObEvalCtx *eval_ctx)
 int ObHyperLogLogAggCell::eval(
     blocksstable::ObStorageDatum &storage_datum,
     const int64_t row_count,
-    const int64_t agg_row_idx)
+    const int64_t agg_row_idx,
+    const int64_t agg_batch_size)
 {
-  UNUSED(agg_row_idx);
+  UNUSEDx(agg_row_idx, agg_batch_size);
   int ret = OB_SUCCESS;
   uint64_t hash_value = 0; // same as ObAggregateProcessor llc hash_value
   if (OB_UNLIKELY(row_count < 0)) {
@@ -1375,9 +1383,10 @@ int ObSumOpSizeAggCell::get_datum_op_size(const ObDatum &datum, int64_t &length)
 int ObSumOpSizeAggCell::eval(
     blocksstable::ObStorageDatum &storage_datum,
     const int64_t row_count,
-    const int64_t agg_row_idx)
+    const int64_t agg_row_idx,
+    const int64_t agg_batch_size)
 {
-  UNUSED(agg_row_idx);
+  UNUSEDx(agg_row_idx, agg_batch_size);
   int ret = OB_SUCCESS;
   int64_t length = 0;
   if (OB_UNLIKELY(row_count < 0)) {
@@ -1910,9 +1919,10 @@ int ObSumAggCell::init_decimal_int_func()
 int ObSumAggCell::eval(
     blocksstable::ObStorageDatum &datum,
     const int64_t row_count,
-    const int64_t agg_row_idx)
+    const int64_t agg_row_idx,
+    const int64_t agg_batch_size)
 {
-  UNUSED(agg_row_idx);
+  UNUSEDx(agg_row_idx, agg_batch_size);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(row_count < 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -2723,9 +2733,10 @@ int ObFirstRowAggCell::init(const bool is_group_by, sql::ObEvalCtx *eval_ctx)
 int ObFirstRowAggCell::eval(
     blocksstable::ObStorageDatum &datum,
     const int64_t row_count,
-    const int64_t agg_row_idx)
+    const int64_t agg_row_idx,
+    const int64_t agg_batch_size)
 {
-  UNUSED(agg_row_idx);
+  UNUSEDx(agg_row_idx, agg_batch_size);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(row_count < 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -3196,8 +3207,9 @@ int ObGroupByCell::copy_output_rows(const int64_t batch_idx, const ObTableIterPa
   return ret;
 }
 
-int ObGroupByCell::copy_single_output_row(sql::ObEvalCtx &ctx)
+int ObGroupByCell::copy_single_output_row(const ObTableIterParam &iter_param, sql::ObEvalCtx &ctx)
 {
+  UNUSED(iter_param);
   int ret = OB_SUCCESS;
   // just shallow copy output datum to agg
   if (IS_NOT_INIT) {

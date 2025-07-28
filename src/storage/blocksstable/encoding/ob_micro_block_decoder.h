@@ -348,7 +348,8 @@ public:
       const common::ObIArray<blocksstable::ObStorageDatum> &default_datums,
       uint32_t *len_array,
       sql::ObEvalCtx &eval_ctx,
-      storage::ObGroupByCellVec &group_by_cell) override;
+      storage::ObGroupByCellVec &group_by_cell,
+      const bool enable_rich_format) override;
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,

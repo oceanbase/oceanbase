@@ -3482,6 +3482,7 @@ int ObTableTscCgService::generate_table_param(const ObTableCtx &ctx,
                                                                  das_tsc_ctdef.access_column_ids_,
                                                                  das_tsc_ctdef.aggregate_column_ids_,
                                                                  das_tsc_ctdef.group_by_column_ids_,
+                                                                 das_tsc_ctdef.aggregate_param_props_,
                                                                  das_tsc_ctdef.pd_expr_spec_.pd_storage_flag_))) {
     LOG_WARN("convert group by failed", K(ret), KP(index_schema),
              K(das_tsc_ctdef.aggregate_column_ids_), K(das_tsc_ctdef.group_by_column_ids_));

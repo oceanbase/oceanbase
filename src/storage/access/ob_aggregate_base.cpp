@@ -17,13 +17,14 @@ namespace oceanbase
 {
 namespace storage
 {
-ObAggCellBase::ObAggCellBase(common::ObIAllocator &allocator)
+ObAggCellBase::ObAggCellBase(common::ObIAllocator &allocator, const share::ObAggrParamProperty &param_prop)
   : bitmap_(nullptr),
     agg_row_reader_(nullptr),
     result_datum_(),
     skip_index_datum_(),
     allocator_(allocator),
     agg_type_(PD_MAX_TYPE),
+    param_prop_(param_prop),
     is_assigned_to_group_by_processor_(false),
     skip_index_datum_is_prefix_(false),
     is_inited_(false)
@@ -257,7 +258,10 @@ int ObPushdownAggContext::init_agg_infos(const ObTableAccessParam &param)
       } else {
         agg_info.real_aggr_type_ = agg_expr->type_;
         agg_info.expr_ = agg_expr;
-        if (agg_expr->arg_cnt_ > 0 && OB_FAIL(agg_info.param_exprs_.push_back(agg_expr->args_[0]))) {
+        if (agg_expr->arg_cnt_ > 1) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected aggr expr", K(ret), KPC(agg_expr));
+        } else if (agg_expr->arg_cnt_ > 0 && OB_FAIL(agg_info.param_exprs_.push_back(agg_expr->args_[0]))) {
           LOG_WARN("Failed to push back expr", K(ret), KPC(agg_expr));
         } else if (OB_FAIL(agg_infos_.push_back(agg_info))) {
           LOG_WARN("Failed to push bach agg_info", K(ret), K(i), K(agg_info));

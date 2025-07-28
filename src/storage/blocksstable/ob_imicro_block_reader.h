@@ -432,7 +432,8 @@ public:
       const common::ObIArray<blocksstable::ObStorageDatum> &default_datums,
       uint32_t *len_array,
       sql::ObEvalCtx &eval_ctx,
-      storage::ObGroupByCellVec &group_by_cell)
+      storage::ObGroupByCellVec &group_by_cell,
+      const bool use_new_format)
   {
     UNUSEDx(row_ids, cell_datas, row_cap, vec_offset, len_array, eval_ctx, group_by_cell);
     return OB_NOT_SUPPORTED;

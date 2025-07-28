@@ -8,7 +8,10 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 
+#define USING_LOG_PREFIX STORAGE
+
 #include "ob_multiple_skip_scan_merge.h"
+#include "ob_aggregated_store_vec.h"
 
 namespace oceanbase
 {
@@ -200,6 +203,11 @@ int ObMultipleSkipScanMerge::inner_get_next_row(blocksstable::ObDatumRow &row)
           } else {
             ret = OB_SUCCESS;
             state_ = UPDATE_SCAN_ROWKEY_RANGE;
+            if (access_param_->iter_param_.enable_pd_aggregate()
+                && access_param_->iter_param_.plan_use_new_format()
+                && OB_FAIL(static_cast<ObAggregatedStoreVec *>(block_row_store_)->do_aggregate(nullptr, false))) {
+              STORAGE_LOG(WARN, "fail to aggregate rows", K(ret));
+            }
           }
         } else {
           STORAGE_LOG(DEBUG, "skip scan get next row", K(row));

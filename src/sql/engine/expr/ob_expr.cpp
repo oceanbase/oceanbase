@@ -1294,7 +1294,7 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
         *rt_skip, evaluated_vec, BATCH_SIZE(),
         [](const uint64_t l, const uint64_t r) { return ~(l | r); });
   }
-  LOG_DEBUG("need evaluate", K(need_evaluate));
+  LOG_DEBUG("need evaluate", K(need_evaluate), KP(this));
   if (OB_SUCC(ret) && need_evaluate) {
     if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
       SQL_LOG(WARN, "failed to check stack overflow", K(ret));
