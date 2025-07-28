@@ -193,6 +193,9 @@ public:
   inline bool is_json() const { return meta_type_.is_json(); }
   inline bool is_geometry() const { return meta_type_.is_geometry(); }
   inline bool is_raw() const { return meta_type_.is_raw(); }
+  inline bool is_mysql_date_or_date() const { return meta_type_.is_mysql_date_or_date(); }
+  inline bool is_mysql_datetime_or_datetime() const { return meta_type_.is_mysql_datetime_or_datetime(); }
+  inline bool is_timestamp() const { return meta_type_.is_timestamp(); }
 
   inline bool is_xmltype() const {
     return ((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)

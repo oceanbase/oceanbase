@@ -4732,6 +4732,12 @@ int ObDDLResolver::cast_default_value(ObObj &default_value,
     if (is_no_zero_date(sql_mode)) {
       cast_mode |= CM_NO_ZERO_DATE;
     }
+    if (!is_strict_mode(sql_mode)
+        && (column_schema.is_mysql_date_or_date()
+            || column_schema.is_mysql_datetime_or_datetime()
+            || column_schema.is_timestamp())) {
+      cast_mode |= CM_WARN_ON_FAIL;
+    }
     ObCastCtx cast_ctx(&allocator, &dtc_params, CUR_TIME,
                        cast_mode,
                        column_schema.get_collation_type(), NULL, &res_accuracy);
