@@ -151,6 +151,9 @@ int ObSkipIndexFilterExecutor::filter_on_min_max(
   } else if (OB_FAIL(read_aggregate_data(col_idx, allocator, col_param, obj_meta,
       filter.is_padding_mode(), null_count, min_datum, is_min_prefix, max_datum, is_max_prefix))) {
     LOG_WARN("Failed to read min and max", K(ret), K(col_idx));
+  } else if (is_min_prefix || is_max_prefix) {
+    // enable filter with min/max prefix in subsequent versions
+    fal_desc.set_uncertain();
   } else if (null_count.is_null() && min_datum.is_null() && max_datum.is_null()) {
     // min max null_count all null, expect uncertain cause by progressive merge
     fal_desc.set_uncertain();
