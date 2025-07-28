@@ -868,19 +868,15 @@ ObVecIndexAsyncTaskHandler::~ObVecIndexAsyncTaskHandler()
 {
 }
 
-int ObVecIndexAsyncTaskHandler::init(ObIAllocator *allocator)
+int ObVecIndexAsyncTaskHandler::init()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
-  } else if (OB_ISNULL(allocator)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("fail to init vector index async task handle", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::VectorAsyncTaskPool, tg_id_))) {
     LOG_WARN("TG_CREATE_TENANT failed", KR(ret));
   } else {
-    allocator_ = allocator;
     is_inited_ = true;
   }
   return ret;
@@ -934,23 +930,24 @@ void ObVecIndexAsyncTaskHandler::destroy()
 int ObVecIndexAsyncTaskHandler::push_task(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
-    ObVecIndexAsyncTaskCtx *ctx)
+    ObVecIndexAsyncTaskCtx *ctx,
+    ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("push back async task to thread pool", K(allocator_), K(ctx->task_status_.tablet_id_), K(ctx->task_status_.task_id_));
+  LOG_INFO("push back async task to thread pool", K(allocator), K(ctx->task_status_.tablet_id_), K(ctx->task_status_.task_id_));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("handler is not init", KR(ret));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || OB_ISNULL(ctx) || OB_ISNULL(allocator_))) {
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || OB_ISNULL(ctx) || OB_ISNULL(allocator))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ls_id), KP(ctx), KP(allocator_));
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ls_id), KP(ctx), KP(allocator));
   } else if (ctx->task_status_.status_ != ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE) {   // skip not PREPARE status task
   } else if (ctx->task_status_.task_type_ != ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_OPTINAL) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected task type", K(ret), K(ctx->task_status_));
   } else {
     ObVecIndexAsyncTask *async_task = nullptr;
-    if (OB_ISNULL(async_task = static_cast<ObVecIndexAsyncTask *>(allocator_->alloc(sizeof(ObVecIndexAsyncTask))))) {
+    if (OB_ISNULL(async_task = static_cast<ObVecIndexAsyncTask *>(allocator->alloc(sizeof(ObVecIndexAsyncTask))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory of ObVecIndexAsyncTask", K(ret), K(tenant_id), K(ls_id));
     } else if (FALSE_IT(async_task = new (async_task) ObVecIndexAsyncTask())) {
@@ -965,13 +962,36 @@ int ObVecIndexAsyncTaskHandler::push_task(
     // free memory
     if (OB_FAIL(ret) && OB_NOT_NULL(async_task)) {
       async_task->~ObVecIndexAsyncTask();
-      allocator_->free(async_task);  // arena need free? no
+      allocator->free(async_task);  // arena need free? no
       async_task = nullptr;
     }
     if (OB_FAIL(ret)) {
     } else if (OB_NOT_NULL(async_task)) {
       handle_ls_process_task_cnt(async_task->get_ls_id(), true);
     }
+  }
+  return ret;
+}
+
+int ObVecIndexAsyncTaskHandler::get_allocator_by_ls(const ObLSID &ls_id, ObIAllocator *&allocator)
+{
+  int ret = OB_SUCCESS;
+  ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
+  ObPluginVectorIndexMgr *vec_idx_mgr = nullptr;
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ls id", K(ret), K(ls_id));
+  } else if (OB_ISNULL(vector_index_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), KP(vector_index_service));
+  } else if (OB_FAIL(vector_index_service->get_ls_index_mgr_map().get_refactored(ls_id, vec_idx_mgr))) {
+    LOG_WARN("fail to get vector index ls mgr", KR(ret), K(ls_id));
+  } else if (OB_ISNULL(vec_idx_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), KP(vec_idx_mgr));
+  } else {
+    ObVecIndexAsyncTaskOption &task_opt = vec_idx_mgr->get_async_task_opt();
+    allocator = task_opt.get_allocator();
   }
   return ret;
 }
@@ -1018,9 +1038,17 @@ void ObVecIndexAsyncTaskHandler::handle(void *task)
   dec_async_task_ref();
   // free memory
   if (OB_NOT_NULL(async_task)) {
+    int tmp_ret = OB_SUCCESS;
+    ObIAllocator *allocator = nullptr;
     async_task->~ObVecIndexAsyncTask();
-    allocator_->free(async_task);
-    async_task = nullptr;
+    if (OB_TMP_FAIL(get_allocator_by_ls(async_task->get_ls_id(), allocator))) {
+      LOG_WARN("fail to get allocator by ls id", K(tmp_ret), K(async_task->get_ls_id()));
+    } else if (OB_ISNULL(allocator)) {
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null allocator", K(tmp_ret), K(async_task->get_ls_id()));
+    } else {
+      allocator->free(async_task);
+    }
   }
 }
 
@@ -1042,9 +1070,17 @@ void ObVecIndexAsyncTaskHandler::handle_drop(void *task)
       handle_ls_process_task_cnt(async_task->get_ls_id(), false);
     }
     if (OB_NOT_NULL(async_task)) {
+      int tmp_ret = OB_SUCCESS;
+      ObIAllocator *allocator = nullptr;
       async_task->~ObVecIndexAsyncTask();
-      allocator_->free(async_task);
-      async_task = nullptr;
+      if (OB_TMP_FAIL(get_allocator_by_ls(async_task->get_ls_id(), allocator))) {
+      LOG_WARN("fail to get allocator by ls id", K(tmp_ret), K(async_task->get_ls_id()));
+    } else if (OB_ISNULL(allocator)) {
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null allocator", K(tmp_ret), K(async_task->get_ls_id()));
+    } else {
+      allocator->free(async_task);
+      }
     }
     // !!!!! desc async task ref cnt
     dec_async_task_ref();

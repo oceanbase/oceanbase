@@ -159,7 +159,7 @@ int ObVecAsyncTaskExector::check_and_set_thread_pool()
     } else {
       common::ObSpinLockGuard init_guard(thread_pool_handle.lock_); // lock thread pool init to avoid init twice
       if (thread_pool_handle.get_tg_id() != INVALID_TG_ID) { // no need to init twice, skip
-      } else if (OB_FAIL(thread_pool_handle.init(allocator))) {
+      } else if (OB_FAIL(thread_pool_handle.init())) {
         LOG_WARN("fail to init vec async task handle", K(ret), K(tenant_id_));
       } else if (OB_FAIL(thread_pool_handle.start())) {
         LOG_WARN("fail to start thread pool", K(ret), K(tenant_id_));
@@ -413,7 +413,7 @@ int ObVecAsyncTaskExector::start_task()
             int tmp_ret = OB_SUCCESS;
             if (task_ctx->in_thread_pool_) {                // skip push task
               LOG_DEBUG("task is in thread pool already", KPC(task_ctx));
-            } else if (OB_FAIL(task_handle.push_task(tenant_id_, ls_->get_ls_id(), task_ctx))) {
+            } else if (OB_FAIL(task_handle.push_task(tenant_id_, ls_->get_ls_id(), task_ctx, task_opt.get_allocator()))) {
               LOG_WARN("fail to push task to thread pool", K(ret), K(tenant_id_), K(ls_->get_ls_id()), K(*task_ctx));
             } else if (FALSE_IT(task_ctx->in_thread_pool_ = true)) {
             } else if (OB_FAIL(update_status_and_ret_code(task_ctx))) {

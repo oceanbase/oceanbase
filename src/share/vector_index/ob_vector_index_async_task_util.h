@@ -209,12 +209,13 @@ class ObVecIndexAsyncTaskHandler : public lib::TGTaskHandler
 public:
   ObVecIndexAsyncTaskHandler();
   virtual ~ObVecIndexAsyncTaskHandler();
-  int init(ObIAllocator *allocator);
+  int init();
   int start();
   void stop();
   void wait();
   void destroy();
-  int push_task(const uint64_t tenant_id, const ObLSID &ls_id, ObVecIndexAsyncTaskCtx *ctx);
+  int push_task(const uint64_t tenant_id, const ObLSID &ls_id, ObVecIndexAsyncTaskCtx *ctx, ObIAllocator *allocator);
+  int get_allocator_by_ls(const ObLSID &ls_id, ObIAllocator *&allocator);
   int get_tg_id() { return tg_id_; }
 
   void inc_async_task_ref() { ATOMIC_INC(&async_task_ref_cnt_); }
@@ -235,7 +236,6 @@ private:
   bool is_inited_;
   int tg_id_;
   volatile int64_t async_task_ref_cnt_;
-  ObIAllocator *allocator_;
 };
 
 class ObPluginVectorIndexAdaptor;
