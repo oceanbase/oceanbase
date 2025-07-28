@@ -1222,6 +1222,42 @@ int ObVectorIndexUtil::check_rowkey_cid_table_readable(
   return ret;
 }
 
+// when rowkey-vid table is readable, can get the table id
+int ObVectorIndexUtil::check_rowkey_tid_table_readable(
+    share::schema::ObSchemaGetterGuard *schema_guard,
+    const ObTableSchema &data_table_schema,
+    uint64_t &tid,
+    const bool allow_unavailable)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  const int64_t tenant_id = data_table_schema.get_tenant_id();
+  tid = OB_INVALID_ID;
+
+  if (OB_ISNULL(schema_guard) || !data_table_schema.is_user_table()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(schema_guard), K(data_table_schema));
+  } else if (OB_FAIL(data_table_schema.get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("fail to get simple index infos failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count() && tid == OB_INVALID_ID; ++i) {
+      const ObTableSchema *index_table_schema = nullptr;
+      if (OB_FAIL(schema_guard->get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_table_schema))) {
+        LOG_WARN("fail to get index_table_schema", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
+      } else if (OB_ISNULL(index_table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index table schema should not be null", K(ret), K(simple_index_infos.at(i).table_id_));
+      } else if (!allow_unavailable && !index_table_schema->can_read_index()) {
+      } else if (!index_table_schema->is_vec_rowkey_vid_type()) {
+        // skip not spec index type
+      } else {
+        tid = simple_index_infos.at(i).table_id_;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObVectorIndexUtil::get_right_index_tid_in_rebuild(
     share::schema::ObSchemaGetterGuard *schema_guard,
     const ObTableSchema &data_table_schema,
@@ -1966,6 +2002,7 @@ int ObVectorIndexUtil::get_vector_index_tid_check_valid(
   }
   return ret;
 }
+
 /*
   NOTE: Only one vector index can be created on the same column now
  */

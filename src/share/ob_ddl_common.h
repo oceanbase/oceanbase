@@ -218,6 +218,8 @@ enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
   PURGE_OLD_MLOG = 47,
   REGISTER_SPLIT_INFO_MDS = 48,
   PREPARE_TABLET_SPLIT_RANGES = 49,
+  DROP_VID_ROWKEY_INDEX_TABLE = 50,
+  DROP_ROWKEY_VID_INDEX_TABLE = 51,
 
   FAIL = 99,
   SUCCESS = 100
@@ -401,6 +403,12 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::PREPARE_TABLET_SPLIT_RANGES:
       str = "PREPARE_TABLET_SPLIT_RANGES";
+      break;
+    case ObDDLTaskStatus::DROP_VID_ROWKEY_INDEX_TABLE:
+      str = "DROP_VID_ROWKEY_INDEX_TABLE";
+      break;
+    case ObDDLTaskStatus::DROP_ROWKEY_VID_INDEX_TABLE:
+      str = "DROP_ROWKEY_VID_INDEX_TABLE";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";

@@ -357,6 +357,11 @@ public:
       const uint64_t column_id,
       uint64_t &tid,
       const bool allow_unavailable = false);
+  static int check_rowkey_tid_table_readable(
+      share::schema::ObSchemaGetterGuard *schema_guard,
+      const ObTableSchema &data_table_schema,
+      uint64_t &tid,
+      const bool allow_unavailable = false);
   static int get_right_index_tid_in_rebuild(
       share::schema::ObSchemaGetterGuard *schema_guard,
       const ObTableSchema &data_table_schema,
