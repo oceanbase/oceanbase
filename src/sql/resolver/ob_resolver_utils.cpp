@@ -16,6 +16,7 @@
 #include <orc/Writer.hh>
 
 #include "sql/resolver/ob_resolver_utils.h"
+#include "sql/engine/expr/ob_expr_vector.h"
 #include "sql/parser/parse_malloc.h"
 #include "sql/parser/ob_parser.h"
 #include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
@@ -511,7 +512,7 @@ int ObResolverUtils::resolve_vector_type_info(const ParseNode &type_node, ObStri
     LOG_WARN("failed to append type string", K(ret), K(type_node.type_));
   } else if (OB_FAIL(buf.append("("))) {
     LOG_WARN("failed to append left bracket", K(ret), K(type_node.type_));
-  } else if (type_node.children_[0]->value_ <= 0 || type_node.children_[0]->value_ > 16000) {
+  } else if (type_node.children_[0]->value_ <= 0 || type_node.children_[0]->value_ > ObExprVector::MAX_VECTOR_DIM) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported vector column dim range", K(ret), K(type_node.children_[0]->value_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector column dim less or equal to zero or larger than 16000 is");
