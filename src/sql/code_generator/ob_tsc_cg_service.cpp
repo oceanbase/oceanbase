@@ -1078,10 +1078,14 @@ int ObTscCgService::extract_das_access_exprs(const ObLogTableScan &op,
           && !static_cast<ObColumnRefRawExpr *>(expr)->is_vec_cid_column()
           && !static_cast<ObColumnRefRawExpr *>(expr)->is_vec_pq_cids_column()) {
         // do nothing.
-      } else if (!cg_.opt_ctx_->is_online_ddl() && expr->is_column_ref_expr() && (static_cast<ObColumnRefRawExpr *>(expr)->is_vec_cid_column() || static_cast<ObColumnRefRawExpr *>(expr)->is_vec_pq_cids_column())) {
+      } else if (!cg_.opt_ctx_->is_online_ddl()
+                 && expr->is_column_ref_expr()
+                 && (static_cast<ObColumnRefRawExpr *>(expr)->is_vec_cid_column()
+                     || static_cast<ObColumnRefRawExpr *>(expr)->is_vec_pq_cids_column()
+                     || static_cast<ObColumnRefRawExpr *>(expr)->is_vec_hnsw_vid_column())) {
         share::schema::ObSchemaGetterGuard *schema_guard = cg_.opt_ctx_->get_schema_guard();
         const ObTableSchema *table_schema = nullptr;
-        uint64_t rowkey_cid_tid = OB_INVALID_ID;
+        uint64_t rowkey_id_tid = OB_INVALID_ID;
         if (OB_ISNULL(schema_guard)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null schema guard", K(ret));
@@ -1092,14 +1096,19 @@ int ObTscCgService::extract_das_access_exprs(const ObLogTableScan &op,
           if (OB_FAIL(add_var_to_array_no_dup(tmp_access_exprs, expr))) {
             LOG_WARN("failed to add param expr", K(ret));
           }
-        } else if (OB_FAIL(ObVectorIndexUtil::check_rowkey_cid_table_readable(schema_guard, *table_schema, static_cast<ObColumnRefRawExpr *>(expr)->get_column_id(), rowkey_cid_tid))) {
+        } else if ((static_cast<ObColumnRefRawExpr *>(expr)->is_vec_cid_column()
+                    || static_cast<ObColumnRefRawExpr *>(expr)->is_vec_pq_cids_column())
+                   && OB_FAIL(ObVectorIndexUtil::check_rowkey_cid_table_readable(schema_guard, *table_schema, static_cast<ObColumnRefRawExpr *>(expr)->get_column_id(), rowkey_id_tid))) {
           LOG_WARN("failed to check_rowkey_cid_table_readable", K(ret));
-        } else if (OB_INVALID_ID == rowkey_cid_tid) {
+        } else if (static_cast<ObColumnRefRawExpr *>(expr)->is_vec_hnsw_vid_column()
+                   && OB_FAIL(ObVectorIndexUtil::check_rowkey_tid_table_readable(schema_guard, *table_schema, rowkey_id_tid))) {
+          LOG_WARN("failed to check_rowkey_vid_table_readable", K(ret));
+        } else if (OB_INVALID_ID == rowkey_id_tid) {
         } else {
           const ObIArray<uint64_t> &domain_tids = op.get_rowkey_domain_tids();
           bool need_add = false;
           for (int i = 0; i < domain_tids.count() && !need_add; i++) {
-            if (rowkey_cid_tid == domain_tids.at(i)) {
+            if (rowkey_id_tid == domain_tids.at(i)) {
               need_add = true;
             }
           }

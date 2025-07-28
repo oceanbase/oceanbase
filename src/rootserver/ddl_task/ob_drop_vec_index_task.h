@@ -69,7 +69,6 @@ private:
                           obrpc::ObDropIndexArg &dst_index_arg);
   int check_switch_succ();
   int prepare(const share::ObDDLTaskStatus &status);
-  int check_and_wait_finish(const share::ObDDLTaskStatus &status);
   int release_snapshot(const int64_t snapshot_version);
   int wait_trans_end(const share::ObDDLTaskStatus next_task_status);
   int obtain_snapshot(const share::ObDDLTaskStatus next_task_status);
@@ -87,14 +86,14 @@ private:
       const common::ObIArray<ObVecIndexDDLChildTaskInfo> &child_task_ids,
       bool &has_finished);
   int wait_none_share_index_child_task_finish(bool &has_finished);
-  int wait_share_index_child_task_finish(bool &has_finished);
+  int wait_vid_rowkey_task_finish(const share::ObDDLTaskStatus &next_task_status);
+  int wait_rowkey_vid_task_finish(const share::ObDDLTaskStatus &next_task_status);
   int create_drop_index_task(
       share::schema::ObSchemaGetterGuard &guard,
       const uint64_t index_tid,
       const common::ObString &index_name,
       int64_t &task_id,
       const bool is_domain_index = false);
-  int create_drop_share_index_task();
   int update_task_message();
   int succ();
   int fail();

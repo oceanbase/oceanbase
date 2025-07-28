@@ -19437,22 +19437,10 @@ int ObDMLResolver::fill_vec_id_expr_param(
   } else if (OB_ISNULL(session_info_) || OB_ISNULL(params_.expr_factory_) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", KP_(session_info), KP_(params_.expr_factory), KP(stmt));
-  } else if (table_schema->is_user_table() && OB_FAIL(table_schema->get_rowkey_vid_tid(rowkey_vid_tid))) {
-    ObSchemaGetterGuard &schema_guard = *params_.schema_checker_->get_schema_guard();
-    int tmp_ret = ret;
-    bool is_all_deleted = false;
-    /* 1. 这里不可能是后建未完成，而取不到rowkey_vid的场景，因为rowkey_vid是第一个后建的索引表，如果判断函数外层的column是vid列，那么说明rowkey_vid已经被创建
-       2. 这里只能是删除向量索引的场景，删除时可能rowkey_vid已经被删除，但vid_rowkey没有删除，外层函数判断主表上的vid列还在，会进入到这个函数。因此需要判断345号表
-       是否存在，如果都不存在了，说明当前正在删除1，2号表，获取不到rowkey_vid的场景是有可能的，这个时候要返回success
-     */
-    if (OB_FAIL(ObVectorIndexUtil::check_vec_aux_index_deleted(schema_guard, *table_schema, is_all_deleted))) {
-      LOG_WARN("fail to check vec index exist", K(ret));
-    }
-    if (OB_SUCC(ret) && is_all_deleted) {
-      ret = OB_SUCCESS;
-    } else {
-      ret = tmp_ret;
-    }
+  } else if (table_schema->is_user_table() && OB_FAIL(ObVectorIndexUtil::check_rowkey_tid_table_readable(schema_checker_->get_schema_guard(), *table_schema, rowkey_vid_tid, true))) {
+    LOG_WARN("not doc id expr", K(ret), "expr type", vec_id_expr->get_expr_type());
+  } else if (OB_INVALID_ID == rowkey_vid_tid) {
+    // do nothing, skip the vid column
   } else {
     CopySchemaExpr copier(*params_.expr_factory_);
     ObSysFunRawExpr *expr = static_cast<ObSysFunRawExpr *>(vec_id_expr);
@@ -20357,6 +20345,24 @@ int ObDMLResolver::check_domain_id_need_column_ref_expr(ObDMLStmt &stmt, ObSchem
           rowkey_cid_tid))) {
         LOG_WARN("fail to check rowkey cid table", K(ret), KPC(table));
       } else if (OB_INVALID_ID != rowkey_cid_tid) {
+        need_column_ref_expr = true;
+      }
+    } else if (col_schema->is_vec_hnsw_vid_column()) {
+      uint64_t rowkey_vid_tid = OB_INVALID_ID;
+      const share::schema::ObTableSchema *table = nullptr;
+      const ObSimpleTableSchemaV2 *index_schema = nullptr;
+      const share::schema::ObTableSchema *data_table = nullptr;
+      if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), col_schema->get_table_id(), table))) {
+        LOG_WARN("fail to get ddl table schema", K(ret));
+      } else if (table->is_vec_hnsw_index() && OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), table->get_data_table_id(), data_table))) {
+        LOG_WARN("fail to get data table schema", K(ret));
+      } else if (FALSE_IT(data_table = OB_ISNULL(data_table)? table : data_table)){
+      } else if (OB_FAIL(ObVectorIndexUtil::check_rowkey_tid_table_readable(
+          schema_guard,
+          *data_table,
+          rowkey_vid_tid))) {
+        LOG_WARN("fail to check rowkey cid table", K(ret), KPC(table));
+      } else if (OB_INVALID_ID != rowkey_vid_tid) {
         need_column_ref_expr = true;
       }
     } else {

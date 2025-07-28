@@ -271,7 +271,7 @@ int ObDomainIdUtils::get_domain_tid_table_by_cid(
         break;
       }
       case ObDomainIDType::VID: {
-        if (OB_FAIL(data_table->get_rowkey_vid_tid(tid))) {
+        if (OB_FAIL(ObVectorIndexUtil::check_rowkey_tid_table_readable(sql_schema_guard->get_schema_guard(), *data_table, tid))) {
           LOG_WARN("fail to get rowkey vid table id", K(ret), KPC(data_table));
         }
         break;

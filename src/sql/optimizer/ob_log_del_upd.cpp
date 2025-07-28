@@ -1721,6 +1721,19 @@ int ObLogDelUpd::replace_dml_info_exprs(
           LOG_WARN("fail to replace expr", K(ret), K(i), K(index_dml_info->column_old_values_exprs_));
         }
       } else if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_vec_hnsw_vid_column()) {
+        const ObTableSchema *table_schema = NULL;
+        if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), index_dml_info->ref_table_id_, table_schema))) {
+          LOG_WARN("failed to get table schema", K(ret));
+        } else if (OB_NOT_NULL(table_schema)) {
+          uint64_t rowkey_vid_tid = OB_INVALID_ID;
+          if (OB_FAIL(ObVectorIndexUtil::check_rowkey_tid_table_readable(schema_guard, *table_schema, rowkey_vid_tid))) {
+            // just skip, nothing to do.
+          } else if (OB_INVALID_ID == rowkey_vid_tid) {
+            if (OB_FAIL(replace_expr_action(replacer, index_dml_info->column_old_values_exprs_.at(i)))) {
+              LOG_WARN("fail to replace expr", K(ret), K(i), K(index_dml_info->column_old_values_exprs_));
+            }
+          }
+        }
         // just skip, nothing to do.
       } else if (expr->is_column_ref_expr() && static_cast<ObColumnRefRawExpr *>(expr)->is_vec_cid_column()) {
         const ObTableSchema *table_schema = NULL;
