@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "common/object/ob_obj_compare.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "sql/engine/expr/ob_expr_vector.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_array_cast.h"
@@ -82,6 +83,12 @@ int ObArrayExprUtils::get_type_vector(
       LOG_WARN("construct array obj failed", K(ret), K(*coll_info));
     } else if (OB_FAIL(result->init(blob_data))) {
       LOG_WARN("failed to init array", K(ret));
+    } else {
+      if (result->size() > ObExprVector::MAX_VECTOR_DIM) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("vector dimension exceeds maximum limit", K(ret), K(result->size()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector dimension exceeds maximum limit of 16000");
+      }
     }
   }
   return ret;
