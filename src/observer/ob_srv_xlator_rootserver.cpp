@@ -82,6 +82,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcAbortRedefTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcUpdateDDLTaskActiveTimeP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateHiddenTableP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCreateHiddenTableV2P, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcSetCommentP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcExchangePartitionP, *gctx_.root_service_);

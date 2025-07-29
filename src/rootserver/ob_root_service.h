@@ -64,6 +64,7 @@
 #include "rootserver/ob_root_rebuild_tablet.h"
 #include "rootserver/ob_ccl_ddl_service.h"
 #include "rootserver/ob_sensitive_rule_ddl_service.h"
+#include "share/ob_create_hidden_tablev2_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -523,6 +524,7 @@ public:
   int abort_redef_table(const obrpc::ObAbortRedefTableArg &arg);
   int update_ddl_task_active_time(const obrpc::ObUpdateDDLTaskActiveTimeArg &arg);
   int create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg, obrpc::ObCreateHiddenTableRes &res);
+  int create_hidden_table_v2(const obrpc::ObCreateHiddenTableArgV2 &arg, obrpc::ObCreateHiddenTableRes &res);
   int send_auto_split_tablet_task_request(const obrpc::ObAutoSplitTabletBatchArg &arg, obrpc::ObAutoSplitTabletBatchRes &res);
   int split_global_index_tablet(const obrpc::ObAlterTableArg &arg);
   /**
