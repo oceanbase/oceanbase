@@ -4893,3 +4893,38 @@ int ObBackupPartialTableListMeta::assign(const ObBackupPartialTableListMeta &oth
   }
   return ret;
 }
+
+static const char *type_strs[] = {
+    "backup_data",
+    "archive_log",
+    "backup_key",
+    "restore_data",
+    "restore_log",
+};
+
+const char *ObBackupDestType::get_str(const TYPE &type)
+{
+  const char *str = nullptr;
+
+  if (type < 0 || type >= TYPE::DEST_TYPE_MAX) {
+    str = "UNKNOWN";
+  } else {
+    str = type_strs[type];
+  }
+  return str;
+}
+
+ObBackupDestType::TYPE ObBackupDestType::get_type(const char *type_str)
+{
+  ObBackupDestType::TYPE type = ObBackupDestType::TYPE::DEST_TYPE_MAX;
+
+  const int64_t count = ARRAYSIZEOF(type_strs);
+  STATIC_ASSERT(static_cast<int64_t>(ObBackupDestType::TYPE::DEST_TYPE_MAX) == count, "type count mismatch");
+  for (int64_t i = 0; i < count; ++i) {
+    if (0 == strcmp(type_str, type_strs[i])) {
+      type = static_cast<ObBackupDestType::TYPE>(i);
+      break;
+    }
+  }
+  return type;
+}

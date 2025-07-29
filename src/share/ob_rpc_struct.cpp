@@ -8612,8 +8612,7 @@ int ObBackupManageArg::assign(const ObBackupManageArg &arg)
 }
 
 OB_SERIALIZE_MEMBER(ObBackupCleanArg, tenant_id_, initiator_tenant_id_, initiator_job_id_, type_,
-                    first_value_,  // FARM COMPAT WHITELIST
-                    dest_id_, description_, clean_tenant_ids_, value_);
+                    first_value_, dest_id_, description_, clean_tenant_ids_, value_, dest_path_, dest_type_);
 bool ObBackupCleanArg::is_valid() const
 {
   return OB_INVALID_ID != initiator_tenant_id_ && first_value_ >= 0;

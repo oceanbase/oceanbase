@@ -21,23 +21,6 @@ namespace oceanbase
 {
 namespace share
 {
-
-struct ObBackupDestType final
-{
-  enum TYPE : int64_t
-  {
-    DEST_TYPE_BACKUP_DATA = 0,
-    DEST_TYPE_ARCHIVE_LOG,
-    DEST_TYPE_BACKUP_KEY,
-    DEST_TYPE_RESTORE_DATA,
-    DEST_TYPE_RESTORE_LOG,
-    DEST_TYPE_MAX
-  };
-  static const char *get_str(const TYPE &type);
-  static TYPE get_type(const char *type_str);
-  static OB_INLINE bool is_valid(const TYPE &type) { return type >= 0 && type < TYPE::DEST_TYPE_MAX; } 
-};
-
 struct ObBackupFormatDesc final : public ObIBackupSerializeProvider
 {
   OB_UNIS_VERSION_V(1); // virtual

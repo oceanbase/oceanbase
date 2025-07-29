@@ -1922,6 +1922,24 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupPartialTableListMeta);
 };
+
+struct ObBackupDestType final
+{
+  enum TYPE : int64_t
+  {
+    DEST_TYPE_BACKUP_DATA = 0,
+    DEST_TYPE_ARCHIVE_LOG = 1,
+    DEST_TYPE_BACKUP_KEY = 2,
+    DEST_TYPE_RESTORE_DATA = 3,
+    DEST_TYPE_RESTORE_LOG = 4,
+    DEST_TYPE_MAX
+  };
+  static const char *get_str(const TYPE &type);
+  static TYPE get_type(const char *type_str);
+  static OB_INLINE bool is_valid(const TYPE &type) { return type >= 0 && type < TYPE::DEST_TYPE_MAX; }
+
+  static OB_INLINE bool is_clean_valid(const TYPE &type) { return DEST_TYPE_BACKUP_DATA == type || DEST_TYPE_ARCHIVE_LOG == type; }
+};
 }//share
 }//oceanbase
 

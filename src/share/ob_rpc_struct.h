@@ -102,6 +102,7 @@
 #include "storage/ob_micro_block_format_version_helper.h"
 #include "share/schema/ob_location_schema_struct.h"
 #include "share/schema/ob_objpriv_mysql_schema_struct.h"
+#include "share/backup/ob_backup_struct.h"
 
 namespace oceanbase
 {
@@ -10120,13 +10121,15 @@ public:
       dest_id_(0),
       description_(),
       clean_tenant_ids_(),
-      value_()
+      value_(),
+      dest_path_(),
+      dest_type_(share::ObBackupDestType::DEST_TYPE_MAX)
   {
 
   }
   bool is_valid() const;
   int assign(const ObBackupCleanArg &arg);
-  TO_STRING_KV(K_(type), K_(tenant_id), K_(initiator_tenant_id), K_(initiator_job_id), K_(first_value), K_(dest_id), K_(description), K_(clean_tenant_ids), K_(value));
+  TO_STRING_KV(K_(type), K_(tenant_id), K_(initiator_tenant_id), K_(initiator_job_id), K_(first_value), K_(dest_id), K_(description), K_(clean_tenant_ids), K_(value), K_(dest_path), K_(dest_type));
   uint64_t tenant_id_;
   uint64_t initiator_tenant_id_;
   int64_t initiator_job_id_;
@@ -10136,6 +10139,8 @@ public:
   share::ObBackupDescription description_;
   common::ObSArray<uint64_t> clean_tenant_ids_;
   common::ObSArray<int64_t> value_;
+  share::ObBackupPathString dest_path_;
+  share::ObBackupDestType::TYPE dest_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanArg);
 };
