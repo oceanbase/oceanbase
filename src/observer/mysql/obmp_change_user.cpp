@@ -14,6 +14,7 @@
 #include "observer/mysql/obmp_change_user.h"
 #include "sql/ob_sql.h"
 #include "rpc/obmysql/packet/ompk_auth_switch.h"
+#include "observer/mysql/obmp_stmt_send_piece_data.h"
 
 
 using namespace oceanbase::common;
@@ -282,6 +283,43 @@ int ObMPChangeUser::process()
       OB_LOG(WARN,"response fail packet fail", K(ret));
     }
     need_disconnect = true;
+  }
+
+  // Releases prepared statements. (include ps stmt, ps cursor, piece)
+  if (OB_SUCC(ret)) {
+    // 1 ps stmt
+    if (OB_FAIL(session->close_all_ps_stmt())) {
+      LOG_WARN("failed to close all stmt", K(ret));
+    }
+
+    // 2 ps cursor
+    if (OB_SUCC(ret) && session->get_cursor_cache().is_inited()) {
+      if (OB_FAIL(session->get_cursor_cache().close_all(*session))) {
+        LOG_WARN("failed to close all cursor", K(ret));
+      } else {
+        session->get_cursor_cache().reset();
+      }
+    }
+
+    // 3 piece
+    if (OB_SUCC(ret) && NULL != session->get_piece_cache()) {
+      observer::ObPieceCache* piece_cache =
+        static_cast<observer::ObPieceCache*>(session->get_piece_cache());
+      if (OB_FAIL(piece_cache->close_all(*session))) {
+        LOG_WARN("failed to close all piece", K(ret));
+      }
+      piece_cache->reset();
+      session->get_session_allocator().free(session->get_piece_cache());
+      session->set_piece_cache(NULL);
+    }
+
+    if (OB_SUCC(ret)) {
+      // 4 ps session info
+      session->reset_ps_session_info();
+
+      // 5 ps name
+      session->reset_ps_name();
+    }
   }
 
   if (OB_UNLIKELY(need_disconnect) && is_conn_valid()) {
