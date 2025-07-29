@@ -60,7 +60,8 @@ public:
     uint16_t var_column_count_; // For pax encoding format
     struct { // For cs encoding format
       uint8_t compressor_type_;
-      uint8_t cs_reserved_;
+      uint8_t has_row_header_ : 1;
+      uint8_t cs_reserved_ : 7;
     };
     uint16_t opt2_;
   };
