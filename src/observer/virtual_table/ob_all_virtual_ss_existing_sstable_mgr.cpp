@@ -246,7 +246,7 @@ int ObAllVirtualSSExistingSSTableMgr::get_next_tablet_()
     ObAtomicExtraInfo extra_info;
     const SCN start_scn = SCN::min_scn();
     SCN end_scn;
-    if (OB_FAIL(meta_service->get_max_committed_meta_scn(end_scn))) {
+    if (OB_FAIL(meta_service->get_max_committed_meta_scn(ls_id_, end_scn))) {
       SERVER_LOG(WARN, "get max committed meta scn failed", K(ret));
     }
     ObMetaVersionRange range(start_scn, end_scn, false);
