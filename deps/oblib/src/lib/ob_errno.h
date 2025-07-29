@@ -425,6 +425,7 @@ constexpr int OB_OBJECT_STORAGE_IO_ERROR = -9129;
 constexpr int OB_OBJECT_STORAGE_CHECKSUM_ERROR = -9132;
 constexpr int OB_BACKUP_ZONE_IDC_REGION_INVALID = -9133;
 constexpr int OB_TMP_FILE_EXCEED_DISK_QUOTA = -9135;
+constexpr int OB_CANNOT_ACCESS_BACKUP_SET = -9147;
 constexpr int OB_ERR_XML_PARSE = -9549;
 constexpr int OB_ERR_XSLT_PARSE = -9574;
 constexpr int OB_MAX_RAISE_APPLICATION_ERROR         = -20000;
