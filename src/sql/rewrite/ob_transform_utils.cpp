@@ -13293,7 +13293,7 @@ int ObTransformUtils::check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &sele
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
     } else if (expr->has_flag(IS_CONST) ||
-               expr->has_generalized_column()) {
+               expr->is_generalized_column()) {
       // do nothing
     } else if (expr->has_flag(CNT_STATE_FUNC) ||
                expr->has_flag(CNT_DYNAMIC_USER_VARIABLE) ||
