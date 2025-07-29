@@ -70,6 +70,7 @@ public:
     auto_part_size_ = OB_INVALID_SIZE;
     tablet_max_checkpoint_scn_ = share::SCN::invalid_scn();
     ss_change_version_ = share::SCN::min_scn();
+    last_match_tablet_meta_version_ = 0;
     notify_ss_change_version_ = share::SCN::min_scn();
   }
   bool is_valid() const { return iter_attr_.valid_; }
@@ -93,11 +94,12 @@ public:
                K_(ss_public_sstable_occupy_size),
                K_(backup_bytes),
                K_(ss_change_version),
+               K_(last_match_tablet_meta_version),
                K_(auto_part_size),
                K_(notify_ss_change_version),
                K_(tablet_max_checkpoint_scn));
 
-  OB_UNIS_VERSION_V(1);
+  OB_UNIS_VERSION(1);
 public:
   ObTabletFastIterAttr iter_attr_;
   int64_t ha_status_;
@@ -114,6 +116,7 @@ public:
   int64_t ss_public_sstable_occupy_size_;
   int64_t backup_bytes_;
   share::SCN ss_change_version_; // 8B
+  int64_t last_match_tablet_meta_version_; // 8B
 
   // =================== ATTENTION !!! ======================
   // The following fields do not need to be persisted
