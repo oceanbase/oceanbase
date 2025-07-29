@@ -11973,6 +11973,7 @@ int ObRootService::reload_master_key(const obrpc::ObReloadMasterKeyArg &arg,
     result.tenant_id_ = arg.tenant_id_;
     result.master_key_id_ = max_version;
   }
+  LOG_INFO("finish reload master key", KR(ret), K(arg), K(result));
   return ret;
 }
 #endif

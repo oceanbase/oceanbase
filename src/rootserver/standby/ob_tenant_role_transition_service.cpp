@@ -22,6 +22,7 @@
 #include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "share/oracle_errno.h"//oracle error code
 #include "rootserver/ob_service_name_command.h"
+#include "rootserver/restore/ob_restore_common_util.h"//rebuild_master_key_version
 
 using namespace oceanbase::common::sqlclient;
 
@@ -85,7 +86,7 @@ const char* const ObTenantRoleTransitionConstants::RESTORE_TO_STANDBY_LOG_MOD_ST
 const char* ObTenantRoleTransCostDetail::type_to_str(CostType type) const
 {
   static const char *strs[] = { "WAIT_LOG_SYNC", "WAIT_BALANCE_TASK", "FLASHBACK_LOG",
-      "WAIT_LOG_END", "CHANGE_ACCESS_MODE" };
+      "WAIT_LOG_END", "CHANGE_ACCESS_MODE", "WAIT_REBUILD_MASTER_KEY" };
   STATIC_ASSERT(MAX_COST_TYPE == ARRAYSIZEOF(strs), "status string array size mismatch");
   const char* str = "UNKNOWN";
   if (type < 0 || type >= MAX_COST_TYPE) {
@@ -452,6 +453,8 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_switch_to_primary_(
   }
   if (FAILEDx(wait_ls_balance_task_finish_())) {
     LOG_WARN("failed to wait ls balance task finish", KR(ret));
+  } else if (OB_FAIL(wait_rebuild_master_key_version_finish_())) {
+    LOG_WARN("failed to wait rebuild master key version", KR(ret));
   } else if (OB_FAIL(switchover_update_tenant_status(tenant_id_,
                                               true /* switch_to_primary */,
                                               tenant_info.get_tenant_role(),
@@ -488,6 +491,8 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_failover_to_primary_
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover cancel failed, failover to primary");
   } else if (OB_FAIL(wait_ls_balance_task_finish_())) {
     LOG_WARN("failed to wait ls balance task finish", KR(ret));
+  } else if (OB_FAIL(wait_rebuild_master_key_version_finish_())) {
+    LOG_WARN("failed to wait rebuild master key version", KR(ret));
   } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_switchover_status(
                      tenant_id_, sql_proxy_, tenant_info.get_switchover_epoch(),
                      tenant_info.get_switchover_status(), share::FLASHBACK_SWITCHOVER_STATUS))) {
@@ -872,6 +877,26 @@ int ObTenantRoleTransitionService::check_ls_balance_task_finish_(
     }
     LOG_INFO("has balance task not finish", K(ls_balance_tasks), K(balance_task_array), K(cur_tenant_info));
   }
+  return ret;
+}
+
+//TODO 如果备库不设置tde_methode配置项，这里也是不能处理的，依赖于
+//配置项一定设置了
+int ObTenantRoleTransitionService::wait_rebuild_master_key_version_finish_()
+{
+  int ret = OB_SUCCESS;
+  int64_t begin_time = ObTimeUtility::current_time();
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
+  } else if (OB_FAIL(ObRestoreCommonUtil::rebuild_master_key_version(
+          GCTX.rs_rpc_proxy_, tenant_id_, false))) {
+    LOG_WARN("failed to rebuild master key version", KR(ret));
+  }
+  if (OB_LIKELY(NULL != cost_detail_)) {
+    int64_t wait_rebuild_master_key_task = ObTimeUtility::current_time() - begin_time;
+    (void) cost_detail_->add_cost(ObTenantRoleTransCostDetail::WAIT_REBUILD_MASTER_KEY, wait_rebuild_master_key_task);
+  }
+  LOG_INFO("finish wait rebuild master key version", KR(ret));
   return ret;
 }
 
