@@ -312,6 +312,12 @@ enum ObTableReferencedByFastLSMMVFlag
   IS_REFERENCED_BY_FAST_LSM_MV = 1
 };
 
+enum ObMvCntProctimeTableFlag
+{
+  MV_NOT_CNT_PROCTIME_TABLE = 0,
+  MV_CNT_PROCTIME_TABLE = 1
+};
+
 struct ObTableMode {
   OB_UNIS_VERSION_V(1);
 private:
@@ -482,7 +488,10 @@ private:
   static const int32_t MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS = 1;
   static const uint32_t MM_TABLE_REFERENCED_BY_FAST_LSM_MV_MASK =
       (1U << MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS) - 1;
-  static const int32_t MM_RESERVED = 62;
+  static const int32_t MM_CNT_PROCTIME_TABLE_OFFSET = 2;
+  static const int32_t MM_CNT_PROCTIME_TABLE_BITS = 1;
+  static const uint32_t MM_CNT_PROCTIME_TABLE_MASK = (1U << MM_CNT_PROCTIME_TABLE_BITS) - 1;
+  static const int32_t MM_RESERVED = 61;
 public:
   ObMvMode() { reset(); }
   virtual ~ObMvMode() { reset(); }
@@ -502,6 +511,11 @@ public:
         (mv_mode >> MM_TABLE_REFERENCED_BY_FAST_LSM_MV_OFFSET) &
         MM_TABLE_REFERENCED_BY_FAST_LSM_MV_MASK);
   }
+  static ObMvCntProctimeTableFlag get_cnt_proctime_table_flag(int64_t mv_mode)
+  {
+    return (ObMvCntProctimeTableFlag)((mv_mode >> MM_CNT_PROCTIME_TABLE_OFFSET) &
+                                       MM_CNT_PROCTIME_TABLE_MASK);
+  }
   union
   {
     int64_t mode_;
@@ -509,11 +523,13 @@ public:
     {
       uint64_t mv_major_refresh_flag_ : MM_MV_MAJOR_REFRESH_BITS;
       uint64_t table_referenced_by_fast_lsm_mv_flag_ : MM_TABLE_REFERENCED_BY_FAST_LSM_MV_BITS;
+      uint64_t cnt_proctime_table_ : MM_CNT_PROCTIME_TABLE_BITS;
       uint64_t reserved_ : MM_RESERVED;
     };
   };
   TO_STRING_KV("mv_major_refresh_flag", mv_major_refresh_flag_,
-               "table_referenced_by_fast_lsm_mv_flag", table_referenced_by_fast_lsm_mv_flag_);
+               "table_referenced_by_fast_lsm_mv_flag", table_referenced_by_fast_lsm_mv_flag_,
+               "cnt_proctime_table", cnt_proctime_table_);
 };
 
 struct ObSemiStructEncodingType
