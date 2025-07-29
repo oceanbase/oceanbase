@@ -1799,10 +1799,13 @@ int ObSSDataSplitHelper::check_satisfy_ss_split_condition(
       if (OB_EMPTY_RESULT != ret) {
         LOG_WARN("get mds table failed", K(ret), K(source_tablet_id));
       } else { // override ret_code is expected.
+        ObSSLSMeta ss_ls_meta;
         const SCN &clog_checkpoint_scn = local_source_tablet_handle.get_obj()->get_clog_checkpoint_scn();
         const SCN &mds_checkpoint_scn = local_source_tablet_handle.get_obj()->get_mds_checkpoint_scn();
-        const SCN transfer_scn = local_source_tablet_handle.get_obj()->get_reorganization_scn();
-        if (OB_FAIL(MTL(ObSSMetaService*)->get_tablet(
+        const SCN &transfer_scn = local_source_tablet_handle.get_obj()->get_reorganization_scn();
+        if (OB_FAIL(MTL(ObSSMetaService*)->get_ls_meta(ls_id, ss_ls_meta))) {
+          LOG_WARN("get ss ls meta failed", K(ret), K(ls_id));
+        } else if (OB_FAIL(MTL(ObSSMetaService*)->get_tablet(
             ls_id, source_tablet_id,
             transfer_scn,
             tmp_arena, ss_tablet_handle))) {
@@ -1813,12 +1816,14 @@ int ObSSDataSplitHelper::check_satisfy_ss_split_condition(
             LOG_WARN("get tablet fail", K(ret), K(ls_id), K(source_tablet_id));
           }
         } else {
-          need_upload = ss_tablet_handle.get_obj()->get_clog_checkpoint_scn() < clog_checkpoint_scn
-                    || ss_tablet_handle.get_obj()->get_mds_checkpoint_scn() < mds_checkpoint_scn;
-          FLOG_INFO("debug for ss-split", K(ret), "local_clog_ckpt", clog_checkpoint_scn,
-                                                  "local_mds_ckpt", mds_checkpoint_scn,
-                                                  "rem_clog_ckpt", ss_tablet_handle.get_obj()->get_clog_checkpoint_scn(),
-                                                  "rem_mds_ckpt", ss_tablet_handle.get_obj()->get_mds_checkpoint_scn());
+          const SCN &ls_ss_checkpoint_scn = ss_ls_meta.get_ss_checkpoint_scn();
+          need_upload = clog_checkpoint_scn > SCN::max(ss_tablet_handle.get_obj()->get_clog_checkpoint_scn(), ls_ss_checkpoint_scn)
+                     || mds_checkpoint_scn > SCN::max(ss_tablet_handle.get_obj()->get_mds_checkpoint_scn(), ls_ss_checkpoint_scn);
+          FLOG_INFO("debug for ss-split", K(ret), K(ls_id), K(source_tablet_id), K(ls_ss_checkpoint_scn),
+            "local_clog_ckpt", clog_checkpoint_scn,
+            "local_mds_ckpt", mds_checkpoint_scn,
+            "rem_clog_ckpt", ss_tablet_handle.get_obj()->get_clog_checkpoint_scn(),
+            "rem_mds_ckpt", ss_tablet_handle.get_obj()->get_mds_checkpoint_scn());
         }
       }
     } else {
