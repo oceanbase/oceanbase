@@ -1360,9 +1360,9 @@ DEF_STR_WITH_CHECKER(audit_log_strategy, OB_TENANT_PARAMETER, "ASYNCHRONOUS",
          "ASYNCHRONOUS, PERFORMANCE, SYNCHRONOUS");
 
 //ddl 超时时间
-DEF_TIME(_ob_ddl_timeout, OB_CLUSTER_PARAMETER, "1000s", "[1s,)",
+DEF_TIME(_ob_ddl_timeout, OB_CLUSTER_PARAMETER, "1000s", "[1s,3216672000s)",
          "the config parameter of ddl timeout"
-         "Range: [1s, +∞)",
+         "Range: [1s, 3216672000s)",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //ddl 中间结果压缩格式
 DEF_STR_WITH_CHECKER(_ob_ddl_temp_file_compress_func, OB_TENANT_PARAMETER, "AUTO",
