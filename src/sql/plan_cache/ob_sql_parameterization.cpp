@@ -2107,20 +2107,29 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
       // UNIX_TIMESTAMP结果精度受参数控制,对于其参数化过程特殊处理。
       if (0 == func_name.case_compare("UNIX_TIMESTAMP")) {
         if (1 == node[1]->num_child_) {
-          // UNIX_TIMESTAMP(literal) 可参数化为 UNIX_TIMESTAMP(?),但需要生成对应的参数约束，在计划匹配时检查
-          if (!is_prepare_mode(ctx.mode_) &&
-              node[1]->children_[0]->type_ > T_INVALID &&
-              node[1]->children_[0]->type_ < T_MAX_CONST) {
-            void *buf = ctx.allocator_->alloc(sizeof(ObPCUnixTimestampParamConstraint));
-            if (OB_ISNULL(buf)) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-            } else {
-              ObPCUnixTimestampParamConstraint *constraint = new(buf)ObPCUnixTimestampParamConstraint((ctx.question_num_));
-              sql_info.params_constraint_.push_back(constraint);
+          // 父节点已经判断不可参数化 或 当前节点不可参数化
+          if (is_node_not_param(ctx) || is_tree_not_param(tree)) {
+            const int64_t ARGS_NUMBER_ONE = 1;
+            bool mark_arr[ARGS_NUMBER_ONE] = {1}; //0表示参数化, 1 表示不参数化
+            if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_ONE, sql_info))) {
+              SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
             }
           } else {
-            // UNIX_TIMESTAMP(EXPR) 可以正常参数化,这类sql可以共用一个计划,结果精度为6.
-            /*do nothing*/
+            // UNIX_TIMESTAMP(literal) 可参数化为 UNIX_TIMESTAMP(?),但需要生成对应的参数约束，在计划匹配时检查
+            if (!is_prepare_mode(ctx.mode_) &&
+                node[1]->children_[0]->type_ > T_INVALID &&
+                node[1]->children_[0]->type_ < T_MAX_CONST) {
+              void *buf = ctx.allocator_->alloc(sizeof(ObPCUnixTimestampParamConstraint));
+              if (OB_ISNULL(buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+              } else {
+                ObPCUnixTimestampParamConstraint *constraint = new(buf)ObPCUnixTimestampParamConstraint((ctx.question_num_));
+                sql_info.params_constraint_.push_back(constraint);
+              }
+            } else {
+              // UNIX_TIMESTAMP(EXPR) 可以正常参数化,这类sql可以共用一个计划,结果精度为6.
+              /*do nothing*/
+            }
           }
         }
       } else if (0 == func_name.case_compare("USERENV")
