@@ -190,7 +190,7 @@ bool ObVecIndexAsyncTaskUtil::check_can_do_work()
   int ret = OB_SUCCESS;
   uint64_t tenant_data_version = 0;
   bool is_oracle_mode = false;
-  const bool is_not_support = true;
+  const bool is_not_support = false;
   int64_t tenant_id = MTL_ID();
   if (is_not_support) {
     bret = false;

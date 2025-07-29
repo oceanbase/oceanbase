@@ -2059,7 +2059,11 @@ int ObDASHNSWScanIter::build_rowkey_obj_from_extra_info(ObObj *extra_info_objs, 
 int ObDASHNSWScanIter::prepare_follower_query_cond(ObVectorQueryConditions &query_cond)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(query_cond_.row_iter_)) {
+  /* snapshot_scan_param_.tablet_id_ will update in do_snapshot_table_scan
+   * so snapshot_scan_param_.tablet_id_ != snapshot_tablet_id_ means current query_cond_.row_iter_ is not current snapshot_tablet_id_ iter,
+   * that we should refresh */
+  if ((query_cond_.row_iter_ != nullptr && snapshot_scan_param_.tablet_id_ != snapshot_tablet_id_)
+      || OB_ISNULL(query_cond_.row_iter_)) {
     if (OB_FAIL(do_snapshot_table_scan())) {
       LOG_WARN("fail to do snapshot table scan", K(ret));
     } else if (OB_NOT_NULL(snapshot_iter_)) {
