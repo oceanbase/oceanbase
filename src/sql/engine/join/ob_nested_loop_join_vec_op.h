@@ -81,7 +81,8 @@ public:
     JS_GET_LEFT_ROW = 0,
     JS_RESCAN_RIGHT_OP,
     JS_PROCESS_RIGHT_BATCH,
-    JS_OUTPUT
+    JS_OUTPUT,
+    JS_CARTESIAN_OPTIMIZED_PROCESS
   };
 
   ObNestedLoopJoinVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
