@@ -756,7 +756,17 @@ int ObExprUDF::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObEx
         bool is_cursor_type = ObExtendType == info->result_type_.get_type() &&
                               (pl::PL_CURSOR_TYPE == info->result_type_.get_extend_type() ||
                               pl::PL_REF_CURSOR_TYPE == info->result_type_.get_extend_type());
-        info->is_deterministic_ &= !is_cursor_type;
+        bool is_subprogram_routine = !info->subprogram_path_.empty();
+        bool is_dblink_routine = info->dblink_id_ != OB_INVALID_ID;
+        if (is_cursor_type || is_subprogram_routine || is_dblink_routine) {
+          info->is_deterministic_ = false;
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && info->is_deterministic_ && i < info->params_type_.count(); ++i) {
+          if (ObExtendType == info->params_type_.at(i).get_type()) {
+            info->is_deterministic_ = false;
+            break;
+          }
+        }
       }
     }
   }
