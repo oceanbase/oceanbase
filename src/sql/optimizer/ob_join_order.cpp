@@ -18506,7 +18506,7 @@ int ObJoinOrder::check_and_fill_inner_path_info(PathHelper &helper,
       /*do nothing*/
     } else if (!OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP6,
                                                                   COMPAT_VERSION_4_3_0,
-                                                                  COMPAT_VERSION_4_3_5_BP3) &&
+                                                                  COMPAT_VERSION_4_3_5_BP4) &&
                !helper.force_inner_nl_ &&
                !inner_path->is_valid_inner_path_) {
       LOG_TRACE("skip none valid inner path");
@@ -18518,7 +18518,7 @@ int ObJoinOrder::check_and_fill_inner_path_info(PathHelper &helper,
     ObSEArray<ObSEArray<Path*, 16>, 16> path_list;
     if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP6,
                                                           COMPAT_VERSION_4_3_0,
-                                                          COMPAT_VERSION_4_3_5_BP3) &&
+                                                          COMPAT_VERSION_4_3_5_BP4) &&
         !helper.force_inner_nl_ &&
         OB_FAIL(prune_none_range_path(valid_inner_paths))) {
       LOG_WARN("failed to prune none valid inner path", K(ret));
@@ -18536,7 +18536,7 @@ int ObJoinOrder::check_and_fill_inner_path_info(PathHelper &helper,
           LOG_WARN("get unexpected null", K(ret));
         } else if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP6,
                                                                      COMPAT_VERSION_4_3_0,
-                                                                     COMPAT_VERSION_4_3_5_BP3) &&
+                                                                     COMPAT_VERSION_4_3_5_BP4) &&
                    !helper.force_inner_nl_ &&
                    !temp_path->is_valid_inner_path_) {
           LOG_TRACE("skip none valid inner path");
