@@ -352,8 +352,9 @@ int ObCreateDbLinkResolver::resolve_hostname_port_str(const ObString &ip_port_st
   int ret = OB_SUCCESS;
   char buf[OB_MAX_DOMIN_NAME_LENGTH + 1] = "";
   if (ip_port_str.empty()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected empty ip_port_str", K(ret));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "host");
   } else {
     int64_t data_len = MIN(ip_port_str.length(), sizeof (buf) - 1);
     MEMCPY(buf, ip_port_str.ptr(), data_len);
