@@ -4989,7 +4989,8 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
         } else if (phy_plan->temp_sql_can_prepare()
             && pc_ctx.neg_param_index_.is_empty()
             && !pc_ctx.sql_ctx_.is_batch_params_execute()
-            && !pc_ctx.exec_ctx_.has_dynamic_values_table()) {
+            && !pc_ctx.exec_ctx_.has_dynamic_values_table()
+            && !pc_ctx.is_rewrite_sql_) {
           //本地是文本协议的SQL，并且缓存在plan中，走ps协议
           //@TODO:yuchen.wyc 文本协议中如果出现不能参数化的参数，由于param store里的值可能不是参数化对应的值
           //例如select a, b-1 from t1; 这里会参数化成select a, b-? from t1;但param store里对应的是-1

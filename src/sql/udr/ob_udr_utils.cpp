@@ -263,10 +263,10 @@ int ObUDRUtils::match_udr_and_refill_ctx(const ObString &pattern,
 {
   int ret = OB_SUCCESS;
   is_match_udr = false;
-  bool enable_udr = sql_ctx.get_enable_user_defined_rewrite();
+
   ObSQLSessionInfo &session = result.get_session();
   ObExecContext &ectx = result.get_exec_context();
-  if (enable_udr
+  if (session.enable_udr()
       && !(pc_ctx.is_arraybinding_ || pc_ctx.is_inner_sql() || PC_PL_MODE == pc_ctx.mode_)) {
     ObIAllocator &allocator = result.get_mem_pool();
     PatternConstConsList cst_cons_list;
