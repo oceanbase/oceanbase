@@ -110,16 +110,17 @@ void process_hex_chars_simd(oceanbase::sql::ObRawSql& raw_sql, bool& is_arch_sup
   }
 }
 
-static const __m256i _9 = _mm256_set1_epi16(9);
-static const __m256i _15 = _mm256_set1_epi16(0xf);
+// TODO by qiyu.zd: avx2 path will be added after avx2 compilation flags are set correct
+// static const __m256i _9 = _mm256_set1_epi16(9);
+// static const __m256i _15 = _mm256_set1_epi16(0xf);
 
-inline static __m256i char_nibble(const __m256i value) {
-  __m256i and15 = _mm256_and_si256(value, _15);
-  __m256i sr6 = _mm256_srai_epi16(value, 6);
-  __m256i mul = _mm256_maddubs_epi16(sr6, _9);
-  __m256i add = _mm256_add_epi16(mul, and15);
-  return add;
-}
+// inline static __m256i char_nibble(const __m256i value) {
+//   __m256i and15 = _mm256_and_si256(value, _15);
+//   __m256i sr6 = _mm256_srai_epi16(value, 6);
+//   __m256i mul = _mm256_maddubs_epi16(sr6, _9);
+//   __m256i add = _mm256_add_epi16(mul, and15);
+//   return add;
+// }
 
 // called in parse_node.c
 extern "C" void ob_parse_binary_simd(const char **src, const char *end, char **dest)
