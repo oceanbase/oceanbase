@@ -926,8 +926,8 @@ int ObIOResult::wait(int64_t wait_ms)
       }
       if (REACH_TIME_INTERVAL(1000L * 1000L)) {
         int64_t cur_time = ObTimeUtility::fast_current_time();
-        if (this->time_log_.enqueue_ts_ > 0 && cur_time - this->time_log_.enqueue_ts_ > 4 * 1000L * 1000L) {
-          LOG_ERROR("schedule time is too long", K(*this), K(wait_ms), K(cur_time), K(this->time_log_.enqueue_ts_));
+        if (this->time_log_.enqueue_ts_ > 0 && this->time_log_.dequeue_ts_ <= 0 && cur_time - this->time_log_.enqueue_ts_ > 4 * 1000L * 1000L) {
+          LOG_WARN("schedule time is too long", K(*this), K(wait_ms), K(cur_time), K(this->time_log_.enqueue_ts_));
           IGNORE_RETURN faststack();
         }
       }
