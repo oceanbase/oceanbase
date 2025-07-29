@@ -43,7 +43,7 @@ protected:
   virtual int check_row(
       const transaction::ObTransID &trans_id,
       const ObRowHeader *row_header,
-      const ObStoreRowLockState &lock_state,
+      ObStoreRowLockState &lock_state,
       bool &need_stop);
   virtual void check_row_in_major_sstable(bool &need_stop);
 protected:
@@ -71,7 +71,7 @@ protected:
   virtual int check_row(
       const transaction::ObTransID &trans_id,
       const ObRowHeader *row_header,
-      const ObStoreRowLockState &lock_state,
+      ObStoreRowLockState &lock_state,
       bool &need_stop);
   virtual void check_row_in_major_sstable(bool &need_stop);
   int seek_forward();
