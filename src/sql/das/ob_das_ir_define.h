@@ -20,6 +20,26 @@ namespace oceanbase
 namespace sql
 {
 
+struct ObTextBlockMaxSpec
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTextBlockMaxSpec(common::ObIAllocator &alloc);
+  virtual ~ObTextBlockMaxSpec() {}
+
+  bool is_valid() const;
+  TO_STRING_KV(K_(col_types), K_(col_store_idxes),
+      K_(scan_col_proj), K_(min_id_idx), K_(max_id_idx), K_(token_freq_idx),
+      K_(doc_length_idx));
+  ObFixedArray<ObSkipIndexColType, ObIAllocator> col_types_;
+  ObFixedArray<int32_t, ObIAllocator> col_store_idxes_;
+  ObFixedArray<int32_t, ObIAllocator> scan_col_proj_;
+  int32_t min_id_idx_;
+  int32_t max_id_idx_;
+  int32_t token_freq_idx_;
+  int32_t doc_length_idx_;
+};
+
 struct ObDASIRScanCtDef : ObDASAttachCtDef
 {
   OB_UNIS_VERSION(1);
@@ -33,6 +53,10 @@ public:
       relevance_expr_(nullptr),
       relevance_proj_col_(nullptr),
       estimated_total_doc_cnt_(0),
+      topk_limit_expr_(nullptr),
+      topk_offset_expr_(nullptr),
+      token_col_(nullptr),
+      block_max_spec_(alloc),
       mode_flag_(NATURAL_LANGUAGE_MODE),
       flags_(0) {}
   bool need_calc_relevance() const { return nullptr != relevance_expr_; }
@@ -107,6 +131,10 @@ public:
   ObExpr *relevance_expr_;
   ObExpr *relevance_proj_col_;
   int64_t estimated_total_doc_cnt_;
+  ObExpr *topk_limit_expr_;
+  ObExpr *topk_offset_expr_;
+  ObExpr *token_col_;
+  ObTextBlockMaxSpec block_max_spec_;
   ObMatchAgainstMode mode_flag_; // for MySQL search mode flag
   union
   {
@@ -116,7 +144,8 @@ public:
       uint8_t has_inv_agg_:1;
       uint8_t has_doc_id_agg_:1;
       uint8_t has_fwd_agg_:1;
-      uint8_t reserved_:5;
+      uint8_t has_block_max_scan_:1;
+      uint8_t reserved_:4;
     };
   };
 };
