@@ -2906,6 +2906,8 @@ typedef enum ObItemType
   T_NO_INDEX_MERGE_HINT = 4892,
 
   T_TABLE_FLASHBACK_PROCTIME = 4893,
+  // hint for disable rich format of operators
+  T_DISABLE_OP_RICH_FORMAT = 4894,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
