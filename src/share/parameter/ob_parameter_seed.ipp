@@ -2902,3 +2902,7 @@ DEF_BOOL(_prexec_prepare_with_params, OB_TENANT_PARAMETER, "False",
 DEF_CAP(_external_table_mem_cache_page_size, OB_TENANT_PARAMETER, "512KB", "[0,)",
         "page size of the external table memory cache. Range: [0,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_session_temp_table_clean_interval, OB_TENANT_PARAMETER, "10m", "[0s,)",
+         "schedule interval for session temporary table clean task. "
+         "Range: [0s, +∞). Default: 10m",
+         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

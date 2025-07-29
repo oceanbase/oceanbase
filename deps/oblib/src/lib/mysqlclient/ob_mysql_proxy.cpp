@@ -21,7 +21,8 @@
 using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;
 
-OB_SERIALIZE_MEMBER(ObSessionDDLInfo, ddl_info_);
+OB_SERIALIZE_MEMBER(ObSessionDDLInfo, ddl_info_.ddl_info_, // FARM COMPAT WHITELIST
+                                      session_id_);
 
 ObCommonSqlProxy::ObCommonSqlProxy() : pool_(NULL)
 {
