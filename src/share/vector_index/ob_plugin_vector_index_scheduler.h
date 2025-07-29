@@ -292,6 +292,7 @@ public:
 private:
   int submit_log_();
   void inner_switch_to_follower_();
+  static bool in_retry_list(const int ret_code) { return OB_REPLICA_NOT_READABLE == ret_code; }
 
 private:
 
