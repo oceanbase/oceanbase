@@ -247,6 +247,27 @@ enum class ProbeAction
  PROBE_STACK,
 };
 
+class ObSyncLogGuard
+{
+public:
+  ObSyncLogGuard()
+    : last_(enable_tl_sync_log())
+  {
+    enable_tl_sync_log() = true;
+  }
+  ~ObSyncLogGuard()
+  {
+    enable_tl_sync_log() = last_;
+  }
+  static bool &enable_tl_sync_log()
+  {
+    static __thread bool tl_enable = false;
+    return tl_enable;
+  }
+private:
+  const bool last_;
+};
+
 //@class ObLogger
 //@brief main class of logging facilities. Provide base function, for example log_message(),
 //parse_set().
@@ -791,8 +812,7 @@ private:
   void free_log_item(ObPLogItem *log_item);
   void inc_dropped_log_count(const int32_t level);
   template<typename Function>
-  void do_log_message(const bool is_async,
-                      const char *mod_name,
+  void do_log_message(const char *mod_name,
                       const char *dba_event,
                       int32_t level,
                       const char *file,
@@ -1029,7 +1049,7 @@ void ObLogger::log_it(const char *mod_name,
           }
         }
       } else {
-        do_log_message(is_async_log_used(), mod_name, dba_event, level, file, line, function, true,
+        do_log_message(mod_name, dba_event, level, file, line, function, true,
                        location_hash_val, errcode, log_data_func);
       }
     }
@@ -1205,8 +1225,7 @@ inline void ObLogger::check_probe(
 }
 
 template<typename Function>
-inline void ObLogger::do_log_message(const bool is_async,
-                                     const char *mod_name,
+inline void ObLogger::do_log_message(const char *mod_name,
                                      const char *dba_event,
                                      int32_t level,
                                      const char *file,
@@ -1292,6 +1311,7 @@ inline void ObLogger::do_log_message(const bool is_async,
 
     if (OB_SUCC(ret)) {
       limited_left_log_size_ = std::max(0L, log_item->get_data_len() - NORMAL_LOG_SIZE);
+      const bool is_async = !ObSyncLogGuard::enable_tl_sync_log() && is_async_log_used();
       if (is_async) {
         // clone by data_size
         ObPLogItem *new_log_item = nullptr;
