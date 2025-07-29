@@ -176,7 +176,7 @@ public:
 
 protected:
   static const int64_t HOLD_OBJ_MAX_TIME = 2 * 60 * 60 * 1000 * 1000L; // 2h
-  virtual void reset_obj();
+  void reset_obj();
 
 protected:
   T *obj_;
