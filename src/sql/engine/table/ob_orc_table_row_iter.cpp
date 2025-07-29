@@ -211,13 +211,17 @@ int ObOrcTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     OZ (file_column_exprs_.assign(file_column_exprs));
     OZ (mapping_column_exprs_.assign(mapping_column_exprs));
     OZ (mapping_column_ids_.assign(mapping_column_ids));
-    for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
-      ObDataAccessPathExtraInfo *data_access_info =
-        static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
-      if (data_access_info == nullptr ||
-          data_access_info->data_access_path_.ptr() == nullptr ||
-          data_access_info->data_access_path_.length() == 0) {
-        ret = OB_EXTERNAL_ACCESS_PATH_ERROR;
+    const sql::ColumnIndexType index_type =
+                                  scan_param_->external_file_format_.orc_format_.column_index_type_;
+    if (OB_SUCC(ret) && index_type == sql::ColumnIndexType::NAME) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
+        ObDataAccessPathExtraInfo *data_access_info =
+          static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
+        if (data_access_info == nullptr ||
+            data_access_info->data_access_path_.ptr() == nullptr ||
+            data_access_info->data_access_path_.length() == 0) {
+          ret = OB_EXTERNAL_ACCESS_PATH_ERROR;
+        }
       }
     }
     OZ (file_meta_column_exprs_.assign(file_meta_column_exprs));
@@ -598,10 +602,8 @@ int ObOrcTableRowIterator::next_file()
             for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
               ObDataAccessPathExtraInfo *data_access_info =
                   static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
-              if (OB_SUCC(ret)) {
-                include_names_list.push_front(std::string(data_access_info->data_access_path_.ptr(),
-                                                    data_access_info->data_access_path_.length()));
-              }
+              include_names_list.push_front(std::string(data_access_info->data_access_path_.ptr(),
+                                                  data_access_info->data_access_path_.length()));
             }
             rowReaderOptions.include(include_names_list);
             break;
