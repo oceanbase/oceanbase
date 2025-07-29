@@ -113,11 +113,14 @@ TEST_F(TestAtomicFileMgr, test_get_sstable_list_handle)
   {
     // test normal workflow
     GET_MINI_SSTABLE_LIST_HANDLE_DEFAULT(file_handle, 1);
+    GET_MINI_SSTABLE_LIST_HANDLE_V2(file_handle, 1010, 200001, SCN::base_scn(), 2);
+    ASSERT_EQ(true, file_handle1.get_atomic_file() != file_handle2.get_atomic_file());
     ObAtomicFile *atomic_file = NULL;
     ObAtomicFileKey file_key(ObAtomicFileType::MINI_SSTABLE_LIST, ls_id1, tablet_id1);
     ASSERT_EQ(OB_SUCCESS, MTL(ObAtomicFileMgr*)->atomic_file_map_.get(file_key, atomic_file));
     MTL(ObAtomicFileMgr*)->atomic_file_map_.revert(atomic_file);
     file_handle1.reset();
+
   }
 
   {
