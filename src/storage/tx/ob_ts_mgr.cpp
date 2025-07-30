@@ -961,7 +961,7 @@ int ObTsMgr::get_gts_sync(const uint64_t tenant_id,
       if (!is_sslog_gts_tenant_id(tenant_id)) {
         TRANS_LOG(WARN, "failed to get ObTsSyncGetTsCbTask, fall back to sleep", K(ret));
       } else {
-        TRANS_LOG(INFO, "get gts sync for sslog", K(ret));
+        TRANS_LOG(TRACE, "get gts sync for sslog", K(ret));
       }
       int64_t expire_ts = ObClockGenerator::getClock() + timeout_us;
       int retry_times = 0;

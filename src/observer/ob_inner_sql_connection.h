@@ -194,6 +194,7 @@ public:
   bool is_nested_conn();
   virtual void set_user_timeout(int64_t timeout) { user_timeout_ = timeout; }
   virtual int64_t get_user_timeout() const { return user_timeout_; }
+  virtual void set_for_sslog(bool v) { is_for_sslog_ = v; }
   int try_acquire_query_lock();
   void try_release_query_lock();
   void ref();
@@ -353,6 +354,8 @@ private:
   template <typename T>
   int process_final(const T &sql,
                     ObInnerSQLResult &res,
+                    sql::ObExecRecord &exec_record,
+                    sql::ObExecTimestamp &exec_timestamp,
                     int do_ret);
   // execute with retry
   int query(sqlclient::ObIExecutor &executor,
@@ -445,6 +448,10 @@ private:
   sql::ObFreeSessionCtx free_session_ctx_;
   ObDiagnosticInfo *diagnostic_info_;
   bool inner_sess_query_locked_;
+
+  // used for sslog
+  bool is_for_sslog_;
+
   DISABLE_COPY_ASSIGN(ObInnerSQLConnection);
 };
 

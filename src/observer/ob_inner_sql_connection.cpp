@@ -134,8 +134,8 @@ ObInnerSQLConnection::ObInnerSQLConnection()
       group_id_(0),
       user_timeout_(0),
       diagnostic_info_(nullptr),
-      inner_sess_query_locked_(false)
-
+      inner_sess_query_locked_(false),
+      is_for_sslog_(false)
 {
   free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
 }
@@ -752,6 +752,8 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
 template <typename T>
 int ObInnerSQLConnection::process_final(const T &sql,
                                         ObInnerSQLResult &res,
+                                        ObExecRecord &exec_record,
+                                        ObExecTimestamp &exec_timestamp,
                                         int last_ret)
 {
   int ret = OB_SUCCESS;
@@ -766,6 +768,23 @@ int ObInnerSQLConnection::process_final(const T &sql,
 
     if (process_time > 1L * 1000 * 1000) {
       LOG_INFO("slow inner sql", K(last_ret), K(sql), K(process_time));
+    }
+
+    if (is_for_sslog_ && process_time > 30_ms) {
+      exec_timestamp.update_stage_time();
+      exec_record.update_stat();
+      const bool enable_perf_event = lib::is_diagnose_info_enabled();
+      LOG_INFO("slow sslog inner sql", K(last_ret), K(sql), K(process_time),
+               K(exec_timestamp));
+
+      if (enable_perf_event) {
+        LOG_INFO("slow sslog inner sql", K(exec_record.max_wait_event_),
+                 K(exec_record.wait_time_), K(exec_record.wait_count_));
+      }
+
+      if (diagnostic_info_) {
+        LOG_INFO("slow sslog diagnose", K(diagnostic_info_->get_ash_stat()));
+      }
     }
   }
   return ret;
@@ -1018,7 +1037,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
     }
   }
   if (res.is_inited()) {
-    int aret = process_final(executor, res, ret);
+    int aret = process_final(executor, res, exec_record, exec_timestamp, ret);
     if (OB_SUCCESS != aret) {
       LOG_WARN("failed to process final",  K(executor), K(aret), K(ret));
     }
