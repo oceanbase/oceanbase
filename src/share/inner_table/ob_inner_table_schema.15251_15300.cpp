@@ -9805,7 +9805,7 @@ int ObInnerTableSchema::all_virtual_external_table_file_real_agent_ora_schema(Ob
       38, //column_length
       38, //column_precision
       0, //column_scale
-      true, //is_nullable
+      false, //is_nullable
       false); //is_autoincrement
   }
 

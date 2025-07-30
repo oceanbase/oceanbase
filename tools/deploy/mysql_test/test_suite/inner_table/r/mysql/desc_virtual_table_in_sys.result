@@ -8487,8 +8487,8 @@ file_url	varbinary(16384)	NO		NULL
 create_version	bigint(20)	NO		NULL	
 delete_version	bigint(20)	NO		NULL	
 file_size	bigint(20)	NO		NULL	
-last_modify_time	bigint(20)	YES		NULL	
-content_digest	varchar(128)	YES		NULL	
+last_modify_time	bigint(20)	NO		-1	
+content_digest	varchar(128)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_external_table_file;
 IF(count(*) >= 0, 1, 0)
 1

@@ -5932,8 +5932,8 @@ def_table_schema(
     ('create_version', 'int'),
     ('delete_version', 'int'),
     ('file_size', 'int'),
-    ('last_modify_time', 'int', 'true'),
-    ('content_digest', 'varchar:128', 'true'),
+    ('last_modify_time', 'int', 'false', '-1'),
+    ('content_digest', 'varchar:128', 'false', ''),
   ],
   in_tenant_space = True,
 )
