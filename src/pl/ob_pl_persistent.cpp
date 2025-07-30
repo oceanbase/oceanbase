@@ -306,7 +306,8 @@ int ObRoutinePersistentInfo::gen_routine_storage_dml(const uint64_t exec_tenant_
                                                      ObDMLSqlSplicer &dml,
                                                      int64_t merge_version,
                                                      const ObString &binary,
-                                                     const ObString &stack_sizes)
+                                                     const ObString &stack_sizes,
+                                                     const ObString &extra_info_str)
 {
   int ret = OB_SUCCESS;
   char build_version[common::OB_SERVER_VERSION_LENGTH] = {'\0'};
@@ -331,6 +332,10 @@ int ObRoutinePersistentInfo::gen_routine_storage_dml(const uint64_t exec_tenant_
   } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_6 || data_version < DATA_VERSION_4_2_5_6) {
     // do nothing
   } else if (OB_FAIL(dml.add_column("stack_size", ObHexEscapeSqlStr(stack_sizes)))) {
+    LOG_WARN("add column failed", K(ret));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_6 || data_version < DATA_VERSION_4_2_5_6) {
+    // do nothing
+  } else if (OB_FAIL(dml.add_column("extra_info", ObHexEscapeSqlStr(extra_info_str)))) {
     LOG_WARN("add column failed", K(ret));
   }
 
@@ -556,9 +561,10 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
     } else if (OB_FAIL(get_package_and_svn(build_version, sizeof(build_version)))) {
       LOG_WARN("fail to get build_version", K(ret));
     } else if (OB_FAIL(query_inner_sql.assign_fmt(
-      "select merge_version, dll %s from OCEANBASE.%s where database_id = %ld and key_id = %ld "
+      "select merge_version, dll %s %s from OCEANBASE.%s where database_id = %ld and key_id = %ld "
       "and compile_db_id = %ld and arch_type = '%s' and build_version = '%s'",
         (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_6 || data_version < DATA_VERSION_4_2_5_6) ? "" : ", stack_size",
+        (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_6 || data_version < DATA_VERSION_4_2_5_6) ? "" : ", extra_info",
         OB_ALL_NCOMP_DLL_V2_TNAME, database_id_, key_id_, compile_db_id_, arch_type_.ptr(), build_version))) {
       LOG_WARN("assign format failed", K(ret));
     } else {
@@ -577,7 +583,7 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
             EXTRACT_INT_FIELD_MYSQL(*(result.get_result()), "merge_version", merge_version, int64_t);
             EXTRACT_VARCHAR_FIELD_MYSQL(*(result.get_result()), "dll", binary);
             if (OB_SUCC(ret)) {
-              bool match = false;
+              bool match = true;
               int64_t tenant_schema_version = OB_INVALID_VERSION;
               if (OB_INVALID_ID == tenant_id_belongs_) {
                 ret = OB_ERR_UNEXPECTED;
@@ -585,11 +591,28 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
               } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_belongs_, tenant_schema_version))) {
                 LOG_WARN("fail to get schema version", K(ret), K(tenant_id_belongs_));
               } else if (merge_version == tenant_schema_version) {
-                match = true;
                 op = ObRoutinePersistentInfo::ObPLOperation::NONE;
               } else if (merge_version < tenant_schema_version) {
                 if (OB_FAIL(check_dep_schema(schema_guard, unit_ast.get_dependency_table(), merge_version, match))) {
                   LOG_WARN("fail to check dep schema", K(ret));
+                } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_5_6 || data_version < DATA_VERSION_4_2_5_6) {
+                  // do nothing
+                } else if (match) {
+                  // need check extra_info
+                  ObString extra_info;
+                  EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result.get_result(),
+                              "extra_info", extra_info, true, false, "");
+                  if (extra_info.empty()) {
+                    // do nothing
+                  } else if (OB_FAIL(decode_and_check_extra_info(extra_info.ptr(),
+                                                                 extra_info.length(),
+                                                                 unit_ast.get_dependency_table(),
+                                                                 match))) {
+                    LOG_WARN("failed to decode_stack_sizes", K(ret));
+                  }
+                }
+                if (ret != OB_SUCCESS) {
+                  LOG_WARN("Check disk cache out of date failed", K(ret));
                 } else if (!match) {
                   op = ObRoutinePersistentInfo::ObPLOperation::UPDATE;
                 } else {
@@ -644,9 +667,91 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
   return ret;
 }
 
+int ObRoutinePersistentInfo::encode_pl_extra_info(char *buf,
+                                               const int64_t len,
+                                               int64_t &pos,
+                                               const sql::DependenyTableStore &dep_table)
+{
+  int ret = OB_SUCCESS;
+  ObPLExtraInfo extra_info;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(lbt()));
+  } else if (OB_UNLIKELY(pos + dep_obj_ids_md5_len > len)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("buffer is not enough", K(ret), K(pos), K(len));
+  } else if (OB_FAIL(get_pl_extra_info(dep_table, extra_info))) {
+    LOG_WARN("failed to get pl extra info for disk cache check", K(ret));
+  } else {
+    MEMCPY(buf + pos, extra_info.dep_obj_ids_md5_, dep_obj_ids_md5_len);
+    pos += dep_obj_ids_md5_len;
+  }
+  return ret;
+}
+
+int ObRoutinePersistentInfo::decode_and_check_extra_info(char *buf,
+                                                         const int64_t len,
+                                                         const ObPLDependencyTable &dep_table,
+                                                         bool &match)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  char stored_dep_obj_ids_md5[dep_obj_ids_md5_len];
+  ObPLExtraInfo extra_info;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(lbt()));
+  } else if (pos + dep_obj_ids_md5_len > len) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("buffer is not enough", K(ret), K(pos), K(len));
+  } else {
+    MEMCPY(stored_dep_obj_ids_md5, buf + pos, dep_obj_ids_md5_len);
+    pos += dep_obj_ids_md5_len;
+  }
+  // get current extra_info
+  OZ (get_pl_extra_info(dep_table, extra_info));
+  if (OB_SUCC(ret)) {
+    // check whether extra_info match
+    if (std::strcmp(stored_dep_obj_ids_md5, extra_info.dep_obj_ids_md5_) != 0) {
+      match = false;
+      LOG_INFO("Out of date, dep_obj_ids md5 hash not equal!", K(ret));
+    } else {
+      // do nothing
+    }
+  }
+  return ret;
+}
+
+template<typename DependencyTable>
+int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
+                                               ObPLExtraInfo& extra_info)
+{
+  int ret = OB_SUCCESS;
+  ObArray<int64_t> dep_obj_ids;
+  char *buf = NULL;
+  ObSqlString concat_ids_sql;
+  for (int64_t i = 0; OB_SUCC(ret) && i < dep_table.count(); ++i) {
+    OZ (add_var_to_array_no_dup(dep_obj_ids, dep_table.at(i).object_id_));
+  }
+  OX (lib::ob_sort(dep_obj_ids.begin(), dep_obj_ids.end()));
+  for (int64_t i = 0; OB_SUCC(ret) && i < dep_obj_ids.count(); ++i) {
+    OZ (concat_ids_sql.append_fmt("%ld", dep_obj_ids.at(i)));
+  }
+  OZ (ObSQLUtils::md5(concat_ids_sql.string(), extra_info.dep_obj_ids_md5_, dep_obj_ids_md5_len));
+  return ret;
+}
+
+template int ObRoutinePersistentInfo::get_pl_extra_info<ObPLDependencyTable>(
+                                          const ObPLDependencyTable &dep_schema_objs,
+                                          ObPLExtraInfo& extra_info);
+
+template int ObRoutinePersistentInfo::get_pl_extra_info<sql::DependenyTableStore>(
+                                          const sql::DependenyTableStore &dep_schema_objs,
+                                          ObPLExtraInfo& extra_info);
 int ObRoutinePersistentInfo::insert_or_update_dll_to_disk(schema::ObSchemaGetterGuard &schema_guard,
                                                           const ObString &binary,
                                                           const ObString &stack_sizes,
+                                                          const ObString &extra_info_str,
                                                           const ObRoutinePersistentInfo::ObPLOperation op)
 {
   int ret = OB_SUCCESS;
@@ -664,7 +769,7 @@ int ObRoutinePersistentInfo::insert_or_update_dll_to_disk(schema::ObSchemaGetter
       LOG_WARN("unexpected tenant id", K(ret));
     } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id_belongs_, tenant_schema_version))) {
       LOG_WARN("fail to get schema version");
-    } else if (OB_FAIL(gen_routine_storage_dml(exec_tenant_id, dml, tenant_schema_version, binary, stack_sizes))) {
+    } else if (OB_FAIL(gen_routine_storage_dml(exec_tenant_id, dml, tenant_schema_version, binary, stack_sizes, extra_info_str))) {
       LOG_WARN("gen table dml failed", K(ret));
     } else {
       ObDMLExecHelper exec(*sql_proxy, exec_tenant_id);
@@ -715,6 +820,8 @@ int ObRoutinePersistentInfo::process_storage_dll(ObIAllocator &alloc,
     ObString dll;
     ObString stack_sizes;
     int64_t stack_size_length = 0;
+    ObString extra_info_str;
+    int64_t extra_info_length = ObPLExtraInfo::get_extra_info_length();
     OZ (get_total_size(unit, total_size));
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(buf = (char *)alloc.alloc(total_size))) {
@@ -730,7 +837,7 @@ int ObRoutinePersistentInfo::process_storage_dll(ObIAllocator &alloc,
     OX (pos = 0);
     OZ (get_stack_size_length(unit, stack_size_length));
     if (OB_SUCC(ret)) {
-      if (OB_ISNULL(buf = (char *)alloc.alloc(stack_size_length))) {
+      if (OB_ISNULL(buf = (char *)alloc.alloc(stack_size_length + extra_info_length))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc memory", K(ret), K(stack_size_length));
       } else {
@@ -739,8 +846,12 @@ int ObRoutinePersistentInfo::process_storage_dll(ObIAllocator &alloc,
       }
     }
     OZ (encode_stack_sizes(buf, stack_size_length, pos, unit));
-
-    OZ (insert_or_update_dll_to_disk(schema_guard, dll, stack_sizes, op));
+    OZ (encode_pl_extra_info(buf, stack_size_length + extra_info_length, pos, unit.get_dependency_table()));
+    if (OB_SUCC(ret)) {
+      buf[stack_size_length + extra_info_length - 1] = '\0';
+      extra_info_str.assign_ptr(buf + stack_size_length, extra_info_length);
+    }
+    OZ (insert_or_update_dll_to_disk(schema_guard, dll, stack_sizes, extra_info_str, op));
     if (OB_FAIL(ret) &&
         OB_ERR_UNEXPECTED != ret &&
         OB_ALLOCATE_MEMORY_FAILED != ret) {

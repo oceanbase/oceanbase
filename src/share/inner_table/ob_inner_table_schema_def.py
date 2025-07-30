@@ -7324,6 +7324,7 @@ all_ncomp_dll_v2 = dict(
     ('merge_version', 'int'),
     ('dll', 'longblob', 'false'),
     ('stack_size', 'longblob', 'true'),
+    ('extra_info', 'longblob', 'true'),
   ],
 )
 def_table_schema(**all_ncomp_dll_v2)
