@@ -1422,6 +1422,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL,//ObExprAIComplete::eval_ai_complete,                          /* 857 */
   NULL,//ObExprAIEmbed::eval_ai_embed,                                /* 858 */
   NULL,//ObExprAIRerank::eval_ai_rerank,                              /* 859 */
+  NULL,//ObExprMd5ConcatWs::calc_md5_concat_ws_expr                   /* 860 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1839,6 +1840,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprAIComplete::eval_ai_complete_vector,                           /* 229 */
   NULL, // ObExprAIEmbed::eval_ai_embed_vector,                                 /* 230 */
   NULL, // ObExprAIRerank::eval_ai_rerank_vector,                               /* 231 */
+  NULL, // ObExprMd5ConcatWs::calc_md5_concat_ws_vector                         /* 232 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
