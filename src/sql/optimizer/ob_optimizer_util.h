@@ -1109,12 +1109,14 @@ public:
   static int gen_set_target_list(ObIAllocator *allocator,
                                  ObSQLSessionInfo *session_info,
                                  ObRawExprFactory *expr_factory,
-                                 ObSelectStmt *select_stmt);
+                                 ObSelectStmt *select_stmt,
+                                 const bool need_merge_type = true);
   static int try_add_cast_to_select_list(ObIAllocator *allocator,
                                          ObSQLSessionInfo *session_info,
                                          ObRawExprFactory *expr_factory,
                                          const int64_t column_cnt,
                                          const bool is_set_distinct,
+                                         const bool need_merge_type,
                                          ObIArray<ObRawExpr*> &select_exprs,
                                          ObIArray<ObExprResType> *res_types);
 
@@ -1130,6 +1132,7 @@ public:
                                        bool &skip_add_cast);
   static int get_set_res_types(ObIAllocator *allocator,
                                ObSQLSessionInfo *session_info,
+                               const bool need_merge_type,
                                ObIArray<ObSelectStmt*> &child_querys,
                                ObIArray<ObExprResType> &res_types);
 
@@ -1141,7 +1144,8 @@ public:
                                             ObIArray<ObSelectStmt*> &right_stmts,
                                             ObIArray<ObExprResType> *res_types,
                                             const bool is_mysql_recursive_union = false,
-                                            ObIArray<ObString> *rcte_col_name = NULL);
+                                            ObIArray<ObString> *rcte_col_name = NULL,
+                                            const bool need_merge_type = true);
   static int try_add_cast_to_set_child_list(ObIAllocator *allocator,
                                             ObSQLSessionInfo *session_info,
                                             ObRawExprFactory *expr_factory,
@@ -1150,7 +1154,8 @@ public:
                                             ObSelectStmt *right_stmt,
                                             ObIArray<ObExprResType> *res_types,
                                             const bool is_mysql_recursive_union = false,
-                                            ObIArray<ObString> *rcte_col_name = NULL);
+                                            ObIArray<ObString> *rcte_col_name = NULL,
+                                            const bool need_merge_type = true);
   static int add_cast_to_set_list(ObSQLSessionInfo *session_info,
                                   ObRawExprFactory *expr_factory,
                                   ObIArray<ObSelectStmt*> &stmts,

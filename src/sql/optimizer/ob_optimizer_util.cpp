@@ -6483,7 +6483,8 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
 int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
                                          ObSQLSessionInfo *session_info,
                                          ObRawExprFactory *expr_factory,
-                                         ObSelectStmt *select_stmt)
+                                         ObSelectStmt *select_stmt,
+                                         const bool need_merge_type)
 {
   int ret = OB_SUCCESS;
   UNUSED(allocator);
@@ -6493,8 +6494,8 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
       || OB_UNLIKELY(select_stmt->get_set_query().empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret));
-  } else if (OB_FAIL(get_set_res_types(allocator, session_info, select_stmt->get_set_query(),
-                                       res_types))) {
+  } else if (OB_FAIL(get_set_res_types(allocator, session_info, need_merge_type,
+                                       select_stmt->get_set_query(), res_types))) {
     LOG_WARN("failed to get set res types", K(ret));
   } else if (OB_ISNULL(child_stmt = select_stmt->get_set_query(0))) {
     ret = OB_ERR_UNEXPECTED;
@@ -6540,6 +6541,7 @@ int ObOptimizerUtil::gen_set_target_list(ObIAllocator *allocator,
 
 int ObOptimizerUtil::get_set_res_types(ObIAllocator *allocator,
                                        ObSQLSessionInfo *session_info,
+                                       const bool need_merge_type, /* generally true */
                                        ObIArray<ObSelectStmt*> &child_querys,
                                        ObIArray<ObExprResType> &res_types)
 {
@@ -6604,7 +6606,7 @@ int ObOptimizerUtil::get_set_res_types(ObIAllocator *allocator,
         ret = res_types.push_back(types.at(0));
       } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type, &types.at(0),
                                                     types.count(), is_oracle_mode(),
-                                                    type_ctx))) {
+                                                    type_ctx, need_merge_type))) {
         LOG_WARN("failed to aggregate result type for merge", K(ret));
       } else if (OB_FAIL(res_types.push_back(res_type))) {
         LOG_WARN("failed to pushback res type", K(ret));
@@ -6724,7 +6726,8 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
                                                     ObIArray<ObSelectStmt*> &right_stmts,
                                                     ObIArray<ObExprResType> *res_types,
                                                     const bool is_mysql_recursive_union /* false */,
-                                                    ObIArray<ObString> *rcte_col_name /* null */)
+                                                    ObIArray<ObString> *rcte_col_name /* null */,
+                                                    const bool need_merge_type /* true */)
 {
   int ret = OB_SUCCESS;
   ObExprResType res_type;
@@ -6737,8 +6740,8 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
   } else if (left_stmts.empty() || right_stmts.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("empty left/right stmts", K(ret), K(left_stmts), K(right_stmts));
-  } else if (OB_FAIL(get_set_res_types(allocator, session_info, left_stmts, left_types)) ||
-             OB_FAIL(get_set_res_types(allocator, session_info, right_stmts, right_types))) {
+  } else if (OB_FAIL(get_set_res_types(allocator, session_info, need_merge_type, left_stmts, left_types)) ||
+             OB_FAIL(get_set_res_types(allocator, session_info, need_merge_type, right_stmts, right_types))) {
     LOG_WARN("failed to get set res types", K(ret));
   } else if (OB_UNLIKELY(left_types.count() != right_types.count())) {
     ret = OB_ERR_COLUMN_SIZE;
@@ -6776,7 +6779,8 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
         } else if (OB_FAIL(types.push_back(left_type)) || OB_FAIL(types.push_back(right_type))) {
           LOG_WARN("failed to push back", K(ret));
         } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type, &types.at(0), 2,
-                                                                    is_oracle_mode, type_ctx))) {
+                                                                    is_oracle_mode, type_ctx,
+                                                                    need_merge_type))) {
           LOG_WARN("failed to aggregate result type for merge", K(ret));
         }
         if (OB_FAIL(ret) || skip_add_cast) {
@@ -6813,7 +6817,8 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
                                                     ObSelectStmt *right_stmt,
                                                     ObIArray<ObExprResType> *res_types,
                                                     const bool is_mysql_recursive_union /* false */,
-                                                    ObIArray<ObString> *rcte_col_name /* null */)
+                                                    ObIArray<ObString> *rcte_col_name /* null */,
+                                                    const bool need_merge_type /* true */)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 1> child_stmts;
@@ -6821,7 +6826,8 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
     LOG_WARN("failed to push back right_stmt", K(ret));
   } else if (OB_FAIL(try_add_cast_to_set_child_list(allocator, session_info, expr_factory,
                                                     is_distinct, left_stmts, child_stmts, res_types,
-                                                    is_mysql_recursive_union, rcte_col_name))) {
+                                                    is_mysql_recursive_union, rcte_col_name,
+                                                    need_merge_type))) {
     LOG_WARN("failed to add cast to set child list", K(ret));
   }
   return ret;
@@ -6966,6 +6972,7 @@ int ObOptimizerUtil::try_add_cast_to_select_list(ObIAllocator *allocator,
                                                  ObRawExprFactory *expr_factory,
                                                  const int64_t column_cnt,
                                                  const bool is_distinct,
+                                                 const bool need_merge_type,
                                                  ObIArray<ObRawExpr*> &select_exprs,
                                                  ObIArray<ObExprResType> *res_types)
 {
@@ -7020,7 +7027,7 @@ int ObOptimizerUtil::try_add_cast_to_select_list(ObIAllocator *allocator,
             } else if (OB_FAIL(types.push_back(left_type)) || OB_FAIL(types.push_back(right_type))) {
               LOG_WARN("failed to push back", K(ret));
             } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(result_type, &types.at(0),
-                                 2, is_oracle_mode, type_ctx))) {
+                                 2, is_oracle_mode, type_ctx, need_merge_type))) {
               LOG_WARN("failed to aggregate result type for merge", K(ret));
             } else if (OB_UNLIKELY(ObMaxType == result_type.get_type())) {
               ret = OB_ERR_INVALID_TYPE_FOR_OP;

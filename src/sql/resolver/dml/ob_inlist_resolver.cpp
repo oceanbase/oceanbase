@@ -288,13 +288,8 @@ int ObInListResolver::check_inlist_rewrite_enable(const ParseNode &in_list,
             } else if (ObMaxType == param_type_prev.obj_type_ ||
                        (enable_hybrid_inlist && ObNullType == param_type_prev.obj_type_)) {
               param_type_prev = param_type_cur;
-              if (lib::is_oracle_mode() && ObCharType == param_type_cur.obj_type_) {
-                // in oracle mode, inlist to values table rewrite may cast char types to varchar2
-                // but comparison behaviors for chars and varchar2s are different for trailing spaces
-                // which will lead to unexpect comparison result
-                is_enable = false;
-              } else if (ob_is_enum_or_set_type(param_type_cur.obj_type_)
-                         || is_lob_locator(param_type_cur.obj_type_)) {
+              if (ob_is_enum_or_set_type(param_type_cur.obj_type_)
+                  || is_lob_locator(param_type_cur.obj_type_)) {
                 is_enable = false;
               }
             } else if (enable_hybrid_inlist && ObNullType == param_type_cur.obj_type_) {
@@ -389,7 +384,7 @@ int ObInListResolver::resolve_access_param_values_table(const ParseNode &in_list
           LOG_WARN("failed to push back res type", K(ret));
         } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(new_res_type,
                            &tmp_res_types.at(0), 2, lib::is_oracle_mode(), type_ctx,
-                           true, false, is_called_in_sql))) {
+                           false, false, is_called_in_sql))) {
           LOG_WARN("failed to aggregate result type for merge", K(ret));
         } else {
           table_def.column_types_.at(j) = new_res_type;
@@ -498,7 +493,7 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
             LOG_WARN("failed to push back res type", K(ret));
           } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(new_res_type,
                             &tmp_res_types.at(0), 2, is_oracle_mode, type_ctx,
-                            true, false, is_called_in_sql))) {
+                            false, false, is_called_in_sql))) {
             LOG_WARN("failed to aggregate result type for merge", K(ret));
           } else {
             table_def.column_types_.at(j) = new_res_type;

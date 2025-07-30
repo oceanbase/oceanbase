@@ -95,6 +95,8 @@ public:
   bool has_resolved_field_list() const { return has_resolved_field_list_; }
   int check_auto_gen_column_names();
 
+  void set_is_right_child_of_sq_cmp(bool is_right_child_of_sq_cmp) { is_right_child_of_sq_cmp_ = is_right_child_of_sq_cmp; }
+  bool is_right_child_of_sq_cmp() const { return is_right_child_of_sq_cmp_; }
   // function members
   TO_STRING_KV(K_(has_calc_found_rows),
                K_(has_top_limit),
@@ -396,6 +398,7 @@ protected:
   bool is_top_stmt_;
   //当前query的field list是否解析成功, 用于force view解析失败时的column schema持久化
   bool has_resolved_field_list_;
+  bool is_right_child_of_sq_cmp_; // true if current stmt is the right branch of a subquery-comparison expr
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSelectResolver);
