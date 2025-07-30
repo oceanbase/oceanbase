@@ -1040,6 +1040,7 @@ int ObLSMigrationHandler::schedule_build_ls_dag_net_(
     const ObLSMigrationTask &task)
 {
   int ret = OB_SUCCESS;
+  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls migration handler do not init", K(ret));
@@ -1063,7 +1064,10 @@ int ObLSMigrationHandler::schedule_build_ls_dag_net_(
         LOG_WARN("failed to swicth next stage cancel", K(ret));
       }
 #ifdef OB_BUILD_SHARED_STORAGE
-    } else if (ObMigrationOpType::REPLACE_LS_OP == task.arg_.type_) {
+    } else if (is_shared_storage
+        && (ObMigrationOpType::REPLACE_LS_OP == task.arg_.type_
+          || ObMigrationOpType::ADD_LS_OP == task.arg_.type_
+          || ObMigrationOpType::MIGRATE_LS_OP == task.arg_.type_)) {
       ObTenantDagScheduler *scheduler = nullptr;
       ObSSMigrationDagNetInitParam param;
       param.arg_ = task.arg_;
