@@ -248,18 +248,13 @@ int ObScheduleTabletFunc::get_schedule_execute_info(
   ObMediumCompactionInfo::ObCompactionType compaction_type = ObMediumCompactionInfo::COMPACTION_TYPE_MAX;
   schedule_scn = 0; // medium_snapshot in medium info
   bool is_mv_major_refresh_tablet = false;
-  ObArenaAllocator temp_allocator("GetMediumInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()); // for load medium info
   const ObMediumCompactionInfoList *medium_list = nullptr;
-  ObStorageSchema *storage_schema = nullptr;
 
   if (OB_ISNULL(tablet_status_.medium_list())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("medium list in tablet status is null", KR(ret), K_(tablet_status));
-  } else if (OB_FAIL(tablet.load_storage_schema(temp_allocator, storage_schema))) {
-    // temp solution(load storage schema to decide whether tablet is MV)
-    // TODO replace with new func on tablet later @lana
-      LOG_WARN("failed to load storage schema", K(ret), K(tablet));
-  } else if (FALSE_IT(is_mv_major_refresh_tablet = storage_schema->is_mv_major_refresh())) {
+  } else if (OB_FAIL(tablet.check_is_mv_major_refresh_tablet(is_mv_major_refresh_tablet))) {
+    LOG_WARN("check mv major_refresh tablet failed", KR(ret));
   } else if (is_mv_major_refresh_tablet &&
              ObBasicMergeScheduler::INIT_COMPACTION_SCN == last_major_snapshot) {
     int tmp_ret = OB_SUCCESS;

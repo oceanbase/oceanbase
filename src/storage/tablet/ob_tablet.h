@@ -535,6 +535,7 @@ public:
 public:
   bool is_cs_replica_compat() const { return nullptr == rowkey_read_info_ ? false : rowkey_read_info_->is_cs_replica_compat(); }
   int check_is_delete_insert_table(bool &is_delete_insert_table) const;
+  int check_is_mv_major_refresh_tablet(bool &val) const;
   int check_micro_block_format_version(int64_t &micro_block_format_version) const;
   int check_row_store_with_co_major(bool &is_row_store_with_co_major) const;
   int pre_process_cs_replica(

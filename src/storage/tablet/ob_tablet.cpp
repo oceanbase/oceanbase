@@ -5743,7 +5743,8 @@ int ObTablet::build_read_info(
                                              is_cs_replica_compat,
                                              storage_schema->is_delete_insert_merge_engine(),
                                              storage_schema->is_global_index_table(),
-                                             storage_schema->get_micro_block_format_version()))) {
+                                             storage_schema->get_micro_block_format_version(),
+                                             storage_schema->is_mv_major_refresh()))) {
     LOG_WARN("fail to init rowkey read info", K(ret), KPC(storage_schema));
   }
   ObTabletObjLoadHelper::free(allocator, storage_schema);
@@ -6533,6 +6534,21 @@ int ObTablet::check_micro_block_format_version(int64_t &micro_block_format_versi
     LOG_WARN("get unexpected null rowkey readinfo", K(ret));
   } else {
     micro_block_format_version = rowkey_read_info_->get_micro_block_format_version();
+  }
+  return ret;
+}
+
+int ObTablet::check_is_mv_major_refresh_tablet(bool &val) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTablet has not been inited", K(ret));
+  } else if (OB_UNLIKELY(nullptr == rowkey_read_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null rowkey readinfo", K(ret));
+  } else {
+    val = rowkey_read_info_->is_mv_major_refresh_tablet();
   }
   return ret;
 }

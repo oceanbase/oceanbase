@@ -1256,8 +1256,6 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_merge(
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   const int64_t last_major_snapshot_version = tablet.get_last_major_snapshot_version();
   int64_t max_sync_medium_scn = 0;
-  ObArenaAllocator temp_allocator("GetSSchema", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  ObStorageSchema *storage_schema = nullptr;
   bool is_mv_major_refresh_tablet = false;
   if (tablet_id.is_ls_inner_tablet()) {
     // do nothing
@@ -1270,9 +1268,8 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_major_merge(
   } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
       tablet, *tablet_status.medium_list(), max_sync_medium_scn))) {
     LOG_WARN("failed to get max sync medium scn", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(tablet.load_storage_schema(temp_allocator, storage_schema))) {
-    LOG_WARN("failed to load storage schema", K(ret), K(tablet));
-  } else if (FALSE_IT(is_mv_major_refresh_tablet = storage_schema->is_mv_major_refresh())) {
+  } else if (OB_FAIL(tablet.check_is_mv_major_refresh_tablet(is_mv_major_refresh_tablet))) {
+    LOG_WARN("check mv major refresh tablet failed", KR(ret));
   } else if (tablet_status.tablet_merge_finish()) {
     diagnose_failed_report_task(ls_id, tablet_id, compaction_scn);
   } else {

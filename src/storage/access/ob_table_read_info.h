@@ -152,6 +152,7 @@ public:
       compat_version_(READ_INFO_VERSION_LATEST),
       is_cs_replica_compat_(false),
       is_delete_insert_table_(false),
+      is_mv_major_refresh_tablet_(false),
       reserved_(0),
       schema_rowkey_cnt_(0),
       rowkey_cnt_(0),
@@ -236,6 +237,7 @@ public:
   }
   OB_INLINE bool is_cs_replica_compat() const { return is_cs_replica_compat_; }
   OB_INLINE bool is_delete_insert_table() const { return is_delete_insert_table_; }
+  OB_INLINE bool is_mv_major_refresh_tablet() const { return is_mv_major_refresh_tablet_; }
   OB_INLINE int64_t get_micro_block_format_version() const { return micro_block_format_version_; }
   DECLARE_VIRTUAL_TO_STRING;
   int generate_for_column_store(ObIAllocator &allocator,
@@ -248,7 +250,8 @@ public:
                        const bool is_cs_replica_compat,
                        const bool is_delete_insert_table,
                        const bool is_global_index_table,
-                       const int64_t micro_block_format_version);
+                       const int64_t micro_block_format_version,
+                       const bool is_mv_major_refresh_tablet);
   int prepare_arrays(common::ObIAllocator &allocator,
                      const common::ObIArray<ObColDesc> &cols_desc,
                      const int64_t col_cnt);
@@ -263,7 +266,7 @@ protected:
   static const int64_t READ_INFO_VERSION_V6 = 6; // after V4.4.1
   static const int64_t READ_INFO_VERSION_LATEST = READ_INFO_VERSION_V6;
   static const int32_t READ_INFO_ONE_BIT = 1;
-  static const int32_t READ_INFO_RESERVED_BITS = 13;
+  static const int32_t READ_INFO_RESERVED_BITS = 12;
 
   bool is_inited_;
   bool is_oracle_mode_;
@@ -277,6 +280,7 @@ protected:
       uint16_t is_cs_replica_compat_   : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
       uint16_t is_delete_insert_table_ : READ_INFO_ONE_BIT;
       uint16_t is_global_index_table_  : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
+      uint16_t is_mv_major_refresh_tablet_  : READ_INFO_ONE_BIT; // only used for rowkey_read_info in ObTablet
       uint16_t reserved_               : READ_INFO_RESERVED_BITS;
     };
   };
@@ -427,7 +431,8 @@ public:
       const bool is_cs_replica_compat = false,
       const bool is_delete_insert_table = false,
       const bool is_global_index = false,
-      const int64_t micro_block_format_version = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION);
+      const int64_t micro_block_format_version = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION,
+      const bool is_mv_major_refresh_tablet = false);
   OB_INLINE virtual int64_t get_seq_read_column_count() const override
   { return get_request_count(); }
   OB_INLINE virtual int64_t get_trans_col_index() const override
