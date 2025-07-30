@@ -3773,7 +3773,8 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
     } else {
       OZ (ObPLContext::get_subprogram_var_type(ctx->exec_ctx_, package_id, routine_id, formal_param_idxs[i], formal_param_type));
     }
-    if (OB_SUCC(ret) && formal_param_type.is_composite_type() && (formal_param_type.get_user_type_id() != dummy_result.get_udt_id())) {
+    if (OB_SUCC(ret) && formal_param_type.is_composite_type() && !formal_param_type.is_generic_type() && !formal_param_type.is_opaque_type()
+       && dummy_result.is_ext() && dummy_result.get_ext() != 0 && (formal_param_type.get_user_type_id() != dummy_result.get_udt_id())) {
       OZ (ObPLExecState::convert_composite(*ctx, dummy_result, formal_param_type.get_user_type_id()));
       OX (convert = true);
     }

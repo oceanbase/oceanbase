@@ -3836,7 +3836,7 @@ int ObPLExecState::convert_composite(ObPLExecCtx &ctx, ObObjParam &param, int64_
   OZ (ctx.get_user_type(dest_type_id, pl_user_type, &tmp_allocator));
   CK (OB_NOT_NULL(pl_user_type));
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && param.is_ext() && param.get_ext() != 0) {
     int64_t dst_size = 0;
     ObObj dst;
     ObObj *dst_ptr = &dst;
