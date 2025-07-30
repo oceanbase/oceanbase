@@ -667,7 +667,6 @@ int ObExprUDF::eval_udf_vector(VECTOR_EVAL_FUNC_ARG_DECL)
     OX (eval_flags.set(idx));
     OZ (transfer_vec_to_obj(udf_ctx->get_obj_stack(), arg_vec, expr, idx));
     OZ (eval_udf_single(expr, ctx, *udf_ctx, result));
-    OZ (deep_copy_obj(ctx.get_expr_res_alloc(), result, result));
     OZ (transfer_obj_to_vec(result, res_vec, idx, expr.datum_meta_));
   }
   return ret;
