@@ -2915,6 +2915,8 @@ typedef enum ObItemType
   T_KRB5CONF = 4897,
   T_MAX_CLIENT_POOL_SIZE = 4898,
   T_SOCKET_TIMEOUT = 4899,
+  // erase ss local_cache
+  T_FLUSH_SS_LOCAL_CACHE = 4900,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
