@@ -81,7 +81,8 @@ ObDelUpdResolver::ObDelUpdResolver(ObResolverParams &params)
     is_column_specify_(false),
     is_oracle_tmp_table_(false),
     oracle_tmp_table_type_(0),
-    is_resolve_insert_update_(false)
+    is_resolve_insert_update_(false),
+    is_insert_into_set_(false)
 {
   // TODO Auto-generated constructor stub
 }
@@ -331,7 +332,7 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
             if (OB_FAIL(ret)) {
             } else if (col_expr->get_result_type().get_obj_meta().is_enum_or_set()
               || col_expr->get_result_type().get_obj_meta().is_urowid()
-              ) {
+              || (params_.is_batch_stmt_ && is_insert_into_set())) {
               // enum, set, rowid do not support cast
               int64_t param_idx = 0;
               OZ (c_expr->get_value().get_unknown(param_idx));
