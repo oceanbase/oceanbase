@@ -161,7 +161,9 @@ int ObSrvNetworkFrame::init()
   } else if (OB_FAIL(net_.add_rpc_unix_listen(rpc_unix_path, rpc_handler_))) {
     LOG_ERROR("listen rpc unix path fail");
   } else {
-    if (OB_FAIL(obrpc::global_poc_server.start(rpc_port, io_cnt, &deliver_))) {
+    if (OB_FAIL(obrpc::global_poc_server.update_tcp_keepalive_params(opts.tcp_user_timeout_))) {
+      LOG_ERROR("update_tcp_keepalive_params fail", K(ret));
+    } else if (OB_FAIL(obrpc::global_poc_server.start(rpc_port, io_cnt, &deliver_))) {
       LOG_ERROR("poc rpc server start fail", K(ret));
     } else {
       LOG_INFO("poc rpc server start successfully");
