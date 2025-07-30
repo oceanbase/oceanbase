@@ -427,7 +427,7 @@ int ObOrderPerservingEncoder::convert_ob_charset_utf8mb4_bin_sp(unsigned char *d
                                                                 int64_t &to_len)
 {
   unsigned char *d_e = data + len;
-  while (*(d_e - 1) == 0x20 && d_e - 1 >= data)
+  while (d_e - 1 >= data && *(d_e - 1) == 0x20)
     d_e--;
 
   while (data < d_e) {
