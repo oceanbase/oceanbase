@@ -8612,10 +8612,10 @@ int ObBackupManageArg::assign(const ObBackupManageArg &arg)
 }
 
 OB_SERIALIZE_MEMBER(ObBackupCleanArg, tenant_id_, initiator_tenant_id_, initiator_job_id_, type_,
-                    first_value_, dest_id_, description_, clean_tenant_ids_, value_, dest_path_, dest_type_);
+                    value_, dest_id_, description_, clean_tenant_ids_, batch_values_, dest_path_, dest_type_);
 bool ObBackupCleanArg::is_valid() const
 {
-  return OB_INVALID_ID != initiator_tenant_id_ && first_value_ >= 0;
+  return OB_INVALID_ID != initiator_tenant_id_ && value_ >= 0;
 }
 
 int ObBackupCleanArg::assign(const ObBackupCleanArg &arg)
@@ -8623,14 +8623,14 @@ int ObBackupCleanArg::assign(const ObBackupCleanArg &arg)
   int ret = OB_SUCCESS;
   if (OB_FAIL(clean_tenant_ids_.assign(arg.clean_tenant_ids_))) {
     LOG_WARN("fail to assign clean_tenant_ids_", K(ret));
-  } else if (OB_FAIL(value_.assign(arg.value_))) {
-    LOG_WARN("fail to assign clean arg value", K(ret), "value", arg.value_);
+  } else if (OB_FAIL(batch_values_.assign(arg.batch_values_))) {
+    LOG_WARN("fail to assign clean arg value", K(ret), "batch_values", arg.batch_values_);
   } else {
     tenant_id_ = arg.tenant_id_;
     initiator_tenant_id_ = arg.initiator_tenant_id_;
     initiator_job_id_ = arg.initiator_job_id_;
     type_ = arg.type_;
-    first_value_ = arg.first_value_;
+    value_ = arg.value_;
     dest_id_ = arg.dest_id_;
     description_ = arg.description_;
   }

@@ -2609,7 +2609,7 @@ int ObBackupCleanExecutor::execute(ObExecContext &ctx, ObBackupCleanStmt &stmt)
     obrpc::ObBackupCleanArg arg;
     arg.initiator_tenant_id_ = stmt.get_tenant_id();
     arg.type_ = stmt.get_type();
-    arg.first_value_ = stmt.get_value();
+    arg.value_ = stmt.get_value();
     arg.dest_id_ = stmt.get_copy_id();
     if (OB_FAIL(arg.description_.assign(stmt.get_description()))) {
       LOG_WARN("set clean description failed", K(ret));

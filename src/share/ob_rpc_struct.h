@@ -10117,11 +10117,11 @@ public:
       initiator_tenant_id_(common::OB_INVALID_TENANT_ID),
       initiator_job_id_(0),
       type_(share::ObNewBackupCleanType::MAX),
-      first_value_(0),
+      value_(0),
       dest_id_(0),
       description_(),
       clean_tenant_ids_(),
-      value_(),
+      batch_values_(),
       dest_path_(),
       dest_type_(share::ObBackupDestType::DEST_TYPE_MAX)
   {
@@ -10129,16 +10129,16 @@ public:
   }
   bool is_valid() const;
   int assign(const ObBackupCleanArg &arg);
-  TO_STRING_KV(K_(type), K_(tenant_id), K_(initiator_tenant_id), K_(initiator_job_id), K_(first_value), K_(dest_id), K_(description), K_(clean_tenant_ids), K_(value), K_(dest_path), K_(dest_type));
+  TO_STRING_KV(K_(type), K_(tenant_id), K_(initiator_tenant_id), K_(initiator_job_id), K_(value), K_(dest_id), K_(description), K_(clean_tenant_ids), K_(batch_values), K_(dest_path), K_(dest_type));
   uint64_t tenant_id_;
   uint64_t initiator_tenant_id_;
   int64_t initiator_job_id_;
   share::ObNewBackupCleanType::TYPE type_;
-  int64_t first_value_;
+  int64_t value_;
   int64_t dest_id_;
   share::ObBackupDescription description_;
   common::ObSArray<uint64_t> clean_tenant_ids_;
-  common::ObSArray<int64_t> value_;
+  common::ObSArray<int64_t> batch_values_;
   share::ObBackupPathString dest_path_;
   share::ObBackupDestType::TYPE dest_type_;
 private:

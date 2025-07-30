@@ -425,7 +425,7 @@ int ObBackupCleanScheduler::fill_template_job_(const obrpc::ObBackupCleanArg &in
     } else {
       job_attr.job_level_.level_ = ObBackupLevel::Level::USER_TENANT;
     }
-    if (OB_FAIL(job_attr.set_clean_parameter(in_arg.first_value_))) {
+    if (OB_FAIL(job_attr.set_clean_parameter(in_arg.value_))) {
       LOG_WARN("failed to set clean parameter", K(in_arg));
     }
   }
@@ -1978,7 +1978,7 @@ int ObBackupAutoObsoleteDeleteTrigger::start_auto_delete_obsolete_data_()
     } else if (recovery_window <= 0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("recovery window is unepxected", K(ret), K(arg), K(recovery_window));
-    } else if (FALSE_IT(arg.first_value_ = now_ts - recovery_window)) {
+    } else if (FALSE_IT(arg.value_ = now_ts - recovery_window)) {
     } else if (OB_FAIL(backup_service_->handle_backup_delete(arg))) {
       LOG_WARN("failed to schedule backup clean", K(ret), K(arg));
     }
