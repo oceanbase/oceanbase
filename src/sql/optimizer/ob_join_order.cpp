@@ -1738,67 +1738,40 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("vec_table_schema unexpected null", K(ret));
   } else {
-    // forbit weak read in both pre/post vec filter
-    bool is_weak_read = false;
-    int64_t route_policy_type = 0;
-    if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy_type))) {
-      LOG_WARN("fail to get sys variable", K(ret));
-    } else if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy_type)) {
-      // do not check weak read
-    } else if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
-      is_weak_read = true;
+    double selectivity = 0.0;
+    if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
+                                                      get_plan()->get_selectivity_ctx(),
+                                                      get_restrict_infos(),
+                                                      selectivity,
+                                                      get_plan()->get_predicate_selectivities()))) {
+      LOG_WARN("failed to calculate selectivity", K(ret));
     } else {
-      ObConsistencyLevel consistency_level = INVALID_CONSISTENCY;
-      if (OB_UNLIKELY(INVALID_CONSISTENCY
-              != OPT_CTX.get_query_ctx()->get_global_hint().read_consistency_)) {
-        consistency_level = OPT_CTX.get_query_ctx()->get_global_hint().read_consistency_;
-      } else {
-        consistency_level = session_info->get_consistency_level();
+      access_path.domain_idx_info_.vec_extra_info_.set_vec_algorithm_by_index_type(vec_index_schema->get_index_type());
+      if (access_path.domain_idx_info_.vec_extra_info_.is_hnsw_vec_scan()) {
+        ObVectorIndexParam index_param;
+        if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(vec_index_schema->get_index_params(), ObVectorIndexType::VIT_HNSW_INDEX, index_param))) {
+          LOG_WARN("fail to parser params from string", K(ret), K(index_schema->get_index_params()));
+        } else  {
+          access_path.domain_idx_info_.vec_extra_info_.set_algorithm_type(index_param.type_);
+        }
       }
-      if (WEAK == consistency_level || FROZEN == consistency_level) {
-        is_weak_read = true;
+      if (OB_SUCC(ret)) {
+        access_path.domain_idx_info_.set_domain_idx_type(DomainIndexType::VEC_INDEX);
+        access_path.domain_idx_info_.vec_extra_info_.set_selectivity(selectivity);
+        // for optimize, distance expr just for order by needn't calculate
+        // using vsag calc result is ok
+        if (OB_ISNULL(vector_expr)) {
+          vector_expr = stmt->get_first_vector_expr();
+        }
+        if (OB_NOT_NULL(vector_expr) &&
+            access_path.domain_idx_info_.vec_extra_info_.is_hnsw_vec_scan()
+            && ! access_path.domain_idx_info_.vec_extra_info_.is_hnsw_bq_scan()
+            &&!stmt->is_contain_vector_origin_distance_calc()) {
+          FLOG_INFO("distance needn't calc", K(ret));
+          vector_expr->add_flag(IS_CUT_CALC_EXPR);
+        }
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (is_weak_read) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when using vector index, weak read is");
-    } else {
-      double selectivity = 0.0;
-      if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
-                                                        get_plan()->get_selectivity_ctx(),
-                                                        get_restrict_infos(),
-                                                        selectivity,
-                                                        get_plan()->get_predicate_selectivities()))) {
-        LOG_WARN("failed to calculate selectivity", K(ret));
-      } else {
-        access_path.domain_idx_info_.vec_extra_info_.set_vec_algorithm_by_index_type(vec_index_schema->get_index_type());
-        if (access_path.domain_idx_info_.vec_extra_info_.is_hnsw_vec_scan()) {
-          ObVectorIndexParam index_param;
-          if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(vec_index_schema->get_index_params(), ObVectorIndexType::VIT_HNSW_INDEX, index_param))) {
-            LOG_WARN("fail to parser params from string", K(ret), K(index_schema->get_index_params()));
-          } else  {
-            access_path.domain_idx_info_.vec_extra_info_.set_algorithm_type(index_param.type_);
-          }
-        }
-        if (OB_SUCC(ret)) {
-          access_path.domain_idx_info_.set_domain_idx_type(DomainIndexType::VEC_INDEX);
-          access_path.domain_idx_info_.vec_extra_info_.set_selectivity(selectivity);
-          // for optimize, distance expr just for order by needn't calculate
-          // using vsag calc result is ok
-          if (OB_ISNULL(vector_expr)) {
-            vector_expr = stmt->get_first_vector_expr();
-          }
-          if (OB_NOT_NULL(vector_expr) &&
-              access_path.domain_idx_info_.vec_extra_info_.is_hnsw_vec_scan()
-              && ! access_path.domain_idx_info_.vec_extra_info_.is_hnsw_bq_scan()
-              &&!stmt->is_contain_vector_origin_distance_calc()) {
-            FLOG_INFO("distance needn't calc", K(ret));
-            vector_expr->add_flag(IS_CUT_CALC_EXPR);
-          }
-        }
-      }
-    } // not weak read
   }
   return ret;
 }
