@@ -2910,6 +2910,12 @@ typedef enum ObItemType
   // hint for disable rich format of operators
   T_DISABLE_OP_RICH_FORMAT = 4894,
 
+  T_PRINCIPAL = 4895,
+  T_KEYTAB = 4896,
+  T_KRB5CONF = 4897,
+  T_MAX_CLIENT_POOL_SIZE = 4898,
+  T_SOCKET_TIMEOUT = 4899,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
