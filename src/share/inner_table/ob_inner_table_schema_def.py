@@ -8270,6 +8270,7 @@ def_table_schema(**gen_history_table_def(555, all_external_resource))
 # 566: __all_backup_validate_task_history
 # 567: __all_backup_validate_ls_task
 # 568: __all_backup_validate_ls_task_history
+# 569: __all_tenant_ss_storage_stat
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -16842,6 +16843,7 @@ def_table_schema(
 # 12566: __all_virtual_backup_validate_task_history
 # 12567: __all_virtual_backup_validate_ls_task
 # 12568: __all_virtual_backup_validate_ls_task_history
+# 12569: __all_virtual_tenant_ss_storage_stat
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -17412,6 +17414,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15523', all_def_keyword
 # 15528: __all_virtual_backup_validate_job_history
 # 15529: __all_virtual_backup_validate_task
 # 15530: __all_virtual_backup_validate_task_history
+# 15531: __all_virtual_tenant_ss_storage_stat
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -42920,6 +42923,8 @@ FROM
 # 21682: V$OB_HNSW_INDEX_INFO
 # 21683: GV$OB_IVF_INDEX_INFO
 # 21684: V$OB_IVF_INDEX_INFO
+# 21685: CDB_OB_SS_SPACE_USAGE
+# 21686: DBA_OB_SS_SPACE_USAGE
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -65029,6 +65034,7 @@ def_table_schema(
 # 25312: DBA_OB_BACKUP_VALIDATE_JOB_HISTORY
 # 25313: DBA_OB_BACKUP_VALIDATE_TASKS
 # 25314: DBA_OB_BACKUP_VALIDATE_TASK_HISTORY
+# 25315: DBA_OB_SS_SPACE_USAGE
 
 #
 # 余留位置（此行之前占位）
