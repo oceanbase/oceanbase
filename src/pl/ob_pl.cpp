@@ -365,6 +365,11 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
           }
         } catch (...) {
           ctx.exec_ctx_->get_sql_ctx()->schema_guard_ = old_schema_guard;
+          if (NULL != mem_context) {
+            proc_params.reset();
+            DESTROY_CONTEXT(mem_context);
+            mem_context = NULL;
+          }
           throw;
         }
         if (OB_SUCC(ret)) {
@@ -3210,7 +3215,7 @@ int ObPLExecState::deep_copy_result_if_need(ObIAllocator &allocator)
     OX (result_ = new_obj);
   } else if (func_.get_ret_type().is_obj_type() && result_.need_deep_copy()) {
     CK (OB_NOT_NULL(get_allocator()));
-    OZ (deep_copy_obj(ctx_.exec_ctx_->get_allocator(), result_, new_obj));
+    OZ (deep_copy_obj(allocator, result_, new_obj));
     ObUserDefinedType::destruct_objparam(*get_allocator(), result_, ctx_.exec_ctx_->get_my_session());
     OX (result_ = new_obj);
   }
