@@ -2480,6 +2480,8 @@ int ObJoinHint::assign(const ObJoinHint &other)
     LOG_WARN("fail to assign table", K(ret));
   } else if (OB_FAIL(ObOptHint::assign(other))) {
     LOG_WARN("fail to assign hint", K(ret));
+  } else {
+    parallel_ = other.parallel_;
   }
   return ret;
 }
@@ -2503,6 +2505,9 @@ int ObJoinHint::print_hint_desc(PlanText &plan_text) const
   } else if (T_PQ_DISTRIBUTE == hint_type_ && NULL != algo_str
              && OB_FAIL(BUF_PRINTF(" %s", algo_str))) {
     LOG_WARN("failed to print dist algo", K(ret));
+  } else if (ObGlobalHint::UNSET_PARALLEL < parallel_ &&
+             OB_FAIL(BUF_PRINTF(" %ld", parallel_))) {
+    LOG_WARN("fail to print parallel", K(ret));
   }
   return ret;
 }
@@ -2540,6 +2545,7 @@ const char *ObJoinHint::get_dist_algo_str(DistAlgo dist_algo)
     case DistAlgo::DIST_NONE_ALL:           return  "NONE ALL";
     case DistAlgo::DIST_ALL_NONE:           return  "ALL NONE";
     case DistAlgo::DIST_RANDOM_ALL:         return  "RANDOM ALL";
+    case DistAlgo::DIST_RANDOM_BROADCAST:     return  "RANDOM BROADCAST";
     case DistAlgo::DIST_HASH_ALL:           return  "HASH ALL";
     case DistAlgo::DIST_HASH_HASH_LOCAL:    return "HASH_LOCAL HASH_LOCAL";
     case DistAlgo::DIST_PARTITION_HASH_LOCAL:    return "PARTITION HASH_LOCAL";

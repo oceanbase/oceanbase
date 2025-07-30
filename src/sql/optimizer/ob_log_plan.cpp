@@ -3665,6 +3665,9 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
     // do nothing
   } else if (DistAlgo::DIST_RANDOM_ALL == join_path.join_dist_algo_) {
     left_exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;
+  } else if (DistAlgo::DIST_RANDOM_BROADCAST == join_path.join_dist_algo_) {
+    left_exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;
+    right_exch_info.dist_method_ = ObPQDistributeMethod::BROADCAST;
   } else { /*do nothing*/
   }
 
@@ -6234,6 +6237,8 @@ int ObLogPlan::check_candi_plan_need_calc_dop(bool &need_calc_dop) const
     LOG_WARN("get unexpected params", K(ret), K(candidates_.candidate_plans_), K(opt_ctx.get_query_ctx()));
   } else if (!opt_ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP1)) {
     /* do nothing */
+  } else if (opt_ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1)) {
+    need_calc_dop = true;
   } else {
     for (int64_t i = 0; !need_calc_dop && OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); ++i) {
       if (OB_FAIL(check_op_need_calc_dop(candidates_.candidate_plans_.at(i).plan_tree_, need_calc_dop))) {

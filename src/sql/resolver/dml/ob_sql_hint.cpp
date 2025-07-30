@@ -2406,6 +2406,7 @@ int LogJoinHint::add_join_hint(const ObJoinHint &join_hint)
       } else {
         dist_methods_ |= join_hint.get_dist_algo();
       }
+      parallel_ = join_hint.get_parallel();
       break;
     }
     case T_PQ_MAP:  {

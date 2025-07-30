@@ -133,10 +133,11 @@ enum DistAlgo
   DIST_HASH_LOCAL_PARTITION = (1UL << 18),
   DIST_BROADCAST_HASH_LOCAL = (1UL << 19),
   DIST_HASH_LOCAL_BROADCAST = (1UL << 20),
-  DIST_MAX_JOIN_METHOD = (1UL << 21), // represents max join method
+  DIST_RANDOM_BROADCAST = (1UL << 21),
+  DIST_MAX_JOIN_METHOD = (1UL << 22), // represents max join method
   // only for set operator
-  DIST_SET_RANDOM = (1UL << 22),
-  DIST_SET_PARTITION_WISE = (1UL << 23) // non-strict set pw with phy_table_location_info_
+  DIST_SET_RANDOM = (1UL << 23),
+  DIST_SET_PARTITION_WISE = (1UL << 24) // non-strict set pw with phy_table_location_info_
 };
 
 inline const ObString &ob_dist_algo_str(DistAlgo algo)
@@ -165,6 +166,7 @@ inline const ObString &ob_dist_algo_str(DistAlgo algo)
     "HASH LOCAL PARTITION",
     "BROADCAST HASH LOCAL",
     "HASH LOCAL BROADCAST",
+    "RANDOM BROADCAST",
     "UNKNOWN ALGO",
     "SET RANDOM",
     "SET PARTITION WISE"
@@ -216,6 +218,8 @@ inline DistAlgo get_dist_algo(int64_t method)
     return DIST_ALL_NONE;
   } else if (method & DIST_RANDOM_ALL) {
     return DIST_RANDOM_ALL;
+  } else if (method & DIST_RANDOM_BROADCAST) {
+    return DIST_RANDOM_BROADCAST;
   } else if (method & DIST_HASH_ALL) {
     return DIST_HASH_ALL;
   } else if (method & DIST_SET_RANDOM) {

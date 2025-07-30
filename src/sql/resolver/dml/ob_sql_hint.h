@@ -254,6 +254,7 @@ struct LogJoinHint
   LogJoinHint() : join_tables_(),
                   local_methods_(0),
                   dist_methods_(0),
+                  parallel_(ObGlobalHint::UNSET_PARALLEL),
                   slave_mapping_(NULL),
                   nl_material_(NULL),
                   local_method_hints_(),
@@ -266,6 +267,7 @@ struct LogJoinHint
                K_(local_methods),
                K_(dist_methods),
                K_(slave_mapping),
+               K_(parallel),
                K_(nl_material),
                K_(local_method_hints),
                K_(dist_method_hints));
@@ -273,6 +275,7 @@ struct LogJoinHint
   ObRelIds join_tables_;
   int64_t local_methods_;
   int64_t dist_methods_;
+  int64_t parallel_;
   const ObJoinHint *slave_mapping_;
   const ObJoinHint *nl_material_;
   ObSEArray<const ObJoinHint*, 4, common::ModulePageAllocator, true> local_method_hints_;
