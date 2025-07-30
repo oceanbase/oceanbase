@@ -1463,8 +1463,12 @@ public:
       const ObTableSchema &index_table_schema,
       ObSchemaService *schema_service,
       int64_t &new_fetched_snapshot);
-
   static int get_table_lob_col_idx(const ObTableSchema &table_schema, ObIArray<uint64_t> &lob_col_idxs);
+  static int load_ddl_task(
+      const int64_t tenant_id,
+      const int64_t task_id,
+      ObIAllocator &allocator,
+      rootserver::ObDDLTask &task);
 
   static int is_ls_leader(ObLS &ls, bool &is_leader);
 private:
