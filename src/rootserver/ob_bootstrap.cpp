@@ -728,7 +728,8 @@ int ObBootstrap::load_all_schema(
                   DBA_STEP_INC_INFO(bootstrap),
                   "bootstrap create all schema begin.");
   ObLoadInnerTableSchemaExecutor executor;
-  if (OB_FAIL(executor.init(table_schemas, OB_SYS_TENANT_ID, get_cpu_count(), &rpc_proxy_))) {
+  if (OB_FAIL(executor.init(table_schemas, OB_SYS_TENANT_ID,
+          GCONF.get_sys_tenant_default_max_cpu(), &rpc_proxy_))) {
     LOG_WARN("failed to init executor", KR(ret));
   } else if (OB_FAIL(executor.execute())) {
     LOG_WARN("failed to execute load all schema", KR(ret));

@@ -46,6 +46,15 @@ public:
   int init(const ObIArray<ObTableSchema> &table_schemas, const uint64_t tenant_id,
       const int64_t max_cpu, obrpc::ObSrvRpcProxy *rpc_proxy);
   int execute();
+public:
+  // just for test
+  static bool get_load_schema_hang_enabled() { return load_schema_hang_enabled_; }
+  static void set_load_schema_hang_enabled(const bool &enabled) { load_schema_hang_enabled_ = enabled; }
+  static void load_schema_wait();
+  static void load_schema_init();
+  static void load_schema_broadcast();
+  static void set_need_hang_count(int64_t need_hang_count) { ATOMIC_CAS(&need_hang_count_, INT64_MAX, need_hang_count); }
+  static int64_t get_need_hang_count() { return need_hang_count_; }
 private:
   int init_args_(const ObIArray<ObTableSchema> &table_schemas);
   int append_arg(const ObIArray<int64_t> &insert_idx, const share::ObLoadInnerTableSchemaInfo &info);
@@ -57,6 +66,11 @@ private:
   static const int64_t WAIT_THREAD_FREE_TIME = 10_ms;
   static const int64_t THREAD_PER_CPU = 4; // should equal to the default value of parameter cpu_quota_concurrency
   static const share::ObLoadInnerTableSchemaInfo *ALL_LOAD_SCHEMA_INFO[];
+private:
+  // just for test
+  static bool load_schema_hang_enabled_;
+  static int64_t need_hang_count_;
+  static ObThreadCond cond_; // cond_ is inited in test
 private:
   uint64_t tenant_id_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;

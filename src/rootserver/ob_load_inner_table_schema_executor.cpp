@@ -20,6 +20,7 @@
 #include "share/location_cache/ob_location_service.h"
 #include "share/ob_global_stat_proxy.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
+#include "deps/oblib/src/lib/lock/ob_lock_guard.h"
 
 namespace oceanbase
 {
@@ -33,12 +34,38 @@ const share::ObLoadInnerTableSchemaInfo *ObLoadInnerTableSchemaExecutor::ALL_LOA
     &share::ALL_TABLE_HISTORY_LOAD_INFO,
     &share::ALL_COLUMN_HISTORY_LOAD_INFO,
 };
+bool ObLoadInnerTableSchemaExecutor::load_schema_hang_enabled_ = false;
+int64_t ObLoadInnerTableSchemaExecutor::need_hang_count_ = INT64_MAX;
+ObThreadCond ObLoadInnerTableSchemaExecutor::cond_;
+void ObLoadInnerTableSchemaExecutor::load_schema_wait()
+{
+  if (get_load_schema_hang_enabled() && cond_.is_inited()) {
+    lib::ObLockGuard<ObThreadCond> guard(cond_);
+    FLOG_INFO("begin to wait cond_");
+    ATOMIC_DEC(&need_hang_count_);
+    cond_.wait();
+    FLOG_INFO("wait cond_ finished");
+  }
+}
+void ObLoadInnerTableSchemaExecutor::load_schema_broadcast()
+{
+  if (get_load_schema_hang_enabled() && cond_.is_inited()) {
+    lib::ObLockGuard<ObThreadCond> guard(cond_);
+    FLOG_INFO("broadcast cond_");
+    cond_.broadcast();
+  }
+}
+void ObLoadInnerTableSchemaExecutor::load_schema_init()
+{
+  cond_.init(0); // just for test, so we assign 0
+}
 ERRSIM_POINT_DEF(ERRSIM_LOAD_INNER_TABLE_SCHEMA);
 int ObLoadInnerTableSchemaExecutor::load_inner_table_schema(
     const obrpc::ObLoadTenantTableSchemaArg &arg)
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(LOAD_INNER_TABLE_SCHEMA);
+  load_schema_wait(); // just for test
   const int64_t start_ts = ObTimeUtility::current_time();
   if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -320,9 +347,11 @@ int ObLoadInnerTableSchemaExecutor::execute()
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret), K_(inited));
   } else {
+    oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT);
     ObLoadTenantTableSchemaProxy proxy(*rpc_proxy_, &obrpc::ObSrvRpcProxy::load_tenant_table_schema);
     int64_t called_rpc_count = 0;
     bool rpc_has_error = false;
+    set_need_hang_count(args_.count()); // just for test
     while (OB_SUCC(ret) && !rpc_has_error) {
       const int64_t finished_rpc_count = proxy.get_response_count();
       if (THIS_WORKER.get_timeout_remain() <= 0) {
@@ -330,7 +359,8 @@ int ObLoadInnerTableSchemaExecutor::execute()
         LOG_WARN("this worker is timeout", KR(ret), K(THIS_WORKER.get_timeout_remain()));
       } else if (proxy.check_has_error_result()) { // check_has_error_result is not thread safe
         rpc_has_error = true;
-      } else if (finished_rpc_count + parallel_count_ > called_rpc_count) {
+      } else if (finished_rpc_count + parallel_count_ > called_rpc_count ||
+          OB_UNLIKELY(get_load_schema_hang_enabled())) {
         if (OB_FAIL(call_next_arg_(proxy))) {
           LOG_WARN("failed to call next arg", KR(ret));
         } else {
