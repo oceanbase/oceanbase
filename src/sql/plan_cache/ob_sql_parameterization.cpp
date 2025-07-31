@@ -60,6 +60,7 @@ struct TransformTreeCtx
   bool ignore_scale_check_;
   bool is_from_pl_;
   ObItemType parent_type_;
+  int64_t ps_question_num_;
   TransformTreeCtx();
 };
 
@@ -122,7 +123,8 @@ TransformTreeCtx::TransformTreeCtx() :
  udr_fixed_params_(NULL),
  ignore_scale_check_(false),
  is_from_pl_(false),
- parent_type_(T_INVALID)
+ parent_type_(T_INVALID),
+ ps_question_num_(0)
 {
 }
 
@@ -535,6 +537,9 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
       // do nothing
     }
     if (OB_SUCC(ret)) {
+      if (T_QUESTIONMARK == ctx.tree_->type_) {
+        ctx.ps_question_num_++;
+      }
       ObObjParam value;
       ObAccuracy tmp_accuracy;
       bool is_fixed = true;
@@ -2123,7 +2128,7 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
               if (OB_ISNULL(buf)) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
               } else {
-                ObPCUnixTimestampParamConstraint *constraint = new(buf)ObPCUnixTimestampParamConstraint((ctx.question_num_));
+                ObPCUnixTimestampParamConstraint *constraint = new(buf)ObPCUnixTimestampParamConstraint((is_execute_mode(ctx.mode_) ? ctx.ps_question_num_ : ctx.question_num_));
                 sql_info.params_constraint_.push_back(constraint);
               }
             } else {
