@@ -415,8 +415,9 @@ int ObMPStmtExecute::response_result_for_arraybinding(
   }
 
   if (OB_SUCC(ret)) {
-    bool ps_out = ((stmt::T_ANONYMOUS_BLOCK == stmt_type_ || stmt::T_CALL_PROCEDURE == stmt_type_)
-                    && arraybinding_columns_->count() > 3) ? true : false;
+    bool ps_out = is_prexecute()
+                  && (stmt::T_ANONYMOUS_BLOCK == stmt_type_ || stmt::T_CALL_PROCEDURE == stmt_type_)
+                  && (OB_NOT_NULL(arraybinding_columns_) && arraybinding_columns_->count() > 3);
     ObOKPParam ok_param;
     ok_param.affected_rows_ = arraybinding_rowcnt_;
     ok_param.is_partition_hit_ = session_info.partition_hit().get_bool();
