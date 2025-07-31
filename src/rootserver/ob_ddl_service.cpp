@@ -29014,8 +29014,11 @@ int ObDDLService::rebuild_vec_index(const ObRebuildIndexArg &arg, obrpc::ObAlter
       } else if (tenant_data_version < DATA_VERSION_4_3_3_0) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "rebuild vec index before 4.3.3 is");
-      } else if (tenant_data_version >= DATA_VERSION_4_4_1_0 && arg.rebuild_index_online_) {
+      } else if ((tenant_data_version >= DATA_VERSION_4_4_1_0 ||
+                 (tenant_data_version >= MOCK_DATA_VERSION_4_3_5_4 && tenant_data_version < DATA_VERSION_4_4_0_0)) &&
+                 arg.rebuild_index_online_) {
         // when only change search params in rebuild task, we only update the index table schema
+        // support version : [4.3.5.4, 4.4.0.0) || [4.4.1.0, +∞)
         ObSchemaService *schema_service = schema_service_->get_schema_service();
         ObDDLSQLTransaction trans(schema_service_);
         ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
