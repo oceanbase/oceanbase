@@ -79,7 +79,8 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
       pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
     }
     proxy_.set_timeout(abs_timeout_ts_ - start_ts);
-    if (OB_FAIL(rpc_encode_req(proxy_, pool, pcode_, NULL, opts_, pnio_req, pnio_req_sz, false, true, false, sessid_))) {
+    const uint64_t gtid = (pnio_group_id<<32) + thread_id;
+    if (OB_FAIL(rpc_encode_req(proxy_, gtid, pcode_, NULL, opts_, pnio_req, pnio_req_sz, false, true, false, sessid_))) {
       RPC_LOG(WARN, "rpc encode req fail", K(ret));
     } else if(OB_FAIL(ObPocClientStub::check_blacklist(dst_))) {
       RPC_LOG(WARN, "check_blacklist failed", K(ret));
@@ -97,13 +98,16 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
         ObSyncRespCallback::client_cb,
         &cb
       };
-      cb.gtid_ = (pnio_group_id<<32) + thread_id;
-      if (0 != (pn_err = pn_send((pnio_group_id<<32) + thread_id, dst_.to_sockaddr(&sock_addr), &pkt, &cb.pkt_id_))) {
+      cb.gtid_ = gtid;
+      if (0 != (pn_err = pn_send(gtid, dst_.to_sockaddr(&sock_addr), &pkt, &cb.pkt_id_))) {
         ret = ObPocClientStub::translate_io_error(pn_err);
         RPC_LOG(WARN, "pnio post fail", K(pn_err));
       }
     }
     if (OB_FAIL(ret)) {
+      if (NULL != pnio_req) {
+        pn_send_free(pnio_req); // if pn_send is not executed or executed failed, release memory allocated in rpc_encode_req
+      }
     } else if (OB_FAIL(cb.wait(proxy_.timeout(), pcode_, pnio_req_sz))) {
       RPC_LOG(WARN, "stream rpc execute fail", K(ret), K(dst_));
     } else if (NULL == (resp = cb.get_resp(resp_sz))) {
@@ -232,7 +236,8 @@ int SSHandle<pcodeStruct>::abort()
       pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
     }
     proxy_.set_timeout(abs_timeout_ts_ - start_ts);
-    if (OB_FAIL(rpc_encode_req(proxy_, pool, pcode_, NULL, opts_, pnio_req, pnio_req_sz, false, false, true, sessid_))) {
+    const uint64_t gtid = (pnio_group_id<<32) + thread_id;
+    if (OB_FAIL(rpc_encode_req(proxy_, gtid, pcode_, NULL, opts_, pnio_req, pnio_req_sz, false, false, true, sessid_))) {
       RPC_LOG(WARN, "rpc encode req fail", K(ret));
     } else if(OB_FAIL(ObPocClientStub::check_blacklist(dst_))) {
       RPC_LOG(WARN, "check_blacklist failed", K(ret));
@@ -250,13 +255,16 @@ int SSHandle<pcodeStruct>::abort()
         ObSyncRespCallback::client_cb,
         &cb
       };
-      cb.gtid_ = (pnio_group_id<<32) + thread_id;
-      if (0 != (pn_err = pn_send((pnio_group_id<<32) + thread_id, dst_.to_sockaddr(&sock_addr), &pkt, &cb.pkt_id_))) {
+      cb.gtid_ = gtid;
+      if (0 != (pn_err = pn_send(gtid, dst_.to_sockaddr(&sock_addr), &pkt, &cb.pkt_id_))) {
         ret = ObPocClientStub::translate_io_error(pn_err);
         RPC_LOG(WARN, "pnio post fail", K(pn_err));
       }
     }
     if (OB_FAIL(ret)) {
+      if (NULL != pnio_req) {
+        pn_send_free(pnio_req); // if pn_send is not executed or executed failed, release memory allocated in rpc_encode_req
+      }
     } else if (OB_FAIL(cb.wait(proxy_.timeout(), pcode_, pnio_req_sz))) {
       RPC_LOG(WARN, "stream rpc execute fail", K(ret), K(dst_));
     } else if (NULL == (resp = cb.get_resp(resp_sz))) {

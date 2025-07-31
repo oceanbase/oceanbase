@@ -105,7 +105,7 @@ OB_TX_MSG_SERDE(ObTxSubCommitRespMsg, ObTxMsg, ret_);
 OB_TX_MSG_SERDE(ObTxSubRollbackMsg, ObTxMsg, xid_);
 OB_TX_MSG_SERDE(ObTxSubRollbackRespMsg, ObTxMsg, ret_);
 OB_TX_MSG_SERDE(ObTxCommitMsg, ObTxMsg, expire_ts_, parts_, app_trace_info_, commit_start_scn_, commit_parts_);
-OB_TX_MSG_SERDE(ObTxCommitRespMsg, ObTxMsg, ret_, commit_version_);
+OB_TX_MSG_SERDE(ObTxCommitRespMsg, ObTxMsg, ret_, commit_version_, need_wait_interval_us_);
 OB_TX_MSG_SERDE(ObTxAbortMsg, ObTxMsg, reason_);
 OB_TX_MSG_SERDE(ObTxKeepaliveMsg, ObTxMsg, status_);
 OB_TX_MSG_SERDE(ObTxKeepaliveRespMsg, ObTxMsg, status_);

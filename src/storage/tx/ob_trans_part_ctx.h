@@ -964,6 +964,8 @@ private:
   {
     return exec_info_.serial_final_scn_.is_valid();
   }
+  bool can_use_gts_ahead_() const;
+  void try_recover_trans_need_wait_wrap_();
 public:
   int prepare_for_submit_redo(ObTxLogCb *&log_cb,
                               ObTxLogBlock &log_block,

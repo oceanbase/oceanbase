@@ -1494,6 +1494,9 @@ void ObTxReadSnapshot::wait_consistency()
   if (SRC::GLOBAL == source_) {
     const int64_t ts = MonotonicTs::current_time().mts_;
     if (ts < uncertain_bound_) {
+      if (TC_REACH_TIME_INTERVAL(1000000)) {
+        TRANS_LOG(INFO, "wait for consistency", K(uncertain_bound_), K(ts));
+      }
       ob_usleep(uncertain_bound_ - ts);
     }
   }

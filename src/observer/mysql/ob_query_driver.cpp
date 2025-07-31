@@ -188,6 +188,9 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
   ObSqlCtx *sql_ctx = result.get_exec_context().get_sql_ctx();
   bool is_packed = result.get_physical_plan() ? result.get_physical_plan()->is_packed() : false;
   MYSQL_PROTOCOL_TYPE protocol_type = is_ps_protocol ? MYSQL_PROTOCOL_TYPE::BINARY : MYSQL_PROTOCOL_TYPE::TEXT;
+  // for external consistency
+  transaction::ObTxReadSnapshot &tx_read_snapshot = DAS_CTX(result.get_exec_context()).get_snapshot();
+  tx_read_snapshot.wait_consistency();
 
   int64_t limit_count = INT64_MAX;
   if (OB_FAIL(ret)) {

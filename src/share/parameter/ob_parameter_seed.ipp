@@ -923,8 +923,8 @@ DEF_CAP(_parallel_redo_logging_trigger, OB_CLUSTER_PARAMETER, "16M", "[0B,)",
         "size of single transaction's pending redo log to trigger parallel writes redo log. "
         "Range: [0B,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(_ob_get_gts_ahead_interval, OB_CLUSTER_PARAMETER, "0s", "[0s, 1s]",
-         "get gts ahead interval. Range: [0s, 1s]",
+DEF_TIME(_ob_get_gts_ahead_interval, OB_CLUSTER_PARAMETER, "0s", "[0s, 100ms]",
+         "get gts ahead interval. Range: [0s, 100ms]",
          ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_TIME(_keepalive_interval, OB_TENANT_PARAMETER, "100ms", "[10ms, 10s]",

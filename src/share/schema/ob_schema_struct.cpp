@@ -7171,6 +7171,7 @@ int ObPartitionUtils::get_range_tablet_and_part_id_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_ENABLE_RAISE_PRUNING_PARTITION_ERROR);
 int ObPartitionUtils::get_list_tablet_and_part_id_(
     const common::ObNewRow &row,
     ObPartition * const* partition_array,
@@ -7193,6 +7194,10 @@ int ObPartitionUtils::get_list_tablet_and_part_id_(
         const ObNewRow &list_row = list_row_values.at(j);
         if (row == list_row) {
           part_idx = i;
+          // no need to rewrite ret, just raise error to find this kind of type
+          if (ERRSIM_ENABLE_RAISE_PRUNING_PARTITION_ERROR) {
+            LOG_ERROR("row not exist in hash, but row exists in partition array", K(row), K(list_row));
+          }
         }
       } // end for
       if (list_row_values.count() == 1

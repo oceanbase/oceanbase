@@ -312,6 +312,10 @@ int ObSyncCmdDriver::check_and_refresh_schema(uint64_t tenant_id)
 int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
 {
   int ret = OB_SUCCESS;
+  // for external consistency
+  transaction::ObTxReadSnapshot &tx_read_snapshot = DAS_CTX(result.get_exec_context()).get_snapshot();
+  tx_read_snapshot.wait_consistency();
+
   const common::ObNewRow *row = NULL;
   if (OB_FAIL(result.next_row(row)) ) {
     LOG_WARN("fail to get next row", K(ret));

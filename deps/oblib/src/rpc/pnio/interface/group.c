@@ -350,10 +350,7 @@ static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, co
 {
   const char* req = pkt->buf;
   const int64_t req_sz = pkt->sz;
-  pn_client_req_t* pn_req = (typeof(pn_req))cfifo_alloc(&pn->client_req_alloc, sizeof(*pn_req) + req_sz);
-  if (unlikely(NULL == pn_req)) {
-    return NULL;
-  }
+  pn_client_req_t* pn_req = (typeof(pn_req))req - 1;
   struct pn_pktc_cb_t* pn_cb = (typeof(pn_cb))cfifo_alloc(&pn->client_cb_alloc, sizeof(*pn_cb));
   if (unlikely(NULL == pn_cb)) {
     cfifo_free(pn_req);
@@ -446,6 +443,26 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_storage* sock_addr, const pn_p
   }
   rk_trace("send rpc packet, gtid=%lx, pkt_id=%u, catg_id=%d, expire_us=%ld, sz=%ld, err=%d", gtid, pkt_id, categ_id, expire_us, sz, err);
   return err;
+}
+
+PN_API void* pn_send_alloc(uint64_t gtid, int64_t sz)
+{
+  pn_grp_t* pgrp = locate_grp(gtid>>32);
+  pn_t* pn = get_pn_for_send(pgrp, gtid & 0xffffffff);
+  pn_client_req_t* pn_req = (typeof(pn_req))cfifo_alloc(&pn->client_req_alloc, sizeof(*pn_req) + sz);
+  void* p = NULL;
+  if (unlikely(NULL != pn_req)) {
+    p = (void*)(pn_req + 1);
+  }
+  return p;
+}
+
+PN_API void pn_send_free(void* p)
+{
+  if (NULL != p) {
+    pn_client_req_t* pn_req =  (pn_client_req_t*)p - 1;
+    cfifo_free(pn_req);
+  }
 }
 
 PN_API void pn_stop(uint64_t gid)

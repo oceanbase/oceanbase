@@ -1160,6 +1160,9 @@ int ObPartTransCtx::post_tx_commit_resp_(const int status)
     build_tx_common_msg_(SCHEDULER_LS, msg);
     msg.commit_version_ = commit_version;
     msg.ret_ = status;
+    if (OB_SUCCESS == status) {
+      msg.need_wait_interval_us_ = get_remaining_wait_interval_us_();
+    }
     if (OB_FAIL(post_msg_(exec_info_.scheduler_, msg))) {
       TRANS_LOG(WARN, "rpc post msg failed", K(*this), K(msg));
     } else {
