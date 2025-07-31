@@ -1670,51 +1670,23 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("vec_table_schema unexpected null", K(ret));
   } else {
-    // forbit weak read in both pre/post vec filter
-    bool is_weak_read = false;
-    int64_t route_policy_type = 0;
-    if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy_type))) {
-      LOG_WARN("fail to get sys variable", K(ret));
-    } else if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy_type)) {
-      // do not check weak read
-    } else if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
-      is_weak_read = true;
+    double selectivity = 0.0;
+    if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
+                                                        get_plan()->get_selectivity_ctx(),
+                                                        get_restrict_infos(),
+                                                        selectivity,
+                                                        get_plan()->get_predicate_selectivities()))) {
+      LOG_WARN("failed to calculate selectivity", K(ret));
+    } else if (OB_FAIL(ObVectorIndexUtil::set_vector_index_param(vec_index_schema,
+                                                                  access_path.domain_idx_info_.vec_extra_info_,
+                                                                  selectivity,
+                                                                  vector_expr,
+                                                                  stmt))) {
+      LOG_WARN("failed to set vector index parameters", K(ret));
     } else {
-      ObConsistencyLevel consistency_level = INVALID_CONSISTENCY;
-      if (OB_UNLIKELY(INVALID_CONSISTENCY
-              != OPT_CTX.get_query_ctx()->get_global_hint().read_consistency_)) {
-        consistency_level = OPT_CTX.get_query_ctx()->get_global_hint().read_consistency_;
-      } else {
-        consistency_level = session_info->get_consistency_level();
-      }
-      if (WEAK == consistency_level || FROZEN == consistency_level) {
-        is_weak_read = true;
-      }
+      access_path.domain_idx_info_.set_domain_idx_type(DomainIndexType::VEC_INDEX);
+      access_path.domain_idx_info_.vec_extra_info_.set_row_count(table_meta_info_.table_row_count_);
     }
-    // set vec_extra_info_
-    if (OB_FAIL(ret)) {
-    } else if (is_weak_read) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when using vector index, weak read is");
-    } else {
-      double selectivity = 0.0;
-      if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
-                                                          get_plan()->get_selectivity_ctx(),
-                                                          get_restrict_infos(),
-                                                          selectivity,
-                                                          get_plan()->get_predicate_selectivities()))) {
-        LOG_WARN("failed to calculate selectivity", K(ret));
-      } else if (OB_FAIL(ObVectorIndexUtil::set_vector_index_param(vec_index_schema,
-                                                                   access_path.domain_idx_info_.vec_extra_info_,
-                                                                   selectivity,
-                                                                   vector_expr,
-                                                                   stmt))) {
-        LOG_WARN("failed to set vector index parameters", K(ret));
-      } else {
-        access_path.domain_idx_info_.set_domain_idx_type(DomainIndexType::VEC_INDEX);
-        access_path.domain_idx_info_.vec_extra_info_.set_row_count(table_meta_info_.table_row_count_);
-      }
-    } // not weak read
 
     if (OB_FAIL(ret)) {
     } else if (access_path.domain_idx_info_.vec_extra_info_.vec_idx_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN
