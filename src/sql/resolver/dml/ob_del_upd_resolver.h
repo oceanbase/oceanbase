@@ -295,6 +295,8 @@ protected:
   int is_external_table_partition_column(const TableItem &table_item,
                                          uint64_t column_id,
                                          bool &is_part_column);
+  void set_is_insert_into_set(bool is_insert_into_set) { is_insert_into_set_ = is_insert_into_set; }
+  bool is_insert_into_set() const { return is_insert_into_set_; }
 
 private:
   common::hash::ObPlacementHashSet<uint64_t, 4229> insert_column_ids_;
@@ -303,6 +305,7 @@ private:
   int64_t oracle_tmp_table_type_;
 protected:
   bool is_resolve_insert_update_;
+  bool is_insert_into_set_;
 };
 
 } /* namespace sql */

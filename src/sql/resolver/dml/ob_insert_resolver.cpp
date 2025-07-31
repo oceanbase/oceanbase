@@ -65,6 +65,11 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
     insert_stmt->set_replace(parse_tree.children_[REPLACE_NODE]->type_ == T_REPLACE);
     session_info_->set_ignore_stmt(NULL != parse_tree.children_[IGNORE_NODE] ? true : false);
     insert_stmt->set_ignore(NULL != parse_tree.children_[IGNORE_NODE] ? true : false);
+    if (OB_NOT_NULL(parse_tree.children_[INSERT_NODE])
+        && OB_NOT_NULL((parse_tree.children_[INSERT_NODE])->children_[VALUE_NODE])) {
+      set_is_insert_into_set(
+        parse_tree.children_[INSERT_NODE]->children_[VALUE_NODE]->type_ == T_ASSIGN_LIST);
+    }
   }
 
   if (OB_SUCC(ret) && 5 <= parse_tree.num_child_) {
