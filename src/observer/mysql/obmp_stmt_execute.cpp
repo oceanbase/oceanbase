@@ -2058,6 +2058,7 @@ int ObMPStmtExecute::process()
     } else if (OB_FAIL(session.gen_configs_in_pc_str())) {
       LOG_WARN("fail to generate configuration string that can influence execution plan", K(ret));
     } else if (is_arraybinding_ && OB_FAIL(check_precondition_for_arraybinding(session))) {
+      need_disconnect = false;
       LOG_WARN("precondition for arraybinding is not satisfied", K(ret));
     } else {
       FLTSpanGuardIfEnable(ps_execute, enable_flt);
