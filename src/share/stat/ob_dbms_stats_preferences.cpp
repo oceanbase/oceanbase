@@ -25,8 +25,7 @@ namespace common {
 #define FETCH_USER_PREFS "SELECT /*+ OPT_PARAM(\'USE_DEFAULT_OPT_STAT\',\'TRUE\') */ valchar FROM %s WHERE tenant_id = %lu and \
                           table_id = %lu and pname = upper('%.*s')"
 
-#define UPDATE_GLOBAL_PREFS "UPDATE %s SET spare4 = upper('%.*s'), \
-                             sval2 = usec_to_time('%ld') WHERE sname = upper('%.*s')"
+#define UPDATE_GLOBAL_PREFS "REPLACE INTO %s(sname, sval1, sval2, spare4) VALUES ('%.*s', NULL, CURRENT_TIMESTAMP, '%.*s');"
 
 #define UPDATE_USER_PREFS "REPLACE INTO %s(tenant_id,\
                                            table_id,\
@@ -152,11 +151,10 @@ int ObDbmsStatsPreferences::set_prefs(ObExecContext &ctx,
   } else {//update global prefs
     if (OB_FAIL(raw_sql.append_fmt(UPDATE_GLOBAL_PREFS,
                                    share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TNAME,
-                                   opt_value.length(),
-                                   opt_value.ptr(),
-                                   current_time,
                                    opt_name.length(),
-                                   opt_name.ptr()))) {
+                                   opt_name.ptr(),
+                                   opt_value.length(),
+                                   opt_value.ptr()))) {
       LOG_WARN("failed to append", K(ret), K(raw_sql));
     } else if (OB_FAIL(mysql_proxy->write(session->get_effective_tenant_id(),
                                           raw_sql.ptr(),
