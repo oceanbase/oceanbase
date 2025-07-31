@@ -5221,6 +5221,20 @@ static const _error _error_OB_INVALID_ZERO_DATE = {
       .ob_str_error          = "OBE-00600: internal error code, arguments: -4409, invalid zero date in no_zero_date mode",
       .ob_str_user_error     = "OBE-00600: internal error code, arguments: -4409, invalid zero date in no_zero_date mode"
 };
+static const _error _error_OB_LS_NOT_IN_LEARNER_LIST = {
+      .error_name            = "OB_LS_NOT_IN_LEARNER_LIST",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "ls not in learner list",
+      .str_user_error        = "ls not in learner list",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -4410, ls not in learner list",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4410, ls not in learner list",
+      .ob_str_error          = "OBE-00600: internal error code, arguments: -4410, ls not in learner list",
+      .ob_str_user_error     = "OBE-00600: internal error code, arguments: -4410, ls not in learner list"
+};
 static const _error _error_OB_IMPORT_NOT_IN_SERVER = {
       .error_name            = "OB_IMPORT_NOT_IN_SERVER",
       .error_cause           = "Internal Error",
@@ -35097,6 +35111,7 @@ struct ObStrErrorInit
     _errors[-OB_LICENSE_SCOPE_EXCEEDED] = &_error_OB_LICENSE_SCOPE_EXCEEDED;
     _errors[-OB_MIGRATE_TX_DATA_NOT_CONTINUES] = &_error_OB_MIGRATE_TX_DATA_NOT_CONTINUES;
     _errors[-OB_INVALID_ZERO_DATE] = &_error_OB_INVALID_ZERO_DATE;
+    _errors[-OB_LS_NOT_IN_LEARNER_LIST] = &_error_OB_LS_NOT_IN_LEARNER_LIST;
     _errors[-OB_IMPORT_NOT_IN_SERVER] = &_error_OB_IMPORT_NOT_IN_SERVER;
     _errors[-OB_CONVERT_ERROR] = &_error_OB_CONVERT_ERROR;
     _errors[-OB_BYPASS_TIMEOUT] = &_error_OB_BYPASS_TIMEOUT;
