@@ -3400,15 +3400,18 @@ int ObSQLSessionInfo::on_user_disconnect()
 // prepare baseline for the following `calc_txn_free_route` to get the diff
 void ObSQLSessionInfo::prep_txn_free_route_baseline(bool reset_audit)
 {
+
 #define RESET_TXN_STATE_ENCODER_CHANGED_(x) txn_##x##_info_encoder_.is_changed_ = false
 #define RESET_TXN_STATE_ENCODER_CHANGED(x) RESET_TXN_STATE_ENCODER_CHANGED_(x)
-  LST_DO(RESET_TXN_STATE_ENCODER_CHANGED, (;), static, dynamic, participants, extra);
+  if (txn_free_route_ctx_.has_calculated()) {
+    LST_DO(RESET_TXN_STATE_ENCODER_CHANGED, (;), static, dynamic, participants, extra);
+    if (reset_audit) {
+      txn_free_route_ctx_.reset_audit_record();
+    }
+    txn_free_route_ctx_.init_before_handle_request(tx_desc_);
+  }
 #undef RESET_TXN_STATE_ENCODER_CHANGED
 #undef RESET_TXN_STATE_ENCODER_CHANGED_
-  if (reset_audit) {
-    txn_free_route_ctx_.reset_audit_record();
-  }
-  txn_free_route_ctx_.init_before_handle_request(tx_desc_);
 }
 
 void ObSQLSessionInfo::post_sync_session_info()
