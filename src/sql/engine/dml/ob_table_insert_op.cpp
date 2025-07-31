@@ -316,6 +316,10 @@ int ObTableInsertOp::write_rows_post_proc(int last_errno)
       // sync last user specified value after iter ends(compatible with MySQL)
       if (OB_FAIL(plan_ctx->sync_last_value_local())) {
         LOG_WARN("failed to sync last value", K(ret));
+      } else if (changed_rows == 0) {
+        // for insert ignore a single row
+        // if the row is ignored, there is no need to update last insert id in session
+        plan_ctx->set_last_insert_id_cur_stmt(0);
       }
     }
     int sync_ret = OB_SUCCESS;
