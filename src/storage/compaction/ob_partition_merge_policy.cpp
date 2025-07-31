@@ -2214,7 +2214,7 @@ int ObPartitionMergePolicy::get_ss_minor_boundary_snapshot_version(
     // hence should skip this round of minor merge
     ObTabletHandle local_tablet_handle;
     int64_t local_last_major_snapshot = 0;
-    if (OB_FAIL(ls.get_tablet(tablet_id, local_tablet_handle))) {
+    if (OB_FAIL(ls.get_tablet(tablet_id, local_tablet_handle, 10_s, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
       if (OB_TABLET_NOT_EXIST == ret) {
         LOG_INFO("local tablet not exist, skip minor merge", K(ret), K(tablet_id));
         ret = OB_NO_NEED_MERGE;
