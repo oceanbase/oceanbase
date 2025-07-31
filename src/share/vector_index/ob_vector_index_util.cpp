@@ -5281,5 +5281,42 @@ int ObVecIdxExtraInfo::set_vec_param_info(const ObTableSchema *vec_index_schema)
   }
   return ret;
 }
+
+// when change search params and same build params, only change table schema
+int ObVectorIndexUtil::check_only_change_search_params(const ObString &old_idx_params,
+                                                       const ObString &new_idx_params,
+                                                       const ObTableSchema &index_table_schema,
+                                                       bool &only_change_search_params)
+{
+  int ret = OB_SUCCESS;
+  ObVectorIndexParam old_vector_index_param;
+  ObVectorIndexParam new_vector_index_param;
+  only_change_search_params = false;
+  ObVectorIndexType index_type = ObVectorIndexType::VIT_MAX;
+  if (index_table_schema.is_vec_hnsw_index()) {
+    index_type = ObVectorIndexType::VIT_HNSW_INDEX;
+    if (OB_FAIL(parser_params_from_string(old_idx_params, index_type, old_vector_index_param))) {
+      LOG_WARN("fail to parser params from string", K(ret), K(old_idx_params));
+    } else if (OB_FAIL(parser_params_from_string(new_idx_params, index_type, new_vector_index_param))) {
+      LOG_WARN("fail to parser params from string", K(ret), K(new_idx_params));
+    } else {
+      if (old_vector_index_param.type_ != new_vector_index_param.type_ ||
+          old_vector_index_param.lib_ != new_vector_index_param.lib_ ||
+          old_vector_index_param.dist_algorithm_ != new_vector_index_param.dist_algorithm_ ||
+          old_vector_index_param.dim_ != new_vector_index_param.dim_ ||
+          old_vector_index_param.m_ != new_vector_index_param.m_ ||
+          old_vector_index_param.ef_construction_ != new_vector_index_param.ef_construction_ ||
+          old_vector_index_param.extra_info_max_size_ != new_vector_index_param.extra_info_max_size_ ||
+          old_vector_index_param.extra_info_actual_size_ != new_vector_index_param.extra_info_actual_size_) {
+        only_change_search_params = false;
+      } else if (old_vector_index_param.ef_search_ != new_vector_index_param.ef_search_) {
+        only_change_search_params = true;
+      }
+    }
+  } else {
+    // do nothing, other type vec index.
+  }
+  return ret;
+}
 }
 }

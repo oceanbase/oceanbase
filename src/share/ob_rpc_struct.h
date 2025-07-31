@@ -1570,6 +1570,7 @@ public:
     index_action_type_ = REBUILD_INDEX;
     index_table_id_ = common::OB_INVALID_ID;
     rebuild_index_type_ = REBUILD_INDEX_TYPE_VEC;
+    rebuild_index_online_ = false;
   }
   virtual ~ObRebuildIndexArg() {}
 
@@ -1583,6 +1584,7 @@ public:
       index_table_id_ = other.index_table_id_;
       vidx_refresh_info_ = other.vidx_refresh_info_;
       rebuild_index_type_ = other.rebuild_index_type_;
+      rebuild_index_online_ = other.rebuild_index_online_;
     }
     return ret;
   }
@@ -1597,6 +1599,7 @@ public:
     // to ensure compatibility, the default value is set to vec index.
     rebuild_index_type_ = REBUILD_INDEX_TYPE_VEC;
     create_mlog_arg_.reset();
+    rebuild_index_online_ = false;
   }
   bool is_rebuild_mlog() const { return REBUILD_INDEX_TYPE_MLOG == rebuild_index_type_; }
   bool is_rebuild_vec_index() const { return REBUILD_INDEX_TYPE_VEC == rebuild_index_type_; }
@@ -1605,6 +1608,7 @@ public:
   share::schema::ObVectorIndexRefreshInfo vidx_refresh_info_;
   RebuildIndexType rebuild_index_type_;
   ObCreateMLogArg create_mlog_arg_;
+  bool rebuild_index_online_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };

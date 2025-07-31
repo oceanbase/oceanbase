@@ -694,6 +694,11 @@ public:
                                     sql::ObRawExpr *&vector_expr,
                                     const sql::ObDMLStmt *&stmt);
   static int set_adaptive_try_path(ObVecIdxExtraInfo& vc_info, const bool is_primary_idx);
+  static int check_only_change_search_params(const ObString &old_idx_params,
+                                             const ObString &new_idx_params,
+                                             const ObTableSchema &index_table_schema,
+                                             bool &only_change_search_params);
+
 private:
   static void save_column_schema(
       const ObColumnSchemaV2 *&old_column,
