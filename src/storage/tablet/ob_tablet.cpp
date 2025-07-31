@@ -5631,7 +5631,8 @@ int ObTablet::build_read_info(
                                              false /*use_default_compat_version*/,
                                              is_cs_replica_compat,
                                              storage_schema->is_delete_insert_merge_engine(),
-                                             storage_schema->is_global_index_table()))) {
+                                             storage_schema->is_global_index_table(),
+                                             storage_schema->is_mv_major_refresh()))) {
     LOG_WARN("fail to init rowkey read info", K(ret), KPC(storage_schema));
   }
   ObTabletObjLoadHelper::free(allocator, storage_schema);
@@ -6381,6 +6382,21 @@ int ObTablet::check_is_delete_insert_table(bool &is_delete_insert_table) const
     LOG_WARN("get unexpected null rowkey readinfo", K(ret));
   } else {
     is_delete_insert_table = rowkey_read_info_->is_delete_insert_table();
+  }
+  return ret;
+}
+
+int ObTablet::check_is_mv_major_refresh_tablet(bool &val) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTablet has not been inited", K(ret));
+  } else if (OB_UNLIKELY(nullptr == rowkey_read_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null rowkey readinfo", K(ret));
+  } else {
+    val = rowkey_read_info_->is_mv_major_refresh_tablet();
   }
   return ret;
 }

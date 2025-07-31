@@ -239,7 +239,8 @@ void ObReadInfoStruct::init_basic_info(const int64_t schema_column_count,
                      const bool is_cg_sstable,
                      const bool is_cs_replica_compat,
                      const bool is_delete_insert_table,
-                     const bool is_global_index_table) {
+                     const bool is_global_index_table,
+                     const bool is_mv_major_refresh_tablet) {
   const int64_t extra_rowkey_cnt = is_cg_sstable ? 0 : storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   schema_column_count_ = schema_column_count;
   schema_rowkey_cnt_ = schema_rowkey_cnt;
@@ -248,6 +249,7 @@ void ObReadInfoStruct::init_basic_info(const int64_t schema_column_count,
   is_cs_replica_compat_ = is_cs_replica_compat;
   is_delete_insert_table_ = is_delete_insert_table;
   is_global_index_table_ = is_global_index_table;
+  is_mv_major_refresh_tablet_ = is_mv_major_refresh_tablet;
 }
 
 int ObReadInfoStruct::generate_for_column_store(ObIAllocator &allocator,
@@ -360,7 +362,7 @@ int ObTableReadInfo::mock_for_sstable_query(
   } else if (OB_FAIL(init_compat_version())) { // init compat verion
     LOG_WARN("failed to init compat version", KR(ret));
   } else if (FALSE_IT(init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable,
-      false /*is_cs_replica_compat*/, false /*is_delete_insert_table*/, false/*is_global_index_table*/))) { // init basic info
+      false /*is_cs_replica_compat*/, false /*is_delete_insert_table*/, false/*is_global_index_table*/, false/*mv_major_refresh_tablet*/))) { // init basic info
   } else if (OB_FAIL(cols_desc_.init_and_assign(cols_desc, allocator))) {
     LOG_WARN("Fail to assign cols_desc", K(ret));
   } else if (OB_FAIL(cols_index_.init_and_assign(storage_cols_index, allocator))) {
@@ -435,7 +437,7 @@ int ObTableReadInfo::init(
   } else if (OB_FAIL(init_compat_version())) { // init compat verion
     LOG_WARN("failed to init compat version", KR(ret));
   } else if (FALSE_IT(init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode, is_cg_sstable,
-      false /*is_cs_replica_compat*/, is_delete_insert_table, false/*is_global_index_table*/))) { // init basic info
+      false /*is_cs_replica_compat*/, is_delete_insert_table, false/*is_global_index_table*/, false/*mv_major_refresh_tablet*/))) { // init basic info
   } else if (OB_FAIL(ObReadInfoStruct::prepare_arrays(allocator, cols_desc, cols_desc.count()))) {
     LOG_WARN("failed to prepare arrays", K(ret), K(cols_desc.count()));
   } else if (nullptr != cols_param && OB_FAIL(cols_param_.init_and_assign(*cols_param, allocator))) {
@@ -824,7 +826,8 @@ int ObRowkeyReadInfo::init(
     const bool use_default_compat_version,
     const bool is_cs_replica_compat,
     const bool is_delete_insert_table,
-    const bool is_global_index_table)
+    const bool is_global_index_table,
+    const bool is_mv_major_refresh_tablet)
 {
   int ret = OB_SUCCESS;
   const int64_t extra_rowkey_cnt = is_cg_sstable ? 0: storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
@@ -845,7 +848,7 @@ int ObRowkeyReadInfo::init(
   if (OB_SUCC(ret)) {
     init_basic_info(schema_column_count, schema_rowkey_cnt, is_oracle_mode,
                     is_cg_sstable, is_cs_replica_compat, is_delete_insert_table,
-                    is_global_index_table); // init basic info
+                    is_global_index_table, is_mv_major_refresh_tablet); // init basic info
     if (OB_FAIL(prepare_arrays(allocator, rowkey_col_descs, out_cols_cnt))) {
       LOG_WARN("failed to prepare arrays", K(ret), K(out_cols_cnt));
     } else if (OB_FAIL(datum_utils_.init(cols_desc_, schema_rowkey_cnt_,
