@@ -2295,3 +2295,6 @@ DEF_BOOL(_ob_enable_pl_dynamic_stack_check, OB_CLUSTER_PARAMETER, "False",
 DEF_CAP(ob_deterministic_udf_cache_max_size, OB_TENANT_PARAMETER, "16M", "[0B,)",
         "deternimistic cache can use max size memory(in bytes). if it's zero, disable cache",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_prexec_prepare_with_params, OB_TENANT_PARAMETER, "False",
+         "Control the prexec protocol prepare with or without parameters during the prepare phase.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

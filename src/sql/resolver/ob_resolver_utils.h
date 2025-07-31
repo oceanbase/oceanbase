@@ -892,6 +892,22 @@ private:
   // disallow construct
   ObResolverUtils();
   ~ObResolverUtils();
+
+public:
+  /**
+   * @brief: walk through parse tree and calculate the returning param count,
+   *         designed for prexecute protocol
+   * @param parse_tree [in] parse tree of the sql
+   * @param returning_param_count [out] the count of returning params
+   * @return oceanbase error code defined in lib/ob_errno.def
+   */
+  static int calc_returning_param_count(const ParseNode &parse_tree,
+                                        int64_t &returning_param_count);
+
+private:
+  static int calc_returning_param_count_recursive(const ParseNode &parse_tree,
+                                                  int64_t &returning_param_count,
+                                                  bool &returning_stmt_found);
 };
 } // end namespace sql
 } // end namespace oceanbase

@@ -56,20 +56,6 @@ inline int ObPSAnalysisChecker::detection(const int64_t len)
   return ret;
 }
 
-void ObPsSessionInfoParamsCleaner::operator()(
-    common::hash::HashMapPair<uint64_t, ObPsSessionInfo *> &entry) {
-  int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(entry.second)) {
-    ObPsSessionInfo *ps_session_info =
-        static_cast<ObPsSessionInfo *>(entry.second);
-    ps_session_info->get_param_types().reuse();
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "ps session info pointer is NULL", K(ret));
-  }
-  ret_ = ret;
-}
-
 void ObPsSessionInfoParamsAssignment::operator()(
     common::hash::HashMapPair<uint64_t, ObPsSessionInfo *> &entry) {
   int ret = OB_SUCCESS;
@@ -89,6 +75,7 @@ ObMPStmtExecute::ObMPStmtExecute(const ObGlobalContext &gctx)
       retry_ctrl_(/*ctx_.retry_info_*/),
       ctx_(),
       stmt_id_(),
+      new_param_bound_flag_(0),
       stmt_type_(stmt::T_NONE),
       params_(NULL),
       arraybinding_params_(NULL),
@@ -183,53 +170,6 @@ int ObMPStmtExecute::init_arraybinding_paramstore(ObIAllocator &alloc)
     LOG_WARN("failed to allocate memory", K(ret));
   }
   OX (arraybinding_params_ = new(arraybinding_params_)ParamStore((ObWrapperAllocator(alloc))));
-  return ret;
-}
-
-
-// only used for pre_execute
-int ObMPStmtExecute::init_arraybinding_fields_and_row(ObMySQLResultSet &result)
-{
-  int ret = OB_SUCCESS;
-  int64_t returning_field_num = 0;
-
-  if (!is_prexecute()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not support execute protocol", K(ret));
-  } else if (OB_ISNULL(result.get_field_columns())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not support execute protocol", K(ret));
-  } else {
-    ObIAllocator *alloc = static_cast<ObMPStmtPrexecute*>(this)->get_alloc();
-    if (OB_ISNULL(alloc)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("allocator is null", K(ret));
-    } else if (OB_ISNULL(result.get_field_columns())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("returning param field is null", K(ret));
-    } else {
-      returning_field_num = result.get_field_columns()->count();
-    }
-
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_ISNULL(arraybinding_columns_
-        = static_cast<ColumnsFieldArray*>(alloc->alloc(sizeof(ColumnsFieldArray))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", K(ret));
-    } else if (OB_ISNULL(arraybinding_row_
-        = static_cast<ObNewRow*>(alloc->alloc(sizeof(ObNewRow))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", K(ret));
-    } else {
-      arraybinding_columns_
-        = new(arraybinding_columns_)ColumnsFieldArray(*alloc, 3 + returning_field_num);
-      arraybinding_row_ = new(arraybinding_row_)ObNewRow();
-    }
-    OZ (init_arraybinding_field(returning_field_num + 3, result.get_field_columns()));
-    OZ (init_row_for_arraybinding(*alloc, returning_field_num + 3));
-  }
-
   return ret;
 }
 
@@ -614,11 +554,29 @@ int ObMPStmtExecute::before_process()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session is NULL or invalid", K(ret), K(session));
     } else {
-      const bool enable_sql_audit =
-      GCONF.enable_sql_audit && session->get_local_ob_enable_sql_audit();
-      OZ (request_params(session, pos, ps_stmt_checksum, alloc, -1));
-      if (enable_sql_audit) {
-        OZ (store_params_value_to_str(alloc, *session));
+      ObPsSessionInfo *ps_session_info = nullptr;
+      ParamTypeArray param_types;
+      ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
+      if (FAILEDx(session->get_ps_session_info(stmt_id_, ps_session_info))) {
+        LOG_WARN("get ps_session_info failed", K(stmt_id_));
+      } else if (OB_ISNULL(ps_session_info)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("ps_session_info is null");
+      } else if (OB_FAIL(verify_ps_stmt_checksum(*session, *ps_session_info, ps_stmt_checksum))) {
+        LOG_WARN("verify ps_stmt_checksum failed", K(ps_stmt_checksum), KPC(ps_session_info));
+      } else if (FALSE_IT(configure_by_stmt_type(ps_session_info->get_stmt_type()))) {
+      } else if (OB_FAIL(param_types.assign(ps_session_info->get_param_types()))) {
+        LOG_WARN("fail to assign param types", K(stmt_id_), KPC(ps_session_info));
+      } else if (OB_FAIL(request_params(
+                     session, alloc, pos, -1, ps_session_info->get_param_count(), param_types))) {
+        LOG_WARN("request params failed", K(stmt_id_), KPC(ps_session_info));
+      } else if (1 == new_param_bound_flag_) {
+        ObPsSessionInfoParamsAssignment assignment(param_types);
+        if (session->update_ps_session_info_safety(stmt_id_, assignment)) {
+          LOG_WARN("fail to update params type of PsSessionInfo");
+        } else if (OB_FAIL(assignment.ret_)) {
+          LOG_WARN("fail to execute assignment", K(assignment.ret_));
+        }
       }
     }
     if (session != NULL) {
@@ -860,88 +818,77 @@ bool ObMPStmtExecute::is_contain_complex_element(const sql::ParamTypeArray &para
   return b_ret;
 }
 
-int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
-                                    const char* &pos,
-                                    uint32_t ps_stmt_checksum,
-                                    ObIAllocator &alloc,
-                                    int32_t all_param_num)
+int ObMPStmtExecute::verify_ps_stmt_checksum(ObSQLSessionInfo &session,
+                                            ObPsSessionInfo &ps_session_info,
+                                            uint32_t ps_stmt_checksum)
 {
   int ret = OB_SUCCESS;
-  ObPsSessionInfo *ps_session_info = NULL;
-  ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
-  ObCharsetType charset = CHARSET_INVALID;
+  if (DEFAULT_ITERATION_COUNT == ps_stmt_checksum) {
+    LOG_DEBUG("no ps stmt checksum sent, skip verification",
+              "session_id", session.get_server_sid(),
+              K(ps_stmt_checksum),
+              K(ps_session_info));
+  } else if (ps_stmt_checksum != ps_session_info.get_ps_stmt_checksum()) {
+    ret = OB_ERR_PREPARE_STMT_CHECKSUM;
+    LOG_ERROR("ps stmt checksum fail",
+              "session_id", session.get_server_sid(),
+              K(ps_stmt_checksum),
+              K(ps_session_info));
+    LOG_DBA_ERROR_V2(OB_SERVER_PS_STMT_CHECKSUM_MISMATCH, ret,
+                     "ps stmt checksum fail. ",
+                     "the ps stmt checksum is ", ps_stmt_checksum,
+                     ", but current session stmt checksum is ", ps_session_info.get_ps_stmt_checksum(),
+                     ". current session id is ", session.get_server_sid(), ". ");
+  }
+  return ret;
+}
+
+void ObMPStmtExecute::configure_by_stmt_type(const stmt::StmtType stmt_type)
+{
+  stmt_type_ = stmt_type;
+  if (is_pl_stmt(stmt_type)) {
+    is_save_exception_ = false;  // pl not support save exception
+    ctx_.is_execute_call_stmt_ = true;
+  }
+}
+
+int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
+                                    ObIAllocator &alloc,
+                                    const char *&pos,
+                                    const int64_t all_param_num,
+                                    const int64_t input_param_num,
+                                    ParamTypeArray &param_types)
+{
+  int ret = OB_SUCCESS;
   ObCollationType cs_conn = CS_TYPE_INVALID;
   ObCollationType cs_server = CS_TYPE_INVALID;
   share::schema::ObSchemaGetterGuard schema_guard;
   const uint64_t tenant_id = session->get_effective_tenant_id();
   session->set_proxy_version(get_proxy_version());
 
-  if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("get schema guard failed", K(ret));
-  } else if (OB_FAIL(session->get_character_set_connection(charset))) {
-    LOG_WARN("get charset for client failed", K(ret));
+  if (FAILEDx(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get schema guard failed");
   } else if (OB_FAIL(session->get_collation_connection(cs_conn))) {
-    LOG_WARN("get charset for client failed", K(ret));
+    LOG_WARN("get collation for connection failed");
   } else if (OB_FAIL(session->get_collation_server(cs_server))) {
-    LOG_WARN("get charset for client failed", K(ret));
-  } else if (OB_FAIL(session->get_ps_session_info(stmt_id_, ps_session_info))) {
-    LOG_WARN("get_ps_session_info failed", K(ret), K_(stmt_id));
-  } else if (OB_ISNULL(ps_session_info)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ps_session_info is null", K(ret));
-  } else if (DEFAULT_ITERATION_COUNT == ps_stmt_checksum) {
-    // do nothing
-    // 新协议不在这里做
-  } else if (ps_stmt_checksum != ps_session_info->get_ps_stmt_checksum()) {
-    ret = OB_ERR_PREPARE_STMT_CHECKSUM;
-    LOG_ERROR("ps stmt checksum fail", K(ret), "session_id", session->get_server_sid(),
-                                        K(ps_stmt_checksum), K(*ps_session_info));
-    LOG_DBA_ERROR_V2(OB_SERVER_PS_STMT_CHECKSUM_MISMATCH, ret,
-                     "ps stmt checksum fail. ",
-                     "the ps stmt checksum is ", ps_stmt_checksum,
-                     ", but current session stmt checksum is ", ps_session_info->get_ps_stmt_checksum(),
-                     ". current session id is ", session->get_server_sid(), ". ");
-  }
-  if (OB_SUCC(ret)) {
-    LOG_TRACE("ps session info",
-              K(ret), "session_id", session->get_server_sid(), K(*ps_session_info));
+    LOG_WARN("get collation for server failed");
+  } else {
     share::schema::ObSchemaGetterGuard *old_guard = ctx_.schema_guard_;
     ObSQLSessionInfo *old_sess_info = ctx_.session_info_;
+
+    params_num_ = MAX(all_param_num, input_param_num);
     ctx_.schema_guard_ = &schema_guard;
     ctx_.session_info_ = session;
-    const int64_t input_param_num = ps_session_info->get_param_count();
-    stmt_type_ = ps_session_info->get_stmt_type();
-    int8_t new_param_bound_flag = 0;
-    if (is_pl_stmt(stmt_type_)) {
-      // pl not support save exception
-      is_save_exception_ = 0;
-    }
-    // for returning into,
-    // all_param_num  = input_param_num + returning_param_num
-    params_num_ = (all_param_num > input_param_num) ? all_param_num : input_param_num;
-    int64_t returning_params_num = all_param_num - input_param_num;
-    if (is_prexecute() && 0 != params_num_) {
-      if (ps_session_info->get_num_of_returning_into() > 0) {
-        // check param_cnt for returning into
-        if (returning_params_num != ps_session_info->get_num_of_returning_into()
-            || input_param_num != ps_session_info->get_param_count()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("param num is not match ps stmt prama count.", K(is_prexecute()), K(params_num_),
-                    K(ps_session_info->get_param_count()));
-        }
-      } else if (params_num_ != ps_session_info->get_param_count()) {
-        // check param_cnt
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("param num is not match ps stmt prama count.", K(is_prexecute()), K(params_num_),
-                 K(ps_session_info->get_param_count()));
-      }
-    }
+    DEFER(ctx_.schema_guard_ = old_guard);
+    DEFER(ctx_.session_info_ = old_sess_info);
     if (OB_SUCC(ret) && params_num_ > 0) {
-      ParamTypeArray &param_types = ps_session_info->get_param_types();
       ParamTypeInfoArray param_type_infos;
       ParamCastArray param_cast_infos;
       ParamTypeArray returning_param_types;
       ParamTypeInfoArray returning_param_type_infos;
+      int8_t new_param_bound_flag = 0;
+      // for returning into, all_param_num  = input_param_num + returning_param_num
+      int64_t returning_params_num = all_param_num - input_param_num;
 
       // Step1: 处理空值位图
       const char *bitmap = pos;
@@ -949,21 +896,16 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
       PS_DEFENSE_CHECK(bitmap_types + 1)  // null value bitmap + new param bound flag
       {
         pos += bitmap_types;
-        // Step2: 获取new_param_bound_flag字段
+        // Step2: 获取 new_param_bound_flag 字段, represent if parameters must be re-bound
         ObMySQLUtil::get_int1(pos, new_param_bound_flag);
-        if (new_param_bound_flag == 1) {
-          // reset param_types
-          ObPsSessionInfoParamsCleaner cleaner;
-          if (OB_FAIL(session->update_ps_session_info_safety(stmt_id_, cleaner))) {
-            LOG_WARN("failed to reset param_types", K(ret), K(stmt_id_));
-          } else if (OB_FAIL(cleaner.ret_)) {
-            LOG_WARN("failed to reset param_types", K(ret), K(stmt_id_));
-          }
+        new_param_bound_flag_ = new_param_bound_flag;
+        if (1 == new_param_bound_flag) {
+          // if there is no need to re-bind param types, param_types in the ps_session_info will
+          // be reused.
+          param_types.reuse();
         }
       }
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (OB_FAIL(param_type_infos.prepare_allocate(input_param_num))) {
+      if (FAILEDx(param_type_infos.prepare_allocate(input_param_num))) {
         LOG_WARN("array prepare allocate failed", K(ret), K(input_param_num));
       } else if (OB_FAIL(params_->prepare_allocate(input_param_num))) {
         LOG_WARN("array prepare allocate failed", K(ret));
@@ -979,50 +921,28 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
       }
 
       if (OB_FAIL(ret)) {
-
       } else if (params_num_ <= input_param_num) {
         // not need init returning_param_types and returning_param_type_infos
       } else if (OB_FAIL(returning_param_type_infos.prepare_allocate(params_num_ - input_param_num))) {
         LOG_WARN("array prepare allocate failed", K(ret));
       }
 
-      // Step3: 获取type信息
-      if (OB_SUCC(ret)) {
-        if (1 == new_param_bound_flag) {
-          ParamTypeArray tmp_param_types;
-          ObPsSessionInfoParamsAssignment assignment(tmp_param_types);
-          if (OB_FAIL(parse_request_type(pos,
-                                         input_param_num,
-                                         new_param_bound_flag,
-                                         cs_conn,
-                                         cs_server,
-                                         tmp_param_types,
-                                         param_type_infos))) {
-            LOG_WARN("fail to parse input params type from packet", K(ret));
-          } else if (session->update_ps_session_info_safety(stmt_id_, assignment)) {
-            LOG_WARN("fail to update params type of PsSessionInfo", K(ret));
-          } else if (OB_FAIL(assignment.ret_)) {
-            LOG_WARN("fail to update params type of PsSessionInfo", K(ret));
-          }
-        } else {
-          if (OB_FAIL(parse_request_type(pos,
-                                         input_param_num,
-                                         new_param_bound_flag,
-                                         cs_conn,
-                                         cs_server,
-                                         param_types,
-                                         param_type_infos))) {
-            LOG_WARN("fail to parse input params type", K(ret));
-          }
-        }
-        if (OB_SUCC(ret) && is_contain_complex_element(param_types)) {
-          analysis_checker_.need_check_ = false;
-        }
+      // Step3-1: 获取type信息
+      if (FAILEDx(parse_request_type(pos,
+                                     input_param_num,
+                                     new_param_bound_flag,
+                                     cs_conn,
+                                     cs_server,
+                                     param_types,
+                                     param_type_infos))) {
+        LOG_WARN("fail to parse input params type");
+      } else if (is_contain_complex_element(param_types)) {
+        analysis_checker_.need_check_ = false;
       }
 
       // Step3-2: 获取returning into params type信息
       if (OB_SUCC(ret) && returning_params_num > 0) {
-        if (new_param_bound_flag != 1) {
+        if (1 != new_param_bound_flag) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("returning into parm must define type", K(ret));
         } else if (OB_FAIL(parse_request_type(pos,
@@ -1039,13 +959,8 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
       if (OB_SUCC(ret) && is_arraybinding_) {
         OZ (check_param_type_for_arraybinding(param_type_infos));
       }
-      if (OB_SUCC(ret)
-          && (stmt::T_CALL_PROCEDURE == ps_session_info->get_stmt_type()
-              || stmt::T_ANONYMOUS_BLOCK == ps_session_info->get_stmt_type())) {
-        ctx_.is_execute_call_stmt_ = true;
-      }
 
-      // Step5: decode value
+      // Step4-1: decode value
       for (int64_t i = 0; OB_SUCC(ret) && i < input_param_num; ++i) {
         ObObjParam &param = is_arraybinding_ ? arraybinding_params_->at(i) : params_->at(i);
         param.reset();
@@ -1066,7 +981,7 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
         }
       }
 
-      // Step5-2: decode returning into value
+      // Step4-2: decode returning into value
       // need parse returning into params
       if (OB_SUCC(ret) && returning_params_num > 0) {
         CK(returning_param_types.count() == returning_params_num);
@@ -1094,8 +1009,12 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
         }
       }
     }
-    ctx_.schema_guard_ = old_guard;
-    ctx_.session_info_ = old_sess_info;
+  }
+  if (OB_SUCC(ret)
+      && GCONF.enable_sql_audit
+      && session->get_local_ob_enable_sql_audit()
+      && OB_FAIL(store_params_value_to_str(alloc, *session))) {
+    LOG_WARN("failed to store params value to str");
   }
   return ret;
 }
@@ -1613,17 +1532,13 @@ int ObMPStmtExecute::response_result(
       async_resp_used = result.is_async_end_trans_submitted();
     } else {
       // 试点ObQuerySyncDriver
-      int32_t iteration_count = OB_INVALID_COUNT;
-      if (is_prexecute()) {
-        iteration_count = static_cast<ObMPStmtPrexecute*>(this)->get_iteration_count();
-      }
       ObSyncPlanDriver drv(gctx_,
                            ctx_,
                            session,
                            retry_ctrl_,
                            *this,
                            is_prexecute(),
-                           iteration_count);
+                           get_iteration_count());
       ret = drv.response_result(result);
     }
   } else {
@@ -1796,7 +1711,7 @@ int ObMPStmtExecute::try_batch_multi_stmt_optimization(ObSQLSessionInfo &session
     LOG_TRACE("is pl execution, can't do the batch optimization");
   } else if (1 == arraybinding_size_) {
     LOG_TRACE("arraybinding size is 1, not need d batch");
-  } else if (get_save_exception()) {
+  } else if (is_save_exception_) {
     LOG_TRACE("is save exception mode, not supported batch optimization");
   } else if (OB_FAIL(is_arraybinding_returning(session, is_ab_returning))) {
     LOG_WARN("failed to check is arraybinding returning", K(ret));

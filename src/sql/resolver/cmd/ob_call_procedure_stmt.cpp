@@ -61,6 +61,15 @@ int ObCallProcedureInfo::add_out_param(int64_t i,
   return ret;
 }
 
+int ObCallProcedureInfo::add_question_mark_idx(int64_t idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(question_mark_idx_.push_back(idx))) {
+    LOG_WARN("push back error", K(idx));
+  }
+  return ret;
+}
+
 int ObCallProcedureInfo::prepare_expression(const common::ObIArray<sql::ObRawExpr*> &params)
 {
   int ret = OB_SUCCESS;

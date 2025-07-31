@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SERVER
 
-
 #include "observer/mysql/obmp_stmt_prexecute.h"
 #include "rpc/obmysql/packet/ompk_prexecute.h"
 #include "rpc/obmysql/packet/ompk_field.h"
@@ -31,25 +30,28 @@ using namespace sql;
 using namespace pl;
 namespace observer
 {
+
 ObMPStmtPrexecute::ObMPStmtPrexecute(const ObGlobalContext &gctx)
     : ObMPStmtExecute(gctx),
-    sql_(),
-    sql_len_(0),
-    iteration_count_(0),
-    exec_mode_(0),
-    close_stmt_count_(0),
-    extend_flag_(0),
-    first_time_(false),
-    allocator_(NULL)
-{}
+      sql_(),
+      sql_len_(0),
+      iteration_count_(0),
+      exec_mode_(0),
+      close_stmt_count_(0),
+      extend_flag_(0),
+      first_time_(false),
+      allocator_(nullptr)
+{
+  ctx_.is_pre_execute_ = true;  // ObSqlCtx
+}
 
 int ObMPStmtPrexecute::before_process()
 {
   int ret = OB_SUCCESS;
-  ObSQLSessionInfo *session = NULL;
+  ObSQLSessionInfo *session = nullptr;
 
   if (OB_FAIL(ObMPBase::before_process())) {
-    LOG_WARN("fail to call before process", K(ret));
+    LOG_WARN("fail to call before process");
   } else if (!GCONF._ob_enable_prepared_statement) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
@@ -57,312 +59,153 @@ int ObMPStmtPrexecute::before_process()
                    "prepared statements");
   } else if ((OB_ISNULL(req_))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("request should not be null", K(ret));
+    LOG_ERROR("request should not be null");
   } else if (req_->get_type() != ObRequest::OB_MYSQL) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid request", K(ret), K_(*req));
+    LOG_ERROR("invalid request", K_(*req));
+  } else if (OB_ISNULL(allocator_ = &CURRENT_CONTEXT->get_arena_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("query allocator is null");
+  } else if (OB_ISNULL(params_ =
+                           static_cast<ParamStore *>(allocator_->alloc(sizeof(ParamStore))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for params");
+  } else if (FALSE_IT(params_ = new (params_) ParamStore(ObWrapperAllocator(*allocator_)))) {
   } else {
-    // its life cycle is very important
-    allocator_ = &CURRENT_CONTEXT->get_arena_allocator();
-    ParamStore *params = NULL;
-    if (OB_ISNULL(allocator_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("query allocator is null.");
-    } else if (OB_ISNULL(params = static_cast<ParamStore *>(allocator_->alloc(sizeof(ParamStore))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", K(ret));
-    } else {
-      params = new(params)ParamStore( (ObWrapperAllocator(*allocator_)) );
-      set_param(params);
-    }
-    const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
-    const char* pos = pkt.get_cdata();
+    const ObMySQLRawPacket &pkt = static_cast<const ObMySQLRawPacket &>(req_->get_packet());
+    const char *pos = pkt.get_cdata();
     analysis_checker_.init(pos, pkt.get_clen());
-    // stmt_id
-    int32_t stmt_id = -1;
-    PS_DEFENSE_CHECK(9) // stmt_id(4) + flag(1) + iteration_count(4)
+    PS_DEFENSE_CHECK(9)  // stmt_id(4) + flag(1) + iteration_count(4)
     {
-      ObMySQLUtil::get_int4(pos, stmt_id);
-      stmt_id_ = stmt_id;
-
-      // flags
+      int32_t stmt_id = -1;
       int8_t flag = 0;
+      ObMySQLUtil::get_int4(pos, stmt_id);
       ObMySQLUtil::get_int1(pos, flag);
-
-      // iteration_count
       ObMySQLUtil::get_int4(pos, iteration_count_);
+      stmt_id_ = static_cast<int64_t>(stmt_id);
     }
-
-    // sql
-    PS_DEFENSE_CHECK(1)
+    PS_DEFENSE_CHECK(1)  // sql(variable length string)
     {
-      if (OB_FAIL(ObMySQLUtil::get_length(pos, sql_len_))) {
-        LOG_WARN("failed to get length", K(ret));
+      if (FAILEDx(ObMySQLUtil::get_length(pos, sql_len_))) {
+        LOG_WARN("failed to get length");
       }
       PS_DEFENSE_CHECK(sql_len_)
       {
         sql_.assign_ptr(pos, static_cast<ObString::obstr_size_t>(sql_len_));
         pos += sql_len_;
       }
-      LOG_DEBUG("get sql in prexecute protocol.", K(stmt_id_), K(sql_));
+      LOG_DEBUG("prexecute protocol packet sql info", K(ret), K(stmt_id_), K(sql_));
+    }
+    PS_DEFENSE_CHECK(4)  // params_num(4)
+    {
+      int32_t params_num = 0;
+      ObMySQLUtil::get_int4(pos, params_num);
+      params_num_ = static_cast<uint64_t>(params_num);
     }
 
-    // params_num
-    int32_t num = 0;
-    PS_DEFENSE_CHECK(4) // params_num
-    {
-      ObMySQLUtil::get_int4(pos, num);
-      set_param_num(num);
-    }
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_FAIL(get_session(session))) {
+    if (FAILEDx(get_session(session))) {
       LOG_WARN("get session failed");
     } else if (OB_ISNULL(session)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("session is NULL or invalid", K(ret), K(session));
+      LOG_WARN("session is NULL or invalid", K(session));
     } else {
-      lib::CompatModeGuard g(session->get_compatibility_mode() == ORACLE_MODE ?
-                             lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
-      uint32_t ps_stmt_checksum = DEFAULT_ITERATION_COUNT;
+      lib::CompatModeGuard g(session->get_compatibility_mode() == ORACLE_MODE
+                                 ? lib::Worker::CompatMode::ORACLE
+                                 : lib::Worker::CompatMode::MYSQL);
       ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
-      bool need_response_error = false;
-      session->set_current_trace_id(ObCurTraceId::get_trace_id());
-      session->set_proxy_version(get_proxy_version());
       ObReqTimeGuard req_timeinfo_guard;
-      if (OB_FAIL(ret)) {
-      } else if (OB_UNLIKELY(!session->is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("invalid session", K_(sql), K(ret));
-      } else if (OB_FAIL(process_kill_client_session(*session))) {
-        LOG_WARN("client session has been killed", K(ret));
-      } else if (OB_UNLIKELY(session->is_zombie())) {
-        ret = OB_ERR_SESSION_INTERRUPTED;
-        LOG_WARN("session has been killed", K(session->get_session_state()), K_(sql),
-                K(session->get_server_sid()), "proxy_sessid", session->get_proxy_sessid(), K(ret));
-      } else if (pkt.exist_trace_info()
-                 && OB_FAIL(session->update_sys_variable(SYS_VAR_OB_TRACE_INFO,
-                                                         pkt.get_trace_info()))) {
-        LOG_WARN("fail to update trace info", K(ret));
-      } else if (FALSE_IT(session->set_txn_free_route(pkt.txn_free_route()))) {
-      } else if (OB_FAIL(process_extra_info(*session, pkt, need_response_error))) {
-        LOG_WARN("fail get process extra info", K(ret));
-      } else if (FALSE_IT(session->post_sync_session_info())) {
-      } else if (sql_len_ > 0 && 0 == stmt_id_) {
-        int64_t query_timeout = 0;
-        int64_t tenant_version = 0;
-        int64_t sys_version = 0;
-        bool force_sync_resp = false;
-        int64_t packet_len =
-            (reinterpret_cast<const ObMySQLRawPacket &>(req_->get_packet())).get_clen();
-        if (OB_UNLIKELY(packet_len > session->get_max_packet_size())) {
-          ret = OB_ERR_NET_PACKET_TOO_LARGE;
-          LOG_WARN("packet too large than allowd for the session", K_(sql), K(ret));
-        } else if (OB_FAIL(session->get_query_timeout(query_timeout))) {
-          LOG_WARN("fail to get query timeout", K_(sql), K(ret));
-        } else if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(
-                    session->get_effective_tenant_id(), tenant_version))) {
-          LOG_WARN("fail get tenant broadcast version", K(ret));
-        } else if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(
-                    OB_SYS_TENANT_ID, sys_version))) {
-          LOG_WARN("fail get tenant broadcast version", K(ret));
-        } else if (OB_FAIL(ObMPStmtPrepare::multiple_query_check(*session,
-                                                                  sql_,
-                                                                  force_sync_resp,
-                                                                  need_response_error))) {
-          LOG_WARN("not support multiple_query", K(ret));
-        } else {
-          THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
-          retry_ctrl_.set_tenant_global_schema_version(tenant_version);
-          retry_ctrl_.set_sys_global_schema_version(sys_version);
-          if (OB_FAIL(init_process_var(get_ctx(), ObMultiStmtItem(false, 0, ObString()), *session))) {
-            LOG_WARN("init process var faield.", K(ret));
-          } else if (OB_FAIL(check_and_refresh_schema(session->get_login_tenant_id(),
-                                                      session->get_effective_tenant_id()))) {
-            LOG_WARN("failed to check_and_refresh_schema", K(ret));
-          } else {
-            oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
-            do {
-              // reset `ret` explicitly before local retry
-              ret = OB_SUCCESS;
-              SMART_VAR(ObMySQLResultSet, result, *session, THIS_WORKER.get_allocator()) {
-                result.set_has_more_result(false);
-                share::schema::ObSchemaGetterGuard schema_guard;
-                const uint64_t tenant_id = session->get_effective_tenant_id();
-                ObVirtualTableIteratorFactory vt_iter_factory(*gctx_.vt_iter_creator_);
-                retry_ctrl_.clear_state_before_each_retry(session->get_retry_info_for_update());
-                if (OB_FAIL(ret)) {
-                } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-                  LOG_WARN("get schema guard failed", K(ret));
-                } else if (OB_FAIL(schema_guard.get_schema_version(
-                                    session->get_effective_tenant_id(), tenant_version))) {
-                  LOG_WARN("fail get schema version", K(ret));
-                } else if (OB_FAIL(schema_guard.get_schema_version(
-                                    OB_SYS_TENANT_ID, sys_version))) {
-                  LOG_WARN("fail get sys schema version", K(ret));
-                } else if (OB_ISNULL(result.get_exec_context().get_task_executor_ctx())) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_ERROR("task executor ctx can not be NULL", K(ret));
-                } else {
-                  retry_ctrl_.set_tenant_local_schema_version(tenant_version);
-                  retry_ctrl_.set_sys_local_schema_version(sys_version);
-                  ObTaskExecutorCtx *task_ctx = result.get_exec_context().get_task_executor_ctx();
-                  task_ctx->set_query_tenant_begin_schema_version(
-                                retry_ctrl_.get_tenant_global_schema_version());
-                  task_ctx->set_query_sys_begin_schema_version(
-                                retry_ctrl_.get_sys_global_schema_version());
-                  task_ctx->set_min_cluster_version(GET_MIN_CLUSTER_VERSION());
-                  get_ctx().schema_guard_ = &schema_guard;
-                  get_ctx().session_info_ = session;
-                  get_ctx().retry_times_ = get_retry_ctrl().get_retry_times();
-                  get_ctx().self_add_plan_ = false;
-                  get_ctx().is_prepare_protocol_ = true; //set to prepare protocol
-                  get_ctx().is_pre_execute_ = true;
-                  get_ctx().is_prepare_stage_ = true;
-                  if (OB_FAIL(result.init())) {
-                    LOG_WARN("result set init failed", K(ret));
-                  } else if (OB_FAIL(ObMPBase::set_session_active(sql_, *session, ObTimeUtil::current_time(),
-                                  obmysql::ObMySQLCmd::COM_STMT_PREPARE))) {
-                    LOG_WARN("fail to set session active", K(ret));
-                  }
-                  if (OB_SUCC(ret)) {
-                    if (OB_FAIL(gctx_.sql_engine_->stmt_prepare(sql_,
-                                                                get_ctx(),
-                                                                result,
-                                                                false/*is_inner_sql*/))) {
-                      set_exec_start_timestamp(ObTimeUtility::current_time());
-                      int cli_ret = OB_SUCCESS;
-                      get_retry_ctrl().test_and_save_retry_state(gctx_,
-                                                                get_ctx(),
-                                                                result,
-                                                                ret,
-                                                                cli_ret);
-                      LOG_WARN("run stmt_query failed, check if need retry",
-                              K(ret), K(cli_ret), K(get_retry_ctrl().need_retry()), K(sql_));
-                      ret = cli_ret;
-                    }
-                    if (OB_FAIL(ret)) {
-                      session->set_session_in_retry(retry_ctrl_.need_retry());
-                    }
-                  }
-                }
-                if (OB_SUCC(ret)) {
-                  stmt_id_ = result.get_statement_id();
-                  first_time_ = true; // need prepare at first time
-                  LOG_DEBUG("execute prexecute success.", K(stmt_id_), K(iteration_count_),
-                    K(get_param_num()), K(result.get_stmt_type()));
-                }
-              }
-            } while (RETRY_TYPE_LOCAL == retry_ctrl_.get_retry_type());
-            if (OB_SUCC(ret) && retry_ctrl_.get_retry_times() > 0) {
-              LOG_TRACE("sql retry succeed", K(ret),
-                        "retry_times", retry_ctrl_.get_retry_times());
-            }
-          }
-          get_ctx().is_prepare_protocol_ = false; //set to prepare protocol
-          get_ctx().is_prepare_stage_ = false;
-        }
-      } else {
-        get_ctx().is_pre_execute_ = true;
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      bool prexec_prepare_with_params = true;
+      if (tenant_config.is_valid()) {
+        prexec_prepare_with_params = tenant_config->_prexec_prepare_with_params;
       }
-      if (OB_SUCC(ret)) {
-        ObPsSessionInfo *ps_session_info = NULL;
-        if (OB_FAIL(session->get_ps_session_info(stmt_id_, ps_session_info))) {
-          LOG_WARN("get_ps_session_info failed", K(ret), K_(stmt_id));
+      if (FAILEDx(prepare_session_info(*session, pkt))) {
+        LOG_WARN("fail to prepare session info", K_(sql));
+      } else if (check_cluster_version_for_prepare_with_params() && prexec_prepare_with_params) {
+        // prepare with params by default
+        ctx_.is_prepare_with_params_ = true;
+        if (sql_len_ > 0 && 0 == stmt_id_) {
+          // if stmt_id_ == 0, it means the sql is sent by prexec protocol for the first time, so we
+          //                   need to do prepare for the sql.
+          if (OB_FAIL(prepare_sql_with_params(*session, pos))) {
+            LOG_WARN("fail to prepare sql with params", K(sql_));
+          }
         } else {
-          stmt_type_ = ps_session_info->get_stmt_type();
-          if (is_arraybinding_has_result_type(stmt_type_) && iteration_count_ > 1) {
-            set_arraybounding(true);
-            if (get_ctx().can_reroute_sql_) {
-              get_ctx().can_reroute_sql_ = false;
-              LOG_INFO("arraybinding not support reroute sql.");
-            }
-            // only init param_store
-            // array_binding_row_ and array_binding_columns_ will init later
-            OZ (init_arraybinding_paramstore(*allocator_));
-          } else {
-            set_arraybounding(false);
+          // if stmt_id_ != 0, it means the sql has been prepared before, so we can skip prepare,
+          //                   just extract params from the request packet.
+          if (OB_FAIL(extract_packet_params(*session, pos))) {
+            LOG_WARN("fail to extract packet params", K(sql_));
           }
         }
+        LOG_DEBUG("prepare with params, controlled by hidden parameter _prexec_prepare_with_params",
+                  K(sql_),
+                  K(prexec_prepare_with_params));
+      } else {
+        // prepare with params as fallback path, in case that prepare with params refactor
+        // introduces some unexpected new issues which have no way to walk around
+        if (sql_len_ > 0 && 0 == stmt_id_) {
+          // 1. resolve sql if sql has not been prepared before, empty params would be passed to
+          //    resolver
+          if (FAILEDx(settle_env_before_resolve(*session))) {
+            LOG_WARN("settle env for resolve failed");
+          } else if (OB_FAIL(resolve_sql_with_params(*session))) {
+            LOG_WARN("fail to resolve sql with params", K(sql_));
+          }
+        }
+        // 2. decode params from request packet
+        if (FAILEDx(extract_packet_params(*session, pos))) {
+          LOG_WARN("fail to extract packet params");
+        }
+        LOG_INFO(
+            "prepare without params, controlled by hidden parameter _prexec_prepare_with_params",
+            K(sql_),
+            K(prexec_prepare_with_params));
+      }
 
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(request_params(session, pos, ps_stmt_checksum, *allocator_, params_num_))) {
-            LOG_WARN("prepare-execute protocol get params request failed", K(ret));
-          } else {
-            const bool enable_sql_audit =
-            GCONF.enable_sql_audit && session->get_local_ob_enable_sql_audit();
-            if (enable_sql_audit) {
-              OZ (store_params_value_to_str(*allocator_, *session));
-            }
-            PS_DEFENSE_CHECK(4) // exec_mode
-            {
-              ObMySQLUtil::get_uint4(pos, exec_mode_);
-              //
-              // is_commit_on_success_ is not use yet
-              // other exec_mode set use ==
-              is_commit_on_success_ = exec_mode_ & OB_OCI_COMMIT_ON_SUCCESS;
-              exec_mode_ = exec_mode_ & (0xffffffff - OB_OCI_COMMIT_ON_SUCCESS);
-              if (OB_OCI_BATCH_ERRORS == exec_mode_ && !is_pl_stmt(stmt_type_)) {
-                set_save_exception(true);
-              }
-            }
-            if (OB_SUCC(ret)) {
-              PS_DEFENSE_CHECK(4) // close stmt count
-              {
-                ObMySQLUtil::get_uint4(pos, close_stmt_count_);
-                int tmp_ret = OB_SUCCESS;
-                if (0 != close_stmt_count_) {
-                  LOG_INFO("close stmt count:", K(close_stmt_count_), K(stmt_id_));
-                  // OCI not support close_stmt_count_ is not 0 yet.
-                  // for (int64_t i = 0; i < close_stmt_count_; i++) {
-                  //   int32_t close_stmt_id = -1;
-                  //   ObMySQLUtil::get_int4(pos, close_stmt_id);
-                  //   if (OB_NOT_NULL(session->get_cursor(close_stmt_id))) {
-                  //     if (OB_FAIL(session->close_cursor(close_stmt_id))) {
-                  //       tmp_ret = ret;
-                  //       LOG_WARN("fail to close cursor", K(ret), K(stmt_id_), K(close_stmt_id), K(session->get_server_sid()));
-                  //     }
-                  //   }
-                  //   if (OB_FAIL(session->close_ps_stmt(close_stmt_id))) {
-                  //     LOG_WARN("close ps stmt fail in prepare-execute.", K(stmt_id_), K(close_stmt_id));
-                  //   }
-                  //   if (OB_SUCCESS != tmp_ret) {
-                  //     ret = tmp_ret;
-                  //   }
-                  // }
-                }
-              }
-            }
-            if (OB_SUCC(ret)) {
-              PS_DEFENSE_CHECK(4) // checksum
-              {
-                ObMySQLUtil::get_uint4(pos, ps_stmt_checksum);
-                if (DEFAULT_ITERATION_COUNT == ps_stmt_checksum
-                      || (OB_NOT_NULL(ps_session_info)
-                          && ps_stmt_checksum != ps_session_info->get_ps_stmt_checksum())) {
-                    ret = OB_ERR_PREPARE_STMT_CHECKSUM;
-                    LOG_ERROR("ps stmt checksum fail", K(ret), "session_id", session->get_server_sid(),
-                                                    K(ps_stmt_checksum), K(*ps_session_info));
-                    LOG_DBA_ERROR_V2(OB_SERVER_PS_STMT_CHECKSUM_MISMATCH, ret,
-                                     "ps stmt checksum fail. ",
-                                     "the ps stmt checksum is ", ps_stmt_checksum,
-                                     ", but current session stmt checksum is ", ps_session_info->get_ps_stmt_checksum(),
-                                     ". current session id is ", session->get_server_sid(), ". ");
-                } else {
-                  PS_DEFENSE_CHECK(4) // extend_flag
-                  {
-                    ObMySQLUtil::get_uint4(pos, extend_flag_);
-                  }
-                }
-              }
-            }
-          }
+      PS_DEFENSE_CHECK(4)  // exec_mode(4)
+      {
+        ObMySQLUtil::get_uint4(pos, exec_mode_);
+        //
+        // is_commit_on_success_ is not use yet
+        // other exec_mode set use ==
+        // weird flag-checking logic, using equality instead of a mask, better be cautious when
+        // modifying it for compatibility
+        is_commit_on_success_ = exec_mode_ & OB_OCI_COMMIT_ON_SUCCESS;
+        exec_mode_ = exec_mode_ & (0xffffffff - OB_OCI_COMMIT_ON_SUCCESS);
+        if (OB_OCI_BATCH_ERRORS == exec_mode_ && !is_pl_stmt(stmt_type_)) {
+          is_save_exception_ = true;
         }
+      }
+      PS_DEFENSE_CHECK(4)  // close_stmt_count(4)
+      {
+        ObMySQLUtil::get_uint4(pos, close_stmt_count_);
+        int tmp_ret = OB_SUCCESS;
+        if (0 != close_stmt_count_) {
+          LOG_INFO("close stmt count", K(ret), K(close_stmt_count_), K(stmt_id_));
+        }
+      }
+      PS_DEFENSE_CHECK(4)  // ps_stmt_checksum(4)
+      {
+        uint32_t ps_stmt_checksum = DEFAULT_ITERATION_COUNT;
+        ObPsSessionInfo *ps_session_info = nullptr;
+        ObMySQLUtil::get_uint4(pos, ps_stmt_checksum);
+        if (FAILEDx(session->get_ps_session_info(stmt_id_, ps_session_info))) {
+          LOG_WARN("get ps_session_info failed", K(stmt_id_));
+        } else if (OB_ISNULL(ps_session_info)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("ps_session_info is null");
+        } else if (OB_FAIL(verify_ps_stmt_checksum(*session, *ps_session_info, ps_stmt_checksum))) {
+          LOG_WARN("verify ps stmt checksum failed", K(stmt_id_));
+        }
+      }
+      PS_DEFENSE_CHECK(4)  // extend_flag(4)
+      {
+        ObMySQLUtil::get_uint4(pos, extend_flag_);
       }
     }
     session->set_last_trace_id(ObCurTraceId::get_trace_id());
     //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
-    if (session != NULL && OB_FAIL(ret)) {
+    if (OB_FAIL(ret) && OB_NOT_NULL(session)) {
       int tmp_ret = OB_SUCCESS;
       //清空WARNING BUFFER
       tmp_ret = do_after_process(*session, false/*no asyn response*/);
@@ -371,18 +214,327 @@ int ObMPStmtPrexecute::before_process()
   }
 
   if (OB_FAIL(ret)) {
-    send_error_packet(ret, NULL);
+    send_error_packet(ret, nullptr);
     if (OB_ERR_PREPARE_STMT_CHECKSUM == ret) {
       force_disconnect();
-      LOG_WARN("prepare stmt checksum error, disconnect connection", K(ret));
+      LOG_WARN("prepare stmt checksum error, disconnect connection");
     }
     OZ (flush_buffer(true));
   }
 
-  if (session != NULL) {
+  if (OB_NOT_NULL(session)) {
     revert_session(session);
   }
 
+  return ret;
+}
+
+bool ObMPStmtPrexecute::check_cluster_version_for_prepare_with_params()
+{
+  return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_5_6 &&
+         GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0;
+}
+
+int ObMPStmtPrexecute::prepare_session_info(sql::ObSQLSessionInfo &session,
+                                            const ObMySQLRawPacket &pkt)
+{
+  int ret = OB_SUCCESS;
+  bool dummy_resp_err = false;
+  session.set_current_trace_id(ObCurTraceId::get_trace_id());
+  session.set_proxy_version(get_proxy_version());
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(!session.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid session", K_(sql));
+  } else if (OB_FAIL(process_kill_client_session(session))) {
+    LOG_WARN("client session has been killed");
+  } else if (OB_UNLIKELY(session.is_zombie())) {
+    ret = OB_ERR_SESSION_INTERRUPTED;
+    LOG_WARN("session has been killed",
+             K(session.get_session_state()),
+             K(session.get_server_sid()),
+             "proxy_sessid", session.get_proxy_sessid(),
+             K(sql_));
+  } else if (pkt.exist_trace_info()
+             && OB_FAIL(session.update_sys_variable(SYS_VAR_OB_TRACE_INFO, pkt.get_trace_info()))) {
+    LOG_WARN("fail to update trace info");
+  } else if (FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
+  } else if (OB_FAIL(process_extra_info(session, pkt, dummy_resp_err))) {
+    LOG_WARN("fail get process extra info", K(dummy_resp_err));
+  } else if (FALSE_IT(session.post_sync_session_info())) {
+  } else if (OB_UNLIKELY(pkt.get_clen() > session.get_max_packet_size())) {
+    ret = OB_ERR_NET_PACKET_TOO_LARGE;
+    LOG_WARN("packet too large than allowed for the session", K(sql_));
+  }
+  return ret;
+}
+
+int ObMPStmtPrexecute::settle_env_before_resolve(sql::ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  int64_t query_timeout = 0;
+  int64_t tenant_version = 0;
+  int64_t sys_version = 0;
+  bool force_sync_resp = false;
+  bool dummy_resp_err = false;
+
+  if (FAILEDx(session.get_query_timeout(query_timeout))) {
+    LOG_WARN("fail to get query timeout", K_(sql));
+  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(
+                 session.get_effective_tenant_id(), tenant_version))) {
+    LOG_WARN("fail get tenant broadcast version");
+  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(OB_SYS_TENANT_ID,
+                                                                                  sys_version))) {
+    LOG_WARN("fail get tenant broadcast version");
+  } else if (OB_FAIL(ObMPStmtPrepare::multiple_query_check(
+                 session, sql_, force_sync_resp, dummy_resp_err))) {
+    LOG_WARN("not support multiple_query");
+  } else if (FALSE_IT(THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout))) {
+  } else if (FALSE_IT(retry_ctrl_.set_tenant_global_schema_version(tenant_version))) {
+  } else if (FALSE_IT(retry_ctrl_.set_sys_global_schema_version(sys_version))) {
+  } else if (OB_FAIL(init_process_var(ctx_, ObMultiStmtItem(false, 0, ObString()), session))) {
+    LOG_WARN("init process var faield.");
+  } else if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),
+                                              session.get_effective_tenant_id()))) {
+    LOG_WARN("failed to check_and_refresh_schema");
+  }
+  return ret;
+}
+
+int ObMPStmtPrexecute::extract_packet_params(ObSQLSessionInfo &session, const char *&pos)
+{
+  int ret = OB_SUCCESS;
+  ObPsSessionInfo *ps_session_info = nullptr;
+  ParamTypeArray param_types;
+
+  if (FAILEDx(session.get_ps_session_info(stmt_id_, ps_session_info))) {
+    LOG_WARN("get_ps_session_info failed", K(stmt_id_));
+  } else if (FALSE_IT(configure_by_stmt_type(ps_session_info->get_stmt_type()))) {
+  } else if (is_arraybinding_has_result_type(stmt_type_) && iteration_count_ > 1) {
+    is_arraybinding_ = true;
+    if (ctx_.can_reroute_sql_) {
+      ctx_.can_reroute_sql_ = false;
+      LOG_INFO("arraybinding not support reroute sql.", K(ret));
+    }
+    // only init param_store
+    // array_binding_row_ and array_binding_columns_ will init later
+    OZ (init_arraybinding_paramstore(*allocator_));
+  } else {
+    is_arraybinding_ = false;
+  }
+  if (FAILEDx(verify_ps_params_num(params_num_,
+                                   ps_session_info->get_param_count(),
+                                   ps_session_info->get_num_of_returning_into()))) {
+    LOG_WARN("fail to verify ps params num", K(params_num_), KPC(ps_session_info));
+  } else if (OB_FAIL(param_types.assign(ps_session_info->get_param_types()))) {
+    LOG_WARN("fail to assign param types", K(params_num_), KPC(ps_session_info));
+  } else if (OB_FAIL(request_params(&session,
+                                    *allocator_,
+                                    pos,
+                                    params_num_,
+                                    ps_session_info->get_param_count(),
+                                    param_types))) {
+    LOG_WARN("fail to request params", K(params_num_), K(ps_session_info->get_param_count()));
+  } else if (1 == new_param_bound_flag_) {
+    ObPsSessionInfoParamsAssignment assignment(param_types);
+    if (session.update_ps_session_info_safety(stmt_id_, assignment)) {
+      LOG_WARN("fail to update params type of PsSessionInfo");
+    } else if (OB_FAIL(assignment.ret_)) {
+      LOG_WARN("fail to execute assignment", K(assignment.ret_));
+    }
+  }
+  return ret;
+}
+
+int ObMPStmtPrexecute::prepare_sql_with_params(ObSQLSessionInfo &session, const char *&pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t query_timeout = 0;
+  int64_t tenant_version = 0;
+  int64_t sys_version = 0;
+  bool force_sync_resp = false;
+  bool dummy_resp_err = false;
+  int64_t input_param_num = 0;
+  ParamTypeArray param_types;
+  ObPsSessionInfo *ps_session_info = nullptr;
+  ParseResult parse_result;
+
+  if (FAILEDx(settle_env_before_resolve(session))) {
+    LOG_WARN("settle env for resolve failed");
+  }
+  // 1. parse sql for stmt_type_ and params counts
+  if (FAILEDx(gctx_.sql_engine_->handle_prexec_parse_sql(
+          session, ctx_, sql_, parse_result, stmt_type_, input_param_num))) {
+    LOG_WARN("fail to parse sql", K(sql_), K(stmt_type_), K(input_param_num));
+  } else if (FALSE_IT(ctx_.parse_result_ = &parse_result)) {
+    // reuse this parse result during `do_real_prepare` later
+  }
+  // 2. decode params from request packet
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(configure_by_stmt_type(stmt_type_))) {
+  } else if (is_arraybinding_has_result_type(stmt_type_) && iteration_count_ > 1) {
+    is_arraybinding_ = true;
+    if (ctx_.can_reroute_sql_) {
+      ctx_.can_reroute_sql_ = false;
+      LOG_INFO("arraybinding not support reroute sql.", K(ret));
+    }
+    // only init param_store
+    // array_binding_row_ and array_binding_columns_ will init later
+    OZ (init_arraybinding_paramstore(*allocator_));
+  } else {
+    is_arraybinding_ = false;
+  }
+  if (FAILEDx(
+          request_params(&session, *allocator_, pos, params_num_, input_param_num, param_types))) {
+    LOG_WARN("fail to request params", K(params_num_), K(input_param_num));
+  }
+  // 3. resolve sql with params, retry if needed, will reuse the parse result
+  //    resolve is not neccessary here, because resolve will be redo in execute phase.
+  //    ps cache is constructed in `stmt_prepare()`, it's not a trivial matter to decouple it.
+  //    therefore, we keep it here for now.
+  if (FAILEDx(resolve_sql_with_params(session))) {
+    LOG_WARN("fail to resolve sql with params", K(sql_));
+  }
+  // 4. verify ps session info & configure by stmt type
+  if (FAILEDx(session.get_ps_session_info(stmt_id_, ps_session_info))) {
+    LOG_WARN("get ps_session_info failed", K(stmt_id_));
+  } else if (OB_ISNULL(ps_session_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ps_session_info is null");
+  } else if (ps_session_info->get_param_count() != input_param_num) {
+    // for prepare with params scenario, check params num match additionally
+    // a. param num calculated by parser (input_param_num) and that calculated by resolve
+    //    (ps_session_info.get_param_count())
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params num not match",
+             K(params_num_),
+             K(input_param_num),
+             K(ps_session_info->get_param_count()));
+  } else if (FALSE_IT(configure_by_stmt_type(ps_session_info->get_stmt_type()))) {
+    // re-configure stmt_type by ps_session_info, stmt_type from parser before may not be accurate,
+    // take that from resolve as final. T_SHOW_VARIABLES would be converted to T_SELECT after
+    // resolve, which would influence packet response afterwards.
+  } else if (OB_FAIL(verify_ps_params_num(
+                 params_num_, input_param_num, ps_session_info->get_num_of_returning_into()))) {
+    LOG_WARN("verify ps params num failed",
+             K(params_num_),
+             K(input_param_num),
+             K(ps_session_info->get_num_of_returning_into()));
+  } else if (1 == new_param_bound_flag_) {
+    ObPsSessionInfoParamsAssignment assignment(param_types);
+    if (session.update_ps_session_info_safety(stmt_id_, assignment)) {
+      LOG_WARN("fail to update params type of PsSessionInfo");
+    } else if (OB_FAIL(assignment.ret_)) {
+      LOG_WARN("fail to execute assignment", K(assignment.ret_));
+    }
+  }
+  return ret;
+}
+
+int ObMPStmtPrexecute::resolve_sql_with_params(ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
+  do {
+    ret = OB_SUCCESS;  // reset `ret` explicitly before local retry
+    SMART_VAR(ObMySQLResultSet, result, session, THIS_WORKER.get_allocator())
+    {
+      share::schema::ObSchemaGetterGuard schema_guard;
+      ObVirtualTableIteratorFactory vt_iter_factory(*gctx_.vt_iter_creator_);
+      ObTaskExecutorCtx *task_ctx = nullptr;
+      int64_t tenant_version = 0;
+      int64_t sys_version = 0;
+
+      result.set_has_more_result(false);
+      retry_ctrl_.clear_state_before_each_retry(session.get_retry_info_for_update());
+      if (FAILEDx(gctx_.schema_service_->get_tenant_schema_guard(session.get_effective_tenant_id(),
+                                                                 schema_guard))) {
+        LOG_WARN("get schema guard failed");
+      } else if (OB_FAIL(schema_guard.get_schema_version(session.get_effective_tenant_id(),
+                                                         tenant_version))) {
+        LOG_WARN("fail get schema version");
+      } else if (OB_FAIL(schema_guard.get_schema_version(OB_SYS_TENANT_ID, sys_version))) {
+        LOG_WARN("fail get sys schema version");
+      } else if (OB_ISNULL(task_ctx = result.get_exec_context().get_task_executor_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("task executor ctx can not be NULL");
+      } else {
+        retry_ctrl_.set_tenant_local_schema_version(tenant_version);
+        retry_ctrl_.set_sys_local_schema_version(sys_version);
+        task_ctx->set_query_tenant_begin_schema_version(
+            retry_ctrl_.get_tenant_global_schema_version());
+        task_ctx->set_query_sys_begin_schema_version(retry_ctrl_.get_sys_global_schema_version());
+        task_ctx->set_min_cluster_version(GET_MIN_CLUSTER_VERSION());
+        ctx_.schema_guard_ = &schema_guard;
+        ctx_.session_info_ = &session;
+        ctx_.retry_times_ = retry_ctrl_.get_retry_times();
+        ctx_.self_add_plan_ = false;
+        ctx_.is_prepare_protocol_ = true;  // set to prepare protocol
+        ctx_.is_prepare_stage_ = true;
+        ctx_.prepare_params_ = params_;  // pass params to resolver, empty in back_compat mode
+        if (FAILEDx(result.init())) {
+          LOG_WARN("result set init failed");
+        } else if (OB_FAIL(ObMPBase::set_session_active(sql_,
+                                                        session,
+                                                        ObTimeUtil::current_time(),
+                                                        obmysql::ObMySQLCmd::COM_STMT_PREPARE))) {
+          LOG_WARN("fail to set session active");
+        } else if (OB_FAIL(gctx_.sql_engine_->stmt_prepare(sql_, ctx_, result, false))) {
+          set_exec_start_timestamp(ObTimeUtility::current_time());
+          int cli_ret = OB_SUCCESS;
+          retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret);
+          LOG_WARN("run stmt_query failed, check if need retry",
+                   K(ret),
+                   K(cli_ret),
+                   K(retry_ctrl_.need_retry()),
+                   K(sql_));
+          ret = cli_ret;
+          if (OB_FAIL(ret)) {
+            session.set_session_in_retry(retry_ctrl_.need_retry());
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        stmt_id_ = result.get_statement_id();
+        first_time_ = true;  // need prepare at first time
+        LOG_DEBUG("execute prexecute success.",
+                  K(ret),
+                  K(stmt_id_),
+                  K(iteration_count_),
+                  K(params_num_),
+                  K(result.get_stmt_type()));
+      }
+    }
+  } while (RETRY_TYPE_LOCAL == retry_ctrl_.get_retry_type());
+  if (OB_SUCC(ret) && retry_ctrl_.get_retry_times() > 0) {
+    LOG_TRACE("sql retry succeed", K(ret), "retry_times", retry_ctrl_.get_retry_times());
+  }
+  ctx_.is_prepare_protocol_ = false;
+  ctx_.is_prepare_stage_ = false;
+  ctx_.prepare_params_ = nullptr;
+  return ret;
+}
+
+int ObMPStmtPrexecute::verify_ps_params_num(const int64_t ps_all_param_num,
+                                            const int64_t ps_input_param_num,
+                                            const int64_t ps_returning_param_num)
+{
+  int ret = OB_SUCCESS;
+  // ps_all_param_num = ps_input_param_num + ps_returning_param_num
+  if (ps_all_param_num == 0) {
+    // no params, pass check
+  } else if (
+      // has returning params
+      (ps_returning_param_num > 0
+       && ps_all_param_num != ps_input_param_num + ps_returning_param_num)
+      // no returning params
+      || (ps_returning_param_num <= 0 && ps_all_param_num != ps_input_param_num)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ps params nums not match",
+             K(ps_all_param_num),
+             K(ps_input_param_num),
+             K(ps_returning_param_num));
+  }
   return ret;
 }
 
@@ -401,8 +553,8 @@ int ObMPStmtPrexecute::clean_ps_stmt(ObSQLSessionInfo &session,
      *    只有 THIS_WORKER.need_retry() 的时候队列重试需要清理，
      *    其他时候都退化成了 local 重试，不需要清理
      */
-    get_ctx().cur_sql_ = sql_;
-    get_ctx().raw_sql_ = sql_;
+    ctx_.cur_sql_ = sql_;
+    ctx_.raw_sql_ = sql_;
     if (OB_FAIL(session.close_ps_stmt(stmt_id_))) {
       LOG_WARN("close cursor failed.", K(ret), K(stmt_id_));
     }
@@ -460,7 +612,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
     if (OB_SUCC(ret)) {
       ObPLExecCtx pl_ctx(cursor->get_allocator(), &result.get_exec_context(), NULL/*params*/,
                         NULL/*result*/, &ret, NULL/*func*/, true);
-      get_ctx().cur_sql_ = sql_;
+      ctx_.cur_sql_ = sql_;
       int64_t orc_max_ret_rows = INT64_MAX;
       if (lib::is_oracle_mode()
           && OB_FAIL(session.get_oracle_sql_select_limit(orc_max_ret_rows))) {
@@ -472,7 +624,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
         if (!THIS_WORKER.need_retry()) {
           int cli_ret = OB_SUCCESS;
           retry_ctrl.test_and_save_retry_state(
-            gctx_, ctx, result, ret, cli_ret, get_arraybounding() /*ararybinding only local retry*/);
+            gctx_, ctx, result, ret, cli_ret, is_arraybinding_ /*ararybinding only local retry*/);
           if (OB_ERR_PROXY_REROUTE == ret) {
             LOG_DEBUG("run stmt_query failed, check if need retry",
                       K(ret), K(cli_ret), K(retry_ctrl.need_retry()), K_(stmt_id));
@@ -482,7 +634,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
           }
           ret = cli_ret;
         }
-        if (OB_ERR_PROXY_REROUTE == ret && !get_arraybounding()) {
+        if (OB_ERR_PROXY_REROUTE == ret && !is_arraybinding_) {
           need_response_error = true;
         }
       } else {
@@ -499,10 +651,11 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
         }
         if (OB_FAIL(session.get_autocommit(ac))) {
           LOG_WARN("fail to get autocommit", K(ret));
-        } else if (OB_FAIL(response_param_query_header(session, &cursor->get_field_columns(),
-                                          get_params(), stmt_id_, has_result, 0))) {
+        } else if (OB_FAIL(response_param_query_header(
+                       session, &cursor->get_field_columns(), params_, stmt_id_, has_result, 0))) {
           LOG_WARN("send header packet faild.", K(ret));
-        } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(session.get_effective_tenant_id(), schema_guard))) {
+        } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
+                       session.get_effective_tenant_id(), schema_guard))) {
           LOG_WARN("get tenant schema guard failed ", K(ret), K(session.get_effective_tenant_id()));
         }
         if (-1 == cursor->get_current_position() && iteration_count_ > 0) {
@@ -603,7 +756,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
     if (!THIS_WORKER.need_retry()) {
       int cli_ret = OB_SUCCESS;
       retry_ctrl.test_and_save_retry_state(
-        gctx_, ctx, result, ret, cli_ret, get_arraybounding() /*ararybinding only local retry*/);
+        gctx_, ctx, result, ret, cli_ret, is_arraybinding_ /*ararybinding only local retry*/);
       if (OB_ERR_PROXY_REROUTE == ret) {
         LOG_DEBUG("run stmt_query failed, check if need retry",
                   K(ret), K(cli_ret), K(retry_ctrl.need_retry()), K_(stmt_id));
@@ -613,7 +766,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
       }
       ret = cli_ret;
     }
-    if (OB_ERR_PROXY_REROUTE == ret && !get_arraybounding()) {
+    if (OB_ERR_PROXY_REROUTE == ret && !is_arraybinding_) {
       need_response_error = true;
     }
     int response_ret = OB_SUCCESS;
@@ -667,7 +820,7 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
     ctx.is_show_trace_stmt_ = ObStmt::is_show_trace_stmt(result.get_literal_stmt_type());
     session.set_current_execution_id(execution_id);
     result.set_statement_id(stmt_id_);
-    if (get_arraybounding()) {
+    if (is_arraybinding_) {
       if (OB_FAIL(after_do_process_for_arraybinding(session, result))) {
         LOG_WARN("failed to process arraybinding sql", K(ret));
       }
@@ -799,7 +952,7 @@ int ObMPStmtPrexecute::response_query_header(ObSQLSessionInfo &session,
                                            result.get_warning_count(),
                                            has_result,
                                            has_arraybinding_result,
-                                           ps_out && get_arraybounding()))) { // 只有 arraybinding + PL + 有结果集返回， prepare 中的 ps_out 才设置为 true
+                                           ps_out && is_arraybinding_))) { // 只有 arraybinding + PL + 有结果集返回， prepare 中的 ps_out 才设置为 true
       LOG_WARN("packet send prepare infomation fail", K(ret), K(stmt_id_));
     } else if (params_cnt > 0 && OB_FAIL(send_param_field_packet(session, param_fields))) {
       LOG_WARN("response param packet fail", K(ret));
@@ -953,7 +1106,7 @@ bool ObMPStmtPrexecute::need_response_pkg_when_error_occur()
   bool bret = false;
   if (sql::SESS_NOT_IN_RETRY == retry_ctrl_.need_retry()
       && !THIS_WORKER.need_retry()
-      && get_arraybounding()) {
+      && is_arraybinding_) {
     if (ctx_.multi_stmt_item_.is_batched_multi_stmt()) {
       // 如果是batch优化，所有失败的场景下都不回包，因为还会做强制重试
       bret = false;
@@ -1072,6 +1225,51 @@ int ObMPStmtPrexecute::response_arraybinding_result(ObSQLSessionInfo &session,
   }
   return ret;
 }
+
+int ObMPStmtPrexecute::init_arraybinding_fields_and_row(ObMySQLResultSet &result)
+{
+  int ret = OB_SUCCESS;
+  int64_t returning_field_num = 0;
+
+  if (!is_prexecute()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not support execute protocol", K(ret));
+  } else if (OB_ISNULL(result.get_field_columns())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not support execute protocol", K(ret));
+  } else {
+    if (OB_ISNULL(allocator_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is null", K(ret));
+    } else if (OB_ISNULL(result.get_field_columns())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("returning param field is null", K(ret));
+    } else {
+      returning_field_num = result.get_field_columns()->count();
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_ISNULL(arraybinding_columns_ = static_cast<ColumnsFieldArray *>(
+                             allocator_->alloc(sizeof(ColumnsFieldArray))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret));
+    } else if (OB_ISNULL(arraybinding_row_ =
+                             static_cast<ObNewRow *>(allocator_->alloc(sizeof(ObNewRow))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret));
+    } else {
+      arraybinding_columns_ =
+          new (arraybinding_columns_) ColumnsFieldArray(*allocator_, 3 + returning_field_num);
+      arraybinding_row_ = new (arraybinding_row_) ObNewRow();
+    }
+    OZ (init_arraybinding_field(returning_field_num + 3, result.get_field_columns()));
+    OZ (init_row_for_arraybinding(*allocator_, returning_field_num + 3));
+  }
+
+  return ret;
+}
+
 int ObMPStmtPrexecute::response_header_for_arraybinding(ObSQLSessionInfo &session,
                                                         ObMySQLResultSet &result)
 {

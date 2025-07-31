@@ -39702,6 +39702,8 @@ int ObDDLService::add_extra_tenant_init_config_(
   ObString config_value_server_full_schema_refresh_parallelism("OBJECT");
   ObString config_name_update_trigger("_update_all_columns_for_trigger");
   ObString config_value_update_trigger("false");
+  ObString config_name_prexec_prepare_with_params("_prexec_prepare_with_params");
+  ObString config_value_prexec_prepare_with_params("true");
 
   if (OB_FAIL(ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(config_value))) {
     LOG_WARN("fail to generate parallel ddl control config value", KR(ret));
@@ -39728,6 +39730,8 @@ int ObDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_server_full_schema_refresh_parallelism), K(config_value_server_full_schema_refresh_parallelism));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_update_trigger, config_value_update_trigger))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_update_trigger), K(config_value_update_trigger));
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_prexec_prepare_with_params, config_value_prexec_prepare_with_params))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_prexec_prepare_with_params), K(config_value_prexec_prepare_with_params));
       }
     }
   }

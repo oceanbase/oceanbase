@@ -345,6 +345,7 @@ struct ObResolverParams
        is_from_create_table_(false),
        is_prepare_protocol_(false),
        is_pre_execute_(false),
+       is_prepare_with_params_(false),
        is_prepare_stage_(false),
        is_dynamic_sql_(false),
        is_dbms_sql_(false),
@@ -409,6 +410,7 @@ public:
   bool is_from_create_table_;
   bool is_prepare_protocol_;
   bool is_pre_execute_;
+  bool is_prepare_with_params_;  // prexec prepare with parameters
   bool is_prepare_stage_;
   bool is_dynamic_sql_;
   bool is_dbms_sql_;
