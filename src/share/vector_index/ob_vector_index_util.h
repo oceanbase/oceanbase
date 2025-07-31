@@ -108,6 +108,22 @@ constexpr const static char* const VEC_INDEX_ALGTH[ObVectorIndexDistAlgorithm::V
   "cosine",
 };
 
+/*
+for descripe vec index plan:
+1. VEC_INDEX_POST_WITHOUT_FILTER: for vec index without filter, index id is vector index id, and not pushdown filter in hnsw_iterator, version < 4351 has only this plan;
+2. VEC_INDEX_PRE: for vec index without filter, and scan normal index first, index id is normal index id, version >= 4351 has this plan;
+3. VEC_INDEX_POST_ITERATIVE_FILTER: for vec index with filter, index id is vector index id, and pushdown filter in hnsw_iterator, version >= 4352 and hnsw has this plan;
+4. VEC_INDEX_ADAPTIVE_SCAN: for vec index adaptive scan, choose from pre, post and in-filter, version >= 4353 and hnsw has this plan;
+*/
+enum ObVecIndexType : uint8_t //FARM COMPAT WHITELIST
+{
+  VEC_INDEX_INVALID = 0,
+  VEC_INDEX_POST_WITHOUT_FILTER = 1,
+  VEC_INDEX_PRE = 2,
+  VEC_INDEX_POST_ITERATIVE_FILTER = 3,
+  VEC_INDEX_ADAPTIVE_SCAN = 4
+};
+
 enum ObVectorIndexSyncIntervalType
 {
   VSIT_IMMEDIATE = 0,  // 'immediate'
@@ -166,6 +182,28 @@ struct ObVectorIndexParam
     sync_interval_value_ = 0;
     MEMSET(endpoint_, 0, sizeof(endpoint_));
   };
+  int assign(const ObVectorIndexParam &other) {
+    int ret = OB_SUCCESS;
+    type_ = other.type_;
+    lib_ = other.lib_;
+    dist_algorithm_ = other.dist_algorithm_;
+    dim_ = other.dim_;
+    m_ = other.m_;
+    ef_construction_ = other.ef_construction_;
+    ef_search_ = other.ef_search_;
+    nlist_ = other.nlist_;
+    sample_per_nlist_ = other.sample_per_nlist_;
+    extra_info_max_size_ = other.extra_info_max_size_;
+    extra_info_actual_size_ = other.extra_info_actual_size_;
+    refine_type_ = other.refine_type_;
+    bq_bits_query_ = other.bq_bits_query_;
+    refine_k_ = other.refine_k_;
+    bq_use_fht_ = other.bq_use_fht_;
+    sync_interval_type_ = other.sync_interval_type_;
+    sync_interval_value_ = other.sync_interval_value_;
+    MEMCPY(endpoint_, other.endpoint_, sizeof(endpoint_));
+    return ret;
+  };
   ObVectorIndexAlgorithmType type_;
   ObVectorIndexAlgorithmLib lib_;
   ObVectorIndexDistAlgorithm dist_algorithm_;
@@ -191,6 +229,60 @@ public:
   TO_STRING_KV(K_(type), K_(lib), K_(dist_algorithm), K_(dim), K_(m), K_(ef_construction), K_(ef_search),
     K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size),
     K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht), K_(sync_interval_type), K_(sync_interval_value), K_(endpoint));
+};
+
+struct ObVecIdxExtraInfo
+{
+static constexpr double DEFAULT_SELECTIVITY_RATE = 0.3;
+static constexpr double DEFAULT_PRE_RATE_FILTER_WITH_ROWKEY = 0.35;
+static constexpr double DEFAULT_PRE_RATE_FILTER_WITH_IDX = 0.15;
+static const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
+static const uint64_t MAX_HNSW_PRE_ROW_CNT_WITH_ROWKEY = 1000000;
+static const uint64_t MAX_HNSW_PRE_ROW_CNT_WITH_IDX = 300000;
+  ObVecIdxExtraInfo()
+    : vec_idx_type_(ObVecIndexType::VEC_INDEX_INVALID),
+      adaptive_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
+      selectivity_(0),
+      row_count_(0),
+      can_use_vec_pri_opt_(false),
+      vector_index_param_(),
+      is_multi_value_index_(false),
+      is_spatial_index_(false),
+      can_extract_range_(false),
+      with_extra_info_(false) {}
+  inline void set_vec_idx_type(ObVecIndexType vec_idx_type) { vec_idx_type_ = vec_idx_type;}
+  ObVecIndexType get_vec_idx_type() const { return vec_idx_type_; }
+  inline double get_selectivity() const { return selectivity_; }
+  inline void set_selectivity(double selectivity) { selectivity_ = selectivity;}
+  inline void set_row_count(int64_t row_count) { row_count_ = row_count;}
+  inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
+  bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
+  inline bool is_hnsw_vec_scan() const
+  {
+    return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW ||
+           vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ ||
+           vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH ||
+           vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;
+  }
+  inline bool is_hnsw_bq_scan() const { return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ; }
+  int64_t get_row_count() { return row_count_; }
+  bool is_pre_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_PRE; }
+  bool is_post_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER || vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
+  int set_vec_param_info(const ObTableSchema *vec_index_schema);
+  ObVectorIndexParam get_vector_index_param() const {return vector_index_param_;}
+  TO_STRING_KV(K_(vec_idx_type), K_(adaptive_try_path), K_(selectivity), K_(row_count),
+  K_(can_use_vec_pri_opt), K_(is_multi_value_index), K_(is_spatial_index),
+  K_(can_extract_range), K_(with_extra_info), K_(vector_index_param));
+  ObVecIndexType vec_idx_type_;                // pre & post & adaptive
+  ObVecIdxAdaTryPath adaptive_try_path_;
+  double selectivity_;
+  int64_t row_count_;
+  bool can_use_vec_pri_opt_;                   // when pre-filter is primary key and can filter by query range, search rowkey_vid table directly
+  ObVectorIndexParam vector_index_param_;
+  bool is_multi_value_index_;
+  bool is_spatial_index_;
+  bool can_extract_range_;
+  bool with_extra_info_;
 };
 
 class ObExprVecIvfCenterIdCache
@@ -578,7 +670,12 @@ public:
                                              const ObString &new_idx_params,
                                              const ObTableSchema &index_table_schema,
                                              bool &only_change_search_params);
-
+  static int set_vector_index_param(const ObTableSchema *&vec_index_schema,
+                                    ObVecIdxExtraInfo &vec_extra_info,
+                                    double &selectivity,
+                                    sql::ObRawExpr *&vector_expr,
+                                    const sql::ObDMLStmt *&stmt);
+  static int set_adaptive_try_path(ObVecIdxExtraInfo& vc_info, const bool is_primary_idx);
 private:
   static void save_column_schema(
       const ObColumnSchemaV2 *&old_column,

@@ -4889,6 +4889,7 @@ int ObLSTabletService::insert_vector_index_rows(
           // set vector null for not to storage
           rows[k].storage_datums_[vector_idx].set_null();
         }
+        adaptor_guard.get_adatper()->update_can_skip(NOT_SKIP);
       }
     }
   } else if (table_param.is_ivf_vector_index()) { // check outrow
@@ -4929,6 +4930,7 @@ int ObLSTabletService::insert_vector_index_rows(
       LOG_WARN("fail to get ObPluginVectorIndexAdapter", K(ret), K(run_ctx.store_ctx_), K(run_ctx.relative_table_));
     } else {
       adaptor_guard.get_adatper()->update_index_id_dml_scn(run_ctx.store_ctx_.mvcc_acc_ctx_.snapshot_.version_);
+      adaptor_guard.get_adatper()->update_can_skip(NOT_SKIP);
     }
   }
   return ret;

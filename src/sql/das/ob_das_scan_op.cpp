@@ -400,7 +400,7 @@ ObDASIterTreeType ObDASScanOp::get_iter_tree_type() const
   bool is_fts_index = scan_param_.table_param_->is_fts_index() && attach_ctdef_ != nullptr;
   bool is_vector_index = is_vec_idx_scan(attach_ctdef_);
   bool is_spatial_index = scan_param_.table_param_->is_spatial_index() && !is_vector_index;
-  bool is_multivalue_index = scan_param_.table_param_->is_multivalue_index();
+  bool is_multivalue_index = scan_param_.table_param_->is_multivalue_index() && !is_vector_index;
 
   if (is_func_lookup(attach_ctdef_)) {
     tree_type = ObDASIterTreeType::ITER_TREE_FUNC_LOOKUP;

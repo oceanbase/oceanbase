@@ -1603,48 +1603,6 @@ int ObJoinOrder::check_use_das_by_false_startup_filter(const IndexInfoEntry &ind
   return ret;
 }
 
-void ObVecIdxExtraInfo::set_vec_algorithm_by_index_type(ObIndexType index_type)
-{
-  switch (index_type) {
-    case ObIndexType::INDEX_TYPE_VEC_ROWKEY_VID_LOCAL:
-    case ObIndexType::INDEX_TYPE_VEC_VID_ROWKEY_LOCAL:
-    case ObIndexType::INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL:
-    case ObIndexType::INDEX_TYPE_VEC_INDEX_ID_LOCAL:
-    case ObIndexType::INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL: {
-      algorithm_type_ = ObVectorIndexAlgorithmType::VIAT_HNSW;
-      break;
-    }
-    case ObIndexType::INDEX_TYPE_VEC_IVFFLAT_CENTROID_LOCAL:
-    case ObIndexType::INDEX_TYPE_VEC_IVFFLAT_CID_VECTOR_LOCAL:
-    case ObIndexType::INDEX_TYPE_VEC_IVFFLAT_ROWKEY_CID_LOCAL: {
-      algorithm_type_ = ObVectorIndexAlgorithmType::VIAT_IVF_FLAT;
-      break;
-    }
-    case ObIndexType::INDEX_TYPE_VEC_IVFSQ8_CENTROID_LOCAL:
-    case ObIndexType::INDEX_TYPE_VEC_IVFSQ8_META_LOCAL:
-    case ObIndexType::INDEX_TYPE_VEC_IVFSQ8_CID_VECTOR_LOCAL:
-    case ObIndexType::INDEX_TYPE_VEC_IVFSQ8_ROWKEY_CID_LOCAL: {
-      algorithm_type_ = ObVectorIndexAlgorithmType::VIAT_IVF_SQ8;
-      break;
-    }
-    case ObIndexType::INDEX_TYPE_VEC_IVFPQ_CENTROID_LOCAL:
-    case ObIndexType::INDEX_TYPE_VEC_IVFPQ_PQ_CENTROID_LOCAL:
-    case ObIndexType::INDEX_TYPE_VEC_IVFPQ_CODE_LOCAL:
-    case ObIndexType::INDEX_TYPE_VEC_IVFPQ_ROWKEY_CID_LOCAL: {
-      algorithm_type_ = ObVectorIndexAlgorithmType::VIAT_IVF_PQ;
-      break;
-    }
-    case ObIndexType::INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL: {
-      algorithm_type_ = ObVectorIndexAlgorithmType::VIAT_SPIV;
-      break;
-    }
-    default: {
-      algorithm_type_ = ObVectorIndexAlgorithmType::VIAT_MAX;
-      break;
-    }
-  }
-}
-
 int ObJoinOrder::check_can_use_vec_primary_opt(const uint64_t ref_table_id,
                                               PathHelper &helper,
                                               const QueryRangeInfo &range_info,
@@ -1677,6 +1635,7 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
   bool vector_index_match = false;
   uint64_t vec_index_id = OB_INVALID_ID;
   ObSQLSessionInfo *session_info = NULL;
+  ObIndexType index_type = INDEX_TYPE_MAX;
 
   if (OB_ISNULL(stmt) || OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())
     || OB_ISNULL(session_info = OPT_CTX.get_session_info())) {
@@ -1692,7 +1651,14 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
     vector_expr = stmt->get_first_vector_expr();
     if (stmt->is_select_stmt() && FALSE_IT(select_stmt = static_cast<const ObSelectStmt*>(stmt))) {
     } else if (nullptr != select_stmt && FALSE_IT(has_aggr = select_stmt->get_aggr_item_size() > 0)) {
-    } else if (OB_FAIL(get_vector_index_tid_from_expr(schema_guard, vector_expr, table_id, ref_table_id, has_aggr, vector_index_match, vec_index_id))) {
+    } else if (OB_FAIL(get_vector_index_tid_from_expr(schema_guard,
+                                                      vector_expr,
+                                                      table_id,
+                                                      ref_table_id,
+                                                      has_aggr,
+                                                      vector_index_match,
+                                                      vec_index_id,
+                                                      index_type))) {
       LOG_WARN("failed to get matched vector index table id", K(ret));
     } else if (vec_index_id == OB_INVALID_ID || !vector_index_match) {
       // not vec expr column, ignore
@@ -1706,11 +1672,13 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr to index schema", K(ret));
     } else {
-      access_path.domain_idx_info_.vec_extra_info_.set_vec_idx_type(ObVecIndexType::VEC_INDEX_PRE);
+      ObVecIndexType pre_vec_type = (vec_index_schema->is_vec_hnsw_index() && helper.vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN) ?
+      ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN : ObVecIndexType::VEC_INDEX_PRE;
       if (index_schema->is_spatial_index()) {
-        access_path.domain_idx_info_.vec_extra_info_.set_force_vec_index_type(ObVecIndexType::VEC_INDEX_PRE);
+        pre_vec_type = ObVecIndexType::VEC_INDEX_PRE;
+        access_path.domain_idx_info_.vec_extra_info_.is_spatial_index_ = true;
       } else if (index_schema->is_multivalue_index()) {
-        access_path.domain_idx_info_.vec_extra_info_.set_force_vec_index_type(ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER);
+        access_path.domain_idx_info_.vec_extra_info_.is_multi_value_index_ = true;
       } else if (index_schema->is_fts_index()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "when using vector index, full-text index is");
@@ -1724,8 +1692,12 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
           access_path.domain_idx_info_.vec_extra_info_.set_can_use_vec_pri_opt(is_filter_all_rowkey_col);
         }
       } // check filter all rowkey col
+      access_path.domain_idx_info_.vec_extra_info_.set_vec_idx_type(pre_vec_type);
+      access_path.domain_idx_info_.vec_extra_info_.can_extract_range_ = !(range_info.get_query_range_provider()->get_range_exprs().empty());
+      access_path.domain_idx_info_.vec_extra_info_.adaptive_try_path_ = helper.vec_idx_try_path_;
     }
   } else {
+    // if adaptive filter, should not come in
     ObVecIndexType post_vec_type = (helper.filters_.count() > 0 && index_schema->is_vec_hnsw_index()) ?
     ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER : ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER;
     vec_index_schema = index_schema;
@@ -1740,37 +1712,26 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
   } else {
     double selectivity = 0.0;
     if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
-                                                      get_plan()->get_selectivity_ctx(),
-                                                      get_restrict_infos(),
-                                                      selectivity,
-                                                      get_plan()->get_predicate_selectivities()))) {
+                                                        get_plan()->get_selectivity_ctx(),
+                                                        get_restrict_infos(),
+                                                        selectivity,
+                                                        get_plan()->get_predicate_selectivities()))) {
       LOG_WARN("failed to calculate selectivity", K(ret));
+    } else if (OB_FAIL(ObVectorIndexUtil::set_vector_index_param(vec_index_schema,
+                                                                 access_path.domain_idx_info_.vec_extra_info_,
+                                                                 selectivity,
+                                                                 vector_expr,
+                                                                 stmt))) {
+      LOG_WARN("failed to set vector index parameters", K(ret));
     } else {
-      access_path.domain_idx_info_.vec_extra_info_.set_vec_algorithm_by_index_type(vec_index_schema->get_index_type());
-      if (access_path.domain_idx_info_.vec_extra_info_.is_hnsw_vec_scan()) {
-        ObVectorIndexParam index_param;
-        if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(vec_index_schema->get_index_params(), ObVectorIndexType::VIT_HNSW_INDEX, index_param))) {
-          LOG_WARN("fail to parser params from string", K(ret), K(index_schema->get_index_params()));
-        } else  {
-          access_path.domain_idx_info_.vec_extra_info_.set_algorithm_type(index_param.type_);
-        }
-      }
-      if (OB_SUCC(ret)) {
-        access_path.domain_idx_info_.set_domain_idx_type(DomainIndexType::VEC_INDEX);
-        access_path.domain_idx_info_.vec_extra_info_.set_selectivity(selectivity);
-        // for optimize, distance expr just for order by needn't calculate
-        // using vsag calc result is ok
-        if (OB_ISNULL(vector_expr)) {
-          vector_expr = stmt->get_first_vector_expr();
-        }
-        if (OB_NOT_NULL(vector_expr) &&
-            access_path.domain_idx_info_.vec_extra_info_.is_hnsw_vec_scan()
-            && ! access_path.domain_idx_info_.vec_extra_info_.is_hnsw_bq_scan()
-            &&!stmt->is_contain_vector_origin_distance_calc()) {
-          FLOG_INFO("distance needn't calc", K(ret));
-          vector_expr->add_flag(IS_CUT_CALC_EXPR);
-        }
-      }
+      access_path.domain_idx_info_.set_domain_idx_type(DomainIndexType::VEC_INDEX);
+      access_path.domain_idx_info_.vec_extra_info_.set_row_count(table_meta_info_.table_row_count_);
+    }
+    if (OB_FAIL(ret)) {
+    } else if (access_path.domain_idx_info_.vec_extra_info_.vec_idx_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN
+      && access_path.domain_idx_info_.vec_extra_info_.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN
+      && OB_FAIL(ObVectorIndexUtil::set_adaptive_try_path(access_path.domain_idx_info_.vec_extra_info_, index_id == ref_table_id))) {
+      LOG_WARN("set vector index adaptive try path", K(ret));
     }
   }
   return ret;
@@ -4671,6 +4632,8 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     // if GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_1, only add vector index (post-filter)
     if (OB_FAIL(add_valid_vec_index_ids(*stmt, schema_guard, table_id, ref_table_id, has_aggr, valid_index_ids))) {
       LOG_WARN("failed to add valid vec index ids", K(ret));
+    } else {
+      helper.vec_index_type_ = ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER;
     }
   } else if (OB_FALSE_IT(add_only_fts_index_id = (!helper.match_expr_infos_.empty() && !stmt->is_select_stmt()))) {
   } else if (add_only_fts_index_id) {
@@ -4692,6 +4655,16 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
       LOG_WARN("failed to get valid hint index list", K(ret));
     } else if (OB_FAIL(valid_index_ids.assign(valid_hint_index_list))) {
       LOG_WARN("failed to assign index ids", K(ret));
+    } else if (valid_hint_index_list.count() > 0
+              && stmt->has_vec_approx()
+              && helper.vec_index_type_ == ObVecIndexType::VEC_INDEX_INVALID) {
+      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+        // hint choose vec index pre-filter
+        helper.vec_index_type_ = ObVecIndexType::VEC_INDEX_PRE;
+      } else {
+        helper.vec_index_type_ = ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN;
+        helper.vec_idx_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER;
+      }
     }
   }
 
@@ -4707,7 +4680,7 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     LOG_WARN("failed to get can read index", K(ref_table_id), K(ret));
   } else if (OB_FAIL(add_valid_fts_index_ids(helper, tids, index_count))) {
     LOG_WARN("failed to add valid fts index ids", K(ret));
-  } else if (OB_FAIL(add_valid_vec_index_ids(*stmt, schema_guard, table_id, ref_table_id, has_aggr, tids, index_count))) {
+  } else if (OB_FAIL(add_valid_vec_index_ids(*stmt, schema_guard, table_id, ref_table_id, has_aggr, tids, index_count, helper))) {
     LOG_WARN("failed to add valid vec index ids", K(ret));
   } else if (index_count > OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1) {
     ret = OB_ERR_UNEXPECTED;
@@ -7113,9 +7086,9 @@ int ObJoinOrder::compute_vec_idx_path_relationship(const AccessPath &first_path,
   AccessPath *pre_path = first_path.domain_idx_info_.vec_extra_info_.is_post_filter() ?
                           const_cast<AccessPath*>(&second_path) : const_cast<AccessPath*>(&first_path);
   double selectivity = 0.0;
-  if (first_path.domain_idx_info_.vec_extra_info_.is_force_pre_filter()) {
+  if (first_path.domain_idx_info_.vec_extra_info_.is_spatial_index_) {
     relation = first_path.domain_idx_info_.vec_extra_info_.is_pre_filter() ? DominateRelation::OBJ_LEFT_DOMINATE : DominateRelation::OBJ_RIGHT_DOMINATE;
-  } else if (first_path.domain_idx_info_.vec_extra_info_.is_force_post_filter()) {
+  } else if (first_path.domain_idx_info_.vec_extra_info_.is_multi_value_index_) {
     relation = first_path.domain_idx_info_.vec_extra_info_.is_post_filter() ? DominateRelation::OBJ_LEFT_DOMINATE : DominateRelation::OBJ_RIGHT_DOMINATE;
   } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
                                                       get_plan()->get_selectivity_ctx(),
@@ -19984,11 +19957,12 @@ int ObJoinOrder::check_vec_hint_index_id(const ObDMLStmt &stmt,
   bool vector_index_match = false;
   ObRawExpr *vector_expr = NULL;
   is_valid = false;
+  ObIndexType index_type = INDEX_TYPE_MAX;
   if (!stmt.has_vec_approx()
       || OB_ISNULL(vector_expr = stmt.get_first_vector_expr())) {
     // do nothing, not vec index
   } else if (OB_FAIL(get_vector_index_tid_from_expr(schema_guard, vector_expr, table_id, ref_table_id,
-                                                    has_aggr, vector_index_match, vec_index_tid))) {
+                                                    has_aggr, vector_index_match, vec_index_tid, index_type))) {
       LOG_WARN("failed to get vector index tid", K(ret));
   } else if (vec_index_tid == OB_INVALID_ID || vec_index_tid != hint_index_id) {
     // skip
@@ -20006,19 +19980,36 @@ int ObJoinOrder::add_valid_vec_index_ids(const ObDMLStmt &stmt,
                                         const uint64_t ref_table_id,
                                         const bool has_aggr,
                                         uint64_t *index_tid_array,
-                                        int64_t &size)
+                                        int64_t &size,
+                                        PathHelper &helper)
 {
   int ret = OB_SUCCESS;
   uint64_t vec_index_tid = OB_INVALID_ID;
   bool vector_index_match = false;
   ObRawExpr *vector_expr = NULL;
+  ObIndexType index_type = INDEX_TYPE_MAX;
   if (!stmt.has_vec_approx()
       || OB_ISNULL(vector_expr = stmt.get_first_vector_expr())) {
     // do nothing, not vec index
-  } else if (OB_FAIL(get_vector_index_tid_from_expr(schema_guard, vector_expr, table_id, ref_table_id, has_aggr, vector_index_match, vec_index_tid))) {
+  } else if (OB_FAIL(get_vector_index_tid_from_expr(schema_guard,
+                                                    vector_expr,
+                                                    table_id,
+                                                    ref_table_id,
+                                                    has_aggr,
+                                                    vector_index_match,
+                                                    vec_index_tid,
+                                                    index_type))) {
       LOG_WARN("failed to get vector index tid", K(ret));
   } else if ((vec_index_tid != OB_INVALID_ID)) {
-    index_tid_array[size++] = vec_index_tid;
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0
+    && index_type >= ObIndexType::INDEX_TYPE_VEC_ROWKEY_VID_LOCAL
+    && index_type <= INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL
+    && helper.vec_index_type_ != ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN) {
+      // if hnsw, do not add vec_index_tid, mark adaptive_scan
+      helper.vec_index_type_ = ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN;
+    } else {
+      index_tid_array[size++] = vec_index_tid;
+    }
   }
   return ret;
 }
@@ -20034,10 +20025,18 @@ int ObJoinOrder::add_valid_vec_index_ids(const ObDMLStmt &stmt,
   uint64_t vec_index_tid = OB_INVALID_ID;
   bool vector_index_match = false;
   ObRawExpr *vector_expr = NULL;
+  ObIndexType index_type = INDEX_TYPE_MAX;
   if (!stmt.has_vec_approx()
       || OB_ISNULL(vector_expr = stmt.get_first_vector_expr())) {
     // do nothing, not vec index
-  } else if (OB_FAIL(get_vector_index_tid_from_expr(schema_guard, vector_expr, table_id, ref_table_id, has_aggr, vector_index_match, vec_index_tid))) {
+  } else if (OB_FAIL(get_vector_index_tid_from_expr(schema_guard,
+                                                    vector_expr,
+                                                    table_id,
+                                                    ref_table_id,
+                                                    has_aggr,
+                                                    vector_index_match,
+                                                    vec_index_tid,
+                                                    index_type))) {
       LOG_WARN("failed to get vector index tid", K(ret));
   } else if ((vec_index_tid != OB_INVALID_ID)) {
     if (OB_FAIL(valid_index_ids.push_back(vec_index_tid))) {
@@ -20053,14 +20052,14 @@ int ObJoinOrder::get_vector_index_tid_from_expr(ObSqlSchemaGuard *schema_guard,
                                                 const uint64_t ref_table_id,
                                                 const bool has_aggr,
                                                 bool &vector_index_match,
-                                                uint64_t& vec_index_tid)
+                                                uint64_t& vec_index_tid,
+                                                ObIndexType& index_type)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
   const ObTableSchema *table_schema = NULL;
   uint64_t inv_idx_tid = OB_INVALID_ID;
   vector_index_match = false;
-  ObIndexType index_type = INDEX_TYPE_MAX;
   if (OB_ISNULL(vector_expr) || OB_ISNULL(schema_guard) ||
       OB_ISNULL(session_info = OPT_CTX.get_session_info()) ||
       OB_ISNULL(schema_guard->get_schema_guard())) {
@@ -20871,7 +20870,6 @@ bool ObJoinOrder::invalid_index_for_vec_pre_filter(const ObTableSchema *index_hi
   bool ret_bool = false;
   if (OB_NOT_NULL(index_hint_table_schema)) {
     ret_bool = index_hint_table_schema->is_fts_index()
-            || index_hint_table_schema->is_multivalue_index()
             || index_hint_table_schema->is_global_index_table();
   }
   return ret_bool;
@@ -20913,8 +20911,23 @@ int ObJoinOrder::get_valid_hint_index_list(const ObDMLStmt &stmt,
                                           has_aggr, is_valid))) {
         LOG_WARN("failed to check vec hint index", K(table_id), K(ref_table_id), K(index_hint_table_schema));
       } else if (!is_valid) {
-      } else if (OB_FAIL(valid_hint_index_ids.push_back(tid))) {
-        LOG_WARN("failed to append valid hint index list", K(ret), K(tid));
+      } else {
+        ObVecIndexType vec_with_filter_index_type = ObVecIndexType::VEC_INDEX_INVALID;
+        if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0 && index_hint_table_schema->is_vec_hnsw_index()) {
+          // hint choose vec index post-with-filter
+          vec_with_filter_index_type = ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN;
+        } else {
+          vec_with_filter_index_type = ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER;
+        }
+        helper.vec_index_type_ = helper.filters_.count() > 0 ? vec_with_filter_index_type : ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER;
+        // filter choose VEC_INDEX_ADAPTIVE_SCAN, can not add vec index into index ids, choose a normal index anyways
+        if (helper.vec_index_type_ != ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN) {
+          if (OB_FAIL(valid_hint_index_ids.push_back(tid))) {
+            LOG_WARN("failed to append valid hint index list", K(ret), K(tid));
+          }
+        } else {
+          helper.vec_idx_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER;
+        }
       }
     } else if (index_hint_table_schema->is_fts_index()) {
       bool is_valid = true;

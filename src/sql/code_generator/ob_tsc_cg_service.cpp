@@ -2267,9 +2267,15 @@ int ObTscCgService::generate_vec_idx_ctdef(const ObLogTableScan &op,
         vec_scan_ctdef->vec_type_ = op.get_vector_index_info().vec_type_;
         vec_scan_ctdef->selectivity_ = op.get_vector_index_info().selectivity_;
         vec_scan_ctdef->row_count_ = op.get_vector_index_info().row_count_;
-        vec_scan_ctdef->algorithm_type_ = op.get_vector_index_info().algorithm_type_;
+        vec_scan_ctdef->algorithm_type_ = op.get_vector_index_info().get_vec_algorithm_type();
         vec_scan_ctdef->set_can_use_vec_pri_opt(op.get_vector_index_info().can_use_vec_pri_opt());
+        vec_scan_ctdef->vector_index_param_ = op.get_vector_index_info().get_vector_index_param();
         vec_scan_ctdef->extra_column_count_ = vc_info.get_extra_info_columns_count();
+        vec_scan_ctdef->adaptive_try_path_ = vc_info.adaptive_try_path_;
+        vec_scan_ctdef->can_extract_range_ = vc_info.can_extract_range_;
+        vec_scan_ctdef->is_spatial_index_ = vc_info.is_spatial_index_;
+        vec_scan_ctdef->is_multi_value_index_ = vc_info.is_multi_value_index_;
+        cg_.phy_plan_->stat_.vec_index_exec_ctx_.cur_path_ = vc_info.adaptive_try_path_;
       }
     }
 
@@ -2740,10 +2746,12 @@ int ObTscCgService::extract_vec_ir_access_columns(
   int ret = OB_SUCCESS;
   const ObVecIndexInfo &vec_info = op.get_vector_index_info();
   if (scan_ctdef.ref_table_id_ == op.get_doc_id_index_table_id()) {
+    if (vec_info.is_spiv_scan() && OB_FAIL(extract_doc_id_index_back_access_columns(op, access_exprs))) {
+      LOG_WARN("failed to extract docid index back access columns", K(ret));
+    }
+  } else if (scan_ctdef.ref_table_id_ == vec_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FIFTH_AUX_TBL_IDX)) {
     if (vec_info.is_hnsw_vec_scan() && OB_FAIL(extract_vec_id_index_back_access_columns(op, access_exprs))) {
       LOG_WARN("failed to extract vid index back access columns", K(ret));
-    } else if (vec_info.is_spiv_scan() && OB_FAIL(extract_doc_id_index_back_access_columns(op, access_exprs))) {
-      LOG_WARN("failed to extract docid index back access columns", K(ret));
     }
   } else {
     switch (scan_ctdef.ir_scan_type_) {
@@ -3314,7 +3322,8 @@ int ObTscCgService::extract_vector_das_output_column_ids(const ObTableSchema &in
   int ret = OB_SUCCESS;
   const ObVecIndexInfo &vec_info = op.get_vector_index_info();
   bool is_column_all_inited = false;
-  if (scan_ctdef.ref_table_id_ == op.get_doc_id_index_table_id()) {
+  if (scan_ctdef.ref_table_id_ == op.get_doc_id_index_table_id()
+  || (vec_info.is_hnsw_vec_scan() && scan_ctdef.ref_table_id_ == vec_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FIFTH_AUX_TBL_IDX))) {
     if (OB_FAIL(extract_doc_id_index_back_output_column_ids(op, output_cids))) {
       LOG_WARN("failed to get vid index back cids", K(ret), K(scan_ctdef.ref_table_id_));
     }

@@ -26,8 +26,10 @@
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/rewrite/ob_query_range_define.h"
 #include "src/share/vector_index/ob_plugin_vector_index_adaptor.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 using oceanbase::common::ObString;
+using oceanbase::share::ObVecIdxExtraInfo;
 namespace test
 {
 class TestJoinOrder_ob_join_order_param_check_Test;
@@ -291,61 +293,6 @@ enum DomainIndexType
   VEC_INDEX = 2
 };
 
-enum ObVecIndexType : uint8_t //FARM COMPAT WHITELIST
-{
-  VEC_INDEX_INVALID = 0,
-  VEC_INDEX_POST_WITHOUT_FILTER = 1,
-  VEC_INDEX_PRE = 2,
-  VEC_INDEX_POST_ITERATIVE_FILTER = 3,
-};
-
-struct ObVecIdxExtraInfo
-{
-static constexpr double DEFAULT_SELECTIVITY_RATE = 0.5;
-  ObVecIdxExtraInfo()
-    : algorithm_type_(VIAT_MAX),
-      vec_idx_type_(ObVecIndexType::VEC_INDEX_INVALID),
-      force_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
-      selectivity_(0),
-      row_count_(0),
-      can_use_vec_pri_opt_(false) {}
-  inline void set_vec_idx_type(ObVecIndexType vec_idx_type) { vec_idx_type_ = vec_idx_type;}
-  ObVecIndexType get_vec_idx_type() const { return vec_idx_type_; }
-  inline double get_selectivity() const { return selectivity_; }
-  inline void set_selectivity(double selectivity) { selectivity_ = selectivity;}
-  inline void set_row_count(int64_t row_count) { row_count_ = row_count;}
-  inline void set_vec_algorithm_by_index_type(ObIndexType index_type);
-  inline void set_algorithm_type(const ObVectorIndexAlgorithmType type) { algorithm_type_ = type; }
-  inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
-  bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
-  ObVectorIndexAlgorithmType get_algorithm_type() { return algorithm_type_; }
-  inline bool is_hnsw_vec_scan() const
-  {
-    return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW ||
-           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_SQ ||
-           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HGRAPH ||
-           algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ;
-  }
-  inline bool is_hnsw_bq_scan() const { return algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_HNSW_BQ; }
-  int64_t get_row_count() { return row_count_; }
-  bool is_pre_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_PRE; }
-  bool is_post_filter() const { return vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER || vec_idx_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
-  bool is_specify_vec_plan() const { return force_index_type_ == ObVecIndexType::VEC_INDEX_INVALID; }
-  bool is_force_pre_filter() const { return force_index_type_ == ObVecIndexType::VEC_INDEX_PRE; }
-  bool is_force_post_filter() const { return force_index_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER || force_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
-  ObVecIndexType get_force_filter_type() const {return force_index_type_;}
-  void set_force_vec_index_type(ObVecIndexType force_index_type) { force_index_type_ = force_index_type; }
-  TO_STRING_KV(K_(algorithm_type), K_(vec_idx_type),K_(force_index_type), K_(selectivity), K_(row_count), K_(can_use_vec_pri_opt));
-
-  ObVectorIndexAlgorithmType algorithm_type_;  // hnsw or ivf type
-  ObVecIndexType vec_idx_type_;                // pre & post，might add with/without join back
-  ObVecIndexType force_index_type_;
-  double selectivity_;
-  int64_t row_count_;
-  bool can_use_vec_pri_opt_;                   // when pre-filter is primary key and can filter by query range, search rowkey_vid table directly
-};
-
-
 struct DomainIndexAccessInfo
 {
   DomainIndexAccessInfo()
@@ -381,7 +328,7 @@ struct DomainIndexAccessInfo
   common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> func_lookup_index_ids_;
   // 新增成员
   DomainIndexType domain_idx_type_;
-  ObVecIdxExtraInfo vec_extra_info_;
+  share::ObVecIdxExtraInfo vec_extra_info_;
 };
 
 
@@ -1465,7 +1412,9 @@ struct NullAwareAntiJoinInfo {
         subquery_exprs_(),
         inner_paths_(),
         table_opt_info_(NULL),
-        est_method_(EST_INVALID)
+        est_method_(EST_INVALID),
+        vec_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
+        vec_idx_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN)
       {}
 
       bool is_inner_path_;
@@ -1491,6 +1440,8 @@ struct NullAwareAntiJoinInfo {
       ObSEArray<ObExecParamRawExpr *, 2> exec_params_;
       // record basic index and selectivity info for all match exprs
       ObSEArray<MatchExprInfo, 4> match_expr_infos_;
+      ObVecIndexType vec_index_type_;
+      ObVecIdxAdaTryPath vec_idx_try_path_;
     };
 
     ObJoinOrder(common::ObIAllocator *allocator,
@@ -1606,7 +1557,8 @@ struct NullAwareAntiJoinInfo {
                                       const uint64_t ref_table_id,
                                       const bool has_aggr,
                                       bool &vector_index_match,
-                                      uint64_t& vec_index_tid);
+                                      uint64_t& vec_index_tid,
+                                      ObIndexType& index_type);
 
     inline ObTablePartitionInfo *get_table_partition_info() { return table_partition_info_; }
 
@@ -2904,7 +2856,8 @@ struct NullAwareAntiJoinInfo {
                                 const uint64_t ref_table_id,
                                 const bool has_aggr,
                                 uint64_t *index_tid_array,
-                                int64_t &size);
+                                int64_t &size,
+                                PathHelper &helper);
     int add_valid_vec_index_ids(const ObDMLStmt &stmt,
                                 ObSqlSchemaGuard *schema_guard,
                                 const uint64_t table_id,

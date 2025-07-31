@@ -271,6 +271,8 @@ public:
   void set_vectors(ObObj *vectors) { vec_data_.vectors_ = vectors; }
   int set_extra_info(int64_t index, const ObRowkey &rowkey, const ObIArray<int64_t> &extra_in_rowkey_idxs);
   void set_extra_infos(ObVecExtraInfoObj *extra_info_objs) { vec_data_.extra_info_objs_ = extra_info_objs; }
+  void set_status(PluginVectorQueryResStatus status) { status_ = status; }
+  void set_flag(ObVectorQueryProcessFlag flag) {flag_ = flag; }
   void set_ls_leader(const bool ls_leader) { ls_leader_ = ls_leader; }
   bool get_ls_leader() { return ls_leader_; }
 
@@ -343,6 +345,14 @@ struct ObVidBound {
   }
 };
 
+enum ObCanSkip3rdAnd4thVecIndex
+{
+  NOT_INITED,
+  SKIP,
+  NOT_SKIP,
+  SKIPMAX
+};
+
 struct ObVectorIndexMemData
 {
   ObVectorIndexMemData()
@@ -361,7 +371,8 @@ struct ObVectorIndexMemData
       bitmap_(nullptr),
       mem_ctx_(nullptr),
       last_dml_scn_(),
-      last_read_scn_() {}
+      last_read_scn_(),
+      can_skip_(NOT_INITED) {}
 
 public:
   TO_STRING_KV(K(rb_flag_), K_(is_init), K_(scn), K_(ref_cnt), K(vid_bound_.max_vid_), K(vid_bound_.min_vid_), KP_(index), KPC_(bitmap), KP_(mem_ctx));
@@ -411,6 +422,7 @@ public:
 
   SCN last_dml_scn_;
   SCN last_read_scn_;
+  ObCanSkip3rdAnd4thVecIndex can_skip_;
 };
 
 struct ObVectorIndexFollowerSyncStatic
@@ -575,6 +587,8 @@ public:
   share::SCN get_index_id_dml_scn();
   share::SCN get_index_id_read_scn();
   bool is_pruned_read_index_id();
+  void update_can_skip(ObCanSkip3rdAnd4thVecIndex can_skip);
+  ObCanSkip3rdAnd4thVecIndex get_can_skip();
 
   // VSAG ADD
   int insert_rows(blocksstable::ObDatumRow *rows,

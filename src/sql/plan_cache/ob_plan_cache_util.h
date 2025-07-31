@@ -514,6 +514,26 @@ enum ObPlanExpiredStat  {
   EXPIRED_BY_EXEC_TIME,   //  expired by unstable execution time
 };
 
+struct ObVecIndexExecCtx {
+  ObVecIndexExecCtx()
+    : cur_path_(0),
+      pre_filter_chosen_times_(0),
+      iter_filter_chosen_times_(0),
+      in_filter_chosen_times_(0),
+      record_count_(0)
+  {}
+  TO_STRING_KV(K_(cur_path),
+               K_(pre_filter_chosen_times),
+               K_(iter_filter_chosen_times),
+               K_(in_filter_chosen_times),
+               K_(record_count));
+  uint8_t cur_path_;               // cur path
+  int64_t pre_filter_chosen_times_; // times of changing to pre-filter
+  int64_t iter_filter_chosen_times_;// times of changing to iter-filter
+  int64_t in_filter_chosen_times_;  // times of changing toin-filter
+  int32_t record_count_;            // window size
+};
+
 struct ObPlanStat
 {
   enum PlanStatus
@@ -664,6 +684,7 @@ struct ObPlanStat
   bool is_inner_;
   bool is_use_auto_dop_;
   AdaptivePCInfo adaptive_pc_info_;
+  ObVecIndexExecCtx vec_index_exec_ctx_;
 
 
   ObPlanStat()
@@ -744,7 +765,8 @@ struct ObPlanStat
       hints_all_worked_(true),
       is_inner_(false),
       is_use_auto_dop_(false),
-      adaptive_pc_info_()
+      adaptive_pc_info_(),
+      vec_index_exec_ctx_()
 {
   exact_mode_sql_id_[0] = '\0';
 }
@@ -826,7 +848,8 @@ struct ObPlanStat
       hints_all_worked_(rhs.hints_all_worked_),
       is_inner_(rhs.is_inner_),
       is_use_auto_dop_(rhs.is_use_auto_dop_),
-      adaptive_pc_info_(rhs.adaptive_pc_info_)
+      adaptive_pc_info_(rhs.adaptive_pc_info_),
+      vec_index_exec_ctx_(rhs.vec_index_exec_ctx_)
   {
     exact_mode_sql_id_[0] = '\0';
     MEMCPY(plan_sel_info_str_, rhs.plan_sel_info_str_, rhs.plan_sel_info_str_len_);
@@ -966,7 +989,8 @@ struct ObPlanStat
                K_(timeout_count),
                K_(evolution_stat),
                K_(plan_hash_value),
-               K_(hints_all_worked));
+               K_(hints_all_worked),
+               K_(vec_index_exec_ctx));
 };
 
 struct SysVarNameVal

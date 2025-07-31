@@ -2604,10 +2604,19 @@ int ObCreateTableResolver::generate_index_arg(const bool process_heap_table_prim
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support global vec index now", K(ret));
         } else if (!is_user_tenant(tenant_id)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("tenant is not user tenant vector index not supported", K(ret), K(tenant_id));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant create vector index is");
-        } else {
+          if (tenant_data_version < DATA_VERSION_4_4_1_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("tenant is not user tenant vector index not supported ", K(ret), K(tenant_id));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.3, not user tenant create vector index is");
+          } else {
+#ifndef OB_BUILD_SYS_VEC_IDX
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("sys tenant vector index not supported ", K(ret), K(tenant_id));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant create vector index is");
+#endif
+          }
+        }
+        if (OB_SUCC(ret)) {
           type = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL; // 需要考虑ivf、hnsw、spiv这三种模式，其中ivf索引又分成ivfflat，ivfsq8，ivfpq三类
         }
       } else if (FTS_KEY == index_keyname_) {

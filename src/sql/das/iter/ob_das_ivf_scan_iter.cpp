@@ -1323,9 +1323,14 @@ int ObDASIvfPQScanIter::inner_init(ObDASIterParam &param)
   ObVectorIndexParam index_param;
   if (OB_FAIL(ObDASIvfScanIter::inner_init(param))) {
     LOG_WARN("fail to do inner init ", K(ret), K(param));
-  } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(vec_aux_ctdef_->vec_index_param_, ObVectorIndexType::VIT_IVF_INDEX, index_param))) {
-    LOG_WARN("fail to parse params from string", K(ret), K(vec_aux_ctdef_->vec_index_param_));
-  } else {
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(vec_aux_ctdef_->vec_index_param_, ObVectorIndexType::VIT_IVF_INDEX, index_param))) {
+      LOG_WARN("fail to parse params from string", K(ret), K(vec_aux_ctdef_->vec_index_param_));
+    }
+  } else if (OB_FAIL(index_param.assign(vec_aux_ctdef_->get_vec_index_param()))) {
+    LOG_WARN("fail to assign params from vec_aux_ctdef_", K(ret));
+  }
+  if (OB_SUCC(ret)) {
     ObDASIvfScanIterParam &ivf_scan_param = static_cast<ObDASIvfScanIterParam &>(param);
     pq_centroid_iter_ = ivf_scan_param.pq_centroid_iter_;
     m_ = index_param.m_;

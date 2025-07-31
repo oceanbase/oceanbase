@@ -12418,6 +12418,8 @@ int ObLogPlan::collect_vec_index_location_related_info(ObLogTableScan &tsc_op,
       LOG_WARN("failed to append index_snapshot_data_tid", K(ret));
     } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, vc_info.get_aux_table_id(VEC_FOURTH_AUX_TBL_IDX)))) {
       LOG_WARN("failed to append main table id", K(ret));
+    } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, vc_info.get_aux_table_id(VEC_FIFTH_AUX_TBL_IDX)))) {
+      LOG_WARN("failed to append main table id", K(ret));
     } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_real_ref_table_id()))) {
       LOG_WARN("failed to append main table id", K(ret));
     }
@@ -15820,8 +15822,12 @@ int ObLogPlan::prepare_vector_index_info(AccessPath *ap,
       vc_info.vec_type_ = ap->domain_idx_info_.vec_extra_info_.get_vec_idx_type();
       vc_info.selectivity_ = ap->domain_idx_info_.vec_extra_info_.get_selectivity();
       vc_info.row_count_ = ap->domain_idx_info_.vec_extra_info_.get_row_count();
-      vc_info.set_vec_algorithm_type(ap->domain_idx_info_.vec_extra_info_.get_algorithm_type());
       vc_info.set_can_use_vec_pri_opt(ap->domain_idx_info_.vec_extra_info_.can_use_vec_pri_opt());
+      vc_info.vector_index_param_ = ap->domain_idx_info_.vec_extra_info_.get_vector_index_param();
+      vc_info.adaptive_try_path_ = ap->domain_idx_info_.vec_extra_info_.adaptive_try_path_;
+      vc_info.can_extract_range_ = ap->domain_idx_info_.vec_extra_info_.can_extract_range_;
+      vc_info.is_spatial_index_ =  ap->domain_idx_info_.vec_extra_info_.is_spatial_index_;
+      vc_info.is_multi_value_index_ = ap->domain_idx_info_.vec_extra_info_.is_multi_value_index_;
       if (vc_info.is_hnsw_vec_scan()) {
         if (OB_FAIL(prepare_hnsw_vector_index_scan(schema_guard, *table_schema, vec_col_id, table_scan))) {
           LOG_WARN("fail to init hnsw aux index table info",
@@ -16056,12 +16062,13 @@ int ObLogPlan::prepare_hnsw_vector_index_scan(ObSchemaGetterGuard *schema_guard,
       LOG_WARN("fail to push back aux table id", K(ret), K(index_snapshot_data_tid), K(vc_info.aux_table_id_.count()));
     } else if (OB_FAIL(vc_info.aux_table_id_.push_back(rowkey_vid_tid))) {
       LOG_WARN("fail to push back aux table id", K(ret), K(rowkey_vid_tid), K(vc_info.aux_table_id_.count()));
+    } else if (OB_FAIL(vc_info.aux_table_id_.push_back(vec_id_rowkey_tid))) {
+      LOG_WARN("fail to push back aux table id", K(ret), K(vec_id_rowkey_tid), K(vc_info.aux_table_id_.count()));
     } else {
-      table_scan->set_doc_id_index_table_id(vec_id_rowkey_tid);
       table_scan->set_index_back(true);
       // if vec query and rebuild vec index happened at the same time
       // the tid maybe not the lastest, update to latest
-      if (vc_info.is_post_filter() && table_scan->get_index_table_id() != delta_buffer_tid) {
+      if (vc_info.vec_index_post_filter() && table_scan->get_index_table_id() != delta_buffer_tid) {
         table_scan->set_index_table_id(delta_buffer_tid);
       }
     }
@@ -16183,7 +16190,7 @@ int ObLogPlan::try_push_topn_into_vector_index_scan(ObLogicalOperator *&top,
       // need_further_sort: if add topn
       // if there is filter or pushdown filter, vector will return more data than limit n, need to add a topn
       // ivf pq index always need top n to calculate vector distance
-      need_further_sort = table_scan->is_distributed() ||  table_scan->get_table_partition_info()->get_table_location().is_partitioned()
+      need_further_sort = table_scan->is_distributed() || table_scan->get_table_partition_info()->get_table_location().is_partitioned()
                         || (vc_info.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
                         && (table_scan->get_filter_exprs().count() != 0 || table_scan->get_pushdown_filter_exprs().count() != 0))
                         || vc_info.is_ivf_pq_scan()

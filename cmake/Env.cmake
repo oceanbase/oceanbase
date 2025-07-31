@@ -56,6 +56,9 @@ ob_define(OB_BUILD_JNI_ODPS ON)
 
 ob_define(ASAN_DISABLE_STACK ON)
 
+# 开源模式默认支持系统租户使用向量索引
+ob_define(OB_BUILD_SYS_VEC_IDX ON)
+
 EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
 
 if(WITH_COVERAGE)
@@ -171,6 +174,9 @@ if(OB_BUILD_CLOSE_MODULES)
   # 默认使用OB_USE_DRCMSG
   ob_define(OB_USE_DRCMSG ON)
   add_definitions(-DOB_USE_DRCMSG)
+
+  # 闭源模式不支持系统租户使用向量索引
+  set(OB_BUILD_SYS_VEC_IDX OFF)
 endif()
 
 # 下面开始逻辑控制
@@ -228,6 +234,10 @@ endif()
 
 if(OB_BUILD_SHARED_LOG_SERVICE)
   add_definitions(-DOB_BUILD_SHARED_LOG_SERVICE)
+endif()
+
+if (OB_BUILD_SYS_VEC_IDX)
+ add_definitions(-DOB_BUILD_SYS_VEC_IDX)
 endif()
 
 # should not use initial-exec for tls-model if building OBCDC.

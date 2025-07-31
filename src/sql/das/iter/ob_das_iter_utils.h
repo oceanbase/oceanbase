@@ -233,7 +233,8 @@ private:
                                     const ObDASRelatedTabletID &related_tablet_ids,
                                     transaction::ObTxDesc *trans_desc,
                                     transaction::ObTxReadSnapshot *snapshot,
-                                    ObDASIter *&iter_tree);
+                                    ObDASIter *&iter_tree,
+                                    const bool in_vec_pre_filter = false);
 
   static int create_gis_lookup_tree(ObTableScanParam &scan_param,
                                     common::ObIAllocator &alloc,

@@ -7975,11 +7975,25 @@ int ObDDLResolver::resolve_vec_index_constraint(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("tenant data version is less than 4.3.3, vector index not supported", K(ret), K(tenant_data_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, vector index");
+    } else if (!is_sparse_vec_col && !is_user_tenant(tenant_id)) {
+      if (tenant_data_version < DATA_VERSION_4_4_1_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tenant is not user tenant vector index not supported ", K(ret), K(tenant_id));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.3, not user tenant create vector index is");
+      } else {
+#ifndef OB_BUILD_SYS_VEC_IDX
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("sys tenant vector index not supported ", K(ret), K(tenant_id));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant create vector index is");
+#endif
+      }
     } else if (is_sparse_vec_col && tenant_data_version < DATA_VERSION_4_3_5_2) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("tenant data version is less than 4.3.5.2, sparse vector index not supported", K(ret), K(tenant_data_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.2, sparse vector index");
-    } else {
+    }
+
+    if (OB_SUCC(ret)) {
       const int64_t MAX_DIM_LIMITED = 4096;
       int64_t dim = 0;
 

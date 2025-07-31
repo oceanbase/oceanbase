@@ -49,7 +49,9 @@ public:
       can_extract_range_(false) {}
 
   inline bool is_pre_filter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_;  }
+  inline bool is_vec_adaptive_scan() const { return ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN == vec_type_ && ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN != adaptive_try_path_; }
   inline bool is_post_filter() const { return ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER == vec_type_ || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
+  inline bool is_iter_filter() const { return ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
   inline bool filter_in_hnsw_iter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_ || ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER == vec_type_; }
   inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
   inline bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
@@ -60,7 +62,7 @@ public:
   int64_t get_snapshot_tbl_idx() const { return ObVecAuxTableIdx::THIRD_VEC_AUX_TBL_IDX; }
   int64_t get_com_aux_tbl_idx() const { return ObVecAuxTableIdx::FOURTH_VEC_AUX_TBL_IDX; }
   int64_t get_rowkey_vid_tbl_idx() const { return ObVecAuxTableIdx::FIFTH_VEC_AUX_TBL_IDX; }
-
+  const ObVectorIndexParam& get_vec_index_param() const { return vector_index_param_; }
   // IVF
   int64_t get_ivf_centroid_tbl_idx() const { return ObVecAuxTableIdx::FIRST_VEC_AUX_TBL_IDX; }
   // for pq, is ivf_pq_code

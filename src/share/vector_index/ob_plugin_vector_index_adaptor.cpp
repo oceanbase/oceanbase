@@ -1118,6 +1118,16 @@ bool ObPluginVectorIndexAdaptor::is_pruned_read_index_id()
   return b_ret;
 }
 
+void ObPluginVectorIndexAdaptor::update_can_skip(ObCanSkip3rdAnd4thVecIndex can_skip)
+{
+  incr_data_->can_skip_ = can_skip;
+}
+
+ObCanSkip3rdAnd4thVecIndex ObPluginVectorIndexAdaptor::get_can_skip()
+{
+  return incr_data_->can_skip_;
+}
+
 int ObPluginVectorIndexAdaptor::insert_rows(blocksstable::ObDatumRow *rows,
                                             const int64_t vid_idx,
                                             const int64_t type_idx,
@@ -1610,18 +1620,8 @@ int ObPluginVectorIndexAdaptor::copy_meta_info(ObPluginVectorIndexAdaptor &other
   } else {
     algo_data_ = hnsw_param;
     ObVectorIndexParam *other_param = static_cast<ObVectorIndexParam *>(other.algo_data_);
-    if (OB_NOT_NULL(other_param)) {
-      hnsw_param->type_ = other_param->type_;
-      hnsw_param->lib_ = other_param->lib_;
-      hnsw_param->dist_algorithm_ = other_param->dist_algorithm_;
-      hnsw_param->dim_ = other_param->dim_;
-      hnsw_param->m_ = other_param->m_;
-      hnsw_param->ef_construction_ = other_param->ef_construction_;
-      hnsw_param->ef_search_ = other_param->ef_search_;
-      hnsw_param->nlist_ = other_param->nlist_;
-      hnsw_param->sample_per_nlist_ = other_param->sample_per_nlist_;
-      hnsw_param->extra_info_max_size_ = other_param->extra_info_max_size_;
-      hnsw_param->extra_info_actual_size_ = other_param->extra_info_actual_size_;
+    if (OB_NOT_NULL(other_param) && OB_FAIL(hnsw_param->assign(*other_param))) {
+      LOG_WARN("fail to assign params from vec_aux_ctdef_", K(ret));
     }
   }
   return ret;
@@ -1712,6 +1712,7 @@ int ObPluginVectorIndexAdaptor::check_delta_buffer_table_readnext_status(ObVecto
 {
   INIT_SUCC(ret);
   SCN min_delta_scn;
+  bool can_skip = true;
 
   // TODO 优先判断是否需要等待 PVQ_WAIT
   if (OB_ISNULL(ctx) || OB_ISNULL(row_iter)) {
@@ -1755,11 +1756,15 @@ int ObPluginVectorIndexAdaptor::check_delta_buffer_table_readnext_status(ObVecto
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get invalid op.", K(ret), K(op));
         }
+        can_skip = false;
       }
     }
 
     if (ret == OB_ITER_END) {
       ret = OB_SUCCESS;
+      if (get_can_skip() != NOT_SKIP && !can_skip) {
+        update_can_skip(NOT_SKIP);
+      }
     }
 
 #ifndef NDEBUG
@@ -1945,6 +1950,9 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
   } else if (OB_FAIL(table_scan_iter->get_next_row(datum_row))) {
     if (ret == OB_ITER_END) {
       ret = OB_SUCCESS;
+      if (get_can_skip() == NOT_INITED) {
+        update_can_skip(SKIP);
+      }
     } else {
       LOG_WARN("failed to get new row.", K(ret));
     }

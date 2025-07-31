@@ -4886,5 +4886,115 @@ int ObVectorIndexUtil::check_only_change_search_params(const ObString &old_idx_p
   }
   return ret;
 }
+
+int ObVectorIndexUtil::set_vector_index_param(const ObTableSchema *&vec_index_schema,
+                                              ObVecIdxExtraInfo &vec_extra_info,
+                                              double &selectivity,
+                                              sql::ObRawExpr *&vector_expr,
+                                              const sql::ObDMLStmt *&stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(vec_extra_info.set_vec_param_info(vec_index_schema))) {
+    LOG_WARN("fail to set vector param info", K(ret), K(vec_index_schema));
+  } else {
+    vec_extra_info.set_selectivity(selectivity);
+    // for optimize, distance expr just for order by needn't calculate
+    // using vsag calc result is ok
+    if (OB_ISNULL(vector_expr)) {
+      vector_expr = stmt->get_first_vector_expr();
+    }
+    if (OB_NOT_NULL(vector_expr) &&
+        vec_extra_info.is_hnsw_vec_scan()
+        && ! vec_extra_info.is_hnsw_bq_scan()
+        &&!stmt->is_contain_vector_origin_distance_calc()) {
+      FLOG_INFO("distance needn't calc", K(ret));
+      vector_expr->add_flag(IS_CUT_CALC_EXPR);
+    }
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::set_adaptive_try_path(ObVecIdxExtraInfo& vc_info, const bool is_primary_idx)
+{
+  int ret = OB_SUCCESS;
+  double output_row_count = vc_info.row_count_ * vc_info.selectivity_;
+  if (vc_info.with_extra_info_ && vc_info.can_use_vec_pri_opt_) {
+    vc_info.adaptive_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_IN_FILTER;
+  } else if (output_row_count <= ObVecIdxExtraInfo::MAX_HNSW_BRUTE_FORCE_SIZE) {
+    vc_info.adaptive_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER;
+  } else if (is_primary_idx) {
+    vc_info.adaptive_try_path_ = (output_row_count < ObVecIdxExtraInfo::MAX_HNSW_PRE_ROW_CNT_WITH_ROWKEY
+                                  && vc_info.selectivity_ <= ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_ROWKEY) ?
+                                  ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER :  ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER;
+  } else {
+    vc_info.adaptive_try_path_ = (output_row_count < ObVecIdxExtraInfo::MAX_HNSW_PRE_ROW_CNT_WITH_IDX
+                                  && vc_info.selectivity_ <= ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_IDX) ?
+                                  ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER : ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER;
+  }
+  return ret;
+}
+
+int ObVecIdxExtraInfo::set_vec_param_info(const ObTableSchema *vec_index_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(vec_index_schema)) {
+    ret = OB_BAD_NULL_ERROR;
+  } else {
+    ObVectorIndexType vec_type = ObVectorIndexType::VIT_MAX;
+    switch (vec_index_schema->get_index_type()) {
+      case ObIndexType::INDEX_TYPE_VEC_ROWKEY_VID_LOCAL:
+      case ObIndexType::INDEX_TYPE_VEC_VID_ROWKEY_LOCAL:
+      case ObIndexType::INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL:
+      case ObIndexType::INDEX_TYPE_VEC_INDEX_ID_LOCAL:
+      case ObIndexType::INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL: {
+        vector_index_param_.type_ = ObVectorIndexAlgorithmType::VIAT_HNSW;
+        vec_type = ObVectorIndexType::VIT_HNSW_INDEX;
+        break;
+      }
+      case ObIndexType::INDEX_TYPE_VEC_IVFFLAT_CENTROID_LOCAL:
+      case ObIndexType::INDEX_TYPE_VEC_IVFFLAT_CID_VECTOR_LOCAL:
+      case ObIndexType::INDEX_TYPE_VEC_IVFFLAT_ROWKEY_CID_LOCAL: {
+        vector_index_param_.type_  = ObVectorIndexAlgorithmType::VIAT_IVF_FLAT;
+        vec_type = ObVectorIndexType::VIT_IVF_INDEX;
+        break;
+      }
+      case ObIndexType::INDEX_TYPE_VEC_IVFSQ8_CENTROID_LOCAL:
+      case ObIndexType::INDEX_TYPE_VEC_IVFSQ8_META_LOCAL:
+      case ObIndexType::INDEX_TYPE_VEC_IVFSQ8_CID_VECTOR_LOCAL:
+      case ObIndexType::INDEX_TYPE_VEC_IVFSQ8_ROWKEY_CID_LOCAL: {
+        vector_index_param_.type_  = ObVectorIndexAlgorithmType::VIAT_IVF_SQ8;
+        vec_type = ObVectorIndexType::VIT_IVF_INDEX;
+        break;
+      }
+      case ObIndexType::INDEX_TYPE_VEC_IVFPQ_CENTROID_LOCAL:
+      case ObIndexType::INDEX_TYPE_VEC_IVFPQ_PQ_CENTROID_LOCAL:
+      case ObIndexType::INDEX_TYPE_VEC_IVFPQ_CODE_LOCAL:
+      case ObIndexType::INDEX_TYPE_VEC_IVFPQ_ROWKEY_CID_LOCAL: {
+        vector_index_param_.type_  = ObVectorIndexAlgorithmType::VIAT_IVF_PQ;
+        vec_type = ObVectorIndexType::VIT_IVF_INDEX;
+        break;
+      }
+      case ObIndexType::INDEX_TYPE_VEC_SPIV_DIM_DOCID_VALUE_LOCAL: {
+        vector_index_param_.type_  = ObVectorIndexAlgorithmType::VIAT_SPIV;
+        vec_type = ObVectorIndexType::VIT_SPIV_INDEX;
+        break;
+      }
+      default: {
+        vector_index_param_.type_ = ObVectorIndexAlgorithmType::VIAT_MAX;
+        break;
+      }
+    }
+
+    if (vector_index_param_.type_  == ObVectorIndexAlgorithmType::VIAT_MAX) {
+      ret = OB_INVALID_DATA;
+      LOG_WARN("invalid vector index type", K(ret), K(vector_index_param_.type_));
+    } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(vec_index_schema->get_index_params(), vec_type, vector_index_param_))) {
+      LOG_WARN("fail to parser params from string", K(ret), K(vec_index_schema->get_index_params()));
+    } else {
+      with_extra_info_ = vector_index_param_.extra_info_max_size_ > 0;
+    }
+  }
+  return ret;
+}
 }
 }
