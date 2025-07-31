@@ -4321,7 +4321,8 @@ int ObRootService::create_hidden_table(const obrpc::ObCreateHiddenTableArg &arg,
   int ret = OB_SUCCESS;
   ObCreateHiddenTableArgV2 new_arg;
   uint64_t compat_version = GET_MIN_CLUSTER_VERSION();
-  if (compat_version >= CLUSTER_VERSION_4_4_0_0) {
+  if ((compat_version >= MOCK_CLUSTER_VERSION_4_2_5_5 && compat_version <= CLUSTER_VERSION_4_3_0_0)
+      || (compat_version >= MOCK_CLUSTER_VERSION_4_3_5_4)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ObCreateHiddenTableArg can not be used after 4400", KR(ret));
   } else if (OB_UNLIKELY(!inited_)) {

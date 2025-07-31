@@ -86,7 +86,8 @@ int ObTableLoadRedefTable::create_hidden_table(const ObTableLoadRedefTableStartA
   const share::ObDDLType ddl_type = arg.is_load_data_ ? share::DDL_DIRECT_LOAD : share::DDL_DIRECT_LOAD_INSERT;
   int64_t foreign_key_checks = 1;
   session_info.get_foreign_key_checks(foreign_key_checks);
-  if (compat_version < CLUSTER_VERSION_4_4_0_0) {
+  if (compat_version < MOCK_CLUSTER_VERSION_4_2_5_5
+      || (compat_version >= CLUSTER_VERSION_4_3_0_0 && compat_version < MOCK_CLUSTER_VERSION_4_3_5_4)) {
     ObCreateHiddenTableArg create_table_arg;
     if (OB_FAIL(create_table_arg.init(tenant_id, tenant_id, tenant_id, arg.table_id_,
                                     THIS_WORKER.get_group_id(), session_info.get_sessid_for_table(),
