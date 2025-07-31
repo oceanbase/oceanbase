@@ -89,7 +89,8 @@ public:
                K_(is_tablet_referenced_by_collect_mv),
                K_(ddl_kv_count),
                K_(memtable_count),
-               KP_(new_table_store_ptr));
+              KP_(new_table_store_ptr),
+               K_(table_store_cache));
 public:
   const ObRowkeyReadInfo *rowkey_read_info_ptr_;
   const ObTabletMacroInfo *tablet_macro_info_ptr_;
@@ -104,6 +105,7 @@ public:
   ObIMemtable *memtables_[MAX_MEMSTORE_CNT];
   int64_t memtable_count_;
   ObTabletTableStore *new_table_store_ptr_;
+  ObTableStoreCache table_store_cache_;
   // If you want to add new member, make sure all member is assigned in 2 convert function.
   // ObTabletPersister::convert_tablet_to_mem_arg
   // ObTabletPersister::convert_tablet_to_disk_arg

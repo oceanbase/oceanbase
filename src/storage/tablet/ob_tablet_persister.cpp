@@ -66,7 +66,8 @@ ObTabletTransformArg::ObTabletTransformArg()
     ddl_kvs_(nullptr),
     ddl_kv_count_(0),
     memtable_count_(0),
-    new_table_store_ptr_(nullptr)
+    new_table_store_ptr_(nullptr),
+    table_store_cache_()
 {
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
@@ -93,6 +94,7 @@ void ObTabletTransformArg::reset()
   }
   memtable_count_ = 0;
   new_table_store_ptr_ = nullptr;
+  table_store_cache_.reset();
 }
 
 bool ObTabletTransformArg::is_valid() const
@@ -101,8 +103,7 @@ bool ObTabletTransformArg::is_valid() const
       && tablet_meta_.is_valid()
       && table_store_addr_.is_valid()
       && storage_schema_addr_.is_valid()
-      && tablet_macro_info_addr_.is_valid()
-      && (table_store_addr_.is_none() || nullptr != new_table_store_ptr_);
+      && tablet_macro_info_addr_.is_valid();
 }
 
 
@@ -799,6 +800,7 @@ int ObTabletPersister::convert_tablet_to_mem_arg(
     MEMCPY(arg.memtables_, tablet.memtables_, sizeof(ObIMemtable*) * MAX_MEMSTORE_CNT);
     arg.memtable_count_ = tablet.memtable_count_;
     arg.new_table_store_ptr_ = tablet.table_store_addr_.ptr_;
+    arg.table_store_cache_.assign(tablet.table_store_cache_);
   }
   return ret;
 }
@@ -834,6 +836,11 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
   } else if (OB_FAIL(fetch_table_store_and_write_info(tablet, table_store_wrapper,
       write_infos, total_write_ctxs, &new_table_store, total_tablet_meta_size, block_info_set))) {
     LOG_WARN("fail to fetch table store and write info", K(ret));
+  } else if (OB_FAIL(arg.table_store_cache_.init(new_table_store.get_major_sstables(),
+                                                 new_table_store.get_minor_sstables(),
+                                                 tablet.is_row_store(),
+                                                 tablet.is_tablet_referenced_by_collect_mv()))) {
+    LOG_WARN("fail to init table store cache", K(ret), K(tablet));
   } else {
     time_stats->click("fetch_table_store_and_write_info");
     arg.ddl_kvs_ = tablet.ddl_kvs_;
@@ -1473,15 +1480,8 @@ int ObTabletPersister::transform(const ObTabletTransformArg &arg, char *buf, con
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(tiny_tablet->table_store_cache_.init(table_store->get_major_sstables(),
-                                                       table_store->get_minor_sstables(),
-                                                       arg.is_row_store_,
-                                                       arg.is_tablet_referenced_by_collect_mv_))) {
-        LOG_WARN("failed to init table store cache", K(ret), KPC(table_store), K(arg));
-      } else {
-        time_stats->click("init_table_store_cache");
-        tiny_tablet->is_inited_ = true;
-      }
+      tiny_tablet->table_store_cache_.assign(arg.table_store_cache_);
+      tiny_tablet->is_inited_ = true;
       LOG_DEBUG("succeed to transform", "tablet_id", tiny_tablet->tablet_meta_.tablet_id_,
         KPC(tiny_tablet->table_store_addr_.ptr_), K(tiny_tablet->macro_info_addr_),
         "tablet_buf_len", len, K(remain_size_before_cache_table_store), K(table_store_size), KPC(arg.tablet_macro_info_ptr_));
