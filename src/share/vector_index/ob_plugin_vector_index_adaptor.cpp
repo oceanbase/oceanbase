@@ -1313,7 +1313,10 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
   int64_t extra_info_actual_size = 0;
   ObVectorIndexParam *param = nullptr;
   ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
-  if (OB_FAIL(check_tablet_valid(VIRT_SNAP))) {
+  if (OB_ISNULL(snap_data_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null snap data", K(ret), K(snap_data_));
+  } else if (OB_FAIL(check_tablet_valid(VIRT_SNAP))) {
     LOG_WARN("check tablet id invalid.", K(ret));
   } else if (OB_ISNULL(param = static_cast<ObVectorIndexParam*>(algo_data_))) {
     ret = OB_ERR_UNEXPECTED;
@@ -1376,6 +1379,11 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
           } else {
             TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
             if (OB_ISNULL(snap_data_->index_)) {
+              // snap_data_->vid_array_ may be released by other thread.
+              if (OB_ISNULL(snap_data_->vid_array_) || OB_ISNULL(snap_data_->vec_array_) || (OB_NOT_NULL(extra_info_buf) && OB_ISNULL(snap_data_->extra_info_buf_))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get null array pointer", K(ret), K(snap_data_->vid_array_), K(snap_data_->vec_array_), K(snap_data_->extra_info_buf_));
+              }
               // frist: write into cache
               for (int i = 0; OB_SUCC(ret) && i < num; i++) {
                 if (OB_FAIL(snap_data_->vid_array_->push_back(vids[i]))) {
@@ -1392,11 +1400,11 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
                   LOG_WARN("failed to append extra info buf", K(ret));
                 }
               }
-              LOG_INFO("HgraphIndex add into cache array success", K(ret), K(dim), K(num), K(vids[0]), K(vids[num - 1]), K(snap_data_->vid_array_->count()));
+              LOG_INFO("HgraphIndex add into cache array success", K(ret), K(dim), K(num), K(vids[0]), K(vids[num - 1]), KPC(snap_data_->vid_array_));
 
               // second: construct hnsw+sq index
               ObVecIdxVidArray *vids_array = snap_data_->vid_array_;
-              if (OB_NOT_NULL(vids_array)
+              if (OB_SUCC(ret) && OB_NOT_NULL(vids_array)
                   && vids_array->count() > VEC_INDEX_HNSWSQ_BUILD_COUNT_THRESHOLD
                   && OB_ISNULL(snap_data_->index_)) {
                 if (OB_FAIL(build_hnswsq_index(param))) {
