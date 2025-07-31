@@ -248,8 +248,8 @@ STAT_EVENT_ADD_DEF(SCHEMA_CACHE_MISS, "schema cache miss", ObStatClassIds::CACHE
 STAT_EVENT_ADD_DEF(TABLET_LS_CACHE_HIT, "tablet ls cache hit", ObStatClassIds::CACHE, 50037, false, true, true)
 STAT_EVENT_ADD_DEF(TABLET_LS_CACHE_MISS, "tablet ls cache miss", ObStatClassIds::CACHE, 50038, false, true, true)
 // obsoleted part from INDEX_CLOG_CACHE_HIT to USER_TABLE_STAT_CACHE_MISS
-STAT_EVENT_ADD_DEF(INDEX_CLOG_CACHE_HIT, "index clog cache hit", ObStatClassIds::CACHE, 50039, false, true, true)
-STAT_EVENT_ADD_DEF(INDEX_CLOG_CACHE_MISS, "index clog cache miss", ObStatClassIds::CACHE, 50040, false, true, true)
+STAT_EVENT_ADD_DEF(INDEX_CLOG_CACHE_HIT, "index clog cache hit", ObStatClassIds::CACHE, 50039, false, true, false)
+STAT_EVENT_ADD_DEF(INDEX_CLOG_CACHE_MISS, "index clog cache miss", ObStatClassIds::CACHE, 50040, false, true, false)
 STAT_EVENT_ADD_DEF(USER_TAB_COL_STAT_CACHE_HIT, "user tab col stat cache hit", ObStatClassIds::CACHE, 50041, false, true, true)
 STAT_EVENT_ADD_DEF(USER_TAB_COL_STAT_CACHE_MISS, "user tab col stat cache miss", ObStatClassIds::CACHE, 50042, false, true, true)
 STAT_EVENT_ADD_DEF(USER_TABLE_STAT_CACHE_HIT, "user table stat cache hit", ObStatClassIds::CACHE, 50043, false, true, true)
