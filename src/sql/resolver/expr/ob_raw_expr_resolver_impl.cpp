@@ -625,7 +625,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
           } else {
             expr = m_expr;
           }
-        } else if (OB_FAIL(SMART_CALL(recursive_resolve(merged_node, expr)))) {  // inlist merge eliminated AND/OR
+        } else if (OB_FAIL(SMART_CALL(recursive_resolve(merged_node, expr, is_root_expr)))) {  // inlist merge eliminated AND/OR
           LOG_WARN("fail to process node", K(ret), K(merged_node));
         }
         break;
