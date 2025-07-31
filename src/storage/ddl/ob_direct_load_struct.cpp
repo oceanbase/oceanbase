@@ -4213,6 +4213,11 @@ int ObVectorIndexSliceStore::serialize_vector_index(
         type = adp->get_snap_index_type();
         LOG_INFO("HgraphIndex finish vsag serialize for tablet", K(tablet_id_), K(ctx_.get_vals().count()), K(type));
       }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(adp->renew_single_snap_index())) {
+          LOG_WARN("fail to renew single snap index", K(ret));
+        }
+      }
     }
   }
   tmp_allocator_.reuse();

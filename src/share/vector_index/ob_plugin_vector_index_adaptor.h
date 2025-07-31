@@ -544,6 +544,7 @@ public:
     }
   }
 
+  int renew_single_snap_index();
   int set_adaptor_ctx_flag(ObVectorQueryAdaptorResultContext *ctx);
 
   ObString &get_index_identity() { return index_identity_; };

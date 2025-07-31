@@ -1443,6 +1443,8 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(refresh_snapshot_index_data(adaptor, tx_desc, snapshot))) {
     LOG_WARN("failed to refresh snapshot index data", K(ret));
+  } else if (OB_FAIL(adaptor.renew_single_snap_index())) {
+    LOG_WARN("fail to renew single snap index", K(ret));
   }
   /* Warning!!!
   * In the process of loading data for a query, the query_lock is acquired first, followed by the adapter_map_lock.

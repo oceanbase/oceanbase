@@ -1607,7 +1607,8 @@ int ObPluginVectorIndexAdaptor::copy_meta_info(ObPluginVectorIndexAdaptor &other
   rowkey_vid_table_id_ = other.rowkey_vid_table_id_;
   vid_rowkey_table_id_ = other.vid_rowkey_table_id_;
   type_ = other.type_;
-  follower_sync_statistics_ = other.follower_sync_statistics_;
+  follower_sync_statistics_.sync_count_ = other.follower_sync_statistics_.sync_count_;
+  follower_sync_statistics_.sync_fail_ = other.follower_sync_statistics_.sync_fail_;
   if (OB_NOT_NULL(algo_data_)) {
     // do nothing
   } else if (OB_ISNULL(get_allocator())) {
@@ -2307,6 +2308,33 @@ int ObPluginVectorIndexAdaptor::serialize(ObIAllocator *allocator, ObOStreamBuf:
     // for multi-version snapshot
     // rb_flag is true means need check snapshot next query.
     snap_data_->rb_flag_ = true;
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexAdaptor::renew_single_snap_index()
+{
+  int ret = OB_SUCCESS;
+  ObVectorIndexAlgorithmType index_type = get_snap_index_type();
+  if (index_type == VIAT_HNSW_BQ) {
+    ObString invalid_prefix("renew");
+    if (OB_ISNULL(snap_data_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr snap_data_", K(ret), KP(snap_data_));
+    } else {
+      TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
+      if (OB_FAIL(try_free_memdata_resource(VIRT_SNAP, snap_data_, allocator_, tenant_id_))) {
+        LOG_WARN("failed to free snap memdata", K(ret), KPC(this));
+      } else if (OB_FAIL(init_mem(snap_data_))) {
+        LOG_WARN("fail to init snap_data_ mem", K(ret));
+      } else if (OB_FAIL(try_init_snap_data(index_type))) {
+        LOG_WARN("failed to init snap data", K(ret), K(index_type));
+      } else if (OB_FAIL(set_snapshot_key_prefix(invalid_prefix))) {
+        LOG_WARN("fail to set snapshot key prefix", K(ret));
+      }
+    }
+  } else {
+    // do nothing
   }
   return ret;
 }
