@@ -109,6 +109,7 @@
 #include "close_modules/shared_storage/storage/incremental/ob_shared_meta_service.h"
 #include "close_modules/shared_storage/storage/incremental/garbage_collector/ob_ss_garbage_collector_service.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_service.h"
+#include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_service.h"
 #include "close_modules/shared_storage/storage/shared_storage/storage_cache_policy/ob_storage_cache_service.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_gts_service.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_uid_service.h"
@@ -595,6 +596,7 @@ int ObMultiTenant::init(ObAddr myaddr,
       MTL_BIND2(mtl_new_default, ObSSLogGTSService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObSSLogUIDService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTabletSplitTaskCache::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, sslog::ObSSLogService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     }
 #endif
     MTL_BIND2(mtl_new_default, ObResourceLimitCalculator::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);

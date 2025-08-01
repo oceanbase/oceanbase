@@ -105,6 +105,7 @@
 #include "storage/incremental/atomic_protocol/ob_atomic_file_mgr.h"
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "storage/incremental/garbage_collector/ob_ss_garbage_collector_service.h"
+#include "storage/incremental/sslog/ob_sslog_service.h"
 #endif
 #include "sql/engine/table/ob_pcached_external_file_service.h"
 #include "share/object_storage/ob_device_config_mgr.h"
@@ -921,6 +922,7 @@ int MockTenantModuleEnv::init()
         MTL_BIND2(mtl_new_default, ObSSWriterService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSMetaService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
         MTL_BIND2(mtl_new_default, ObSSGarbageCollectorService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+        MTL_BIND2(mtl_new_default, ObSSLogService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       }
 #else
 #endif

@@ -254,6 +254,7 @@ namespace storage {
 namespace sslog
 {
   class ObSSLogNotifyService;
+  class ObSSLogService;
 }
 #endif
 
@@ -315,6 +316,7 @@ namespace detector
 #define SSMetaService storage::ObSSMetaService*,
 #define SSGarbageCollectorService storage::ObSSGarbageCollectorService*,
 #define OBSSLOGNOTIFYSERVICE sslog::ObSSLogNotifyService*,
+#define OBSSLOGSERVICE sslog::ObSSLogService*,
 #define StorageCachePolicyService storage::ObStorageCachePolicyService*,
 #define SSLogGTSService transaction::ObSSLogGTSService*,
 #define SSLogUIDService transaction::ObSSLogUIDService*,
@@ -335,6 +337,7 @@ namespace detector
 #define SSMetaService
 #define SSGarbageCollectorService
 #define OBSSLOGNOTIFYSERVICE
+#define OBSSLOGSERVICE
 #define StorageCachePolicyService
 #define SSLogGTSService
 #define SSLogUIDService
@@ -482,6 +485,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       SSMetaService                                 \
       SSGarbageCollectorService                     \
       OBSSLOGNOTIFYSERVICE                          \
+      OBSSLOGSERVICE                                \
       SSLogGTSService                               \
       SSLogUIDService                               \
       TabletSplitTaskCache                          \

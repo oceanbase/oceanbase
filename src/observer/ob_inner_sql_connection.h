@@ -303,7 +303,8 @@ public:
                             bool has_tenant_resource,
                             const ObString &ps_sql,
                             bool is_from_pl = false,
-                            ObString *pl_exec_params = NULL);
+                            ObString *pl_exec_params = NULL,
+                            const bool is_for_sslog = false);
   static int process_audit_record(sql::ObResultSet &result_set,
                                   sql::ObSqlCtx &sql_ctx,
                                   sql::ObSQLSessionInfo &session,
