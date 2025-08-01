@@ -83,7 +83,7 @@ public:
                               int64_t &avg_cache_item_size);
 
   int get_washable_size(const uint64_t tenant_id, int64_t &washable_size);
-  void flush_washable_mbs();
+  int flush_washable_mbs();
   int flush_washable_mbs(const uint64_t tenant_id, const bool force_flush = false);
   void flush_washable_mbs(const int64_t cache_id);
   void flush_washable_mbs(const uint64_t tenant_id, const int64_t cache_id);

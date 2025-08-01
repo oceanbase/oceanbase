@@ -580,9 +580,9 @@ int ObKVCacheStore::get_washable_size(const uint64_t tenant_id, int64_t &washabl
   return ret;
 }
 
-void ObKVCacheStore::flush_washable_mbs()
+int ObKVCacheStore::flush_washable_mbs()
 {
-  int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS, last_error_code = OB_SUCCESS;
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -593,17 +593,19 @@ void ObKVCacheStore::flush_washable_mbs()
       COMMON_LOG(WARN, "Fail to get all tenant ids", K(ret));
     } else {
       uint64_t tenant_id = OB_INVALID_TENANT_ID;
-      for (int64_t i = 0 ; i < tenant_ids.count() ; ++i) {
-        int tmp_ret = OB_SUCCESS;
+      // record error code in last_error_code
+      for (int64_t i = 0 ; /* OB_SUCC(ret) && */ i < tenant_ids.count() ; ++i) {
         if (OB_FAIL(tenant_ids.at(i, tenant_id))) {
           COMMON_LOG(WARN, "Fail to get tenant id, continue to flush rest tenants", K(ret), K(i));
-        } else if (OB_TMP_FAIL(flush_washable_mbs(tenant_id))) {
-          COMMON_LOG(WARN, "Fail to flush tenant washable memblock", K(tmp_ret));
+        } else if (OB_FAIL(flush_washable_mbs(tenant_id))) {
+          COMMON_LOG(WARN, "Fail to flush tenant washable memblock");
         }
+        last_error_code = ret;
       }
     }
   }
 
+  return ret == OB_SUCCESS ? last_error_code : ret;
 }
 
 int ObKVCacheStore::flush_washable_mbs(const uint64_t tenant_id, const bool force_flush)
