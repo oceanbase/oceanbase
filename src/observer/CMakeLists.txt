@@ -583,6 +583,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_logservice_cluster_info.cpp
   virtual_table/ob_all_virtual_ss_gc_status.cpp
   virtual_table/ob_all_virtual_ss_gc_detect_info.cpp
+  virtual_table/ob_all_virtual_dba_source.cpp
 )
 
 ob_server_add_target(ob_server)

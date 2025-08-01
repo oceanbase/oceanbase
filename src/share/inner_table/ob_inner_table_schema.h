@@ -1209,6 +1209,7 @@ public:
   static int all_virtual_logservice_cluster_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ss_gc_status_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ss_gc_detect_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_dba_source_v1_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_plan_explain_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -1534,6 +1535,7 @@ public:
   static int all_virtual_ss_ls_tablet_reorganization_info_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ss_existing_tablet_meta_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ss_existing_sstable_mgr_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_dba_source_v1_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_stat_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_plan_stat_schema(share::schema::ObTableSchema &table_schema);
   static int schemata_schema(share::schema::ObTableSchema &table_schema);
@@ -2370,6 +2372,9 @@ public:
   static int dba_mview_running_jobs_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_mview_deps_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_dynamic_partition_tables_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_source_v1_schema(share::schema::ObTableSchema &table_schema);
+  static int all_source_v1_schema(share::schema::ObTableSchema &table_schema);
+  static int user_source_v1_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_instance_schema(share::schema::ObTableSchema &table_schema);
@@ -4397,6 +4402,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_logservice_cluster_info_schema,
   ObInnerTableSchema::all_virtual_ss_gc_status_schema,
   ObInnerTableSchema::all_virtual_ss_gc_detect_info_schema,
+  ObInnerTableSchema::all_virtual_dba_source_v1_schema,
   ObInnerTableSchema::all_virtual_ddl_diagnose_info_all_virtual_ddl_diagnose_info_i1_schema,
   ObInnerTableSchema::all_virtual_ash_all_virtual_ash_i1_schema,
   ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monitor_i1_schema,
@@ -4733,6 +4739,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_ss_ls_tablet_reorganization_info_ora_schema,
   ObInnerTableSchema::all_virtual_ss_existing_tablet_meta_ora_schema,
   ObInnerTableSchema::all_virtual_ss_existing_sstable_mgr_ora_schema,
+  ObInnerTableSchema::all_virtual_dba_source_v1_ora_schema,
   ObInnerTableSchema::all_virtual_table_real_agent_ora_idx_data_table_id_real_agent_schema,
   ObInnerTableSchema::all_virtual_table_real_agent_ora_idx_db_tb_name_real_agent_schema,
   ObInnerTableSchema::all_virtual_table_real_agent_ora_idx_tb_name_real_agent_schema,
@@ -5667,6 +5674,9 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_mview_running_jobs_ora_schema,
   ObInnerTableSchema::dba_mview_deps_ora_schema,
   ObInnerTableSchema::dba_ob_dynamic_partition_tables_ora_schema,
+  ObInnerTableSchema::dba_source_v1_schema,
+  ObInnerTableSchema::all_source_v1_schema,
+  ObInnerTableSchema::user_source_v1_schema,
   ObInnerTableSchema::gv_ob_sql_audit_ora_schema,
   ObInnerTableSchema::v_ob_sql_audit_ora_schema,
   ObInnerTableSchema::gv_instance_schema,
@@ -6637,6 +6647,7 @@ const uint64_t tenant_space_tables [] = {
   OB_TENANT_VIRTUAL_LIST_FILE_TID,
   OB_ALL_VIRTUAL_SS_GC_STATUS_TID,
   OB_ALL_VIRTUAL_SS_GC_DETECT_INFO_TID,
+  OB_ALL_VIRTUAL_DBA_SOURCE_V1_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -6971,6 +6982,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_SS_LS_TABLET_REORGANIZATION_INFO_ORA_TID,
   OB_ALL_VIRTUAL_SS_EXISTING_TABLET_META_ORA_TID,
   OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_ORA_TID,
+  OB_ALL_VIRTUAL_DBA_SOURCE_V1_ORA_TID,
   OB_GV_OB_PLAN_CACHE_STAT_TID,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TID,
   OB_SCHEMATA_TID,
@@ -7660,6 +7672,9 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_MVIEW_RUNNING_JOBS_ORA_TID,
   OB_DBA_MVIEW_DEPS_ORA_TID,
   OB_DBA_OB_DYNAMIC_PARTITION_TABLES_ORA_TID,
+  OB_DBA_SOURCE_V1_TID,
+  OB_ALL_SOURCE_V1_TID,
+  OB_USER_SOURCE_V1_TID,
   OB_GV_OB_SQL_AUDIT_ORA_TID,
   OB_V_OB_SQL_AUDIT_ORA_TID,
   OB_GV_INSTANCE_TID,
@@ -8908,7 +8923,8 @@ const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_SS_SSTABLE_MGR_TID,
   OB_ALL_VIRTUAL_SS_LS_TABLET_REORGANIZATION_INFO_TID,
   OB_ALL_VIRTUAL_SS_EXISTING_TABLET_META_TID,
-  OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_TID,  };
+  OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_TID,
+  OB_ALL_VIRTUAL_DBA_SOURCE_V1_TID,  };
 
 const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID
 ,  OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID
@@ -9093,6 +9109,7 @@ const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_O
 ,  OB_ALL_VIRTUAL_SS_LS_TABLET_REORGANIZATION_INFO_ORA_TID
 ,  OB_ALL_VIRTUAL_SS_EXISTING_TABLET_META_ORA_TID
 ,  OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_ORA_TID
+,  OB_ALL_VIRTUAL_DBA_SOURCE_V1_ORA_TID
 ,  };
 
 /* start/end_pos is start/end postition for column with tenant id */
@@ -9704,6 +9721,7 @@ const char* const tenant_space_table_names [] = {
   OB_TENANT_VIRTUAL_LIST_FILE_TNAME,
   OB_ALL_VIRTUAL_SS_GC_STATUS_TNAME,
   OB_ALL_VIRTUAL_SS_GC_DETECT_INFO_TNAME,
+  OB_ALL_VIRTUAL_DBA_SOURCE_V1_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TNAME,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TNAME,
@@ -10038,6 +10056,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_SS_LS_TABLET_REORGANIZATION_INFO_ORA_TNAME,
   OB_ALL_VIRTUAL_SS_EXISTING_TABLET_META_ORA_TNAME,
   OB_ALL_VIRTUAL_SS_EXISTING_SSTABLE_MGR_ORA_TNAME,
+  OB_ALL_VIRTUAL_DBA_SOURCE_V1_ORA_TNAME,
   OB_GV_OB_PLAN_CACHE_STAT_TNAME,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TNAME,
   OB_SCHEMATA_TNAME,
@@ -10727,6 +10746,9 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_MVIEW_RUNNING_JOBS_ORA_TNAME,
   OB_DBA_MVIEW_DEPS_ORA_TNAME,
   OB_DBA_OB_DYNAMIC_PARTITION_TABLES_ORA_TNAME,
+  OB_DBA_SOURCE_V1_TNAME,
+  OB_ALL_SOURCE_V1_TNAME,
+  OB_USER_SOURCE_V1_TNAME,
   OB_GV_OB_SQL_AUDIT_ORA_TNAME,
   OB_V_OB_SQL_AUDIT_ORA_TNAME,
   OB_GV_INSTANCE_TNAME,
@@ -15115,11 +15137,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 336;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 959;
-const int64_t OB_SYS_VIEW_COUNT = 1070;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2370;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 961;
+const int64_t OB_SYS_VIEW_COUNT = 1073;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2375;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2373;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2378;
 
 } // end namespace share
 } // end namespace oceanbase

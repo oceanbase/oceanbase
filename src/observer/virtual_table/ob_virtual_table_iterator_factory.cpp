@@ -249,6 +249,7 @@
 #include "observer/virtual_table/ob_list_file.h"
 #include "observer/virtual_table/ob_all_virtual_ss_gc_status.h"
 #include "observer/virtual_table/ob_all_virtual_ss_gc_detect_info.h"
+#include "observer/virtual_table/ob_all_virtual_dba_source.h"
 
 namespace oceanbase
 {
@@ -2752,6 +2753,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "ObAllVirtualSSGCDetectInfo table construct fail", K(ret));
             } else {
               vt_iter = static_cast<ObAllVirtualSSGCDetectInfo *>(ss_gc_detect_info_table);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_DBA_SOURCE_V1_TID: {
+            ObAllVirtualDbaSource *table = nullptr;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualDbaSource, table))) {
+              SERVER_LOG(ERROR, "ObAllVirtualDbaSource table construct fail", K(ret));
+            } else {
+              table->set_tenant_id(real_tenant_id);
+              vt_iter = static_cast<ObAllVirtualDbaSource *>(table);
             }
             break;
           }
