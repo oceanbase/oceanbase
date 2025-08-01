@@ -308,106 +308,24 @@ int ObExecutingSqlStatRecord::move_to_sqlstat_cache(
   }
   LOG_DEBUG("view sqlstat cache key and query_sql", K(ret), K(key), K(cur_sql));
 
-  if (key.is_valid()) {
-    if (OB_ISNULL(plan)) {
-      ObCacheObjGuard guard;
-      guard.init(sql::CacheRefHandleID::SQL_STAT_NODE_HANDLE);
-      bool is_use_cache = true;
-      if (OB_FAIL(ObSqlStatRecordUtil::get_cache_obj(key, guard))) {
-        if (ret == OB_SQL_PC_NOT_EXIST) {
-          // not found, need create
-          ret =OB_SUCCESS;
-          is_use_cache = false;
-          if (OB_FAIL(ObSqlStatRecordUtil::create_cache_obj(key, guard))) {
-            LOG_WARN("failed to create cache obj", K(ret));
-          }
-        } else {
-          LOG_WARN("failed to get cache obj", K(ret));
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        if (OB_ISNULL(guard.get_cache_obj())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("cache obj is NULL", KR(ret));
-        } else {
-          ObSqlStatRecordObj *cache_obj = static_cast<ObSqlStatRecordObj *>(guard.get_cache_obj());
-          ObExecutedSqlStatRecord *sql_stat_value = cache_obj->get_record_value();
-          if (!is_use_cache) {
-            if (OB_FAIL(sql_stat_value->get_sql_stat_info().init(key, session_info, cur_sql, plan))) {
-              LOG_WARN("failed to init sql stat info", K(ret));
-            }
-          }
-
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(sql_stat_value->sum_stat_value(*this))) {
-              LOG_WARN("sql_stat_value sum value failed", KR(ret));
-            }
-          }
-        }
-      }
+  if (key.is_valid() && OB_NOT_NULL(plan)) {
+    ObExecutedSqlStatRecord *sql_stat_value = const_cast<ObExecutedSqlStatRecord *>(&(plan->sql_stat_record_value_));
+    if (OB_ISNULL(sql_stat_value)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql_stat_value is NULL", KR(ret));
     } else {
-      ObExecutedSqlStatRecord *sql_stat_value = const_cast<ObExecutedSqlStatRecord *>(&(plan->sql_stat_record_value_));
-      if (OB_ISNULL(sql_stat_value)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sql_stat_value is NULL", KR(ret));
-      } else {
-        if (!sql_stat_value->get_key().is_valid()) {
-          if (OB_FAIL(sql_stat_value->get_sql_stat_info().init(key, session_info, cur_sql, plan))) {
-            LOG_WARN("failed to init sql stat info", K(ret));
-          }
+      if (!sql_stat_value->get_key().is_valid()) {
+        if (OB_FAIL(sql_stat_value->get_sql_stat_info().init(key, session_info, cur_sql, plan))) {
+          LOG_WARN("failed to init sql stat info", K(ret));
         }
+      }
 
-        if (OB_SUCC(ret) && OB_FAIL(sql_stat_value->sum_stat_value(*this))) {
-          LOG_WARN("sql_stat_value sum value failed", KR(ret));
-        }
+      if (OB_SUCC(ret) && OB_FAIL(sql_stat_value->sum_stat_value(*this))) {
+        LOG_WARN("sql_stat_value sum value failed", KR(ret));
       }
     }
   } else {
     LOG_WARN("the key is not valid which at plan cache mgr", KR(ret));
-  }
-  return ret;
-}
-
-
-int ObExecutingSqlStatRecord::move_to_sqlstat_cache(ObSqlStatRecordKey& key)
-{
-  int ret = OB_SUCCESS;
-  if (key.is_valid()) {
-    ObCacheObjGuard guard;
-    guard.init(sql::CacheRefHandleID::SQL_STAT_NODE_HANDLE);
-    bool is_use_cache = true;
-    if (OB_FAIL(ObSqlStatRecordUtil::get_cache_obj(key, guard))) {
-      if (ret == OB_SQL_PC_NOT_EXIST) {
-        // not found, need create
-        ret =OB_SUCCESS;
-        is_use_cache = false;
-        if (OB_FAIL(ObSqlStatRecordUtil::create_cache_obj(key, guard))) {
-          LOG_WARN("failed to create cache obj", K(ret));
-        }
-      } else {
-        LOG_WARN("failed to get cache obj", K(ret));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(guard.get_cache_obj())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("cache obj is NULL", KR(ret));
-      } else {
-        ObSqlStatRecordObj *cache_obj = static_cast<ObSqlStatRecordObj *>(guard.get_cache_obj());
-        ObExecutedSqlStatRecord *sql_stat_value = cache_obj->get_record_value();
-        if (!is_use_cache) {
-          sql_stat_value->get_sql_stat_info().set_key(key);
-        }
-
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(sql_stat_value->sum_stat_value(*this))) {
-            LOG_WARN("sql_stat_value sum value failed", KR(ret));
-          }
-        }
-      }
-    }
   }
   return ret;
 }
