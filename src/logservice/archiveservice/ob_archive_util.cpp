@@ -26,9 +26,9 @@ int64_t cal_archive_file_id(const LSN &lsn, const int64_t N)
 }
 
 /*
-  archive_lag_target = 0  ----> interval = 100ms
-  archive_lag_target > 1s ----> interval = 100ms
-  archive_lag_target < 1s ----> interval = archive_lag_target / 10
+  0 <= archive_lag_target <= 100ms  ----> interval = 10ms
+  100ms < archive_lag_target <= 1s  ----> interval = archive_lag_target / 10
+  archive_lag_target > 1s           ----> interval = 100ms
 */
 int64_t cal_thread_run_interval()
 {

@@ -197,8 +197,8 @@ int ObArchiveFetcher::submit_log_fetch_task(ObArchiveLogFetchTask *task)
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), KPC(task));
   } else {
-    RETRY_FUNC_ON_ERROR(OB_SIZE_OVERFLOW, has_set_stop(), task_queue_, push, task);
     task->push_fetch_queue_ts_ = ObTimeUtility::fast_current_time();
+    RETRY_FUNC_ON_ERROR(OB_SIZE_OVERFLOW, has_set_stop(), task_queue_, push, task);
   }
   if (OB_SUCC(ret)) {
     ARCHIVE_LOG(INFO, "submit log fetch task succ", KP(task));
@@ -823,11 +823,11 @@ int ObArchiveFetcher::submit_fetch_log_(ObArchiveLogFetchTask &task, bool &submi
     // just skip
   } else {
     GET_LS_TASK_CTX(ls_mgr_, id) {
-      if (OB_FAIL(ls_archive_task->push_fetch_log(task))) {
+      if (OB_FALSE_IT(task.submit_dest_queue_ts_ = common::ObTimeUtility::fast_current_time())) {
+      } else if (OB_FAIL(ls_archive_task->push_fetch_log(task))) {
         ARCHIVE_LOG(WARN, "push fetch log failed", K(ret), K(id), K(task));
       } else {
         submitted = true;
-        task.submit_dest_queue_ts_ = common::ObTimeUtility::fast_current_time();
         ARCHIVE_LOG(INFO, "push fetch log succ", K(id), KP(&task));
       }
     }
@@ -976,13 +976,15 @@ int ObArchiveFetcher::submit_residual_log_fetch_task_(ObArchiveLogFetchTask &tas
   if (OB_UNLIKELY(cur_piece.is_valid() && cur_offset == start_offset)) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(task));
-  } else if (OB_FAIL(task_queue_.push(&task))) {
-    ARCHIVE_LOG(WARN, "push task failed", K(ret), K(task));
   } else {
     task.push_fetch_queue_ts_ = common::ObTimeUtility::fast_current_time();
     task.consume_ts_ = OB_INVALID_TIMESTAMP;
     task.submit_dest_queue_ts_ = OB_INVALID_TIMESTAMP;
-    ARCHIVE_LOG(TRACE, "submit residual log fetch task succ", KP(&task));
+    if (OB_FAIL(task_queue_.push(&task))) {
+      ARCHIVE_LOG(WARN, "push task failed", K(ret), K(task));
+    } else {
+      ARCHIVE_LOG(TRACE, "submit residual log fetch task succ", KP(&task));
+    }
   }
   return ret;
 }
@@ -995,10 +997,10 @@ int ObArchiveFetcher::submit_send_task_(ObArchiveSendTask *send_task)
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), KP(send_task));
   } else if (FALSE_IT(buf_size = send_task->get_buf_size())) {
+  } else if (OB_FALSE_IT(send_task->submit_ts_ = common::ObTimeUtility::fast_current_time())) {
   } else if (OB_FAIL(archive_sender_->submit_send_task(send_task))) {
     ARCHIVE_LOG(WARN, "submit send task failed", K(ret), KPC(send_task));
   } else {
-    send_task->submit_ts_ = common::ObTimeUtility::fast_current_time();
     ARCHIVE_LOG(INFO, "submit send task succ", KP(send_task));
     EVENT_TENANT_ADD(ObStatEventIds::ARCHIVE_WRITE_LOG_SIZE, buf_size, tenant_id_);
   }
