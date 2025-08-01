@@ -491,7 +491,9 @@ int ObWrCollector::collect_ash()
                 } else if (ash.sql_id_[0] != '\0' &&
                           OB_FAIL(dml_splicer.add_column("sql_id", ash.sql_id_))) {
                   LOG_WARN("failed to add column sql_id", KR(ret), K(ash));
-                } else if (OB_FAIL(dml_splicer.add_column("trace_id", ash.trace_id_))) {
+                } else if (ash.trace_id_[0] == '\0' && OB_FAIL(dml_splicer.add_column(true, "trace_id"))) {
+                  LOG_WARN("failed to add column trace_id", KR(ret), K(ash));
+                } else if (ash.trace_id_[0] != '\0' && OB_FAIL(dml_splicer.add_column("trace_id", ash.trace_id_))) {
                   LOG_WARN("failed to add column trace_id", KR(ret), K(ash));
                 FILL_NULLABLE_COLUMN(event_no)
                 FILL_NULLABLE_COLUMN(event_id)
