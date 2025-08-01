@@ -1267,6 +1267,19 @@ public:
                           int64_t *nocopy_argv,
                           uint64_t dblink_id);
 
+#if defined(__aarch64__)
+    static int execute_proc_arm(ObPLExecCtx &ctx,
+                                uint64_t package_id,
+                                uint64_t proc_id,
+                                int64_t *subprogram_path,
+                                int64_t path_length,
+                                uint64_t line_num, /* call position line number, for call_stack info*/
+                                int64_t argc,
+                                common::ObObjParam **argv,
+                                int64_t *nocopy_argv,
+                                uint64_t dblink_id);
+#endif // defined(__aarch64__)
+
   static int set_user_type_var(ObPLExecCtx *ctx,
                                int64_t var_index,
                                int64_t var_addr,

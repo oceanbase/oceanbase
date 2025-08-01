@@ -156,7 +156,12 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
   jit::ObLLVMHelper::add_symbol(ObString("spi_check_composite_not_null"),
                                 WRAP_SPI_CALL(sql::ObSPIService::spi_check_composite_not_null));
   jit::ObLLVMHelper::add_symbol(ObString("pl_execute"),
-                                WRAP_SPI_CALL(ObPL::execute_proc));
+#if defined(__aarch64__)
+                                (void*)(ObPL::execute_proc_arm)
+#else
+                                WRAP_SPI_CALL(ObPL::execute_proc)
+#endif // defined(__aarch64__)
+                                );
   jit::ObLLVMHelper::add_symbol(ObString("set_user_type_var"),
                                 WRAP_SPI_CALL(ObPL::set_user_type_var));
   jit::ObLLVMHelper::add_symbol(ObString("set_implicit_cursor_in_forall"),
@@ -268,6 +273,35 @@ ObPLCtx::~ObPLCtx()
 void ObPL::destory()
 {
 }
+
+#if defined(__aarch64__)
+int ObPL::execute_proc_arm(ObPLExecCtx &ctx,
+                           uint64_t package_id,
+                           uint64_t proc_id,
+                           int64_t *subprogram_path,
+                           int64_t path_length,
+                           uint64_t loc,
+                           int64_t argc,
+                           common::ObObjParam **argv,
+                           int64_t *nocopy_argv,
+                           uint64_t dblink_id)
+{
+  int ret = OB_SUCCESS;
+
+  bool is_overflow = false;
+
+  if (OB_FAIL(check_stack_overflow(is_overflow))) {
+    LOG_WARN("failed to check stack overflow", K(ret), K(is_overflow), K(package_id), K(proc_id), K(subprogram_path));
+  } else if (is_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("stack overflow when execute inner call", K(ret), K(is_overflow), K(package_id), K(proc_id), K(subprogram_path));
+  } else if (OB_FAIL(execute_proc(ctx, package_id, proc_id, subprogram_path, path_length, loc, argc, argv, nocopy_argv, dblink_id))) {
+    LOG_WARN("failed to execute inner call", K(ret), K(package_id), K(proc_id), K(subprogram_path));
+  }
+
+  return ret;
+}
+#endif // defined(__aarch64__)
 
 int ObPL::execute_proc(ObPLExecCtx &ctx,
                        uint64_t package_id,
