@@ -3767,6 +3767,116 @@ int ObDDLOperator::alter_table_rename_index(
           LOG_WARN("failed to rename built in index_snapshot_data_table index", K(ret), K(tenant_id),
               K(data_table_id), K(database_id), K(index_name), K(new_index_name));
         }
+      } else if (is_vec_ivfflat_centroid_index(index_table_schema->get_index_type())) {
+        if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                       data_table_id,
+                                                       database_id,
+                                                       INDEX_TYPE_VEC_IVFFLAT_CID_VECTOR_LOCAL, /* index_type */
+                                                       index_name,
+                                                       new_index_name,
+                                                       new_index_status,
+                                                       is_in_deleting,
+                                                       schema_guard,
+                                                       trans,
+                                                       allocator))) {
+          LOG_WARN("failed to rename built in ivf_cid_vector index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        } else if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                              data_table_id,
+                                                              database_id,
+                                                              INDEX_TYPE_VEC_IVFFLAT_ROWKEY_CID_LOCAL, /* index_type */
+                                                              index_name,
+                                                              new_index_name,
+                                                              new_index_status,
+                                                              is_in_deleting,
+                                                              schema_guard,
+                                                              trans,
+                                                              allocator))) {
+          LOG_WARN("failed to rename built in ivf_rowkey_cid index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        }
+      } else if (is_vec_ivfsq8_centroid_index(index_table_schema->get_index_type())) {
+         if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                       data_table_id,
+                                                       database_id,
+                                                       INDEX_TYPE_VEC_IVFSQ8_META_LOCAL, /* index_type */
+                                                       index_name,
+                                                       new_index_name,
+                                                       new_index_status,
+                                                       is_in_deleting,
+                                                       schema_guard,
+                                                       trans,
+                                                       allocator))) {
+          LOG_WARN("failed to rename built in ivfsq8_meta index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        } else if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                              data_table_id,
+                                                              database_id,
+                                                              INDEX_TYPE_VEC_IVFSQ8_CID_VECTOR_LOCAL, /* index_type */
+                                                              index_name,
+                                                              new_index_name,
+                                                              new_index_status,
+                                                              is_in_deleting,
+                                                              schema_guard,
+                                                              trans,
+                                                              allocator))) {
+          LOG_WARN("failed to rename built in ivfsq8_cid_vector index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        } else if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                              data_table_id,
+                                                              database_id,
+                                                              INDEX_TYPE_VEC_IVFSQ8_ROWKEY_CID_LOCAL, /* index_type */
+                                                              index_name,
+                                                              new_index_name,
+                                                              new_index_status,
+                                                              is_in_deleting,
+                                                              schema_guard,
+                                                              trans,
+                                                              allocator))) {
+          LOG_WARN("failed to rename built in ivfsq8_rowkey_cid index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        }
+      } else if (is_vec_ivfpq_centroid_index(index_table_schema->get_index_type())) {
+         if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                       data_table_id,
+                                                       database_id,
+                                                       INDEX_TYPE_VEC_IVFPQ_PQ_CENTROID_LOCAL, /* index_type */
+                                                       index_name,
+                                                       new_index_name,
+                                                       new_index_status,
+                                                       is_in_deleting,
+                                                       schema_guard,
+                                                       trans,
+                                                       allocator))) {
+          LOG_WARN("failed to rename built in ivfpq_pq_centroid index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        } else if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                              data_table_id,
+                                                              database_id,
+                                                              INDEX_TYPE_VEC_IVFPQ_CODE_LOCAL, /* index_type */
+                                                              index_name,
+                                                              new_index_name,
+                                                              new_index_status,
+                                                              is_in_deleting,
+                                                              schema_guard,
+                                                              trans,
+                                                              allocator))) {
+          LOG_WARN("failed to rename built in ivfpq_code index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        } else if (OB_FAIL(alter_table_rename_built_in_index_(tenant_id,
+                                                              data_table_id,
+                                                              database_id,
+                                                              INDEX_TYPE_VEC_IVFPQ_ROWKEY_CID_LOCAL, /* index_type */
+                                                              index_name,
+                                                              new_index_name,
+                                                              new_index_status,
+                                                              is_in_deleting,
+                                                              schema_guard,
+                                                              trans,
+                                                              allocator))) {
+          LOG_WARN("failed to rename built in ivfpq_rowkey_cid index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        }
       }
     }
   }
