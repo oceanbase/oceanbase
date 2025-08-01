@@ -520,7 +520,8 @@ private:
     (void)MTL(ObTenantFreezer*)->get_tenant_memstore_limit(max_lsn_gap);
     const int64_t config_trigger = ObTenantFreezer::get_freeze_trigger_percentage();
     const int64_t freeze_trigger = config_trigger > 0 ? config_trigger : 20;
-    max_lsn_gap = max_lsn_gap * freeze_trigger / 100;
+    // use 1/8 freeze_trigger as lsn_gap
+    max_lsn_gap = max_lsn_gap * freeze_trigger / 100 / 8;
 
     const SCN sn_ckpt_scn = ls.get_clog_checkpoint_scn();
     const SCN ss_ckpt_scn = ss_ls_meta.get_ss_checkpoint_scn();
@@ -528,6 +529,9 @@ private:
     if (!ls.get_inc_sstable_uploader().finish_reloading()) {
       (void)ls.disable_flush();
       FLOG_INFO("disable ls flush to wait uploader reloading", PRINT_CKPT_INFO_WRAPPER);
+    } else if (ls.get_inc_sstable_uploader().task_overflowed()) {
+      (void)ls.disable_flush();
+      FLOG_INFO("disable ls flush to handle current tasks", PRINT_CKPT_INFO_WRAPPER);
     } else if ((sn_ckpt_lsn > ss_ckpt_lsn) && (sn_ckpt_lsn - ss_ckpt_lsn > max_lsn_gap)) {
       (void)ls.disable_flush();
       ckpt_lag_too_large = true;
