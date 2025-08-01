@@ -2340,6 +2340,18 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
     left_view_stmt->set_hierarchical_query(false);
     left_view_stmt->set_has_prior(false);
     left_view_stmt->set_order_siblings(false);
+    if (stmt.is_order_siblings()) {
+      // if order siblings by expr is a shared expr of the upper stmt,
+      // the right branch will produce a new output expr of it when allocating expr
+      // this will cause an un-alignment of output exprs between left and right branch of connect by
+      // so we temporarily push down order siblings by exprs to left view,
+      // those shared exprs will be used to generate a select item for left view here to resolve the un-alignment
+      if (OB_FAIL(left_view_stmt->get_order_items().assign(stmt.get_order_items()))) {
+        LOG_WARN("failed to assign order items", K(ret));
+      } else {
+        stmt.get_order_items().reset();
+      }
+    }
   }
   // 4. finish creating the left child stmts
   if (OB_SUCC(ret)) {
@@ -2361,6 +2373,11 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
                                                              left_view_stmt,
                                                              shared_exprs))) {
       LOG_WARN("failed to extract shared expr", K(ret));
+    // pull back order items that were pushed down to left view stmt
+    } else if (stmt.is_order_siblings()
+               && OB_FAIL(stmt.get_order_items().assign(left_view_stmt->get_order_items()))
+               && FALSE_IT(left_view_stmt->get_order_items().reset())) {
+      LOG_WARN("failed to pull up order siblings by items", K(ret));
     } else if (OB_FAIL(append_array_no_dup(select_list, shared_exprs))) {
       LOG_WARN("failed to append shared exprs", K(ret));
     } else if (has_for_update && OB_FAIL(add_select_item_for_update(left_view_stmt, select_list))) {
