@@ -1423,6 +1423,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL,//ObExprAIEmbed::eval_ai_embed,                                /* 858 */
   NULL,//ObExprAIRerank::eval_ai_rerank,                              /* 859 */
   NULL,//ObExprMd5ConcatWs::calc_md5_concat_ws_expr                   /* 860 */
+  NULL,//ObExprUDF::eval_mysql_udtf,                                  /* 861 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
