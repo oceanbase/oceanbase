@@ -506,6 +506,23 @@ int ObDatumHexUtils::rawtohex(const ObExpr &expr, const ObString &in_str,
         } else {
           out_str = lob_data;
         }
+        break;
+      }
+      case ObUserDefinedSQLType: {
+        // max_length_ field record udt_id, only allow GIS UDT currently
+        if (ObGeometryTypeCastUtil::is_sdo_geometry_udt(expr.args_[0]->max_length_)) {
+          ObString lob_data = in_str;
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_alloc, ObLongTextType,
+                      expr.args_[0]->datum_meta_.cs_type_, true, lob_data))) {
+            LOG_WARN("fail to get real data.", K(ret), K(lob_data));
+          } else {
+            out_str = lob_data;
+          }
+        } else {
+          ret = OB_ERR_INVALID_HEX_NUMBER;
+          LOG_WARN("invalid hex number", K(ret), K(in_str), "type", in_type);
+        }
+        break;
       }
       default: {
         ret = OB_ERR_INVALID_HEX_NUMBER;
