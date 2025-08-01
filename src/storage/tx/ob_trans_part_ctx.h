@@ -28,6 +28,7 @@
 #include <cstdint>
 #include "storage/multi_data_source/buffer_ctx.h"
 #include "storage/tx/ob_tx_log_cb_define.h"
+#include "storage/tx/ob_tx_sby_read_define.h"
 
 
 namespace oceanbase
@@ -283,6 +284,11 @@ public:
                               const bool filter_unreadable_prepare_trx,
                               ObTxCommitData::TxDataState &tx_data_state,
                               share::SCN &commit_version);
+  int infer_standby_trx_state_v2(const share::SCN snapshot,
+                              const int64_t wait_participant_timeout_us,
+                              const bool filter_unreadable_prepare_trx,
+                              ObTxCommitData::TxDataState &tx_data_state,
+                              share::SCN &commit_version);
   static bool is_undecied_standby_trx_state_info(const ObTxCommitData::TxDataState tx_data_state,
                                                  const share::SCN commit_version);
 
@@ -290,6 +296,14 @@ public:
   int handle_trans_ask_state_resp(const ObAskStateRespMsg &msg);
   int handle_trans_collect_state(ObCollectStateRespMsg &resp, const ObCollectStateMsg &req);
   int handle_trans_collect_state_resp(const ObCollectStateRespMsg &msg);
+
+  int handle_sby_ask_downstream(const ObTxSbyAskDownstreamReq &req,
+                                const share::SCN &ls_readable_scn);
+  int handle_sby_ask_upstream(const ObTxSbyAskUpstreamReq &req, const share::SCN &ls_readable_scn);
+  int handle_sby_state_result(const ObTxSbyStateResultMsg &msg);
+
+  static int handle_sby_unknown_state_info(const ObTxSbyStateInfo &parts_sby_info,
+                                           ObTxSbyStateInfo &local_sby_info);
 
   // tx state check for 4377
   int handle_ask_tx_state_for_4377(bool &is_alive);
@@ -389,7 +403,26 @@ private:
   int check_and_copy_participant_state_info_(const share::SCN snapshot,
                                              ObStateInfoArray &cur_state_info_array);
   // bool need_commit_barrier();
+  int build_ctx_sby_state_info_(const share::SCN read_snapshot,
+                                const share::SCN ls_replica_readable_scn,
+                                const ObLSID send_ls_id,
+                                const int64_t epoch,
+                                const int64_t transfer_epoch,
+                                ObTxSbyStateInfo &state_info);
+  int sby_read_ask_upstream_(const share::SCN read_snapshot,
+                             const share::SCN ls_replica_readable_scn,
+                             const share::ObLSID ori_ls_id,
+                             const ObAddr &ori_addr);
+  int sby_read_ask_downsteam_(const ObTxSbyAskDownstreamReq &req, const share::SCN &ls_readable_scn);
+  int sby_read_post_state_result_(const ObTxSbyStateInfo &state_info,
+                                  const share::ObLSID dst_ls_id,
+                                  const ObAddr &dst_addr);
 
+  int init_parts_sby_info_array_(const share::SCN read_snapshot,
+                                 const share::ObLSID ori_ls_id,
+                                 const ObAddr &ori_addr);
+  int ask_sby_participants_(const share::SCN read_snapshot, const share::SCN ls_readable_scn);
+  int infer_standby_trx_state_by_participants_();
 public:
   // ========================================================
   // newly added for 4.0
@@ -823,8 +856,10 @@ private:
   int post_tx_sub_commit_resp_(const int status);
   int post_tx_sub_rollback_resp_(const int status);
 
+  bool is_errsim_blocking_() const;
+
   virtual bool is_2pc_blocking() const override {
-    return sub_state_.is_transfer_blocking();
+    return sub_state_.is_transfer_blocking() || is_errsim_blocking_();
   }
 
 // ======================= for transfer ===============================
@@ -1140,6 +1175,11 @@ private:
   // this is a tempoary variable which is set to now by default
   // therefore, if a follower switchs to leader, the variable is set to now
   int64_t last_request_ts_;
+
+
+  ObTxSbyStateInfo cache_sby_state_info_;
+  CtxPartSbyStateInfoArray parts_sby_info_list_;
+  CtxSbyAskOriginList sby_origin_list_;
 
   // for transfer move tx ctx to clean for abort
   bool transfer_deleted_;
