@@ -432,7 +432,7 @@ int ObRowGetter::init_multi_get_merge()
   if (OB_FAIL(ret)) {
   } else if (nullptr == multi_get_merge_) {
     void *buf = nullptr;
-    if (OB_ISNULL(buf = access_ctx_.get_long_life_allocator()->alloc(sizeof(ObSingleMerge)))) {
+    if (OB_ISNULL(buf = access_ctx_.get_long_life_allocator()->alloc(sizeof(ObMultipleGetMerge)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "Fail to allocate memory", K(ret));
     } else {
