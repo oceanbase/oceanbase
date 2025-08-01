@@ -545,6 +545,14 @@ public:
                        const ObRawExpr *target,
                        bool &bret);
 
+  static int recursive_find_shared_expr(ObRawExpr *source,
+                                        ObRawExpr *target,
+                                        bool &bret);
+
+  static int recursive_find_shared_expr(ObIArray<ObRawExpr *> &source,
+                                        ObRawExpr *target,
+                                        bool &bret);
+
   template <typename T>
   static int get_expr_idx(const ObIArray<T *> &source,
                           const T *target,

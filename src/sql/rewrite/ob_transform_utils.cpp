@@ -2975,6 +2975,48 @@ int ObTransformUtils::find_expr(ObIArray<ObRawExpr *> &source,
   return ret;
 }
 
+int ObTransformUtils::recursive_find_shared_expr(ObRawExpr *source,
+                                                 ObRawExpr *target,
+                                                 bool &bret)
+{
+  int ret = OB_SUCCESS;
+  bret = false;
+  if (OB_ISNULL(target) || OB_ISNULL(source)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dest expr is null", K(ret));
+  } else if (source == target) {
+    bret = true;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !bret && i < source->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(recursive_find_shared_expr(source->get_param_expr(i), target, bret)))) {
+        LOG_WARN("failed to recursive find shared expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::recursive_find_shared_expr(ObIArray<ObRawExpr *> &source,
+                                                 ObRawExpr *target,
+                                                 bool &bret)
+{
+  int ret = OB_SUCCESS;
+  bret = false;
+  if (OB_ISNULL(target)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dest expr is null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !bret && i < source.count(); ++i) {
+    if (OB_ISNULL(source.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr in source is null", K(ret));
+    } else if (OB_FAIL(recursive_find_shared_expr(source.at(i), target, bret))) {
+      LOG_WARN("failed to recursive find shared expr", K(ret));
+    }
+  }
+  return ret;
+}
+
 /**
  * column <=> ? 或 ？<=> column
  * column is ? 或 column != ?

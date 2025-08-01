@@ -1201,6 +1201,7 @@ int ObTransformAggrSubquery::transform_with_join_first(ObDMLStmt *&stmt,
 {
   int ret = OB_SUCCESS;
   bool is_valid = false;
+  bool post_groupby_only = false;
   int64_t query_num = 0;
   ObDMLStmt *target_stmt = stmt;
   const ObQueryHint* query_hint = nullptr;
@@ -1209,7 +1210,7 @@ int ObTransformAggrSubquery::transform_with_join_first(ObDMLStmt *&stmt,
       OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null stmt", K(ret), K(stmt), K(query_hint));
-  } else if (OB_FAIL(check_stmt_valid(*stmt, is_valid))) {
+  } else if (OB_FAIL(check_stmt_valid(*stmt, is_valid, post_groupby_only))) {
     LOG_WARN("failed to check stmt valid", K(ret));
   } else if (is_valid) {
     query_num = stmt->get_subquery_expr_size();
@@ -1219,7 +1220,7 @@ int ObTransformAggrSubquery::transform_with_join_first(ObDMLStmt *&stmt,
     ObSelectStmt *view_stmt = NULL;
     ObRawExpr *root_expr = NULL;
     bool post_group_by = false;
-    if (OB_FAIL(get_trans_param(*target_stmt, param, root_expr, post_group_by))) {
+    if (OB_FAIL(get_trans_param(*target_stmt, param, root_expr, post_groupby_only, post_group_by))) {
       LOG_WARN("failed to find trans params", K(ret));
     } else if (NULL == root_expr) {
       break;
@@ -1303,6 +1304,7 @@ int ObTransformAggrSubquery::add_constraints_for_limit(TransformParam &param)
 int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
                                              TransformParam &param,
                                              ObRawExpr *&root_expr,
+                                             const bool post_groupby_only,
                                              bool &post_group_by)
 {
   int ret = OB_SUCCESS;
@@ -1318,15 +1320,17 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
   } else if (has_rownum) {
     // do nothing
   } else if (stmt.is_select_stmt()) {
+    // 1. we can create spj view with group-by pushed down for normal group by
+    // 2. if there is no group by clause, we can directly pullup subqueries
     ObSelectStmt &sel_stmt = static_cast<ObSelectStmt &>(stmt);
     if (sel_stmt.has_rollup()) {
-      // we can create spj view with group-by pushed down for normal group by
+      // do nothing
     } else if (OB_FAIL(append(pre_group_by_exprs, sel_stmt.get_group_exprs()))) {
       LOG_WARN("failed to append group by exprs", K(ret));
     } else if (OB_FAIL(append(pre_group_by_exprs, sel_stmt.get_aggr_items()))) {
       LOG_WARN("failed to append aggr items", K(ret));
     } else if (sel_stmt.is_scala_group_by()) {
-      // there is no group by clause, we can directly pullup subqueries
+      // do nothing
     } else if (OB_FAIL(append(post_group_by_exprs, sel_stmt.get_having_exprs()))) {
       LOG_WARN("failed to append having exprs", K(ret));
     } else if (OB_FAIL(sel_stmt.get_select_exprs(post_group_by_exprs))) {
@@ -1340,7 +1344,8 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
   }
   int64_t pre_count = pre_group_by_exprs.count();
   int64_t post_count = post_group_by_exprs.count();
-  for (int64_t i = 0; OB_SUCC(ret) && NULL == root_expr && i < pre_count + post_count; ++i) {
+  int64_t start = post_groupby_only ? pre_count : 0;
+  for (int64_t i = start; OB_SUCC(ret) && NULL == root_expr && i < pre_count + post_count; ++i) {
     params.reset();
     post_group_by = (i >= pre_count);
     ObRawExpr *expr = !post_group_by ? pre_group_by_exprs.at(i) :
@@ -1358,7 +1363,17 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
     }
     for (int64_t j = 0; OB_SUCC(ret) && NULL == root_expr && j < params.count(); ++j) {
       bool is_valid = true;
+      bool found = false;
       if (ObOptimizerUtil::find_item(invalid_list, params.at(j).ja_query_ref_)) {
+        is_valid = false;
+      } else if (post_groupby_only &&
+                 OB_FAIL(ObTransformUtils::recursive_find_shared_expr(pre_group_by_exprs,
+                                                                      params.at(j).ja_query_ref_,
+                                                                      found))) {
+        LOG_WARN("failed to find shared expr", K(ret));
+      } else if (found) {
+        // found in pre_group_by_exprs, will be pushed down into view when
+        // 'post group by only' mode and can't transform
         is_valid = false;
       } else if (is_exists_op(expr->get_expr_type())) {
         if (OB_FAIL(choose_pullup_method_for_exists(params.at(j).ja_query_ref_,
@@ -1435,10 +1450,11 @@ int ObTransformAggrSubquery::get_trans_view(ObDMLStmt &stmt,
   return ret;
 }
 
-int ObTransformAggrSubquery::check_stmt_valid(ObDMLStmt &stmt, bool &is_valid)
+int ObTransformAggrSubquery::check_stmt_valid(ObDMLStmt &stmt, bool &is_valid, bool &post_groupby_only)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
+  post_groupby_only = false;
   bool can_set_unique = false;
   if (stmt.is_set_stmt()
       || stmt.is_hierarchical_query()
@@ -1448,7 +1464,18 @@ int ObTransformAggrSubquery::check_stmt_valid(ObDMLStmt &stmt, bool &is_valid)
   } else if (OB_FAIL(StmtUniqueKeyProvider::check_can_set_stmt_unique(&stmt, can_set_unique))) {
     LOG_WARN("failed to check can set stmt unque", K(ret));
   } else if (!can_set_unique) {
-    is_valid = false;
+    // check has group by;
+    if (stmt.is_select_stmt() && static_cast<ObSelectStmt &>(stmt).has_group_by()) {
+      // Consider such a query:
+      // 'explain select t1.c1, (select sum(c2) from t2 where t2.c1 = t1.c1)
+      //  from t1, (select 1 c1 union all select 1+1) v group by t1.c1;'
+      // Although v does not satisfy uniqueness, since t1.c1 is a group by column
+      // and has uniqueness, subqueries that operate after group by can still be
+      // rewritten.
+      post_groupby_only = true;
+    } else {
+      is_valid = false;
+    }
   }
   return ret;
 }
