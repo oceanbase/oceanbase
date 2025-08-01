@@ -92,7 +92,6 @@ int ObExprExistsNodeXml::eval_existsnode_xml(const ObExpr &expr, ObEvalCtx &ctx,
   bool is_exists = false;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
   ObDatum *xml_datum = NULL;
   ObIMulModeBase *xml_doc = NULL;
   ObMulModeNodeType node_type = M_MAX_TYPE;
@@ -120,6 +119,7 @@ int ObExprExistsNodeXml::eval_existsnode_xml(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("fail to get namespace str", K(ret), K(expr.args_[2]));
   }
 
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
   // process xmltype and xpath
   OZ(ObXMLExprHelper::get_xml_base(
       mem_ctx, xml_datum,

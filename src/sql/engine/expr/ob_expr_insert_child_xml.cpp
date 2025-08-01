@@ -114,7 +114,6 @@ int ObExprInsertChildXml::eval_insert_child_xml(const ObExpr &expr, ObEvalCtx &c
   bool is_insert_attributes = false;
 
   ObMulModeMemCtx* mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   } else if (OB_UNLIKELY(expr.arg_cnt_ != 5)) {
@@ -136,6 +135,7 @@ int ObExprInsertChildXml::eval_insert_child_xml(const ObExpr &expr, ObEvalCtx &c
     LOG_WARN("fail to construct namespace params", K(ret), K(namespace_str));
   }
 
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   if (OB_FAIL(ret)) {
   } else if (xpath_str.empty()) {
     // do nothing
