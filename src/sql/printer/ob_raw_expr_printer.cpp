@@ -3857,14 +3857,14 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
             }
           }
         }
-        if (OB_FAIL(ret)) {
+        DATA_PRINTF(")");
+        if (OB_SUCC(ret)) {
           if (expr->is_ignore_null()) {
             DATA_PRINTF(" ignore nulls");
           } else {
             DATA_PRINTF(" respect nulls");
           }
         }
-        DATA_PRINTF(")");
         DATA_PRINTF(" over(");
         if (OB_FAIL(print_partition_exprs(expr))) {
           LOG_WARN("failed to print partition exprs.", K(ret));
