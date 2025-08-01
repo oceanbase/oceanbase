@@ -22,6 +22,7 @@
 #include "storage/tmp_file/ob_shared_storage_tmp_file.h"
 #include "storage/shared_storage/ob_file_manager.h"
 #include "mittest/shared_storage/clean_residual_data.h"
+#include "lib/alloc/memory_dump.h"
 
 namespace oceanbase
 {
@@ -67,6 +68,8 @@ void TestTmpFile::SetUpTestCase()
 
   CHUNK_MGR.set_limit(TENANT_MEMORY);
   ObMallocAllocator::get_instance()->set_tenant_limit(MTL_ID(), TENANT_MEMORY);
+  ObMallocAllocator::get_instance()->set_tenant_max_min(MTL_ID(), TENANT_MEMORY, 0);
+  ObMemoryDump::get_instance().init();
 
   MTL(ObTenantTmpFileManager *)->get_ss_file_manager().wbp_.default_wbp_memory_limit_ = SMALL_WBP_MEM_LIMIT;
 }
@@ -1554,9 +1557,9 @@ TEST_F(TestTmpFile, test_multiple_small_files)
   STORAGE_LOG(INFO, "=======================test_multiple_small_files begin=======================");
   int ret = OB_SUCCESS;
   const int64_t read_thread_cnt = 2;
-  const int64_t file_cnt = 256;
-  const int64_t batch_size = 1 * 1024 * 1024 + 54 * 1024 + 1023; // 1MB + 54KB + 1023B
-  const int64_t batch_num = 3;
+  const int64_t file_cnt = 1024;
+  const int64_t batch_size = 54 * 1024 + 1023; // 1MB + 54KB + 1023B
+  const int64_t batch_num = 4;
   TestMultiTmpFileStress test(MTL_CTX());
   int64_t dir = -1;
   ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
