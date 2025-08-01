@@ -1918,6 +1918,8 @@ public:
                                  ObLogValuesTableAccess *&out_access_path_op);
   inline ObRawExprReplacer &gen_col_replacer() { return gen_col_replacer_; }
   int get_enable_rich_vector_format(bool &enable);
+  bool get_need_accurate_cardinality() const { return need_accurate_cardinality_; }
+  void set_need_accurate_cardinality(bool need) { need_accurate_cardinality_ = need; }
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;
 protected: // member variable
@@ -2110,6 +2112,7 @@ private:
   //
   // 为select into分配了range shuffle后, 在分配select into算子时不应再分配exchange算子
   bool has_allocated_range_shuffle_;
+  bool need_accurate_cardinality_;
   DISALLOW_COPY_AND_ASSIGN(ObLogPlan);
 };
 

@@ -135,52 +135,71 @@ sid	subject	score	tid	name	subject
 64	MA	87	2	Mr Wang	MA
 explain select /*+ USE_PX parallel(2) */ teacher.name, teacher.subject, avg(score) from score, teacher where teacher.subject = score.subject group by teacher.name, teacher.subject;
 Query Plan
-================================================================================
-|ID|OPERATOR                                    |NAME    |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------------------
-|0 |PX COORDINATOR                              |        |2       |33          |
-|1 |└─EXCHANGE OUT DISTR                        |:EX10002|2       |32          |
-|2 |  └─HASH GROUP BY                           |        |2       |30          |
-|3 |    └─EXCHANGE IN DISTR                     |        |4       |29          |
-|4 |      └─EXCHANGE OUT DISTR (HASH)           |:EX10001|4       |28          |
-|5 |        └─HASH GROUP BY                     |        |4       |24          |
-|6 |          └─SHARED HASH JOIN                |        |28      |22          |
-|7 |            ├─EXCHANGE IN DISTR             |        |2       |10          |
-|8 |            │ └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000|2       |10          |
-|9 |            │   └─PX BLOCK ITERATOR         |        |2       |9           |
-|10|            │     └─TABLE FULL SCAN         |teacher |2       |9           |
-|11|            └─PX BLOCK ITERATOR             |        |28      |8           |
-|12|              └─TABLE FULL SCAN             |score   |28      |8           |
-================================================================================
+=============================================================================
+|ID|OPERATOR                                 |NAME    |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------------
+|0 |PX COORDINATOR                           |        |2       |31          |
+|1 |└─EXCHANGE OUT DISTR                     |:EX10003|2       |29          |
+|2 |  └─HASH JOIN                            |        |2       |27          |
+|3 |    ├─SUBPLAN SCAN                       |VIEW1   |2       |14          |
+|4 |    │ └─HASH GROUP BY                    |        |2       |14          |
+|5 |    │   └─EXCHANGE IN DISTR              |        |4       |13          |
+|6 |    │     └─EXCHANGE OUT DISTR (HASH)    |:EX10000|4       |12          |
+|7 |    │       └─HASH GROUP BY              |        |4       |9           |
+|8 |    │         └─PX BLOCK ITERATOR        |        |28      |8           |
+|9 |    │           └─TABLE FULL SCAN        |score   |28      |8           |
+|10|    └─EXCHANGE IN DISTR                  |        |2       |13          |
+|11|      └─EXCHANGE OUT DISTR (HASH)        |:EX10002|2       |13          |
+|12|        └─SUBPLAN SCAN                   |VIEW2   |2       |11          |
+|13|          └─HASH GROUP BY                |        |2       |11          |
+|14|            └─EXCHANGE IN DISTR          |        |2       |11          |
+|15|              └─EXCHANGE OUT DISTR (HASH)|:EX10001|2       |10          |
+|16|                └─HASH GROUP BY          |        |2       |9           |
+|17|                  └─PX BLOCK ITERATOR    |        |2       |9           |
+|18|                    └─TABLE FULL SCAN    |teacher |2       |9           |
+=============================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(teacher.name, teacher.subject, cast(cast(T_FUN_SUM(T_FUN_SUM(score.score)), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(score.score)),
-       DECIMAL_INT(20, 0)), DECIMAL(15, 4)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(teacher.name, teacher.subject, cast(cast(T_FUN_SUM(T_FUN_SUM(score.score)), DECIMAL_INT(65, 32)) / cast(T_FUN_COUNT_SUM(T_FUN_COUNT(score.score)),
-       DECIMAL_INT(20, 0)), DECIMAL(15, 4)))]), filter(nil), rowset=256
+  0 - output([INTERNAL_FUNCTION(VIEW2.teacher.name, VIEW2.teacher.subject, cast(cast(cast(cast(VIEW1.T_FUN_SUM(score.score) * cast(VIEW2.T_FUN_COUNT(*),
+       DECIMAL_INT(20, 0)), DECIMAL_INT(75, 0)), DECIMAL_INT(33, 0)), DECIMAL_INT(65, 32)) / cast(cast(VIEW1.T_FUN_COUNT(score.score) * VIEW2.T_FUN_COUNT(*), 
+      BIGINT(20, 0)), DECIMAL_INT(20, 0)), DECIMAL(15, 4)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(VIEW2.teacher.name, VIEW2.teacher.subject, cast(cast(cast(cast(VIEW1.T_FUN_SUM(score.score) * cast(VIEW2.T_FUN_COUNT(*),
+       DECIMAL_INT(20, 0)), DECIMAL_INT(75, 0)), DECIMAL_INT(33, 0)), DECIMAL_INT(65, 32)) / cast(cast(VIEW1.T_FUN_COUNT(score.score) * VIEW2.T_FUN_COUNT(*), 
+      BIGINT(20, 0)), DECIMAL_INT(20, 0)), DECIMAL(15, 4)))]), filter(nil), rowset=256
       dop=2
-  2 - output([teacher.name], [teacher.subject], [T_FUN_SUM(T_FUN_SUM(score.score))], [T_FUN_COUNT_SUM(T_FUN_COUNT(score.score))]), filter(nil), rowset=256
-      group([teacher.name], [teacher.subject]), agg_func([T_FUN_SUM(T_FUN_SUM(score.score))], [T_FUN_COUNT_SUM(T_FUN_COUNT(score.score))])
-  3 - output([teacher.name], [teacher.subject], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)]), filter(nil), rowset=256
-  4 - output([teacher.name], [teacher.subject], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)]), filter(nil), rowset=256
-      (#keys=2, [teacher.name], [teacher.subject]), dop=2
-  5 - output([teacher.name], [teacher.subject], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)]), filter(nil), rowset=256
-      group([teacher.name], [teacher.subject]), agg_func([T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)])
-  6 - output([score.score], [teacher.name], [teacher.subject]), filter(nil), rowset=256
-      equal_conds([teacher.subject = score.subject]), other_conds(nil)
-  7 - output([teacher.name], [teacher.subject]), filter(nil), rowset=256
-  8 - output([teacher.name], [teacher.subject]), filter(nil), rowset=256
-      dop=2
-  9 - output([teacher.subject], [teacher.name]), filter(nil), rowset=256
- 10 - output([teacher.subject], [teacher.name]), filter(nil), rowset=256
-      access([teacher.subject], [teacher.name]), partitions(p[0-7])
-      is_index_back=false, is_global_index=false, 
-      range_key([teacher.tid]), range(MIN ; MAX)always true
- 11 - output([score.subject], [score.score]), filter(nil), rowset=256
- 12 - output([score.subject], [score.score]), filter(nil), rowset=256
+  2 - output([VIEW2.T_FUN_COUNT(*)], [VIEW2.teacher.subject], [VIEW1.T_FUN_SUM(score.score)], [VIEW1.T_FUN_COUNT(score.score)], [VIEW2.teacher.name]), filter(nil), rowset=256
+      equal_conds([VIEW2.teacher.subject = VIEW1.score.subject]), other_conds(nil)
+  3 - output([VIEW1.score.subject], [VIEW1.T_FUN_SUM(score.score)], [VIEW1.T_FUN_COUNT(score.score)]), filter(nil), rowset=256
+      access([VIEW1.score.subject], [VIEW1.T_FUN_SUM(score.score)], [VIEW1.T_FUN_COUNT(score.score)])
+  4 - output([score.subject], [T_FUN_SUM(T_FUN_SUM(score.score))], [T_FUN_COUNT_SUM(T_FUN_COUNT(score.score))]), filter(nil), rowset=256
+      group([score.subject]), agg_func([T_FUN_SUM(T_FUN_SUM(score.score))], [T_FUN_COUNT_SUM(T_FUN_COUNT(score.score))])
+  5 - output([score.subject], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)]), filter(nil), rowset=256
+  6 - output([score.subject], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)]), filter(nil), rowset=256
+      (#keys=1, [score.subject]), dop=2
+  7 - output([score.subject], [T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)]), filter(nil), rowset=256
+      group([score.subject]), agg_func([T_FUN_SUM(score.score)], [T_FUN_COUNT(score.score)])
+  8 - output([score.subject], [score.score]), filter(nil), rowset=256
+  9 - output([score.subject], [score.score]), filter(nil), rowset=256
       access([score.subject], [score.score]), partitions(p[0-5])
       is_index_back=false, is_global_index=false, 
       range_key([score.sid], [score.subject]), range(MIN,MIN ; MAX,MAX)always true
+ 10 - output([VIEW2.T_FUN_COUNT(*)], [VIEW2.teacher.subject], [VIEW2.teacher.name]), filter(nil), rowset=256
+ 11 - output([VIEW2.T_FUN_COUNT(*)], [VIEW2.teacher.subject], [VIEW2.teacher.name]), filter(nil), rowset=256
+      (#keys=1, [VIEW2.teacher.subject]), dop=2
+ 12 - output([VIEW2.teacher.subject], [VIEW2.teacher.name], [VIEW2.T_FUN_COUNT(*)]), filter(nil), rowset=256
+      access([VIEW2.teacher.subject], [VIEW2.teacher.name], [VIEW2.T_FUN_COUNT(*)])
+ 13 - output([teacher.subject], [teacher.name], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
+      group([teacher.subject], [teacher.name]), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+ 14 - output([teacher.subject], [teacher.name], [T_FUN_COUNT(*)]), filter(nil), rowset=256
+ 15 - output([teacher.subject], [teacher.name], [T_FUN_COUNT(*)]), filter(nil), rowset=256
+      (#keys=2, [teacher.subject], [teacher.name]), dop=2
+ 16 - output([teacher.subject], [teacher.name], [T_FUN_COUNT(*)]), filter(nil), rowset=256
+      group([teacher.subject], [teacher.name]), agg_func([T_FUN_COUNT(*)])
+ 17 - output([teacher.subject], [teacher.name]), filter(nil), rowset=256
+ 18 - output([teacher.subject], [teacher.name]), filter(nil), rowset=256
+      access([teacher.subject], [teacher.name]), partitions(p[0-7])
+      is_index_back=false, is_global_index=false, 
+      range_key([teacher.tid]), range(MIN ; MAX)always true
 select /*+ USE_PX parallel(2) */ teacher.name, teacher.subject, avg(score) from score, teacher where teacher.subject = score.subject group by teacher.name, teacher.subject;
 name	subject	avg(score)
 Miss Zhang	EN	83.7143

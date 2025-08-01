@@ -597,8 +597,8 @@ Outputs & filters:
       access([a.card_no])
   3 - output([pcb_common_bill_01.CARD_NO]), filter(nil), rowset=16
       distinct([pcb_common_bill_01.CARD_NO])
-  4 - output([pcb_common_bill_01.CARD_NO]), filter([(T_OP_LIKE, pcb_common_bill_01.CARD_NO, '5001____________', '\\')], [pcb_common_bill_01.PRODUCT_ID != 
-      '9302']), rowset=16
+  4 - output([pcb_common_bill_01.CARD_NO]), filter([pcb_common_bill_01.PRODUCT_ID != '9302'], [(T_OP_LIKE, pcb_common_bill_01.CARD_NO, '5001____________',
+       '\\')]), rowset=16
       access([pcb_common_bill_01.PRODUCT_ID], [pcb_common_bill_01.CARD_NO]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([pcb_common_bill_01.CARD_NO], [pcb_common_bill_01.ATTRIBUTE_INST], [pcb_common_bill_01.PRODUCT_ID], [pcb_common_bill_01.OUT_BILL_NO], [pcb_common_bill_01.shadow_pk_0]),

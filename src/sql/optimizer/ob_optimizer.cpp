@@ -198,8 +198,9 @@ int ObOptimizer::generate_plan_for_temp_table(ObDMLStmt &stmt)
                                         (ctx_.get_log_plan_factory().create(ctx_, *ref_query)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to create logical plan", K(temp_plan), K(ret));
-      } else if (OB_FALSE_IT(temp_plan->set_temp_table_info(temp_table_info))) {
       } else {
+        temp_plan->set_temp_table_info(temp_table_info);
+        temp_plan->set_need_accurate_cardinality(true);
         OPT_TRACE_TITLE("begin generate plan for temp table ", temp_table_info->table_name_);
       }
       /**
