@@ -64,17 +64,19 @@ int ObInterruptUtil::broadcast_dfo(ObDfo *dfo, int code)
   } else {
     // 暂存上次的 id，inc_seqnum 将修改 px_interrupt_id_
     ObInterruptibleTaskID interrupt_id = dfo->get_interrupt_id().px_interrupt_id_;
+    ObSEArray<ObAddr, 8> interrupt_addrs;
     for (int64_t j = 0; j < sqcs.count(); ++j) {
       const ObAddr &addr = sqcs.at(j)->get_exec_addr();
-      if(OB_SUCCESS != (tmp_ret = manager->interrupt(addr, interrupt_id, int_code))) {
+      if (OB_SUCCESS != (tmp_ret = manager->interrupt(addr, interrupt_id, int_code))) {
         ret = tmp_ret;
         LOG_WARN("fail to send interrupt message to other server",
                 K(ret), K(int_code), K(addr), K(interrupt_id));
-      } else {
-        LOG_INFO("success to send interrupt message",
-                  K(int_code), K(addr), K(interrupt_id));
+      } else if (OB_FAIL(interrupt_addrs.push_back(addr))) {
+        LOG_WARN("fail to push back", K(j), K(ret));
       }
     }
+    LOG_INFO("success to send interrupt message",
+            K(int_code), K(interrupt_id), K(sqcs.count()), K(interrupt_addrs));
   }
   return ret;
 }
