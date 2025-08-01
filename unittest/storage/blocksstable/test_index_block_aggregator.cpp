@@ -938,6 +938,15 @@ TEST_F(TestIndexBlockAggregator, min_max_agg_calc_with_prefix)
       ASSERT_TRUE(cmp_ret > 0);
       ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(l_datum, r_datum, false, true, cmp_ret));
       ASSERT_TRUE(cmp_ret < 0);
+      // TODO: fix and open these cases
+      // ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(r_datum, l_datum, false, false, cmp_ret));
+      // ASSERT_TRUE(cmp_ret > 0);
+      // ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(r_datum, l_datum, true, true, cmp_ret));
+      // ASSERT_TRUE(cmp_ret < 0);
+      // ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(r_datum, l_datum, true, false, cmp_ret));
+      // ASSERT_TRUE(cmp_ret > 0);
+      // ASSERT_EQ(OB_SUCCESS, max_agg.cmp_with_prefix(r_datum, l_datum, false, true, cmp_ret));
+      // ASSERT_TRUE(cmp_ret < 0);
     };
 
     const char *str_s = "abc";
