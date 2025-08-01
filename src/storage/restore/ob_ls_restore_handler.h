@@ -178,6 +178,7 @@ private:
   ObILSRestoreState *state_handler_;
   common::ObFIFOAllocator allocator_;
   ObLSRestoreStat restore_stat_;
+  share::ObTaskId trace_id_;
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreHandler);
 };
 
