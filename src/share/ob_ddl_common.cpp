@@ -2125,6 +2125,30 @@ int ObDDLUtil::write_defensive_and_obtain_snapshot(
   return ret;
 }
 
+int ObDDLUtil::load_ddl_task(
+    const int64_t tenant_id,
+    const int64_t task_id,
+    ObIAllocator &allocator,
+    rootserver::ObDDLTask &task)
+{
+  int ret = OB_SUCCESS;
+  rootserver::ObDDLTaskRecord task_record;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || task_id <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("there are invalid args", K(ret), K(tenant_id), K(task_id));
+  } else if (OB_FAIL(rootserver::ObDDLTaskRecordOperator::get_ddl_task_record(tenant_id,
+                                                                              task_id,
+                                                                              *GCTX.sql_proxy_,
+                                                                              allocator,
+                                                                              task_record))) {
+    LOG_WARN("fail to get ddl task record", K(ret), K(tenant_id), K(task_id));
+  } else if (OB_FAIL(task.init(task_record))) {
+    LOG_WARN("fail to initialize ddl task obj", K(ret));
+  }
+  LOG_INFO("finish to load ddl task obj from the disk", K(ret), K(task));
+  return ret;
+}
+
 int ObDDLUtil::check_and_cancel_single_replica_dag(
     rootserver::ObDDLTask* task,
     const uint64_t table_id,

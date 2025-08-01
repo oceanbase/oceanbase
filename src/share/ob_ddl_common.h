@@ -1496,6 +1496,11 @@ public:
       const ObTableSchema &index_table_schema,
       ObSchemaService *schema_service,
       int64_t &new_fetched_snapshot);
+  static int load_ddl_task(
+        const int64_t tenant_id,
+        const int64_t task_id,
+        ObIAllocator &allocator,
+        rootserver::ObDDLTask &task);
 
 private:
   static int hold_snapshot(
