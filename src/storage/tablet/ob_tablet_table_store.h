@@ -233,11 +233,13 @@ public:
   int get_all_minor_sstables(ObTableStoreIterator &iter) const;
 private:
   int get_need_to_cache_sstables(
+      const int64_t limit_size,
       common::ObIArray<ObStorageMetaValue::MetaType> &meta_types,
       common::ObIArray<ObStorageMetaKey> &keys,
       common::ObIArray<blocksstable::ObSSTable *> &sstables);
   int get_need_to_cache_sstables(
       const ObSSTableArray &sstable_array,
+      int64_t &remain_size,
       common::ObIArray<ObStorageMetaValue::MetaType> &meta_types,
       common::ObIArray<ObStorageMetaKey> &keys,
       common::ObIArray<blocksstable::ObSSTable *> &sstables);

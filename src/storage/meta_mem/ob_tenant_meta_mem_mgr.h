@@ -172,6 +172,11 @@ public:
     }
     return ret;
   }
+  int choose_tablet_pool_type(
+      const bool is_user_tablet,
+      const int64_t must_cache_size,
+      const int64_t try_cache_size,
+      ObTabletPoolType &type);
 
 private:
   static const int64_t DEFAULT_TABLET_CNT_PER_GB = 20000;

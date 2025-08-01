@@ -545,7 +545,7 @@ int ObTabletTableStore::deep_copy(
     LOG_WARN("not init", K(ret));
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < get_deep_copy_size())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len));
+    LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len), K(get_deep_copy_size()));
   } else {
     ObTabletTableStore *new_table_store = new (buf) ObTabletTableStore();
     pos = sizeof(ObTabletTableStore);
@@ -2252,7 +2252,7 @@ int ObTabletTableStore::batch_cache_sstable_meta(
     LOG_WARN("invalid arguments", K(ret), K(remain_size));
   } else if (OB_UNLIKELY(remain_size < sizeof(ObSSTableMeta))) {
     // The remain_size is too small to hold an sstable meta.
-  } else if (OB_FAIL(get_need_to_cache_sstables(meta_types, cache_keys, sstables))) { /*not include cg sstable*/
+  } else if (OB_FAIL(get_need_to_cache_sstables(remain_size, meta_types, cache_keys, sstables))) { /*not include cg sstable*/
     LOG_WARN("fail to get need to cache keys", K(ret));
   } else if (OB_UNLIKELY(0 == cache_keys.count())) {
   } else if (OB_FAIL(OB_STORE_CACHE.get_storage_meta_cache().batch_get_meta_and_bypass_cache(
@@ -2265,20 +2265,22 @@ int ObTabletTableStore::batch_cache_sstable_meta(
 }
 
 int ObTabletTableStore::get_need_to_cache_sstables(
+    const int64_t limit_size,
     common::ObIArray<ObStorageMetaValue::MetaType> &meta_types,
     common::ObIArray<ObStorageMetaKey> &keys,
     common::ObIArray<blocksstable::ObSSTable *> &sstables)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_need_to_cache_sstables(meta_major_tables_, meta_types, keys, sstables))) {
+  int64_t remain_size = limit_size;
+  if (OB_FAIL(get_need_to_cache_sstables(meta_major_tables_, remain_size, meta_types, keys, sstables))) {
     LOG_WARN("fail to get need to cache sstables", K(ret), K(meta_major_tables_));
-  } else if (OB_FAIL(get_need_to_cache_sstables(major_tables_, meta_types, keys, sstables))) {
+  } else if (OB_FAIL(get_need_to_cache_sstables(major_tables_, remain_size, meta_types, keys, sstables))) {
     LOG_WARN("fail to get need to cache sstables", K(ret), K(major_tables_));
-  } else if (OB_FAIL(get_need_to_cache_sstables(minor_tables_, meta_types, keys, sstables))) {
+  } else if (OB_FAIL(get_need_to_cache_sstables(minor_tables_, remain_size, meta_types, keys, sstables))) {
     LOG_WARN("fail to get need to cache sstables", K(ret), K(minor_tables_));
-  } else if (OB_FAIL(get_need_to_cache_sstables(mds_sstables_, meta_types, keys, sstables))) {
+  } else if (OB_FAIL(get_need_to_cache_sstables(mds_sstables_, remain_size, meta_types, keys, sstables))) {
     LOG_WARN("fail to get need to cache sstables", K(ret), K(mds_sstables_));
-  } else if (OB_FAIL(get_need_to_cache_sstables(ddl_sstables_, meta_types, keys, sstables))) {
+  } else if (OB_FAIL(get_need_to_cache_sstables(ddl_sstables_, remain_size, meta_types, keys, sstables))) {
     LOG_WARN("fail to get need to cache sstables", K(ret), K(ddl_sstables_));
   } else if (OB_UNLIKELY(keys.count() != sstables.count() || meta_types.count() != keys.count())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2293,6 +2295,7 @@ int ObTabletTableStore::get_need_to_cache_sstables(
 // hold cg sstable now.
 int ObTabletTableStore::get_need_to_cache_sstables(
     const ObSSTableArray &sstable_array,
+    int64_t &remain_size,
     common::ObIArray<ObStorageMetaValue::MetaType> &meta_types,
     common::ObIArray<ObStorageMetaKey> &keys,
     common::ObIArray<blocksstable::ObSSTable *> &sstables)
@@ -2305,18 +2308,23 @@ int ObTabletTableStore::get_need_to_cache_sstables(
       LOG_WARN("unexpected error, sstable is nullptr", K(ret), KP(sstable));
     } else if (sstable->is_loaded()) {
       // sstable is already loaded to memory, do nothing
+    } else if (remain_size < sizeof(ObSSTableMeta)) {
+      break;
     } else {
       ObStorageMetaValue::MetaType meta_type = sstable->is_co_sstable()
                                              ? ObStorageMetaValue::CO_SSTABLE
                                              : ObStorageMetaValue::SSTABLE;
       ObStorageMetaKey key(MTL_ID(), sstable->get_addr());
-
-      if (OB_FAIL(meta_types.push_back(meta_type))) {
+      if (remain_size <= sstable->get_addr().size()) {
+        break;
+      } else if (OB_FAIL(meta_types.push_back(meta_type))) {
         LOG_WARN("fail to push back meta type", K(ret), K(meta_type));
       } else if (OB_FAIL(keys.push_back(key))) {
         LOG_WARN("fail to push back meta cache key", K(ret), K(key));
       } else if (OB_FAIL(sstables.push_back(sstable))) {
         LOG_WARN("fail to push back sstable ptr", K(ret), KPC(sstable));
+      } else {
+        remain_size -= sizeof(ObSSTableMeta);
       }
     }
   }

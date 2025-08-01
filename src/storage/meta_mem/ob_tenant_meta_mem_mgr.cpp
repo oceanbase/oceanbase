@@ -194,6 +194,28 @@ ObTenantMetaMemMgr::~ObTenantMetaMemMgr()
   destroy();
 }
 
+int ObTenantMetaMemMgr::choose_tablet_pool_type(
+    const bool is_user_tablet,
+    const int64_t must_cache_size,
+    const int64_t try_cache_size,
+     ObTabletPoolType &type)
+{
+  int ret = OB_SUCCESS;
+  const int64_t user_tablet_count = MAX(tablet_map_.count() - 1000, 0); // 1000 is the number of system tablets, which
+                                                                        // is a rough estimate value.
+  if (!is_user_tablet) {
+    type = ObTabletPoolType::TP_NORMAL;
+  } else if (must_cache_size > NORMAL_TABLET_POOL_SIZE) {
+    type = ObTabletPoolType::TP_LARGE;
+  } else if (must_cache_size + try_cache_size > NORMAL_TABLET_POOL_SIZE
+          && user_tablet_count <= get_default_large_tablet_pool_count()) {
+    type = ObTabletPoolType::TP_LARGE;
+  } else {
+    type = ObTabletPoolType::TP_NORMAL;
+  }
+  return ret;
+}
+
 int ObTenantMetaMemMgr::mtl_new(ObTenantMetaMemMgr *&meta_mem_mgr)
 {
   int ret = OB_SUCCESS;
