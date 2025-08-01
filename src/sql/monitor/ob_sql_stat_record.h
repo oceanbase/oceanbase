@@ -128,7 +128,6 @@ public:
                             ObString &cur_sql,
                             const ObPhysicalPlan *plan = nullptr,
                             const bool is_px_remote_exec = false);
-  int move_to_sqlstat_cache(ObSqlStatRecordKey& key); // just for das remote exec
 
   bool get_is_in_retry() const { return is_in_retry_; }
   void set_is_in_retry(const bool is_in_retry) { is_in_retry_ = is_in_retry; }
