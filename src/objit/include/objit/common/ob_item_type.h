@@ -2917,6 +2917,14 @@ typedef enum ObItemType
   T_SOCKET_TIMEOUT = 4899,
   // erase ss local_cache
   T_FLUSH_SS_LOCAL_CACHE = 4900,
+    // alter type
+  T_TYPE_ALTER = 4901,
+  T_TYPE_ALTER_CLAUSE = 4902,
+  T_TYPE_ALTER_COMPILE = 4903,
+  T_TYPE_ALTER_ATTR = 4904,
+  T_TYPE_ALTER_ATTR_LIST = 4905,
+  T_COMMON_IDENTIFIER_LIST = 4906,
+  T_ALTER_ATTRIBUTE_DEFINITION_LIST = 4907,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

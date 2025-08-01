@@ -235,6 +235,7 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_REPLACE_UDT,)                                       \
   ACT(OB_DDL_DROP_UDT,)                                          \
   ACT(OB_DDL_DROP_UDT_BODY,)                                     \
+  ACT(OB_DDL_ALTER_UDT,)                                         \
   ACT(OB_DDL_UDT_OPERATION_END, = 1330)                          \
   ACT(OB_DDL_AUDIT_OPERATION_BEGIN, = 1331)                      \
   ACT(OB_DDL_ADD_AUDIT,)                                         \

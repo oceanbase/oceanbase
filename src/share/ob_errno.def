@@ -2741,6 +2741,12 @@ DEFINE_ORACLE_ERROR(OB_ERR_EXECUTE_CODE_COVERAGE, -9825, -1, "HY000", "error exe
 DEFINE_ERROR_DEP(OB_PYTHON_ENV_ERROR, -9826, -1, "HY000", "Python env could not be found")
 DEFINE_ERROR_EXT(OB_PYTHON_PARAMS_ERROR, -9827, -1, "HY000", "python params error", "%s");
 DEFINE_ERROR_EXT(OB_PYTHON_EXEC_ERROR, -9828, -1, "HY000", "python execute error", "%s");
+DEFINE_PLS_ERROR_EXT(OB_ERR_ALTER_ATTR_NOT_EXIST, -9829, -1, "HY000", "attribute or method does not exist", "attribute or method by name '%.*s' does not exist", 715, "attribute or method does not exist", "attribute or method by name '%.*s' does not exist");
+DEFINE_PLS_ERROR_EXT(OB_ERR_ALTER_ATTR_LENGTH_ILLEGAL, -9830, -1, "HY000", "only widening of attribute constraints is allowed", "only widening of attribute '%.*s' constraints is allowed", 719, "only widening of attribute constraints is allowed", "only widening of attribute '%.*s' constraints is allowed");
+DEFINE_PLS_ERROR_EXT(OB_ERR_ALTER_ATTR_DUPLICATE, -9831, -1, "HY000", "Attribute/method can occur only once in an ALTER TYPE statement", "Attribute/method '%.*s' can occur only once in an ALTER TYPE statement", 716, "Attribute/method can occur only once in an ALTER TYPE statement", "Attribute/method '%.*s' can occur only once in an ALTER TYPE statement");
+DEFINE_ERROR(OB_ERR_ALTER_INVALID_UDT, -9832, -1, "HY000", "cannot alter a type that is not valid");
+DEFINE_PLS_ERROR_EXT(OB_ERR_ALTER_ATTR_TYPE_ILLEGAL, -9833, -1, "HY000", "type of attribute does not allow modifications to the attribute", "type of attribute '%.*s' does not allow modifications to the attribute", 718, "type of attribute does not allow modifications to the attribute", "type of attribute '%.*s' does not allow modifications to the attribute");
+DEFINE_ERROR(OB_ERR_ALTER_HAS_DEPENDENT, -9834, -1, "HY000", "must specify either CASCADE or INVALIDATE option");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)
