@@ -80,8 +80,8 @@ ObLockWaitMgr::ObLockWaitMgr()
       stop_check_timeout_(false),
       not_free_remote_exec_side_node_cnt_(0),
       total_wait_node_(0),
-      deadlocked_sessions_lock_(common::ObLatchIds::DEADLOCK_DETECT_LOCK),
-      deadlocked_sessions_index_(0)
+      killed_sessions_lock_(common::ObLatchIds::DEADLOCK_DETECT_LOCK),
+      killed_sessions_index_(0)
 {
   memset(sequence_, 0, sizeof(sequence_));
   hash_ = &hash_ref_;
@@ -130,7 +130,7 @@ void ObLockWaitMgr::stop() {
 void ObLockWaitMgr::destroy() {
   is_inited_ = false;
   total_wait_node_ = 0;
-  deadlocked_sessions_index_ = 0;
+  killed_sessions_index_ = 0;
   row_holder_mapper_.~RowHolderMapper();
 }
 
@@ -1369,8 +1369,9 @@ ObLink* ObLockWaitMgr::check_timeout()
   const char *reason = NULL;
   bool need_check_session = false;
   const int64_t MAX_WAIT_TIME_US = 10 * 1000 * 1000;
-  DeadlockedSessionArray *deadlocked_session = NULL;
-  fetch_deadlocked_sessions_(deadlocked_session);
+  KilledSessionArray *killed_session = NULL;
+  fetch_killed_sessions_(killed_session);
+
   // FIX:
   // lower down session idle check frequency to 10s
   int64_t curr_ts = ObClockGenerator::getClock();
@@ -1413,8 +1414,8 @@ ObLink* ObLockWaitMgr::check_timeout()
         // abnormal case which session_id equals 0 from causing the problem of missing wakeup
       } else if (0 == iter->sessid_) {
         // do nothing, may be rpc plan, sessionid is not setted
-      } else if (NULL != deadlocked_session
-                 && is_deadlocked_session_(deadlocked_session,
+      } else if (NULL != killed_session
+                 && is_killed_session_(killed_session,
                                            iter->get_sess_id())) {
         SET_NODE_TO_DELETE("deadlock");
         TRANS_LOG(INFO, "session is deadlocked, pop the request",
@@ -1803,37 +1804,37 @@ void ObLockWaitMgr::wakeup(const ObLockID &lock_id)
   wakeup_(LockHashHelper::hash_lock_id(lock_id));
 }
 
-int ObLockWaitMgr::notify_deadlocked_session(const uint32_t sess_id)
+int ObLockWaitMgr::notify_killed_session(const uint32_t sess_id)
 {
-  ObSpinLockGuard guard(deadlocked_sessions_lock_);
-  return deadlocked_sessions_[deadlocked_sessions_index_].push_back(SessPair{sess_id});
+  ObSpinLockGuard guard(killed_sessions_lock_);
+  return killed_sessions_[killed_sessions_index_].push_back(SessPair{sess_id});
 }
 
-void ObLockWaitMgr::fetch_deadlocked_sessions_(DeadlockedSessionArray* &sessions)
+void ObLockWaitMgr::fetch_killed_sessions_(KilledSessionArray* &sessions)
 {
-  ObSpinLockGuard guard(deadlocked_sessions_lock_);
+  ObSpinLockGuard guard(killed_sessions_lock_);
 
-  deadlocked_sessions_index_ = 1 - deadlocked_sessions_index_;
-  if (0 != deadlocked_sessions_index_
-      && 1 != deadlocked_sessions_index_) {
-    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected deadlocked session index", K(deadlocked_sessions_index_));
+  killed_sessions_index_ = 1 - killed_sessions_index_;
+  if (0 != killed_sessions_index_
+      && 1 != killed_sessions_index_) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected deadlocked session index", K(killed_sessions_index_));
   }
-  deadlocked_sessions_[deadlocked_sessions_index_].reset();
-  sessions = deadlocked_sessions_ + (1 - deadlocked_sessions_index_);
+  killed_sessions_[killed_sessions_index_].reset();
+  sessions = killed_sessions_ + (1 - killed_sessions_index_);
 }
 
-bool ObLockWaitMgr::is_deadlocked_session_(DeadlockedSessionArray *sessions,
+bool ObLockWaitMgr::is_killed_session_(KilledSessionArray *sessions,
                                            const uint32_t sess_id)
 {
-  bool is_deadlocked_session = false;
+  bool is_killed_session = false;
 
   for (int64_t i = 0; i < sessions->count(); i++) {
     if (sess_id == (*sessions)[i].sess_id_) {
-      is_deadlocked_session = true;
+      is_killed_session = true;
     }
   }
 
-  return is_deadlocked_session;
+  return is_killed_session;
 }
 
 int64_t ObLockWaitMgr::calc_holder_tx_lock_timestamp(const int64_t holder_tx_start_time, const int64_t holder_data_seq_num)

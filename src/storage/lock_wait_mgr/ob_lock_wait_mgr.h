@@ -89,7 +89,7 @@ public:
     uint32_t sess_id_;
     TO_STRING_KV(K(sess_id_));
   };
-  typedef ObSEArray<SessPair, OB_SESSPAIR_COUNT> DeadlockedSessionArray;
+  typedef ObSEArray<SessPair, OB_SESSPAIR_COUNT> KilledSessionArray;
 
 public:
   ObLockWaitMgr();
@@ -206,7 +206,7 @@ public:
   DELEGATE_WITH_RET(row_holder_mapper_, insert_hash_holder, void);
   DELEGATE_WITH_RET(row_holder_mapper_, get_hash_holder, int);
   DELEGATE_WITH_RET(row_holder_mapper_, erase_hash_holder_record, void);
-  int notify_deadlocked_session(const uint32_t sess_id);
+  int notify_killed_session(const uint32_t sess_id);
 
   // for all_virtual_lock_wait_stat
   Node* next(Node*& iter, Node* target);
@@ -427,9 +427,9 @@ private:
                                       const Node * const node,
                                       const ObString &query_sql,
                                       const int64_t query_timeout_us);
-  bool is_deadlocked_session_(DeadlockedSessionArray *sessions,
+  bool is_killed_session_(KilledSessionArray *sessions,
                               const uint32_t sess_id);
-  void fetch_deadlocked_sessions_(DeadlockedSessionArray *&sessions);
+  void fetch_killed_sessions_(KilledSessionArray *&sessions);
   inline int64_t calc_holder_tx_lock_timestamp(const int64_t holder_tx_start_time, const int64_t holder_data_seq_num);
   void begin_row_lock_wait_event(const Node * const node);
   void end_row_lock_wait_event(const Node * const node);
@@ -452,9 +452,9 @@ private:
   int64_t total_wait_node_;
 
   // for deadlock
-  ObSpinLock deadlocked_sessions_lock_;
-  int32_t deadlocked_sessions_index_;
-  DeadlockedSessionArray deadlocked_sessions_[2];
+  ObSpinLock killed_sessions_lock_;
+  int32_t killed_sessions_index_;
+  KilledSessionArray killed_sessions_[2];
   RowHolderMapper row_holder_mapper_;
 };
 

@@ -153,7 +153,7 @@ int ObTransDeadlockDetectorAdapter::kill_tx(const SessionIDPair sess_id_pair)
     DETECT_LOG(WARN, "fail to kill transaction", K(ret), K(sess_id_pair), K(*session_info));
   } else {
     session_info->reset_tx_variable();
-    mgr->notify_deadlocked_session(sess_id_pair.get_valid_sess_id());
+    mgr->notify_killed_session(sess_id_pair.get_valid_sess_id());
     DETECT_LOG(INFO, "set query dealocked success in mysql mode", K(ret), K(sess_id_pair), K(*session_info));
   }
   return ret;
@@ -183,7 +183,7 @@ int ObTransDeadlockDetectorAdapter::kill_stmt(const SessionIDPair sess_id_pair)
   } else if (OB_FAIL(GCTX.session_mgr_->set_query_deadlocked(*session_info))) {
     TRANS_LOG(WARN, "set query dealocked failed", K(ret), K(sess_id_pair), K(*session_info));
   } else {
-    mgr->notify_deadlocked_session(sess_id_pair.get_valid_sess_id());
+    mgr->notify_killed_session(sess_id_pair.get_valid_sess_id());
     TRANS_LOG(INFO, "set query dealocked success in oracle mode", K(ret), K(sess_id_pair), K(*session_info));
   }
   return ret;
