@@ -877,7 +877,7 @@ int ObUnLockExecutor::release_all_locks_(ObLockContext &ctx,
 
   OZ (get_task_type_by_release_type_(release_type, task_type));
   OZ (ObTableLockDetector::get_unlock_request_list(session, owner_id, task_type, allocator, arg_list));
-  OX (release_all_locks_(ctx, arg_list, session, tx_param, release_cnt));
+  OZ (release_all_locks_(ctx, arg_list, session, tx_param, release_cnt));
   // clean the unlock request list
   for (int64_t i = 0; i < arg_list.count(); i++) {
     ObLockRequest *arg = arg_list.at(i);
