@@ -508,38 +508,63 @@ public:
   }
 
 private:
+  bool is_leader_(ObLS &ls)
+  {
+    int ret = OB_SUCCESS;
+    // set default value as leader because leader do not skip throttle
+    bool is_leader = true;
+    ObRole role;
+    int64_t proposal_id = 0;
+    if (OB_FAIL(ls.get_log_handler()->get_role(role, proposal_id))) {
+      LOG_WARN("get ls role failed", KR(ret), K(ls.get_ls_id()));
+    } else if (common::is_strong_leader(role)) {
+      is_leader = true;
+    } else {
+      is_leader = false;
+    }
+    return is_leader;
+  }
+
 #define PRINT_CKPT_INFO_WRAPPER                                                                 \
   "ls_id", ls.get_ls_id(), K(sn_ckpt_lsn), K(ss_ckpt_lsn), K(sn_ckpt_scn), K(ss_ckpt_scn),       \
       KTIME(sn_ckpt_scn.convert_to_ts()), KTIME(ss_ckpt_scn.convert_to_ts()), "MAX LSN GAP(MB)", \
       max_lsn_gap / 1024 / 1024
-
   void throttle_flush_if_needed(const ObSSLSMeta &ss_ls_meta, LSN sn_ckpt_lsn, LSN ss_ckpt_lsn, ObLS &ls)
   {
-    bool ckpt_lag_too_large = false;
-    int64_t max_lsn_gap = INT64_MAX;
-    (void)MTL(ObTenantFreezer*)->get_tenant_memstore_limit(max_lsn_gap);
-    const int64_t config_trigger = ObTenantFreezer::get_freeze_trigger_percentage();
-    const int64_t freeze_trigger = config_trigger > 0 ? config_trigger : 20;
-    // use 1/8 freeze_trigger as lsn_gap
-    max_lsn_gap = max_lsn_gap * freeze_trigger / 100 / 8;
+    if (is_leader_(ls)) {
+      bool ckpt_lag_too_large = false;
+      // use 16GB as default lsn gap
+      int64_t max_lsn_gap = 16LL * 1024LL * 1024LL * 1024LL;
+      (void)MTL(ObTenantFreezer *)->get_tenant_memstore_limit(max_lsn_gap);
+      const int64_t config_trigger = ObTenantFreezer::get_freeze_trigger_percentage();
+      const int64_t freeze_trigger = config_trigger > 0 ? config_trigger : 20;
+      // use 1/8 freeze_trigger as lsn_gap
+      max_lsn_gap = max_lsn_gap * freeze_trigger / 100 / 8;
 
-    const SCN sn_ckpt_scn = ls.get_clog_checkpoint_scn();
-    const SCN ss_ckpt_scn = ss_ls_meta.get_ss_checkpoint_scn();
+      const SCN sn_ckpt_scn = ls.get_clog_checkpoint_scn();
+      const SCN ss_ckpt_scn = ss_ls_meta.get_ss_checkpoint_scn();
 
-    if (!ls.get_inc_sstable_uploader().finish_reloading()) {
-      (void)ls.disable_flush();
-      FLOG_INFO("disable ls flush to wait uploader reloading", PRINT_CKPT_INFO_WRAPPER);
-    } else if (ls.get_inc_sstable_uploader().task_overflowed()) {
-      (void)ls.disable_flush();
-      FLOG_INFO("disable ls flush to handle current tasks", PRINT_CKPT_INFO_WRAPPER);
-    } else if ((sn_ckpt_lsn > ss_ckpt_lsn) && (sn_ckpt_lsn - ss_ckpt_lsn > max_lsn_gap)) {
-      (void)ls.disable_flush();
-      ckpt_lag_too_large = true;
-      FLOG_INFO("disable ls flush to throttle writes and allow ss checkpoint to catch up with sn checkpoint",
-                PRINT_CKPT_INFO_WRAPPER);
-    } else if (ls.flush_is_disabled()) {
-      (void)ls.enable_flush();
-      FLOG_INFO("enable ls flush", PRINT_CKPT_INFO_WRAPPER);
+      if (!ls.get_inc_sstable_uploader().finish_reloading()) {
+        (void)ls.disable_flush();
+        FLOG_INFO("disable ls flush to wait uploader reloading", PRINT_CKPT_INFO_WRAPPER);
+      } else if (ls.get_inc_sstable_uploader().task_overflowed()) {
+        (void)ls.disable_flush();
+        FLOG_INFO("disable ls flush to handle current tasks", PRINT_CKPT_INFO_WRAPPER);
+      } else if ((sn_ckpt_lsn > ss_ckpt_lsn) && (sn_ckpt_lsn - ss_ckpt_lsn > max_lsn_gap)) {
+        (void)ls.disable_flush();
+        ckpt_lag_too_large = true;
+        FLOG_INFO("disable ls flush to throttle writes and allow ss checkpoint to catch up with sn checkpoint",
+                  PRINT_CKPT_INFO_WRAPPER);
+      } else if (ls.flush_is_disabled()) {
+        (void)ls.enable_flush();
+        FLOG_INFO("enable ls flush", PRINT_CKPT_INFO_WRAPPER);
+      }
+    } else {
+      // this ls replica is not leader
+      if (ls.flush_is_disabled()) {
+        (void)ls.enable_flush();
+        FLOG_INFO("enable ls flush because this ls is not leader", K(ls.get_ls_id()));
+      }
     }
   }
 #undef  PRINT_CKPT_INFO_WRAPPER
