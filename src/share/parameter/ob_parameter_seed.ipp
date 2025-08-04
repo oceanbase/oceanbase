@@ -941,7 +941,7 @@ DEF_INT(row_compaction_update_limit, OB_CLUSTER_PARAMETER, "6", "[1, 6400]",
         "maximum update count before trigger row compaction. "
         "Range: [1, 6400]",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(ignore_replay_checksum_error, OB_CLUSTER_PARAMETER, "False",
+DEF_BOOL(ignore_replay_checksum_error, OB_CLUSTER_PARAMETER, "True",
          "specifies whether error raised from the memtable replay checksum validation can be ignored. "
          "Value: True:ignored; False: not ignored",
          ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -586,8 +586,7 @@ int ObMemtableCtx::trans_replay_end(const bool commit,
   // merge may be triggered after clear state in which the callback has already
   if (commit
       && 0 != checksum // if leader's checksum is skipped, follow skip check
-      && log_cluster_version >= CLUSTER_VERSION_3100
-      && !ObServerConfig::get_instance().ignore_replay_checksum_error) {
+      && log_cluster_version >= CLUSTER_VERSION_3100) {
     ObSEArray<uint64_t, 1> replay_checksum;
     if (OB_FAIL(calc_checksum_all(replay_checksum))) {
       TRANS_LOG(WARN, "calc checksum fail", K(ret));
@@ -603,9 +602,11 @@ int ObMemtableCtx::trans_replay_end(const bool commit,
                   "checksum_replayed", checksum_collapsed,
                   "checksum_before_collapse", replay_checksum,
                   K(checksum_signature), KPC(this));
-        // TODO(handora.qc): use safe one later
-        // OB_SAFE_ABORT();
-        ob_abort();
+        if (ObServerConfig::get_instance().ignore_replay_checksum_error) {
+          cs_ret = OB_SUCCESS;
+        } else {
+          OB_SAFE_ABORT();
+        }
       }
     }
   }
