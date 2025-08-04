@@ -16,6 +16,7 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/code_generator/ob_expr_generator_impl.h"
 #include "sql/engine/expr/ob_expr_get_path.h"
+#include "sql/engine/aggregate/ob_aggregate_processor.h"
 
 namespace oceanbase
 {
@@ -427,6 +428,32 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
     }
     if (OB_SUCC(ret)) {
       rt_expr->local_session_var_id_ = raw_expr->get_local_session_var_id();
+    }
+    if (T_FUN_APPROX_COUNT_DISTINCT == raw_expr->get_expr_type()
+        || T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == raw_expr->get_expr_type()
+        || T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE == raw_expr->get_expr_type()) {
+      int64_t approx_cnt_distinct_prec = ObAggrInfo::DEFAULT_APPROX_COUNT_DISTINCT_PRECISION;
+      if (OB_ISNULL(op_cg_ctx_.log_plan_)) {
+        // just use default value
+      } else {
+        bool hint_exists = false;
+        int64_t hint_prec = ObAggrInfo::DEFAULT_APPROX_COUNT_DISTINCT_PRECISION;
+        const ObOptParamHint &opt_hint = op_cg_ctx_.log_plan_->get_optimizer_context().get_global_hint().opt_params_;
+        if (OB_FAIL(opt_hint.get_integer_opt_param(ObOptParamHint::APPROX_COUNT_DISTINCT_PRECISION,
+                                                   hint_prec, hint_exists))) {
+          LOG_WARN("get integer opt param failed", K(ret));
+        } else if (hint_exists) {
+          approx_cnt_distinct_prec = hint_prec;
+        } else {
+          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+          approx_cnt_distinct_prec = tenant_config.is_valid() ?
+                                       tenant_config->approx_count_distinct_precision :
+                                       ObAggrInfo::DEFAULT_APPROX_COUNT_DISTINCT_PRECISION;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        rt_expr->extra_ = approx_cnt_distinct_prec;
+      }
     }
   } // for end
 

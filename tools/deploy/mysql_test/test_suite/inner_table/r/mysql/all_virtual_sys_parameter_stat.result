@@ -25,6 +25,7 @@ select name from __all_virtual_sys_parameter_stat where name not like "module_te
 name
 alert_log_level
 all_server_list
+approx_count_distinct_precision
 arbitration_degradation_policy
 arbitration_timeout
 archive_lag_target

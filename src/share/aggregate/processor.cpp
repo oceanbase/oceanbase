@@ -1238,8 +1238,12 @@ int Processor::llc_init_empty(ObExpr &expr, ObEvalCtx &eval_ctx) const
 {
   int ret = OB_SUCCESS;
   char *llc_bitmap_buf = nullptr;
-  const int64_t llc_bitmap_size = ObAggregateProcessor::get_llc_size();
-  if (OB_ISNULL(llc_bitmap_buf = expr.get_str_res_mem(eval_ctx, llc_bitmap_size))) {
+
+  int64_t llc_bitmap_size = ObAggrInfo::get_approx_cnt_llc_buck_num(expr.extra_);
+  if (OB_UNLIKELY(!ObExprEstimateNdv::llc_is_num_buckets_valid(llc_bitmap_size))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected bitmap size", K(ret), K(llc_bitmap_size));
+  } else if (OB_ISNULL(llc_bitmap_buf = expr.get_str_res_mem(eval_ctx, llc_bitmap_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SQL_LOG(WARN, "allocate memory failed", K(ret));
   } else {

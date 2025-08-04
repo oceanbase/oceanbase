@@ -43,7 +43,6 @@ using namespace common;
 using namespace common::number;
 namespace sql
 {
-
 OB_SERIALIZE_MEMBER(HashRollupRTInfo, rollup_grouping_id_, expand_exprs_, gby_exprs_, dup_expr_pairs_);
 
 
@@ -1422,7 +1421,11 @@ int ObAggregateProcessor::init()
       if (aggr_info.has_distinct_) {
         ++distinct_count_;
       }
-
+      if (aggr_info.get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT
+          || aggr_info.get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS
+          || aggr_info.get_expr_type() == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
+        approx_cnt_distinct_prec_ = aggr_info.expr_->extra_;
+      }
       if (T_FUN_MEDIAN == aggr_info.get_expr_type()
           || T_FUN_GROUP_PERCENTILE_CONT == aggr_info.get_expr_type()) {
         // ObAggregateProcessor::init would be invoked many times under groupby rescan
@@ -3442,7 +3445,10 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
           LOG_WARN("curr_row_results count is not 1", K(stored_row));
         } else if (!stored_row.cells()[0].is_null()) {
           if (aggr_fun == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
-            if (OB_UNLIKELY(stored_row.cells()[0].len_ < get_llc_size())) {
+            int64_t llc_size = 0;
+            if (OB_FAIL(get_llc_buckets_num(llc_size))) {
+              LOG_WARN("get llc buckets number failed", K(ret));
+            } else if (OB_UNLIKELY(stored_row.cells()[0].len_ != llc_size)) {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("invalid argument length", K(ret), K(stored_row.cells()[0].len_));
             }
@@ -3847,14 +3853,17 @@ int ObAggregateProcessor::process_aggr_batch_result(
       break;
     }
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE: {
-      if (1 != param_exprs->count()) {
+      int64_t llc_size = 0;
+      if (OB_FAIL(get_llc_buckets_num(llc_size))) {
+        LOG_WARN("get llc buckets number failed", K(ret));
+      } else if (1 != param_exprs->count()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("The count of APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE is not 1",
           K(param_exprs->count()));
       } else {
         ObDatumVector arg_datums = param_exprs->at(0)->locate_expr_datumvector(eval_ctx_);
         ret = approx_count_merge_calc_batch(aggr_cell.get_iter_result(), aggr_cell, arg_datums,
-                                            aggr_info.is_number(), selector);
+                                            aggr_info.is_number(), selector, llc_size);
       }
       break;
     }
@@ -4106,7 +4115,10 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
       bool has_null_cell = false;
       ObDatum *llc_bitmap = &aggr_cell.get_iter_result();
       uint64_t hash_value = 0;
-      if (OB_FAIL(llc_calc_hash_value(stored_row,
+      int64_t llc_size = 0;
+      if (OB_FAIL(get_llc_buckets_num(llc_size))) {
+        LOG_WARN("get llc buckets number failed", K(ret));
+      } else if (OB_FAIL(llc_calc_hash_value(stored_row,
                                       aggr_info.param_exprs_,
                                       has_null_cell,
                                       hash_value))) {
@@ -4114,7 +4126,7 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
       } else if (has_null_cell) {
        /*do nothing*/
       } else {
-        ret = llc_add_value(hash_value, llc_bitmap->get_string());
+        ret = llc_add_value(hash_value, llc_bitmap->get_string(), get_llc_bucket_bits(llc_size));
       }
       break;
     }
@@ -6287,7 +6299,8 @@ int ObAggregateProcessor::approx_count_merge_calc_batch(
   AggrCell &aggr_cell,
   const ObDatumVector &arg_datums,
   const bool is_number,
-  const T &selector
+  const T &selector,
+  const int64_t llc_buckets_num
 )
 {
   int ret = OB_SUCCESS;
@@ -6296,7 +6309,10 @@ int ObAggregateProcessor::approx_count_merge_calc_batch(
     if (arg_datums.at(nth_row)->is_null()) {
       continue;
     }
-    if (!aggr_cell.get_is_evaluated()) {
+    if (OB_UNLIKELY(llc_buckets_num != arg_datums.at(nth_row)->len_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid merge length", K(ret), K(llc_buckets_num), K(arg_datums.at(nth_row)->len_));
+    } else if (!aggr_cell.get_is_evaluated()) {
       // init firstly
       ret = clone_aggr_cell(aggr_cell, *arg_datums.at(nth_row), is_number);
       aggr_cell.set_is_evaluated(true);
@@ -6316,6 +6332,10 @@ int ObAggregateProcessor::approx_count_calc_batch(
 {
   int ret = OB_SUCCESS;
   int64_t nth_row = 0;
+  int64_t llc_size = 0;
+  if (OB_FAIL(get_llc_buckets_num(llc_size))) {
+    LOG_WARN("get llc buckets number failed", K(ret));
+  }
   for (auto it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
     uint64_t hash_value = 0;
     bool has_null_cell = false;
@@ -6335,7 +6355,7 @@ int ObAggregateProcessor::approx_count_calc_batch(
     if (OB_SUCC(ret)) {
       LOG_DEBUG("debug approx_count_calc_batch", K(has_null_cell), K(dst));
       if (!has_null_cell) {
-        ret = llc_add_value(hash_value, dst.get_string());
+        ret = llc_add_value(hash_value, dst.get_string(), get_llc_bucket_bits(llc_size));
       }
     }
   }
@@ -6895,13 +6915,16 @@ int ObAggregateProcessor::llc_add(ObDatum &result, const ObDatum &new_value)
   ObString res_buf = result.get_string();
   ObString left_buf = result.get_string();
   ObString right_buf = new_value.get_string();;
-  if (OB_UNLIKELY(left_buf.length() < get_llc_size())
-      || OB_UNLIKELY(right_buf.length() < get_llc_size())) {
+  int64_t llc_size = 0;
+  if (OB_FAIL(get_llc_buckets_num(llc_size))) {
+    LOG_WARN("get llc bucket number failed", K(ret));
+  } else if (OB_UNLIKELY(left_buf.length() < llc_size)
+      || OB_UNLIKELY(right_buf.length() < llc_size)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("buffer size don't match", K(left_buf.length()), K(right_buf.length()), K(ret));
   } else {
     //TODO::here we can use SSE
-    for (int64_t i = 0; i < get_llc_size(); ++i) {
+    for (int64_t i = 0; i < llc_size; ++i) {
       res_buf.ptr()[i] = std::max(static_cast<uint8_t>(left_buf[i]),
                                   static_cast<uint8_t>(right_buf[i]));
     }
@@ -6909,32 +6932,30 @@ int ObAggregateProcessor::llc_add(ObDatum &result, const ObDatum &new_value)
   return ret;
 }
 
-int ObAggregateProcessor::get_llc_size()
-{
-  return sizeof(char ) * LLC_NUM_BUCKETS;
-}
-
-int ObAggregateProcessor::llc_add_value(const uint64_t value, const ObString &llc_bitmap_buf)
+int ObAggregateProcessor::llc_add_value(const uint64_t value, const ObString &llc_bitmap_buf,
+                                        const int64_t llc_bucket_bits /* 10 */)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(llc_add_value(value, const_cast<char*>(llc_bitmap_buf.ptr()), llc_bitmap_buf.length()))) {
+  if (OB_FAIL(llc_add_value(value, const_cast<char *>(llc_bitmap_buf.ptr()),
+                            llc_bitmap_buf.length(), llc_bucket_bits))) {
     LOG_WARN("fail to add value", K(ret));
   }
   return ret;
 }
 
-int ObAggregateProcessor::llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size)
+int ObAggregateProcessor::llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size,
+                                        const int64_t llc_bucket_bits/* 10 */)
 {
   int ret = OB_SUCCESS;
-  uint64_t bucket_index = value >> (64 - LLC_BUCKET_BITS);
+  uint64_t bucket_index = value >> (64 - llc_bucket_bits);
   uint64_t pmax = 0;
-  if (0 == value << LLC_BUCKET_BITS) {
+  if (0 == value << llc_bucket_bits) {
     // do nothing
   } else {
-    pmax = ObExprEstimateNdv::llc_leading_zeros(value << LLC_BUCKET_BITS, 64 - LLC_BUCKET_BITS) + 1;
+    pmax = ObExprEstimateNdv::llc_leading_zeros(value << llc_bucket_bits, 64 - llc_bucket_bits) + 1;
   }
   ObString::obstr_size_t llc_num_buckets = size;
-  OB_ASSERT(size == get_llc_size());
+  // OB_ASSERT(size == get_llc_size());
   OB_ASSERT(ObExprEstimateNdv::llc_is_num_buckets_valid(llc_num_buckets));
   OB_ASSERT(llc_num_buckets > bucket_index);
   if (pmax > static_cast<uint8_t>(llc_bitmap_buf[bucket_index])) {
@@ -6947,18 +6968,23 @@ int ObAggregateProcessor::llc_add_value(const uint64_t value, char *llc_bitmap_b
 int ObAggregateProcessor::llc_init(AggrCell &aggr_cell)
 {
   int ret = OB_SUCCESS;
-  char llc_bitmap_buf[sizeof(char ) * LLC_NUM_BUCKETS] = {};
-  ObDatum src_datum;
-  src_datum.set_string(llc_bitmap_buf, sizeof(char ) * LLC_NUM_BUCKETS);
-  ret = clone_aggr_cell(aggr_cell, src_datum);
-  LOG_DEBUG("llc init", K(aggr_cell));
+  int64_t llc_size = 0;
+  if (OB_FAIL(get_llc_buckets_num(llc_size))) {
+    LOG_WARN("get llc buckets number failed", K(ret));
+  } else if (OB_FAIL(clone_cell(aggr_cell, llc_size * sizeof(char), nullptr))) {
+    LOG_WARN("clone cell failed", K(ret));
+  } else {
+    const char *buf = aggr_cell.get_buf() + 2 * sizeof(int64_t);
+    MEMSET(const_cast<char *>(buf), 0, sizeof(char) * llc_size);
+    aggr_cell.get_iter_result().pack_ = llc_size * sizeof(char);
+  }
   return ret;
 }
 
-int ObAggregateProcessor::llc_init_empty(char *&llc_map, int64_t &llc_map_size, common::ObIAllocator &alloc)
+int ObAggregateProcessor::llc_init_empty(char *&llc_map, int64_t &llc_map_size, common::ObIAllocator &alloc, const int64_t llc_buckets_size)
 {
   int ret = OB_SUCCESS;
-  llc_map_size = get_llc_size();
+  llc_map_size = llc_buckets_size;
   OB_ASSERT(llc_map_size > 0);
   if (OB_ISNULL(llc_map = static_cast<char *> (alloc.alloc(llc_map_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -6973,9 +6999,10 @@ int ObAggregateProcessor::llc_init_empty(ObExpr &expr, ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
   char *llc_bitmap_buf = NULL;
-  const int64_t llc_bitmap_size = get_llc_size();
-  if (OB_ISNULL(llc_bitmap_buf = expr.get_str_res_mem(eval_ctx_,
-      llc_bitmap_size))) {
+  int64_t llc_bitmap_size = 0;
+  if (OB_FAIL(get_llc_buckets_num(llc_bitmap_size))) {
+    LOG_WARN("get llc bucket number failed", K(ret));
+  } else if (OB_ISNULL(llc_bitmap_buf = expr.get_str_res_mem(eval_ctx_, llc_bitmap_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc", K(llc_bitmap_size), K(ret));
   } else {
@@ -9734,6 +9761,18 @@ bool ObAggregateProcessor::has_listagg_non_const_separator() const
   }
   return has_it;
 }
+
+int ObAggregateProcessor::get_llc_buckets_num(int64_t &llc_bucket_size)
+{
+  int ret = OB_SUCCESS;
+  llc_bucket_size = ObAggrInfo::get_approx_cnt_llc_buck_num(approx_cnt_distinct_prec_);
+  if (OB_UNLIKELY(!ObExprEstimateNdv::llc_is_num_buckets_valid(llc_bucket_size))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid llc bucket number", K(ret), K(llc_bucket_size));
+  }
+  return ret;
+}
+
 
 template<typename RES_T, typename ARG_T>
 struct ObDecIntSumOpFunc
