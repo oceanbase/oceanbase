@@ -122,6 +122,7 @@ set(ob_inner_sql_parser_object_list
   parser_utility.cpp
   parser_utility.h
   type_name.c
+  ob_parse_simd.cpp
 )
 
 # parser objects for server parser
