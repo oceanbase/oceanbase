@@ -1271,6 +1271,15 @@ public:
 
   static int extract_params(const common::ObIArray<ObRawExpr*> &exprs,
                             common::ObIArray<ObRawExpr*> &params);
+
+  static int extract_dynamic_params(ObRawExpr* expr,
+                                    common::ObIArray<ObRawExpr*> &params,
+                                    const bool without_const_expr = false);
+
+  static int extract_dynamic_params(const common::ObIArray<ObRawExpr*> &exprs,
+                                    common::ObIArray<ObRawExpr*> &params,
+                                    const bool without_const_expr = false);
+
   static int is_contain_params(const common::ObIArray<ObRawExpr*> &exprs, bool &is_contain);
   static int is_contain_params(const ObRawExpr *expr, bool &is_contain);
   static int get_col_ref_expr_recursively(ObRawExpr *expr,

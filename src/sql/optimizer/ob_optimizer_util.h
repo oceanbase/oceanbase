@@ -1325,10 +1325,6 @@ public:
                                               const EqualSets &equal_sets,
                                               bool &is_left_dominate);
 
-  static int get_range_params(ObLogicalOperator *root,
-                              ObIArray<ObRawExpr*> &range_exprs,
-                              ObIArray<ObRawExpr*> &all_table_filters);
-
   static int check_basic_sharding_info(const ObAddr &local_addr,
                                        const ObIArray<ObLogicalOperator *> &child_ops,
                                        bool &is_basic);
