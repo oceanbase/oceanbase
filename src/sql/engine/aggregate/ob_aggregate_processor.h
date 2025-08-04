@@ -101,6 +101,10 @@ public:
   TO_STRING_KV(KP_(rollup_grouping_id), K_(expand_exprs), K_(gby_exprs), K_(dup_expr_pairs));
 };
 
+struct GroupingSetRTInfo
+{
+};
+
 struct ObAggrInfo
 {
 public:
@@ -138,7 +142,8 @@ public:
     with_unique_keys_(false),
     distinct_hash_funcs_(),
     max_disuse_param_expr_(NULL),
-    hash_rollup_info_(nullptr)
+    hash_rollup_info_(nullptr),
+    grouping_set_info_(nullptr)
   {}
   ObAggrInfo(common::ObIAllocator &alloc)
   : alloc_(&alloc),
@@ -174,7 +179,8 @@ public:
     external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
     external_routine_entry_(),
     external_routine_url_(),
-    external_routine_resource_()
+    external_routine_resource_(),
+    grouping_set_info_(nullptr)
   {}
   virtual ~ObAggrInfo();
 
@@ -265,6 +271,7 @@ public:
   ObString external_routine_entry_;
   ObString external_routine_url_;
   ObString external_routine_resource_;
+  GroupingSetRTInfo *grouping_set_info_;
 };
 
 typedef common::ObFixedArray<ObAggrInfo, common::ObIAllocator> AggrInfoFixedArray;
