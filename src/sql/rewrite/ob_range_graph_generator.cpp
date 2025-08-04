@@ -1367,9 +1367,15 @@ int ObRangeGraphGenerator::generate_expr_final_info()
   range_map.in_params_.reset();
   int64_t N = final_exprs.count();
   bool cnt_exec_param = false;
+  ObSqlBitSet<> final_expr_bits(N);
+  ObSqlBitSet<> in_params_bits(ctx_.in_params_.count());
   if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(exec_ctx));
+  } else if (OB_FAIL(formalize_final_exprs(pre_range_graph_->get_range_head(),
+                                           final_expr_bits,
+                                           in_params_bits))) {
+    LOG_WARN("failed to formalize final exprs", K(ret));
   } else if (OB_FAIL(range_map.expr_final_infos_.prepare_allocate(N))) {
     LOG_WARN("failed to prepare allocate expr final infos", K(N));
   }
@@ -1380,6 +1386,8 @@ int ObRangeGraphGenerator::generate_expr_final_info()
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null expr");
+    } else if (!final_expr_bits.has_member(i)) {
+      // do nothing
     } else if (T_QUESTIONMARK == expr->get_expr_type()) {
       const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr *>(expr);
       const ObObj& val = const_expr->get_value();
@@ -1415,9 +1423,11 @@ int ObRangeGraphGenerator::generate_expr_final_info()
       expr_info.is_expr_ = true;
     }
 
-    if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
-      cnt_exec_param = true;
-      expr_info.cnt_exec_param_ = true;
+    if (final_expr_bits.has_member(i)) {
+      if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
+        cnt_exec_param = true;
+        expr_info.cnt_exec_param_ = true;
+      }
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.null_safe_value_idxs_.count(); ++i) {
@@ -1919,6 +1929,28 @@ int GeneralNljChecker::visit(const ObRangeNode *range_node, const ObRangeMap &ra
   return ret;
 }
 
+int ObRangeGraphGenerator::formalize_final_exprs(const ObRangeNode *range_node,
+                                                 ObSqlBitSet<> &exprs_bitset,
+                                                 ObSqlBitSet<> &in_params_bitset)
+{
+  int ret = OB_SUCCESS;
+  for (const ObRangeNode *check_node = range_node; OB_SUCC(ret) && check_node != nullptr;
+       check_node = check_node->or_next_) {
+    if (OB_FAIL(formalize_one_range_exprs(*check_node,
+                                          exprs_bitset,
+                                          in_params_bitset))) {
+      LOG_WARN("failed to formalize one range exprs", K(ret));
+    } else if (check_node->and_next_ != NULL) {
+      if (OB_FAIL(SMART_CALL(formalize_final_exprs(check_node->and_next_,
+                                                   exprs_bitset,
+                                                   in_params_bitset)))) {
+        LOG_WARN("failed to formalize final exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int GeneralNljChecker::get_fast_final_pos_array(const ObRangeMap &range_map,
                                                 ObIArray<ObFastFinalPos> &pos_arr)
 {
@@ -2024,6 +2056,42 @@ int GeneralNljChecker::check_one_range(const ObRangeNode &range_node,
   return ret;
 }
 
+int ObRangeGraphGenerator::formalize_one_range_exprs(const ObRangeNode &range_node,
+                                                     ObSqlBitSet<> &exprs_bitset,
+                                                     ObSqlBitSet<> &in_params_bitset)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<const ObRawExpr*> &final_exprs = ctx_.final_exprs_;
+  for (int64_t i = 0; OB_SUCC(ret) && i < range_node.column_cnt_; ++i) {
+    int64_t start = range_node.start_keys_[i];
+    int64_t end = range_node.end_keys_[i];
+    if (start >= 0 && start < final_exprs.count()) {
+      if (OB_FAIL(exprs_bitset.add_member(start))) {
+        LOG_WARN("failed to add member", K(ret));
+      }
+    } else if (start < 0) {
+      if (OB_FAIL(formalize_in_param_exprs(-start - 1,
+                                           exprs_bitset,
+                                           in_params_bitset))) {
+        LOG_WARN("failed to formalize in param exprs", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (end >= 0 && end < final_exprs.count()) {
+      if (OB_FAIL(exprs_bitset.add_member(end))) {
+        LOG_WARN("failed to add member", K(ret));
+      }
+    } else if (end < 0) {
+      if (OB_FAIL(formalize_in_param_exprs(-end - 1,
+                                           exprs_bitset,
+                                           in_params_bitset))) {
+        LOG_WARN("failed to formalize in param exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int GeneralNljChecker::check_in_param(const InParam* param,
                                       const ObRangeMap &range_map,
                                       bool &can_extract)
@@ -2037,6 +2105,32 @@ int GeneralNljChecker::check_in_param(const InParam* param,
       int64_t idx = param->at(i);
       if (idx >= 0 && idx < range_map.expr_final_infos_.count()) {
         can_extract = !range_map.expr_final_infos_.at(idx).cnt_exec_param_;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::formalize_in_param_exprs(int64_t in_param_idx,
+                                                    ObSqlBitSet<> &exprs_bitset,
+                                                    ObSqlBitSet<> &in_params_bitset)
+{
+  int ret = OB_SUCCESS;
+  if (in_params_bitset.has_member(in_param_idx)) {
+    // do nothing
+  } else if (in_param_idx >= 0 && in_param_idx < ctx_.in_params_.count()) {
+    InParam *param = ctx_.in_params_.at(in_param_idx);
+    if (OB_ISNULL(param)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < param->count(); ++i) {
+        if (OB_FAIL(exprs_bitset.add_member(param->at(i)))) {
+          LOG_WARN("failed to add member", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(in_params_bitset.add_member(in_param_idx))) {
+        LOG_WARN("failed to add member", K(ret));
       }
     }
   }

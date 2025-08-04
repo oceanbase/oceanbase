@@ -196,6 +196,15 @@ private:
                                                     bool &general_nlj_range);
 
   static int formalize_one_range_node(ObRangeNode &range_node);
+  int formalize_final_exprs(const ObRangeNode *range_node,
+                            ObSqlBitSet<> &exprs_bitset,
+                            ObSqlBitSet<> &in_params_bitset);
+  int formalize_one_range_exprs(const ObRangeNode &range_node,
+                                ObSqlBitSet<> &exprs_bitset,
+                                ObSqlBitSet<> &in_params_bitset);
+  int formalize_in_param_exprs(int64_t in_idx,
+                               ObSqlBitSet<> &exprs_bitset,
+                               ObSqlBitSet<> &in_params_bitset);
 private:
   ObRangeGraphGenerator();
 private:
