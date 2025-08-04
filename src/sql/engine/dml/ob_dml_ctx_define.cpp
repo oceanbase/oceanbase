@@ -280,7 +280,8 @@ OB_SERIALIZE_MEMBER(ObDMLBaseCtDef,
                     is_primary_index_,
                     is_table_without_pk_, // FARM COMPAT WHITELIST, renamed
                     has_instead_of_trigger_,
-                    trans_info_expr_);
+                    trans_info_expr_,
+                    is_table_with_clustering_key_);
 
 OB_SERIALIZE_MEMBER(ObMultiInsCtDef,
                     calc_part_id_expr_,
