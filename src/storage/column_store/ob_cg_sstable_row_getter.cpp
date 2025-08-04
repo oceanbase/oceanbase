@@ -263,16 +263,19 @@ int ObCGSSTableRowGetter::get_row_id(ObSSTableReadHandle &read_handle, ObCSRowId
   } else if (ObSSTableRowState::IN_BLOCK == read_handle.row_state_) {
     int64_t cursor = -1;
     ObMicroBlockData block_data;
+    ObMicroBlockAddr block_addr(read_handle.micro_handle_->macro_block_id_,
+                                   read_handle.micro_handle_->micro_info_.offset_,
+                                   read_handle.micro_handle_->micro_info_.size_);
     if (OB_FAIL(read_handle.get_block_data(macro_block_reader_, block_data))) {
       LOG_WARN("Fail to get block data", K(ret), K(read_handle));
     } else if (OB_FAIL(reader_helper_.get_reader(block_data.get_store_type(), reader_))) {
       LOG_WARN("Fail to prepare reader", K(ret), K(read_handle.micro_handle_->macro_block_id_));
-    } else if (OB_FAIL(reader_->get_row_id(block_data, *read_handle.rowkey_, *iter_param_->get_read_info(), cursor))) {
+    } else if (OB_FAIL(reader_->get_row_id(block_addr, block_data, *read_handle.rowkey_, *iter_param_->get_read_info(), cursor))) {
       if (OB_BEYOND_THE_RANGE == ret) {
         row_id = OB_INVALID_CS_ROW_ID;
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("Fail to get row id", K(ret), KPC(read_handle.rowkey_), K(read_handle.micro_handle_->macro_block_id_));
+        LOG_WARN("Fail to get row id", K(ret), KPC(read_handle.rowkey_), K(block_addr));
       }
     } else {
       row_id = read_handle.index_block_info_.get_row_range().start_row_id_ + cursor;

@@ -233,10 +233,14 @@ int ObMicroBlockRowGetter::get_block_row(ObSSTableReadHandle &read_handle,
 {
   int ret = OB_SUCCESS;
   ObMicroBlockData block_data;
+  const ObMicroBlockAddr block_addr(read_handle.micro_handle_->macro_block_id_,
+                                 read_handle.micro_handle_->micro_info_.offset_,
+                                 read_handle.micro_handle_->micro_info_.size_);
+
   if (OB_FAIL(read_handle.get_block_data(block_reader, block_data))) {
     LOG_WARN("Fail to get block data", K(ret), K(read_handle));
   } else if (OB_FAIL(inner_get_row(
-              read_handle.micro_handle_->macro_block_id_,
+              block_addr,
               read_handle.get_rowkey(),
               block_data,
               store_row))) {
@@ -318,7 +322,7 @@ int ObMicroBlockRowGetter::project_cache_row(const ObRowCacheValue &value, ObDat
 }
 
 int ObMicroBlockRowGetter::inner_get_row(
-    const MacroBlockId &macro_id,
+    const ObMicroBlockAddr &block_addr,
     const ObDatumRowkey &rowkey,
     const ObMicroBlockData &block_data,
     const ObDatumRow *&row)
@@ -331,19 +335,19 @@ int ObMicroBlockRowGetter::inner_get_row(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid read_info", K(ret), KPC_(read_info));
   } else if (OB_FAIL(prepare_reader(block_data.get_store_type()))) {
-    LOG_WARN("failed to prepare reader", K(ret), K(macro_id));
+    LOG_WARN("failed to prepare reader", K(ret), K(block_addr));
   } else {
     if (OB_FAIL(row_.reserve(read_info_->get_request_count()))) {
       LOG_WARN("fail to reserve memory for datum row", K(ret), K(read_info_->get_request_count()));
-    } else if (OB_FAIL(reader_->get_row(block_data, rowkey, *read_info_, row_))) {
+    } else if (OB_FAIL(reader_->get_row(block_addr, block_data, rowkey, *read_info_, row_))) {
       if (OB_BEYOND_THE_RANGE == ret) {
         if (OB_FAIL(get_not_exist_row(rowkey, row))) {
-          LOG_WARN("Fail to get not exist row", K(ret), K(rowkey), K(macro_id));
+          LOG_WARN("Fail to get not exist row", K(ret), K(rowkey), K(block_addr));
         }
-        STORAGE_LOG(DEBUG, "get not exist row", K(rowkey), K(macro_id));
+        STORAGE_LOG(DEBUG, "get not exist row", K(rowkey), K(block_addr));
       } else {
         LOG_WARN("Fail to get row", K(ret), K(rowkey), K(block_data), KPC_(read_info),
-                 KPC_(param), KPC_(context), K(macro_id));
+                 KPC_(param), KPC_(context), K(block_addr));
       }
     } else {
       row = &row_;
@@ -353,7 +357,7 @@ int ObMicroBlockRowGetter::inner_get_row(
         TRANS_LOG(WARN, "check base version filter fail", K(ret));
       }
       LOG_DEBUG("Success to get row", K(ret), K(rowkey), K(row_), KPC_(read_info),
-                K(context_->enable_put_row_cache()), K(context_->use_fuse_row_cache_), K(macro_id));
+                K(context_->enable_put_row_cache()), K(context_->use_fuse_row_cache_), K(block_addr));
     }
   }
 
@@ -381,7 +385,7 @@ int ObMicroBlockRowGetter::inner_get_row(
         LOG_WARN("fail to project cache row", K(ret), K(row_cache_value));
       } else {
         row = &cache_project_row_;
-        LOG_DEBUG("Success to get row", K(ret), K(rowkey), K(row_), K(row_cache_value), K(macro_id));
+        LOG_DEBUG("Success to get row", K(ret), K(rowkey), K(row_), K(row_cache_value), K(block_addr));
       }
     }
   }
@@ -492,18 +496,21 @@ int ObMicroBlockCGRowGetter::get_block_row(
 {
   int ret = OB_SUCCESS;
   ObMicroBlockData block_data;
-  const MacroBlockId &macro_id = read_handle.micro_handle_->macro_block_id_;
+  const ObMicroBlockAddr block_addr(read_handle.micro_handle_->macro_block_id_,
+                                    read_handle.micro_handle_->micro_info_.offset_,
+                                    read_handle.micro_handle_->micro_info_.size_);
+
   if (OB_FAIL(read_handle.get_block_data(block_reader, block_data))) {
     LOG_WARN("Fail to get block data", K(ret), K(read_handle));
   } else if (OB_FAIL(prepare_reader(block_data.get_store_type()))) {
-    LOG_WARN("Failed to prepare reader", K(ret), K(macro_id));
+    LOG_WARN("Failed to prepare reader", K(ret), K(block_addr));
   } else if (OB_FAIL(row_.reserve(read_info_->get_request_count()))) {
     LOG_WARN("Fail to reserve memory for datum row", K(ret), K(read_info_->get_request_count()));
-  } else if (OB_FAIL(reader_->get_row(block_data, *read_info_, row_idx, row_))) {
-    LOG_WARN("Fail to get cs row", K(ret), K(row_idx), K(block_data), KPC_(read_info), K(macro_id));
+  } else if (OB_FAIL(reader_->get_row(block_addr, block_data, *read_info_, row_idx, row_))) {
+    LOG_WARN("Fail to get cs row", K(ret), K(row_idx), K(block_data), KPC_(read_info), K(block_addr));
   } else {
     row = &row_;
-    LOG_DEBUG("Success to get row", K(ret), K(row_idx), K(row_), KPC_(read_info), K(macro_id));
+    LOG_DEBUG("Success to get row", K(ret), K(row_idx), K(row_), KPC_(read_info), K(block_addr));
   }
   return ret;
 }

@@ -240,6 +240,7 @@ public:
   {}
   virtual ~ObMicroBlockGetReader() {}
   virtual int get_row(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
       const storage::ObITableReadInfo &read_info,
@@ -252,11 +253,13 @@ public:
       bool &found) final;
   int locate_rowkey(const ObDatumRowkey &rowkey, int64_t &row_idx);
   virtual int get_row(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObITableReadInfo &read_info,
       const uint32_t row_idx,
       ObDatumRow &row) final;
   int get_row_id(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
       const ObITableReadInfo &read_info,

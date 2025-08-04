@@ -197,8 +197,10 @@ int ObMicroBlockGetReader<EnableNewFlatFormat>::inner_init(
   return ret;
 }
 
+
 template<bool EnableNewFlatFormat>
 int ObMicroBlockGetReader<EnableNewFlatFormat>::get_row(
+    const ObMicroBlockAddr &block_addr,
     const ObMicroBlockData &block_data,
     const ObDatumRowkey &rowkey,
     const ObITableReadInfo &read_info,
@@ -206,6 +208,8 @@ int ObMicroBlockGetReader<EnableNewFlatFormat>::get_row(
 {
   int ret = OB_SUCCESS;
   int64_t row_idx;
+  UNUSED(block_addr);
+
   if (OB_UNLIKELY(!read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid columns info ", K(ret), K(read_info));
@@ -340,12 +344,14 @@ int ObMicroBlockGetReader<EnableNewFlatFormat>::locate_rowkey_fast_path(const Ob
 
 template<bool EnableNewFlatFormat>
 int ObMicroBlockGetReader<EnableNewFlatFormat>::get_row(
+    const ObMicroBlockAddr &block_addr,
     const ObMicroBlockData &block_data,
     const ObITableReadInfo &read_info,
     const uint32_t row_idx,
     ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
+  UNUSED(block_addr);
   if (OB_UNLIKELY(!read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid columns info ", K(ret), K(read_info));
@@ -374,12 +380,14 @@ int ObMicroBlockGetReader<EnableNewFlatFormat>::get_row(
 
 template<bool EnableNewFlatFormat>
 int ObMicroBlockGetReader<EnableNewFlatFormat>::get_row_id(
+    const ObMicroBlockAddr &block_addr,
     const ObMicroBlockData &block_data,
     const ObDatumRowkey &rowkey,
     const ObITableReadInfo &read_info,
     int64_t &row_id)
 {
   int ret = OB_SUCCESS;
+  UNUSED(block_addr);
   if (OB_UNLIKELY(!read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid columns info ", K(ret), K(read_info));

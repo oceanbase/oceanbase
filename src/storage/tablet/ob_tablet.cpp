@@ -4995,7 +4995,7 @@ int ObTablet::update_rows(
     ObStoreCtx &store_ctx,
     const ObColDescIArray &col_descs,
     const ObIArray<int64_t> &update_idx,
-    const storage::ObDatumRow *old_rows,
+    const blocksstable::ObDatumRow *old_rows,
     const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr,
     ObRowsInfo &rows_info)
 {

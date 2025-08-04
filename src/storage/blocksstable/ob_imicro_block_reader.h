@@ -103,6 +103,25 @@ public:
   int64_t row_id_;
 };
 
+struct ObMicroBlockAddr
+{
+  ObMicroBlockAddr() : macro_id_(), offset_(), size_() {}
+  ObMicroBlockAddr(const MacroBlockId &macro_id, const int32_t offset, const int32_t size)
+    : macro_id_(macro_id), offset_(offset), size_(size) {}
+
+  bool operator ==(const ObMicroBlockAddr &other) const
+  {
+    return macro_id_ == other.macro_id_ && offset_ == other.offset_ && size_ == other.size_;
+  }
+  bool operator !=(const ObMicroBlockAddr &other) const { return !(*this == other); }
+
+  TO_STRING_KV(K_(macro_id), K_(offset), K_(size));
+
+  MacroBlockId macro_id_;
+  int32_t offset_;
+  int32_t size_;
+};
+
 struct ObMicroBlockData
 {
   enum Type
@@ -235,6 +254,7 @@ public:
   }
   virtual ~ObIMicroBlockGetReader() {};
   virtual int get_row(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
       const ObITableReadInfo &read_info,
@@ -246,11 +266,13 @@ public:
       bool &exist,
       bool &found) = 0;
   virtual int get_row(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObITableReadInfo &read_info,
       const uint32_t row_idx,
       ObDatumRow &row) = 0;
   virtual int get_row_id(
+      const ObMicroBlockAddr &block_addr,
       const ObMicroBlockData &block_data,
       const ObDatumRowkey &rowkey,
       const ObITableReadInfo &read_info,

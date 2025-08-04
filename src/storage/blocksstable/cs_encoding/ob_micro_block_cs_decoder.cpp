@@ -175,7 +175,7 @@ ObNoneExistColumnCSDecoder ObICSEncodeBlockReader::none_exist_column_decoder_;
 ObColumnCSDecoderCtx ObICSEncodeBlockReader::none_exist_column_decoder_ctx_;
 
 ObICSEncodeBlockReader::ObICSEncodeBlockReader()
-  : request_cnt_(0), cached_decoder_(NULL), decoders_(nullptr),
+  : block_addr_(), request_cnt_(0), cached_decoder_(NULL), decoders_(nullptr),
     transform_helper_(), column_count_(0), default_decoders_(),
     ctxs_(NULL),
     decoder_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), common::ObModIds::OB_DECODER_CTX)), OB_MALLOC_NORMAL_BLOCK_SIZE),
@@ -183,7 +183,7 @@ ObICSEncodeBlockReader::ObICSEncodeBlockReader()
     allocated_decoders_buf_(nullptr),
     allocated_decoders_buf_size_(0),
     store_id_array_(NULL), default_store_ids_(),
-    default_column_types_(), need_cast_(false), semistruct_decode_ctx_()
+    default_column_types_(), semistruct_decode_ctx_()
 {
 }
 
@@ -197,7 +197,6 @@ void ObICSEncodeBlockReader::reuse()
   cached_decoder_ = nullptr;
   request_cnt_ = 0;
   decoders_ = nullptr;
-  need_cast_ = false;
   ctxs_ = nullptr;
   store_id_array_ = nullptr;
   column_type_array_ = nullptr;
@@ -213,7 +212,6 @@ void ObICSEncodeBlockReader::reset()
   cached_decoder_ = NULL;
   request_cnt_ = 0;
   decoders_ = nullptr;
-  need_cast_ = false;
   ctxs_ = NULL;
   store_id_array_ = NULL;
   column_type_array_ = nullptr;
@@ -399,7 +397,9 @@ void ObCSEncodeBlockGetReader::reuse()
 }
 
 int ObCSEncodeBlockGetReader::init(
-  const ObMicroBlockData &block_data, const ObITableReadInfo &read_info)
+  const ObMicroBlockAddr &block_addr,
+  const ObMicroBlockData &block_data,
+  const ObITableReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
   const int64_t request_cnt = read_info.get_request_count();
@@ -431,21 +431,49 @@ int ObCSEncodeBlockGetReader::init(
       column_type_array_[i] = col_type;
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(do_init(block_data, request_cnt))) {
-    LOG_WARN("failed to do init", K(ret), K(block_data), K(request_cnt));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(do_init(block_data, request_cnt))) {
+      LOG_WARN("failed to do init", K(ret), K(block_data), K(request_cnt));
+    } else {
+      block_addr_ = block_addr;
+      read_info_ = &read_info;
+    }
   }
 
   return ret;
 }
-int ObCSEncodeBlockGetReader::get_row(const ObMicroBlockData &block_data,
-  const ObDatumRowkey &rowkey, const ObITableReadInfo &read_info, ObDatumRow &row)
+
+int ObCSEncodeBlockGetReader::init_if_need(const ObMicroBlockAddr &block_addr,
+                                          const ObMicroBlockData &block_data,
+                                          const ObITableReadInfo &read_info)
+{
+  int ret = OB_SUCCESS;
+  const ObMicroBlockHeader *header = reinterpret_cast<const ObMicroBlockHeader *>(block_data.get_buf());
+  const ObMicroBlockHeader *curr_header = transform_helper_.get_micro_block_header();
+
+  if (header == curr_header && block_addr == block_addr_ && read_info_ == &read_info) {
+    // skip init
+  } else {
+    reuse();
+    if (OB_FAIL(init(block_addr, block_data, read_info))) {
+      LOG_WARN("failed to do inner init", K(ret), K(block_data), K(read_info));
+    }
+  }
+  return ret;
+}
+
+int ObCSEncodeBlockGetReader::get_row(const ObMicroBlockAddr &block_addr,
+                                      const ObMicroBlockData &block_data,
+                                      const ObDatumRowkey &rowkey,
+                                      const ObITableReadInfo &read_info,
+                                      ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
   bool found = false;
   int64_t row_id = -1;
 
-  reuse();
-  if (OB_FAIL(init(block_data, read_info))) {
+  if (OB_FAIL(init_if_need(block_addr, block_data, read_info))) {
     LOG_WARN("failed to do inner init", K(ret), K(block_data), K(read_info));
   } else if (OB_FAIL(locate_row(rowkey, read_info.get_datum_utils(), row_id, found))) {
     LOG_WARN("failed to locate row", K(ret), K(rowkey));
@@ -591,6 +619,7 @@ int ObCSEncodeBlockGetReader::exist_row(const ObMicroBlockData &block_data,
 }
 
 int ObCSEncodeBlockGetReader::get_row(
+    const ObMicroBlockAddr &block_addr,
     const ObMicroBlockData &block_data,
     const ObITableReadInfo &read_info,
     const uint32_t row_idx,
@@ -598,9 +627,8 @@ int ObCSEncodeBlockGetReader::get_row(
 {
   int ret = OB_SUCCESS;
 
-  reuse();
-  if (OB_FAIL(init(block_data, read_info))) {
-    LOG_WARN("Failed to do inner init", K(ret), K(block_data), K(read_info));
+  if (OB_FAIL(init_if_need(block_addr, block_data, read_info))) {
+    LOG_WARN("failed to do inner init", K(ret), K(block_addr), K(block_data), K(read_info));
   } else if (OB_UNLIKELY(row_idx >= transform_helper_.get_micro_block_header()->row_count_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected row index", K(ret), K(row_idx), K(transform_helper_.get_micro_block_header()->row_count_));
@@ -619,6 +647,7 @@ int ObCSEncodeBlockGetReader::get_row(
 }
 
 int ObCSEncodeBlockGetReader::get_row_id(
+    const ObMicroBlockAddr &block_addr,
     const ObMicroBlockData &block_data,
     const ObDatumRowkey &rowkey,
     const ObITableReadInfo &read_info,
@@ -626,18 +655,9 @@ int ObCSEncodeBlockGetReader::get_row_id(
 {
   int ret = OB_SUCCESS;
   bool found = false;
-  const char *row_data = NULL;
-  const int64_t rowkey_cnt = rowkey.get_datum_cnt();
 
-  reuse();
-  if (OB_UNLIKELY(!read_info.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(read_info));
-  } else if (OB_FAIL(init(block_data,
-                          read_info.get_schema_rowkey_count(),
-                          read_info.get_columns_desc(),
-                          rowkey_cnt))) {
-    LOG_WARN("failed to do inner init", K(ret), K(block_data), K(read_info));
+  if (OB_FAIL(init_if_need(block_addr, block_data, read_info))) {
+    LOG_WARN("failed to do inner init", K(ret), K(block_addr), K(block_data), K(read_info));
   } else if (OB_FAIL(locate_row(rowkey, read_info.get_datum_utils(), row_id, found))) {
     LOG_WARN("failed to locate row", K(ret), K(rowkey));
   } else if (!found) {

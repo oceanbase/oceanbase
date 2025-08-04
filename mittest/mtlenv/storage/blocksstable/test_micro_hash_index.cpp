@@ -246,6 +246,7 @@ TEST_F(TestMicroHashIndex, hash_index_get_all_row)
       number_of_hash_index += micro_data.get_micro_header()->is_contain_hash_index();
 
       ObMicroBlockGetReader<> reader;
+      ObMicroBlockAddr block_addr;
       for (int i = 0; i < micro_data.get_micro_header()->row_count_; i++) {
         row_key_array_[row_idx++].deep_copy(find_rowkey, allocator_);
         find_rowkey.datum_cnt_ = table_schema_.get_rowkey_column_num();
@@ -256,7 +257,7 @@ TEST_F(TestMicroHashIndex, hash_index_get_all_row)
         ObDatumRowkey row_key;
         ASSERT_EQ(OB_SUCCESS,
                   reader.exist_row(micro_data, find_rowkey, rowkey_read_info, exist, found));
-        ASSERT_EQ(OB_SUCCESS, reader.get_row(micro_data, find_rowkey, rowkey_read_info, row));
+        ASSERT_EQ(OB_SUCCESS, reader.get_row(block_addr, micro_data, find_rowkey, rowkey_read_info, row));
         ASSERT_TRUE(found);
         ASSERT_TRUE(exist);
         ASSERT_EQ(OB_SUCCESS, row_key.assign(row.storage_datums_, rowkey_read_info.datum_utils_.get_rowkey_count() - 2));

@@ -214,7 +214,7 @@ int new_decoder_with_allocated_buf(char *buf,
 ObNoneExistColumnDecoder ObIEncodeBlockReader::none_exist_column_decoder_;
 ObColumnDecoderCtx ObIEncodeBlockReader::none_exist_column_decoder_ctx_;
 ObIEncodeBlockReader::ObIEncodeBlockReader()
-  : request_cnt_(0),
+  : block_addr_(), request_cnt_(0),
     header_(NULL), col_header_(NULL), cached_decoder_(NULL), meta_data_(NULL), row_data_(NULL),
     var_row_index_(), fix_row_index_(), row_index_(&var_row_index_),
     decoders_(nullptr),
@@ -225,8 +225,7 @@ ObIEncodeBlockReader::ObIEncodeBlockReader()
     allocated_decoders_buf_(nullptr),
     allocated_decoders_buf_size_(0),
     store_id_array_(NULL), column_type_array_(NULL),
-    default_store_ids_(), default_column_types_(),
-    need_cast_(false)
+    default_store_ids_(), default_column_types_()
 {}
 
 ObIEncodeBlockReader::~ObIEncodeBlockReader()
@@ -239,7 +238,6 @@ void ObIEncodeBlockReader::reuse()
   header_ = nullptr;
   request_cnt_ = 0;
   decoders_ = nullptr;
-  need_cast_ = false;
   col_header_ = nullptr;
   meta_data_ = nullptr;
   row_data_ = nullptr;
@@ -255,7 +253,6 @@ void ObIEncodeBlockReader::reset()
   header_ = NULL;
   request_cnt_ = 0;
   decoders_ = nullptr;
-  need_cast_ = false;
   col_header_ = NULL;
   meta_data_ = NULL;
   row_data_ = NULL;
@@ -527,6 +524,7 @@ void ObEncodeBlockGetReader::reuse()
 }
 
 int ObEncodeBlockGetReader::init_by_read_info(
+    const ObMicroBlockAddr &block_addr,
     const ObMicroBlockData &block_data,
     const ObITableReadInfo &read_info)
 {
@@ -570,12 +568,32 @@ int ObEncodeBlockGetReader::init_by_read_info(
     } else {
       row_count_ = header_->row_count_;
       original_data_length_ = header_->original_length_;
+      read_info_ = &read_info;
+      block_addr_ = block_addr;
+    }
+  }
+  return ret;
+}
+
+int ObEncodeBlockGetReader::init_if_need(const ObMicroBlockAddr &block_addr,
+                                         const ObMicroBlockData &block_data,
+                                         const ObITableReadInfo &read_info)
+{
+  int ret = OB_SUCCESS;
+  const ObMicroBlockHeader *header = reinterpret_cast<const ObMicroBlockHeader *>(block_data.get_buf());
+  if (header == header_ && block_addr == block_addr_ && read_info_ == &read_info) {
+    // skip init
+  } else {
+    reuse();
+    if (OB_FAIL(init_by_read_info(block_addr, block_data, read_info))) {
+      LOG_WARN("failed to do inner init", K(ret), K(block_addr), K(block_data), K(read_info));
     }
   }
   return ret;
 }
 
 int ObEncodeBlockGetReader::get_row(
+    const ObMicroBlockAddr &block_addr,
     const ObMicroBlockData &block_data,
     const ObDatumRowkey &rowkey,
     const ObITableReadInfo &read_info,
@@ -587,11 +605,10 @@ int ObEncodeBlockGetReader::get_row(
   int64_t row_len = 0;
   int64_t row_id = -1;
 
-  reuse();
-  if (OB_FAIL(init_by_read_info(block_data, read_info))) {
-    LOG_WARN("failed to do inner init", K(ret), K(block_data), K(read_info));
+  if (OB_FAIL(init_if_need(block_addr, block_data, read_info))) {
+    LOG_WARN("failed to do inner init", K(ret), K(block_addr), K(block_data), K(read_info));
   } else if (OB_FAIL(locate_row(rowkey, read_info.get_datum_utils(), row_data, row_len, row_id, found))) {
-    LOG_WARN("failed to locate row", K(ret), K(rowkey));
+    LOG_WARN("failed to locate row", K(ret), K(rowkey), K(block_addr), K(block_data));
   } else {
     row.row_flag_.reset();
     row.mvcc_row_flag_.reset();
@@ -757,6 +774,7 @@ int ObEncodeBlockGetReader::exist_row(
 }
 
 int ObEncodeBlockGetReader::get_row(
+    const ObMicroBlockAddr &block_addr,
     const ObMicroBlockData &block_data,
     const ObITableReadInfo &read_info,
     const uint32_t row_idx,
@@ -766,11 +784,10 @@ int ObEncodeBlockGetReader::get_row(
   const char *row_data = NULL;
   int64_t row_len = 0;
 
-  reuse();
-  if (OB_FAIL(init_by_read_info(block_data, read_info))) {
-    LOG_WARN("failed to do inner init", K(ret), K(block_data), K(read_info));
+  if (OB_FAIL(init_if_need(block_addr, block_data, read_info))) {
+    LOG_WARN("failed to do inner init", K(ret), K(block_addr), K(block_data), K(read_info));
   } else if (OB_FAIL(setup_row(row_idx, row_len, row_data))) {
-    LOG_WARN("Failed to setup row", K(ret), K(row_idx));
+    LOG_WARN("Failed to setup row", K(ret), K(row_idx), K(block_addr), K(block_data));
   } else {
     row.row_flag_.reset();
     row.mvcc_row_flag_.reset();
@@ -785,6 +802,7 @@ int ObEncodeBlockGetReader::get_row(
 }
 
 int ObEncodeBlockGetReader::get_row_id(
+    const ObMicroBlockAddr &block_addr,
     const ObMicroBlockData &block_data,
     const ObDatumRowkey &rowkey,
     const ObITableReadInfo &read_info,
@@ -795,14 +813,10 @@ int ObEncodeBlockGetReader::get_row_id(
   const char *row_data = NULL;
   int64_t row_len = 0;
 
-  reuse();
-  if (OB_UNLIKELY(!read_info.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(read_info));
-  } else if (OB_FAIL(init_by_read_info(block_data, read_info))) {
-    LOG_WARN("failed to do inner init", K(ret), K(block_data), K(read_info));
+  if (OB_FAIL(init_if_need(block_addr, block_data, read_info))) {
+    LOG_WARN("failed to do inner init", K(ret), K(block_addr), K(block_data), K(read_info));
   } else if (OB_FAIL(locate_row(rowkey, read_info.get_datum_utils(), row_data, row_len, row_id, found))) {
-    LOG_WARN("failed to locate row", K(ret), K(rowkey));
+    LOG_WARN("failed to locate row", K(ret), K(rowkey), K(block_addr), K(block_data));
   } else if (!found) {
     ret = OB_BEYOND_THE_RANGE;
   }

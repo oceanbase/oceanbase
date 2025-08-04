@@ -82,7 +82,7 @@ private:
   int get_not_exist_row(const ObDatumRowkey &rowkey, const ObDatumRow *&row);
   int project_cache_row(const ObRowCacheValue &value, ObDatumRow &row);
   int inner_get_row(
-      const MacroBlockId &macro_id,
+      const ObMicroBlockAddr &block_addr,
       const ObDatumRowkey &rowkey,
       const ObMicroBlockData &block_data,
       const ObDatumRow *&row);
