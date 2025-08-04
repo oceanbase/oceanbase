@@ -1314,7 +1314,7 @@ bool ObKVCacheStore::compute_tenant_wash_size()
 
   if (OB_FAIL(mem_limit_getter_->get_all_tenant_id(tenant_ids_))) {
     COMMON_LOG(WARN, "Fail to get all tenant ids, ", K(ret));
-  } else if (OB_FAIL(insts_->get_cache_info(OB_SYS_TENANT_ID, inst_handles_))) {
+  } else if (OB_FAIL(insts_->get_cache_info(inst_handles_))) {
     COMMON_LOG(WARN, "Fail to get all cache infos, ", K(ret));
   }
 

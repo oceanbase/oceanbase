@@ -892,7 +892,7 @@ int ObKVGlobalCache::get_cache_inst_info(const uint64_t tenant_id, ObIArray<ObKV
   } else if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument", K(ret), K(tenant_id));
-  } else if (OB_FAIL(insts_.get_cache_info(tenant_id, inst_handles))) {
+  } else if (OB_FAIL(insts_.get_cache_info(inst_handles, &tenant_id))) {
     COMMON_LOG(WARN, "Fail to get all cache info", K(ret));
   }
 
