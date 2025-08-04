@@ -204,6 +204,8 @@ public:
   template<typename DependencyTable>
   static int get_pl_extra_info(const DependencyTable &dep_table,
                                ObPLExtraInfo& extra_info);
+  static bool is_extra_info_column_exist(const uint64_t data_version);
+  static bool is_stack_size_column_exist(const uint64_t data_version);
 
 private:
   uint64_t tenant_id_;

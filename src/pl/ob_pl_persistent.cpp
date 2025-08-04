@@ -330,19 +330,33 @@ int ObRoutinePersistentInfo::gen_routine_storage_dml(const uint64_t exec_tenant_
     // do nothing
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, data_version))) {
     LOG_WARN("failed to GET_MIN_DATA_VERSION", K(ret), K(exec_tenant_id), K(data_version));
-  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_2 || data_version < DATA_VERSION_4_3_5_2) {
-    // do nothing
-  } else if (OB_FAIL(dml.add_column("stack_size", ObHexEscapeSqlStr(stack_sizes)))) {
-    LOG_WARN("add column failed", K(ret));
-  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0 || data_version < DATA_VERSION_4_4_0_0) {
-    // do nothing
-  } else if (OB_FAIL(dml.add_column("extra_info", ObHexEscapeSqlStr(extra_info_str)))) {
-    LOG_WARN("add column failed", K(ret));
+  } else if (is_stack_size_column_exist(data_version)) {
+    if (OB_FAIL(dml.add_column("stack_size", ObHexEscapeSqlStr(stack_sizes)))) {
+      LOG_WARN("add column failed", K(ret));
+    } else if (is_extra_info_column_exist(data_version)) {
+      if (OB_FAIL(dml.add_column("extra_info", ObHexEscapeSqlStr(extra_info_str)))) {
+        LOG_WARN("add column failed", K(ret));
+      }
+    }
   }
 
   return ret;
 }
 
+bool ObRoutinePersistentInfo::is_extra_info_column_exist(const uint64_t data_version)
+{
+  // [4.2.5.6, 4.3.0.0) || [4.3.5.4, +inf)
+  return (data_version >= MOCK_DATA_VERSION_4_2_5_6
+          && data_version < DATA_VERSION_4_3_0_0)
+        || (data_version >= MOCK_DATA_VERSION_4_3_5_4);
+}
+
+bool ObRoutinePersistentInfo::is_stack_size_column_exist(const uint64_t data_version)
+{ // [4.2.5.6, 4.3.0.0) || [4.3.5.4, +inf)
+  return (data_version >= MOCK_DATA_VERSION_4_2_5_6
+          && data_version < DATA_VERSION_4_3_0_0)
+        || (data_version >= MOCK_DATA_VERSION_4_3_5_4);
+}
 int ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(
                                                                   ObSchemaGetterGuard &schema_guard,
                                                                   const ObPLDependencyTable &dep_schema_objs,
@@ -579,8 +593,8 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
     } else if (OB_FAIL(query_inner_sql.assign_fmt(
       "select merge_version, dll %s %s from OCEANBASE.%s where database_id = %ld and key_id = %ld "
       "and compile_db_id = %ld and arch_type = '%s' and build_version = '%s'",
-        (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_2 || data_version < DATA_VERSION_4_3_5_2) ? "" : ", stack_size",
-        (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0 || data_version < DATA_VERSION_4_4_0_0) ? "" : ", extra_info",
+        (is_stack_size_column_exist(data_version)) ? ", stack_size" : "",
+        (is_extra_info_column_exist(data_version)) ? ", extra_info" : "",
         OB_ALL_NCOMP_DLL_V2_TNAME, database_id_, key_id_, compile_db_id_, arch_type_.ptr(), build_version))) {
       LOG_WARN("assign format failed", K(ret));
     } else {
@@ -611,7 +625,7 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
               } else if (merge_version < tenant_schema_version) {
                 if (OB_FAIL(check_dep_schema(schema_guard, unit_ast.get_dependency_table(), merge_version, match))) {
                   LOG_WARN("fail to check dep schema", K(ret));
-                } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0 || data_version < DATA_VERSION_4_4_0_0) {
+                } else if (!is_extra_info_column_exist(data_version)) {
                   // do nothing
                 } else if (match) {
                   // need check extra_info
@@ -648,7 +662,7 @@ int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
                 } else if (0 != level || 0 != id) {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_WARN("fail to decode dll", K(ret), K(level), K(id));
-                } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_2 || data_version < DATA_VERSION_4_3_5_2) {
+                } else if (!is_stack_size_column_exist(data_version)) {
                   // do nothing
                 } else {
                   ObString stack_size;
