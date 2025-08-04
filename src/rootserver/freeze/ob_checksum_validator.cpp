@@ -16,6 +16,7 @@
 #include "rootserver/freeze/ob_major_merge_progress_checker.h"
 #include "share/ob_service_epoch_proxy.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -703,9 +704,24 @@ int ObChecksumValidator::validate_index_checksum() {
   } else if (!need_validate_index_ckm_) { // no need to validate data-index checksum
     table_compaction_info_.set_index_ckm_verified();
   } else if (simple_schema_->is_index_table()) { // for index table, do not check status
-    if (!table_compaction_info_.is_index_ckm_verified() && OB_FAIL(handle_index_table(*simple_schema_))) {
+    bool should_handle_index_table = true;
+    // only for case : check special index table first
+#ifdef ERRSIM
+    if (EN_SPECIAL_INDEX_TABLE_VERIFY && !simple_schema_->should_not_validate_data_index_ckm()) {
+      should_handle_index_table = false;
+    }
+#endif
+    if (should_handle_index_table && !table_compaction_info_.finish_idx_verified() && OB_FAIL(handle_index_table(*simple_schema_))) {
       LOG_WARN("fail to handle index table", KR(ret), KPC_(simple_schema));
     }
+#ifdef ERRSIM
+    if (EN_SPECIAL_INDEX_TABLE_VERIFY && simple_schema_->should_not_validate_data_index_ckm()) {
+      SERVER_EVENT_ADD("storage_engine", "special_index_table_verify",
+        "tenant_id", tenant_id_,
+        "index_table_id", simple_schema_->get_table_id(),
+        "data_table_id", simple_schema_->get_data_table_id());
+    }
+#endif
   } else if (table_compaction_info_.need_check_fts_) {
     LOG_INFO("check fts for data table", KR(ret), K_(table_compaction_info));
   } else if (table_compaction_info_.is_compacted()) { // for data table, check status
@@ -787,10 +803,20 @@ int ObChecksumValidator::handle_index_table(
   }
   // deal with data table
   if (OB_SUCC(ret) && index_compaction_info.finish_idx_verified() && !data_compaction_info.finish_idx_verified()) {
-    if ((0 == (--data_compaction_info.unfinish_index_cnt_)) && !data_compaction_info.need_check_fts_) {
-      data_compaction_info.set_index_ckm_verified();
+    if (index_simple_schema.should_not_validate_data_index_ckm()) { // special index table not count in unfinish index cnt
+      if (0 == data_compaction_info.unfinish_index_cnt_) {
+        data_compaction_info.set_index_ckm_verified();
+      }
+    } else {
+      if ((0 == (--data_compaction_info.unfinish_index_cnt_)) && !data_compaction_info.need_check_fts_) {
+        data_compaction_info.set_index_ckm_verified();
+      }
     }
-    if (OB_FAIL(table_compaction_map_.set_refactored(
+    // add for defend, unfinish_index_cnt_ of data table should not be less than 0
+    if (data_compaction_info.unfinish_index_cnt_ < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unfinish index cnt is unexpected", KR(ret), K(data_compaction_info));
+    } else if (OB_FAIL(table_compaction_map_.set_refactored(
             data_compaction_info.table_id_, data_compaction_info,
             true /*overwrite*/))) {
       LOG_WARN("failed to set", K(ret), K(data_compaction_info));
