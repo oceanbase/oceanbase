@@ -1207,8 +1207,6 @@ int ObFTDMLIterator::scan_ft_word_rows(const ObChunkDatumStore::StoredRow *store
             } else if (!is_tx_active) {
               need_check_tx_active = false;
               LOG_WARN("tx is aborted, skip this check.", K(tx_id));
-              sleep(1);
-              abort();
             }
           }
         }
