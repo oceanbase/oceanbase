@@ -194,6 +194,11 @@ private:
 
   static int get_rebuild_drop_index_id_and_name(share::schema::ObSchemaGetterGuard &schema_guard,
                                                 obrpc::ObDropIndexArg &arg);
+  int check_index_for_if_not_exist_(const uint64_t tenant_id,
+                                    const ObString database_name,
+                                    const ObString index_name,
+                                    share::schema::ObSchemaGetterGuard &schema_guard,
+                                    obrpc::ObAlterTableRes &res);
 
 private:
   ObDDLService &ddl_service_;
