@@ -6022,6 +6022,7 @@ int ObTablet::get_ha_sstable_size(int64_t &data_size)
 }
 
 int ObTablet::fetch_tablet_autoinc_seq_cache(
+    const ObLSSwitchChecker &ls_switch_checker,
     const uint64_t cache_size,
     share::ObTabletAutoincInterval &result)
 {
@@ -6032,7 +6033,7 @@ int ObTablet::fetch_tablet_autoinc_seq_cache(
   mds::TwoPhaseCommitState trans_stat;// will be removed later
   share::SCN trans_version;// will be removed later
   uint64_t auto_inc_seqvalue = 0;
-  const int64_t rpc_timeout = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : obrpc::ObRpcProxy::MAX_RPC_TIMEOUT;
+  bool is_online = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -6050,6 +6051,11 @@ int ObTablet::fetch_tablet_autoinc_seq_cache(
   } else if (OB_UNLIKELY(mds::TwoPhaseCommitState::ON_COMMIT != trans_stat)) {
     ret = OB_EAGAIN;
     LOG_WARN("tablet autoinc not committed", K(ret), K(autoinc_seq));
+  } else if (OB_FAIL(ls_switch_checker.double_check_epoch(is_online))) {
+    LOG_WARN("double check failed", K(ret), K(tablet_meta_.tablet_id_), K(is_online));
+    if (OB_VERSION_NOT_MATCH == ret) {
+      ret = OB_NOT_MASTER;
+    }
   } else if (OB_FAIL(autoinc_seq.get_autoinc_seq_value(auto_inc_seqvalue))) {
     LOG_WARN("failed to get autoinc seq value", K(ret), K(autoinc_seq));
   } else {
@@ -6303,7 +6309,10 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
   return ret;
 }
 
-int ObTablet::update_tablet_autoinc_seq(const uint64_t autoinc_seq, const bool is_tablet_creating)
+int ObTablet::update_tablet_autoinc_seq(
+    const ObLSSwitchChecker &ls_switch_checker,
+    const uint64_t autoinc_seq,
+    const bool is_tablet_creating)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "UpdAutoincSeq"));
@@ -6313,7 +6322,7 @@ int ObTablet::update_tablet_autoinc_seq(const uint64_t autoinc_seq, const bool i
   share::SCN trans_version;// will be removed later
   uint64_t curr_auto_inc_seqvalue;
   SCN scn;
-  const int64_t rpc_timeout = THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : obrpc::ObRpcProxy::MAX_RPC_TIMEOUT;
+  bool is_online = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -6331,6 +6340,11 @@ int ObTablet::update_tablet_autoinc_seq(const uint64_t autoinc_seq, const bool i
   } else if (mds::TwoPhaseCommitState::ON_COMMIT != trans_stat) {
     ret = OB_EAGAIN;
     LOG_WARN("tablet autoinc not committed", K(ret), K(autoinc_seq));
+  } else if (OB_FAIL(ls_switch_checker.double_check_epoch(is_online))) {
+    LOG_WARN("double check failed", K(ret), K(tablet_meta_.tablet_id_), K(is_online));
+    if (OB_VERSION_NOT_MATCH == ret) {
+      ret = OB_NOT_MASTER;
+    }
   } else if (OB_FAIL(curr_autoinc_seq.get_autoinc_seq_value(curr_auto_inc_seqvalue))) {
     LOG_WARN("failed to get autoinc seq value", K(ret));
   } else if (autoinc_seq > curr_auto_inc_seqvalue) {
