@@ -945,9 +945,8 @@ int ObTransformSimplifyGroupby::convert_valid_count_aggr(ObSelectStmt *select_st
       if (OB_ISNULL(aggr = count_const.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null", K(ret), K(aggr));
-      } else if (OB_FAIL(ObTransformUtils::add_const_param_constraints(aggr->get_param_expr(0),
-                                                                       ctx_))) {
-        LOG_WARN("failed to add const param constraints", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, aggr->get_param_expr(0)))) {
+        LOG_WARN("failed to add param not null constraint", K(ret));
       } else {
         aggr->get_real_param_exprs_for_update().reuse();
       }
