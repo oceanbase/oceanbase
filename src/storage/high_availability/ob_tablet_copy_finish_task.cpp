@@ -460,12 +460,22 @@ int ObTabletCopyFinishTask::check_tablet_valid_()
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
+#ifdef ERRSIM
+  if (GCONF.errsim_test_tablet_id == param_.tablet_id_.id()
+      && (ObTabletRestoreAction::ACTION::RESTORE_REMOTE_SSTABLE == param_.restore_action_)) {
+     LOG_ERROR("before check tablet valid", "tablet_id", param_.tablet_id_);
+    DEBUG_SYNC(BEFORE_CHECK_TABLET_VALID);
+  }
+#endif
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet finish restore task do not init", K(ret));
-  } else if (OB_FAIL(param_.ls_->get_tablet(param_.tablet_id_, tablet_handle,
-      ObTabletCommon::DEFAULT_GET_TABLET_NO_WAIT, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
-    LOG_WARN("failed to get tablet", K(ret), "tablet_id", param_.tablet_id_);
+  } else if (OB_FAIL(param_.ls_->ha_get_tablet(param_.tablet_id_, tablet_handle))) {
+    if (OB_TABLET_NOT_EXIST == ret) {
+      LOG_INFO("tablet is not exist, skip check valid", "tablet_id", param_.tablet_id_);
+    } else {
+      LOG_WARN("failed to get tablet", K(ret), "tablet_id", param_.tablet_id_);
+    }
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(param_));
