@@ -1634,6 +1634,7 @@ int ObLSRestoreStartState::do_restore()
   bool is_created = false;
   bool is_exist = true;
   bool is_ready = false;
+  bool is_finish = false;
   LOG_INFO("ready to start restore ls", K(ls_restore_status_), KPC(ls_));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1641,6 +1642,12 @@ int ObLSRestoreStartState::do_restore()
   } else if (OB_ISNULL(log_restore_handle = ls_->get_log_restore_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log restore handle can't nullptr", K(ret), K(log_restore_handle));
+  } else if (OB_FAIL(check_restore_pre_finish_(is_finish))) {
+    LOG_WARN("fail to check can advance status", K(ret), KPC(ls_));
+  } else if (!is_finish) {
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+      LOG_INFO("restore_pre has not finished, wait later", KPC(ls_));
+    }
   } else if (OB_FAIL(check_ls_created_(is_created))) {
     LOG_WARN("fail to check ls created", K(ret), KPC(ls_));
   } else if (!is_created) {
@@ -1663,6 +1670,28 @@ int ObLSRestoreStartState::do_restore()
     }
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
+  }
+  return ret;
+}
+
+int ObLSRestoreStartState::check_restore_pre_finish_(bool &is_finish) const
+{
+  int ret = OB_SUCCESS;
+  is_finish = false;
+  share::ObPhysicalRestoreTableOperator restore_table_operator;
+  const uint64_t tenant_id = ls_->get_tenant_id();
+  if (OB_FAIL(restore_table_operator.init(proxy_, tenant_id, share::OBCG_STORAGE))) {
+    LOG_WARN("fail to init restore table operator", K(ret), K(tenant_id));
+  } else {
+    HEAP_VAR(ObPhysicalRestoreJob, job_info) {
+      if (OB_FAIL(restore_table_operator.get_job_by_tenant_id(tenant_id, job_info))) {
+        LOG_WARN("fail to get restore job", K(ret), K(tenant_id));
+      } else if (share::PhysicalRestoreStatus::PHYSICAL_RESTORE_PRE >= job_info.get_status()) {
+        is_finish = false;
+      } else {
+        is_finish = true;
+      }
+    }
   }
   return ret;
 }
