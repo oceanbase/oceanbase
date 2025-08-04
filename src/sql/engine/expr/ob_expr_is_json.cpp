@@ -94,7 +94,7 @@ int ObExprIsJson::check_is_json(const ObExpr &expr, ObEvalCtx &ctx,
       LOG_WARN("fail to get real data.", K(ret), K(j_str));
     } else if (is_null) {
     } else if (OB_UNLIKELY(j_str == "")) {
-      if (type == ObJsonType) {
+      if (ob_is_json(type) || ob_is_string_type(type)) {
         is_null = true;
       } else {
         is_invalid = true;
