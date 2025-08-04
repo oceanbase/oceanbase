@@ -475,8 +475,10 @@ int ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(
   }
   return ret;
 }
+
+template<typename DependencyTable>
 int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
-                                          const ObPLDependencyTable &dep_schema_objs,
+                                          const DependencyTable &dep_schema_objs,
                                           int64_t merge_version,
                                           bool &match)
 {
@@ -498,6 +500,9 @@ int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
                                                   new_version))) {
         LOG_WARN("failed to get schema version",
                   K(ret), K(tenant_id), K(dep_schema_objs.at(i)));
+      } else if (new_version == OB_INVALID_VERSION) {
+        // check for DbmsUtilityHelper::check_disk_cache_obj_expired
+        match = false;
       } else if (new_version <= merge_version) {
         match = true;
       } else {

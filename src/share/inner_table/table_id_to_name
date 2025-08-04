@@ -2753,6 +2753,7 @@
 # 28266: V$OB_LOGSTORE_SERVICE_STATUS
 # 28267: GV$OB_LOGSTORE_SERVICE_INFO
 # 28268: V$OB_LOGSTORE_SERVICE_INFO
+# 28279: DBA_OB_PL_OBJ_CACHE_STATUS
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
 # 14999: __all_virtual_plan_cache_stat  # DATA_BASE_TABLE_NAME

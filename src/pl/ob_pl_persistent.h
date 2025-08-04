@@ -152,10 +152,11 @@ public:
                               const ObString &stack_sizes,
                               const ObString &extra_info_str);
 
-  int check_dep_schema(ObSchemaGetterGuard &schema_guard,
-                        const ObPLDependencyTable &dep_schema_objs,
-                        int64_t merge_version,
-                        bool &match);
+  template<typename DependencyTable>
+  static int check_dep_schema(ObSchemaGetterGuard &schema_guard,
+                              const DependencyTable &dep_schema_objs,
+                              int64_t merge_version,
+                              bool &match);
 
   int read_dll_from_disk(ObSQLSessionInfo *session_info,
                           schema::ObSchemaGetterGuard &schema_guard,
