@@ -158,7 +158,7 @@ int ObPxMsgProc::on_sqc_init_msg(ObExecContext &ctx, const ObPxInitSqcResultMsg 
     } else if (pkt.task_count_ <= 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("task count returned by sqc invalid. expect 1 or more", K(pkt), K(ret));
-    } else if (OB_FAIL(sqc->get_partitions_info().assign(pkt.tablets_info_))) {
+    } else if (OB_FAIL(sqc->get_px_tablets_info().assign(pkt.tablets_info_))) {
       LOG_WARN("Failed to assign partitions info", K(ret));
     } else {
       sqc->set_task_count(pkt.task_count_);

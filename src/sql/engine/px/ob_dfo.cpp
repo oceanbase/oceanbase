@@ -67,7 +67,8 @@ OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     monitoring_info_,
                     branch_id_base_,
                     partition_random_affinitize_,
-                    locations_order_);
+                    locations_order_,
+                    px_tablets_info_);
 OB_SERIALIZE_MEMBER(ObPxTask,
                     qc_id_,
                     dfo_id_,
@@ -88,7 +89,7 @@ OB_SERIALIZE_MEMBER(ObPxRpcInitTaskResponse,
 OB_SERIALIZE_MEMBER(ObPxRpcInitSqcResponse,
                     rc_,
                     reserved_thread_count_,
-                    partitions_info_,
+                    px_tablets_info_, // FARM COMPAT WHITELIST for partitions_info_
                     sqc_order_gi_tasks_);
 OB_SERIALIZE_MEMBER(ObSqcTableLocationKey,
                     table_location_key_,

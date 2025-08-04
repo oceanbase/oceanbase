@@ -2906,3 +2906,7 @@ DEF_TIME(_session_temp_table_clean_interval, OB_TENANT_PARAMETER, "10m", "[0s,)"
          "schedule interval for session temporary table clean task. "
          "Range: [0s, +∞). Default: 10m",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_data_based_sqc_dop, OB_TENANT_PARAMETER, "False",
+         "Assign sqc dop based on data size.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

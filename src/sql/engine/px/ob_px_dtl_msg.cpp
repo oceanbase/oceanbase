@@ -21,7 +21,7 @@ using namespace oceanbase::sql::dtl;
 
 OB_SERIALIZE_MEMBER(ObPxTabletInfo,
                     tablet_id_,
-                    logical_row_count_,
+                    estimated_row_count_, // FARM COMPAT WHITELIST for logical_row_count_
                     physical_row_count_);
 OB_SERIALIZE_MEMBER(ObPxTaskMonitorInfo, sched_exec_time_start_, sched_exec_time_end_, exec_time_start_, exec_time_end_, metrics_);
 OB_SERIALIZE_MEMBER((ObPxTaskChSet, dtl::ObDtlChSet), sqc_id_, task_id_);

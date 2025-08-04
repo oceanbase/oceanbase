@@ -329,7 +329,7 @@ OB_DEF_SERIALIZE_SIZE(ObRangeMap)
 }
 
 //ObRangeColumnMeta
-OB_SERIALIZE_MEMBER(ObRangeColumnMeta, column_type_);
+OB_SERIALIZE_MEMBER(ObRangeColumnMeta, column_type_, column_id_);
 
 //ObFastFinalPos
 OB_SERIALIZE_MEMBER(ObFastFinalPos, index_, offset_, flags_);
@@ -540,6 +540,7 @@ int ObPreRangeGraph::deep_copy_column_metas(const ObIArray<ObRangeColumnMeta*> &
     } else {
       column_meta = new(ptr)ObRangeColumnMeta();
       column_meta->column_type_ = src_meta->column_type_;
+      column_meta->column_id_ = src_meta->column_id_;
       column_metas_.at(i) = column_meta;
     }
   }
@@ -774,7 +775,8 @@ int ObPreRangeGraph::fill_column_metas(const ObIArray<ColumnItem> &range_columns
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memeory for ObRangeColumnMeta");
     } else {
-      ObRangeColumnMeta *column_meta = new(ptr)ObRangeColumnMeta(column_expr->get_result_type());
+      ObRangeColumnMeta *column_meta =
+          new (ptr) ObRangeColumnMeta(column_expr->get_result_type(), column_expr->get_column_id());
       if (column_meta->column_type_.is_lob_locator()) {
         column_meta->column_type_.set_type(ObLongTextType);
       }

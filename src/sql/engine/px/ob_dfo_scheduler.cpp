@@ -1297,7 +1297,7 @@ int ObParallelDfoScheduler::dispatch_sqc(ObExecContext &exec_ctx,
           LOG_TRACE("SQC don`t have enough thread or thread auto scaling, Downgraded thread allocation",
               K(resp), K(sqc));
         }
-        if (OB_FAIL(pkt.tablets_info_.assign(resp.partitions_info_))) {
+        if (OB_FAIL(pkt.tablets_info_.assign(resp.px_tablets_info_))) {
           LOG_WARN("Failed to assign partition info", K(ret));
         } else if (OB_FAIL(proc_.on_sqc_init_msg(exec_ctx, pkt))) {
           LOG_WARN("fail to do sqc init callback", K(resp), K(pkt), K(ret));

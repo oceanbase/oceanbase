@@ -203,15 +203,16 @@ class ObRangeColumnMeta
   OB_UNIS_VERSION(1);
 public:
   ObRangeColumnMeta()
-  : column_type_()
+  : column_type_(), column_id_(OB_INVALID_ID)
   {}
 
-  ObRangeColumnMeta(const ObExprResType &type)
-  : column_type_(type)
+  ObRangeColumnMeta(const ObExprResType &type, uint64_t column_id)
+  : column_type_(type), column_id_(column_id)
   {}
 
   TO_STRING_KV(N_COLUMN_TYPE, column_type_);
   ObExprResType column_type_;
+  uint64_t column_id_;
 };
 
 class ObFastFinalPos

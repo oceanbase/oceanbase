@@ -377,6 +377,7 @@ _enable_constant_type_demotion
 _enable_convert_real_to_decimal
 _enable_das_batch_rescan_flag
 _enable_das_keep_order
+_enable_data_based_sqc_dop
 _enable_dblink_reuse_connection
 _enable_dbms_job_package
 _enable_dbms_lob_partial_update

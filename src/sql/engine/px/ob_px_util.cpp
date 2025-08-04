@@ -3812,7 +3812,7 @@ int ObSlaveMapUtil::build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDf
           ret = OB_HASH_NOT_EXIST == ret ? OB_SCHEMA_ERROR : ret;
           LOG_WARN("fail to get tablet idx", K(ret));
         } else if (OB_FAIL(ObPxAffinityByRandom::get_tablet_info(location.tablet_id_.id(),
-                                                                 sqc.get_partitions_info(),
+                                                                 sqc.get_px_tablets_info(),
                                                                  partition_row_info))) {
           LOG_WARN("Failed to get partition info", K(ret));
         } else if (OB_FAIL(affinitize_rule.add_partition(location.tablet_id_.id(),
@@ -3824,7 +3824,7 @@ int ObSlaveMapUtil::build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDf
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(affinitize_rule.do_random(!sqc.get_partitions_info().empty(),
+      } else if (OB_FAIL(affinitize_rule.do_random(!sqc.get_px_tablets_info().empty(),
                          ctx.get_my_session()->get_effective_tenant_id()))) {
         LOG_WARN("failed to do random", K(ret));
       } else {
@@ -3837,7 +3837,7 @@ int ObSlaveMapUtil::build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDf
           OZ(map.push_back(ObPxPartChMapItem(tablet_id, prefix_task_count, task_id)));
           LOG_DEBUG("debug push partition map", K(tablet_id), K(task_id));
         }
-        LOG_DEBUG("Get all partition rows info", K(ret), K(sqc.get_partitions_info()));
+        LOG_DEBUG("Get all partition rows info", K(ret), K(sqc.get_px_tablets_info()));
       }
     }
   }

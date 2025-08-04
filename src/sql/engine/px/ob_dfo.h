@@ -291,7 +291,7 @@ public:
   uint64_t get_qc_id() const { return qc_id_; }
   int64_t get_sqc_id() const { return sqc_id_; }
   int64_t get_dfo_id() const { return dfo_id_; }
-  common::ObIArray<ObPxTabletInfo> &get_partitions_info() { return partitions_info_; }
+  common::ObIArray<ObPxTabletInfo> &get_px_tablets_info() { return px_tablets_info_; }
   common::ObIArray<ObSqlTempTableCtx> &get_temp_table_ctx() { return temp_table_ctx_; }
 
   const common::ObAddr &get_exec_addr() const {   return exec_addr_; }
@@ -427,7 +427,7 @@ private:
   bool is_fulltree_;
   bool is_rpc_worker_;
   // No need to serialize
-  ObSEArray<ObPxTabletInfo, 8> partitions_info_;
+  ObSEArray<ObPxTabletInfo, 8> px_tablets_info_;
   bool need_report_;
   uint64_t qc_server_id_;
   int64_t parent_dfo_id_;
@@ -1246,14 +1246,14 @@ public:
   ObPxRpcInitSqcResponse()
       : rc_(common::OB_NOT_INIT),
         reserved_thread_count_(0),
-        partitions_info_(),
+        px_tablets_info_(),
         sqc_order_gi_tasks_(false)
   {}
   TO_STRING_KV(K_(rc), K_(reserved_thread_count));
 public:
   int rc_;
   int64_t reserved_thread_count_;
-  ObSEArray<ObPxTabletInfo, 8> partitions_info_;
+  ObSEArray<ObPxTabletInfo, 8> px_tablets_info_;
   bool sqc_order_gi_tasks_;
 };
 

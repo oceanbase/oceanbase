@@ -39,16 +39,16 @@ struct ObPxTabletInfo
 {
   OB_UNIS_VERSION(1);
 public:
-  ObPxTabletInfo() : tablet_id_(), logical_row_count_(0), physical_row_count_(0) {}
+  ObPxTabletInfo() : tablet_id_(), estimated_row_count_(0), physical_row_count_(0) {}
   virtual ~ObPxTabletInfo() = default;
   void assign(const ObPxTabletInfo &partition_info) {
     tablet_id_ = partition_info.tablet_id_;
-    logical_row_count_ = partition_info.logical_row_count_;
+    estimated_row_count_ = partition_info.estimated_row_count_;
     physical_row_count_ = partition_info.physical_row_count_;
   }
-  TO_STRING_KV(K_(tablet_id), K_(logical_row_count), K_(physical_row_count));
+  TO_STRING_KV(K_(tablet_id), K_(estimated_row_count), K_(physical_row_count));
   int64_t tablet_id_;
-  int64_t logical_row_count_;
+  int64_t estimated_row_count_;
   int64_t physical_row_count_;
 };
 struct ObPxDmlRowInfo
