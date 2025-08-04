@@ -572,6 +572,8 @@ public:
   {
     return inner_ls_group_stat_array_.count();
   }
+  int get_ls_count(int64_t &ls_count) const;
+
   int64_t get_target_lg_cnt() const
   {
     return target_lg_cnt_;

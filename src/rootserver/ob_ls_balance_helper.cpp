@@ -2942,6 +2942,19 @@ int64_t ObLSGroupMatrixCell::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
+int ObLSGroupMatrixCell::get_ls_count(int64_t &ls_count) const
+{
+  int ret = OB_SUCCESS;
+  ls_count = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < inner_ls_group_stat_array_.count(); ++i) {
+    CK(OB_NOT_NULL(inner_ls_group_stat_array_.at(i)));
+    if (OB_SUCC(ret)) {
+      ls_count += inner_ls_group_stat_array_.at(i)->ls_count_in_group();
+    }
+  }
+  return ret;
+}
+
 int ObLSGroupCountBalance::construct_ls_group_matrix_to_do_balance_(
     LSGroupMatrix &ls_group_matrix)
 {
@@ -3382,7 +3395,7 @@ int ObLSGroupCountBalance::check_can_balance_ls_group_(
       need_balance = true;
     } else {
       //检查每个ls_group内是否有多余1条的日志流，如果有则也需要均衡，尽可能把日志流
-      //平铺在各个组内
+      //平铺在各个组内. 可以证明一定能生成 alter 任务.
       ARRAY_FOREACH(tenant_info_->ls_group_array_, idx) {
         const ObLSGroupStat &lg_stat = tenant_info_->ls_group_array_.at(idx);
         if (lg_stat.ls_count_in_group() > 1) {
@@ -3493,9 +3506,10 @@ int ObLSGroupCountBalance::expand_ls_group_cnt_(
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner stat error", KR(ret));
   } else if (OB_UNLIKELY(row_index < 0 || row_index >= lg_matrix.get_row_count()
+        || curr_lg_count <= 0
         || curr_lg_count >= target_lg_cnt)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("row index is invalid", KR(ret), K(row_index), K(curr_lg_count), K(target_lg_cnt));
+    LOG_WARN("invalid argument", KR(ret), K(row_index), K(curr_lg_count), K(target_lg_cnt));
   } else if (OB_FAIL(set_cell_expand_lg_cnt_(lg_matrix, row_index, target_lg_cnt,
           curr_lg_count))) {
     LOG_WARN("failed to set cell expand lg cnt", KR(ret), K(lg_matrix), K(row_index),
@@ -3547,6 +3561,8 @@ int ObLSGroupCountBalance::expand_ls_group_cnt_(
  *   如果要选择B这个cell，前面已经扩容过一个了，所以B当前的日志流组是3，则扩容后每个日志流组的比例是 2/3 /(3 + 1) 等于1/6。
  *   这个时候AB的扩容后比例是一样的，正常情况下是可以随机选择的，但是选择原始日志流最小的更加容易扩容，所以选择A。
  *
+ * 另外，enable_transfer关闭的情况，如果cell只有单个ls的lsg，那么该cell无法扩容。
+ * 这一行所有cell都不能扩容也是有可能的,跳过这行即可。
  * */
 int ObLSGroupCountBalance::set_cell_expand_lg_cnt_(LSGroupMatrix &lg_matrix,
       const int64_t row_index, const int64_t target_lg_cnt, const int64_t curr_lg_count)
@@ -3556,11 +3572,13 @@ int ObLSGroupCountBalance::set_cell_expand_lg_cnt_(LSGroupMatrix &lg_matrix,
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner stat error", KR(ret));
   } else if (OB_UNLIKELY(row_index < 0 || row_index >= lg_matrix.get_row_count()
+        || curr_lg_count <= 0
         || curr_lg_count >= target_lg_cnt)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("row index is invalid", KR(ret), K(row_index), K(curr_lg_count), K(target_lg_cnt));
+    LOG_WARN("invalid argument", KR(ret), K(row_index), K(curr_lg_count), K(target_lg_cnt));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < target_lg_cnt - curr_lg_count; ++i) {
+    bool no_more_cell_to_expand = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < target_lg_cnt - curr_lg_count && !no_more_cell_to_expand; ++i) {
       //对于每一个需要扩容的日志流组，从行上的每一列找到最大的比例分上去
       ObLSGroupMatrixCell* target_cell = NULL;
       double load_factor = 0;
@@ -3568,11 +3586,18 @@ int ObLSGroupCountBalance::set_cell_expand_lg_cnt_(LSGroupMatrix &lg_matrix,
         ObLSGroupMatrixCell *cell = lg_matrix.get(row_index, j);
         CK(OB_NOT_NULL(cell))
         if (OB_SUCC(ret)) {
-          //计算这个cell如果新增一个日志流组，均值有多少，取一个均值最大的cell
-          //假设每一个日志流组上tablet和磁盘是一样的，使用比值计算，TODO
-          //当前cell的总数是cell_lg_cnt / curr_lg_count,
           double cell_lg_cnt = cell->get_ls_group_count();
-          if (cell_lg_cnt > 0) {
+          int64_t cell_ls_count = 0;
+          if (OB_FAIL(cell->get_ls_count(cell_ls_count))) {
+            LOG_WARN("failed to get ls count", KR(ret), KPC(cell));
+          } else if (cell_lg_cnt <= 0 ||
+              (!tenant_info_->job_desc_.get_enable_transfer()
+                && cell_ls_count < cell->get_target_lg_cnt() + 1)) {
+            // this cell can not expand, continue
+          } else {
+            //计算这个cell如果新增一个日志流组，均值有多少，取一个均值最大的cell
+            //假设每一个日志流组上tablet和磁盘是一样的，使用比值计算，TODO
+            //当前cell的总数是cell_lg_cnt / curr_lg_count,
             double tmp_factor = ( cell_lg_cnt / curr_lg_count) / (cell->get_target_lg_cnt() + 1);
             if (tmp_factor > load_factor) {
               target_cell = cell;
@@ -3580,7 +3605,7 @@ int ObLSGroupCountBalance::set_cell_expand_lg_cnt_(LSGroupMatrix &lg_matrix,
             } else if (fabs(tmp_factor - load_factor) < OB_DOUBLE_EPSINON) {
               CK(OB_NOT_NULL(target_cell));
               if (OB_SUCC(ret)) {
-                //如果计算出来的均值是一样的，则选择原始日志流比较少的一个作为目标端
+                //如果计算出来的均值是一样的，则选择原始日志流组比较少的一个作为目标端
                 target_cell = target_cell->get_ls_group_count() > cell_lg_cnt ?
                   cell : target_cell;
               }
@@ -3588,10 +3613,21 @@ int ObLSGroupCountBalance::set_cell_expand_lg_cnt_(LSGroupMatrix &lg_matrix,
           }
         }
       }//end for get max factor
-      CK(OB_NOT_NULL(target_cell))
       if (OB_SUCC(ret)) {
-        target_cell->inc_expand_cnt();
-        LOG_INFO("the cell need expand", KPC(target_cell));
+        if (nullptr == target_cell) {
+          if (!tenant_info_->job_desc_.get_enable_transfer()) {
+            // 此row已经没有可expand的cell，则跳出循环
+            no_more_cell_to_expand = true;
+            LOG_INFO("no more cell can expand in this row", K(row_index), K(i), K(target_lg_cnt), K(curr_lg_count));
+          } else {
+            // 不合预期. 开启enable_transfer预期一定有非空的cell，一定可以选出expand的cell
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("no cell can expand, but transfer is enabled, unexpected", KR(ret), K(row_index));
+          }
+        } else {
+          target_cell->inc_expand_cnt();
+          LOG_INFO("the cell need expand", KPC(target_cell), K(row_index));
+        }
       }
     }//end for construct
   }

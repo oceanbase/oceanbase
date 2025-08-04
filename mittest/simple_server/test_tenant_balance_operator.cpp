@@ -626,6 +626,164 @@ TEST_F(TestBalanceOperator, merge_task)
   ASSERT_EQ(true, all_part_transferred);
 }
 
+TEST_F(TestBalanceOperator, test_ls_group_count_balance_disable_transfer)
+{
+  // test expand ls_group_count when enable_transfer is false
+  uint64_t tenant_id = 1002;
+  ObArenaAllocator allocator("TntLSBalance" , OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy *sql_proxy = get_curr_observer().get_gctx().sql_proxy_;
+  common::ObArray<share::ObLSGroupUnitListOp> lsg_op_array;
+  ObArray<ObUnit> unit_array;
+  ObArray<ObLSStatusInfo> ls_array;
+  ObTenantRole tenant_role(ObTenantRole::Role::PRIMARY_TENANT);
+
+  // lambda for construct ls and push back to ls array
+  auto construct_ls = [&ret, &ls_array, &tenant_id]
+      (const uint64_t ls_id, const int64_t ls_group_id, const std::initializer_list<int64_t> unit_ids)
+  {
+    ObUnitIDList unit_id_list;
+    for (const auto& unit_id : unit_ids) {
+      ret = unit_id_list.push_back(ObDisplayUnitID(unit_id));
+      ASSERT_EQ(OB_SUCCESS, ret);
+    }
+    ObLSStatusInfo ls_status;
+    ls_status.init(tenant_id, ObLSID(ls_id), ls_group_id, share::OB_LS_NORMAL, 0, ObZone("zone1"), share::ObLSFlag::NORMAL_FLAG, unit_id_list);
+    ret = ls_array.push_back(ls_status);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  };
+
+  /* case 1: all ls cnt > all ls group cnt
+  row_1: ls_cnt < target_lsg_cnt, all cells in one row can not expand
+  row_2: ls_cnt < target_lsg_cnt, part of cells in one row can not expand
+  row_3: ls_cnt >= target_lsg_cnt, part of cells in one row can not expand
+  括号包裹数字代表一个日志流组，日志流个数为括号中数字
+  +-----+------+------+------+------+
+  |     |col_1 |col_2 |col_3 |col_4 |
+  +-----+------+------+------+------+
+  |row_1| (1)  |  (1) |      |      |
+  +-----+------+------+------+------+
+  |row_2| (1)  |      | (2)  |      | -> expand 1 lsg in cell(row_2, col_3)
+  +-----+------+------+------+------+
+  |row_3| (1)  |      |(1)(2)|      | -> expand 1 lsg in cell(row_3, col_3)
+  +-----+------+------+------+------+
+  z1 units: 1000, 1001, 1002
+  z2 units: 1003, 1004, 1005, 1006
+  */
+  // 9 LS, 7 LS group
+  {
+  ObDisplayZoneUnitCnt z1("zone1", 3);
+  ObDisplayZoneUnitCnt z2("zone2", 4);
+  ObZoneUnitCntList zone_list;
+  ret = zone_list.push_back(z1);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = zone_list.push_back(z2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = construct_unit_array(zone_list, unit_array);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ls_array.reuse();
+  // sys_ls
+  construct_ls(1, 0, {});
+  // normal ls
+  construct_ls(1001, 1001, {1000, 1003});
+  construct_ls(1002, 1002, {1001, 1003});
+  construct_ls(1003, 1003, {1002, 1003});
+  construct_ls(1004, 1004, {1000, 1004});
+  construct_ls(1005, 1005, {1001, 1005});  // alter to new lsg
+  construct_ls(1006, 1005, {1001, 1005});
+  construct_ls(1007, 1006, {1002, 1005});
+  construct_ls(1008, 1007, {1002, 1005});  // alter to new lsg
+  construct_ls(1009, 1007, {1002, 1005});
+
+  ObBalanceJobDesc job_desc;
+  ObTenantLSBalanceInfo balance_job(allocator);
+
+  ret = job_desc.init_without_job(1, zone_list, 1, 1, true, false, false);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  MTL_SWITCH(tenant_id) {
+    ret = balance_job.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    common::ObArray<share::ObUnitUGOp> unit_op_array;
+    share::ObBalanceJob job;
+    common::ObArray<share::ObBalanceTask> task_array;
+    ObLSGroupCountBalance lg_cnt(&balance_job, sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+    ret = lg_cnt.balance(true);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    job.reset();
+    ret = lg_cnt.balance(false);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(true, job.is_valid());
+    ASSERT_EQ(2, task_array.count());
+    ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER), task_array[0].get_task_type());
+    ASSERT_EQ(ObBalanceTaskType(ObBalanceTaskType::BALANCE_TASK_ALTER), task_array[1].get_task_type());
+    ASSERT_EQ(1005, task_array[0].get_src_ls_id().id_);
+    ASSERT_EQ(1008, task_array[1].get_src_ls_id().id_);
+    LOG_INFO("ls group count balance case 1", K(job), K(task_array));
+  }
+  }
+
+
+  /* case 2: all ls cnt == all ls group cnt, all cells in all rows can not expand
+  won't do balance and generate no job
+  +-----+------+------+------+------+
+  |row_1| (1)  |      |(1)(1)|      |
+  +-----+------+------+------+------+
+  |row_2| (1)  |      | (1)  | (1)  |
+  +-----+------+------+------+------+
+  |row_3|      |      |      |      |
+  +-----+------+------+------+------+
+  z1 units: 1000, 1001, 1002
+  z2 units: 1003, 1004, 1005, 1006
+  */
+  // 6 LS, 6 LS group
+  {
+  ObDisplayZoneUnitCnt z1("zone1", 3);
+  ObDisplayZoneUnitCnt z2("zone2", 4);
+  ObZoneUnitCntList zone_list;
+  ret = zone_list.push_back(z1);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = zone_list.push_back(z2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = construct_unit_array(zone_list, unit_array);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ls_array.reuse();
+  // sys_ls
+  construct_ls(1, 0, {});
+  // normal ls
+  construct_ls(1001, 1001, {1000, 1003});
+  construct_ls(1002, 1002, {1001, 1003});
+  construct_ls(1003, 1003, {1000, 1005});
+  construct_ls(1004, 1004, {1000, 1005});
+  construct_ls(1005, 1005, {1001, 1005});
+  construct_ls(1006, 1006, {1001, 1006});
+
+  ObBalanceJobDesc job_desc;
+  ObTenantLSBalanceInfo balance_job(allocator);
+
+  ret = job_desc.init_without_job(1, zone_list, 1, 1, true, false, false);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  MTL_SWITCH(tenant_id) {
+    ret = balance_job.init_tenant_ls_balance_info(tenant_id, ls_array, job_desc, unit_array, tenant_role);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    common::ObArray<share::ObUnitUGOp> unit_op_array;
+    share::ObBalanceJob job;
+    common::ObArray<share::ObBalanceTask> task_array;
+    ObLSGroupCountBalance lg_cnt(&balance_job, sql_proxy, ObBalanceJobID(), &job, &task_array, &lsg_op_array, &unit_op_array);
+    ret = lg_cnt.balance(true);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    job.reset();
+    ret = lg_cnt.balance(false);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(false, job.is_valid());
+    LOG_INFO("ls group count balance case 2", K(job), K(task_array));
+  }
+  }
+}
+
 TEST_F(TestBalanceOperator, ls_balance_helper)
 {
   ObBalanceTaskHelper task;
