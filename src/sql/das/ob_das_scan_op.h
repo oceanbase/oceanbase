@@ -212,7 +212,8 @@ public:
     struct {
       uint64_t is_index_merge_               : 1; // whether used for index merge
       uint64_t is_new_query_range_           : 1; // whether use new query range
-      uint64_t reserved_                     : 62;
+      uint64_t enable_new_false_range_       : 1; // whether use new false range
+      uint64_t reserved_                     : 61;
     };
   };
   ObFixedArray<share::DomainIdxs, common::ObIAllocator> domain_id_idxs_;
