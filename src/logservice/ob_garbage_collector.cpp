@@ -1603,6 +1603,7 @@ int ObGarbageCollector::check_can_remove_sslog_ls_(bool &can_remove_sslog)
       CLOG_LOG(WARN, "check meta tenant failed", K(ret));
     } else {
       MTL_SWITCH(user_tenant_id) {
+        ls_service = MTL(ObLSService*);
         if (OB_FAIL(ls_service->foreach_ls(user_tenant_fn))) {
           CLOG_LOG(WARN, "check user tenant failed", K(ret));
         }
@@ -2059,8 +2060,17 @@ void ObGarbageCollector::execute_gc_(ObGCCandidateArray &gc_candidates)
         }
       }
       ObSwitchLeaderAdapter switch_leader_adapter;
+      bool can_remove_sslog_ls = true;
       if (OB_SUCCESS != (tmp_ret = (gc_handler->execute_pre_remove()))) {
         CLOG_LOG(WARN, "failed to execute_pre_remove", K(tmp_ret), K(id), K_(self_addr));
+#ifdef OB_BUILD_SHARED_STORAGE
+      } else if (GCTX.is_shared_storage_mode()
+                 && is_tenant_sslog_ls(MTL_ID(), ls->get_ls_id())
+                 && OB_TMP_FAIL(check_can_remove_sslog_ls_(can_remove_sslog_ls))) {
+        CLOG_LOG(WARN, "failed to check sslog ls", K(tmp_ret), K(id), K_(self_addr));
+      } else if (!can_remove_sslog_ls) {
+        CLOG_LOG(INFO, "sslog ls can not be removed", K(id), K_(self_addr));
+#endif
       } else if (OB_SUCCESS != (tmp_ret = switch_leader_adapter.remove_from_election_blacklist(id.id(), self_addr_))) {
         CLOG_LOG(WARN, "remove_from_election_blacklist failed", K(tmp_ret), K(id), K_(self_addr));
       } else if (OB_SUCCESS != (tmp_ret = ls_service_->remove_ls(id))) {
