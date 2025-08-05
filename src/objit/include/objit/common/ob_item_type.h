@@ -964,6 +964,7 @@ typedef enum ObItemType
   T_FUN_SYS_TMP_FILE_WRITE = 1924,
   T_FUN_SYS_TMP_FILE_READ = 1925,
   T_FUN_SYS_HYBRID_VEC_CHUNK = 1926, // hybrid vector index
+  T_FUN_SYS_FORMAT_PROFILE = 1927, // format query profile
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,

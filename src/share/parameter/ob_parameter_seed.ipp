@@ -2911,3 +2911,7 @@ DEF_TIME(_session_temp_table_clean_interval, OB_TENANT_PARAMETER, "10m", "[0s,)"
 DEF_BOOL(_enable_data_based_sqc_dop, OB_TENANT_PARAMETER, "False",
          "Assign sqc dop based on data size.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_extend_sql_plan_monitor_metrics, OB_TENANT_PARAMETER, "False",
+         "Extend sql plan monitor metrics.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

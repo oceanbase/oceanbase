@@ -460,6 +460,7 @@ _enable_values_table_folding
 _enable_var_assign_use_das
 _enable_wait_remote_lock
 _endpoint_tenant_mapping
+_extend_sql_plan_monitor_metrics
 _external_table_mem_cache_page_size
 _faststack_min_interval
 _faststack_req_queue_size_threshold
