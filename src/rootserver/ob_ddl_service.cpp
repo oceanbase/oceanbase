@@ -5464,7 +5464,7 @@ int ObDDLService::drop_column_group(const obrpc::ObAlterTableArg &alter_table_ar
         /* if not exist in origin*/
         if (OB_HASH_NOT_EXIST == ret) {
           ret = OB_COLUMN_GROUP_NOT_FOUND;
-          LOG_WARN("cannot found column group", KPC(column_group));
+          LOG_WARN("cannot found column group", K(ret), KPC(column_group), K(ori_table_schema));
           char err_msg[OB_MAX_COLUMN_GROUP_NAME_LENGTH] = {'\0'};
           ObString err_msg_str(OB_MAX_COLUMN_GROUP_NAME_LENGTH, 0, err_msg);
           int tmp_ret = column_group->get_column_group_type_name(err_msg_str);

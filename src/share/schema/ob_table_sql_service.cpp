@@ -5841,14 +5841,14 @@ int ObTableSqlService::gen_column_group_dml(const ObTableSchema &table_schema,
     if (OB_FAIL(dml.add_pk_column("tenant_id", tmp_tenant_id))
       || OB_FAIL(dml.add_pk_column("table_id", tmp_table_id))
       || OB_FAIL(dml.add_pk_column("column_group_id", tmp_cg_id))
-      || (!(is_history && is_deleted) && OB_FAIL(dml.add_column("column_group_name", column_group_schema.get_column_group_name().ptr())))
+      || (!(is_history && is_deleted) && OB_FAIL(dml.add_column("column_group_name", ObHexEscapeSqlStr(column_group_schema.get_column_group_name().ptr()))))
       || OB_FAIL(dml.add_column("column_group_type", column_group_schema.get_column_group_type()))
       || OB_FAIL(dml.add_column("block_size", column_group_schema.get_block_size()))
       || OB_FAIL(dml.add_column("compressor_type", column_group_schema.get_compressor_type()))
       || OB_FAIL(dml.add_column("row_store_type", column_group_schema.get_row_store_type()))
       || (is_history && OB_FAIL(dml.add_column("is_deleted", is_deleted)))
       || (is_history && OB_FAIL(dml.add_column("schema_version", schema_version)))) {
-    LOG_WARN("fail to build column column dml", K(ret));
+      LOG_WARN("fail to build column column dml", K(ret));
     } else if (OB_FAIL(dml.finish_row())) {
       LOG_WARN("fail to finish column group dml row", K(ret));
     }
