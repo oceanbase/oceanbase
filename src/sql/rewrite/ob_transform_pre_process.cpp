@@ -2374,10 +2374,15 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
                                                              shared_exprs))) {
       LOG_WARN("failed to extract shared expr", K(ret));
     // pull back order items that were pushed down to left view stmt
-    } else if (stmt.is_order_siblings()
-               && OB_FAIL(stmt.get_order_items().assign(left_view_stmt->get_order_items()))
-               && FALSE_IT(left_view_stmt->get_order_items().reset())) {
-      LOG_WARN("failed to pull up order siblings by items", K(ret));
+    } else if (stmt.is_order_siblings()) {
+      // pull back order items that were pushed down to left view stmt
+      if (OB_FAIL(stmt.get_order_items().assign(left_view_stmt->get_order_items()))) {
+        LOG_WARN("failed to pull up order siblings by items", K(ret));
+      } else {
+        left_view_stmt->get_order_items().reset();
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(append_array_no_dup(select_list, shared_exprs))) {
       LOG_WARN("failed to append shared exprs", K(ret));
     } else if (has_for_update && OB_FAIL(add_select_item_for_update(left_view_stmt, select_list))) {
