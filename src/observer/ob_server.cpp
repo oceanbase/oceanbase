@@ -236,15 +236,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   init_arches();
   scramble_rand_.init(static_cast<uint64_t>(start_time_), static_cast<uint64_t>(start_time_ / 2));
 
-#if defined(__x86_64__)
-  if (OB_UNLIKELY(!is_arch_supported(ObTargetArch::AVX))) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_ERROR("unsupported CPU platform, AVX instructions are required.");
-  }
-#endif
-
   // server parameters be inited here.
-  if (OB_SUCC(ret) && OB_FAIL(init_config())) {
+  if (OB_FAIL(init_config())) {
     LOG_ERROR("init config failed", KR(ret));
   }
   // set alert log level earlier
