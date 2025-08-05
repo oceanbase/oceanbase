@@ -25180,8 +25180,10 @@ int ObDDLService::get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,
     } else if (OB_FAIL(root_key_arg.init_for_get(primary_tenant_id))) {
       LOG_WARN("failed to init for get", KR(ret), K(primary_tenant_id));
     }
+    ////如果主备租户在同一个单节点的集群，addr里面就会只有一台RS的节点，
+    //    //skip_call_rs就不能为true。
     if (FAILEDx(notify_root_key(*rpc_proxy_, root_key_arg,
-            addr_list, result, true/*enable_default*/, true/*skip_call_rs*/,
+            addr_list, result, true/*enable_default*/, false/*skip_call_rs*/,
             cluster_id, &allocator))) {
       LOG_WARN("failed to get root key from obs", KR(ret), K(cluster_id),
           K(root_key_arg), K(addr_list));
@@ -25249,8 +25251,8 @@ int ObDDLService::notify_root_key(
         rpc_proxy, &obrpc::ObSrvRpcProxy::set_root_key);
     int tmp_ret = OB_SUCCESS;
     int return_ret = OB_SUCCESS;
-    // need_to_call_rs is true only if skip_call_rs is false and not notify cross-cluster
-    bool need_call_rs = (!skip_call_rs) && (OB_INVALID_CLUSTER_ID == cluster_id);
+    // 存在单机上面既有主库也有备库，cluster_id有效也是要访问RS的
+    bool need_call_rs = !skip_call_rs;
     ObAddr rs_addr = GCONF.self_addr_;
     int64_t timeout = ctx.get_timeout();
     for (int64_t i = 0; OB_SUCC(ret) && i < addrs.count(); i++) {
@@ -25265,7 +25267,8 @@ int ObDDLService::notify_root_key(
         need_call_rs = false;
       }
     } // end for
-    if (OB_FAIL(ret) || !need_call_rs) {
+    if (OB_FAIL(ret) || !need_call_rs || OB_INVALID_CLUSTER_ID != cluster_id) {
+      //如果不是本集群，不需要单独发一遍本集群的RS节点
     } else if (OB_TMP_FAIL(proxy.call(rs_addr, timeout, cluster_id, OB_SYS_TENANT_ID, arg))) {
       has_failed = true;
       return_ret= tmp_ret;

@@ -9377,6 +9377,33 @@ public:
 private:
   common::ObArenaAllocator allocator_;
 };
+
+struct ObReloadMasterKeyArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObReloadMasterKeyArg(): tenant_id_(OB_INVALID_ID)
+  {}
+  ~ObReloadMasterKeyArg() {}
+  int assign(const ObReloadMasterKeyArg &other);
+  bool is_valid() const { return OB_INVALID_ID != tenant_id_; }
+  TO_STRING_KV(K_(tenant_id));
+  uint64_t tenant_id_;
+};
+
+struct ObReloadMasterKeyResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObReloadMasterKeyResult(): tenant_id_(OB_INVALID_ID), master_key_id_(OB_INVALID_ID)
+  {}
+  ~ObReloadMasterKeyResult() {}
+  int assign(const ObReloadMasterKeyResult &other);
+  TO_STRING_KV(K_(tenant_id), K_(master_key_id));
+  uint64_t tenant_id_;
+  uint64_t master_key_id_;
+};
+
 #endif
 
 struct ObAlterUserProxyRes

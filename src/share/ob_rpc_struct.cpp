@@ -7994,6 +7994,24 @@ void ObRootKeyResult::reset()
   key_type_ = RootKeyType::INVALID;
   root_key_.reset();
 }
+OB_SERIALIZE_MEMBER(ObReloadMasterKeyArg, tenant_id_);
+
+int ObReloadMasterKeyArg::assign(const ObReloadMasterKeyArg &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObReloadMasterKeyResult, tenant_id_, master_key_id_);
+
+int ObReloadMasterKeyResult::assign(const ObReloadMasterKeyResult &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  master_key_id_ = other.master_key_id_;
+  return ret;
+}
 #endif
 OB_SERIALIZE_MEMBER(ObTrxToolArg, trans_id_, status_,
                     trans_version_, end_log_ts_, cmd_);

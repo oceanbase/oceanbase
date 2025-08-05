@@ -76,6 +76,7 @@ public:
     LOG_FLASHBACK,
     WAIT_LOG_END,
     CHANGE_ACCESS_MODE,
+    WAIT_REBUILD_MASTER_KEY,
     MAX_COST_TYPE
   };
   const char* type_to_str(CostType type) const;
@@ -315,6 +316,7 @@ private:
       const SCN &max_sys_ls_sync_scn/* SYS LS real max sync scn */,
       const SCN &target_tenant_sync_scn/* tenant target sync scn in switchover */);
   int wait_ls_balance_task_finish_();
+  int wait_rebuild_master_key_version_finish_();
   int check_ls_balance_task_finish_(
       ObBalanceTaskArray &balance_task_array, ObArray<ObBalanceTaskHelper> &ls_balance_tasks,
       share::ObAllTenantInfo &cur_tenant_info, bool &is_finish);

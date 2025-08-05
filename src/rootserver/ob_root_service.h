@@ -847,6 +847,8 @@ public:
   int try_add_dep_infos_for_synonym_batch(const obrpc::ObTryAddDepInofsForSynonymBatchArg &arg);
 #ifdef OB_BUILD_TDE_SECURITY
   int handle_get_root_key(const obrpc::ObRootKeyArg &arg, obrpc::ObRootKeyResult &result);
+int reload_master_key(const obrpc::ObReloadMasterKeyArg &arg,
+    obrpc::ObReloadMasterKeyResult &result);
 #endif
   int root_rebuild_tablet(const obrpc::ObRebuildTabletArg &arg);
 

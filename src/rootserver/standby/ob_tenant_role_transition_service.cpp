@@ -25,6 +25,8 @@
 #include "share/ob_server_check_utils.h"
 #include "share/ob_flashback_log_scn_table_operator.h"
 
+using namespace oceanbase::common::sqlclient;
+
 namespace oceanbase
 {
 using namespace share;
@@ -85,7 +87,7 @@ const char* const ObTenantRoleTransitionConstants::RESTORE_TO_STANDBY_LOG_MOD_ST
 const char* ObTenantRoleTransCostDetail::type_to_str(CostType type) const
 {
   static const char *strs[] = { "WAIT_LOG_SYNC", "WAIT_BALANCE_TASK", "FLASHBACK_LOG",
-      "WAIT_LOG_END", "CHANGE_ACCESS_MODE" };
+      "WAIT_LOG_END", "CHANGE_ACCESS_MODE", "WAIT_REBUILD_MASTER_KEY" };
   STATIC_ASSERT(MAX_COST_TYPE == ARRAYSIZEOF(strs), "status string array size mismatch");
   const char* str = "UNKNOWN";
   if (type < 0 || type >= MAX_COST_TYPE) {
@@ -440,6 +442,8 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_switch_to_primary_(
   }
   if (FAILEDx(wait_ls_balance_task_finish_())) {
     LOG_WARN("failed to wait ls balance task finish", KR(ret));
+  } else if (OB_FAIL(wait_rebuild_master_key_version_finish_())) {
+    LOG_WARN("failed to wait rebuild master key version", KR(ret));
   } else if (OB_FAIL(switchover_update_tenant_status(tenant_id_,
                                               true /* switch_to_primary */,
                                               tenant_info.get_tenant_role(),
@@ -476,6 +480,8 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_failover_to_primary_
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover cancel failed, failover to primary");
   } else if (OB_FAIL(wait_ls_balance_task_finish_())) {
     LOG_WARN("failed to wait ls balance task finish", KR(ret));
+  } else if (OB_FAIL(wait_rebuild_master_key_version_finish_())) {
+    LOG_WARN("failed to wait rebuild master key version", KR(ret));
   } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_switchover_status(
                      tenant_id_, sql_proxy_, tenant_info.get_switchover_epoch(),
                      tenant_info.get_switchover_status(), share::FLASHBACK_SWITCHOVER_STATUS))) {
@@ -826,6 +832,45 @@ int ObTenantRoleTransitionService::check_ls_balance_task_finish_(
     }
     LOG_INFO("has balance task not finish", K(ls_balance_tasks), K(balance_task_array), K(cur_tenant_info));
   }
+  return ret;
+}
+
+//TODO 如果备库不设置tde_methode配置项，这里也是不能处理的，依赖于
+//配置项一定设置了
+int ObTenantRoleTransitionService::wait_rebuild_master_key_version_finish_()
+{
+  int ret = OB_SUCCESS;
+  int64_t begin_time = ObTimeUtility::current_time();
+#ifdef OB_BUILD_TDE_SECURITY
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
+  } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rs rpc proxy is null", KR(ret));
+  } else if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tenant config", K(ret), K(tenant_id_));
+  } else if (!ObTdeMethodUtil::is_valid(ObString(tenant_config->tde_method.get_value()))) {
+    //do nothing
+  } else if (CLUSTER_VERSION_4_2_5_6 > GET_MIN_CLUSTER_VERSION()) {
+    //如果集群版本号小于4256还没有reload的rpc，不可以执行下面的操作
+  } else {
+    const int64_t DEFAULT_TIMEOUT = GCONF.internal_sql_execute_timeout;
+    obrpc::ObReloadMasterKeyArg arg;
+    obrpc::ObReloadMasterKeyResult result;
+    arg.tenant_id_ = tenant_id_;
+    //备库切成主库的逻辑值触发reload，不等master_key生效，交给后台线程
+    if (OB_FAIL(GCTX.rs_rpc_proxy_->timeout(DEFAULT_TIMEOUT).reload_master_key(arg, result))) {
+      LOG_WARN("fail to reload master key", KR(ret), K(arg), K(DEFAULT_TIMEOUT));
+    }
+  }
+#endif
+  if (OB_LIKELY(NULL != cost_detail_)) {
+    int64_t wait_rebuild_master_key_task = ObTimeUtility::current_time() - begin_time;
+    (void) cost_detail_->add_cost(ObTenantRoleTransCostDetail::WAIT_REBUILD_MASTER_KEY, wait_rebuild_master_key_task);
+  }
+  LOG_INFO("finish wait rebuild master key version", KR(ret));
   return ret;
 }
 
