@@ -267,7 +267,7 @@ int ObVecIndexAsyncTaskUtil::move_task_to_history_table(
   } else if (data_version < DATA_VERSION_4_3_5_2) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("data version less than 4.3.5.2 is not support");
-  } else if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s SELECT * FROM %s WHERE tenant_id = %ld AND status = 3 ORDER BY gmt_create LIMIT %ld",
+  } else if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s SELECT gmt_create, gmt_modified, tenant_id, table_id, tablet_id, task_id, trigger_type, task_type, status, target_scn, ret_code, trace_id FROM %s WHERE tenant_id = %ld AND status = 3 ORDER BY gmt_create LIMIT %ld",
               share::OB_ALL_VECTOR_INDEX_TASK_HISTORY_TNAME,
               share::OB_ALL_VECTOR_INDEX_TASK_TNAME,
               ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),

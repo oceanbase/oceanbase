@@ -10869,6 +10869,7 @@ snapshot_index_tablet_id	bigint(20)	NO		NULL
 data_tablet_id	bigint(20)	NO		NULL	
 statistics	varchar(2048)	NO		NULL	
 sync_info	varchar(1024)	NO		NULL	
+index_type	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_vector_index_info;
 IF(count(*) >= 0, 1, 0)
 1
@@ -11341,6 +11342,7 @@ status	bigint(20)	NO		NULL
 target_scn	bigint(20)	NO		NULL	
 ret_code	bigint(20)	NO		NULL	
 trace_id	varchar(512)	NO		NULL	
+progress_info	varchar(512)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_vector_index_task;
 IF(count(*) >= 0, 1, 0)
 1

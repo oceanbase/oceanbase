@@ -76,6 +76,7 @@ public:
     DATA_TABLET_ID,
     STATISTICS, // memory usage, status..., logic_version
     SYNC_INFO, // sync snapshot...
+    INDEX_TYPE
   };
   ObAllVirtualVectorIndexInfo();
   virtual ~ObAllVirtualVectorIndexInfo();

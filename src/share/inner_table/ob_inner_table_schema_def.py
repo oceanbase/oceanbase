@@ -8154,7 +8154,8 @@ def_table_schema(
     ('status', 'int'),
     ('target_scn', 'int'),
     ('ret_code', 'int'),
-    ('trace_id', 'varchar:OB_MAX_ERROR_MSG_LEN')
+    ('trace_id', 'varchar:OB_MAX_ERROR_MSG_LEN'),
+    ('progress_info', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true', 'NULL')
   ],
 )
 
@@ -16136,7 +16137,8 @@ def_table_schema(
     # memory usage, status..., logic_version
     ('statistics', 'varchar:MAX_COLUMN_COMMENT_LENGTH'),
     # sync snapshot...
-    ('sync_info', 'varchar:OB_INNER_TABLE_DEFAULT_KEY_LENTH')
+    ('sync_info', 'varchar:OB_INNER_TABLE_DEFAULT_KEY_LENTH'),
+    ('index_type', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

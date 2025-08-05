@@ -5628,6 +5628,7 @@ snapshot_index_tablet_id	bigint(20)	NO		NULL
 data_tablet_id	bigint(20)	NO		NULL	
 statistics	varchar(2048)	NO		NULL	
 sync_info	varchar(1024)	NO		NULL	
+index_type	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_vector_index_info;
 IF(count(*) >= 0, 1, 0)
 1
