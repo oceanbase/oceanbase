@@ -107,7 +107,6 @@ int ObExprJsonSchemaValidationReport::eval_json_schema_validation_report(const O
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
   MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   ObJsonBin j_schema_bin;
   if (OB_ISNULL(info)) {
     // schema is not const

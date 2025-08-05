@@ -84,7 +84,6 @@ int ObExprDeleteXml::eval_delete_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
   MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   ObDatum *xml_datum = NULL;
   ObIMulModeBase *xml_tree = NULL;
   ObXmlDocument *xml_doc = NULL;
@@ -116,6 +115,7 @@ int ObExprDeleteXml::eval_delete_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     LOG_WARN("fail to construct namespace params", K(ret), K(namespace_str));
   }
 
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   if (OB_FAIL(ret)) {
   } else if (xpath_str.empty()) {
     // do nothing
