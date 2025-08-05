@@ -473,9 +473,22 @@ int ObQueryDriver::convert_extend_value_charset(common::ObObj& value, sql::ObRes
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
     } else {
+      ObArenaAllocator temp_allocator("PlTemp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      ObObj tmp_obj;
+      ObObj element_obj;
       for (int64_t i = 0; OB_SUCC(ret) && i < coll->get_count(); ++i) {
-        if (OB_FAIL(SMART_CALL(convert_value_charset(coll->get_data()[i], result, charset_type, nchar, allocator)))) {
+        tmp_obj = coll->get_data()[i];
+        element_obj = coll->get_data()[i];
+        if (OB_FAIL(SMART_CALL(convert_value_charset(tmp_obj, result, charset_type, nchar, &temp_allocator)))) {
           LOG_WARN("failed to convert charset", K(ret), K(i));
+        } else {
+          if (!tmp_obj.is_pl_extend()) {
+            if (OB_FAIL(SMART_CALL(common::deep_copy_obj(*allocator, tmp_obj, coll->get_data()[i])))) { // deep copy to dst element
+              LOG_WARN("failed to deep copy obj", K(ret), K(i));
+            } else if (OB_FAIL(SMART_CALL(pl::ObUserDefinedType::destruct_objparam(*allocator, element_obj)))) { // destruct src element
+              LOG_WARN("failed to destruct objparam", K(ret), K(i));
+            }
+          }
         }
       }
     }
@@ -488,12 +501,26 @@ int ObQueryDriver::convert_extend_value_charset(common::ObObj& value, sql::ObRes
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
     } else {
+      ObArenaAllocator temp_allocator("PlTemp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       for (int64_t i = 0; OB_SUCC(ret) && i < record->get_count(); ++i) {
-        ObObj obj;
-        if (OB_FAIL(record->get_element(i, obj))) {
+        ObObj* obj;
+        ObObj tmp_obj;
+        ObObj element_obj;
+        if (OB_FAIL(record->get_element(i, tmp_obj))) {
           LOG_WARN("failed to get element", K(ret), K(i));
-        } else if (OB_FAIL(SMART_CALL(convert_value_charset(obj, result, charset_type, nchar, allocator)))) {
+        } else if (OB_FAIL(record->get_element(i, obj))) {
+          LOG_WARN("failed to get element", K(ret), K(i));
+        } else if (OB_FAIL(SMART_CALL(convert_value_charset(tmp_obj, result, charset_type, nchar, &temp_allocator)))) {
           LOG_WARN("failed to convert charset", K(ret), K(i));
+        } else {
+          if (!tmp_obj.is_pl_extend()) {
+            element_obj = *obj;
+            if (OB_FAIL(SMART_CALL(common::deep_copy_obj(*allocator, tmp_obj, *obj)))) { // deep copy to dst element
+              LOG_WARN("failed to deep copy obj", K(ret), K(i));
+            } else if (OB_FAIL(SMART_CALL(pl::ObUserDefinedType::destruct_objparam(*allocator, element_obj)))) { // destruct src element
+              LOG_WARN("failed to destruct objparam", K(ret), K(i));
+            }
+          }
         }
       }
     }
