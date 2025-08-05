@@ -3,4 +3,3 @@ config:
   skip_proxy_sys_private_check: true
   syslog_level: 'DEBUG'
   enable_metadb_used: 'false'
-__mirror_repository_section_name: taobao-test
