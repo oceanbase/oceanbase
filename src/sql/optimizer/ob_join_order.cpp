@@ -9571,17 +9571,18 @@ int JoinPath::check_right_has_gi_or_exchange(bool &right_has_gi_or_exchange)
   if (OB_ISNULL(left_path_) || OB_ISNULL(right_path_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(left_path_), K(right_path_));
+  } else if (is_right_need_exchange() || right_path_->exchange_allocated_) {
+    right_has_gi_or_exchange = true;
   } else if (DistAlgo::DIST_BASIC_METHOD == join_dist_algo_
              || DistAlgo::DIST_NONE_ALL == join_dist_algo_
 	     || DistAlgo::DIST_RANDOM_ALL == join_dist_algo_) {
     right_has_gi_or_exchange = false;
   } else if (DistAlgo::DIST_PARTITION_WISE == join_dist_algo_
-             && !left_path_->exchange_allocated_
-             && !right_path_->exchange_allocated_) {
+             && !left_path_->exchange_allocated_) {
     right_has_gi_or_exchange = false;
   } else if (DistAlgo::DIST_BC2HOST_NONE == join_dist_algo_ && right_path_->is_single()) {
     right_has_gi_or_exchange = false;
-  } else if (DistAlgo::DIST_PULL_TO_LOCAL == join_dist_algo_ && !is_right_need_exchange()) {
+  } else if (DistAlgo::DIST_PULL_TO_LOCAL == join_dist_algo_) {
     right_has_gi_or_exchange = false;
   } else {
     right_has_gi_or_exchange = true;
