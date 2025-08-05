@@ -59,6 +59,7 @@ class ObAllVirtualTableMgr : public common::ObVirtualTableScannerIterator,
     DATA_CHECKSUM,
     TABLE_FLAG,
     REC_SCN,
+    ROW_COUNT
   };
 public:
   ObAllVirtualTableMgr();

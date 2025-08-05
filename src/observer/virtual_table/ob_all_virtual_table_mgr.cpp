@@ -12,6 +12,7 @@
 
 #include "observer/virtual_table/ob_all_virtual_table_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -334,6 +335,16 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
         case REC_SCN: {
           uint64_t v = table->get_rec_scn().get_val_for_inner_table_field();
           cur_row_.cells_[i].set_int(v);
+          break;
+        }
+        case ROW_COUNT: {
+          int64_t row_count = -1;
+          if (table->is_sstable()) {
+            row_count = static_cast<blocksstable::ObSSTable *>(table)->get_row_count();
+          } else if (table->is_data_memtable()) {
+            row_count = static_cast<memtable::ObMemtable *>(table)->get_physical_row_cnt();
+          }
+          cur_row_.cells_[i].set_int(row_count);
           break;
         }
         default:
