@@ -984,6 +984,18 @@ STAT_EVENT_SET_DEF(EXTERNAL_TABLE_DISK_CACHE_MISS_BYTES, "external table disk ca
 
 STAT_EVENT_SET_DEF(SS_MACRO_CACHE_ALLOC_DISK_SIZE, "ss_macro_cache total alloc disk size", ObStatClassIds::CACHE, 245058, false, true, true)
 
+STAT_EVENT_SET_DEF(IO_REMOTE_PRIVATE_WRITE_COUNT, "remote private write count", ObStatClassIds::OBSERVER, 245059, false, true, true)
+STAT_EVENT_SET_DEF(IO_REMOTE_PRIVATE_WRITE_BYTES, "remote private write bytes", ObStatClassIds::OBSERVER, 245060, false, true, true)
+STAT_EVENT_SET_DEF(IO_REMOTE_PRIVATE_WRITE_DELAY, "remote private write delay", ObStatClassIds::OBSERVER, 245061, false, true, true)
+STAT_EVENT_SET_DEF(IO_REMOTE_PRIVATE_READ_COUNT, "remote private read count", ObStatClassIds::OBSERVER, 245062, false, true, true)
+STAT_EVENT_SET_DEF(IO_REMOTE_PRIVATE_READ_BYTES, "remote private read bytes", ObStatClassIds::OBSERVER, 245063, false, true, true)
+STAT_EVENT_SET_DEF(IO_REMOTE_PRIVATE_READ_DELAY, "remote private read delay", ObStatClassIds::OBSERVER, 245064, false, true, true)
+STAT_EVENT_SET_DEF(IO_REMOTE_PUBLIC_WRITE_COUNT, "remote public write count", ObStatClassIds::OBSERVER, 245065, false, true, true)
+STAT_EVENT_SET_DEF(IO_REMOTE_PUBLIC_WRITE_BYTES, "remote public write bytes", ObStatClassIds::OBSERVER, 245066, false, true, true)
+STAT_EVENT_SET_DEF(IO_REMOTE_PUBLIC_WRITE_DELAY, "remote public write delay", ObStatClassIds::OBSERVER, 245067, false, true, true)
+STAT_EVENT_SET_DEF(IO_REMOTE_PUBLIC_READ_COUNT, "remote public read count", ObStatClassIds::OBSERVER, 245068, false, true, true)
+STAT_EVENT_SET_DEF(IO_REMOTE_PUBLIC_READ_BYTES, "remote public read bytes", ObStatClassIds::OBSERVER, 245069, false, true, true)
+STAT_EVENT_SET_DEF(IO_REMOTE_PUBLIC_READ_DELAY, "remote public read delay", ObStatClassIds::OBSERVER, 245070, false, true, true)
 // END
 STAT_EVENT_SET_DEF(STAT_EVENT_SET_END, "event set end", ObStatClassIds::DEBUG, 300000, false, false, true)
 #endif
