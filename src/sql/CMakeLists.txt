@@ -1617,7 +1617,6 @@ ob_set_subtarget(ob_sql_simd common
   engine/basic/ob_pushdown_filter_simd.cpp
   engine/basic/ob_byte_compare_simd.cpp
   engine/px/ob_px_bloom_filter_simd.cpp
-  parser/ob_parse_simd.cpp
 )
 
 ob_server_add_target(ob_sql_simd)
