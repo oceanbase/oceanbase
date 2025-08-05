@@ -16,6 +16,8 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
 #include "lib/mysqlclient/ob_dblink_error_trans.h"
+#include "lib/string/ob_sql_string.h"
+
 #ifdef OB_BUILD_DBLINK
 #endif
 using namespace oceanbase::common;
@@ -512,19 +514,37 @@ int ObDbLinkProxy::prepare_enviroment(const sqlclient::dblink_param_ctx &param_c
   return ret;
 }
 
+int ObDbLinkProxy::init_conn_character_set(ObMySQLConnection &mysql_conn, ObMySQLStatement &stmt, ObCharsetType charset_type)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const char *charset_name = ObCharset::charset_name(charset_type);
+  if (OB_FAIL(sql.append_fmt("set names %s", charset_name))) {
+    LOG_WARN("fail to assign sql", K(ret), K(charset_type));
+  } else if (OB_FAIL(stmt.init(mysql_conn, sql.string()))) {
+    LOG_WARN("create statement failed", K(ret));
+  } else if (OB_FAIL(stmt.execute_update())) {
+    LOG_WARN("execute sql failed", K(sql), K(ret), K(charset_type));
+  }
+  return ret;
+}
+
 int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx,
                                     ObISQLConnection *dblink_conn)
 {
   int ret = OB_SUCCESS;
   typedef const char * sql_ptr_type;
-  if (!lib::is_oracle_mode()) {
+  if (OB_ISNULL(dblink_conn)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dblink conn is null", K(ret));
+  } else if (!lib::is_oracle_mode()) {
     sql_ptr_type sql_ptr[] = {param_ctx.set_sql_mode_cstr_,
-                              param_ctx.set_client_charset_cstr_,
-                              param_ctx.set_connection_charset_cstr_,
-                              param_ctx.set_results_charset_cstr_,
                               param_ctx.set_transaction_isolation_cstr_};
     ObMySQLStatement stmt;
     ObMySQLConnection *mysql_conn = static_cast<ObMySQLConnection *>(dblink_conn);
+    if (OB_FAIL(init_conn_character_set(*mysql_conn, stmt, param_ctx.set_conn_charset_type_))) {
+      LOG_WARN("init connection character set failed", K(ret));
+    }
     for (int i = 0; OB_SUCC(ret) && i < sizeof(sql_ptr) / sizeof(sql_ptr_type); ++i) {
       if (OB_ISNULL(sql_ptr[i])) {
         //do nothing
@@ -538,9 +558,6 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
     }
   } else if (DBLINK_DRV_OB == param_ctx.link_type_) {
     sql_ptr_type sql_ptr[] = {
-      param_ctx.set_client_charset_cstr_,
-      param_ctx.set_connection_charset_cstr_,
-      param_ctx.set_results_charset_cstr_,
       param_ctx.set_transaction_isolation_cstr_,
       "set nls_date_format='YYYY-MM-DD HH24:MI:SS'",
       "set nls_timestamp_format = 'YYYY-MM-DD HH24:MI:SS.FF'",
@@ -549,6 +566,9 @@ int ObDbLinkProxy::execute_init_sql(const sqlclient::dblink_param_ctx &param_ctx
     // todo statement may different
     ObMySQLStatement stmt;
     ObMySQLConnection *mysql_conn = static_cast<ObMySQLConnection *>(dblink_conn);
+    if (OB_FAIL(init_conn_character_set(*mysql_conn, stmt, param_ctx.set_conn_charset_type_))) {
+      LOG_WARN("init connection character set failed", K(ret));
+    }
     for (int i = 0; OB_SUCC(ret) && i < sizeof(sql_ptr) / sizeof(sql_ptr_type); ++i) {
       if (OB_ISNULL(sql_ptr[i])) {
         //do nothing

@@ -309,6 +309,7 @@ public:
 private:
   int prepare_enviroment(const sqlclient::dblink_param_ctx &param_ctx,
                          sqlclient::ObISQLConnection *dblink_conn);
+  static int init_conn_character_set(sqlclient::ObMySQLConnection &mysql_conn, sqlclient::ObMySQLStatement &stmt, ObCharsetType charset_type);
 private:
   sqlclient::ObDbLinkConnectionPool *link_pool_;
 };
