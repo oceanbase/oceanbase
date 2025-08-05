@@ -151,7 +151,8 @@ public:
   int erase_tenant(const uint64_t tenant_id);
   int refresh_score();
   int set_priority(const int64_t cache_id, const int64_t old_priority, const int64_t new_priority);
-  int get_cache_info(const uint64_t tenant_id, ObIArray<ObKVCacheInstHandle> &inst_handles);
+  // when `tenant_id` is nullptr, return all inst handles
+  int get_cache_info(ObIArray<ObKVCacheInstHandle> &inst_handles, const uint64_t* tenant_id = nullptr);
   void print_all_cache_info();
   void print_tenant_cache_info(const uint64_t tenant_id);
 
