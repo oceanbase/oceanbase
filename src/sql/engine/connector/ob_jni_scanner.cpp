@@ -75,7 +75,6 @@ int JniScanner::do_init(common::hash::ObHashMap<ObString, ObString> &params) {
     common::hash::ObHashMap<ObString, ObString>::iterator params_iter;
     for (params_iter = params.begin();
          OB_SUCC(ret) && params_iter != params.end(); ++params_iter) {
-      LOG_TRACE("scanner params", K(ret), K(params_iter->first), K(params_iter->second));
       // init scanner params
       if (OB_FAIL(scanner_params_.set_refactored(params_iter->first,
                                                  params_iter->second))) {

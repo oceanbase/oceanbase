@@ -967,17 +967,20 @@ int ObODPSJNITableRowIterator::next_task_storage_row_without_data_getter(const i
     LOG_INFO("odps table iter end", K(ret), K(state_), K(task_idx), K_(read_rounds));
   } else {
     // do nothing
-    int64_t start = scan_param_->key_ranges_.at(task_idx)
-                    .get_start_key()
-                    .get_obj_ptr()[ObExternalTableUtils::LINE_NUMBER]
-                    .get_int();
-    int64_t step =
-      scan_param_->key_ranges_.at(task_idx).get_end_key().get_obj_ptr()[ObExternalTableUtils::LINE_NUMBER].get_int();
     const ObString &part_spec = scan_param_->key_ranges_.at(task_idx)
                                     .get_start_key()
                                     .get_obj_ptr()[ObExternalTableUtils::FILE_URL]
                                     .get_string();
-    if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
+    int64_t start = 0;
+    int64_t step = 0;
+    if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(scan_param_->key_ranges_.at(task_idx),
+                                                    ObExternalTableUtils::LINE_NUMBER,
+                                                    start,
+                                                    step))) {
+      LOG_WARN("failed to resolve odps start step", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
       ret = OB_ITER_END;
       LOG_INFO("iterator of odps jni scanner is end with dummy file", K(ret));
     } else {
@@ -1181,17 +1184,19 @@ int ObODPSJNITableRowIterator::next_task_storage(const int64_t capacity)
         scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::SPLIT_IDX].get_int();
     int64_t end_split =
         scan_param_->key_ranges_.at(task_idx).get_end_key().get_obj_ptr()[ObExternalTableUtils::SPLIT_IDX].get_int();
-    int64_t start = scan_param_->key_ranges_.at(task_idx)
-                        .get_start_key()
-                        .get_obj_ptr()[ObExternalTableUtils::LINE_NUMBER]
-                        .get_int();
-    int64_t step =
-        scan_param_->key_ranges_.at(task_idx).get_end_key().get_obj_ptr()[ObExternalTableUtils::LINE_NUMBER].get_int();
-
     const ObString &session_id = scan_param_->key_ranges_.at(task_idx)
-                                     .get_start_key()
-                                     .get_obj_ptr()[ObExternalTableUtils::SESSION_ID]
-                                     .get_string();
+                                  .get_start_key()
+                                  .get_obj_ptr()[ObExternalTableUtils::SESSION_ID]
+                                  .get_string();
+    int64_t start = 0;
+    int64_t step = 0;
+    if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(scan_param_->key_ranges_.at(task_idx),
+                                                    ObExternalTableUtils::LINE_NUMBER,
+                                                    start,
+                                                    step))) {
+      LOG_WARN("failed to resolve odps start step", K(ret));
+    }
+
     LOG_TRACE("task storage",
         K(part_id),
         K(part_spec),
@@ -1201,7 +1206,8 @@ int ObODPSJNITableRowIterator::next_task_storage(const int64_t capacity)
         K(step),
         K(session_id),
         K(task_idx));
-    if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
+    if (OB_FAIL(ret)) {
+    } else if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
       ret = OB_ITER_END;
       LOG_TRACE("iterator of odps jni scanner is end with dummy file", K(ret));
       int tmp_ret = OB_SUCCESS;
@@ -1528,13 +1534,14 @@ int ObODPSJNITableRowIterator::next_task_tunnel_without_data_getter(const int64_
                                     .get_obj_ptr()[ObExternalTableUtils::FILE_URL]
                                     .get_string();
 
-    int64_t start = scan_param_->key_ranges_.at(task_idx)
-                        .get_start_key()
-                        .get_obj_ptr()[ObExternalTableUtils::LINE_NUMBER]
-                        .get_int();
-    int64_t step =
-        scan_param_->key_ranges_.at(task_idx).get_end_key().get_obj_ptr()[ObExternalTableUtils::LINE_NUMBER].get_int();
-    if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
+    int64_t start = 0;
+    int64_t step = 0;
+    if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(scan_param_->key_ranges_.at(task_idx),
+                                                    ObExternalTableUtils::LINE_NUMBER,
+                                                    start,
+                                                    step))) {
+      LOG_WARN("failed to resolve odps start step", K(ret));
+    } else if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
       ret = OB_ITER_END;
       LOG_INFO(" iterator of odps jni scanner is end with dummy file", K(ret));
     } else {
@@ -1556,6 +1563,7 @@ int ObODPSJNITableRowIterator::next_task_tunnel_without_data_getter(const int64_
           step = real_time_partition_row_count - start;
         }
       }
+      LOG_TRACE("next_task_tunnel_without_data_getter", K(ret), K(part_id), K(part_spec), K(start), K(step));
 
       if (OB_SUCC(ret)) {
         state_.task_idx_ = task_idx;
@@ -1622,13 +1630,18 @@ int ObODPSJNITableRowIterator::next_task_tunnel(const int64_t capacity)
                                     .get_obj_ptr()[ObExternalTableUtils::FILE_URL]
                                     .get_string();
 
-    int64_t start = scan_param_->key_ranges_.at(task_idx)
-                        .get_start_key()
-                        .get_obj_ptr()[ObExternalTableUtils::LINE_NUMBER]
-                        .get_int();
-    int64_t step =
-        scan_param_->key_ranges_.at(task_idx).get_end_key().get_obj_ptr()[ObExternalTableUtils::LINE_NUMBER].get_int();
-    if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
+    int64_t start = 0;
+    int64_t step = 0;
+    if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(scan_param_->key_ranges_.at(task_idx),
+                                                    ObExternalTableUtils::LINE_NUMBER,
+                                                    start,
+                                                    step))) {
+      LOG_WARN("failed to resolve odps start step", K(ret));
+    }
+    LOG_TRACE("next_task_tunnel", K(ret), K(part_id), K(part_spec), K(start), K(step));
+
+    if (OB_FAIL(ret)) {
+    } else if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
       ret = OB_ITER_END;
       // END NORMALLY
       if (OB_NOT_NULL(state_.odps_jni_scanner_)) {
