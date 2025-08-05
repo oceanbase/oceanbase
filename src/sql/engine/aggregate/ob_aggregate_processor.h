@@ -103,6 +103,18 @@ public:
 
 struct GroupingSetRTInfo
 {
+  OB_UNIS_VERSION_V(1);
+public:
+  GroupingSetRTInfo(): grouping_set_id_(nullptr), groupset_exprs_(), pruned_exprs_() {}
+  GroupingSetRTInfo(ObIAllocator &alloc): grouping_set_id_(nullptr), groupset_exprs_(alloc), pruned_exprs_(alloc) {}
+
+  int assign(const GroupingSetRTInfo &other);
+
+  TO_STRING_KV(KP_(grouping_set_id), K_(groupset_exprs), K_(pruned_exprs));
+public:
+  ObExpr *grouping_set_id_;
+  ObFixedArray<ExprFixedArray, ObIAllocator> groupset_exprs_;
+  ExprFixedArray pruned_exprs_;
 };
 
 struct ObAggrInfo

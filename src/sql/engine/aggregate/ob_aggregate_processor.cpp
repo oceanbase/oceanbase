@@ -45,6 +45,7 @@ namespace sql
 {
 
 OB_SERIALIZE_MEMBER(HashRollupRTInfo, rollup_grouping_id_, expand_exprs_, gby_exprs_, dup_expr_pairs_);
+OB_SERIALIZE_MEMBER(GroupingSetRTInfo, grouping_set_id_, groupset_exprs_, pruned_exprs_);
 
 
 OB_DEF_SERIALIZE(ObAggrInfo)
@@ -99,6 +100,12 @@ OB_DEF_SERIALIZE(ObAggrInfo)
               external_routine_url_,
               external_routine_resource_
   );
+
+  int8_t enable_grouping_set_expansion = (grouping_set_info_ != nullptr);
+  OB_UNIS_ENCODE(enable_grouping_set_expansion);
+  if (grouping_set_info_ != nullptr) {
+    OB_UNIS_ENCODE(*grouping_set_info_);
+  }
 
   return ret;
 }
@@ -171,6 +178,21 @@ OB_DEF_DESERIALIZE(ObAggrInfo)
               external_routine_resource_
   );
 
+  int8_t enable_grouping_set_expansion = 0;
+  OB_UNIS_DECODE(enable_grouping_set_expansion);
+  if (OB_SUCC(ret) && enable_grouping_set_expansion) {
+    CK(alloc_ != NULL);
+    if (OB_SUCC(ret)) {
+      grouping_set_info_ = OB_NEWx(GroupingSetRTInfo, alloc_, (*alloc_));
+      if (OB_ISNULL(grouping_set_info_)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
+      } else {
+        OB_UNIS_DECODE(*grouping_set_info_);
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -223,6 +245,12 @@ OB_DEF_SERIALIZE_SIZE(ObAggrInfo)
               external_routine_url_,
               external_routine_resource_
   );
+
+  int8_t enable_grouping_set_expansion = 0;
+  OB_UNIS_ADD_LEN(enable_grouping_set_expansion);
+  if (grouping_set_info_ != nullptr) {
+    OB_UNIS_ADD_LEN(*grouping_set_info_);
+  }
 
   return len;
 }
@@ -342,6 +370,18 @@ int HashRollupRTInfo::assign(const HashRollupRTInfo &other)
     LOG_WARN("assign array failed", K(ret));
   } else if (OB_FAIL(dup_expr_pairs_.assign(other.dup_expr_pairs_))) {
     LOG_WARN("assign array failed", K(ret));
+  }
+  return ret;
+}
+
+int GroupingSetRTInfo::assign(const GroupingSetRTInfo &other)
+{
+  int ret = OB_SUCCESS;
+  grouping_set_id_ = other.grouping_set_id_;
+  if (OB_FAIL(groupset_exprs_.assign(other.groupset_exprs_))) {
+    LOG_WARN("assign array failed", K(ret));
+  } else if (OB_FAIL(pruned_exprs_.assign(other.pruned_exprs_))) {
+    LOG_WARN("assign failed", K(ret));
   }
   return ret;
 }
