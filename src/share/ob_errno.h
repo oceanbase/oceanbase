@@ -1608,6 +1608,9 @@ constexpr int OB_RESOURCE_RELEASED = -9141;
 constexpr int OB_UNEXPECTED_MACRO_CACHE_FILE = -9144;
 constexpr int OB_OBJECT_STORAGE_CONDITION_NOT_MATCH = -9145;
 constexpr int OB_DISK_QUOTA_EXCEEDED = -9148;
+constexpr int OB_BACKUP_DEST_NOT_ALLOWED_TO_SET = -9149;
+constexpr int OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET = -9150;
+constexpr int OB_BACKUP_CLEAN_CAN_NOT_START = -9151;
 constexpr int OB_ERR_RESIZE_FILE_TO_SMALLER = -9200;
 constexpr int OB_MARK_BLOCK_INFO_TIMEOUT = -9201;
 constexpr int OB_NOT_READY_TO_EXTEND_FILE = -9202;
@@ -2045,8 +2048,8 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
+constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -4053,6 +4056,9 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_SSLOG_LS_NOT_EXIST__USER_ERROR_MSG "sslog ls do not exist"
 #define OB_CANNOT_ACCESS_BACKUP_SET__USER_ERROR_MSG "can not access backup set file"
 #define OB_DISK_QUOTA_EXCEEDED__USER_ERROR_MSG "disk quota is exceeded"
+#define OB_BACKUP_DEST_NOT_ALLOWED_TO_SET__USER_ERROR_MSG "backup dest is not allowed to set when log_only policy exists"
+#define OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET__USER_ERROR_MSG "log_only policy is not allowed to set when backup dest exists"
+#define OB_BACKUP_CLEAN_CAN_NOT_START__USER_ERROR_MSG "backup clean can not start, because %s"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -4533,8 +4539,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -8545,6 +8551,12 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_CANNOT_ACCESS_BACKUP_SET__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9147, can not access backup set file"
 #define OB_DISK_QUOTA_EXCEEDED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9148, disk quota is exceeded"
 #define OB_DISK_QUOTA_EXCEEDED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9148, disk quota is exceeded"
+#define OB_BACKUP_DEST_NOT_ALLOWED_TO_SET__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9149, backup dest is not allowed to set when log_only policy exists"
+#define OB_BACKUP_DEST_NOT_ALLOWED_TO_SET__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9149, backup dest is not allowed to set when log_only policy exists"
+#define OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9150, log_only policy is not allowed to set when backup dest exists"
+#define OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9150, log_only policy is not allowed to set when backup dest exists"
+#define OB_BACKUP_CLEAN_CAN_NOT_START__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9151, backup clean can not start, because %s"
+#define OB_BACKUP_CLEAN_CAN_NOT_START__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9151, backup clean can not start, because %s"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -9505,12 +9517,12 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2483];
+extern int g_all_ob_errnos[2487];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

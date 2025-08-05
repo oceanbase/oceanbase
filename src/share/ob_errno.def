@@ -2378,6 +2378,9 @@ DEFINE_ERROR(OB_OBJECT_STORAGE_CONDITION_NOT_MATCH, -9145, -1, "HY000", "object 
 DEFINE_ERROR_DEP(OB_SSLOG_LS_NOT_EXIST, -9146, -1, "HY000", "sslog ls do not exist");
 DEFINE_ERROR_DEP(OB_CANNOT_ACCESS_BACKUP_SET, -9147, -1, "HY000", "can not access backup set file");
 DEFINE_ERROR(OB_DISK_QUOTA_EXCEEDED, -9148, -1, "HY000", "disk quota is exceeded");
+DEFINE_ERROR(OB_BACKUP_DEST_NOT_ALLOWED_TO_SET, -9149, -1, "HY000", "backup dest is not allowed to set when log_only policy exists");
+DEFINE_ERROR(OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET, -9150, -1, "HY000", "log_only policy is not allowed to set when backup dest exists");
+DEFINE_ERROR_EXT(OB_BACKUP_CLEAN_CAN_NOT_START, -9151, -1, "HY000", "backup clean can not start", "backup clean can not start, because %s");
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////
