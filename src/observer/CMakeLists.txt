@@ -575,6 +575,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_tenant_show_catalog_databases.cpp
   virtual_table/ob_all_virtual_tenant_vector_mem_info.cpp
   virtual_table/ob_all_virtual_ccl_status.cpp
+  virtual_table/ob_all_virtual_dba_source.cpp
 )
 
 ob_server_add_target(ob_server)
