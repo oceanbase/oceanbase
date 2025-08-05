@@ -82,10 +82,11 @@ void wq_init(write_queue_t* wq) {
 
 void wq_move(write_queue_t* dest, write_queue_t* src) {
   dqueue_init(&dest->queue);
-  dlink_t* top = dqueue_top(&src->queue);
   dlink_t* src_head = &src->queue.head;
   dlink_t* dest_head = &dest->queue.head;
-  if (top->next != src_head) {
+  if (src_head->next != src_head) {
+    // src write_queue is not empty
+    dlink_t* top = dqueue_top(&src->queue);
     dest_head->next = top;
     top->prev = dest_head;
     dlink_t* bottom = top;
