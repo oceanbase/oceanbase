@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_BLOCK_ALLOCATING_PRIORITY_MANAGER_H_
 #define OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_BLOCK_ALLOCATING_PRIORITY_MANAGER_H_
 
+#include "storage/tmp_file/ob_tmp_file_block_handle_list.h"
 #include "storage/tmp_file/ob_tmp_file_block.h"
 #include "lib/list/ob_dlist.h"
 #include "lib/lock/ob_spin_rwlock.h"
@@ -44,7 +45,7 @@ public:
 class ObTmpFileBlockAllocatingPriorityManager final
 {
 public:
-  ObTmpFileBlockAllocatingPriorityManager() : is_inited_(false), alloc_lists_(), locks_() {};
+  ObTmpFileBlockAllocatingPriorityManager() : is_inited_(false), alloc_lists_() {};
   ~ObTmpFileBlockAllocatingPriorityManager() {};
   int init();
   void destroy();
@@ -71,12 +72,20 @@ private:
     L3,     // free page num is in (0, 64]
     MAX
   };
+  struct GetAllocatableBlockOp {
+    GetAllocatableBlockOp(int64_t candidate_page_num,
+                          int64_t necessary_page_num,
+                          ObIArray<ObTmpFileBlockHandle> &candidate_blocks);
+    bool operator()(ObTmpFileBlkNode *node);
+    int64_t candidate_page_num_;
+    int64_t necessary_page_num_;
+    ObIArray<ObTmpFileBlockHandle> &candidate_blocks_;
+  };
   BlockPreAllocLevel get_block_list_level_(const int64_t free_page_num) const;
   BlockPreAllocLevel get_next_level_(const BlockPreAllocLevel level) const;
 private:
   bool is_inited_;
-  ObTmpFileBlockAllocList alloc_lists_[BlockPreAllocLevel::MAX];
-  ObSpinLock locks_[BlockPreAllocLevel::MAX];
+  ObTmpFileBlockHandleList alloc_lists_[BlockPreAllocLevel::MAX];
 };
 
 }  // end namespace tmp_file

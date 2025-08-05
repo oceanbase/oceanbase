@@ -227,6 +227,7 @@ void ObTmpFileWriteCache::run1()
     if (TC_REACH_TIME_INTERVAL(REFRESH_CONFIG_INTERVAL)) {
       refresh_disk_usage_limit_();
       tmp_file_block_manager_->print_block_usage();
+      // tmp_file_block_manager_->print_blocks();
       metrics_.print();
       print_();
     }
@@ -306,13 +307,19 @@ int ObTmpFileWriteCache::flush_()
     int64_t expect_flush_cnt = cal_flush_page_cnt_();
     ObTmpFileBlockFlushIterator block_iterator;
     ObTmpFileBlockFlushPriorityManager &flush_prio_mgr = tmp_file_block_manager_->get_flush_priority_mgr();
+    ObArray<ObTmpFileFlushTask *> tasks;
+    ObArray<ObTmpFileBlockHandle> failed_blocks;
     if (expect_flush_cnt == 0) {
       LOG_DEBUG("no need to flush", K(expect_flush_cnt), K(ATOMIC_LOAD(&used_page_cnt_)));
     } else if (OB_FAIL(check_tmp_file_disk_usage_limit_(metrics_.get_flushing_data_size()))) {
       set_flush_ret_code_(ret);
+    } else if (OB_FAIL(tasks.reserve(MAX_FLUSH_TASK_NUM_PER_BATCH))) {
+      LOG_WARN("fail to prepare allocate flush tasks", KR(ret));
+    } else if (OB_FAIL(failed_blocks.reserve(MAX_ITER_BLOCK_NUM_PER_BATCH))) {
+      LOG_WARN("fail to prepare allocate failed_blocks", KR(ret));
     } else if (OB_FAIL(block_iterator.init(&flush_prio_mgr))) {
       LOG_WARN("fail to init block iterator", KR(ret));
-    } else if (OB_FAIL(build_task_(expect_flush_cnt, block_iterator))) {
+    } else if (OB_FAIL(build_task_(expect_flush_cnt, block_iterator, tasks, failed_blocks))) {
       LOG_WARN("fail to build flush task", KR(ret));
     } else if (OB_FAIL(exec_wait_())) {
       LOG_WARN("fail to exec wait", KR(ret));
@@ -873,155 +880,135 @@ int ObTmpFileWriteCache::try_to_set_macro_block_idx_(ObTmpFileBlock &block)
   return ret;
 }
 
-int ObTmpFileWriteCache::build_task_(const int64_t expect_flush_cnt, ObTmpFileBlockFlushIterator &iterator)
+int ObTmpFileWriteCache::build_task_(
+    const int64_t expect_flush_cnt,
+    ObTmpFileBlockFlushIterator &iterator,
+    ObIArray<ObTmpFileFlushTask *> &tasks,
+    ObIArray<ObTmpFileBlockHandle> &failed_blocks)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int64_t actual_flush_cnt = 0;
-  ObTmpFileBlockFlushingPageIterator page_iterator;
 
-  static const int64_t MAX_FLUSH_TASK_NUM_FOR_ONE_BATCH = 1024;
-  static const int64_t MAX_ITER_BLOCK_NUM = 1024;
-  void * task_arr_buf = nullptr;
-  void * blk_arr_buf = nullptr;
-  ObSEArray<ObTmpFileFlushTask *, MAX_FLUSH_TASK_NUM_FOR_ONE_BATCH> *tasks = nullptr;
-  ObSEArray<ObTmpFileBlockHandle, MAX_ITER_BLOCK_NUM> *failed_blocks = nullptr;
-  if (OB_ISNULL(task_arr_buf = flush_allocator_.alloc(sizeof(ObSEArray<ObTmpFileFlushTask *, MAX_FLUSH_TASK_NUM_FOR_ONE_BATCH>)))) { // TODO: wrap in a function or use SMART_VAR
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc memory for flush task", KR(ret));
-  } else if (OB_ISNULL(blk_arr_buf = flush_allocator_.alloc(sizeof(ObSEArray<ObTmpFileBlockHandle, MAX_ITER_BLOCK_NUM>)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc memory for flush task", KR(ret));
-  } else {
-    tasks = new (task_arr_buf) ObSEArray<ObTmpFileFlushTask *, MAX_FLUSH_TASK_NUM_FOR_ONE_BATCH>();
-    failed_blocks = new (blk_arr_buf) ObSEArray<ObTmpFileBlockHandle, MAX_ITER_BLOCK_NUM>();
-    while (OB_SUCC(ret)
-          && actual_flush_cnt < expect_flush_cnt
-          && MAX_FLUSHING_DATA_SIZE >= metrics_.get_flushing_data_size()
-          && MAX_FLUSH_TASK_NUM_FOR_ONE_BATCH >= tasks->count()
-          && MAX_ITER_BLOCK_NUM >= failed_blocks->count()) {
-      ObTmpFileBlockHandle block_handle;
-      bool need_reinsert = false;
-      if (OB_FAIL(iterator.next(block_handle))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("get next block failed", KR(ret), K(block_handle));
-        }
-        break;
-      } else if (OB_ISNULL(block_handle.get())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("block is nullptr", KR(ret));
-      } else if (OB_FAIL(try_to_set_macro_block_idx_(*block_handle.get()))) {
-        LOG_WARN("fail to set macro block index", KR(ret), K(block_handle));
-        need_reinsert = true;
-      }
-
-      if (FAILEDx(page_iterator.init(*block_handle.get()))) {
-        if (OB_ITER_END == ret) {
-          need_reinsert = true;
-        } else {
-          LOG_ERROR("fail to init page iterator", KR(ret), K(block_handle));
-        }
+  while (OB_SUCC(ret)
+        && actual_flush_cnt < expect_flush_cnt
+        && MAX_FLUSHING_DATA_SIZE >= metrics_.get_flushing_data_size()
+        && MAX_FLUSH_TASK_NUM_PER_BATCH >= tasks.count()
+        && MAX_ITER_BLOCK_NUM_PER_BATCH >= failed_blocks.count()) {
+    ObTmpFileBlockHandle block_handle;
+    if (OB_FAIL(iterator.next(block_handle))) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
       } else {
-        while (OB_SUCC(ret)) {
-          if (OB_FAIL(page_iterator.next_range())) {
-            if (OB_ITER_END != ret) {
-              LOG_WARN("fail to get next range", KR(ret));
-            } else {
-              ret = OB_SUCCESS;
-            }
-            break;
-          }
-          for (int32_t i = 0; OB_SUCC(ret); ++i) {
-            ObTmpFileFlushTask *task = nullptr;
-            if (OB_FAIL(alloc_flush_task_(task))) {
-              LOG_WARN("fail to alloc flush task", KR(ret), KPC(task));
-              // tmp file block may then can not be flushed
-              // if alloc fail at first range and no new writes on this block
-              need_reinsert = i == 0 ? true: false;
-            } else if (OB_FAIL(task->init(&flush_allocator_, block_handle))) {
-              LOG_WARN("fail to init task", KR(ret), KPC(task));
-            } else if (OB_FAIL(collect_pages_(page_iterator, *task, block_handle))) {
-              LOG_WARN("fail to collect pages", KR(ret), KPC(task));
-            }
-
-            if (OB_FAIL(ret) || (OB_NOT_NULL(task) && task->get_page_cnt() <= 0)) {
-              if (OB_NOT_NULL(task)) {
-                task->cancel(OB_CANCELED);
-                LOG_DEBUG("cancel flush task, free", KPC(task));
-                free_flush_task_(task);
-              }
-              break;
-            }
-
-            if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(tasks->push_back(task))) {
-              LOG_ERROR("fail to push back task", KR(ret), KPC(task));
-            } else {
-              actual_flush_cnt += task->get_page_cnt();
-              LOG_DEBUG("build_task_ succ", K(actual_flush_cnt), KPC(task), K(io_waiting_queue_size_));
-            }
-          }
-        }
+        LOG_WARN("fail to get next block handle", KR(ret), K(block_handle));
       }
-      page_iterator.reset();
-
-      if (need_reinsert) {
-        if (OB_FAIL(failed_blocks->push_back(block_handle))) {
-          LOG_ERROR("fail to push back block handle to reinsert array, block might fail to flush",
-                  KR(ret), K(block_handle));
-        }
-      }
-    }
-
-    reinsert_block_for_flushing_(*failed_blocks);
-    for (int32_t i = 0; i < tasks->count(); ++i) {
-      ObTmpFileFlushTask *task = tasks->at(i);
-      if (OB_ISNULL(task) || OB_UNLIKELY(cur_timer_idx_ < 0 || cur_timer_idx_ >= MAX_FLUSH_TIMER_NUM)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("invalid timer index or task ptr", KR(ret), K(i), K(cur_timer_idx_), KPC(task));
-      } else if (OB_TMP_FAIL(TG_SCHEDULE(flush_tg_id_[cur_timer_idx_],
-                            task->get_write_block_task(), 0/*delay*/))) {
-        LOG_ERROR("fail to schedule flush task", KR(tmp_ret), KPC(task));
-      }  else if (OB_TMP_FAIL(add_flush_task_(task))) {
-        LOG_ERROR("fail to add task to continue waiting", KR(tmp_ret), KPC(task));
-      } else {
-        cur_timer_idx_ = (cur_timer_idx_ + 1) % MAX_FLUSH_TIMER_NUM;
-        metrics_.record_flush_task(task->get_page_cnt());
-      }
+      break;
+    } else if (OB_ISNULL(block_handle.get())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("block is nullptr", KR(ret));
+    } else if (OB_FAIL(build_task_in_block_(block_handle, tasks, failed_blocks, actual_flush_cnt))) {
+      LOG_WARN("fail to build task in block", KR(ret));
     }
   }
 
-  if (OB_NOT_NULL(tasks)) {
-    tasks->destroy();
-    flush_allocator_.free(tasks);
+  for (int64_t i = 0; i < failed_blocks.count(); ++i) {
+    ObTmpFileBlockHandle &block_handle = failed_blocks.at(i);
+    if (OB_ISNULL(block_handle.get())) {
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("block is nullptr", K(tmp_ret), K(i), K(block_handle));
+    } else if (OB_TMP_FAIL(block_handle.get()->reinsert_into_flush_prio_mgr())) {
+      LOG_ERROR("fail to reinsert into flush prio mgr", KR(tmp_ret), K(block_handle));
+    }
   }
-  if (OB_NOT_NULL(failed_blocks)) {
-    failed_blocks->destroy();
-    flush_allocator_.free(failed_blocks);
+  for (int32_t i = 0; i < tasks.count(); ++i) {
+    ObTmpFileFlushTask *task = tasks.at(i);
+    if (OB_ISNULL(task) || OB_UNLIKELY(cur_timer_idx_ < 0 || cur_timer_idx_ >= MAX_FLUSH_TIMER_NUM)) {
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid timer index or task ptr", KR(tmp_ret), K(i), K(cur_timer_idx_), KPC(task));
+    } else if (OB_TMP_FAIL(TG_SCHEDULE(flush_tg_id_[cur_timer_idx_],
+                          task->get_write_block_task(), 0/*delay*/))) {
+      LOG_ERROR("fail to schedule flush task", KR(tmp_ret), KPC(task));
+    }  else if (OB_TMP_FAIL(add_flush_task_(task))) {
+      LOG_ERROR("fail to add task to continue waiting", KR(tmp_ret), KPC(task));
+    } else {
+      cur_timer_idx_ = (cur_timer_idx_ + 1) % MAX_FLUSH_TIMER_NUM;
+      metrics_.record_flush_task(task->get_page_cnt());
+    }
   }
 
   if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
     LOG_INFO("build_task_end", KR(ret), K(actual_flush_cnt),
           K(expect_flush_cnt), K(io_waiting_queue_size_));
   }
-  if (OB_ITER_END == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
-    ret = OB_SUCCESS;
-  }
   return ret;
 }
 
-int ObTmpFileWriteCache::reinsert_block_for_flushing_(ObIArray<ObTmpFileBlockHandle> &failed_blocks)
+int ObTmpFileWriteCache::build_task_in_block_(
+    ObTmpFileBlockHandle &block_handle,
+    ObIArray<ObTmpFileFlushTask *> &tasks,
+    ObIArray<ObTmpFileBlockHandle> &failed_blocks,
+    int64_t &actual_flush_cnt)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < failed_blocks.count(); ++i) {
-    ObTmpFileBlockHandle &block_handle = failed_blocks.at(i);
-    if (OB_ISNULL(block_handle.get())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("block is nullptr", KR(ret), K(i), K(block_handle));
-    } else if (OB_FAIL(block_handle.get()->reinsert_into_flush_prio_mgr())) {
-      LOG_ERROR("fail to reinsert into flush prio mgr", KR(ret), K(block_handle));
+  ObTmpFileBlockHandle cur_blk_handle = block_handle;
+  ObTmpFileBlockFlushingPageIterator page_iterator;
+  if (OB_ISNULL(block_handle.get())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("block is nullptr", KR(ret));
+  } else if (OB_FAIL(try_to_set_macro_block_idx_(*block_handle.get()))) {
+    LOG_WARN("fail to set macro block index", KR(ret), K(block_handle));
+  } else if (OB_FAIL(page_iterator.init(*block_handle.get()))) {
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_ERROR("fail to init page iterator", KR(ret), K(block_handle));
     }
-    ret = OB_SUCCESS; // ignore error code
+  } else {
+    while (OB_SUCC(ret) && MAX_FLUSH_TASK_NUM_PER_BATCH >= tasks.count()) {
+      if (OB_FAIL(page_iterator.next_range())) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail to get next range", KR(ret));
+        } else {
+          ret = OB_SUCCESS;
+        }
+        break;
+      }
+      for (int32_t i = 0; OB_SUCC(ret) && MAX_FLUSH_TASK_NUM_PER_BATCH >= tasks.count(); ++i) {
+        ObTmpFileFlushTask *task = nullptr;
+        if (OB_FAIL(alloc_flush_task_(task))) {
+          LOG_WARN("fail to alloc flush task", KR(ret), KPC(task));
+        } else if (OB_FAIL(task->init(&flush_allocator_, cur_blk_handle))) {
+          LOG_WARN("fail to init task", KR(ret), KPC(task));
+        } else {
+          block_handle.reset();
+        }
+
+        if (FAILEDx(collect_pages_(page_iterator, *task, cur_blk_handle))) {
+          LOG_WARN("fail to collect pages", KR(ret), KPC(task));
+        }
+
+        if (OB_FAIL(ret) || (OB_NOT_NULL(task) && task->get_page_cnt() <= 0)) {
+          if (OB_NOT_NULL(task)) {
+            task->cancel(OB_CANCELED);
+            free_flush_task_(task);
+            task = nullptr;
+          }
+          break;
+        } else if (OB_FAIL(tasks.push_back(task))) {
+          LOG_ERROR("fail to push back task", KR(ret), KPC(task));
+        } else {
+          actual_flush_cnt += task->get_page_cnt();
+          LOG_DEBUG("build_task_ succ", K(actual_flush_cnt), KPC(task), K(io_waiting_queue_size_));
+        }
+      }
+    }
+  }
+
+  if (OB_NOT_NULL(block_handle.get())) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(failed_blocks.push_back(block_handle))) {
+      LOG_ERROR("fail to push back block handle to reinsert array", KR(tmp_ret), K(block_handle));
+    }
   }
   return ret;
 }

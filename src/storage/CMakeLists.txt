@@ -183,6 +183,7 @@ ob_set_subtarget(ob_storage tmp_file
   tmp_file/ob_tmp_file_block_flush_priority_manager.cpp
   tmp_file/ob_tmp_file_block_manager.cpp
   tmp_file/ob_tmp_file_block.cpp
+  tmp_file/ob_tmp_file_block_handle_list.cpp
   tmp_file/ob_tmp_file_cache.cpp
   tmp_file/ob_tmp_file_global.cpp
   tmp_file/ob_tmp_file_info.cpp

@@ -64,6 +64,7 @@ int ObTmpFileBlockManager::init(const uint64_t tenant_id)
 
 void ObTmpFileBlockManager::destroy()
 {
+  int ret = OB_SUCCESS;
   if (IS_INIT) {
     LOG_INFO("ObTmpFileBlockManager destroy", K(block_map_.count()));
     is_inited_ = false;
@@ -71,12 +72,9 @@ void ObTmpFileBlockManager::destroy()
     block_index_generator_ = 0;
     block_allocator_.reset();
 
-    int ret = OB_SUCCESS;
     if (block_map_.count() != 0) {
       LOG_ERROR("block map is not empty", K(block_map_.count()));
     }
-    flush_priority_mgr_.print_blocks();
-    alloc_priority_mgr_.print_blocks();
 
     block_map_.destroy();
     flush_priority_mgr_.destroy();
@@ -469,10 +467,20 @@ bool ObTmpFileBlockManager::CollectDiskUsageFunctor::operator()(const ObTmpFileB
   return OB_SUCCESS == ret;
 }
 
+bool ObTmpFileBlockManager::PrintBlockOp::operator()(const ObTmpFileBlockKey &key, const ObTmpFileBlockHandle &value)
+{
+  LOG_INFO("print_block", K(key), K(value));
+  return true;
+}
+
 void ObTmpFileBlockManager::print_blocks()
 {
   LOG_INFO("printing blocks begin", K(block_map_.count()));
-
+  int ret = OB_SUCCESS;
+  PrintBlockOp print_op;
+  if (OB_FAIL(block_map_.for_each(print_op))) {
+    LOG_WARN("fail to print blocks", KR(ret));
+  }
   LOG_INFO("printing blocks end", K(block_map_.count()));
 }
 

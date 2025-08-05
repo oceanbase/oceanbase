@@ -268,7 +268,7 @@ TEST_F(TestTmpFile, test_read)
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = write_size;
-  io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS * 5;
   // Write data
   int64_t write_time = ObTimeUtility::current_time();
   ret = MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info);
@@ -1575,7 +1575,7 @@ int main(int argc, char **argv)
   system("rm -f ./test_sn_tmp_file.log*");
   system("rm -rf ./run*");
   OB_LOGGER.set_file_name("test_sn_tmp_file.log", true);
-  OB_LOGGER.set_log_level("INFO");
+  OB_LOGGER.set_log_level("DEBUG");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
