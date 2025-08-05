@@ -26,6 +26,7 @@
 #include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include "sql/engine/table/ob_orc_table_row_iter.h"
 #include "sql/engine/table/ob_csv_table_row_iter.h"
+#include "plugin/external_table/ob_plugin_external_table_row_iter.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "share/config/ob_server_config.h"
 
@@ -43,6 +44,8 @@ class ObExternalTablePartInfoArray;
 using namespace share::schema;
 using namespace common;
 using namespace share;
+using namespace plugin;
+
 namespace sql
 {
 
@@ -652,6 +655,14 @@ int ObExternalTableAccessService::table_scan(
         LOG_WARN("alloc memory failed", K(ret));
       }
       break;
+    case ObExternalFileFormat::PLUGIN_FORMAT:
+      if (OB_ISNULL(row_iter = OB_NEWx(ObPluginExternalTableRowIterator, (scan_param.allocator_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret), K(sizeof(ObPluginExternalTableRowIterator)));
+      } else {
+        LOG_TRACE("success to create plugin row iterator");
+      }
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected format", K(ret), "format", param.external_file_format_.format_type_);
@@ -698,6 +709,14 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
         LOG_WARN("not support to read odps in opensource", K(ret));
 #endif
         break;
+      case ObExternalFileFormat::PLUGIN_FORMAT: {
+        ObPluginExternalTableRowIterator *iter = static_cast<ObPluginExternalTableRowIterator *>(result);
+        iter->reset();
+        if (OB_FAIL(iter->rescan(static_cast<ObTableScanParam *>(&param)))) {
+          LOG_WARN("failed to do rescan by plugin row iterator", K(ret));
+        }
+        break;
+      }
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected format", K(ret), "format", param.external_file_format_.format_type_);

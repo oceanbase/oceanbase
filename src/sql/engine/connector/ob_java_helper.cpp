@@ -85,6 +85,10 @@ int JVMFunctionHelper::jni_find_class(const char *clazz, jclass* gen_clazz) {
   if (nullptr == cls) {
     ret = OB_JNI_CLASS_NOT_FOUND_ERROR;
     LOG_WARN("failed to find class", K(ret), K(clazz));
+    if (jni_env_->ExceptionCheck()) {
+      jni_env_->ExceptionDescribe();
+      jni_env_->ExceptionClear();
+    }
   } else {
     *gen_clazz = (jclass)jni_env_->NewGlobalRef(cls);
     jni_env_->DeleteLocalRef(cls);
@@ -235,7 +239,7 @@ int JVMFunctionHelper::get_lib_path(char *path, uint64_t length, const char* lib
   int ret = OB_SUCCESS;
   const char *env_var_name = "LD_LIBRARY_PATH";
   char *env_str = getenv(env_var_name);
-  LOG_INFO("LD_LIBRARY_PATH: ", K(ObString(env_str)));
+  LOG_INFO("LD_LIBRARY_PATH: ", K(ObString(env_str)), KCSTRING(lib_name));
   bool found = false;
   if (OB_ISNULL(env_str)) {
     ret = OB_ERR_UNEXPECTED;
@@ -324,7 +328,7 @@ int JVMFunctionHelper::get_lib_path(char *path, uint64_t length, const char* lib
     // LOG_USER_ERROR(OB_JNI_ENV_ERROR, user_error_len, user_error_str);
     LOG_WARN("failed to find path", K(ret), K(ObString(env_str)), K(lib_name));
   } else {
-    LOG_TRACE("succ to find path", K(ret), K(ObString(env_str)), K(path), K(lib_name));
+    LOG_INFO("succ to find path", K(ret), K(ObString(env_str)), K(path), K(lib_name));
   }
   return ret;
 }
@@ -364,6 +368,8 @@ int JVMFunctionHelper::open_java_lib(ObJavaEnvContext &java_env_ctx)
   } else if (OB_FAIL(get_lib_path(jvm_lib_buf, load_lib_size, jvm_lib_name))) {
     // if return OB_SUCCESS, this func will obtain the C-style jvm lib path string.
     LOG_WARN("failed to get jvm path", K(ret));
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(jvm_lib_handle_ = LIB_OPEN(jvm_lib_buf))) {
     ret = OB_JNI_ENV_ERROR;
     const char * dlerror_str = dlerror();
@@ -371,7 +377,7 @@ int JVMFunctionHelper::open_java_lib(ObJavaEnvContext &java_env_ctx)
     // LOG_USER_ERROR(OB_JNI_ENV_ERROR, dlerror_str_len, dlerror_str);
     LOG_WARN("failed to open jvm lib from path", K(ret), K(ObString(jvm_lib_buf)), K(dlerror_str));
   } else {
-    LOG_TRACE("use jvm lib from path", K(ret), K(ObString(jvm_lib_buf)));
+    LOG_INFO("use jvm lib from path", K(ret), KP(jvm_lib_handle_), K(ObString(jvm_lib_buf)));
 
     if (OB_FAIL(ret) && OB_NOT_NULL(jvm_lib_handle_)) {
       if (OB_JNI_ENV_ERROR == ret) {
@@ -414,7 +420,7 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
     // LOG_USER_ERROR(OB_JNI_ENV_ERROR, dlerror_str_len, dlerror_str);
     LOG_WARN("failed to open hdfs lib from path", K(ret), K(ObString(hdfs_lib_buf)), K(dlerror_str));
   } else {
-    LOG_TRACE("succ to open jvm and hdfs lib from patch", K(ObString(hdfs_lib_buf)), K(ObString(hdfs_lib_buf)));
+    LOG_TRACE("succ to open jvm and hdfs lib from patch", KP(hdfs_lib_handle_), K(ObString(hdfs_lib_buf)), K(ObString(hdfs_lib_buf)));
     LIB_SYMBOL(hdfs_lib_handle_, "getJNIEnv", getJNIEnv, GETJNIENV);
     LIB_SYMBOL(hdfs_lib_handle_, "detachCurrentThread", detachCurrentThread, DETACHCURRENTTHREAD);
     LIB_SYMBOL(hdfs_lib_handle_, "destroyJNIEnv", destroyJNIEnv, DESTROYJNIENV);
@@ -467,8 +473,7 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
         OB_ISNULL(obHdfsBuilderSetKerb5Conf) || OB_ISNULL(obHdfsBuilderSetKeyTabFile)) {
       ret = OB_ERR_UNEXPECTED;
       const char * dlerror_str = dlerror();
-      int dlerror_str_len = STRLEN(dlerror_str);
-      LOG_WARN("expected funcs exist some null, the loaded hdfs lib is not the expected", K(ret), K(dlerror_str));
+      LOG_WARN("expected funcs exist some null, the loaded hdfs lib is not the expected", K(ret), KCSTRING(dlerror_str));
     }
 
     if (OB_FAIL(ret) && OB_NOT_NULL(hdfs_lib_handle_)) {
@@ -607,63 +612,6 @@ int JVMFunctionHelper::check_jni_exception_(JNIEnv *env) {
   return ret;
 }
 
-bool JVMFunctionHelper::is_valid_loaded_jars_() {
-  int ret = OB_SUCCESS;
-  bool is_valid = false;
-  uint64_t data_version = 0;
-  uint64_t real_jar_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
-    LOG_WARN("fail to get sys tenant data version", KR(ret), K(data_version));
-  } else {
-    jclass cls = jni_env_->FindClass(JAR_VERSION_CLASS);
-    if (OB_FAIL(check_jni_exception_(jni_env_))) {
-      LOG_WARN("failed to find jar version class", K(ret));
-    } else if (OB_ISNULL(cls)) {
-      ret = OB_JNI_CLASS_NOT_FOUND_ERROR;
-      LOG_WARN("unable to find version class", K(ret));
-    } else {
-      jmethodID call_version_id =
-          jni_env_->GetStaticMethodID(cls, "getJarVersion", "()J");
-      if (OB_FAIL(check_jni_exception_(jni_env_))) {
-        LOG_WARN("failed to find call version method", K(ret));
-      } else if (OB_ISNULL(call_version_id)) {
-        ret = OB_JNI_METHOD_NOT_FOUND_ERROR;
-        LOG_WARN("unable to find call version method", K(ret));
-      } else {
-        jlong jar_version = jni_env_->CallStaticLongMethod(cls, call_version_id);
-        if (OB_FAIL(check_jni_exception_(jni_env_))) {
-          LOG_WARN("failed to find get version", K(ret));
-        } else {
-          real_jar_version = static_cast<uint64_t>(jar_version);
-        }
-      }
-      jni_env_->DeleteLocalRef(cls);
-    }
-  }
-
-  // Note!!!
-  // Current jar version should be matched to jar version
-  // which is in "tools/upgrade/deps_compat.yml".
-  if (OB_FAIL(ret)) {
-    /* do nothing */
-  } else if (OB_LIKELY(DATA_VERSION_4_3_5_2 <= data_version)) {
-    if (OB_LIKELY(JAR_VERSION_101 <= real_jar_version)) {
-      is_valid = true;
-    } else {
-      LOG_WARN("current major jar version is not 1.0.1", K(ret), K(real_jar_version), K(JAR_VERSION_101));
-    }
-  } else if (OB_LIKELY(DATA_VERSION_4_3_5_1 <= data_version)) {
-    if (OB_LIKELY(JAR_VERSION_100 <= real_jar_version && real_jar_version < JAR_VERSION_101)) {
-      is_valid = true;
-    } else {
-      LOG_WARN("current major jar version is not 1.0.0", K(ret), K(real_jar_version), K(JAR_VERSION_100));
-    }
-  }
-  LOG_TRACE("check jar version in detail", K(ret), K(real_jar_version),
-            K(data_version), K(is_valid));
-  return is_valid;
-}
-
 int JVMFunctionHelper::init_classes()
 {
   int ret = OB_SUCCESS;
@@ -703,9 +651,6 @@ int JVMFunctionHelper::do_init_() {
     LOG_WARN("already inited jni env, but it is null", K(ret));
   } else if (OB_FAIL(init_classes())) {
     LOG_WARN("failed to init useful classes", K(ret));
-  } else if (OB_UNLIKELY(!is_valid_loaded_jars_())) {
-    ret = OB_JNI_JAVA_EXCEPTION_ERROR;
-    LOG_WARN("current env loaded with unexpected jar version", K(ret));
   }
 
   return ret;
@@ -728,18 +673,34 @@ JavaGlobalRef::~JavaGlobalRef() {
   clear();
 }
 
+int JavaGlobalRef::new_global_ref(jobject handle, JNIEnv *env)
+{
+  int ret = OB_SUCCESS;
+  jobject global_ref = nullptr;
+  if (OB_NOT_NULL(handle_) || OB_ISNULL(handle) || OB_ISNULL(env)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(handle_), KP(handle), KP(env));
+  } else if (OB_ISNULL(global_ref = env->NewGlobalRef(handle))) {
+    ret = OB_JNI_ERROR;
+    LOG_WARN("failed to create global ref", K(ret));
+  } else {
+    handle_ = global_ref;
+  }
+
+  return ret;
+}
 void JavaGlobalRef::clear() {
   int ret = OB_SUCCESS;
   if (handle_) {
     JNIEnv *env;
     if (OB_FAIL(JVMFunctionHelper::getInstance().get_env(env))) {
-      LOG_WARN("failed to get jni env", K(ret));
+      LOG_WARN("failed to get jni env, cannot release java global handle", K(ret));
     } else {
       env->DeleteGlobalRef(handle_);
     }
     handle_ = nullptr;
   }
-  LOG_WARN("clear the global ref", K(ret));
+  LOG_DEBUG("clear the global ref", K(ret));
 }
 // ------------------------- end of JavaGlobalRef -------------------------
 

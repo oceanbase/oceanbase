@@ -34,6 +34,7 @@ static int __plugin_register_global_plugins(ObIArray<ObBuiltinPlugin> &plugins)
   int ret = OB_SUCCESS;
   /// Append builtin plugins here
   OB_DECLARE_BUILTIN_PLUGIN(fts_parser);
+  OB_DECLARE_BUILTIN_PLUGIN(java_external);
   return ret;
 }
 

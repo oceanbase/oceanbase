@@ -5072,6 +5072,31 @@ int ObResolverUtils::calc_file_column_idx(const ObString &column_name, uint64_t 
   return ret;
 }
 
+/// calc the external column name in column name
+/// @param[in] column_name Generated or input by user with format like 'external$tablecol1$a'.
+/// @param[out] external_column_name The column name of the external data source.
+int ObResolverUtils::calc_file_column_external_name(const ObString &column_name, ObString &external_column_name)
+{
+  int ret = OB_SUCCESS;
+  const char delimiter = '$';
+  ObString column_name_without_prefix;
+  const int64_t prefix_len = str_length(N_EXTERNAL_TABLE_COLUMN_PREFIX);
+  if (!column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_PREFIX)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid column_name, should have 'external_table_column_prefix'",
+             K(column_name), KCSTRING(N_EXTERNAL_TABLE_COLUMN_PREFIX));
+  } else if (FALSE_IT(column_name_without_prefix.assign_ptr(
+      column_name.ptr() + prefix_len, column_name.length() - prefix_len))) {
+  } else if (FALSE_IT(external_column_name = column_name_without_prefix.after(delimiter))) {
+  } else if (external_column_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("no external column name. The column name is the string after delimiter.",
+             K(delimiter), K(column_name), K(ret));
+  }
+  LOG_TRACE("calc external column name done", K(external_column_name), K(column_name), K(ret));
+  return ret;
+}
+
 ObRawExpr *ObResolverUtils::find_file_column_expr(ObIArray<ObRawExpr *> &pseudo_exprs,
                                         int64_t table_id,
                                         int64_t column_idx,
@@ -9936,8 +9961,8 @@ int ObResolverUtils::resolve_column_index_type(const ParseNode* node, ObExternal
 int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFormat &format, ObResolverParams &params, FileFormatContext &ff_ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(node) || node->num_child_ != 1 || OB_ISNULL(node->children_[0]) ||
-      OB_ISNULL(params.session_info_) || OB_ISNULL(params.expr_factory_)) {
+  if (OB_ISNULL(node) || (node->num_child_ < 1) || OB_ISNULL(node->children_[0]) ||
+      OB_ISNULL(params.session_info_) || OB_ISNULL(params.expr_factory_) || OB_ISNULL(params.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse node", K(ret));
   } else {
@@ -10289,6 +10314,36 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.3.5.2, ignore_last_empty_column");
         } else {
           format.csv_format_.ignore_last_empty_col_ = node->children_[0]->value_;
+        }
+        break;
+      }
+      case ObItemType::T_PLUGIN_NAME: {
+        ObString name(node->children_[0]->str_len_, node->children_[0]->str_value_);
+        if (OB_FAIL(format.plugin_format_.set_type_name(name.trim_space_only()))) {
+          LOG_WARN("failed to set plugin name", K(ret), K(name));
+        }
+        // we will check plugin name in validate_properties
+        break;
+      }
+      case ObItemType::T_PLUGIN_PROPERTIES: {
+        ObString value_str;
+        uint64_t data_version = 0;
+        GET_MIN_DATA_VERSION(MTL_ID(), data_version);
+        if (ObExternalFileFormat::INVALID_FORMAT == format.format_type_) {
+          format.format_type_ = ObExternalFileFormat::PLUGIN_FORMAT;
+        }
+        if (data_version < DATA_VERSION_4_4_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "cluster version is less than 4.4.1, binary_format");
+        } else if (node->num_child_ != 1 || OB_ISNULL(node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expect T_PLUGIN_PROPERTIES node has 1 valid child", K(node->num_child_), K(ret));
+        } else if (FALSE_IT(value_str.assign_ptr(node->children_[0]->str_value_, node->children_[0]->str_len_))) {
+        } else if (FALSE_IT(value_str = value_str.trim())) {
+        } else if (OB_FAIL(format.plugin_format_.set_parameters(value_str))) {
+          LOG_WARN("failed to set parameters", K(value_str), K(ret));
+        } else {
+          LOG_DEBUG("set parameters success", K(value_str));
         }
         break;
       }

@@ -831,10 +831,12 @@ public:
   int extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
                                ObIArray<ObRawExpr*> &scan_pushdown_filters,
                                ObIArray<ObRawExpr*> &lookup_pushdown_filters,
+                               ObIArray<ObString> *external_pushdown_filters = nullptr,
                                bool ignore_pd_filter = false) const;
   int extract_nonpushdown_filters(const ObIArray<ObRawExpr*> &filters,
                                   ObIArray<ObRawExpr*> &nonpushdown_filters,
                                   ObIArray<ObRawExpr*> &pushdown_filters) const;
+
   int has_nonpushdown_filter(bool &has_npd_filter);
   int has_nonpushdown_aggr(const ObIArray<ObAggFunRawExpr*> &aggr_items, bool &has_npd_aggr);
   int replace_index_back_pushdown_filters(ObRawExprReplacer &replacer);
@@ -1070,6 +1072,10 @@ private: // member functions
                         const share::schema::ObColumnSchemaV2 &column_schema,
                         ObColumnRefRawExpr *&column_expr);
   int check_is_delete_insert_scan(bool &is_delete_insert_scan) const;
+  int extract_external_table_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
+                                              ObIArray<ObString> &external_pushdown_filters,
+                                              bool ignore_pd_filter = false) const;
+
 protected: // memeber variables
   // basic info
   uint64_t table_id_; //table id or alias table id

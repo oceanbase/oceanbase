@@ -5360,7 +5360,8 @@ int ObDMLResolver::build_mocked_external_table_schema(const ParseNode *location_
     LOG_WARN("failed to resolve external file format", K(ret));
   }
   if (OB_SUCC(ret)) {
-    if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
+    if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_ ||
+        ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_) {
       if (OB_FAIL(table_schema.set_external_properties(format_str))) {
         LOG_WARN("failed to set external properties", K(ret));
       }
@@ -5393,6 +5394,7 @@ int ObDMLResolver::build_mocked_external_table_schema(const ParseNode *location_
     } else if (T_EXTERNAL_FILE_FORMAT_TYPE == format_properties_node->children_[i]->type_ ||
                 T_CHARSET == format_properties_node->children_[i]->type_) {
     } else if (OB_FAIL(ObDDLResolver::mask_properties_sensitive_info(format_properties_node->children_[i],
+                                                                    format,
                                                                     masked_sql,
                                                                     &allocator,
                                                                     temp_masked_sql))) {
@@ -10218,7 +10220,8 @@ int ObDMLResolver::resolve_external_table_generated_column(
         }
       }
     } else if (ObExternalFileFormat::PARQUET_FORMAT == format.format_type_ ||
-               ObExternalFileFormat::ORC_FORMAT == format.format_type_ ) {
+               ObExternalFileFormat::ORC_FORMAT == format.format_type_  ||
+               ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_) {
       ObRawExpr *cast_expr = NULL;
       ObRawExpr *get_path_expr = NULL;
       ObRawExpr *cast_type_expr = NULL;
@@ -10279,6 +10282,9 @@ int ObDMLResolver::resolve_external_table_generated_column(
           LOG_WARN("replace column reference expr failed", K(ret));
         }
       }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("unknown format type", K(format.format_type_), K(ret));
     }
   }
   if (OB_SUCC(ret)) {

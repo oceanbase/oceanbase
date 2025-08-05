@@ -15,6 +15,7 @@
 #include "sql/optimizer/ob_log_join.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "share/domain_id/ob_domain_id.h"
+#include "plugin/interface/ob_plugin_external_intf.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -902,6 +903,7 @@ int ObLogTableScan::has_nonpushdown_filter(bool &has_npd_filter)
   if (OB_FAIL(extract_pushdown_filters(nonpushdown_filters,
                                        scan_pushdown_filters,
                                        lookup_pushdown_filters,
+                                       nullptr /* external_pushdown_filters */,
                                        true /*ignore pushdown filters*/))) {
     LOG_WARN("extract pushdnow filters failed", K(ret));
   } else if (!nonpushdown_filters.empty()) {
@@ -941,6 +943,7 @@ int ObLogTableScan::has_nonpushdown_aggr(const ObIArray<ObAggFunRawExpr*> &aggr_
 int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
                                              ObIArray<ObRawExpr*> &scan_pushdown_filters,
                                              ObIArray<ObRawExpr*> &lookup_pushdown_filters,
+                                             ObIArray<ObString> *external_pushdown_filters /* = nullptr */,
                                              bool ignore_pd_filter /*= false */) const
 {
   int ret = OB_SUCCESS;
@@ -951,6 +954,16 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
     //all filters can not push down to storage
     if (OB_FAIL(nonpushdown_filters.assign(filters))) {
       LOG_WARN("store non-pushdown filters failed", K(ret));
+    }
+  } else if (EXTERNAL_TABLE == get_table_type()) {
+    ObArray<ObString> tmp_external_filters;
+    if (OB_ISNULL(external_pushdown_filters)) {
+      external_pushdown_filters = &tmp_external_filters;
+    }
+    if (OB_FAIL(extract_external_table_pushdown_filters(nonpushdown_filters,
+                                                        *external_pushdown_filters,
+                                                        ignore_pd_filter))) {
+      LOG_WARN("failed to pushdown filters to external table", K(ret));
     }
   } else {
     //part of filters can push down to storage
@@ -1038,6 +1051,100 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
       }
     }
   }
+  return ret;
+}
+
+int ObLogTableScan::extract_external_table_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
+                                                            ObIArray<ObString> &external_pushdown_filters,
+                                                            bool ignore_pd_filter /* = false */) const
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObRawExpr*> &filters = get_filter_exprs();
+  ObSqlSchemaGuard *schema_guard = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  const ParamStore *param_store = nullptr;
+  ObString external_properties_str;
+  ObExternalFileFormat external_file_format;
+  plugin::ObExternalDataEngine *data_engine = nullptr;
+  ObArray<ObRawExpr *> candidate_pushdown_filters;
+  ObMemAttr mem_attr(MTL_ID(), "ExternPushdown");
+  ObArenaAllocator arena_allocator(mem_attr);
+  ObIAllocator *allocator = nullptr;
+
+  candidate_pushdown_filters.set_attr(mem_attr);
+
+  const auto &flags = get_filter_before_index_flags();
+  if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan()) || OB_ISNULL(allocator = &get_plan()->get_allocator()) ||
+      OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard()) ||
+      OB_ISNULL(param_store = get_plan()->get_optimizer_context().get_params())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id_, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret));
+  } else if (FALSE_IT(external_properties_str = table_schema->get_external_properties())) {
+  } else if (external_properties_str.empty()) {
+    // all filters can not push down to storage
+    // this is a csv external table
+    if (OB_FAIL(nonpushdown_filters.assign(filters))) {
+      LOG_WARN("store non-pushdown filters failed", K(ret));
+    }
+  } else if (OB_FAIL(external_file_format.load_from_string(external_properties_str, arena_allocator))) {
+    LOG_WARN("failed to parse external file format", K(ret));
+  } else if (ObExternalFileFormat::PLUGIN_FORMAT != external_file_format.format_type_) {
+    if (OB_FAIL(nonpushdown_filters.assign(filters))) {
+      LOG_WARN("non-plugin external table store non pushdown filters failed", K(ret));
+    }
+  } else if (OB_FAIL(external_file_format.plugin_format_.create_engine(arena_allocator, data_engine))) {
+    LOG_WARN("failed to create data engine", K(ret));
+  } else if (OB_UNLIKELY(OB_ISNULL(data_engine))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data engine is null", K(ret));
+  } else {
+    // part of filters can push down to storage
+    // refer to extract_pushdown_filters
+    for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
+      if ((use_batch() && filters.at(i)->has_flag(CNT_DYNAMIC_PARAM)) ||
+          (filters.at(i)->has_flag(CNT_PL_UDF) || filters.at(i)->has_flag(CNT_OBJ_ACCESS_EXPR)) ||
+          (filters.at(i)->has_flag(CNT_DYNAMIC_USER_VARIABLE) || filters.at(i)->has_flag(CNT_ASSIGN_EXPR)) ||
+          (has_func_lookup() && (filters.at(i)->has_flag(CNT_MATCH_EXPR) || !flags.at(i))) ||
+          (is_text_retrieval_scan() && need_text_retrieval_calc_relevance()) ||
+          (get_index_back())) { // external table doesn't has index now
+        if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
+          LOG_WARN("push scan store non-pushdown filter failed", K(ret), K(i));
+        }
+      } else if (OB_FAIL(candidate_pushdown_filters.push_back(filters.at(i)))) {
+        LOG_WARN("failed to pushback filter to candidate pushdown filters", K(ret));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret) || candidate_pushdown_filters.count() == 0) {
+  } else if (OB_FAIL(data_engine->pushdown_filters(
+      *allocator, *param_store, candidate_pushdown_filters, external_pushdown_filters))) {
+    LOG_WARN("failed to detect pushdown filters by external table data engine", K(ret));
+  } else if (external_pushdown_filters.count() > candidate_pushdown_filters.count()) {
+    LOG_WARN("invalid pushdown filters number",
+             K(external_pushdown_filters.count()),
+             K(candidate_pushdown_filters.count()));
+  } else {
+    for (int64_t i = external_pushdown_filters.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+      const ObString &filter_info = external_pushdown_filters.at(i);
+      ObRawExpr *filter = candidate_pushdown_filters.at(i);
+      if (filter_info.empty()) {
+        if (OB_FAIL(nonpushdown_filters.push_back(filter))) {
+          LOG_WARN("failed to push filter into nonpushdown_filters", K(ret), K(i));
+        } else if (OB_FAIL(external_pushdown_filters.remove(i))) {
+          LOG_WARN("failed to remove empty filter", K(i), K(ret));
+        }
+      }
+    }
+  }
+
+  LOG_TRACE("external table pushdown filters done",
+            K(ret), K(external_pushdown_filters.count()), K(nonpushdown_filters.count()));
   return ret;
 }
 

@@ -9365,6 +9365,14 @@ TYPE COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_REGION, 1, $3);
 }
+| NAME COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PLUGIN_NAME, 1, $3);
+}
+| PARAMETERS COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PLUGIN_PROPERTIES, 1, $3);
+}
 | API_MODE COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_MODE, 1, $3);

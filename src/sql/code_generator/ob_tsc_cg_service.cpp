@@ -790,6 +790,7 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
   ObArray<ObRawExpr *> nonpushdown_filters;
   ObArray<ObRawExpr *> scan_pushdown_filters;
   ObArray<ObRawExpr *> lookup_pushdown_filters;
+  ObArray<ObString> external_pushdown_filters;
   ObDASScanCtDef &scan_ctdef = spec.tsc_ctdef_.scan_ctdef_;
   ObDASScanCtDef *lookup_ctdef = spec.tsc_ctdef_.get_lookup_ctdef();
   if (OB_NOT_NULL(op.get_auto_split_filter())) {
@@ -832,7 +833,8 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
     }
   } else if (OB_FAIL(op.extract_pushdown_filters(nonpushdown_filters,
                                                  scan_pushdown_filters,
-                                                 lookup_pushdown_filters))) {
+                                                 lookup_pushdown_filters,
+                                                 &external_pushdown_filters))) {
     LOG_WARN("extract pushdown filters failed", K(ret));
   } else if (op.get_contains_fake_cte()) {
     // do nothing
@@ -855,6 +857,11 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
     LOG_WARN("generate pd storage flag for lookup ctdef failed", K(ret));
   } else if (OB_FAIL(generate_ext_tbl_filter_pd_level(op, scan_ctdef, scan_ctdef.pd_expr_spec_))) {
     LOG_WARN("generate filter pd level for external table failed", K(ret));
+  }
+  if (OB_SUCC(ret) && !external_pushdown_filters.empty()) {
+    if (OB_FAIL(scan_ctdef.external_pushdown_filters_.store_strs(external_pushdown_filters))) {
+      LOG_WARN("failed to store external pushdown filters", K(ret));
+    }
   }
   if (OB_SUCC(ret) && !scan_pushdown_filters.empty()) {
     bool pd_filter = scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_filter_pushdown();

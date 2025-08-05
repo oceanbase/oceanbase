@@ -369,6 +369,7 @@ int ObDASScanOp::init_scan_param()
     scan_param_.partition_infos_ = &(scan_ctdef_->partition_infos_);
     scan_param_.external_file_access_info_ = scan_ctdef_->external_file_access_info_.str_;
     scan_param_.external_file_location_ = scan_ctdef_->external_file_location_.str_;
+    scan_param_.external_pushdown_filters_ = &scan_ctdef_->external_pushdown_filters_.strs_;
     if (OB_FAIL(scan_param_.external_file_format_.load_from_string(scan_ctdef_->external_file_format_str_.str_, *scan_param_.allocator_))) {
       LOG_WARN("fail to load from string", K(ret));
     } else {

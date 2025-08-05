@@ -66,6 +66,8 @@ class ObExternalTableUtils {
   };
 
  public:
+  static const char *dummy_file_name();
+
   // range_filter is from query_range
   static int is_file_id_in_ranges(const common::ObIArray<common::ObNewRange *> &range_filter,
                                   const int64_t &file_id,
@@ -133,6 +135,13 @@ class ObExternalTableUtils {
       ObIAllocator &range_allocator, ObODPSGeneralFormat::ApiMode odps_api_mode);
   static int filter_files_in_locations(common::ObIArray<share::ObExternalFileInfo> &files,
       common::ObIArray<common::ObAddr> &locations);
+
+  static int plugin_split_tasks(
+      ObIAllocator &allocator,
+      const ObString &external_table_format_str,
+      ObDfo &dfo,
+      ObIArray<ObPxSqcMeta *> &sqcs,
+      int64_t parallel);
 
   static int collect_external_file_list(
     const ObSQLSessionInfo* session_ptr_in,

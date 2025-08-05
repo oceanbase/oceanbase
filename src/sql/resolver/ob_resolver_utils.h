@@ -798,6 +798,7 @@ public:
                                           int64_t column_idx,
                                           const ObString &expr_name);
   static int calc_file_column_idx(const ObString &column_name, uint64_t &file_column_idx);
+  static int calc_file_column_external_name(const ObString &column_name, ObString &external_column_name);
   static int build_file_column_expr_for_odps(
     ObRawExprFactory &expr_factory,
     const ObSQLSessionInfo &session_info,
@@ -807,6 +808,7 @@ public:
     int64_t column_idx,
     const ObColumnSchemaV2 *column_schema,
     ObRawExpr *&expr);
+
   static int build_file_column_expr_for_csv(
     ObRawExprFactory &expr_factory,
     const ObSQLSessionInfo &session_info,

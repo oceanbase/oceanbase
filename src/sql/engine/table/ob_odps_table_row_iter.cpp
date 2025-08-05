@@ -241,7 +241,7 @@ int ObODPSTableRowIterator::next_task()
         int64_t part_id = scan_param_->key_ranges_.at(task_idx).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
         bool is_part_table = scan_param_->table_param_->is_partition_table();
         bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
-        if (part_spec.compare("#######DUMMY_FILE#######") == 0) {
+        if (part_spec.compare(ObExternalTableUtils::dummy_file_name()) == 0) {
           ret = OB_ITER_END;
           LOG_WARN("empty file", K(ret));
         } else {
@@ -2723,7 +2723,7 @@ int ObOdpsPartitionDownloaderMgr::fetch_row_count(uint64_t tenant_id,
       const share::ObExternalFileInfo &odps_partition = external_table_files.at(i);
       apsara::odps::sdk::IDownloadPtr odps_partition_downloader = NULL;
       if (INT64_MAX == odps_partition.file_id_
-          && 0 == odps_partition.file_url_.compare("#######DUMMY_FILE#######")) {
+          && 0 == odps_partition.file_url_.compare(ObExternalTableUtils::dummy_file_name())) {
         // do nothing
         *(const_cast<int64_t*>(&odps_partition.file_size_)) = 0;
       } else if (odps_partition.file_size_ >= 0) {

@@ -2550,8 +2550,8 @@ int ObOdpsDataTypeCastUtil::common_string_text_wrap(const ObExpr &expr,
                                               ObEvalCtx &ctx,
                                               const ObLobLocatorV2 *lob_locator,
                                               ObDatum &res_datum,
-                                              ObObjType &in_type,
-                                              ObCollationType &in_cs_type)
+                                              const ObObjType &in_type,
+                                              const ObCollationType &in_cs_type)
 {
   int ret = OB_SUCCESS;
   ObObjType out_type = expr.datum_meta_.type_; // ObLongTextType
@@ -2560,7 +2560,7 @@ int ObOdpsDataTypeCastUtil::common_string_text_wrap(const ObExpr &expr,
   bool is_final_res = false;
   bool is_different_charset_type = (ObCharset::charset_type_by_coll(in_cs_type)
                                     != ObCharset::charset_type_by_coll(out_cs_type));
-  OB_ASSERT(ob_is_text_tc(out_type));
+  OB_ASSERT(is_lob_storage(out_type));
   if (is_different_charset_type) {
     if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_string_wrap(expr, in_type, in_cs_type, out_type,
                                      out_cs_type, in_str, ctx, res_datum, is_final_res))) {

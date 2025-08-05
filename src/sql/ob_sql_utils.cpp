@@ -1381,13 +1381,10 @@ int ObSQLUtils::get_external_table_type(const ObTableSchema *table_schema, ObExt
 int ObSQLUtils::get_external_table_type(const ObString &table_format_or_properties,
                                         ObExternalFileFormat::FormatType &type) {
   int ret = OB_SUCCESS;
-  ObExternalFileFormat format;
   ObArenaAllocator allocator;
   if (table_format_or_properties.empty()) {
-  } else if (OB_FAIL(format.load_from_string(table_format_or_properties, allocator))) {
+  } else if (OB_FAIL(ObExternalFileFormat::parse_format_type(table_format_or_properties, allocator, type))) {
     LOG_WARN("fail to load from properties string", K(ret), K(table_format_or_properties));
-  } else {
-    type = format.format_type_;
   }
   return ret;
 }
@@ -1462,9 +1459,11 @@ int ObSQLUtils::check_location_constraint(const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   bool is_odps_external_table = false;
-  if (OB_FAIL(ObSQLUtils::is_odps_external_table(&table_schema, is_odps_external_table))) {
-    LOG_WARN("failed to check is odps external table or not", K(ret));
-  } else if (is_odps_external_table) {
+  ObExternalFileFormat::FormatType external_table_type = ObExternalFileFormat::INVALID_FORMAT;
+  if (OB_FAIL(ObSQLUtils::get_external_table_type(&table_schema, external_table_type))) {
+    LOG_WARN("failed to check external table type", K(ret));
+  } else if (ObExternalFileFormat::ODPS_FORMAT == external_table_type ||
+             ObExternalFileFormat::PLUGIN_FORMAT == external_table_type) {
     // do nothing
   } else if ((!table_schema.get_external_file_location().empty()
       && OB_INVALID_ID != table_schema.get_external_location_id())

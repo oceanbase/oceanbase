@@ -17,6 +17,7 @@
 #include "sql/engine/table/ob_csv_table_row_iter.h"
 #include "share/config/ob_server_config.h"
 #include "sql/engine/table/ob_odps_jni_table_row_iter.h"
+#include "plugin/interface/ob_plugin_external_intf.h"
 #include "sql/engine/basic/ob_consistent_hashing_load_balancer.h"
 #include "lib/restore/ob_object_device.h"
 #include "src/share/ob_device_manager.h"
@@ -28,8 +29,10 @@ using namespace sql;
 
 namespace share
 {
-
-
+const char *ObExternalTableUtils::dummy_file_name()
+{
+  return "#######DUMMY_FILE#######";
+}
 
 bool ObExternalTableUtils::is_left_edge(const ObObj &value)
 {
@@ -1077,6 +1080,62 @@ int ObExternalTableUtils::split_odps_to_sqcs_process_tunnel(
   return ret;
 }
 
+int ObExternalTableUtils::plugin_split_tasks(
+    ObIAllocator &allocator,
+    const ObString &external_table_format_str,
+    ObDfo &dfo,
+    ObIArray<ObPxSqcMeta *> &sqcs,
+    int64_t parallel)
+{
+  int ret = OB_SUCCESS;
+  ObExternalFileFormat external_file_format;
+  ObString engine_type;
+  plugin::ObExternalDataEngine *engine = nullptr;
+  ObArray<ObString> tasks;
+  tasks.set_label(plugin::OB_PLUGIN_MEMORY_LABEL);
+  tasks.set_tenant_id(MTL_ID());
+
+  if (sqcs.count() == 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sqc node not found", K(ret), K(sqcs.count()));
+  } else if (OB_FAIL(external_file_format.load_from_string(external_table_format_str, allocator))) {
+    LOG_WARN("failed to load external file format from string", K(external_table_format_str), K(ret));
+  } else if (ObExternalFileFormat::PLUGIN_FORMAT != external_file_format.format_type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("external format is not plugin", K(ret), K(external_table_format_str));
+  } else if (OB_FAIL(external_file_format.plugin_format_.create_engine(allocator, engine))) {
+    LOG_WARN("failed to get external engine type property", K(ret));
+  } else if (OB_FAIL(engine->split_task(allocator, parallel, tasks))) {
+    LOG_WARN("failed to assign tasks to nodes", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tasks.count(); i++) {
+      const int64_t node_index = i % sqcs.count();
+      ObExternalFileInfo file_info;
+      file_info.file_url_ = tasks.at(i);
+      if (OB_FAIL(sqcs.at(node_index)->get_access_external_table_files().push_back(file_info))) {
+        LOG_WARN("failed to pushback task into sqc", K(ret), K(node_index), K(tasks.at(i)));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else {
+    ObExternalFileInfo dummy_file;
+    dummy_file.file_url_ = ObExternalTableUtils::dummy_file_name();
+    for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); i++) {
+      if (sqcs.at(i)->get_access_external_table_files().empty()) {
+        OZ(sqcs.at(i)->get_access_external_table_files().push_back(dummy_file));
+      }
+    }
+  }
+
+  if (OB_NOT_NULL(engine)) {
+    OB_DELETEx(ObExternalDataEngine, &allocator, engine);
+    engine = nullptr;
+  }
+  return ret;
+}
+
 int ObExternalTableUtils::calc_assigned_files_to_sqcs(
   const ObIArray<ObExternalFileInfo> &files,
   ObIArray<int64_t> &assigned_idx,
@@ -1410,18 +1469,19 @@ int ObExternalTableUtils::collect_external_file_list(
   int ret = OB_SUCCESS;
 
   if (!properties.empty()) {
-    if (!GCONF._use_odps_jni_connector) {
+    sql::ObExternalFileFormat ex_format;
+    if (OB_FAIL(ex_format.load_from_string(properties, allocator))) {
+      LOG_WARN("failed to load from string", K(ret));
+    } else if (sql::ObExternalFileFormat::PLUGIN_FORMAT == ex_format.format_type_) {
+      // do nothing
+    } else if (!GCONF._use_odps_jni_connector) {
 #if defined (OB_BUILD_CPP_ODPS)
       // Since each partition information of an ODPS table obtained by the ODPS
       // driver is a string, OceanBase treat partition string as an external
       // table filename, one file corresponds to one odps partition, the number
       // of files corresponds to the number of partitions.
       sql::ObODPSTableRowIterator odps_driver;
-      sql::ObExternalFileFormat ex_format;
-      ex_format.format_type_ = sql::ObExternalFileFormat::ODPS_FORMAT;
-      if (OB_FAIL(ex_format.load_from_string(properties, allocator))) {
-        LOG_WARN("failed to load from string", K(ret));
-      } else if (OB_FAIL(odps_driver.init_tunnel(ex_format.odps_format_))) {
+      if (OB_FAIL(odps_driver.init_tunnel(ex_format.odps_format_))) {
         LOG_WARN("failed to init tunnel", K(ret));
       } else if (OB_FAIL(odps_driver.pull_partition_info())) {
         LOG_WARN("failed to pull partition info", K(ret));
@@ -1482,9 +1542,7 @@ int ObExternalTableUtils::collect_external_file_list(
       // driver is a string, OceanBase treat partition string as an external
       // table filename, one file corresponds to one odps partition, the number
       // of files corresponds to the number of partitions.
-      sql::ObExternalFileFormat ex_format;
       sql::ObODPSJNITableRowIterator odps_jni_iter;
-      ex_format.format_type_ = sql::ObExternalFileFormat::ODPS_FORMAT;
       if (is_oracle_mode()) {
         ret = OB_ERR_UNSUPPORTED_TYPE;
         LOG_WARN("Current not support to execute in oracle mode", K(ret));

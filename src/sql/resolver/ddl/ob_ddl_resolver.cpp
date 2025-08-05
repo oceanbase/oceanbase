@@ -25,6 +25,10 @@
 #include "share/external_table/ob_hdfs_storage_info.h"
 #include "sql/resolver/ddl/ob_fts_parser_resolver.h"
 #include "share/ob_dynamic_partition_manager.h"
+#include "plugin/interface/ob_plugin_external_intf.h"
+#include "plugin/external_table/ob_external_struct.h"
+#include "plugin/sys/ob_plugin_helper.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -2710,6 +2714,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         }
         break;
       }
+      case T_PLUGIN_PROPERTIES:
       case T_EXTERNAL_PROPERTIES:
       case T_EXTERNAL_FILE_FORMAT: {
         uint64_t data_version = 0;
@@ -2725,6 +2730,11 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support odps external table under CLUSTER_VERSION_4_3_2_1", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "odps external table");
+        } else if (T_PLUGIN_PROPERTIES == option_node->type_ &&
+                   data_version < DATA_VERSION_4_4_0_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support general external table under DATA_VERSION_4_4_0_0", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "general engine external table");
         } else if (stmt::T_CREATE_TABLE != stmt_->get_stmt_type()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid file format option", K(ret));
@@ -2743,7 +2753,8 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             }
 
             if (OB_SUCC(ret)) {
-              if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
+              if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_ ||
+                  ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_) {
                 if (OB_FAIL(arg.schema_.set_external_properties(format_str))) {
                   LOG_WARN("failed to set external properties", K(ret));
                 }
@@ -2762,6 +2773,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               } else if (T_EXTERNAL_FILE_FORMAT_TYPE == option_node->children_[i]->type_ ||
                          T_CHARSET == option_node->children_[i]->type_) {
               } else if (OB_FAIL(mask_properties_sensitive_info(option_node->children_[i],
+                                                                format,
                                                                 masked_sql,
                                                                 allocator_,
                                                                 temp_masked_sql))) {
@@ -2775,7 +2787,8 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
                 LOG_WARN("failed to encrypt odps format", K(ret));
               } else {
                 if (OB_SUCC(ret)) {
-                  if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
+                  if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_ ||
+                      ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_) {
                     ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
                     if (OB_ISNULL(create_table_stmt)) {
                       ret = OB_ERR_UNEXPECTED;
@@ -3163,12 +3176,14 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
 }
 
 int ObDDLResolver::mask_properties_sensitive_info(const ParseNode *node,
+                                                  const ObExternalFileFormat &format,
                                                   ObString &ddl_sql,
                                                   ObIAllocator *allocator,
                                                   ObString &masked_sql)
   {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(node) || node->num_child_ != 1 || OB_ISNULL(node->children_[0])) {
+  const ParseNode *node_to_mark = nullptr;
+  if (OB_ISNULL(node) || (node->num_child_ < 1) || OB_ISNULL(node->children_[0])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse node", K(ret));
   } else {
@@ -3178,18 +3193,19 @@ int ObDDLResolver::mask_properties_sensitive_info(const ParseNode *node,
       case ObItemType::T_STSTOKEN:
       case ObItemType::T_ACCESSKEY:
       case ObItemType::T_ACCESSID: {
-        if (OB_FAIL(ObDCLResolver::mask_password_for_passwd_node(allocator,
-                                                                ddl_sql,
-                                                                node->children_[0],
-                                                                masked_sql,
-                                                                true))) {
-          LOG_WARN("fail to gen masked sql", K(ret));
-        }
+        node_to_mark = node->children_[0];
+        break;
+      }
+      case ObItemType::T_PLUGIN_PROPERTIES: {
+        node_to_mark = node->children_[0];
         break;
       }
       default: {
         // do nothing
       }
+    }
+    if (OB_FAIL(ObDCLResolver::mask_password_for_passwd_node(allocator, ddl_sql, node_to_mark, masked_sql, true))) {
+      LOG_WARN("fail to gen masked sql", K(ret));
     }
   }
   return ret;
@@ -3249,10 +3265,32 @@ int ObDDLResolver::resolve_column_definition_ref(ObColumnSchemaV2 &column,
   return ret;
 }
 
-int ObDDLResolver::check_format_valid(const ObExternalFileFormat &format, bool &is_valid)
+int ObDDLResolver::check_format_valid(ObExternalFileFormat &format, bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
+  if (ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_) {
+    ObMalloc malloc(ObMemAttr(MTL_ID(), "PluginParameter"));
+    ObString parameters = format.plugin_format_.parameters();
+    ObString engine_type = format.plugin_format_.type_name();
+    plugin::ObIExternalDescriptor *external_desc = nullptr;
+    plugin::external::ObTableSchema table_schema; // TODO wangyunlai.wyl fill schema fields in the future
+    if (OB_FAIL(plugin::ObPluginHelper::find_external_table(engine_type, external_desc))) {
+      LOG_WARN("engine type is not found", K(engine_type), K(ret));
+    } else if (OB_ISNULL(external_desc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("found engine but got null", KP(external_desc), K(ret));
+    } else if (OB_FAIL(external_desc->validate_properties(malloc,
+                                                          table_schema,
+                                                          format.plugin_format_.type_name(),
+                                                          parameters))) {
+      LOG_WARN("engine properties is invalid", K(ret));
+    } else if (parameters.ptr() != format.plugin_format_.parameters().ptr() &&
+               OB_FAIL(format.plugin_format_.set_parameters(parameters))) {
+      LOG_WARN("failed to update plugin parameters", K(ret));
+    } else {
+      is_valid = true;
+    }
+  } else if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
     is_valid = true;
   } else {
     if (!format.csv_format_.line_term_str_.empty() && !format.csv_format_.field_term_str_.empty()) {

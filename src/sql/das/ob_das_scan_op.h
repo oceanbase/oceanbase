@@ -164,6 +164,7 @@ public:
                        K_(external_file_format_str),
                        K_(external_file_location),
                        K_(external_file_pattern),
+                       K_(external_pushdown_filters),
                        KPC_(trans_info_expr),
                        K_(ir_scan_type),
                        K_(rowkey_exprs),

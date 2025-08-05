@@ -185,12 +185,13 @@ int ObLocationDDLService::check_location_constraint(const ObTableSchema &schema)
   int ret = OB_SUCCESS;
   uint64_t compat_version = 0;
   const uint64_t tenant_id = schema.get_tenant_id();
-  bool is_odps_external_table = false;
+  sql::ObExternalFileFormat::FormatType external_table_type = sql::ObExternalFileFormat::INVALID_FORMAT;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", K(ret), K(tenant_id));
-  } else if (OB_FAIL(sql::ObSQLUtils::is_odps_external_table(&schema, is_odps_external_table))) {
-    LOG_WARN("failed to check is odps external table or not", K(ret));
-  } else if (is_odps_external_table) {
+  } else if (OB_FAIL(sql::ObSQLUtils::get_external_table_type(&schema, external_table_type))) {
+    LOG_WARN("failed to get external table type", K(ret));
+  } else if (sql::ObExternalFileFormat::ODPS_FORMAT == external_table_type ||
+      sql::ObExternalFileFormat::PLUGIN_FORMAT == external_table_type) {
     // do nothing
   } else {
     if (compat_version < DATA_VERSION_4_4_0_0 && OB_INVALID_ID != schema.get_external_location_id()) {

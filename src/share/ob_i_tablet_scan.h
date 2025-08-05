@@ -484,6 +484,7 @@ ObVTableScanParam() :
       ext_column_convert_exprs_(NULL),
       partition_infos_(NULL),
       external_object_ctx_(NULL),
+      external_pushdown_filters_(NULL),
       ext_mapping_column_exprs_(NULL),
       ext_mapping_column_ids_(NULL),
       schema_guard_(NULL),
@@ -573,6 +574,7 @@ ObVTableScanParam() :
   ObString external_file_access_info_;
   const share::ObExternalTablePartInfoArray *partition_infos_;
   const share::ObExternalObjectCtx *external_object_ctx_;
+  const ObIArray<ObString> *external_pushdown_filters_;
   const sql::ExprFixedArray *ext_mapping_column_exprs_;
   const common::ObFixedArray<uint64_t, ObIAllocator> *ext_mapping_column_ids_;
 

@@ -23,6 +23,7 @@
 #include "storage/fts/ob_fts_plugin_helper.h"
 #include "share/ob_dynamic_partition_manager.h"
 #include "sql/resolver/ddl/ob_storage_cache_ddl_util.h"
+#include "plugin/interface/ob_plugin_external_intf.h"
 #include "share/external_table/ob_external_table_utils.h"
 
 namespace oceanbase
@@ -49,7 +50,8 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
   const ObString &properties_string = table_schema.get_external_properties();
   const ObString &sub_path = table_schema.get_external_sub_path();
   const bool user_specified = table_schema.is_user_specified_partition_for_external_table();
-  bool is_odps_external_table = false;
+  bool use_properties = false;
+  ObExternalFileFormat::FormatType external_table_type = ObExternalFileFormat::INVALID_FORMAT;
   ObString location_name;
   const ObLocationSchema *location_schema = NULL;
   if (OB_INVALID_ID != location_id) {
@@ -64,10 +66,15 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
   }
   if (OB_SUCC(ret) && OB_FAIL(ObExternalTableUtils::get_external_file_location(table_schema, schema_guard_, allocator, location))) {
     LOG_WARN("failed to get external file location", K(ret));
-  } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(&table_schema, is_odps_external_table))) {
+  } else if (OB_FAIL(ObSQLUtils::get_external_table_type(&table_schema, external_table_type))) {
     LOG_WARN("failed to check is odps table or not", K(ret));
+  } else if (ObExternalFileFormat::ODPS_FORMAT != external_table_type &&
+      ObExternalFileFormat::PLUGIN_FORMAT != external_table_type) {
+    use_properties = false;
+  } else {
+    use_properties = true;
   }
-  if (OB_SUCC(ret) && !is_odps_external_table) {
+  if (OB_SUCC(ret) && !use_properties) {
     if (!location_name.empty()) {
       if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nLOCATION=@%.*s", location_name.length(), location_name.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print LOCATION OBJ", K(ret));
@@ -80,7 +87,8 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
   }
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (!is_odps_external_table && !pattern.empty() && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPATTERN='%.*s'", pattern.length(), pattern.ptr()))) {
+  } else if (!use_properties && !pattern.empty() &&
+      OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPATTERN='%.*s'", pattern.length(), pattern.ptr()))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print PATTERN", K(ret));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nAUTO_REFRESH = %s", table_schema.get_external_table_auto_refresh() == 0 ? "OFF" :
                                                                                 table_schema.get_external_table_auto_refresh() == 1 ? "IMMEDIATE" : "INTERVAL"))) {
@@ -100,7 +108,7 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
    // 2. print file format
   if (OB_SUCC(ret)) {
     ObExternalFileFormat format;
-    const ObString &table_format_or_properties = is_odps_external_table ?  properties_string : format_string;
+    const ObString &table_format_or_properties = use_properties ? properties_string : format_string;
     if (table_format_or_properties.empty()) {
       ret = OB_ERR_UNEXPECTED;
       SHARE_SCHEMA_LOG(WARN, "table_format_or_properties is empty", K(ret));
@@ -110,9 +118,9 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
                  && format.format_type_ < ObExternalFileFormat::MAX_FORMAT)) {
       ret = OB_NOT_SUPPORTED;
       SHARE_SCHEMA_LOG(WARN, "unsupported to print file format", K(ret), K(format.format_type_));
-    } else if (!is_odps_external_table && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nFORMAT (\n"))) {
+    } else if (!use_properties && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nFORMAT (\n"))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print FORMAT (", K(ret));
-    } else if (is_odps_external_table && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPROPERTIES (\n"))) {
+    } else if (use_properties && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPROPERTIES (\n"))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print FORMAT (", K(ret));
     } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "  TYPE = '%s',", ObExternalFileFormat::FORMAT_TYPE_STR[format.format_type_]))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print TYPE", K(ret));
@@ -238,6 +246,36 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
           LOG_WARN("failed to get right api mode", K(ret));
         }
       }
+    } else if (OB_SUCC(ret) && ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_) {
+      ObString plugin_unavailable("<plugin is not available>");
+      ObString parameters;
+      plugin::ObExternalDataEngine *engine = nullptr;
+      if (OB_FAIL(format.plugin_format_.create_engine(allocator, engine))) {
+        LOG_WARN("failed to create engine", K(ret));
+        if (OB_FUNCTION_NOT_DEFINED == ret) {
+          ret = OB_SUCCESS;
+          parameters = plugin_unavailable;
+        }
+      } else if (OB_FAIL(engine->display(allocator, parameters))) {
+        LOG_WARN("failed to get data engine display string", K(ret));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  NAME = '%.*s',",
+                                 format.plugin_format_.type_name().length(), format.plugin_format_.type_name().ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "failed to print plugin name", K(ret));
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  PARAMETERS = '%.*s' ",
+                                         parameters.length(), parameters.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "failed to print parameters", K(ret));
+      }
+      if (OB_NOT_NULL(engine)) {
+        OB_DELETEx(ObExternalDataEngine, &allocator, engine);
+        engine = nullptr;
+      }
+      if (OB_NOT_NULL(parameters.ptr()) && parameters.ptr() != plugin_unavailable.ptr()) {
+        allocator.free(parameters.ptr());
+        parameters.reset();
+      }
     } else if (OB_SUCC(ret) && ObExternalFileFormat::ORC_FORMAT == format.format_type_) {
       const ObOrcGeneralFormat &orc = format.orc_format_;
       const char *column_index_type = column_index_type_to_string(orc.column_index_type_);
@@ -265,6 +303,6 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
   return ret;
 }
 
-}
-}
-}
+} // namespace schema
+} // namespace share
+} // namespace oceanbase

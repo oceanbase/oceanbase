@@ -495,11 +495,12 @@ public:
                                                   common::ObString sub_path);
 
   static int mask_properties_sensitive_info(const ParseNode *node,
+                                            const ObExternalFileFormat &format,
                                             ObString &ddl_sql,
                                             ObIAllocator *allocator,
                                             ObString &masked_sql);
 
-  static int check_format_valid(const ObExternalFileFormat &format, bool &is_valid);
+  static int check_format_valid(ObExternalFileFormat &format, bool &is_valid);
   int check_column_in_check_constraint(
       const share::schema::ObTableSchema &table_schema,
       const ObReducedVisibleColSet &drop_column_names_set,

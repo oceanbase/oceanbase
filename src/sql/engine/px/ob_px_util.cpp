@@ -278,9 +278,8 @@ int ObPXServerAddrUtil::get_external_table_loc(
     }
 
     if (OB_SUCC(ret) && ext_file_urls.empty()) {
-      const char* dummy_file_name = "#######DUMMY_FILE#######";
       ObExternalFileInfo dummy_file;
-      dummy_file.file_url_ = dummy_file_name;
+      dummy_file.file_url_ = ObExternalTableUtils::dummy_file_name();
       dummy_file.file_id_ = INT64_MAX;
       dummy_file.part_id_ = ref_table_id;
       if (is_external_files_on_disk) {
@@ -308,10 +307,12 @@ int ObPXServerAddrUtil::get_external_table_loc(
         }
       }
     } else {
-      bool is_odps_external_table = false;
+      // bool is_odps_external_table = false;
+      ObExternalFileFormat::FormatType external_table_type = ObExternalFileFormat::INVALID_FORMAT;
       ObSEArray<const ObTableScanSpec *, 2> scan_ops;
       const ObTableScanSpec *scan_op = nullptr;
       const ObOpSpec *root_op = NULL;
+      ObString external_table_format_str;
       dfo.get_root(root_op);
       if (OB_ISNULL(root_op)) {
         ret = OB_ERR_UNEXPECTED;
@@ -321,10 +322,11 @@ int ObPXServerAddrUtil::get_external_table_loc(
       } else if (scan_ops.count() == 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("empty scan_ops", K(ret));
-      } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
-                                                            is_odps_external_table))) {
-        LOG_WARN("failed to check is odps external table or not", K(ret));
-      } else if (is_odps_external_table) {
+      } else if (FALSE_IT(external_table_format_str = scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_)) {
+      } else if (OB_FAIL(ObSQLUtils::get_external_table_type(external_table_format_str, external_table_type))) {
+        LOG_WARN("failed to get external table type", K(ret), K(external_table_format_str));
+      } else if (ObExternalFileFormat::ODPS_FORMAT == external_table_type ||
+                 ObExternalFileFormat::PLUGIN_FORMAT == external_table_type) {
         int64_t expected_location_cnt = std::min(dfo.get_dop(), all_locations.count());
         if (1 == expected_location_cnt) {
           if (OB_FAIL(target_locations.push_back(GCTX.self_addr()))) {
@@ -389,11 +391,14 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
       }
     }
   } else {
+    // bool is_odps_external_table = false;
+    ObExternalFileFormat::FormatType external_table_type = ObExternalFileFormat::INVALID_FORMAT;
     bool is_odps_external_table = false;
     ObODPSGeneralFormat::ApiMode odps_api_mode;
     ObSEArray<const ObTableScanSpec *, 2> scan_ops;
     const ObTableScanSpec *scan_op = nullptr;
     const ObOpSpec *root_op = NULL;
+    ObString external_table_format_str;
     dfo.get_root(root_op);
     if (OB_ISNULL(root_op)) {
       ret = OB_ERR_UNEXPECTED;
@@ -403,6 +408,10 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
     } else if (scan_ops.count() == 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("empty scan_ops", K(ret));
+    } else if (FALSE_IT(external_table_format_str = scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_)) {
+    } else if (OB_FAIL(ObSQLUtils::get_external_table_type(external_table_format_str, external_table_type))) {
+      LOG_WARN("failed to get external table type", K(ret), K(external_table_format_str));
+    } else if (FALSE_IT(is_odps_external_table = (ObExternalFileFormat::ODPS_FORMAT == external_table_type))) {
     } else if (OB_FAIL(ObSQLUtils::get_odps_api_mode(scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
                                                      is_odps_external_table,
                                                      odps_api_mode))) {
@@ -411,6 +420,11 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
       if (OB_FAIL(ObExternalTableUtils::assign_odps_file_to_sqcs(
               dfo, exec_ctx, sqcs, parallel, odps_api_mode))) {
         LOG_WARN("failed to assisn odps file to sqcs", K(files), K(ret));
+      }
+    } else if (ObExternalFileFormat::PLUGIN_FORMAT == external_table_type) {
+      if (OB_FAIL(ObExternalTableUtils::plugin_split_tasks(
+              exec_ctx.get_allocator(), external_table_format_str, dfo, sqcs, parallel))) {
+        LOG_WARN("failed to do plugin_split_tasks", K(ret));
       }
     } else {
       ObArray<int64_t> file_assigned_sqc_ids;

@@ -36,11 +36,17 @@ int ObDDLResolver::resolve_external_file_format(const ParseNode *format_node,
   }
   // resolve file type and encoding type
   if (OB_SUCC(ret)) {
-    if (OB_ISNULL(format_node) || (T_EXTERNAL_FILE_FORMAT != format_node->type_ && T_EXTERNAL_PROPERTIES != format_node->type_)) {
+    if (OB_ISNULL(format_node) || OB_ISNULL(params.allocator_)
+        || (T_EXTERNAL_FILE_FORMAT != format_node->type_ && T_EXTERNAL_PROPERTIES != format_node->type_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected format node", K(ret), K(format_node->type_));
+      LOG_WARN("unexpected format node", K(ret), K(format_node->type_), KP(params.allocator_));
     }
   }
+
+  if (OB_SUCC(ret) && OB_FAIL(format.plugin_format_.init(*params.allocator_))) {
+    LOG_WARN("failed to init plugin format/properties", K(ret));
+  }
+
   ObResolverUtils::FileFormatContext ff_ctx;
   for (int i = 0; OB_SUCC(ret) && i < format_node->num_child_; ++i) {
     if (OB_ISNULL(format_node->children_[i])) {

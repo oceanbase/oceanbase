@@ -19,8 +19,12 @@
 
 #ifdef __cplusplus
 #define OBP_PLUGIN_EXPORT extern "C" OBP_PUBLIC_API
+#define OBP_EXTERN_C_BEGIN extern "C" {
+#define OBP_EXTERN_C_END }
 #else // __cplusplus
 #define OBP_PLUGIN_EXPORT OBP_PUBLIC_API
+#define OBP_EXTERN_C_BEGIN
+#define OBP_EXTERN_C_END
 #endif // __cplusplus
 
 #define OBP_STRINGIZE_(str) #str

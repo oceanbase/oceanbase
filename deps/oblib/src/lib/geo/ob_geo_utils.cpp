@@ -935,8 +935,12 @@ int ObGeoTypeUtil::get_bo_from_wkb(const ObString &wkb, ObGeoWkbByteOrder &bo)
 int ObGeoTypeUtil::add_geo_version(ObIAllocator &allocator, const ObString &src, ObString &res_wkb)
 {
   int ret = OB_SUCCESS;
-  uint8_t version = (*(src.ptr() + WKB_GEO_SRID_SIZE));
-  if (ObGeoWkbByteOrder::BigEndian == static_cast<ObGeoWkbByteOrder>(version)
+  uint8_t version = 0;
+  if (src.length() < WKB_GEO_SRID_SIZE + 1) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(src.length()));
+  } else if (FALSE_IT(version = (*(src.ptr() + WKB_GEO_SRID_SIZE)))) {
+  } else if (ObGeoWkbByteOrder::BigEndian == static_cast<ObGeoWkbByteOrder>(version)
      || ObGeoWkbByteOrder::LittleEndian == static_cast<ObGeoWkbByteOrder>(version)) {
     // without version, add version
     uint64_t res_size = src.length() + WKB_VERSION_SIZE;

@@ -1073,6 +1073,11 @@ int ObExternalFileFormat::to_string(char *buf, const int64_t buf_len, int64_t &p
     case ORC_FORMAT:
       OZ(orc_format_.to_json_kv_string(buf, buf_len, pos));
       break;
+    case PLUGIN_FORMAT: {
+      J_COMMA();
+      pos += plugin_format_.to_json_string(buf + pos, buf_len - pos);
+      break;
+    }
     default:
       // do nothing, format type can be invalid
       break;
@@ -1089,7 +1094,25 @@ int64_t ObExternalFileFormat::to_string(char *buf, const int64_t buf_len, bool i
   return pos;
 }
 
+int ObExternalFileFormat::parse_format_type(const common::ObString &str,
+    common::ObIAllocator &allocator, FormatType &format_type)
+{
+  int ret = OB_SUCCESS;
+  format_type = INVALID_FORMAT;
+  ObExternalFileFormat format;
+  if (OB_FAIL(format.load_from_string_(str, allocator, true/*parse_format_type_only*/))) {
+    LOG_WARN("failed to parse file format from str", K(ret));
+  } else {
+    format_type = format.format_type_;
+  }
+  return ret;
+}
+
 int ObExternalFileFormat::load_from_string(const ObString &str, ObIAllocator &allocator)
+{
+  return load_from_string_(str, allocator, false/*parse_format_type_only*/);
+}
+int ObExternalFileFormat::load_from_string_(const ObString &str, ObIAllocator &allocator, bool parse_format_type_only)
 {
   int ret = OB_SUCCESS;
   json::Value *data = NULL;
@@ -1118,25 +1141,32 @@ int ObExternalFileFormat::load_from_string(const ObString &str, ObIAllocator &al
           break;
         }
       }
-      format_type_node = format_type_node->get_next();
-      switch (format_type_) {
-        case CSV_FORMAT:
-          OZ (csv_format_.load_from_json_data(format_type_node, allocator));
-          OZ (origin_file_format_str_.load_from_json_data(format_type_node, allocator));
-          break;
-        case ODPS_FORMAT:
-          OZ (odps_format_.load_from_json_data(format_type_node, allocator));
-          break;
-        case PARQUET_FORMAT:
-          OZ (parquet_format_.load_from_json_data(format_type_node, allocator));
-          break;
-        case ORC_FORMAT:
-          OZ (orc_format_.load_from_json_data(format_type_node, allocator));
-          break;
-        default:
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid format type", K(ret), K(format_type_str));
-          break;
+      if (parse_format_type_only) {
+      } else {
+        format_type_node = format_type_node->get_next();
+        switch (format_type_) {
+          case CSV_FORMAT:
+            OZ (csv_format_.load_from_json_data(format_type_node, allocator));
+            OZ (origin_file_format_str_.load_from_json_data(format_type_node, allocator));
+            break;
+          case ODPS_FORMAT:
+            OZ (odps_format_.load_from_json_data(format_type_node, allocator));
+            break;
+          case PARQUET_FORMAT:
+            OZ (parquet_format_.load_from_json_data(format_type_node, allocator));
+            break;
+          case ORC_FORMAT:
+            OZ (orc_format_.load_from_json_data(format_type_node, allocator));
+            break;
+          case PLUGIN_FORMAT:
+            OZ (plugin_format_.init(allocator));
+            OZ (plugin_format_.load_from_json_node(format_type_node));
+            break;
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid format type", K(ret), K(format_type_str));
+            break;
+        }
       }
     }
   }
@@ -1201,6 +1231,15 @@ int ObExternalFileFormat::mock_gen_column_def(
       } else {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not supported column index type", K(ret), K(orc_format_.column_index_type_));
+      }
+      break;
+    }
+    case PLUGIN_FORMAT: {
+      if (OB_FAIL(temp_str.append_fmt("get_path(%s, '%.*s')",
+                                      N_EXTERNAL_FILE_ROW,
+                                      column.get_column_name_str().length(),
+                                      column.get_column_name_str().ptr()))) {
+        LOG_WARN("fail to append sql str", K(ret));
       }
       break;
     }

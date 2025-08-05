@@ -101,8 +101,8 @@ public:
                                     ObEvalCtx &ctx,
                                     const ObLobLocatorV2 *lob_locator,
                                     ObDatum &res_datum,
-                                    ObObjType &in_type,
-                                    ObCollationType &in_cs_type);
+                                    const ObObjType &in_type,
+                                    const ObCollationType &in_cs_type);
   static int common_check_convert_string(const ObExpr &expr,
                                         ObEvalCtx &ctx,
                                         const ObString &in_str,

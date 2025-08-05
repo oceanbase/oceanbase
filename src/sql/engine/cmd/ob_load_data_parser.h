@@ -18,7 +18,7 @@
 #include "lib/string/ob_string.h"
 #include "lib/json/ob_json.h"
 #include "lib/charset/ob_charset_string_helper.h"
-
+#include "plugin/external_table/ob_external_format.h"
 
 namespace oceanbase
 {
@@ -1100,14 +1100,20 @@ struct ObExternalFileFormat
   int mock_gen_column_def(const share::schema::ObColumnSchemaV2 &column, common::ObIAllocator &allocator, common::ObString &def);
   int get_format_file_extension(FormatType format_type, ObString &file_extension);
 
+  static int parse_format_type(const common::ObString &str, common::ObIAllocator &allocator, FormatType &format_type);
+
   ObOriginFileFormat origin_file_format_str_;
   FormatType format_type_;
   sql::ObCSVGeneralFormat csv_format_;
   sql::ObParquetGeneralFormat parquet_format_;
   sql::ObODPSGeneralFormat odps_format_;
   sql::ObOrcGeneralFormat orc_format_;
+  plugin::ObPluginFormat plugin_format_;
   uint64_t options_;
   static const char *FORMAT_TYPE_STR[];
+
+private:
+  int load_from_string_(const common::ObString &str, common::ObIAllocator &allocator, bool parse_format_type_only);
 };
 
 

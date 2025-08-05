@@ -27,6 +27,7 @@
 #include "common/ob_common_utility.h"
 #include "ob_java_native_method.h"
 #include "lib/lock/ob_mutex.h"
+#include "lib/utility/ob_defer.h"
 
 // implements by libhdfs
 // hadoop-hdfs-native-client/src/main/native/libhdfs/jni_helper.c
@@ -355,10 +356,19 @@ private:
     lref = nullptr;                                                            \
   }
 
+#define LOCAL_REF_GUARD_ENV(lref, env)                                         \
+  DEFER(                                                                       \
+    if (OB_NOT_NULL(lref) && OB_NOT_NULL(env)) {                               \
+       env->DeleteLocalRef(lref);                                              \
+       lref = nullptr;                                                         \
+    }                                                                          \
+  )
+
 // A global ref of the guard, handle can be shared across threads
 class JavaGlobalRef {
 public:
-  JavaGlobalRef(jobject handle) : handle_(handle) {}
+  /// @note handle is a java global ref
+  explicit JavaGlobalRef(jobject handle = nullptr) : handle_(handle) {}
   ~JavaGlobalRef();
   JavaGlobalRef(const JavaGlobalRef &) = delete;
 
@@ -372,6 +382,9 @@ public:
     std::swap(this->handle_, tmp.handle_);
     return *this;
   }
+
+  /// @param handle a local ref, not global
+  int new_global_ref(jobject handle, JNIEnv *env);
 
   jobject handle() const { return handle_; }
 
