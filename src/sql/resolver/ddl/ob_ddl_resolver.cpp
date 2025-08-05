@@ -4286,7 +4286,33 @@ int ObDDLResolver::cast_default_value(ObObj &default_value,
   return ret;
 }
 
-int ObDDLResolver::check_default_value_length(const ObColumnSchemaV2 &column,
+int ObDDLResolver::trim_space_for_default_value(
+    const bool is_mysql_mode,
+    const bool is_char_type,
+    const ObCollationType &collation_type,
+    ObObj &default_value,
+    ObString &out_str)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(default_value.get_varchar(out_str))) {
+    LOG_WARN("invalid default data", K(ret), K(default_value));
+  } else if (is_mysql_mode && is_char_type) {
+    const char *str = out_str.ptr();
+    int32_t len = out_str.length();
+    ObString space_pattern = ObCharsetUtils::get_const_str(collation_type, ' ');
+    for (; len >= space_pattern.length(); len -= space_pattern.length()) {
+      if (0 != MEMCMP(str + len - space_pattern.length(), space_pattern.ptr(), space_pattern.length())) {
+        break;
+      }
+    }
+    default_value.set_varchar(str, len);
+    out_str.assign_ptr(str, len);
+  }
+  return ret;
+}
+
+int ObDDLResolver::check_default_value_length(const bool is_mysql_mode,
+                                              const ObColumnSchemaV2 &column,
                                               ObObj &default_value)
 {
   int ret = OB_SUCCESS;
@@ -4298,12 +4324,12 @@ int ObDDLResolver::check_default_value_length(const ObColumnSchemaV2 &column,
      } else {
       // get characters of default value under specified charset
       ObString str;
-      const bool is_byte_length = is_oracle_byte_length(lib::is_oracle_mode(), column.get_length_semantics());
+      const bool is_byte_length = is_oracle_byte_length(!is_mysql_mode, column.get_length_semantics());
       if (default_value.is_null()) {
         strlen = 0;
-      } else if (OB_FAIL(default_value.get_varchar(str))) {
-        SQL_RESV_LOG(WARN, "invalid default data", K(ret), K(str), K(default_value));
-      } else if (lib::is_mysql_mode() && str.trim().empty()) {
+      } else if (OB_FAIL(trim_space_for_default_value(is_mysql_mode, column.get_meta_type().is_char(), column.get_collation_type(), default_value, str))) {
+        SQL_RESV_LOG(WARN, "trim space for default value failed", K(ret));
+      } else if (is_mysql_mode && str.empty()) {
         strlen = 0;
         default_value.set_varchar("");
       } else {
@@ -5631,11 +5657,14 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
     }
     LOG_DEBUG("finish check default value", K(input_default_value), K(expr_str), K(tmp_default_value), K(tmp_dest_obj), K(tmp_dest_obj_null), KPC(expr), K(ret));
   } else {
+    bool is_oracle_mode = false;
     if (OB_FAIL(cast_default_value(default_value, tz_info_wrap.get_time_zone_info(),
                                    nls_formats, allocator, column, sql_mode))) {
       LOG_WARN("fail to cast default value!", K(ret), K(default_value), KPC(tz_info_wrap.get_time_zone_info()), K(column), K(sql_mode));
-    } else if (OB_FAIL(check_default_value_length(column, default_value))) {
-      LOG_WARN("fail to check default value length", K(default_value), K(column), K(ret));
+    } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(table_schema.get_tenant_id(), is_oracle_mode))) {
+      LOG_WARN("check if_oracle_compat_mode failed", KR(ret), K(table_schema.get_tenant_id()));
+    } else if (OB_FAIL(check_default_value_length(!is_oracle_mode, column, default_value))) {
+      LOG_WARN("fail to check default value length", K(ret), K(default_value), K(column));
     } else {
       default_value.set_collation_type(column.get_collation_type());
       LOG_DEBUG("succ to set default value", K(input_default_value), K(default_value), K(column), K(ret), K(lbt()));

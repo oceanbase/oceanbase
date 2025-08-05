@@ -193,6 +193,7 @@ public:
   static int check_urowid_column_length(
       const share::schema::ObColumnSchemaV2 &column);
   static int check_default_value_length(
+      const bool is_mysql_mode,
       const share::schema::ObColumnSchemaV2 &column,
       common::ObObj &default_value);
   static int cast_default_value(
@@ -860,6 +861,11 @@ protected:
   int add_new_indexkey_for_oracle_temp_table();
 
   void reset();
+  static int trim_space_for_default_value(
+      const bool is_mysql_mode,
+      const bool is_char_type,
+      const ObCollationType &collation_type,
+      ObObj &default_value, ObString &str);
   int64_t block_size_;
   int64_t consistency_level_;
   INDEX_TYPE index_scope_;
