@@ -90,6 +90,7 @@ enum ObDDLType
   DDL_DROP_VEC_IVFPQ_INDEX = 23,
   DDL_DROP_VEC_SPIV_INDEX = 24,
   DDL_REPLACE_MLOG = 25, // placeholder of alter mlog
+  DDL_CREATE_VEC_SPIV_INDEX = 26, // placeholder of spiv post build
 
   ///< @note tablet split.
   DDL_AUTO_SPLIT_BY_RANGE = 100,

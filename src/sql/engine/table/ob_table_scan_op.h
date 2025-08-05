@@ -467,7 +467,8 @@ public:
       uint64_t is_multivalue_ddl_               : 1;
       uint64_t can_be_paused_                   : 1;
       uint64_t need_check_outrow_lob_           : 1;
-      uint64_t reserved_                        : 48;
+      uint64_t is_spiv_ddl_                     : 1;
+      uint64_t reserved_                        : 47;
     };
   };
   int64_t tenant_id_col_idx_;

@@ -3300,7 +3300,8 @@ OB_SERIALIZE_MEMBER((ObDropIndexArg, ObIndexArg),
                     is_parent_task_dropping_fts_index_,
                     is_parent_task_dropping_multivalue_index_,
                     table_id_,
-                    is_drop_in_rebuild_task_);
+                    is_drop_in_rebuild_task_,
+                    is_parent_task_dropping_spiv_index_);
 
 OB_SERIALIZE_MEMBER(ObDropIndexRes, tenant_id_, index_table_id_, schema_version_, task_id_);
 
@@ -3320,6 +3321,7 @@ int ObDropIndexArg::assign(const ObDropIndexArg &other)
     is_vec_inner_drop_ = other.is_vec_inner_drop_;
     is_parent_task_dropping_fts_index_ = other.is_parent_task_dropping_fts_index_;
     is_parent_task_dropping_multivalue_index_ = other.is_parent_task_dropping_multivalue_index_;
+    is_parent_task_dropping_spiv_index_ = other.is_parent_task_dropping_spiv_index_;
     only_set_status_ = other.only_set_status_;
     table_id_ = other.table_id_;
     is_drop_in_rebuild_task_ = other.is_drop_in_rebuild_task_;
