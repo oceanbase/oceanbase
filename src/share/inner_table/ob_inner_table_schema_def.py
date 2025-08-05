@@ -16844,7 +16844,7 @@ def_table_schema(
 # 12567: __all_virtual_backup_validate_ls_task
 # 12568: __all_virtual_backup_validate_ls_task_history
 # 12569: __all_virtual_tenant_ss_storage_stat
-# 12570: __all_virtual_hms_client_pool_status
+# 12570: __all_virtual_hms_client_pool_stat
 
 def_table_schema(
   owner = 'wangbai.wx',
@@ -17436,7 +17436,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15523', all_def_keyword
 # 15529: __all_virtual_backup_validate_task
 # 15530: __all_virtual_backup_validate_task_history
 # 15531: __all_virtual_tenant_ss_storage_stat
-# 15532: __all_virtual_hms_client_pool_status
+# 15532: __all_virtual_hms_client_pool_stat
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_dba_source_v1']))
 
 # 余留位置（此行之前占位）
@@ -42948,8 +42948,8 @@ FROM
 # 21684: V$OB_IVF_INDEX_INFO
 # 21685: CDB_OB_SS_SPACE_USAGE
 # 21686: DBA_OB_SS_SPACE_USAGE
-# 21687: GV$OB_HMS_CLIENT_POOL_STATUS
-# 21688: V$OB_HMS_CLIENT_POOL_STATUS
+# 21687: GV$OB_HMS_CLIENT_POOL_STAT
+# 21688: V$OB_HMS_CLIENT_POOL_STAT
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -76798,8 +76798,8 @@ def_table_schema(
 # 28280: GV$OB_SQL_HISTOGRAM
 # 28281: V$OB_SQL_HISTOGRAM
 # 28282: DBA_WR_SQL_HISTOGRAM
-# 28283: GV$OB_HMS_CLIENT_POOL_STATUS
-# 28284: V$OB_HMS_CLIENT_POOL_STATUS
+# 28283: GV$OB_HMS_CLIENT_POOL_STAT
+# 28284: V$OB_HMS_CLIENT_POOL_STAT
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
