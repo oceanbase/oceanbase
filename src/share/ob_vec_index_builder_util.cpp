@@ -920,6 +920,13 @@ int ObVecIndexBuilderUtil::set_vec_ivf_table_columns(
           LOG_WARN("failed to add column", K(ret), KPC(rowkey_column), K(row_desc));
         }
       }
+      // if is pq center_id table, add rowkey column
+      ObVectorIndexParam index_param; // not use
+      if (OB_FAIL(ret)) {
+      } else if (share::schema::is_vec_ivfpq_pq_centroid_index(arg.index_type_) &&
+                 OB_FAIL(set_extra_info_columns(data_schema, row_desc, true, index_param, index_schema))) {
+        LOG_WARN("fail to set extra info columns", K(ret));
+      }
       if (OB_SUCC(ret)) {
         index_schema.set_rowkey_column_num(row_desc.get_column_num());
         index_schema.set_index_column_num(row_desc.get_column_num());
@@ -2724,7 +2731,7 @@ int ObVecIndexBuilderUtil::construct_ivf_partial_column_info(
           LOG_WARN("print generate expr definition prefix failed", K(ret));
         } else {
           collation_type = CS_TYPE_BINARY;
-          obj_type = ObCollectionSQLType;
+          obj_type = ObVarcharType;
           col_flag = GENERATED_VEC_IVF_PQ_CENTER_IDS_COLUMN_FLAG;
         }
         break;
@@ -2846,7 +2853,11 @@ int ObVecIndexBuilderUtil::generate_vec_ivf_column(
           column_schema.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
           column_schema.set_is_hidden(true);
           column_schema.set_data_type(obj_type);
-          column_schema.set_data_length(0);
+          if (col_type == IVF_PQ_CENTER_IDS_COL) {
+            column_schema.set_data_length(OB_MAX_VARCHAR_LENGTH);
+          } else {
+            column_schema.set_data_length(0);
+          }
           column_schema.set_collation_type(collection_type);
           column_schema.set_prev_column_id(UINT64_MAX);
           column_schema.set_next_column_id(UINT64_MAX);

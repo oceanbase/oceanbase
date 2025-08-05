@@ -627,6 +627,9 @@ int ObVectorIndexRefresher::do_rebuild() {
         LOG_WARN("index id table is not available now", K(ret), K(index_id_tb_schema->get_index_status()));
       }
     }
+  } else if (domain_table_schema->is_vec_ivf_index() && !idx_parameters.empty()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support rebuild ivf index with params", K(ret), K(idx_parameters));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id,

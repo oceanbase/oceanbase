@@ -7128,7 +7128,7 @@ int ObJoinOrder::compute_vec_idx_path_relationship(const AccessPath &first_path,
                                                       selectivity,
                                                       get_plan()->get_predicate_selectivities()))) {
     LOG_WARN("failed to calculate selectivity", K(ret));
-  } else if (selectivity >= ObVecIdxExtraInfo::DEFAULT_SELECTIVITY_RATE) {
+  } else if (selectivity >= first_path.domain_idx_info_.vec_extra_info_.get_default_selectivity_rate()) {
     relation = first_path.domain_idx_info_.vec_extra_info_.is_post_filter() ? DominateRelation::OBJ_LEFT_DOMINATE : DominateRelation::OBJ_RIGHT_DOMINATE;
   } else {
     relation = first_path.domain_idx_info_.vec_extra_info_.is_pre_filter() ? DominateRelation::OBJ_LEFT_DOMINATE : DominateRelation::OBJ_RIGHT_DOMINATE;

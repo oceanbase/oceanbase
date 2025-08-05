@@ -16774,6 +16774,29 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12554: __ALL_VIRTUAL_UNIT_MYSQL_SYS_AGENT
 
 def_table_schema(
+  owner = 'tonghui.ht',
+  table_name     = '__all_virtual_tenant_vector_mem_info',
+  table_id       = '12550',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+
+  normal_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('tenant_id', 'int'),
+  ('raw_malloc_size', 'int'),
+  ('index_metadata_size', 'int'),
+  ('vector_mem_hold', 'int'),
+  ('vector_mem_used', 'int'),
+  ('vector_mem_limit', 'int'),
+  ('tx_share_limit', 'int'),
+  ('vector_mem_detail_info', 'varchar:OB_MAX_MYSQL_VARCHAR_LENGTH')
+  ],
+)
+
+def_table_schema(
   owner = 'bohou.ws',
   table_name     = '__all_virtual_logservice_cluster_info',
   table_id       = '12551',
@@ -16867,6 +16890,7 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
 )
+
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -42367,8 +42391,8 @@ def_table_schema(
       table_id as TABLE_ID,
       tablet_id as TABLET_ID,
       task_id as TASK_ID,
-      usec_to_time(gmt_create) as START_TIME,
-      usec_to_time(gmt_modified) as MODIFY_TIME,
+      gmt_create as START_TIME,
+      gmt_modified as MODIFY_TIME,
       case trigger_type
         when 0 then "USER"
         when 1 then "MANUAL"
@@ -42401,8 +42425,8 @@ def_table_schema(
       table_id as TABLE_ID,
       tablet_id as TABLET_ID,
       task_id as TASK_ID,
-      usec_to_time(gmt_create) as START_TIME,
-      usec_to_time(gmt_modified) as MODIFY_TIME,
+      gmt_create as START_TIME,
+      gmt_modified as MODIFY_TIME,
       case trigger_type
         when 0 then "USER"
         when 1 then "MANUAL"
@@ -42435,8 +42459,8 @@ def_table_schema(
       table_id as TABLE_ID,
       tablet_id as TABLET_ID,
       task_id as TASK_ID,
-      usec_to_time(gmt_create) as START_TIME,
-      usec_to_time(gmt_modified) as MODIFY_TIME,
+      gmt_create as START_TIME,
+      gmt_modified as MODIFY_TIME,
       case trigger_type
         when 0 then "AUTO"
         when 1 then "MANUAL"
@@ -42469,8 +42493,8 @@ def_table_schema(
       table_id as TABLE_ID,
       tablet_id as TABLET_ID,
       task_id as TASK_ID,
-      usec_to_time(gmt_create) as START_TIME,
-      usec_to_time(gmt_modified) as MODIFY_TIME,
+      gmt_create as START_TIME,
+      gmt_modified as MODIFY_TIME,
       case trigger_type
         when 0 then "AUTO"
         when 1 then "MANUAL"
@@ -42923,9 +42947,57 @@ FROM
  oceanbase.__all_virtual_ss_sstable_mgr M
 """.replace("\n", " ")
 )
+
+def_table_schema(
+  owner = 'tonghui.ht',
+  table_name      = 'GV$OB_VECTOR_MEMORY',
+  table_id        = '21661',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    (VECTOR_MEM_HOLD + RAW_MALLOC_SIZE + INDEX_METADATA_SIZE) as VECTOR_MEM_HOLD,
+    (VECTOR_MEM_USED + RAW_MALLOC_SIZE + INDEX_METADATA_SIZE) as VECTOR_MEM_USED,
+    VECTOR_MEM_LIMIT
+FROM
+    oceanbase.__all_virtual_tenant_vector_mem_info
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'tonghui.ht',
+  table_name      = 'V$OB_VECTOR_MEMORY',
+  table_id        = '21662',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    VECTOR_MEM_HOLD,
+    VECTOR_MEM_USED,
+    VECTOR_MEM_LIMIT
+FROM
+    OCEANBASE.GV$OB_VECTOR_MEMORY
+WHERE
+        SVR_IP=HOST_IP()
+    AND
+        SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
+
 # 21661: GV$OB_VECTOR_MEMORY
 # 21662: V$OB_VECTOR_MEMORY
-
 # 21663: DBA_OB_SENSITIVE_RULES
 # 21664: CDB_OB_SENSITIVE_RULES
 # 21665: DBA_OB_SENSITIVE_COLUMNS

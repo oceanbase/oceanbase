@@ -10983,6 +10983,42 @@ when ('' like '%|V$OB_SS_SSTABLES|%') then 3
 when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SS_SSTABLES|%') then 4
 else 1
 end a);
+desc oceanbase.GV$OB_VECTOR_MEMORY;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+VECTOR_MEM_HOLD	bigint(22)	NO		NULL	
+VECTOR_MEM_USED	bigint(22)	NO		NULL	
+VECTOR_MEM_LIMIT	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_VECTOR_MEMORY|%') then 2
+when ('' like '%|GV$OB_VECTOR_MEMORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_VECTOR_MEMORY|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_VECTOR_MEMORY limit 1);
+cnt
+1
+desc oceanbase.V$OB_VECTOR_MEMORY;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+VECTOR_MEM_HOLD	bigint(22)	NO			
+VECTOR_MEM_USED	bigint(22)	NO			
+VECTOR_MEM_LIMIT	bigint(20)	NO			
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|V$OB_VECTOR_MEMORY|%') then 2
+when ('' like '%|V$OB_VECTOR_MEMORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_VECTOR_MEMORY|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_VECTOR_MEMORY limit 1);
+cnt
+1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from
 (SELECT t.table_name,
 group_concat(c.column_name) as column_name_list

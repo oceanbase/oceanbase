@@ -25,6 +25,7 @@
 #include "share/ob_common_id.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ob_value_row_iterator.h"
+#include "share/vector_index/ob_ivf_async_task.h"
 
 namespace oceanbase
 {
@@ -32,6 +33,16 @@ using namespace sql;
 using namespace common;
 namespace share
 {
+ObVecIndexAsyncTaskCtx::~ObVecIndexAsyncTaskCtx()
+{
+  if (OB_NOT_NULL(extra_data_)) {
+    ObIvfAuxTableInfo *aux_table = static_cast<ObIvfAuxTableInfo *>(extra_data_);
+    aux_table->~ObIvfAuxTableInfo();
+    allocator_.free(aux_table);
+    extra_data_ = nullptr;
+  }
+  allocator_.reset();
+}
 
 ObVecIndexAsyncTaskOption::~ObVecIndexAsyncTaskOption()
 {
@@ -41,7 +52,7 @@ ObVecIndexAsyncTaskOption::~ObVecIndexAsyncTaskOption()
 int ObVecIndexAsyncTaskOption::init(const int64_t capacity, const int64_t tenant_id, ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(task_ctx_map_.create(capacity, "VecAsyncTaskMap", "VecAsyncTaskMap", tenant_id))) {
+  if (OB_FAIL(task_ctx_map_.create(capacity, mem_attr_.label_, mem_attr_.label_, tenant_id))) {
     LOG_WARN("fail to create vector index task ctx map", K(ret), K(tenant_id), K(ls_id));
   }
   return ret;
@@ -95,6 +106,23 @@ int ObVecIndexAsyncTaskOption::del_task_ctx(ObTabletID &tablet_id)
   return ret;
 }
 
+int ObVecIndexAsyncTaskOption::is_task_ctx_exist(ObTabletID &tablet_id, bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  ObVecIndexAsyncTaskCtx *tmp_ctx = nullptr;
+  is_exist = false;
+  if (OB_FAIL(task_ctx_map_.get_refactored(tablet_id, tmp_ctx))) {
+    if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("fail to delete task ctx from map", KR(ret), K(tablet_id));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  } else {
+    is_exist = true;
+  }
+  return ret;
+}
+
 int ObVecIndexAsyncTaskUtil::check_task_is_cancel(ObVecIndexAsyncTaskCtx *task_ctx, bool &is_cancel)
 {
   int ret = OB_SUCCESS;
@@ -109,6 +137,9 @@ int ObVecIndexAsyncTaskUtil::check_task_is_cancel(ObVecIndexAsyncTaskCtx *task_c
   return ret;
 }
 
+/////////////////////////////
+// ObVecIndexAsyncTaskUtil //
+////////////////////////////
 int ObVecIndexAsyncTaskUtil::in_active_time(
     const uint64_t tenant_id, bool& is_active_time)
 {
@@ -190,12 +221,8 @@ bool ObVecIndexAsyncTaskUtil::check_can_do_work()
   int ret = OB_SUCCESS;
   uint64_t tenant_data_version = 0;
   bool is_oracle_mode = false;
-  const bool is_not_support = false;
   int64_t tenant_id = MTL_ID();
-  if (is_not_support) {
-    bret = false;
-    LOG_DEBUG("can not do work, not support async task");
-  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+  if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", K(ret), K(tenant_id));
   } else if (is_oracle_mode) {
     bret = false;
@@ -206,14 +233,6 @@ bool ObVecIndexAsyncTaskUtil::check_can_do_work()
   } else if (tenant_data_version < DATA_VERSION_4_3_5_2) {
     bret = false;
     LOG_DEBUG("vector index can not work with data version less than 4_3_3", K(tenant_data_version));
-  } else if (is_user_tenant(tenant_id)) {
-    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
-      bret = false;
-      LOG_WARN("get tenant data version failed", K(ret));
-    } else if (tenant_data_version < DATA_VERSION_4_3_5_2) {
-      bret = false;
-      LOG_DEBUG("vector index can not work with data version less than 4_3_3", K(tenant_data_version));
-    }
   }
   return bret;
 }
@@ -313,6 +332,8 @@ int ObVecIndexAsyncTaskUtil::batch_insert_vec_task(
       if ((i == task.size() - 1) || (i % batch_size == 0 && i != 0)) {
         if (OB_FAIL(insert_vec_tasks(tenant_id, tname, tmp_array.size(), proxy, tmp_array))) {
           LOG_WARN("fail to insert vec tasks", K(ret), K(tmp_array.size()));
+        } else {
+          tmp_array.reuse();
         }
       } else if (OB_FAIL(tmp_array.push_back(task.at(i)))) {
         LOG_WARN("fail to push back", K(ret), K(i));
@@ -942,10 +963,7 @@ int ObVecIndexAsyncTaskHandler::push_task(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ls_id), KP(ctx), KP(allocator));
   } else if (ctx->task_status_.status_ != ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE) {   // skip not PREPARE status task
-  } else if (ctx->task_status_.task_type_ != ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_OPTINAL) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected task type", K(ret), K(ctx->task_status_));
-  } else {
+  } else if (ctx->task_status_.task_type_ == ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_OPTINAL) {
     ObVecIndexAsyncTask *async_task = nullptr;
     if (OB_ISNULL(async_task = static_cast<ObVecIndexAsyncTask *>(allocator->alloc(sizeof(ObVecIndexAsyncTask))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -969,6 +987,33 @@ int ObVecIndexAsyncTaskHandler::push_task(
     } else if (OB_NOT_NULL(async_task)) {
       handle_ls_process_task_cnt(async_task->get_ls_id(), true);
     }
+  } else if (ctx->task_status_.task_type_ == OB_VECTOR_ASYNC_INDEX_IVF_LOAD
+          || ctx->task_status_.task_type_ == OB_VECTOR_ASYNC_INDEX_IVF_CLEAN) {
+    ObIvfAsyncTask *ivf_task = nullptr;
+    if (OB_ISNULL(ivf_task = OB_NEWx(ObIvfAsyncTask, allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc memory of ObIvfAsyncTask", K(ret), K(tenant_id), K(ls_id));
+    } else if (OB_FAIL(ivf_task->init(tenant_id, ls_id, ctx->task_status_.task_type_, ctx))) {
+      LOG_WARN("fail to init opt async task", KR(ret), K(tenant_id), K(ls_id));
+    } else if (OB_FAIL(TG_PUSH_TASK(tg_id_, ivf_task))) {
+      LOG_WARN("fail to TG_PUSH_TASK", KR(ret), KPC(ivf_task));
+    } else {
+      // !!!! inc async task ref cnt;
+      inc_async_task_ref();
+    }
+    // free memory
+    if (OB_FAIL(ret) && OB_NOT_NULL(ivf_task)) {
+      ivf_task->~ObIvfAsyncTask();
+      allocator->free(ivf_task);  // arena need free? no
+      ivf_task = nullptr;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(ivf_task)) {
+      handle_ls_process_task_cnt(ivf_task->get_ls_id(), true);
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected task type", K(ret), K(ctx));
   }
   return ret;
 }
@@ -999,7 +1044,7 @@ int ObVecIndexAsyncTaskHandler::get_allocator_by_ls(const ObLSID &ls_id, ObIAllo
 void ObVecIndexAsyncTaskHandler::handle(void *task)
 {
   int ret = OB_SUCCESS;
-  ObVecIndexAsyncTask *async_task = nullptr;
+  ObVecIndexIAsyncTask *async_task = nullptr;
   bool is_cancel = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1008,8 +1053,10 @@ void ObVecIndexAsyncTaskHandler::handle(void *task)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
   } else {
-    async_task = static_cast<ObVecIndexAsyncTask *>(task);
-    if (async_task->get_task_type() == ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_OPTINAL) {
+    async_task = static_cast<ObVecIndexIAsyncTask *>(task);
+    if (async_task->get_task_type() == ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_OPTINAL
+    || async_task->get_task_type() == ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_IVF_LOAD
+    || async_task->get_task_type() == ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_IVF_CLEAN) {
       ObVecIndexAsyncTaskCtx *task_ctx = async_task->get_task_ctx();
       if (OB_ISNULL(task_ctx)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1040,7 +1087,7 @@ void ObVecIndexAsyncTaskHandler::handle(void *task)
   if (OB_NOT_NULL(async_task)) {
     int tmp_ret = OB_SUCCESS;
     ObIAllocator *allocator = nullptr;
-    async_task->~ObVecIndexAsyncTask();
+    async_task->~ObVecIndexIAsyncTask();
     if (OB_TMP_FAIL(get_allocator_by_ls(async_task->get_ls_id(), allocator))) {
       LOG_WARN("fail to get allocator by ls id", K(tmp_ret), K(async_task->get_ls_id()));
     } else if (OB_ISNULL(allocator)) {
@@ -1074,12 +1121,12 @@ void ObVecIndexAsyncTaskHandler::handle_drop(void *task)
       ObIAllocator *allocator = nullptr;
       async_task->~ObVecIndexAsyncTask();
       if (OB_TMP_FAIL(get_allocator_by_ls(async_task->get_ls_id(), allocator))) {
-      LOG_WARN("fail to get allocator by ls id", K(tmp_ret), K(async_task->get_ls_id()));
-    } else if (OB_ISNULL(allocator)) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null allocator", K(tmp_ret), K(async_task->get_ls_id()));
-    } else {
-      allocator->free(async_task);
+        LOG_WARN("fail to get allocator by ls id", K(tmp_ret), K(async_task->get_ls_id()));
+      } else if (OB_ISNULL(allocator)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null allocator", K(tmp_ret), K(async_task->get_ls_id()));
+      } else {
+        allocator->free(async_task);
       }
     }
     // !!!!! desc async task ref cnt
@@ -1110,19 +1157,23 @@ void ObVecIndexAsyncTaskHandler::handle_ls_process_task_cnt(const ObLSID &ls_id,
   }
 }
 
-/**************************** ObVecIndexAsyncTask ******************************/
-int ObVecIndexAsyncTask::init(
-    const uint64_t tenant_id, const ObLSID &ls_id, const int task_type, ObVecIndexAsyncTaskCtx *ctx)
+/**************************** ObVecIndexIAsyncTask ******************************/
+int ObVecIndexIAsyncTask::init(
+  const uint64_t tenant_id,
+  const ObLSID &ls_id,
+  const int task_type,
+  ObVecIndexAsyncTaskCtx *ctx)
 {
   int ret = OB_SUCCESS;
-   ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
+  ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
   } else if (OB_ISNULL(vector_index_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", K(ret));
-  } else if (OB_FAIL(vector_index_service->get_ls_index_mgr_map().get_refactored(ls_id, vec_idx_mgr_))) {
+  } else if (OB_FAIL(vector_index_service->get_ls_index_mgr_map().get_refactored(ls_id,
+                                                                                 vec_idx_mgr_))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {
@@ -1141,6 +1192,7 @@ int ObVecIndexAsyncTask::init(
   return ret;
 }
 
+/**************************** ObVecIndexAsyncTask ******************************/
 int ObVecIndexAsyncTask::do_work()
 {
   int ret = OB_SUCCESS;

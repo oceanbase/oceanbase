@@ -24971,6 +24971,14 @@ INTNUM
   $1->type_ = T_NUMBER;
   $$ = $1;
 }
+| BOOL_VALUE
+{
+  $$ = $1;
+}
+| DECIMAL_VAL
+{
+  $$ = $1;
+}
 | relation_name
 {
   $$ = $1;

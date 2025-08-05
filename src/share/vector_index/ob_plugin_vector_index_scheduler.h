@@ -22,6 +22,7 @@
 #include "logservice/ob_append_callback.h"
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_handler.h"
+#include "share/vector_index/ob_ivf_async_task_executor.h"
 
 namespace oceanbase
 {
@@ -292,6 +293,10 @@ public:
 private:
   int submit_log_();
   void inner_switch_to_follower_();
+  int init_task_executors(uint64_t tenant_id, ObLS &ls);
+  int check_and_load_task_executors();
+  int start_task_executors();
+  int resume_task_executors();
   static bool in_retry_list(const int ret_code) { return OB_REPLICA_NOT_READABLE == ret_code; }
 
 private:
@@ -330,6 +335,7 @@ private:
   ObVectorIndexTabletIDArray tablet_id_array_;
   ObVectorIndexTableIDArray table_id_array_;
   ObVecAsyncTaskExector async_task_exec_;
+  ObIvfAsyncTaskExector ivf_task_exec_;
 };
 
 class ObVectorIndexTask : public share::ObITask
@@ -343,7 +349,7 @@ public:
       vec_idx_mgr_(nullptr),
       task_ctx_(nullptr),
       read_snapshot_(),
-      allocator_(ObMemAttr(MTL_ID(), "VecIdxTaskCtx"))
+      allocator_(ObMemAttr(MTL_ID(), "VecIdxTask"))
   {}
   ~ObVectorIndexTask() {};
   int init(ObPluginVectorIndexLoadScheduler *schedular,

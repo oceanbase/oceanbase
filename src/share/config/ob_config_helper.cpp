@@ -166,34 +166,11 @@ bool less_or_equal_tx_share_limit(const uint64_t tenant_id, const int64_t value)
   return bool_ret;
 }
 
-bool check_vector_memory_limit(const uint64_t tenant_id, const int64_t value)
-{
-  bool bool_ret = false;
-  int64_t vector_memory_limit = 0;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (tenant_config.is_valid()) {
-    vector_memory_limit = tenant_config->ob_vector_memory_limit_percentage;
-    if (0 == vector_memory_limit) {
-      // 0 is default value, which means vector index is disabled,do not need to check
-      bool_ret = true;
-    } else if (value + 15 + vector_memory_limit >= 100) {
-      bool_ret = false;
-    } else {
-      bool_ret = true;
-    }
-  } else {
-    bool_ret = false;
-    OB_LOG_RET(ERROR, OB_INVALID_CONFIG, "tenant config check_vector_memory_limit is invalid",K(value), K(vector_memory_limit), K(tenant_id));
-  }
-  return bool_ret;
-}
-
 bool ObConfigMemstoreLimitChecker::check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t)
 {
   bool is_valid = false;
   int64_t value = ObConfigIntParser::get(t.value_.ptr(), is_valid);
-  if (less_or_equal_tx_share_limit(tenant_id, value) &&
-      check_vector_memory_limit(tenant_id, value)) {
+  if (less_or_equal_tx_share_limit(tenant_id, value)) {
     is_valid = true;
   } else {
     is_valid = false;
@@ -681,21 +658,10 @@ bool ObConfigVectorMemoryChecker::check(const uint64_t tenant_id, const obrpc::O
 {
   bool is_valid = false;
   int64_t value = ObConfigIntParser::get(t.value_.ptr(), is_valid);
-  int64_t cur_value = 0;
-  int64_t upper_limit = 0;
-  int ret = OB_SUCCESS;
-  if (is_valid) {
-    if (value == 0) {
-      is_valid = true;
-    } else if (OB_FAIL(ObPluginVectorIndexHelper::get_vector_memory_value_and_limit(tenant_id, cur_value, upper_limit))) {
-      OB_LOG_RET(ERROR, OB_INVALID_CONFIG, "fail to get_vector_memory_value_and_limit", K(tenant_id));
-    } else if (0 < value && value < upper_limit) {
-      is_valid = true;
-    } else {
-      is_valid = false;
-    }
-    int64_t memory_size = 0;
-    ObPluginVectorIndexHelper::get_vector_memory_limit_size(tenant_id, memory_size);
+  if (less_or_equal_tx_share_limit(tenant_id, value)) {
+    is_valid = true;
+  } else {
+    is_valid = false;
   }
   return is_valid;
 }

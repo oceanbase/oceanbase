@@ -652,10 +652,12 @@ struct InsertMonitorNodeInfo final
 {
 public:
   InsertMonitorNodeInfo():
-    tenant_id_(OB_INVALID_ID), task_id_(0), execution_id_(0), thread_id_(0), last_refresh_time_(0), cg_row_inserted_(0), sstable_row_inserted_(0)
+    tenant_id_(OB_INVALID_ID), task_id_(0), execution_id_(0), thread_id_(0), last_refresh_time_(0), cg_row_inserted_(0), sstable_row_inserted_(0),
+    vec_task_thread_pool_cnt_(0), vec_task_total_cnt_(0), vec_task_finish_cnt_(0)
   {}
   ~InsertMonitorNodeInfo() = default;
-  TO_STRING_KV(K(tenant_id_), K(task_id_), K(execution_id_), K(thread_id_), K(last_refresh_time_), K(cg_row_inserted_), K(sstable_row_inserted_));
+  TO_STRING_KV(K(tenant_id_), K(task_id_), K(execution_id_), K(thread_id_), K(last_refresh_time_), K(cg_row_inserted_), K(sstable_row_inserted_),
+  K(vec_task_thread_pool_cnt_), K(vec_task_total_cnt_), K(vec_task_finish_cnt_));
 
 public:
   uint64_t tenant_id_;
@@ -665,6 +667,10 @@ public:
   int64_t last_refresh_time_;
   int64_t cg_row_inserted_;
   int64_t sstable_row_inserted_;
+  // for vec index
+  int64_t vec_task_thread_pool_cnt_;
+  int64_t vec_task_total_cnt_;
+  int64_t vec_task_finish_cnt_;
 };
 
 struct ObSqlMonitorStats final
@@ -815,6 +821,15 @@ public:
     insert_remain_time_ = 0;
     insert_slowest_thread_id_ = 0;
 
+    vec_task_thread_pool_cnt_ = 0;
+    vec_task_total_cnt_ = 0;
+    vec_task_finish_cnt_ = 0;
+    vec_task_trigger_cnt_ = 0;
+    vec_task_progress_ = 1;
+    vec_task_slowest_trigger_id_ = 0;
+    vec_task_slowest_cnt_ = 0;
+    vec_task_slowest_finish_cnt_ = 0;
+
     state_ = RedefinitionState::BEFORESCAN;
     is_empty_ = true;
     finish_ddl_ = false;
@@ -870,6 +885,15 @@ public:
     insert_remain_time_ = 0;
     insert_slowest_thread_id_ = 0;
 
+    vec_task_thread_pool_cnt_ = 0;
+    vec_task_total_cnt_ = 0;
+    vec_task_finish_cnt_ = 0;
+    vec_task_trigger_cnt_ = 0;
+    vec_task_progress_ = 1;
+    vec_task_slowest_trigger_id_ = 0;
+    vec_task_slowest_cnt_ = 0;
+    vec_task_slowest_finish_cnt_ = 0;
+
     state_ = RedefinitionState::BEFORESCAN;
     finish_thread_num_ = 0;
     is_empty_ = true;
@@ -902,6 +926,8 @@ public:
   K(merge_sort_thread_num_), K(row_merge_sorted_), K(expected_round_), K(merge_sort_remain_time_), K(merge_sort_progress_),
   K(dump_size_), K(compress_type_),
   K(row_inserted_cg_), K(row_inserted_file_), K(insert_thread_num_), K(insert_progress_), K(insert_remain_time_),
+  K(vec_task_thread_pool_cnt_), K(vec_task_total_cnt_), K(vec_task_finish_cnt_), K(vec_task_trigger_cnt_), K(vec_task_progress_),
+  K(vec_task_slowest_trigger_id_), K(vec_task_slowest_cnt_), K(vec_task_slowest_finish_cnt_),
   K(state_), K(parallelism_), K(real_parallelism_), K(execution_id_), K(finish_thread_num_),
   K(min_inmem_sort_row_), K(min_merge_sort_row_), K(min_insert_row_));
 
@@ -922,6 +948,7 @@ private:
       const int64_t row_count,
       const SortMonitorNodeInfo &sort_info,
       const ObSqlMonitorStats &sql_monitor_stats);
+  int calculate_vec_task_info(const InsertMonitorNodeInfo &insert_monitor_node);
   int local_index_diagnose();
   int finish_ddl_diagnose();
   int running_ddl_diagnose();
@@ -993,6 +1020,15 @@ private:
   int64_t min_insert_row_;
   double insert_spend_time_;
   int64_t insert_slowest_thread_id_ = 0;
+  // for vec index
+  int64_t vec_task_thread_pool_cnt_;
+  int64_t vec_task_total_cnt_;
+  int64_t vec_task_finish_cnt_;
+  int64_t vec_task_trigger_cnt_;
+  double vec_task_progress_;
+  int64_t vec_task_slowest_trigger_id_;
+  int64_t vec_task_slowest_cnt_;
+  int64_t vec_task_slowest_finish_cnt_;
 
   // analysis data
   bool is_empty_;

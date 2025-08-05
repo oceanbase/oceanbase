@@ -971,6 +971,7 @@ public:
   void set_identify_seq_expr(ObRawExpr *expr) { identify_seq_expr_ = expr; }
   inline bool can_batch_rescan() const { return NULL != access_path_ && access_path_->can_batch_rescan_; }
   inline bool is_ivf_vec_scan() const {return vector_index_info_.is_ivf_vec_scan();}
+  inline bool is_ivf_pq_scan() const {return vector_index_info_.is_ivf_pq_scan();}
   inline bool is_hnsw_vec_scan() const {return vector_index_info_.is_hnsw_vec_scan();}
   inline bool is_primary_vec_idx_scan() const { return is_vec_idx_scan_pre_filter() && ref_table_id_ == index_table_id_; }
   inline bool is_vec_index_table_id(const uint64_t tid) const { return vector_index_info_.is_vec_aux_table_id(tid) || tid == doc_id_table_id_; }

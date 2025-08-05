@@ -2232,11 +2232,11 @@ int ObTscCgService::generate_vec_idx_ctdef(const ObLogTableScan &op,
     ObDASScanCtDef *fourth_aux_ctdef = nullptr; // HNSW_ROWKEY_VID_TABLE    | null or IVF_SQ_META_TABLE or IVF_PQ_ID_TABLE
     ObDASScanCtDef *com_aux_ctdef = nullptr;    // main table
     ObStoragePushdownFlag pushdown_flag = tsc_ctdef.scan_ctdef_.pd_expr_spec_.pd_storage_flag_;
-
+    bool need_com_aux_ctdef = vc_info.is_hnsw_vec_scan() || vc_info.is_ivf_vec_scan();
     if (OB_FAIL(generate_vec_aux_idx_tbl_ctdef(op, first_aux_ctdef, second_aux_ctdef, third_aux_ctdef, fourth_aux_ctdef, pushdown_flag))) {
       LOG_WARN("fail to generate_vec_aux_idx_tbl_ctdef", K(ret));
-    } else if (OB_FAIL(vc_info.is_hnsw_vec_scan()
-    && generate_vec_aux_table_ctdef(op, ObTSCIRScanType::OB_VEC_COM_AUX_SCAN, vc_info.main_table_tid_, com_aux_ctdef, pushdown_flag, vc_info.is_hnsw_vec_scan()))) {
+    } else if (OB_FAIL(need_com_aux_ctdef
+    && generate_vec_aux_table_ctdef(op, ObTSCIRScanType::OB_VEC_COM_AUX_SCAN, vc_info.main_table_tid_, com_aux_ctdef, pushdown_flag, need_com_aux_ctdef))) {
       LOG_WARN("fail to generate_vec_aux_table_ctdef", K(ret));
     } else {
       int64_t vec_child_task_cnt = 6;
@@ -2244,9 +2244,9 @@ int ObTscCgService::generate_vec_idx_ctdef(const ObLogTableScan &op,
         vec_child_task_cnt = 4;
       } else if (!vc_info.is_hnsw_vec_scan()) {
         if (vc_info.is_ivf_flat_scan()) {
-          vec_child_task_cnt = 4;
-        } else {
           vec_child_task_cnt = 5;
+        } else {
+          vec_child_task_cnt = 6;
         }
       }
       if (OB_ISNULL(vec_scan_ctdef->children_ = OB_NEW_ARRAY(ObDASBaseCtDef*, &ctdef_alloc, vec_child_task_cnt))) {
@@ -2263,7 +2263,12 @@ int ObTscCgService::generate_vec_idx_ctdef(const ObLogTableScan &op,
         if (!vc_info.is_spiv_scan()) {
           if (!vc_info.is_ivf_flat_scan()) {
             vec_scan_ctdef->children_[4] = fourth_aux_ctdef;
+          } else {
+            vec_scan_ctdef->children_[4] = com_aux_ctdef; // ivf flat no.4 is data_table_def
           }
+        }
+        if (vc_info.is_ivf_pq_scan() || vc_info.is_ivf_sq_scan()) {
+          vec_scan_ctdef->children_[5] = com_aux_ctdef;
         }
         if (vc_info.is_hnsw_vec_scan()) {
           // compatible with version 435, the fourth child must be com_aux_ctdef
@@ -2823,6 +2828,10 @@ int ObTscCgService::extract_vec_ir_access_columns(
       case ObTSCIRScanType::OB_VEC_COM_AUX_SCAN: {
         if (OB_FAIL(add_var_to_array_no_dup(access_exprs, static_cast<ObRawExpr*>(vec_info.target_vec_column_)))) {
           LOG_WARN("failed to push document id column to access exprs", K(ret));
+        } else if (vec_info.is_ivf_vec_scan()) {
+          if (OB_FAIL(extract_ivf_rowkey_access_columns(op, scan_ctdef, access_exprs, 0, 0))) {
+            LOG_WARN("failed to extract ivf rowkey access columns", K(ret));
+          }
         }
         break;
       }
@@ -3368,6 +3377,10 @@ int ObTscCgService::extract_vector_das_output_column_ids(const ObTableSchema &in
         if (OB_FAIL(output_cids.push_back(
             static_cast<ObColumnRefRawExpr *>(vec_info.target_vec_column_)->get_column_id()))) {
           LOG_WARN("failed to push output vid col id", K(ret));
+        } else if (vec_info.is_ivf_vec_scan()) {
+          if (OB_FAIL(extract_vector_ivf_rowkey_output_column_ids(op, scan_ctdef, output_cids, 0, 0))) {
+            LOG_WARN("failed to extract vector ivf rowkey output column ids", K(ret));
+          }
         }
         break;
       }

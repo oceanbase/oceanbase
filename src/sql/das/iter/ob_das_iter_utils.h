@@ -38,7 +38,7 @@ namespace oceanbase
 namespace sql
 {
 
-class ObDASIvfScanIter;
+class ObDASIvfBaseScanIter;
 class ObDASHNSWScanIter;
 class ObDASIvfScanIterParam;
 
@@ -408,7 +408,7 @@ private:
     ObVectorIndexAlgorithmType type,
     ObIAllocator &alloc,
     ObDASIvfScanIterParam &param,
-    ObDASIvfScanIter *&result);
+    ObDASIvfBaseScanIter *&result);
   ObDASIterUtils() = delete;
   ~ObDASIterUtils() = delete;
 };

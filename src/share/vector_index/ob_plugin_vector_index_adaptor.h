@@ -25,6 +25,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "lib/oblog/ob_log_module.h"
 #include "share/vector_index/ob_plugin_vector_index_serialize.h"
+#include "share/allocator/ob_tenant_vector_allocator.h"
 #include "ob_vector_index_util.h"
 
 
@@ -629,7 +630,6 @@ public:
   static int cast_roaringbitmap_to_stdmap(const roaring::api::roaring64_bitmap_t *bitmap,
                                           std::map<int, bool> &mymap,
                                           uint64_t tenant_id);
-  int check_vsag_mem_used();
   uint64_t get_all_vsag_mem_used() {
     return ATOMIC_LOAD(all_vsag_use_mem_);
   }
@@ -874,44 +874,6 @@ public:
 
 private:
   ObPluginVectorIndexAdaptor *adapter_;
-};
-
-class ObVsagMemContext : public vsag::Allocator
-{
-public:
-  ObVsagMemContext(uint64_t *all_vsag_use_mem)
-    : all_vsag_use_mem_(all_vsag_use_mem),
-      mem_context_(nullptr) {};
-  ~ObVsagMemContext() {
-    if (mem_context_ != nullptr) {
-      DESTROY_CONTEXT(mem_context_);
-      mem_context_ = nullptr;
-    }
-  }
-  int init(lib::MemoryContext &parent_mem_context, uint64_t *all_vsag_use_mem, uint64_t tenant_id);
-  bool is_inited() { return OB_NOT_NULL(mem_context_); }
-
-  std::string Name() override {
-    return "ObVsagAlloc";
-  }
-  void* Allocate(size_t size) override;
-
-  void Deallocate(void* p) override;
-
-  void* Reallocate(void* p, size_t size) override;
-
-  int64_t hold() {
-    return mem_context_->hold();
-  }
-
-  int64_t used() {
-    return mem_context_->used();
-  }
-
-private:
-  uint64_t *all_vsag_use_mem_;
-  lib::MemoryContext mem_context_;
-  constexpr static int64_t MEM_PTR_HEAD_SIZE = sizeof(int64_t);
 };
 
 void free_hnswsq_array_data(ObVectorIndexMemData *&memdata, ObIAllocator *allocator);

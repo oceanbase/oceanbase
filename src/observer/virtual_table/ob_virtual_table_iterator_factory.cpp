@@ -250,6 +250,7 @@
 #include "observer/virtual_table/ob_all_virtual_ss_gc_status.h"
 #include "observer/virtual_table/ob_all_virtual_ss_gc_detect_info.h"
 #include "observer/virtual_table/ob_all_virtual_dba_source.h"
+#include "observer/virtual_table/ob_all_virtual_tenant_vector_mem_info.h"
 
 namespace oceanbase
 {
@@ -3203,6 +3204,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               vt_iter = static_cast<ObVirtualTableIterator *>(logservice_cluster_info_table);
             }
           } break;
+          case OB_ALL_VIRTUAL_TENANT_VECTOR_MEM_INFO_TID:
+          {
+            ObAllVirtualTenantVectorMemInfo *gv_tenant_vector_mem_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualTenantVectorMemInfo, gv_tenant_vector_mem_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualTenantVectorMemInfo construct failed", K(ret));
+            } else {
+              gv_tenant_vector_mem_info->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(gv_tenant_vector_mem_info);
+            }
+            break;
+          }
         END_CREATE_VT_ITER_SWITCH_LAMBDA
 
 #define AGENT_VIRTUAL_TABLE_CREATE_ITER

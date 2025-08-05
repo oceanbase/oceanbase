@@ -25,6 +25,8 @@
 #include "lib/vector/ob_vector_util.h"
 #include "ob_vector_kmeans_ctx.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "share/vector_index/ob_vector_index_ivf_cache_mgr.h"
+#include "share/vector_index/ob_plugin_vector_index_service.h"
 
 namespace oceanbase
 {
@@ -62,6 +64,7 @@ public:
                                     ObIAllocator &allocator);
   static int release_vector_index_adapter(ObPluginVectorIndexAdaptor* &adapter);
   static int release_vector_index_build_helper(ObIvfBuildHelper* &helper);
+  static int release_ivf_cache_mgr(ObIvfCacheMgr* &mgr);
   static ObVectorIndexRecordType index_type_to_record_type(schema::ObIndexType type);
 
   static ObAdapterCreateType index_type_to_create_type(schema::ObIndexType type);
@@ -74,7 +77,6 @@ public:
   static int set_vsag_logger() {
     return obvectorutil::init_vasg_logger(&ObVsagLoggerSingleton::getInstance());
   }
-
   static void set_ls_leader_flag(const ObLSID &ls_id, const bool is_leader);
   static int get_ls_leader_flag(const ObLSID &ls_id, bool &is_leader);
   static int query_need_refresh_memdata(ObPluginVectorIndexAdaptor *adapter, ObLSID &ls_id);
@@ -134,6 +136,12 @@ public:
                                   ObIndexType index_type,
                                   SCN target_scn,
                                   ObIAllocator &allocator);
+  static int erase_ivf_build_helper(ObLSID ls_id, const ObIvfHelperKey &key);
+  static int get_mem_context_detail_info(ObPluginVectorIndexService *service,
+                                         ObIArray<ObLSTabletPair> &complete_tablet_ids,
+                                         ObIArray<ObLSTabletPair> &partial_tablet_ids,
+                                         ObIArray<ObLSTabletPair> &cache_tablet_ids,
+                                         char *buf, int64_t buf_len, int64_t &pos);
 
 private:
   static int init_common_scan_param(storage::ObTableScanParam& scan_param,
@@ -172,6 +180,9 @@ private:
                                       SCN &target_scn,
                                       ObIAllocator &allocator,
                                       ObVectorQueryAdaptorResultContext &ada_ctx);
+  static int fill_mem_context_detail_info(ObPluginVectorIndexService *service, ObIArray<ObLSTabletPair> &tablet_ids, char *buf, int64_t buf_len, int64_t &pos);
+  static int fill_ivf_mem_context_detail_info(ObPluginVectorIndexService *service, ObIArray<ObLSTabletPair> &tablet_ids, char *buf, int64_t buf_len, int64_t &pos);
+
 };
 
 } // namespace share

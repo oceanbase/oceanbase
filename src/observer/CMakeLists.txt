@@ -584,6 +584,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_ss_gc_status.cpp
   virtual_table/ob_all_virtual_ss_gc_detect_info.cpp
   virtual_table/ob_all_virtual_dba_source.cpp
+  virtual_table/ob_all_virtual_tenant_vector_mem_info.cpp
 )
 
 ob_server_add_target(ob_server)

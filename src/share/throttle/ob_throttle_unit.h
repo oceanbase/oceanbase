@@ -105,6 +105,11 @@ public:
   bool has_triggered_throttle(const int64_t holding_resource);
 
   /**
+   * @brief Check if this throttle unit has reached reource limit
+   */
+  bool exceeded_resource_limit(const int64_t holding_resource, const int64_t apply_resource);
+
+  /**
    * @brief Check if this throttle unit is throttling status.
    *
    * @param[out] ti_guard The throttle info guard from this unit.
@@ -170,6 +175,7 @@ public: // throttle configs setter
                               const int64_t throttle_trigger_percentage,
                               const int64_t throttle_max_duration,
                               bool &config_changed);
+  inline int64_t get_resource_limit() { return resource_limit_; }
 
 private:
   int get_throttle_info_(const ThrottleID &throttle_id, share::ObThrottleInfoGuard &ti_guard);

@@ -6038,6 +6038,21 @@ location_sub_path	varchar(128)	NO	PRI	NULL
 pattern	varchar(128)	NO	PRI	NULL	
 file_name	varchar(16384)	NO		NULL	
 file_size	bigint(20)	NO		NULL	
+desc oceanbase.__all_virtual_tenant_vector_mem_info;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+raw_malloc_size	bigint(20)	NO		NULL	
+index_metadata_size	bigint(20)	NO		NULL	
+vector_mem_hold	bigint(20)	NO		NULL	
+vector_mem_used	bigint(20)	NO		NULL	
+vector_mem_limit	bigint(20)	NO		NULL	
+tx_share_limit	bigint(20)	NO		NULL	
+vector_mem_detail_info	varchar(65535)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_vector_mem_info;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_ss_gc_status;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	

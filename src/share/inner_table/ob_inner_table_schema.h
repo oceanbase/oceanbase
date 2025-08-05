@@ -1206,6 +1206,7 @@ public:
   static int tenant_virtual_list_file_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_external_resource_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_external_resource_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_tenant_vector_mem_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_logservice_cluster_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ss_gc_status_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ss_gc_detect_info_schema(share::schema::ObTableSchema &table_schema);
@@ -2082,6 +2083,8 @@ public:
   static int dba_ob_external_resources_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_external_resources_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_ss_sstables_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_vector_memory_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_vector_memory_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -4399,6 +4402,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::tenant_virtual_list_file_schema,
   ObInnerTableSchema::all_virtual_external_resource_schema,
   ObInnerTableSchema::all_virtual_external_resource_history_schema,
+  ObInnerTableSchema::all_virtual_tenant_vector_mem_info_schema,
   ObInnerTableSchema::all_virtual_logservice_cluster_info_schema,
   ObInnerTableSchema::all_virtual_ss_gc_status_schema,
   ObInnerTableSchema::all_virtual_ss_gc_detect_info_schema,
@@ -5384,6 +5388,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_external_resources_schema,
   ObInnerTableSchema::cdb_ob_external_resources_schema,
   ObInnerTableSchema::v_ob_ss_sstables_schema,
+  ObInnerTableSchema::gv_ob_vector_memory_schema,
+  ObInnerTableSchema::v_ob_vector_memory_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -6645,6 +6651,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_SS_NOTIFY_TABLETS_STAT_TID,
   OB_TENANT_VIRTUAL_SHOW_CREATE_LOCATION_TID,
   OB_TENANT_VIRTUAL_LIST_FILE_TID,
+  OB_ALL_VIRTUAL_TENANT_VECTOR_MEM_INFO_TID,
   OB_ALL_VIRTUAL_SS_GC_STATUS_TID,
   OB_ALL_VIRTUAL_SS_GC_DETECT_INFO_TID,
   OB_ALL_VIRTUAL_DBA_SOURCE_V1_TID,
@@ -7382,6 +7389,8 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_DYNAMIC_PARTITION_TABLES_TID,
   OB_DBA_OB_EXTERNAL_RESOURCES_TID,
   OB_V_OB_SS_SSTABLES_TID,
+  OB_GV_OB_VECTOR_MEMORY_TID,
+  OB_V_OB_VECTOR_MEMORY_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
   OB_ALL_OBJECTS_TID,
@@ -9719,6 +9728,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_SS_NOTIFY_TABLETS_STAT_TNAME,
   OB_TENANT_VIRTUAL_SHOW_CREATE_LOCATION_TNAME,
   OB_TENANT_VIRTUAL_LIST_FILE_TNAME,
+  OB_ALL_VIRTUAL_TENANT_VECTOR_MEM_INFO_TNAME,
   OB_ALL_VIRTUAL_SS_GC_STATUS_TNAME,
   OB_ALL_VIRTUAL_SS_GC_DETECT_INFO_TNAME,
   OB_ALL_VIRTUAL_DBA_SOURCE_V1_TNAME,
@@ -10456,6 +10466,8 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_DYNAMIC_PARTITION_TABLES_TNAME,
   OB_DBA_OB_EXTERNAL_RESOURCES_TNAME,
   OB_V_OB_SS_SSTABLES_TNAME,
+  OB_GV_OB_VECTOR_MEMORY_TNAME,
+  OB_V_OB_VECTOR_MEMORY_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
   OB_ALL_OBJECTS_TNAME,
@@ -15137,11 +15149,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 336;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 961;
-const int64_t OB_SYS_VIEW_COUNT = 1073;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2375;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 962;
+const int64_t OB_SYS_VIEW_COUNT = 1075;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2378;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2378;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2381;
 
 } // end namespace share
 } // end namespace oceanbase

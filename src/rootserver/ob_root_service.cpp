@@ -10310,7 +10310,7 @@ int ObRootService::check_tx_share_memory_limit_(obrpc::ObAdminSetConfigItem &ite
   int ret = OB_SUCCESS;
   // There is a prefix "Incorrect arguments to " before user log so the warn log looked kinds of wired
   const char *warn_log = "tenant config _tx_share_memory_limit_percentage. "
-                         "It should larger than or equal with any single module in it(Memstore, TxData, Mds)";
+                         "It should larger than or equal with any single module in it(Memstore, TxData, Mds, Vector)";
   CHECK_TENANTS_CONFIG_WITH_FUNC(ObConfigTxShareMemoryLimitChecker, warn_log);
   return ret;
 }
@@ -10342,7 +10342,7 @@ int ObRootService::check_vector_memory_limit_(obrpc::ObAdminSetConfigItem &item)
 {
   int ret = OB_SUCCESS;
   const char *warn_log = "ob_vector_limit_percentage. "
-                         "It should be less than (85 - memstore_limit_percentage), check parameter 'memstore_limit_percentage' or '_memstore_limit_percentage'";
+                         "It should be less than _tx_share_memory_limit_percentage";
   CHECK_TENANTS_CONFIG_WITH_FUNC(ObConfigVectorMemoryChecker, warn_log);
   return ret;
 }

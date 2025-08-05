@@ -4073,6 +4073,9 @@ int ObSqlMonitorStatsCollector::get_insert_monitor_stats_batch(sqlclient::ObMySQ
     EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(*scan_result, "LAST_REFRESH_TIME", insert_node_info.last_refresh_time_);
     EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_1_VALUE", insert_node_info.cg_row_inserted_, int64_t);
     EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_2_VALUE", insert_node_info.sstable_row_inserted_, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_8_VALUE", insert_node_info.vec_task_thread_pool_cnt_, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_9_VALUE", insert_node_info.vec_task_total_cnt_, int64_t);
+    EXTRACT_INT_FIELD_MYSQL(*scan_result, "OTHERSTAT_10_VALUE", insert_node_info.vec_task_finish_cnt_, int64_t);
     int trace_id_len = 0;
     EXTRACT_STRBUF_FIELD_MYSQL(*scan_result, "TRACE_ID", trace_id_str, OB_MAX_TRACE_ID_BUFFER_SIZE, trace_id_len);
     if (OB_FAIL(ret)) {
@@ -4415,8 +4418,34 @@ int ObDDLDiagnoseInfo::calculate_insert_info(
             }
           }
         }
+        vec_task_thread_pool_cnt_ = OB_MAX(vec_task_thread_pool_cnt_, insert_monitor_node.vec_task_thread_pool_cnt_);
+        if (vec_task_thread_pool_cnt_ > 0 && OB_FAIL(calculate_vec_task_info(insert_monitor_node))) {
+          LOG_WARN("failed to calculate vec task info", K(ret));
+        }
       }
      thread_index_++;
+    }
+  }
+  return ret;
+}
+
+int ObDDLDiagnoseInfo::calculate_vec_task_info(const InsertMonitorNodeInfo &insert_monitor_node)
+{
+  int ret = OB_SUCCESS;
+  uint64_t thread_id_tmp = insert_monitor_node.thread_id_;
+  int64_t vec_index_task_total_cnt_tmp = insert_monitor_node.vec_task_total_cnt_;
+  int64_t vec_index_task_finish_cnt_tmp = insert_monitor_node.vec_task_finish_cnt_;
+  vec_task_total_cnt_ += vec_index_task_total_cnt_tmp;
+  vec_task_finish_cnt_ += vec_index_task_finish_cnt_tmp;
+  if (vec_index_task_total_cnt_tmp == 0 || vec_index_task_finish_cnt_tmp == 0) {
+  } else if (vec_index_task_finish_cnt_tmp <= vec_index_task_total_cnt_tmp) {
+    vec_task_trigger_cnt_++;
+    double vec_task_progress_tmp = static_cast<double>(vec_index_task_finish_cnt_tmp) / vec_index_task_total_cnt_tmp;
+    if (vec_task_progress_tmp <= vec_task_progress_) {
+      vec_task_slowest_trigger_id_ = thread_id_tmp;
+      vec_task_slowest_cnt_ = vec_index_task_total_cnt_tmp;
+      vec_task_slowest_finish_cnt_ = vec_index_task_finish_cnt_tmp;
+      vec_task_progress_ = vec_task_progress_tmp;
     }
   }
   return ret;
@@ -4637,6 +4666,15 @@ int ObDDLDiagnoseInfo::generate_session_longops_message(const int64_t target_cg_
                                     insert_spend_time_ / (1000 * 1000), insert_progress_ * 100, insert_remain_time_ / (1000 * 1000),
                                     insert_slowest_thread_id_, min_insert_row_))) {
           LOG_WARN("failed to print", K(ret));
+        } else if (vec_task_trigger_cnt_ > 0) {
+          if (OB_FAIL(databuff_printf(
+                                    stat_info.message_, MAX_LONG_OPS_MESSAGE_LENGTH, pos,
+                                    ", VEC_TASK_INFO:{ VEC_TASK_TRIGGER_THREAD_CNT: %ld, VEC_TASK_THREAD_POOL_CNT: %ld, VEC_INDEX_TASK_TOTAL_CNT: %ld, VEC_INDEX_TASK_FINISH_CNT: %ld },"
+                                    " SLOWEST_THREAD_INFO:{ THREAD_ID: %ld, TASK_TOTAL_CNT: %ld, TASK_FINISH_CNT: %ld }",
+                                    vec_task_trigger_cnt_, vec_task_thread_pool_cnt_, vec_task_total_cnt_, vec_task_finish_cnt_,
+                                    vec_task_slowest_trigger_id_, vec_task_slowest_cnt_, vec_task_slowest_finish_cnt_))) {
+            LOG_WARN("failed to print", K(ret));
+          }
         }
         break;
       }
@@ -4675,7 +4713,15 @@ int ObDDLDiagnoseInfo::generate_session_longops_message_v1(const int64_t target_
                                 row_scanned_,
                                 row_sorted_ + row_merge_sorted_,
                                 row_inserted_file_))) {
-    LOG_WARN("failed to print", K(ret));
+      LOG_WARN("failed to print", K(ret));
+    } else if (vec_task_trigger_cnt_ > 0) {
+      if (OB_FAIL(databuff_printf(stat_info.message_, MAX_LONG_OPS_MESSAGE_LENGTH, pos,
+                                  ", VEC_TASK_INFO:{ VEC_TASK_TRIGGER_THREAD_CNT: %ld, VEC_TASK_THREAD_POOL_CNT: %ld, VEC_INDEX_TASK_TOTAL_CNT: %ld, VEC_INDEX_TASK_FINISH_CNT: %ld },"
+                                  " SLOWEST_THREAD_INFO:{ THREAD_ID: %ld, TASK_TOTAL_CNT: %ld, TASK_FINISH_CNT: %ld }",
+                                  vec_task_trigger_cnt_, vec_task_thread_pool_cnt_, vec_task_total_cnt_, vec_task_finish_cnt_,
+                                  vec_task_slowest_trigger_id_, vec_task_slowest_cnt_, vec_task_slowest_finish_cnt_))) {
+        LOG_WARN("failed to print", K(ret));
+      }
     }
   }
   return ret;

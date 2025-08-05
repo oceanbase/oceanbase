@@ -241,6 +241,17 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
     } else if (OB_FAIL(ObDDLUtil::get_task_tablet_slice_count(MTL_ID(), ddl_task_id, is_partition_table, tablet_slice_cnt_map))) {
       LOG_WARN("failed to get tablet slice count", K(ret), K(ddl_task_id), K(MTL_ID()));
     }
+    if (OB_SUCC(ret) && is_vec_data_complement_) {
+      op_monitor_info_.otherstat_8_id_ = ObSqlMonitorStatIds::VECTOR_INDEX_TASK_THREAD_POOL_COUNT;
+      op_monitor_info_.otherstat_8_value_ = 0;
+      op_monitor_info_.otherstat_9_id_ = ObSqlMonitorStatIds::VECTOR_INDEX_TASK_TOTAL_COUNT;
+      op_monitor_info_.otherstat_9_value_ = 0;
+      op_monitor_info_.otherstat_10_id_ = ObSqlMonitorStatIds::VECTOR_INDEX_TASK_FINISH_COUNT;
+      op_monitor_info_.otherstat_10_value_ = 0;
+      insert_monitor.vec_index_task_thread_pool_cnt_ = &op_monitor_info_.otherstat_8_value_;
+      insert_monitor.vec_index_task_total_cnt_ = &op_monitor_info_.otherstat_9_value_;
+      insert_monitor.vec_index_task_finish_cnt_ = &op_monitor_info_.otherstat_10_value_;
+    }
 
     for (notify_idx = 0; OB_SUCC(ret) && notify_idx < participants_.count();) {
       clear_evaluated_flag();

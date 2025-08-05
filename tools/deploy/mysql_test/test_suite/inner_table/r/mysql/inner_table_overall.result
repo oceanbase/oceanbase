@@ -864,6 +864,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12546	__tenant_virtual_list_file	2	201001	1
 12547	__all_virtual_external_resource	2	201001	1
 12548	__all_virtual_external_resource_history	2	201001	1
+12550	__all_virtual_tenant_vector_mem_info	2	201001	1
 12551	__all_virtual_logservice_cluster_info	2	201001	1
 12552	__all_virtual_ss_gc_status	2	201001	1
 12553	__all_virtual_ss_gc_detect_info	2	201001	1
@@ -1414,6 +1415,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21658	DBA_OB_EXTERNAL_RESOURCES	1	201001	1
 21659	CDB_OB_EXTERNAL_RESOURCES	1	201001	1
 21660	V$OB_SS_SSTABLES	1	201001	1
+21661	GV$OB_VECTOR_MEMORY	1	201001	1
+21662	V$OB_VECTOR_MEMORY	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

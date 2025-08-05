@@ -103,6 +103,7 @@ ob_set_subtarget(ob_share allocator
   allocator/ob_tenant_mutil_allocator.cpp
   allocator/ob_tenant_mutil_allocator_mgr.cpp
   allocator/ob_tx_data_allocator.cpp
+  allocator/ob_tenant_vector_allocator.cpp
 )
 
 ob_set_subtarget(ob_share backup
@@ -733,6 +734,11 @@ ob_set_subtarget(ob_share vector_index
   vector_index/ob_vector_index_async_task.cpp
   vector_index/ob_vector_index_async_task_util.cpp
   vector_index/ob_vector_index_param.cpp
+  vector_index/ob_vector_index_ivf_cache_mgr.cpp
+  vector_index/ob_ivf_async_task.cpp
+  vector_index/ob_ivf_async_task_executor.cpp
+  vector_index/ob_vector_index_i_task_executor.cpp
+  vector_index/ob_vector_index_ivf_cache_util.cpp
 )
 
 ob_set_subtarget(ob_share vector_type

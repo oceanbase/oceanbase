@@ -16134,7 +16134,7 @@ int ObLogPlan::try_push_topn_into_domain_scan(ObLogicalOperator *&top,
                                                       need_further_sort))) {
       LOG_WARN("failed to push topn into text retrieval scan", K(ret));
     }
-  } else if (table_scan->is_vec_idx_scan_post_filter() || table_scan->is_hnsw_vec_scan()) {
+  } else if (table_scan->is_vec_idx_scan_post_filter() || table_scan->is_ivf_pq_scan() || table_scan->is_hnsw_vec_scan()) {
     if (OB_FAIL(try_push_topn_into_vector_index_scan(top,
                                                     topn_expr,
                                                     get_stmt()->get_limit_expr(),
@@ -16195,7 +16195,6 @@ int ObLogPlan::try_push_topn_into_vector_index_scan(ObLogicalOperator *&top,
       need_further_sort = table_scan->is_distributed() || table_scan->get_table_partition_info()->get_table_location().is_partitioned()
                         || (vc_info.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
                         && (table_scan->get_filter_exprs().count() != 0 || table_scan->get_pushdown_filter_exprs().count() != 0))
-                        || vc_info.is_ivf_pq_scan()
                         || vc_info.is_hnsw_bq_scan();
       if (vc_info.vec_type_ == ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER
           && table_scan->get_filter_exprs().count() == 0

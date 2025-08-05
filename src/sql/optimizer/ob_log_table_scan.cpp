@@ -3555,6 +3555,11 @@ int ObLogTableScan::extract_vec_idx_access_expr(ObIArray<ObRawExpr *> &exprs)
           LOG_WARN("unexpected hnsw aux column count", K(ret));
         }  // for each col
       }    // end for
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(exprs.push_back(vec_info.target_vec_column_))) { // add target vec column for ivf
+          LOG_WARN("failed to append target vec column to access exprs", K(ret));
+        }
+      }
     } else if (vec_info.is_spiv_scan()) {
       if (OB_FAIL(exprs.push_back(vec_info.target_vec_column_))) {
         LOG_WARN("failed to append target vec column to access exprs", K(ret));
@@ -3626,6 +3631,9 @@ int ObLogTableScan::get_vec_idx_calc_exprs(ObIArray<ObRawExpr *> &all_exprs) // 
       }
     } else {
       if (vec_info.is_ivf_vec_scan()) {
+        if (OB_FAIL(all_exprs.push_back(vec_info.target_vec_column_))) {
+          LOG_WARN("failed to append target vec column to access exprs", K(ret));
+        }
         for (int i = 0; i < vec_info.aux_table_column_.count() && OB_SUCC(ret); ++i) {
           if (OB_FAIL(all_exprs.push_back(vec_info.aux_table_column_.at(i)))) {
             LOG_WARN("failed to append aux column to access exprs", K(ret));
@@ -4014,7 +4022,6 @@ int ObLogTableScan::prepare_ivf_pq_access_exprs(const ObTableSchema *table_schem
                                                                       ivf_rowkey_cid_cid_column, ivf_rowkey_cid_pids_column))) {
     LOG_WARN("fail to prepare_ivf_aux_tbl_cid_and_pids_col_access_exprs", K(ret));
   }
-
   if (OB_FAIL(ret)) {
   } else if ( OB_ISNULL(ivf_pq_id_pid_column) || OB_ISNULL(ivf_pq_id_center_column)
             || OB_ISNULL(ivf_pq_code_cid_column) || OB_ISNULL(ivf_pq_code_pids_column)
@@ -4087,6 +4094,8 @@ int ObLogTableScan::prepare_ivf_common_tbl_access_exprs(const ObTableSchema *tab
   ObVecIndexInfo &vc_info = get_vector_index_info();
   ObColumnRefRawExpr *cid_column = nullptr;
   ObColumnRefRawExpr *center_column = nullptr;
+  ObColumnRefRawExpr *target_vec_column = nullptr;
+  ObSEArray<uint64_t , 1> col_ids;
   if (OB_ISNULL(table_schema) || OB_ISNULL(schema_guard) || OB_ISNULL(table_item)
      || OB_ISNULL(expr_factory) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4099,6 +4108,24 @@ int ObLogTableScan::prepare_ivf_common_tbl_access_exprs(const ObTableSchema *tab
   } else if (OB_FAIL(prepare_ivf_aux_tbl_cid_and_center_col_access_exprs(ivf_center_id_tbl, table_schema, expr_factory, table_item,
                                                                         cid_column, center_column, true, true))) {
     LOG_WARN("fail to prepare ivf cid vec tbl access exprs", K(ret));
+  } else {
+    // get data vec column
+    const ObColumnSchemaV2 *vec_column_schema = nullptr;
+    if (OB_FAIL(ObVectorIndexUtil::get_vector_index_column_id(*table_schema, *ivf_center_id_tbl, col_ids))) {
+      LOG_WARN("failed to get vector index column.", K(ret));
+    } else if (col_ids.count() != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get invalid vector col counts.", K(ret), K(col_ids.count()));
+    } else if (OB_ISNULL(vec_column_schema = table_schema->get_column_schema(col_ids.at(0)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get invalid vector col column.", K(ret), K(col_ids.at(0)));
+    } else if (OB_FAIL(build_column_expr(*expr_factory, *vec_column_schema, target_vec_column))) {
+      LOG_WARN("failed to build target vector column expr", K(ret));
+    } else if (OB_NOT_NULL(target_vec_column)) {
+      target_vec_column->set_ref_id(get_table_id(), vec_column_schema->get_column_id());
+      target_vec_column->set_column_attr(get_table_name(), vec_column_schema->get_column_name_str());
+      target_vec_column->set_database_name(table_item->database_name_);
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -4111,6 +4138,8 @@ int ObLogTableScan::prepare_ivf_common_tbl_access_exprs(const ObTableSchema *tab
     LOG_WARN("fail to push back delta vid column", K(ret));
   } else if (OB_FAIL(vc_info.aux_table_column_.push_back(center_column))) {
     LOG_WARN("fail to push back delta type column", K(ret));
+  } else {
+    vc_info.target_vec_column_ = target_vec_column;
   }
   return ret;
 }

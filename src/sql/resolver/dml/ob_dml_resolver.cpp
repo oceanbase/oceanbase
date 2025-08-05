@@ -19766,6 +19766,7 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
   ObIndexType index_type = INDEX_TYPE_IS_NOT;
   ObSEArray<ObIndexType, 2> index_type_array;
   bool index_readable = true;
+  bool param_filled = false;
   if (OB_ISNULL(table_schema) || OB_ISNULL(column_schema) || OB_ISNULL(raw_expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(table_schema), KP(column_schema), KP(raw_expr));
@@ -19775,7 +19776,8 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
   } else if (OB_UNLIKELY(T_FUN_SYS_VEC_IVF_CENTER_ID != raw_expr->get_expr_type())
           && OB_UNLIKELY(T_FUN_SYS_VEC_IVF_SQ8_DATA_VECTOR != raw_expr->get_expr_type())
           && OB_UNLIKELY(T_FUN_SYS_VEC_IVF_PQ_CENTER_IDS != raw_expr->get_expr_type())
-          && OB_UNLIKELY(T_FUN_SYS_VEC_IVF_PQ_CENTER_VECTOR != raw_expr->get_expr_type())) {
+          && OB_UNLIKELY(T_FUN_SYS_VEC_IVF_PQ_CENTER_VECTOR != raw_expr->get_expr_type()
+          && OB_UNLIKELY(T_FUN_SYS_VEC_IVF_FLAT_DATA_VECTOR != raw_expr->get_expr_type()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("not ivf center id/sq8 data vector/pq centroids expr", K(ret), "expr type", raw_expr->get_expr_type());
   } else if (OB_ISNULL(session_info_) || OB_ISNULL(params_.expr_factory_) || OB_ISNULL(stmt) || OB_ISNULL(schema_checker_)) {
@@ -19785,22 +19787,25 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
       schema_checker_->get_schema_guard(),
       *table_schema,
       column_id,
-      param))) {
-    LOG_WARN("failed to get vector index param", K(ret));
-  } else if (OB_FAIL(ObVectorIndexUtil::get_vector_index_type(
-      raw_expr,
       param,
-      index_type_array))) {
-    LOG_WARN("fail to get vector index type", K(ret), K(param));
-  } else if (index_type_array.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected index type", K(ret));
+      param_filled))) {
+    LOG_WARN("failed to get vector index param", K(ret));
+  } else if (param_filled) {
+    if (OB_FAIL(ObVectorIndexUtil::get_vector_index_type(raw_expr, param,
+                                                         index_type_array))) {
+      LOG_WARN("fail to get vector index type", K(ret), K(param));
+    } else if (index_type_array.empty() && T_FUN_SYS_VEC_IVF_FLAT_DATA_VECTOR != raw_expr->get_expr_type()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected index type", K(ret));
+    }
+  } else {
+    index_readable = false;
   }
 
   // add calc_table_id_expr & calc_tablet_id_expr
   ObSysFunRawExpr *expr = static_cast<ObSysFunRawExpr *>(raw_expr);
   if (OB_SUCC(ret)) {
-    int64_t new_capacity = expr->get_param_count() + 2 * index_type_array.count() + 2;
+    int64_t new_capacity = expr->get_param_count() + 2 * index_type_array.count() + ObIvfConstant::IVF_VEC_EXPR_PARAM_COUNT;
     if (OB_FAIL(expr->extend_param_exprs(new_capacity))) {
       LOG_WARN("failed to extend param exprs", K(ret));
     }
@@ -19900,11 +19905,17 @@ int ObDMLResolver::fill_ivf_vec_expr_param(
 
   if (OB_SUCC(ret) && T_FUN_SYS_VEC_IVF_PQ_CENTER_IDS == raw_expr->get_expr_type() && index_readable) {
     ObConstRawExpr *calc_pq_m_expr = nullptr;
+    ObConstRawExpr *calc_nbits_expr = nullptr;
     if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(
         *params_.expr_factory_, ObUInt64Type, static_cast<uint64_t>(param.m_), calc_pq_m_expr))) {
       LOG_WARN("failed to build const uint expr", K(ret), K(param));
     } else if (OB_FAIL(expr->add_param_expr(calc_pq_m_expr))) {
       LOG_WARN("fail to replace param expr", K(ret), KP(calc_pq_m_expr));
+    } else if (OB_FAIL(ObRawExprUtils::build_const_uint_expr(
+        *params_.expr_factory_, ObUInt64Type, static_cast<uint64_t>(param.nbits_), calc_nbits_expr))) {
+      LOG_WARN("failed to build const uint expr", K(ret), K(param));
+    } else if (OB_FAIL(expr->add_param_expr(calc_nbits_expr))) {
+      LOG_WARN("fail to replace param expr", K(ret), KP(calc_nbits_expr));
     }
   }
 
@@ -20803,6 +20814,9 @@ int ObDMLResolver::check_need_fill_ivf_vec_expr_param(const ObDMLStmt &stmt,
     } else if (column_schema.is_vec_ivf_data_vector_column()
             && T_FUN_SYS_VEC_IVF_SQ8_DATA_VECTOR == ref_expr->get_expr_type()) {
       need_fill = true;
+    } else if (column_schema.is_vec_ivf_data_vector_column() && T_FUN_SYS_VEC_IVF_FLAT_DATA_VECTOR == ref_expr->get_expr_type()) {
+      need_fill = true;
+      need_dist_algo_expr = true;
     } else if (column_schema.is_vec_ivf_center_vector_column()
             && T_FUN_SYS_VEC_IVF_PQ_CENTER_VECTOR == ref_expr->get_expr_type()) {
       need_fill = true;

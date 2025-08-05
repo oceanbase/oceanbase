@@ -51,5 +51,20 @@ int ObVectorIpDistance<uint8_t>::ip_distance_func(const uint8_t *a, const uint8_
   }
   return ret;
 }
+
+template <>
+void ObVectorIpDistance<float>::fvec_inner_products_ny(float* ip, const float* x, const float* y, size_t d, size_t ny)
+{
+  #if OB_USE_MULTITARGET_CODE
+  if (common::is_arch_supported(ObTargetArch::SSE42)) {
+    common::specific::sse42::fvec_inner_products_ny(ip, x, y, d, ny);
+  } else {
+    common::specific::normal::fvec_inner_products_ny(ip, x, y, d, ny);
+  }
+#else
+  common::specific::normal::fvec_inner_products_ny(ip, x, y, d, ny);
+#endif
+}
+
 }
 }

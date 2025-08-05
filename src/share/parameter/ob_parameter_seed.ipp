@@ -530,7 +530,7 @@ DEF_INT(_tx_share_memory_limit_percentage, OB_TENANT_PARAMETER, "0", "[0, 100)",
         "This primarily includes user data (MemTable), transaction data (TxData), etc. "
         "When it is set to the default value of 0, it represents dynamic adaptive behavior, "
         "which will be adjusted dynamically based on memstore_limit_percentage. The adjustment rule is: "
-        " _tx_share_memory_limit_percentage = memstore_limit_percentage + 10. "
+        " _tx_share_memory_limit_percentage = max(memstore_limit_percentage, ob_vector_memory_limit_percentage + 5) + 10. "
         "Range: [0, 100)",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_tx_data_memory_limit_percentage, OB_TENANT_PARAMETER, "20", "(0, 100)",
@@ -2531,7 +2531,8 @@ DEF_INT(_enable_kv_group_commit_ops, OB_TENANT_PARAMETER, "10000", "[0,)",
 
 DEF_INT(ob_vector_memory_limit_percentage, OB_TENANT_PARAMETER, "0",
         "[0,100)",
-        "Used to control the upper limit percentage of memory resources that the vector_index module can use. Range:[0, 100)",
+        "Used to control the upper limit percentage of memory resources that the vector_index module can use. Range:[0, 100)."
+        "The system will adjust automatically if ob_vector_memory_limit_percentage set to 0(by default).",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(enable_ps_parameterize, OB_TENANT_PARAMETER, "True",

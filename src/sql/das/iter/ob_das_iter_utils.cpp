@@ -73,10 +73,10 @@ int ObDASIterUtils::create_das_ivf_scan_iter(
   ObVectorIndexAlgorithmType type,
   common::ObIAllocator &alloc,
   ObDASIvfScanIterParam &param,
-  ObDASIvfScanIter *&result)
+  ObDASIvfBaseScanIter *&result)
 {
   int ret = OB_SUCCESS;
-  ObDASIvfScanIter *iter = nullptr;
+  ObDASIvfBaseScanIter *iter = nullptr;
   switch (type) {
     case ObVectorIndexAlgorithmType::VIAT_IVF_FLAT: {
       iter = OB_NEWx(ObDASIvfScanIter, &alloc);
@@ -3487,6 +3487,12 @@ int ObDASIterUtils::create_vec_ivf_lookup_tree(ObTableScanParam &scan_param,
     data_table_rtdef->scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
     const ObDASBaseCtDef *inv_idx_ctdef = vec_aux_ctdef->get_inv_idx_scan_ctdef();
     ObDASBaseRtDef *inv_idx_rtdef = vec_aux_rtdef->get_inv_idx_scan_rtdef();
+    // ivf brute scan need com aux tbl ctdef
+    const ObDASScanCtDef *com_aux_tbl_ctdef = vec_aux_ctdef->get_vec_aux_tbl_ctdef(vec_aux_ctdef->get_ivf_brute_tbl_idx(), ObTSCIRScanType::OB_VEC_COM_AUX_SCAN);
+    ObDASScanRtDef *com_aux_tbl_rtdef = vec_aux_rtdef->get_vec_aux_tbl_rtdef(vec_aux_ctdef->get_ivf_brute_tbl_idx());
+    if (com_aux_tbl_rtdef != nullptr) {
+      com_aux_tbl_rtdef->scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
+    }
 
     ObDASIter *inv_idx_iter = nullptr;
     ObDASScanIter *centroid_table_iter = nullptr;
@@ -3494,6 +3500,7 @@ int ObDASIterUtils::create_vec_ivf_lookup_tree(ObTableScanParam &scan_param,
     ObDASScanIter *rowkey_cid_table_iter = nullptr;
     ObDASScanIter *sq_meta_iter = nullptr;
     ObDASScanIter *pq_centroid_iter = nullptr;
+    ObDASScanIter *brute_iter = nullptr;
 
     bool is_primary_index = false;
     if (scan_param.table_param_->is_spatial_index()) {
@@ -3559,6 +3566,8 @@ int ObDASIterUtils::create_vec_ivf_lookup_tree(ObTableScanParam &scan_param,
                    vec_aux_rtdef->get_vec_aux_tbl_rtdef(vec_aux_ctdef->get_ivf_pq_id_tbl_idx()),
                    pq_centroid_iter))) {
       LOG_WARN("failed to create spacial table iter", K(ret));
+    } else if (OB_NOT_NULL(com_aux_tbl_ctdef) && OB_FAIL(create_das_scan_iter(alloc, com_aux_tbl_ctdef, com_aux_tbl_rtdef, brute_iter))) {
+      LOG_WARN("failed to create main table iter", K(ret));
     }
 
     bool is_pre_filter = vec_aux_ctdef->is_pre_filter();
@@ -3592,7 +3601,7 @@ int ObDASIterUtils::create_vec_ivf_lookup_tree(ObTableScanParam &scan_param,
       }
 
       if (OB_SUCC(ret)) {
-        ObDASIvfScanIter *ivf_scan_iter = nullptr;
+        ObDASIvfBaseScanIter *ivf_scan_iter = nullptr;
 
         ObDASIvfScanIterParam ivf_scan_param(vec_aux_ctdef->algorithm_type_);
         ivf_scan_param.max_size_ =
@@ -3613,6 +3622,7 @@ int ObDASIterUtils::create_vec_ivf_lookup_tree(ObTableScanParam &scan_param,
         ivf_scan_param.ls_id_ = scan_param.ls_id_;
         ivf_scan_param.tx_desc_ = trans_desc;
         ivf_scan_param.snapshot_ = snapshot;
+        ivf_scan_param.brute_iter_ = brute_iter;
         if (vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_SQ8) {
           ivf_scan_param.sq_meta_iter_ = sq_meta_iter;
         } else if (vec_aux_ctdef->algorithm_type_ == ObVectorIndexAlgorithmType::VIAT_IVF_PQ) {

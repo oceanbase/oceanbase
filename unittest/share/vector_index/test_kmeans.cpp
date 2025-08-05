@@ -426,7 +426,7 @@ int ObTestAnnSearchHelper::inner_ann_search(const int64_t idx, float *vector, co
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc norm vector", K(ret));
     } else if (FALSE_IT(MEMSET(norm_vector, 0, dim * sizeof(float)))) {
-    } else if (OB_FAIL(norm_info_->normalize_func_(dim, vector, norm_vector))) {
+    } else if (OB_FAIL(norm_info_->normalize_func_(dim, vector, norm_vector, nullptr))) {
       LOG_WARN("failed to normalize vector", K(ret));
     }
   }
@@ -535,77 +535,77 @@ int ObTestAnnSearchHelper::get_recall_value(const int64_t topk)
   return ret;
 }
 
-TEST_F(TestVectorIndexKmeans, DISABLED_fashion_mnist)
-{
-  KmeansDataSet dataset;
-  ASSERT_EQ(OB_SUCCESS, dataset.init(FASHION_MNIST_784));
-  // lists 60
-  ObSingleKmeansExecutor kmeans_ctx;
-  ASSERT_EQ(OB_SUCCESS, kmeans_ctx.init(
-    ObKmeansAlgoType::KAT_ELKAN,
-    OB_SERVER_TENANT_ID/*tenant_id*/,
-    60/*lists*/,
-    200/*sample_per_nlist*/,
-    784/*dim*/,
-    share::VIDA_L2/*unused*/));
-  // do sample
-  for (int64_t i = 0; i < dataset.dataset_train_.count(); ++i) {
-    ASSERT_EQ(OB_SUCCESS, kmeans_ctx.append_sample_vector(dataset.dataset_train_.at(i)));
-  }
-  // build
-  ASSERT_EQ(OB_SUCCESS, kmeans_ctx.build());
+// TEST_F(TestVectorIndexKmeans, DISABLED_fashion_mnist)
+// {
+//   KmeansDataSet dataset;
+//   ASSERT_EQ(OB_SUCCESS, dataset.init(FASHION_MNIST_784));
+//   // lists 60
+//   ObSingleKmeansExecutor kmeans_ctx;
+//   ASSERT_EQ(OB_SUCCESS, kmeans_ctx.init(
+//     ObKmeansAlgoType::KAT_ELKAN,
+//     OB_SERVER_TENANT_ID/*tenant_id*/,
+//     60/*lists*/,
+//     200/*sample_per_nlist*/,
+//     784/*dim*/,
+//     share::VIDA_L2/*unused*/));
+//   // do sample
+//   for (int64_t i = 0; i < dataset.dataset_train_.count(); ++i) {
+//     ASSERT_EQ(OB_SUCCESS, kmeans_ctx.append_sample_vector(dataset.dataset_train_.at(i)));
+//   }
+//   // build
+//   ASSERT_EQ(OB_SUCCESS, kmeans_ctx.build());
 
-  ObTestAnnSearchHelper helper;
-  ASSERT_EQ(OB_SUCCESS, helper.init(&dataset, &kmeans_ctx, 60/*lists*/));
-  // test top 10
-  // nprobe 1
-  ASSERT_EQ(OB_SUCCESS, helper.ann_search(10/*topk*/, 1/*nprobe*/));
-  // metrics
-  ASSERT_EQ(OB_SUCCESS, helper.get_recall_value(10/*topk*/));
-  // nprobe 5
-  ASSERT_EQ(OB_SUCCESS, helper.ann_search(10/*topk*/, 5/*nprobe*/));
-  // metrics
-  ASSERT_EQ(OB_SUCCESS, helper.get_recall_value(10/*topk*/));
-}
+//   ObTestAnnSearchHelper helper;
+//   ASSERT_EQ(OB_SUCCESS, helper.init(&dataset, &kmeans_ctx, 60/*lists*/));
+//   // test top 10
+//   // nprobe 1
+//   ASSERT_EQ(OB_SUCCESS, helper.ann_search(10/*topk*/, 1/*nprobe*/));
+//   // metrics
+//   ASSERT_EQ(OB_SUCCESS, helper.get_recall_value(10/*topk*/));
+//   // nprobe 5
+//   ASSERT_EQ(OB_SUCCESS, helper.ann_search(10/*topk*/, 5/*nprobe*/));
+//   // metrics
+//   ASSERT_EQ(OB_SUCCESS, helper.get_recall_value(10/*topk*/));
+// }
 
-TEST_F(TestVectorIndexKmeans, DISABLED_glove_25)
-{
-  KmeansDataSet dataset;
-  ASSERT_EQ(OB_SUCCESS, dataset.init(GLOVE_25));
-  share::ObVectorNormalizeInfo norm_info;
-  // lists 1000
-  ObSingleKmeansExecutor kmeans_ctx;
-  ASSERT_EQ(OB_SUCCESS, kmeans_ctx.init(
-    ObKmeansAlgoType::KAT_ELKAN,
-    OB_SERVER_TENANT_ID/*tenant_id*/,
-    1000/*lists*/,
-    50/*sample_per_nlist*/,
-    25/*dim*/,
-    share::VIDA_L2/*unused*/,
-    &norm_info));
-  // do sample
-  for (int64_t i = 0; i < dataset.dataset_train_.count(); ++i) {
-    ASSERT_EQ(OB_SUCCESS, kmeans_ctx.append_sample_vector(dataset.dataset_train_.at(i)));
-  }
-  // build
-  ASSERT_EQ(OB_SUCCESS, kmeans_ctx.build());
+// TEST_F(TestVectorIndexKmeans, DISABLED_glove_25)
+// {
+//   KmeansDataSet dataset;
+//   ASSERT_EQ(OB_SUCCESS, dataset.init(GLOVE_25));
+//   share::ObVectorNormalizeInfo norm_info;
+//   // lists 1000
+//   ObSingleKmeansExecutor kmeans_ctx;
+//   ASSERT_EQ(OB_SUCCESS, kmeans_ctx.init(
+//     ObKmeansAlgoType::KAT_ELKAN,
+//     OB_SERVER_TENANT_ID/*tenant_id*/,
+//     1000/*lists*/,
+//     50/*sample_per_nlist*/,
+//     25/*dim*/,
+//     share::VIDA_L2/*unused*/,
+//     &norm_info));
+//   // do sample
+//   for (int64_t i = 0; i < dataset.dataset_train_.count(); ++i) {
+//     ASSERT_EQ(OB_SUCCESS, kmeans_ctx.append_sample_vector(dataset.dataset_train_.at(i)));
+//   }
+//   // build
+//   ASSERT_EQ(OB_SUCCESS, kmeans_ctx.build());
 
-  ObTestAnnSearchHelper helper;
-  ASSERT_EQ(OB_SUCCESS, helper.init(&dataset, &kmeans_ctx, 1000/*lists*/, &norm_info));
-  // test top 10
-  // nprobe 1
-  ASSERT_EQ(OB_SUCCESS, helper.ann_search(10/*topk*/, 1/*nprobe*/));
-  // metrics
-  ASSERT_EQ(OB_SUCCESS, helper.get_recall_value(10/*topk*/));
-  // nprobe 5
-  ASSERT_EQ(OB_SUCCESS, helper.ann_search(10/*topk*/, 5/*nprobe*/));
-  // metrics
-  ASSERT_EQ(OB_SUCCESS, helper.get_recall_value(10/*topk*/));
-  // nprobe 10
-  ASSERT_EQ(OB_SUCCESS, helper.ann_search(10/*topk*/, 10/*nprobe*/));
-  // metrics
-  ASSERT_EQ(OB_SUCCESS, helper.get_recall_value(10/*topk*/));
-}
+//   ObTestAnnSearchHelper helper;
+//   ASSERT_EQ(OB_SUCCESS, helper.init(&dataset, &kmeans_ctx, 1000/*lists*/, &norm_info));
+//   // test top 10
+//   // nprobe 1
+//   ASSERT_EQ(OB_SUCCESS, helper.ann_search(10/*topk*/, 1/*nprobe*/));
+//   // metrics
+//   ASSERT_EQ(OB_SUCCESS, helper.get_recall_value(10/*topk*/));
+//   // nprobe 5
+//   ASSERT_EQ(OB_SUCCESS, helper.ann_search(10/*topk*/, 5/*nprobe*/));
+//   // metrics
+//   ASSERT_EQ(OB_SUCCESS, helper.get_recall_value(10/*topk*/));
+//   // nprobe 10
+//   ASSERT_EQ(OB_SUCCESS, helper.ann_search(10/*topk*/, 10/*nprobe*/));
+//   // metrics
+//   ASSERT_EQ(OB_SUCCESS, helper.get_recall_value(10/*topk*/));
+// }
 
 } // namespace common
 } // namespace oceanbase

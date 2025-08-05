@@ -13,56 +13,27 @@
 #ifndef OCEANBASE_OBSERVER_OB_VECTOR_INDEX_ASYNC_TASK_DEFINE_H_
 #define OCEANBASE_OBSERVER_OB_VECTOR_INDEX_ASYNC_TASK_DEFINE_H_
 
-#include "share/ob_ls_id.h"
-#include "share/scn.h"
-#include "share/rc/ob_tenant_base.h"
 #include "share/vector_index/ob_vector_index_async_task_util.h"
 #include "share/vector_index/ob_plugin_vector_index_adaptor.h"
+#include "share/vector_index/ob_vector_index_i_task_executor.h"
 
 namespace oceanbase
 {
 namespace share
 {
-
 // schedule vector tasks for a ls
 class ObPluginVectorIndexMgr;
-class ObVecAsyncTaskExector final
+class ObVecAsyncTaskExector final : public ObVecITaskExecutor
 {
 public:
   ObVecAsyncTaskExector()
-    : is_inited_(false),
-      tenant_id_(OB_INVALID_TENANT_ID),
-      vector_index_service_(nullptr),
-      ls_(nullptr)
+    : ObVecITaskExecutor()
   {}
   virtual ~ObVecAsyncTaskExector() {}
-  int init(const uint64_t tenant_id, ObLS *ls);
-  int resume_task();
-  int start_task();
-  int load_task();
-  int check_and_set_thread_pool();
-  int clear_old_task_ctx_if_need();
-
+  int load_task(uint64_t &task_trace_base_num) override;
+  int check_and_set_thread_pool() override;
 private:
-  int get_index_ls_mgr(ObPluginVectorIndexMgr *&index_ls_mgr);
-  int check_task_result(ObVecIndexAsyncTaskCtx *task_ctx);
-  int insert_new_task(ObVecIndexTaskCtxArray &task_status_array);
-  int update_status_and_ret_code(ObVecIndexAsyncTaskCtx *task_ctx);
-  int clear_task_ctx(ObVecIndexAsyncTaskOption &task_opt, ObVecIndexAsyncTaskCtx *task_ctx);
-  int clear_task_ctxs(ObVecIndexAsyncTaskOption &task_opt, const ObVecIndexTaskCtxArray &task_ctx_array);
-
-  bool check_operation_allow();
-
-private:
-  static const int64_t VEC_INDEX_TASK_MAX_RETRY_TIME = 3; // 200
-  static const int64_t INVALID_TG_ID = -1;
-  static const int64_t MAX_ASYNC_TASK_PROCESSING_COUNT = 128; // the thread pool max paralell processing cnt is 8
-
-  bool is_inited_;
-  uint64_t tenant_id_;
-  ObPluginVectorIndexService *vector_index_service_;
-  ObLS *ls_;
-  volatile int64_t async_task_ref_cnt_;
+  bool check_operation_allow() override;
 };
 
 } // namespace share

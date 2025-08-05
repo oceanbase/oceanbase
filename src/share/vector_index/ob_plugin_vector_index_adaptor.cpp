@@ -19,6 +19,7 @@
 #include "lib/roaringbitmap/ob_rb_memory_mgr.h"
 #include "share/ls/ob_ls_operator.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
+#include "share/allocator/ob_tenant_vector_allocator.h"
 
 namespace oceanbase
 {
@@ -795,8 +796,6 @@ int ObPluginVectorIndexAdaptor::init_mem_data(ObVectorIndexRecordType type, ObVe
   const char* const DATATYPE_FLOAT32 = "float32";
   if (OB_FAIL(get_hnsw_param(param))) {
     LOG_WARN("get hnsw param failed.", K(ret));
-  } else if (OB_FAIL(check_vsag_mem_used())) {
-    LOG_WARN("check vsag mem used failed.", K(ret));
   } else if (type == VIRT_INC) {
     TCWLockGuard lock_guard(incr_data_->mem_data_rwlock_);
     if (!incr_data_->is_inited()) {
@@ -923,8 +922,6 @@ int ObPluginVectorIndexAdaptor::init_snap_data_without_lock(ObVectorIndexAlgorit
   const char* const DATATYPE_FLOAT32 = "float32";
   if (OB_FAIL(get_hnsw_param(param))) {
     LOG_WARN("get hnsw param failed.", K(ret));
-  } else if (OB_FAIL(check_vsag_mem_used())) {
-    LOG_WARN("check vsag mem used failed.", K(ret));
   } else if (!snap_data_->is_inited()) {
     if (OB_FAIL(snap_data_->mem_ctx_->init(parent_mem_ctx_, all_vsag_use_mem_, tenant_id_))) {
       LOG_WARN("failed to init incr data mem ctx.", K(ret));
@@ -1238,7 +1235,6 @@ int ObPluginVectorIndexAdaptor::insert_rows(blocksstable::ObDatumRow *rows,
         LOG_WARN("failed to encode extra info buffer.", K(ret));
       }
     }
-    OZ(check_vsag_mem_used());
     if (OB_SUCC(ret) && incr_vid_count > 0) {
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
       TCWLockGuard lock_guard(incr_data_->mem_data_rwlock_);
@@ -1344,8 +1340,6 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
       } else if (OB_ISNULL(vids)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid data.", K(ret));
-      } else if (OB_FAIL(check_vsag_mem_used())) {
-        LOG_WARN("check vsag mem used failed.", K(ret));
       } else {
         char* extra_info_buf = nullptr;
         if (OB_NOT_NULL(extra_objs) && extra_column_count > 0 && param->extra_info_actual_size_ > 0 &&
@@ -1368,8 +1362,6 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
       } else if (OB_ISNULL(vids)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid data.", K(ret));
-      } else if (OB_FAIL(check_vsag_mem_used())) {
-        LOG_WARN("check vsag mem used failed.", K(ret));
       } else {
         char *extra_info_buf = nullptr;
         if (OB_NOT_NULL(extra_objs) && extra_column_count > 0 && param->extra_info_actual_size_ > 0 &&
@@ -1650,8 +1642,6 @@ int ObPluginVectorIndexAdaptor::check_snap_hnswsq_index()
       LOG_WARN("failed to init incr data mem ctx.", K(ret));
     } else if (OB_ISNULL(vid_array) || OB_ISNULL(vec_array)) {
       // do nothing :maybe null data
-    } else if (OB_FAIL(check_vsag_mem_used())) {
-      LOG_WARN("check vsag mem used failed.", K(ret));
     } else {
       ObVectorIndexAlgorithmType build_type = param->extra_info_actual_size_ > 0 ?  VIAT_HGRAPH : VIAT_HNSW;
       int64_t build_metric = param->type_ == VIAT_HNSW_SQ ? ObVectorIndexUtil::get_hnswsq_type_metric(param->m_) : param->m_;
@@ -1795,8 +1785,6 @@ int ObPluginVectorIndexAdaptor::write_into_delta_mem(ObVectorQueryAdaptorResultC
   } else if (!is_mem_data_init_atomic(VIRT_INC)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("write into delta mem but incr memdata uninit.", K(ret));
-  } else if (OB_FAIL(check_vsag_mem_used())) {
-    LOG_WARN("check vsag mem used failed.", K(ret));
   } else {
     TCWLockGuard lock_guard(incr_data_->mem_data_rwlock_);
     if (check_if_complete_delta(ctx->bitmaps_->insert_bitmap_, count)) {
@@ -2519,9 +2507,7 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
   int64_t query_ef_search = query_cond->ef_search_ > ObPluginVectorIndexAdaptor::VSAG_MAX_EF_SEARCH ?
                             ObPluginVectorIndexAdaptor::VSAG_MAX_EF_SEARCH : query_cond->ef_search_;
 
-  if (OB_FAIL(check_vsag_mem_used())) {
-    LOG_WARN("failed to check vsag mem used.", K(ret));
-  } else if (OB_FAIL(merge_and_generate_bitmap(ctx, ifilter, dfilter))) {
+  if (OB_FAIL(merge_and_generate_bitmap(ctx, ifilter, dfilter))) {
     LOG_WARN("failed to merge and generate bitmap.", K(ret));
   } else if (OB_FAIL(get_extra_info_actual_size(extra_info_actual_size))) {
     LOG_WARN("failed to get extra info actual size.", K(ret));
@@ -3552,36 +3538,6 @@ void ObPluginVectorIndexAdaptor::output_bitmap(roaring::api::roaring64_bitmap_t 
   tmp_allocator.reset();
 }
 
-int ObPluginVectorIndexAdaptor::check_vsag_mem_used()
-{
-  INIT_SUCC(ret);
-  int64_t mem_size = 0;
-  // There is no need to worry about the thread safety of mem_check_cnt_ here,
-  // because mem_check_cnt_ is used to roughly determine
-  // whether to perform memory verification and does not require accurate counting.
-  mem_check_cnt_++;
-  if (is_mem_limited_ || mem_check_cnt_ > 10) {
-    mem_check_cnt_ = 0;
-    ObRbMemMgr *mem_mgr = nullptr;
-    int64_t bitmap_mem_used = 0;
-    if (OB_ISNULL(mem_mgr = MTL(ObRbMemMgr *))) {
-      // do nothing
-    } else {
-      bitmap_mem_used = mem_mgr->get_vec_idx_used();
-    }
-    if (OB_FAIL(ObPluginVectorIndexHelper::get_vector_memory_limit_size(tenant_id_, mem_size))) {
-      LOG_WARN("failed to get vector mem limit size.", K(ret), K(tenant_id_));
-    } else if (ATOMIC_LOAD(all_vsag_use_mem_) + bitmap_mem_used > mem_size) {
-      is_mem_limited_ = true;
-      ret = OB_ERR_VSAG_MEM_LIMIT_EXCEEDED;
-      LOG_USER_ERROR(OB_ERR_VSAG_MEM_LIMIT_EXCEEDED, int(mem_size>>20));
-      LOG_WARN("Memory usage exceeds user limit.", K(ret), K(mem_size), K(ATOMIC_LOAD(all_vsag_use_mem_)), K(bitmap_mem_used));
-    }
-  }
-
-  return ret;
-}
-
 int ObPluginVectorIndexAdaptor::get_incr_vsag_mem_used()
 {
   int64_t size = 0;
@@ -3676,86 +3632,6 @@ int ObPluginVectorIndexAdaptor::get_snap_index_row_cnt(int64_t &count)
   } else {
     LOG_DEBUG("succ to get snap index row cnt", K(ret), K(count));
   }
-  return ret;
-}
-
-void *ObVsagMemContext::Allocate(size_t size)
-{
-  void *ret_ptr = nullptr;
-
-  if (size != 0) {
-    int64_t actual_size = MEM_PTR_HEAD_SIZE + size;
-
-    void *ptr = mem_context_->get_malloc_allocator().alloc(actual_size);
-    if (OB_NOT_NULL(ptr)) {
-      ATOMIC_AAF(all_vsag_use_mem_, actual_size);
-
-      *(int64_t*)ptr = actual_size;
-      ret_ptr = (char*)ptr + MEM_PTR_HEAD_SIZE;
-    }
-  }
-
-  return ret_ptr;
-}
-
-void ObVsagMemContext::Deallocate(void* p)
-{
-  if (OB_NOT_NULL(p)) {
-    void *size_ptr = (char*)p - MEM_PTR_HEAD_SIZE;
-    int64_t size = *(int64_t *)size_ptr;
-
-    ATOMIC_SAF(all_vsag_use_mem_, size);
-    mem_context_->get_malloc_allocator().free((char*)p - MEM_PTR_HEAD_SIZE);
-    p = nullptr;
-  }
-}
-
-void *ObVsagMemContext::Reallocate(void* p, size_t size)
-{
-  void *new_ptr = nullptr;
-  if (size == 0) {
-    if (OB_NOT_NULL(p)) {
-      Deallocate(p);
-      p = nullptr;
-    }
-  } else if (OB_ISNULL(p)) {
-    new_ptr = Allocate(size);
-  } else {
-    void *size_ptr = (char*)p - MEM_PTR_HEAD_SIZE;
-    int64_t old_size = *(int64_t *)size_ptr - MEM_PTR_HEAD_SIZE;
-    if (old_size >= size) {
-      new_ptr = p;
-    } else {
-      new_ptr = Allocate(size);
-      if (OB_ISNULL(new_ptr) || OB_ISNULL(p)) {
-      } else {
-        MEMCPY(new_ptr, p, old_size);
-        Deallocate(p);
-        p = nullptr;
-      }
-    }
-  }
-  return new_ptr;
-}
-
-int ObVsagMemContext::init(lib::MemoryContext &parent_mem_context,
-                           uint64_t *all_vsag_use_mem,
-                           uint64_t tenant_id)
-{
-  INIT_SUCC(ret);
-  lib::ContextParam param;
-  ObMemAttr attr(tenant_id, "VIndexVsagADP");
-  SET_IGNORE_MEM_VERSION(attr);
-  param.set_mem_attr(attr)
-    .set_page_size(OB_MALLOC_MIDDLE_BLOCK_SIZE)
-    .set_parallel(8)
-    .set_properties(lib::ALLOC_THREAD_SAFE | lib::RETURN_MALLOC_DEFAULT);
-  if (OB_FAIL(parent_mem_context->CREATE_CONTEXT(mem_context_, param))) {
-    LOG_WARN("create memory entity failed", K(ret));
-  } else {
-    all_vsag_use_mem_ = all_vsag_use_mem;
-  }
-
   return ret;
 }
 
