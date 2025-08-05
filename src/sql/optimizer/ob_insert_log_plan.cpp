@@ -165,6 +165,14 @@ int ObInsertLogPlan::generate_normal_raw_plan()
       }
     }
 
+    if (OB_SUCC(ret) && insert_stmt->is_returning() && insert_stmt->get_returning_aggr_item_size() <= 0) {
+      if (OB_FAIL(candi_allocate_material_for_dml())) {
+        LOG_WARN("failed to allocate material operator", K(ret));
+      } else {
+        LOG_TRACE("succeed to allocate material op for dml returning", K(candidates_.candidate_plans_.count()));
+      }
+    }
+
     if (OB_SUCC(ret)) {
       if (OB_FAIL(candi_allocate_root_exchange())) {
         LOG_WARN("failed to allocate root exchange", K(ret));

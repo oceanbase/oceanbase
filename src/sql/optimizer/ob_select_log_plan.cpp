@@ -4663,7 +4663,7 @@ int ObSelectLogPlan::allocate_plan_top()
       // FOR UPDATE SKIP LOCKED does not need SQL-level retry, hence we don't need a MATERIAL to
       // block the output.
       if (optimizer_context_.has_no_skip_for_update()
-          && OB_FAIL(candi_allocate_for_update_material())) {
+          && OB_FAIL(candi_allocate_material_for_dml())) {
         LOG_WARN("failed to allocate material", K(ret));
         //allocate temp-table transformation if needed.
       } else if (!get_optimizer_context().get_temp_table_infos().empty() &&
