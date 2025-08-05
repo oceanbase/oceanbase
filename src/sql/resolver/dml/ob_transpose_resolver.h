@@ -127,7 +127,9 @@ struct UnpivotDef : TransposeDef
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> orig_columns_;
   common::ObSEArray<ObString, 4, common::ModulePageAllocator, true> orig_column_names_;
   common::ObSEArray<ObString, 4, common::ModulePageAllocator, true> label_columns_;
+  common::ObSEArray<ObRawExprResType, 4, common::ModulePageAllocator, true> label_col_types_;
   common::ObSEArray<ObString, 4, common::ModulePageAllocator, true> value_columns_;
+  common::ObSEArray<ObRawExprResType, 4, common::ModulePageAllocator, true> value_col_types_;
   common::ObSEArray<InPair, 4, common::ModulePageAllocator, true> in_pairs_;
 };
 

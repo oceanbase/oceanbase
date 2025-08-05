@@ -3267,14 +3267,9 @@ int ObRawExprDeduceType::visit(ObMatchFunRawExpr &expr)
 
 int ObRawExprDeduceType::visit(ObUnpivotRawExpr &expr)
 {
+  //result type has been set in resolver
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(expr.get_param_count() <= 0) ||
-      OB_ISNULL(expr.get_param_expr(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected expr", K(expr));
-  } else {
-    expr.set_result_type(expr.get_param_expr(0)->get_result_type());
-  }
+  UNUSED(expr);
   return ret;
 }
 
