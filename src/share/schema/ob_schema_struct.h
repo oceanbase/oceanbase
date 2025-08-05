@@ -1520,6 +1520,7 @@ enum class ObObjectType {
   CONTEXT         = 16,
   CATALOG         = 17,
   LOCATION        = 18,
+  AI_MODEL        = 19,
   MAX_TYPE,
 };
 struct ObSchemaObjVersion

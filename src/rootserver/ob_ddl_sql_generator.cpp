@@ -132,6 +132,14 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
       name = "USE CATALOG"; break;
     case OB_PRIV_CREATE_LOCATION:
       name = "CREATE LOCATION"; break;
+    case OB_PRIV_CREATE_AI_MODEL:
+      name = "CREATE AI MODEL"; break;
+    case OB_PRIV_ALTER_AI_MODEL:
+      name = "ALTER AI MODEL"; break;
+    case OB_PRIV_DROP_AI_MODEL:
+      name = "DROP AI MODEL"; break;
+    case OB_PRIV_ACCESS_AI_MODEL:
+      name = "ACCESS AI MODEL"; break;
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid priv", K(ret), K(priv));
