@@ -277,7 +277,8 @@ int ObTmpFileWriteCache::swap_()
 
   // wake up all jobs if IO error occurs
   int ret_code = get_flush_ret_code_();
-  if (OB_SERVER_OUTOF_DISK_SPACE == ret_code) {
+  if (OB_SERVER_OUTOF_DISK_SPACE == ret_code ||
+      OB_TMP_FILE_EXCEED_DISK_QUOTA == ret_code) {
     while (OB_SUCC(ret) && OB_SUCCESS != ret_code && !swap_queue_.is_empty()) {
       ObTmpFileSwapJob *swap_job = nullptr;
       if (OB_FAIL(pop_swap_job_(swap_job))) {
