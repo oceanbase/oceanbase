@@ -1682,6 +1682,7 @@ int ObUpgradeExecutor::construct_tenant_ids_(
     LOG_WARN("fail to get sys tenant schema guard", KR(ret));
   } else if (src_tenant_ids.count() > 0) {
     for (int64_t i = 0; OB_SUCC(ret) && i < src_tenant_ids.count(); i++) {
+      WorkerTimeoutGuard worker_timeout_guard(ObTimeUtility::current_time() + GCONF.internal_sql_execute_timeout);
       const uint64_t tenant_id = src_tenant_ids.at(i);
       const ObSimpleTenantSchema *tenant_schema = nullptr;
       if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
@@ -1709,6 +1710,7 @@ int ObUpgradeExecutor::construct_tenant_ids_(
       LOG_WARN("fail to get tenant_ids", KR(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
+      WorkerTimeoutGuard worker_timeout_guard(ObTimeUtility::current_time() + GCONF.internal_sql_execute_timeout);
       const uint64_t tenant_id = tenant_ids.at(i);
       const ObSimpleTenantSchema *tenant_schema = nullptr;
       if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {

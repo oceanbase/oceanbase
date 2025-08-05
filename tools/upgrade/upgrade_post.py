@@ -17,6 +17,7 @@
 #import mysql.connector
 #from mysql.connector import errorcode
 #from my_error import MyError
+#from my_utils import SetSessionTimeout
 #import logging
 #
 #class SqlItem:
@@ -135,11 +136,6 @@
 #  cur.execute(sql)
 #  wait_parameter_sync(cur, False, parameter, value, timeout)
 #
-#def set_session_timeout(cur, seconds):
-#  sql = "set @@session.ob_query_timeout = {0}".format(seconds * 1000 * 1000)
-#  logging.info(sql)
-#  cur.execute(sql)
-#
 #def set_default_timeout_by_tenant(cur, timeout, timeout_per_tenant, min_timeout):
 #  if timeout > 0:
 #    logging.info("use timeout from opt, timeout(s):{0}".format(timeout))
@@ -167,14 +163,11 @@
 #
 #  query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
 #
-#  set_session_timeout(cur, query_timeout)
-#
-#  for tenants in tenants_list:
-#    sql = """alter system set {0} = '{1}' tenant = '{2}'""".format(parameter, value, tenants)
-#    logging.info(sql)
-#    cur.execute(sql)
-#
-#  set_session_timeout(cur, 10)
+#  with SetSessionTimeout(cur, query_timeout):
+#    for tenants in tenants_list:
+#      sql = """alter system set {0} = '{1}' tenant = '{2}'""".format(parameter, value, tenants)
+#      logging.info(sql)
+#      cur.execute(sql)
 #
 #  wait_parameter_sync(cur, True, parameter, value, timeout, only_sys_tenant)
 #
@@ -276,29 +269,26 @@
 #    wait_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
 #    query_timeout = set_default_timeout_by_tenant(cur, timeout, 2, 60)
 #
-#  set_session_timeout(cur, query_timeout)
+#  with SetSessionTimeout(cur, query_timeout):
+#    times = wait_timeout / 5
+#    while times >= 0:
+#      logging.info(sql)
+#      cur.execute(sql)
+#      result = cur.fetchall()
+#      if len(result) != 1 or len(result[0]) != 1:
+#        logging.exception('result cnt not match')
+#        raise MyError('result cnt not match')
+#      elif result[0][0] == 0:
+#        logging.info("""{0} is sync, value is {1}""".format(key, value))
+#        break
+#      else:
+#        logging.info("""{0} is not sync, value should be {1}""".format(key, value))
 #
-#  times = wait_timeout / 5
-#  while times >= 0:
-#    logging.info(sql)
-#    cur.execute(sql)
-#    result = cur.fetchall()
-#    if len(result) != 1 or len(result[0]) != 1:
-#      logging.exception('result cnt not match')
-#      raise MyError('result cnt not match')
-#    elif result[0][0] == 0:
-#      logging.info("""{0} is sync, value is {1}""".format(key, value))
-#      break
-#    else:
-#      logging.info("""{0} is not sync, value should be {1}""".format(key, value))
-#
-#    times -= 1
-#    if times == -1:
-#      logging.exception("""check {0}:{1} sync timeout""".format(key, value))
-#      raise MyError("""check {0}:{1} sync timeout""".format(key, value))
-#    time.sleep(5)
-#
-#  set_session_timeout(cur, 10)
+#      times -= 1
+#      if times == -1:
+#        logging.exception("""check {0}:{1} sync timeout""".format(key, value))
+#        raise MyError("""check {0}:{1} sync timeout""".format(key, value))
+#      time.sleep(5)
 #
 #def do_begin_upgrade(cur, timeout):
 #
@@ -374,15 +364,12 @@
 #
 #  query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
 #
-#  set_session_timeout(cur, query_timeout)
-#
-#  for tenants in tenants_list:
-#    action_sql = "alter system suspend merge tenant = {0}".format(tenants)
-#    rollback_sql = "alter system resume merge tenant = {0}".format(tenants)
-#    logging.info(action_sql)
-#    cur.execute(action_sql)
-#
-#  set_session_timeout(cur, 10)
+#  with SetSessionTimeout(cur, query_timeout):
+#    for tenants in tenants_list:
+#      action_sql = "alter system suspend merge tenant = {0}".format(tenants)
+#      rollback_sql = "alter system resume merge tenant = {0}".format(tenants)
+#      logging.info(action_sql)
+#      cur.execute(action_sql)
 #
 #def do_resume_merge(cur, timeout):
 #  tenants_list = []
@@ -393,15 +380,12 @@
 #
 #  query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
 #
-#  set_session_timeout(cur, query_timeout)
-#
-#  for tenants in tenants_list:
-#    action_sql = "alter system resume merge tenant = {0}".format(tenants)
-#    rollback_sql = "alter system suspend merge tenant = {0}".format(tenants)
-#    logging.info(action_sql)
-#    cur.execute(action_sql)
-#
-#  set_session_timeout(cur, 10)
+#  with SetSessionTimeout(cur, query_timeout):
+#    for tenants in tenants_list:
+#      action_sql = "alter system resume merge tenant = {0}".format(tenants)
+#      rollback_sql = "alter system suspend merge tenant = {0}".format(tenants)
+#      logging.info(action_sql)
+#      cur.execute(action_sql)
 #
 #class Cursor:
 #  __cursor = None
@@ -605,6 +589,7 @@
 #import sys
 #import mysql.connector
 #from mysql.connector import errorcode
+#from my_utils import set_session_timeout_for_upgrade
 #import logging
 #import json
 #import config
@@ -666,6 +651,8 @@
 #    cur = conn.cursor(buffered=True)
 #    try:
 #      query_cur = actions.QueryCursor(cur)
+#      if timeout != 0:
+#        set_session_timeout_for_upgrade(query_cur, timeout)
 #      actions.check_server_version_by_cluster(cur)
 #      conn.commit()
 #
@@ -777,7 +764,7 @@
 #from mysql.connector import errorcode
 #import logging
 #import re
-#
+#from my_utils import set_session_timeout_for_upgrade
 #import config
 #import opts
 #import run_modules
@@ -835,6 +822,8 @@
 #    cur = conn.cursor(buffered=True)
 #    try:
 #      query_cur = actions.QueryCursor(cur)
+#      if timeout != 0:
+#        set_session_timeout_for_upgrade(cur, timeout)
 #      actions.check_server_version_by_cluster(cur)
 #
 #      if run_modules.MODULE_BEGIN_UPGRADE in my_module_set:
@@ -944,7 +933,6 @@
 #import mysql.connector
 #from mysql.connector import errorcode
 #from my_error import MyError
-#from actions import QueryCursor
 #import logging
 #
 #def results_to_str(desc, results):
@@ -985,6 +973,50 @@
 #  result_str = results_to_str(desc, results)
 #  logging.info('dump query results, sql: %s, results:\n%s', sql, result_str)
 #
+#upgrade_session_timeout_set = False
+#
+## set_session_timeout_for_upgrade这个函数只能被调用一次，设置当前升级流程里所有SQL的timeout，单个步骤需要改timeout请使用SetSessionTimeout
+## 用法：
+## with SetSessionTimeout(cur, timeout):
+##   # some code here
+##   pass
+#def set_session_timeout_for_upgrade(cur, time):
+#  global upgrade_session_timeout_set
+#  if upgrade_session_timeout_set:
+#    raise MyError('error in upgrade script, set_session_timeout_for_upgrade should only be called once')
+#  upgrade_session_timeout_set = True
+#  sql = "set @@session.ob_query_timeout = {0}".format(time)
+#  logging.info(sql)
+#  cur.execute(sql)
+#
+#class SetSessionTimeout:
+#  def set_session_timeout(self, cur, time):
+#    sql = "set @@session.ob_query_timeout = {0}".format(time)
+#    logging.info(sql)
+#    cur.execute(sql)
+#
+#  def get_session_timeout(self, cur):
+#    sql = "select @@session.ob_query_timeout"
+#    cur.execute(sql)
+#    results = cur.fetchall()
+#    if len(results) != 1 or len(results[0]) != 1:
+#      logging.exception('results unexpected')
+#    else:
+#      return int(results[0][0])
+#
+#  def __init__(self, cur, seconds):
+#    self.cur = cur
+#    self.query_timeout_before = self.get_session_timeout(cur)
+#    self.timeout_overall = seconds * 1000 * 1000
+#
+#  # 类似于C++里的RAII，会在with语句入口处调用__enter__，出口处调用__exit__
+#  def __enter__(self):
+#    if self.timeout_overall != 0:
+#      self.set_session_timeout(self.cur, self.timeout_overall)
+#
+#  def __exit__(self, exc_type, exc_val, exc_tb):
+#    if self.timeout_overall != 0:
+#      self.set_session_timeout(self.cur, self.query_timeout_before)
 ####====XXXX======######==== I am a splitter ====######======XXXX====####
 #filename:opts.py
 ##!/usr/bin/env python
@@ -1402,6 +1434,7 @@
 #from actions import Cursor
 #from actions import DMLCursor
 #from actions import QueryCursor
+#from my_utils import SetSessionTimeout
 #import mysql.connector
 #from mysql.connector import errorcode
 #import actions
@@ -1449,13 +1482,10 @@
 #
 #  query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 10, 600)
 #
-#  actions.set_session_timeout(cur, query_timeout)
-#
-#  sql = "alter system run job 'root_inspection'"
-#  logging.info(sql)
-#  cur.execute(sql)
-#
-#  actions.set_session_timeout(cur, 10)
+#  with SetSessionTimeout(cur, query_timeout):
+#    sql = "alter system run job 'root_inspection'"
+#    logging.info(sql)
+#    cur.execute(sql)
 #
 #def upgrade_across_version(cur):
 #  current_data_version = actions.get_current_data_version()
@@ -1481,7 +1511,7 @@
 #      raise MyError("tenant_ids count is unexpected")
 #    tenant_count = len(tenant_ids)
 #
-#    sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version', 'upgrade_begin_data_version') and column_value = {0}".format(int_current_data_version)
+#    sql = "select count(*) from __all_virtual_core_table where table_name = '__all_global_stat' and column_name in ('target_data_version', 'current_data_version', 'upgrade_begin_data_version') and column_value = {0}".format(int_current_data_version)
 #    results = query(cur, sql)
 #    if len(results) != 1 or len(results[0]) != 1:
 #      logging.warn('result cnt not match')
@@ -3191,6 +3221,7 @@
 #import logging
 #import time
 #import actions
+#from my_utils import SetSessionTimeout
 #
 ##### START
 ## 1 检查版本号
@@ -3225,32 +3256,30 @@
 #  current_data_version = actions.get_current_data_version()
 #
 #  query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 2, 60)
-#  actions.set_session_timeout(cur, query_timeout)
+#  with SetSessionTimeout(cur, query_timeout):
 #
-#  sql = """select count(*) as cnt from oceanbase.__all_virtual_tenant_parameter_info where name = 'compatible' and value = '{0}' and tenant_id in ({1})""".format(current_data_version, tenant_ids_str)
+#    sql = """select count(*) as cnt from oceanbase.__all_virtual_tenant_parameter_info where name = 'compatible' and value = '{0}' and tenant_id in ({1})""".format(current_data_version, tenant_ids_str)
 #
-#  wait_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 10, 60)
-#  times = wait_timeout / 5
-#  while times >= 0:
-#    logging.info(sql)
-#    cur.execute(sql)
-#    result = cur.fetchall()
-#    if len(result) != 1 or len(result[0]) != 1:
-#      logging.exception('result cnt not match')
-#      raise MyError('result cnt not match')
-#    elif result[0][0] == parameter_count:
-#      logging.info("""'compatible' is sync, value is {0}""".format(current_data_version))
-#      break
-#    else:
-#      logging.info("""'compatible' is not sync, value should be {0}, expected_cnt should be {1}, current_cnt is {2}""".format(current_data_version, parameter_count, result[0][0]))
+#    wait_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 10, 60)
+#    times = wait_timeout / 5
+#    while times >= 0:
+#      logging.info(sql)
+#      cur.execute(sql)
+#      result = cur.fetchall()
+#      if len(result) != 1 or len(result[0]) != 1:
+#        logging.exception('result cnt not match')
+#        raise MyError('result cnt not match')
+#      elif result[0][0] == parameter_count:
+#        logging.info("""'compatible' is sync, value is {0}""".format(current_data_version))
+#        break
+#      else:
+#        logging.info("""'compatible' is not sync, value should be {0}, expected_cnt should be {1}, current_cnt is {2}""".format(current_data_version, parameter_count, result[0][0]))
 #
-#    times -= 1
-#    if times == -1:
-#      logging.exception("""check compatible:{0} sync timeout""".format(current_data_version))
-#      raise MyError("""check compatible:{0} sync timeout""".format(current_data_version))
-#    time.sleep(5)
-#
-#  actions.set_session_timeout(cur, 10)
+#      times -= 1
+#      if times == -1:
+#        logging.exception("""check compatible:{0} sync timeout""".format(current_data_version))
+#        raise MyError("""check compatible:{0} sync timeout""".format(current_data_version))
+#      time.sleep(5)
 #
 #  # check target_data_version/current_data_version/upgrade_begin_data_version from __all_core_table
 #  int_current_data_version = actions.get_version(current_data_version)
