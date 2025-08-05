@@ -15232,7 +15232,9 @@ int ObLogPlan::check_aggr_param_match_pushdown_rule(const uint64_t table_id,
   ObSQLSessionInfo *session_info = nullptr;
   ObColumnRefRawExpr* col_expr = nullptr;
   ObSEArray<ObRawExpr*, 1> column_exprs;
-  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(first_param, column_exprs,
+  if (first_param->has_flag(ObExprInfoFlag::CNT_PL_UDF)) {
+    can_push = false;
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(first_param, column_exprs,
                       false/*need_pseudo_column*/, false/*can_extract_pseudo_column_ref*/))) {
     LOG_WARN("fail to extract column expr", K(ret));
   } else if (column_exprs.count() != 1) {
