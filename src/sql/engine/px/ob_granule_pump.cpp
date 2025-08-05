@@ -1103,6 +1103,7 @@ int ObRandomGranuleSplitter::split_granule(ObGranulePumpArgs &args,
       uint64_t op_id = tsc->get_id();
       ObGITaskSet total_task_set;
       ObGITaskArray &taskset_array = gi_task_array_result.at(idx + task_idx).taskset_array_;
+      taskset_array.reuse();
       partition_granule = is_virtual_table(scan_key_id) || partition_granule;
       if (OB_FAIL(split_gi_task(args,
                                 tsc,
