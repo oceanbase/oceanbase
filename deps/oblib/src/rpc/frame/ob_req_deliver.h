@@ -16,6 +16,7 @@
 #include "rpc/frame/ob_req_queue_thread.h"
 #include "rpc/frame/ob_req_qhandler.h"
 #include "rpc/frame/ob_req_translator.h"
+#include "lib/ob_errno.h"
 
 namespace oceanbase
 {
@@ -37,6 +38,14 @@ public:
   // deliver a ObPacket to a responding queue
   virtual int deliver(rpc::ObRequest &req) = 0;
   virtual void stop() = 0;
+  virtual int lock_tenant_list()
+  {
+    return OB_SUCCESS;
+  }
+  virtual int unlock_tenant_list()
+  {
+    return OB_SUCCESS;
+  }
 
 }; // end of class ObPktDeliver
 

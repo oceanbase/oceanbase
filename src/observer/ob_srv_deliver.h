@@ -126,6 +126,8 @@ public:
   int create_queue_thread(int tg_id, const char *thread_name, QueueThread *&qthread);
   int get_mysql_login_thread_count_to_set(int cfg_cnt);
   int set_mysql_login_thread_count(int cnt);
+  virtual int lock_tenant_list() override;
+  virtual int unlock_tenant_list() override;
 private:
   int init_queue_threads();
 
