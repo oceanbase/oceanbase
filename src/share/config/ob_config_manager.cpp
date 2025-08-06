@@ -519,13 +519,8 @@ int ObConfigManager::got_version(int64_t version, const bool remove_repeat/* = f
       // 如果决策了本次要调度一个新 task，那么现将队列中排队的所有 task 全部移除
       // 有一点可以确保，到达这个点时无论移除的 task 是什么，下一个要添加的 task
       // 的 version 一定是最新的。
-      bool task_exist = false;
-      int tmp_ret = TG_TASK_EXIST(lib::TGDefIDs::CONFIG_MGR, update_task_, task_exist);
-      if (task_exist) {
-        TG_CANCEL(lib::TGDefIDs::CONFIG_MGR, update_task_);
-        LOG_INFO("Cancel pending update task",
-                 K(tmp_ret), K_(current_version), K(version));
-      }
+      TG_CANCEL(lib::TGDefIDs::CONFIG_MGR, update_task_);
+      LOG_INFO("May cancel pending update task", K_(current_version), K(version));
     }
 
     if (schedule) {
