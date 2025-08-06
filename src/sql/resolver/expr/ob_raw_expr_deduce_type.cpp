@@ -4189,7 +4189,8 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
       cast_dst_type.set_scale(SCALE_UNKNOWN_YET);
       cast_dst_type.set_precision(PRECISION_UNKNOWN_YET);
     }
-  } else if (lib::is_oracle_mode() && dst_type.get_calc_meta().is_number() && expr.is_const_expr()) {
+  } else if (lib::is_oracle_mode() && dst_type.get_calc_meta().is_number() &&
+      (expr.is_const_expr() || dst_type.get_calc_scale() == SCALE_UNKNOWN_YET)) {
     cast_dst_type.set_precision(PRECISION_UNKNOWN_YET);
     cast_dst_type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
   }
