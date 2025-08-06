@@ -1956,7 +1956,7 @@ int ObTenantMetaMemMgr::check_tablet_has_sstable_need_upload(const SCN &ls_ss_ch
     if (OB_ISNULL(tablet_ptr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet ptr is NULL", K(ret), K(ptr_handle));
-    } else if (tablet_ptr->is_empty_shell()) {
+    } else if (tablet_ptr->is_empty_shell() || tablet_ptr->get_addr().is_none()) {
       need_upload = false;
     } else {
       const share::SCN &scn = tablet_ptr->get_tablet_max_checkpoint_scn();
