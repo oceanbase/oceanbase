@@ -9829,9 +9829,12 @@ public:
   {
     struct
     {
-      uint64_t min_max_       :1;
-      uint64_t sum_           :1;
-      uint64_t reserved_      :62;
+      uint64_t min_max_                 :1;
+      uint64_t sum_                     :1;
+      uint64_t loose_min_max_           :1;
+      uint64_t bm25_token_freq_param_   :1;
+      uint64_t bm25_doc_len_param_      :1;
+      uint64_t reserved_                :59;
     };
     uint64_t pack_;
   };
