@@ -284,6 +284,7 @@ private:
   int do_with_uncreated_ls_();
   int check_ls_leader_ready_(bool &is_ready);
   int inc_need_restore_ls_cnt_();
+  int check_restore_pre_finish_(bool &is_finish) const;
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreStartState);
 };
 
