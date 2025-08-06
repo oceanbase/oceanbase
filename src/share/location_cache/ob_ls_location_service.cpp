@@ -245,6 +245,8 @@ int ObLSLocationService::start()
       DUMP_CACHE_INTERVAL_US,
       false/*repeat*/))) {
     LOG_WARN("ObLSLocationService timer schedule dump_cache_timer_task failed", KR(ret));
+  } else {
+    last_cache_clear_ts_ = ObTimeUtility::current_time();
   }
   return ret;
 }
@@ -682,7 +684,7 @@ int ObLSLocationService::check_and_clear_dead_cache()
           // do not clear sys tenant ls location cache
         } else if (OB_FAIL(hash.get_refactored(key, exist))) {
           if (OB_HASH_NOT_EXIST == ret) {
-            if (OB_FAIL(inner_cache_.del(ls_cache_key))) {
+            if (OB_FAIL(inner_cache_.del(ls_cache_key, 0/*safe_delete_time*/))) {
               LOG_WARN("inner cache del error", KR(ret), "ls_location", total_arr.at(i));
             } else {
               LOG_INFO("del ls location cache succ", "ls_location_cache", total_arr.at(i));
@@ -708,8 +710,15 @@ int ObLSLocationService::renew_all_ls_locations()
   int ret = OB_SUCCESS;
   int ret_fail = OB_SUCCESS;
   ObArray<uint64_t> tenant_ids;
+  bool sys_tenant_schema_ready = false;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (FALSE_IT(sys_tenant_schema_ready = schema_service_->is_tenant_refreshed(OB_SYS_TENANT_ID))) {
+  } else if (!sys_tenant_schema_ready) {
+    // sys tenant schema may be not ready when starting observer
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) { // 10s
+      FLOG_INFO("can not renew all ls locations because sys tenant schema is not ready", KR(ret));
+    }
   } else if (OB_FAIL(schema_service_->get_tenant_ids(tenant_ids))) {
     LOG_WARN("get tenant_ids failed", KR(ret));
   } else {
@@ -730,6 +739,15 @@ int ObLSLocationService::renew_all_ls_locations()
       }
     } // end ARRAY_FOREACH_NORET
     ret = OB_FAIL(ret) ? ret : ret_fail;
+  }
+  // try clear ls location caches whose tenant is dropped
+  if (OB_FAIL(ret) || !sys_tenant_schema_ready) {
+  } else if (ObTimeUtil::current_time() - last_cache_clear_ts_ > CLEAR_CACHE_INTERVAL) {
+    if (OB_FAIL(try_clear_dropped_tenant_caches_())) {
+      LOG_WARN("try clear dropped tenant caches failed", KR(ret), K(last_cache_clear_ts_));
+    } else {
+      last_cache_clear_ts_ = ObTimeUtil::current_time();
+    }
   }
   return ret;
 }
@@ -917,7 +935,7 @@ int ObLSLocationService::batch_update_caches_(
     } else if (new_location.get_replica_locations().empty()) {
       if (!can_erase) {
         // do nothing
-      } else if (OB_FAIL(erase_location_(cluster_id, ls_info.get_tenant_id(), ls_info.get_ls_id()))) {
+      } else if (OB_FAIL(erase_location_safely_(cluster_id, ls_info.get_tenant_id(), ls_info.get_ls_id()))) {
         LOG_WARN("fail to erase location", KR(ret), K(cluster_id), K(ls_info));
       }
     } else if (OB_FAIL(update_cache_(
@@ -1071,7 +1089,7 @@ int ObLSLocationService::update_cache_(
   return ret;
 }
 
-int ObLSLocationService::erase_location_(
+int ObLSLocationService::erase_location_safely_(
     const int64_t cluster_id,
     const uint64_t tenant_id,
     const ObLSID &ls_id)
@@ -1085,16 +1103,22 @@ int ObLSLocationService::erase_location_(
   } else if (is_sys_tenant(tenant_id)) {
     // location of sys ls shouldn't be erased
   } else {
+    // can not erase the location just detected by RPC
+    const int64_t safe_delete_time = RENEW_LS_LOCATION_BY_RPC_INTERVAL_US + GCONF.rpc_timeout;
     ObLSLocationCacheKey cache_key(cluster_id, tenant_id, ls_id);
-    if (OB_FAIL(inner_cache_.del(cache_key))) {
+    if (OB_FAIL(inner_cache_.del(cache_key, safe_delete_time))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
         LOG_TRACE("not exist in inner_cache_", K(cache_key));
+      } else if (OB_NEED_WAIT == ret) {
+        ret = OB_SUCCESS;
+        LOG_TRACE("can not delete cache because safe_delete_time has not been reached",
+            K(cache_key), K(safe_delete_time));
       } else {
         LOG_WARN("fail to erase location from inner_cache_", KR(ret), K(cache_key));
       }
     } else {
-      LOG_TRACE("erase location from inner_cache_", K(cache_key));
+      LOG_INFO("[LS_LOCATION] erase ls location successfully", K(cache_key));
     }
   }
   return ret;
@@ -1241,6 +1265,70 @@ int ObLSLocationService::batch_renew_ls_locations(
     } else if (OB_FAIL(batch_update_caches_(cluster_id, ls_infos, can_erase, ls_locations))) {
       LOG_WARN("batch update caches failed", KR(ret),
           K(cluster_id), K(ls_infos), K(can_erase), K(ls_locations));
+    }
+  }
+  return ret;
+}
+
+int ObLSLocationService::try_clear_dropped_tenant_caches_()
+{
+  int ret = OB_SUCCESS;
+  ObLSLocationArray all_caches;
+  ObArray<uint64_t> dropped_tenant_ids;
+  hash::ObHashSet<uint64_t> dropped_tenant_set;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_dropped_tenant_ids(dropped_tenant_ids))) {
+    LOG_WARN("get dropped tenant_ids failed", KR(ret));
+  } else if (dropped_tenant_ids.empty()) {
+    // no tenant is dropped, do nothing
+  } else if (OB_FAIL(all_caches.reserve(inner_cache_.size()))) {
+    LOG_WARN("fail to reserve all_caches", KR(ret), "size", inner_cache_.size());
+  } else if (OB_FAIL(inner_cache_.get_all(all_caches))) {
+    LOG_WARN("get all inner cache failed", KR(ret));
+  } else if (OB_FAIL(dropped_tenant_set.create(dropped_tenant_ids.count()))) {
+    LOG_WARN("create failed", KR(ret), "count", dropped_tenant_ids.count());
+  } else {
+    // use hashset to improve performance
+    ARRAY_FOREACH(dropped_tenant_ids, idx) {
+      const uint64_t tenant_id = dropped_tenant_ids.at(idx);
+      if (is_user_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
+        if (OB_FAIL(dropped_tenant_set.set_refactored(tenant_id))) {
+          // OB_HASH_EXIST is also unexpected
+          LOG_WARN("set_refactored failed", KR(ret), K(idx), K(tenant_id), K(dropped_tenant_ids));
+        }
+      }
+    }
+    ARRAY_FOREACH(all_caches, idx) {
+      const ObLSLocationCacheKey &cache_key = all_caches.at(idx).get_cache_key();
+      const uint64_t tenant_id = cache_key.get_tenant_id();
+      if (OB_ISNULL(dropped_tenant_set.get(tenant_id))) {
+        // not dropped tenant, do nothing
+      } else if (is_user_tenant(tenant_id)) {
+        // the cache of user tenant ls location can not be erased until it's meta tenant has been dropped
+        const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+        if (OB_ISNULL(dropped_tenant_set.get(meta_tenant_id))) {
+          // meta tenant exists, do nothing
+        } else if (OB_FAIL(erase_location_safely_(
+            cache_key.get_cluster_id(),
+            cache_key.get_tenant_id(),
+            cache_key.get_ls_id()))) {
+          LOG_WARN("erase location failed", KR(ret), K(cache_key), K(meta_tenant_id));
+        }
+      } else if (is_meta_tenant(tenant_id)) {
+        // the cache of meta tenant can not be erased until it is removed from ls meta table in sys
+        ObLSLocation tmp_loc;
+        if (OB_FAIL(renew_location_(
+            cache_key.get_cluster_id(),
+            cache_key.get_tenant_id(),
+            cache_key.get_ls_id(),
+            tmp_loc))) {
+          LOG_WARN("renew location failed", KR(ret), K(cache_key));
+        }
+      } else { // other tenant
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("there should be only user or meta tenant", KR(ret), K(cache_key));
+      }
     }
   }
   return ret;

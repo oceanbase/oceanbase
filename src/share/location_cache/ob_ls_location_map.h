@@ -70,7 +70,7 @@ public:
              const ObLSLocationCacheKey &key,
              ObLSLocation &ls_location);
   int get(const ObLSLocationCacheKey &key, ObLSLocation &location) const;
-  int del(const ObLSLocationCacheKey &key);
+  int del(const ObLSLocationCacheKey &key, const int64_t safe_delete_time);
   int check_and_generate_dead_cache(ObLSLocationArray &arr);
   int get_all(ObLSLocationArray &arr);
   int64_t size() { return size_; }

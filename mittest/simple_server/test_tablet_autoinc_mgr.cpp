@@ -187,7 +187,10 @@ TEST_F(TestTabletAutoincMgr, test_lob_tablet_autoinc_location_cache)
 
   // remove source ls and clear src ls cache
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(src_ls_id, false));
-  ASSERT_EQ(OB_SUCCESS, ls_location_service->erase_location_(GCONF.cluster_id, g_tenant_id, src_ls_id));
+  ObLSLocationCacheKey cache_key(GCONF.cluster_id, g_tenant_id, src_ls_id);
+  ObLSLocation tmp_loc;
+  ASSERT_EQ(OB_SUCCESS, ls_location_service->inner_cache_.del(cache_key, 0/*safe_delete_time*/));
+  ASSERT_EQ(OB_LS_LOCATION_NOT_EXIST, ls_location_service->nonblock_get(GCONF.cluster_id, g_tenant_id, src_ls_id, tmp_loc));
 
   // insert lob
   ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("insert into t1 values (2, repeat('abcde0123456789', 1000));"));

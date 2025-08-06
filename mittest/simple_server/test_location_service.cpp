@@ -217,8 +217,10 @@ TEST_F(TestLocationService, test_location_service)
 
 TEST_F(TestLocationService, test_check_ls_exist)
 {
+  // create tenant
   uint64_t user_tenant_id = OB_INVALID_TENANT_ID;
-  ASSERT_EQ(OB_SUCCESS, get_tenant_id(user_tenant_id));
+  ASSERT_EQ(OB_SUCCESS, create_tenant("tt2"));
+  ASSERT_EQ(OB_SUCCESS, get_tenant_id(user_tenant_id, "tt2"));
   uint64_t meta_tenant_id = gen_meta_tenant_id(user_tenant_id);
 
   ObLSID user_ls_id(1001);
@@ -299,6 +301,20 @@ TEST_F(TestLocationService, test_check_ls_exist)
   state.reset();
   ASSERT_EQ(OB_SUCCESS, ObLocationService::check_ls_exist(meta_tenant_id, SYS_LS, state));
   ASSERT_TRUE(state.is_uncreated());
+
+  // reset
+  ASSERT_EQ(OB_SUCCESS, delete_tenant("tt2"));
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("alter system set_tp tp_name = EN_CHECK_LS_EXIST_WITH_TENANT_NOT_NORMAL, error_code = 0, frequency = 0"));
+  ASSERT_EQ(OB_SUCCESS, inner_proxy.write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows));
+  bool tenant_exist = true;
+  int ret = OB_SUCCESS;
+  while (true == tenant_exist && OB_SUCC(ret)) {
+    if (OB_FAIL(check_tenant_exist(tenant_exist, "tt2"))) {
+      SERVER_LOG(WARN, "check_tenant_exist failed", K(ret));
+    } else {
+      usleep(1_s);
+    }
+  }
 }
 
 TEST_F(TestLocationService, test_clear_tablet_ls_cache)
@@ -342,6 +358,7 @@ TEST_F(TestLocationService, test_clear_tablet_ls_cache)
   ASSERT_EQ(OB_SUCCESS, batch_create_table(oracle_sql_proxy, TABLET_COUNT, true, tablet_ls_pairs));
   ASSERT_TRUE(TABLET_COUNT == tablet_ls_pairs.count());
   const int64_t cache_size_before_renew = tablet_ls_service->inner_cache_.size();
+  ASSERT_TRUE(cache_size_before_renew > 0);
   ObArenaAllocator allocator;
   ObList<ObTabletID, ObIAllocator> tablet_list(allocator);
   ObSEArray<ObTabletLSCache, TABLET_COUNT> tablet_ls_caches;
@@ -359,7 +376,7 @@ TEST_F(TestLocationService, test_clear_tablet_ls_cache)
   ASSERT_EQ(OB_SUCCESS, delete_tenant("oracle"));
   ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
   cache_size = tablet_ls_service->inner_cache_.size();
-  ASSERT_TRUE(cache_size == cache_size_before_renew);
+  ASSERT_TRUE(cache_size_before_renew == cache_size);
 
   // test 1 million cache clear
   const bool update_only = false;
@@ -373,8 +390,43 @@ TEST_F(TestLocationService, test_clear_tablet_ls_cache)
   const int64_t start_time = ObTimeUtility::current_time();
   ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
   cache_size = tablet_ls_service->inner_cache_.size();
-  ASSERT_TRUE(cache_size = cache_size_before_renew);
+  ASSERT_TRUE(cache_size_before_renew == cache_size);
   LOG_INFO("TEST: clear 1 million cache", "cost_time", ObTimeUtility::current_time() - start_time); // cost_time = 1.67s
+}
+
+TEST_F(TestLocationService, test_clear_ls_location)
+{
+  int ret = OB_SUCCESS;
+  uint64_t user_tenant_id = OB_INVALID_TENANT_ID;
+  ASSERT_EQ(OB_SUCCESS, get_tenant_id(user_tenant_id, "tt1"));
+  ASSERT_TRUE(is_user_tenant(user_tenant_id));
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(user_tenant_id);
+  ObLocationService *location_service = GCTX.location_service_;
+  ASSERT_TRUE(OB_NOT_NULL(location_service));
+  ObLSLocationService *ls_location_service = &(location_service->ls_location_service_);
+  ASSERT_TRUE(OB_NOT_NULL(ls_location_service));
+  const ObLSID &user_ls_id = ObLSID(1001);
+  ObLSLocation location;
+  // assert caches exist
+  usleep(ls_location_service->RENEW_LS_LOCATION_INTERVAL_US);
+  ASSERT_EQ(OB_SUCCESS, ls_location_service->get_from_cache_(GCONF.cluster_id, user_tenant_id, user_ls_id, location));
+  ASSERT_TRUE(location.get_cache_key() == ObLSLocationCacheKey(GCONF.cluster_id, user_tenant_id, user_ls_id));
+  location.reset();
+  ASSERT_EQ(OB_SUCCESS, ls_location_service->get_from_cache_(GCONF.cluster_id, meta_tenant_id, SYS_LS, location));
+  ASSERT_TRUE(location.get_cache_key() == ObLSLocationCacheKey(GCONF.cluster_id, meta_tenant_id, SYS_LS));
+
+  // drop tenant force
+  ASSERT_EQ(OB_SUCCESS, delete_tenant("tt1"));
+  // meta tenant is dropped in schema and user tenant unit has been gc
+  bool is_dropped = false;
+  ASSERT_EQ(OB_SUCCESS, GSCHEMASERVICE.check_if_tenant_has_been_dropped(meta_tenant_id, is_dropped));
+  ASSERT_TRUE(is_dropped);
+
+  // auto clear caches successfully
+  usleep(ls_location_service->CLEAR_CACHE_INTERVAL);
+  usleep(ls_location_service->RENEW_LS_LOCATION_BY_RPC_INTERVAL_US + GCONF.rpc_timeout);
+  ASSERT_EQ(OB_CACHE_NOT_HIT, ls_location_service->get_from_cache_(GCONF.cluster_id, user_tenant_id, user_ls_id, location));
+  ASSERT_EQ(OB_CACHE_NOT_HIT, ls_location_service->get_from_cache_(GCONF.cluster_id, meta_tenant_id, SYS_LS, location));
 }
 
 } // namespace rootserver

@@ -187,7 +187,7 @@ int ObLSLocationMap::get(
   return ret;
 }
 
-int ObLSLocationMap::del(const ObLSLocationCacheKey &key)
+int ObLSLocationMap::del(const ObLSLocationCacheKey &key, const int64_t safe_delete_time)
 {
   int ret = OB_SUCCESS;
   ObLSLocation *prev = NULL;
@@ -212,6 +212,9 @@ int ObLSLocationMap::del(const ObLSLocationCacheKey &key)
 
     if (OB_ISNULL(ls_location)) {
       ret = OB_ENTRY_NOT_EXIST;
+    } else if (ObTimeUtility::current_time() - ls_location->get_renew_time() <= safe_delete_time) {
+      // must use ObTimeUtil::current_time() for clock source unification of renew_time
+      ret = OB_NEED_WAIT;
     } else {
       if (OB_ISNULL(prev)) {
         // the first node
