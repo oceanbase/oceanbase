@@ -1351,9 +1351,6 @@ int ObStaticEngineCG::generate_spec(ObLogDistinct &op, ObHashDistinctVecSpec &sp
         } else if (OB_UNLIKELY(ObRoaringBitmapType == raw_expr->get_data_type())) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("select distinct roaringbitmap not allowed", K(ret));
-        } else if (OB_UNLIKELY(ObCollectionSQLType == raw_expr->get_data_type())) {
-          ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("select distinct array not allowed", K(ret));
         } else if (is_oracle_mode() && OB_UNLIKELY(ObGeometryType == raw_expr->get_data_type())) {
           ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
           LOG_WARN("select distinct geometry not allowed", K(ret));
