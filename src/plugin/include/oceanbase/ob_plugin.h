@@ -101,6 +101,7 @@ enum OBP_PUBLIC_API ObPluginType
   OBP_PLUGIN_TYPE_INVALID = 0,
   OBP_PLUGIN_TYPE_FT_PARSER,   /** fulltext parser plugin */
   OBP_PLUGIN_TYPE_EXTERNAL,    /** external table data resource */
+  OBP_PLUGIN_TYPE_KMS,         /** KMS plugin */
   OBP_PLUGIN_TYPE_MAX,         /** max plugin type */
 };
 
