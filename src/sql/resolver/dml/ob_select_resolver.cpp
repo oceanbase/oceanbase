@@ -1637,6 +1637,11 @@ int ObSelectResolver::set_for_update_mysql(ObSelectStmt &stmt, const int64_t wai
 {
   int ret = OB_SUCCESS;
   TableItem *table_item = NULL;
+  if (stmt.has_vec_approx()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "FOR UPDATE with APPROXIMATE vector search is");
+    LOG_WARN("FOR UPDATE is not supported with APPROXIMATE vector search", K(ret));
+  }
   for (int64_t idx = 0; OB_SUCC(ret) && idx < stmt.get_table_size(); ++idx) {
     if (OB_ISNULL(table_item = stmt.get_table_item(idx))) {
       ret = OB_ERR_UNEXPECTED;
