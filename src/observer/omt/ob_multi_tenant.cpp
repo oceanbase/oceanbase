@@ -1425,10 +1425,24 @@ int ObMultiTenant::update_tenant_memory(const uint64_t tenant_id, const int64_t 
   if (OB_SUCC(ret)) {
     // make sure half reserve memory available
     if (target_mem_limit < pre_mem_limit) {
-      allowed_mem_limit = mem_hold + static_cast<int64_t>(
+      int64_t additional_memory = static_cast<int64_t>(
           static_cast<double>(target_mem_limit) * TENANT_RESERVE_MEM_RATIO / 2.0);
+      allowed_mem_limit = mem_hold + additional_memory;
       if (allowed_mem_limit < target_mem_limit) {
         allowed_mem_limit = target_mem_limit;
+      }
+      for (int ctx_id = 0; ctx_id < ObCtxIds::MAX_CTX_ID; ++ctx_id) {
+        ObTenantCtxAllocatorGuard ta = malloc_allocator->get_tenant_ctx_allocator(tenant_id, ctx_id);
+        if (OB_NOT_NULL(ta)) {
+          int64_t ctx_limit = ta->get_limit();
+          int64_t ctx_hold = ta->get_hold();
+          if (ctx_limit < pre_mem_limit) {
+            int64_t limit = 1.0 * pre_mem_limit / ctx_limit * ctx_hold + additional_memory;
+            if (limit > allowed_mem_limit) {
+              allowed_mem_limit = limit;
+            }
+          }
+        }
       }
       if (allowed_mem_limit < pre_mem_limit) {
         LOG_INFO("reduce memory quota", K(mem_limit), K(pre_mem_limit), K(target_mem_limit), K(mem_hold));
