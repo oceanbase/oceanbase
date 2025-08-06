@@ -157,7 +157,7 @@ int ObRbUtils::build_empty_binary(ObIAllocator &allocator, ObString &res_rb_bin)
   return ret;
 }
 
-int ObRbUtils::to_roaring64_bin(ObIAllocator &allocator, ObRbBinType rb_type, ObString &rb_bin, ObString &roaring64_bin)
+int ObRbUtils::to_roaring64_bin(ObIAllocator &allocator, ObRbBinType rb_type, const ObString &rb_bin, ObString &roaring64_bin)
 {
   int ret = OB_SUCCESS;
   uint32_t offset = RB_VERSION_SIZE + RB_BIN_TYPE_SIZE;
@@ -226,7 +226,7 @@ int ObRbUtils::get_cardinality(ObIAllocator &allocator, const ObString &rb_bin, 
   return ret;
 }
 
-int ObRbUtils::get_calc_cardinality(ObIAllocator &allocator, ObString &rb1_bin, ObString &rb2_bin, uint64_t &cardinality, ObRbOperation op)
+int ObRbUtils::get_calc_cardinality(ObIAllocator &allocator, const ObString &rb1_bin, const ObString &rb2_bin, uint64_t &cardinality, ObRbOperation op)
 {
   int ret = OB_SUCCESS;
   ObRbBinType rb1_type;
@@ -273,9 +273,9 @@ int ObRbUtils::get_calc_cardinality(ObIAllocator &allocator, ObString &rb1_bin, 
 }
 
 int ObRbUtils::get_and_cardinality(ObIAllocator &allocator,
-                                   ObString &rb1_bin,
+                                   const ObString &rb1_bin,
                                    ObRbBinType rb1_type,
-                                   ObString &rb2_bin,
+                                   const ObString &rb2_bin,
                                    ObRbBinType rb2_type,
                                    uint64_t &cardinality,
                                    uint64_t &rb1_card,
@@ -393,7 +393,7 @@ int ObRbUtils::get_and_cardinality(ObIAllocator &allocator,
 }
 
 
-int ObRbUtils::binary_calc(ObIAllocator &allocator, ObString &rb1_bin, ObString &rb2_bin, ObString &res_rb_bin, ObRbOperation op)
+int ObRbUtils::binary_calc(ObIAllocator &allocator, const ObString &rb1_bin, const ObString &rb2_bin, ObString &res_rb_bin, ObRbOperation op)
 {
   int ret = OB_SUCCESS;
   ObRbBinType rb1_bin_type = ObRbBinType::EMPTY;
@@ -551,7 +551,7 @@ int ObRbUtils::rb_serialize(ObIAllocator &allocator, ObString &res_rb_bin, ObRoa
   return ret;
 }
 
-int ObRbUtils::build_binary(ObIAllocator &allocator, ObString &rb_bin, ObString &res_rb_bin)
+int ObRbUtils::build_binary(ObIAllocator &allocator, const ObString &rb_bin, ObString &res_rb_bin)
 {
   int ret = OB_SUCCESS;
   ObRoaringBitmap *rb = NULL;
@@ -675,11 +675,11 @@ int ObRbUtils::binary_format_convert(ObIAllocator &allocator, const ObString &rb
   return ret;
 }
 
-int ObRbUtils::rb_from_string(ObIAllocator &allocator, ObString &rb_str, ObRoaringBitmap *&rb)
+int ObRbUtils::rb_from_string(ObIAllocator &allocator, const ObString &rb_str, ObRoaringBitmap *&rb)
 {
   int ret = OB_SUCCESS;
   const char *str = rb_str.ptr();
-  char *str_end = rb_str.ptr() + rb_str.length();
+  const char *str_end = rb_str.ptr() + rb_str.length();
   char *value_end = nullptr;
   uint64_t value = 0;
   bool is_first = true;
@@ -721,7 +721,7 @@ int ObRbUtils::rb_from_string(ObIAllocator &allocator, ObString &rb_str, ObRoari
   return ret;
 }
 
-int ObRbUtils::rb_to_string(ObIAllocator &allocator, ObString &rb_bin, ObString &res_rb_str)
+int ObRbUtils::rb_to_string(ObIAllocator &allocator, const ObString &rb_bin, ObString &res_rb_str)
 {
   int ret = OB_SUCCESS;
   ObRbBinType bin_type;
@@ -756,11 +756,18 @@ int ObRbUtils::rb_to_string(ObIAllocator &allocator, ObString &rb_bin, ObString 
         uint8_t value_count = static_cast<uint8_t>(*(rb_bin.ptr() + offset));
         offset += RB_VALUE_COUNT_SIZE;
         if (value_count > 0) {
-          uint32_t *value_ptr = reinterpret_cast<uint32_t *>(rb_bin.ptr() + offset);
-          lib::ob_sort(value_ptr, value_ptr + value_count);
+          const uint32_t *value_ptr = reinterpret_cast<const uint32_t *>(rb_bin.ptr() + offset);
+          uint32_t value_set_size = value_count * sizeof(uint32_t);
+          uint32_t *sort_buf = NULL;
+          if (OB_ISNULL(sort_buf = (static_cast<uint32_t *>(allocator.alloc(value_set_size))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("allocate memory failed", K(ret), K(value_count));
+          } else {
+            MEMCPY(sort_buf, value_ptr, value_set_size);
+            lib::ob_sort(sort_buf, sort_buf + value_count);
+          }
           for (int i = 0; OB_SUCC(ret) && i < value_count; i++) {
-            uint32_t value_32 = *reinterpret_cast<const uint32_t*>(rb_bin.ptr() + offset);
-            offset += sizeof(uint32_t);
+            uint32_t value_32 = sort_buf[i];
             ObFastFormatInt ffi(value_32);
             if (!is_first && OB_FAIL(res_buf.append(","))) {
               LOG_WARN("failed to append res_buf", K(ret));
@@ -777,10 +784,18 @@ int ObRbUtils::rb_to_string(ObIAllocator &allocator, ObString &rb_bin, ObString 
         uint8_t value_count = static_cast<uint8_t>(*(rb_bin.ptr() + offset));
         offset += RB_VALUE_COUNT_SIZE;
         if (value_count > 0) {
-          uint64_t *value_ptr = reinterpret_cast<uint64_t *>(rb_bin.ptr() + offset);
-          lib::ob_sort(value_ptr, value_ptr + value_count);
+          const uint64_t *value_ptr = reinterpret_cast<const uint64_t *>(rb_bin.ptr() + offset);
+          uint32_t value_set_size = value_count * sizeof(uint64_t);
+          uint64_t *sort_buf = NULL;
+          if (OB_ISNULL(sort_buf = (static_cast<uint64_t *>(allocator.alloc(value_set_size))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("allocate memory failed", K(ret), K(value_count));
+          } else {
+            MEMCPY(sort_buf, value_ptr, value_set_size);
+            lib::ob_sort(sort_buf, sort_buf + value_count);
+          }
           for (int i = 0; OB_SUCC(ret) && i < value_count; i++) {
-            uint64_t value_64 = *reinterpret_cast<const uint64_t*>(rb_bin.ptr() + offset);
+            uint64_t value_64 = sort_buf[i];
             offset += sizeof(uint64_t);
             ObFastFormatInt ffi(value_64);
             if (!is_first && OB_FAIL(res_buf.append(","))) {

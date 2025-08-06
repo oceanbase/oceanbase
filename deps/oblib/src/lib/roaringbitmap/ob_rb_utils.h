@@ -31,29 +31,29 @@ public:
   static int get_bin_type(const ObString &rb_bin, ObRbBinType &bin_type);
   static int check_binary(const ObString &rb_bin);
   static int build_empty_binary(ObIAllocator &allocator, ObString &res_rb_bin);
-  static int to_roaring64_bin(ObIAllocator &allocator, ObRbBinType rb_type, ObString &rb_bin, ObString &roaring64_bin);
+  static int to_roaring64_bin(ObIAllocator &allocator, ObRbBinType rb_type, const ObString &rb_bin, ObString &roaring64_bin);
   static int get_cardinality(ObIAllocator &allocator, const ObString &rb_bin, uint64_t &cardinality);
-  static int get_calc_cardinality(ObIAllocator &allocator, ObString &rb1_bin, ObString &rb2_bin, uint64_t &cardinality, ObRbOperation op);
+  static int get_calc_cardinality(ObIAllocator &allocator, const ObString &rb1_bin, const ObString &rb2_bin, uint64_t &cardinality, ObRbOperation op);
   static int get_and_cardinality(ObIAllocator &allocator,
-                                 ObString &rb1_bin,
+                                 const ObString &rb1_bin,
                                  ObRbBinType rb1_type,
-                                 ObString &rb2_bin,
+                                 const ObString &rb2_bin,
                                  ObRbBinType rb2_type,
                                  uint64_t &cardinality,
                                  uint64_t &rb1_card,
                                  uint64_t &rb2_card);
-  static int binary_calc(ObIAllocator &allocator, ObString &rb1_bin, ObString &rb2_bin, ObString &res_rb_bin, ObRbOperation op);
+  static int binary_calc(ObIAllocator &allocator, const ObString &rb1_bin, const ObString &rb2_bin, ObString &res_rb_bin, ObRbOperation op);
   static int calc_inplace(ObRoaringBitmap *&rb1, ObRoaringBitmap *&rb2, ObRbOperation op);
 
   // common
   static void rb_destroy(ObRoaringBitmap *&rb);
   static int rb_deserialize(ObIAllocator &allocator, const ObString &rb_bin, ObRoaringBitmap *&rb, bool need_validate = false);
   static int rb_serialize(ObIAllocator &allocator, ObString &res_rb_bin, ObRoaringBitmap *&rb);
-  static int build_binary(ObIAllocator &allocator, ObString &rb_bin, ObString &res_rb_bin);
+  static int build_binary(ObIAllocator &allocator, const ObString &rb_bin, ObString &res_rb_bin);
   static int convert_to_bitmap_binary(ObIAllocator &allocator, const ObString &rb_bin, ObString &bitmap_bin, ObRbBinType &bin_type);
   static int binary_format_convert(ObIAllocator &allocator, const ObString &rb_bin, ObString &roaring_bin);
-  static int rb_from_string(ObIAllocator &allocator, ObString &rb_str, ObRoaringBitmap *&rb);
-  static int rb_to_string(ObIAllocator &allocator, ObString &rb_bin, ObString &res_rb_str);
+  static int rb_from_string(ObIAllocator &allocator, const ObString &rb_str, ObRoaringBitmap *&rb);
+  static int rb_to_string(ObIAllocator &allocator, const ObString &rb_bin, ObString &res_rb_str);
 
   // calculate
   static int rb_calc_equals(ObRoaringBitmap *&rb1, ObRoaringBitmap *&rb2, bool &result); //not impl
