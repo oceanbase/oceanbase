@@ -6969,9 +6969,11 @@ int ObAggregateProcessor::llc_init(AggrCell &aggr_cell)
 {
   int ret = OB_SUCCESS;
   int64_t llc_size = 0;
+  int64_t need_cell_len = 0;
   if (OB_FAIL(get_llc_buckets_num(llc_size))) {
     LOG_WARN("get llc buckets number failed", K(ret));
-  } else if (OB_FAIL(clone_cell(aggr_cell, llc_size * sizeof(char), nullptr))) {
+  } else if (FALSE_IT(need_cell_len = llc_size * sizeof(char) + 2 * sizeof(int64_t))) {
+  } else if (OB_FAIL(clone_cell(aggr_cell, need_cell_len, nullptr))) {
     LOG_WARN("clone cell failed", K(ret));
   } else {
     const char *buf = aggr_cell.get_buf() + 2 * sizeof(int64_t);

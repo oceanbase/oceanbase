@@ -429,9 +429,14 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
     if (OB_SUCC(ret)) {
       rt_expr->local_session_var_id_ = raw_expr->get_local_session_var_id();
     }
-    if (T_FUN_APPROX_COUNT_DISTINCT == raw_expr->get_expr_type()
-        || T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == raw_expr->get_expr_type()
-        || T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE == raw_expr->get_expr_type()) {
+    ObItemType real_expr_type = raw_expr->get_expr_type();
+    if (real_expr_type == T_WINDOW_FUNCTION) {
+      real_expr_type = static_cast<ObWinFunRawExpr *>(raw_expr)->get_func_type();
+    }
+
+    if (T_FUN_APPROX_COUNT_DISTINCT == real_expr_type
+        || T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS == real_expr_type
+        || T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE == real_expr_type) {
       int64_t approx_cnt_distinct_prec = ObAggrInfo::DEFAULT_APPROX_COUNT_DISTINCT_PRECISION;
       if (OB_ISNULL(op_cg_ctx_.log_plan_)) {
         // just use default value
