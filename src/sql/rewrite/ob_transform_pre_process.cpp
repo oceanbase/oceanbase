@@ -42,9 +42,8 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
     LOG_WARN("unexpected NULL", K(ret), K(stmt), K(ctx_));
   } else if (OB_FAIL(ObTransformUtils::right_join_to_left(stmt))) {
     LOG_WARN("failed to transform right join as left", K(ret));
-  } else if (parent_stmts.empty() && lib::is_oracle_mode() &&
-              OB_FAIL(formalize_limit_expr(*stmt))) {
-    LOG_WARN("formalize stmt failed", K(ret));
+  } else if (OB_FAIL(formalize_limit_expr(*stmt, parent_stmts.empty() && lib::is_oracle_mode()))) {
+    LOG_WARN("formalize limit expr failed", K(ret));
   } else if (OB_FAIL(stmt->adjust_duplicated_table_names(*ctx_->allocator_, is_happened))) {
     LOG_WARN("failed to adjust duplicated table names", K(ret));
   } else if (OB_FAIL(THIS_WORKER.check_status())) {
@@ -517,7 +516,22 @@ int ObTransformPreProcess::add_all_rowkey_columns_to_stmt(const ObTableSchema &t
   return ret;
 }
 
-int ObTransformPreProcess::formalize_limit_expr(ObDMLStmt &stmt)
+int ObTransformPreProcess::formalize_limit_expr(ObDMLStmt &stmt, bool formalize_oracle_limit)
+{
+  int ret = OB_SUCCESS;
+  if (formalize_oracle_limit) {
+    if (OB_FAIL(formalize_limit_expr_oracle(stmt))) {
+      LOG_WARN("failed to formalize oracle limit expr", K(ret));
+    }
+  } else if (!lib::is_oracle_mode()) {
+    if (OB_FAIL(formalize_limit_expr_mysql(stmt))) {
+      LOG_WARN("failed to formalize oracle limit expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::formalize_limit_expr_oracle(ObDMLStmt &stmt)
 {
   int ret = OB_SUCCESS;
 
@@ -672,9 +686,56 @@ int ObTransformPreProcess::formalize_limit_expr(ObDMLStmt &stmt)
       if (OB_ISNULL(child_stmts.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("stmt is null", K(ret));
-      } else if (OB_FAIL(SMART_CALL(formalize_limit_expr(*child_stmts.at(i))))) {
+      } else if (OB_FAIL(SMART_CALL(formalize_limit_expr_oracle(*child_stmts.at(i))))) {
         LOG_WARN("formalize limit expr failed", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+// Check if limit val reaches int64_max. If so, remove limit expr.
+int ObTransformPreProcess::formalize_limit_expr_mysql(ObDMLStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *limit_expr = stmt.get_limit_expr();
+  ObRawExpr *offset_expr = stmt.get_offset_expr();
+  int64_t limit_val = -1;
+  int64_t offset_val = -1;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->exec_ctx_) || OB_ISNULL(ctx_->allocator_) ||
+      OB_ISNULL(ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx is null", K(ret));
+  } else if (limit_expr == NULL || offset_expr == NULL) {
+    // do nothing
+  } else {
+    ObConstRawExpr *int64_max_expr = NULL;
+    ObRawExpr *limit_overflow_cond = NULL;
+    bool got_result = false;
+    ObObj result;
+    if (OB_FAIL(ObRawExprUtils::build_const_int_expr(*ctx_->expr_factory_,
+                                                     ObIntType,
+                                                     INT64_MAX,
+                                                     int64_max_expr))) {
+      LOG_WARN("failed to build int64_max expr", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx_->expr_factory_, ctx_->session_info_,
+                                                             T_OP_EQ, limit_overflow_cond,
+                                                             limit_expr, int64_max_expr))) {
+      LOG_WARN("failed to create eq expr", K(ret));
+    } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx_->exec_ctx_,
+                                                                 limit_overflow_cond,
+                                                                 result,
+                                                                 got_result,
+                                                                 *ctx_->allocator_))) {
+      LOG_WARN("failed to calculate limit overflow cond", K(ret));
+    } else if (!got_result) {
+      // do nothing
+    } else if (result.is_true()) {
+      stmt.set_limit_offset(NULL, offset_expr);
+      if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(ctx_, limit_overflow_cond, true))) {
+        LOG_WARN("failed to add bool constraint", K(ret));
+      }
+      OPT_TRACE("limit expr over flow int64_max, remove limit.", limit_expr);
     }
   }
   return ret;
