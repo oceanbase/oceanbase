@@ -3336,6 +3336,7 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
   int64_t element_init_size = 0;
   ObPLAllocator1 *collection_allocator = NULL;
   char *table_data = NULL;
+  int64_t processed_count = 0;
 
   CK (OB_NOT_NULL(src));
   CK (OB_NOT_NULL(dst));
@@ -3382,6 +3383,7 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
           OX (new (dst_table_pos)ObObj());
           OZ (element_type_.convert(resolve_ctx, src_table_pos, dst_table_pos));
         }
+        OX (processed_count++);
       }
     }
     if (OB_SUCC(ret)) {
@@ -3411,6 +3413,16 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
         elem_desc.set_field_count(1);
       }
       OX (dst_table->set_element_desc(elem_desc));
+    } else if (OB_NOT_NULL(collection_allocator) && OB_NOT_NULL(table_data)) { // Memory cleanup in case of error
+      for (int64_t i = 0; i < processed_count; i++) {
+        ObObj *dst_table_pos = reinterpret_cast<ObObj*>(table_data) + i;
+        int tmp_ret = ObUserDefinedType::destruct_objparam(*collection_allocator, *dst_table_pos, NULL, true);
+        if (OB_FAIL(tmp_ret)) {
+          LOG_WARN("failed to destruct objparam", K(tmp_ret));
+        }
+      }
+      collection_allocator->free(table_data);
+      table_data = NULL;
     }
   }
   return ret;
