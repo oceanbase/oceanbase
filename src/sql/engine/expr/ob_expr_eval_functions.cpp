@@ -1840,7 +1840,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprInstr::calc_mysql_instr_expr_vector,                             /* 223 */
   NULL, // ObExprOracleInstr::calc_oracle_instr_expr_vector,                      /* 224 */
   NULL, // ObLocationExprOperator::calc_location_expr_vector,                     /* 225 */
-  NULL, // ObExprConvertTZ::calc_convert_tz_vector,                               /* 226 */
+  ObExprConvertTZ::calc_convert_tz_vector,                               /* 226 */
   NULL, // ObExprMul::mul_decimalint64_int64_int64_vector,                        /* 227 */
   NULL, // ObExprHash::calc_hash_value_expr_vector,                               /* 228 */
   NULL, // ObExprAIComplete::eval_ai_complete_vector,                           /* 229 */
