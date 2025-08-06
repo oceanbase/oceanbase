@@ -1146,6 +1146,10 @@ int ObTablet::init_for_sstable_replace(
   } else if (OB_UNLIKELY(!param.is_valid()) || OB_UNLIKELY(!old_tablet.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(param), K(old_tablet));
+  } else if (param.is_transfer_replace_ && !old_tablet.get_tablet_meta().has_transfer_table()) {
+    ret = OB_NO_NEED_UPDATE;
+    LOG_INFO("old tablet has no transfer table, should skip this operation when transfer replace", K(ret), K(param),
+      K(old_tablet));
   } else if (param.reorg_scn_ != old_tablet.get_reorganization_scn()) {
     ret = OB_TABLET_REORG_SCN_NOT_MATCH;
     LOG_WARN("tablet reorg scn not match, cannot do sstable replace", K(ret), K(param), K(old_tablet));
