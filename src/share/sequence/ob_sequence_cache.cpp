@@ -436,7 +436,7 @@ int ObSequenceCache::del_item(uint64_t tenant_id, CacheItemKey &key, obrpc::ObSe
     } else if (FAILEDx(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
       LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
     } else if (compat_version >= DATA_VERSION_4_2_5_0) {
-      lib::ObMutexGuard guard(item->alloc_mutex_);
+      lib::ObMutexGuard guard(item->fetch_);
       if (OB_FAIL(ret) || item->last_refresh_ts_ <= SequenceCacheStatus::INITED) {
         // do nothing
       } else if (OB_FAIL(cache_res.cache_node_.set_start(item->last_number()))) {
@@ -492,7 +492,9 @@ int ObSequenceCache::nextval(const ObSequenceSchema &schema,
     LOG_WARN("fail to get switchover_epoch", K(ret));
   } else if (item->epoch_version_ != switchover_epoch) {
     obrpc::ObSeqCleanCacheRes cache_res;
+    sequence_cache_.revert(item);
     remove(schema.get_tenant_id(), schema.get_sequence_id(), cache_res);
+    item = nullptr;
     ret = OB_AUTOINC_CACHE_NOT_EQUAL;
     LOG_WARN("cache is out of date, need to be cleared and retry", K(ret));
   } else {
