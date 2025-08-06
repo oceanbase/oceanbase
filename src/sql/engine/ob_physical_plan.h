@@ -582,6 +582,8 @@ public:
   void set_inactive_status() { ATOMIC_STORE(&(stat_.adaptive_pc_info_.status_), ObPlanStat::INACTIVE);; }
   int64_t get_adaptive_feedback_times() const;
   void update_adaptive_pc_info(const ObAuditRecordData &record, const AdaptivePCConf *adpt_pc_conf);
+  void set_extend_sql_plan_monitor_metrics() { extend_sql_plan_monitor_metrics_ = true; }
+  bool extend_sql_plan_monitor_metrics() const { return extend_sql_plan_monitor_metrics_; }
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
@@ -788,6 +790,7 @@ private:
   common::ObFixedArray<common::ObAddr, common::ObIAllocator> px_node_addrs_;
   int64_t px_node_count_;
   int64_t px_worker_share_plan_enabled_;
+  bool extend_sql_plan_monitor_metrics_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

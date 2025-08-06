@@ -12538,6 +12538,7 @@ def_table_schema(
     ('WORKAREA_MAX_TEMPSEG', 'int'),
     ('SQL_ID', 'varchar:OB_MAX_SQL_ID_LENGTH'),
     ('PLAN_HASH_VALUE', 'uint'),
+    ('RAW_PROFILE', 'varbinary:65536'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',

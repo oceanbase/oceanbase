@@ -2848,7 +2848,6 @@ int ObInnerTableSchema::all_virtual_table_mgr_schema(ObTableSchema &table_schema
       false, //is_nullable
       false); //is_autoincrement
   }
-
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_num(1);
     table_schema.set_part_level(PARTITION_LEVEL_ONE);

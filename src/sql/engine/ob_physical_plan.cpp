@@ -139,7 +139,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     px_node_policy_(ObPxNodePolicy::INVALID),
     px_node_addrs_(&allocator_),
     px_node_count_(ObPxNodeHint::UNSET_PX_NODE_COUNT),
-    px_worker_share_plan_enabled_(false)
+    px_worker_share_plan_enabled_(false),
+    extend_sql_plan_monitor_metrics_(false)
 {
 }
 
@@ -255,6 +256,7 @@ void ObPhysicalPlan::reset()
   px_node_count_ = ObPxNodeHint::UNSET_PX_NODE_COUNT;
   px_node_addrs_.reset();
   px_worker_share_plan_enabled_ = false;
+  extend_sql_plan_monitor_metrics_ = false;
 }
 void ObPhysicalPlan::destroy()
 {
@@ -918,7 +920,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     px_node_policy_,
                     px_node_addrs_,
                     px_node_count_,
-                    px_worker_share_plan_enabled_);
+                    px_worker_share_plan_enabled_,
+                    extend_sql_plan_monitor_metrics_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

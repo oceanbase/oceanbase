@@ -858,6 +858,10 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
         cells[cell_idx].set_uint64(node.plan_hash_value_);
         break;
       }
+      case RAW_PROFILE: {
+        cells[cell_idx].set_null();
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid column id", K(cell_idx),
