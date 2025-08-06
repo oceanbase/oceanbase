@@ -1675,7 +1675,6 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
       ObVecIndexType pre_vec_type = (vec_index_schema->is_vec_hnsw_index() && helper.vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN) ?
       ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN : ObVecIndexType::VEC_INDEX_PRE;
       if (index_schema->is_spatial_index()) {
-        pre_vec_type = ObVecIndexType::VEC_INDEX_PRE;
         access_path.domain_idx_info_.vec_extra_info_.is_spatial_index_ = true;
       } else if (index_schema->is_multivalue_index()) {
         access_path.domain_idx_info_.vec_extra_info_.is_multi_value_index_ = true;
@@ -1729,7 +1728,8 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
     }
     if (OB_FAIL(ret)) {
     } else if (access_path.domain_idx_info_.vec_extra_info_.vec_idx_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN
-      && access_path.domain_idx_info_.vec_extra_info_.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN
+      && (access_path.domain_idx_info_.vec_extra_info_.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN
+      || access_path.domain_idx_info_.vec_extra_info_.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER)
       && OB_FAIL(ObVectorIndexUtil::set_adaptive_try_path(access_path.domain_idx_info_.vec_extra_info_, index_id == ref_table_id))) {
       LOG_WARN("set vector index adaptive try path", K(ret));
     }

@@ -16073,6 +16073,21 @@ int ObLogPlan::prepare_hnsw_vector_index_scan(ObSchemaGetterGuard *schema_guard,
       if (vc_info.vec_index_post_filter() && table_scan->get_index_table_id() != delta_buffer_tid) {
         table_scan->set_index_table_id(delta_buffer_tid);
       }
+
+      if (OB_FAIL(ret)) {
+      } else if (vc_info.is_vec_adaptive_iter_scan()) {
+        const ObTableSchema *vec_table_schema = nullptr;
+        if (OB_FAIL(schema_guard->get_table_schema(get_optimizer_context().get_session_info()->get_effective_tenant_id(),
+                                                   delta_buffer_tid,
+                                                   vec_table_schema))) {
+          LOG_WARN("failed to get table schema", K(ret));
+        } else if (OB_ISNULL(vec_table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null schema", K(ret));
+        } else if (OB_FAIL(vec_table_schema->get_index_name(vc_info.vec_index_name_))) {
+          LOG_WARN("failed to get index name", K(ret));
+        }
+      }
     }
   }
   return ret;

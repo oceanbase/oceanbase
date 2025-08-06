@@ -33,17 +33,23 @@ namespace sql
 int ObDASHNSWScanIter::do_table_scan()
 {
   int ret = OB_SUCCESS;
+
   if (!is_primary_pre_with_rowkey_with_filter_) {
     if (is_pre_filter() || is_in_filter()) {
+      ObDASScanIter *idx_scan_iter = static_cast<ObDASScanIter *>(inv_idx_scan_iter_);
       if (OB_ISNULL(inv_idx_scan_iter_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("inv idx scan iter is null", K(ret));
+      } else if (OB_FALSE_IT(idx_scan_iter->get_scan_param().need_switch_param_ = false)) {
       } else if (OB_FAIL(inv_idx_scan_iter_->do_table_scan())) {
         LOG_WARN("failed to do inv idx table scan.", K(ret));
+      } else {
+        idx_iter_first_scan_ = false;
       }
     }
   } else {
-    if (OB_ISNULL(rowkey_vid_iter_)) {
+    if (!is_pre_filter() && !is_in_filter()) {
+    } else if (OB_ISNULL(rowkey_vid_iter_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rowkey vid iter is null", K(ret));
     } else if (OB_FAIL(build_rowkey_vid_range())) {
@@ -102,13 +108,15 @@ int ObDASHNSWScanIter::rescan()
       }
     }
   } else {
-    if (OB_ISNULL(rowkey_vid_iter_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("rowkey vid iter is null", K(ret));
-    } else if (OB_FAIL(build_rowkey_vid_range())) {
-      LOG_WARN("fail to build rowkey vid range", K(ret));
-    } else if (OB_FAIL(do_rowkey_vid_table_scan())) {
-      LOG_WARN("fail to do rowkey vid table scan.", K(ret));
+    if (is_pre_filter() || is_in_filter()) {
+      if (OB_ISNULL(rowkey_vid_iter_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("rowkey vid iter is null", K(ret));
+      } else if (OB_FAIL(build_rowkey_vid_range())) {
+        LOG_WARN("fail to build rowkey vid range", K(ret));
+      } else if (OB_FAIL(do_rowkey_vid_table_scan())) {
+        LOG_WARN("fail to do rowkey vid table scan.", K(ret));
+      }
     }
   }
 
@@ -196,9 +204,9 @@ int ObDASHNSWScanIter::inner_init(ObDASIterParam &param)
       ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(*exec_ctx_);
       ObVecIdxAdaTryPath cur_path = ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN;
       if (OB_ISNULL(plan_ctx->get_phy_plan())) {
-        ret = OB_ERR_UNEXPECTED;
+        // remote scan, phy plan is null, do nothing, just use try path in ctdef
         LOG_WARN("plan ctx is null", K(ret), KP(plan_ctx));
-      } else if (OB_FALSE_IT( cur_path = static_cast<ObVecIdxAdaTryPath>(plan_ctx->get_phy_plan()->stat_.vec_index_exec_ctx_.cur_path_))) {
+      } else if (OB_FALSE_IT(cur_path = static_cast<ObVecIdxAdaTryPath>(plan_ctx->get_phy_plan()->stat_.vec_index_exec_ctx_.cur_path_))) {
       } else if (cur_path != vec_idx_try_path_ &&
                  cur_path > ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN &&
                  cur_path < ObVecIdxAdaTryPath::VEC_PATH_MAX) {
@@ -597,16 +605,18 @@ int ObDASHNSWScanIter::reset_filter_path()
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(*exec_ctx_);
   ObPlanStat* plan_stat = nullptr;
   if (OB_ISNULL(plan_ctx->get_phy_plan())) {
-    ret = OB_ERR_UNEXPECTED;
+    // remote scan, phy plan is null, do nothing, just use try path in ctdef
     LOG_WARN("plan ctx is null", K(ret), KP(plan_ctx));
   } else if (OB_FALSE_IT(plan_stat = const_cast<ObPlanStat*>(&(plan_ctx->get_phy_plan()->stat_)))) {
   } else if (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER) {
     vec_idx_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER;
   } else if (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER) {
+    double iter_selectivity = double(adaptive_ctx_.iter_res_row_cnt_) / double(adaptive_ctx_.iter_filter_row_cnt_);
+    adaptive_ctx_.selectivity_ = iter_selectivity;
     vec_idx_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER;
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) || OB_ISNULL(plan_stat)) {
   } else if (OB_FAIL(updata_vec_exec_ctx(plan_stat))) {
     LOG_WARN("failed to updata vec exec ctx", K(ret), K(vec_idx_try_path_));
   } else {
@@ -614,6 +624,16 @@ int ObDASHNSWScanIter::reset_filter_path()
     go_brute_force_ = false;
     only_complete_data_ = false;
     can_retry_ = false;
+    if (OB_NOT_NULL(tmp_adaptor_vid_iter_)) {
+      tmp_adaptor_vid_iter_->reset();
+      tmp_adaptor_vid_iter_->~ObVectorQueryVidIterator();
+      tmp_adaptor_vid_iter_ = nullptr;
+    }
+    if (OB_NOT_NULL(adaptor_vid_iter_)) {
+      adaptor_vid_iter_->reset();
+      adaptor_vid_iter_->~ObVectorQueryVidIterator();
+      adaptor_vid_iter_ = nullptr;
+    }
   }
   return ret;
 }
@@ -634,7 +654,7 @@ int ObDASHNSWScanIter::updata_vec_exec_ctx(ObPlanStat* plan_stat)
       } else if (vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_IN_FILTER) {
         ATOMIC_INC(&(plan_stat->vec_index_exec_ctx_.in_filter_chosen_times_));
       }
-       ATOMIC_INC(&(plan_stat->vec_index_exec_ctx_.record_count_));
+      ATOMIC_INC(&(plan_stat->vec_index_exec_ctx_.record_count_));
     } else {
       double iter_time = plan_stat->vec_index_exec_ctx_.iter_filter_chosen_times_;
       double pre_time = plan_stat->vec_index_exec_ctx_.pre_filter_chosen_times_;
@@ -642,7 +662,7 @@ int ObDASHNSWScanIter::updata_vec_exec_ctx(ObPlanStat* plan_stat)
       iter_time = std::log(iter_time) * DECAY_FACTOR;
       pre_time = std::log(pre_time) * DECAY_FACTOR;
       in_time = std::log(in_time) * DECAY_FACTOR;
-      LOG_INFO("begin to reset plan stat filter path", K(plan_stat->vec_index_exec_ctx_.record_count_),
+      FLOG_INFO("begin to reset plan stat filter path", K(plan_stat->vec_index_exec_ctx_.record_count_),
       K(plan_stat->vec_index_exec_ctx_.cur_path_), K(vec_idx_try_path_), K(adaptive_ctx_), K(ret));
       ATOMIC_STORE(&(plan_stat->vec_index_exec_ctx_.record_count_), 0);
       ATOMIC_STORE(&(plan_stat->vec_index_exec_ctx_.iter_filter_chosen_times_), static_cast<int64_t>(iter_time));
@@ -661,11 +681,20 @@ int ObDASHNSWScanIter::process_adaptor_state(bool is_vectorized)
   if (OB_FAIL(inner_process_adaptor_state(is_vectorized))) {
     if (ret == OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY && can_retry_) {
       ret = OB_SUCCESS;
-      LOG_INFO("hnsw change filter path", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
       if (OB_FAIL(reset_filter_path())) {
         LOG_WARN("failed to reset filter path", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_), K(ret));
-      } else if (OB_FAIL(do_table_scan())) {
-        LOG_WARN("failed to do table scan", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
+      } else if (!is_pre_filter() && !is_in_filter()) {
+        // do not need scan/rescan idx iter
+      } else if (idx_iter_first_scan_) {
+        if (OB_FAIL(do_table_scan())) {
+          LOG_WARN("failed to do table scan", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
+        }
+      } else if (!idx_iter_first_scan_) {
+        if (OB_FAIL(rescan())) {
+          LOG_WARN("failed to do table rescan", K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(inner_process_adaptor_state(is_vectorized))) {
         LOG_WARN("failed to process adaptor state hnsw", K(extra_column_count_), K(is_primary_pre_with_rowkey_with_filter_),
                                                          K(data_filter_ctdef_), K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
@@ -1152,6 +1181,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
               }
             }
           }
+          adaptive_ctx_.pre_scan_row_cnt_ += batch_row_count;
         } else {
           rowkey_vid_iter_->clear_evaluated_flag();
           int64_t scan_row_cnt = 0;
@@ -1164,6 +1194,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
 
           if (OB_FAIL(ret) && OB_ITER_END != ret) {
           } else if (scan_row_cnt > 0) {
+            adaptive_ctx_.pre_scan_row_cnt_ += scan_row_cnt;
             ret = OB_SUCCESS;
           }
 
@@ -1200,6 +1231,10 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_rowkey(
               }
             }
           }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (can_retry_ && !go_brute_force_ && OB_FAIL(check_pre_filter_need_retry())) {
+          LOG_WARN("ret of check iter filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
         }
       } // end while
     }
@@ -1343,8 +1378,8 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_idx_filter(
           }
           if (OB_FAIL(ret)) {
             LOG_WARN("failed to get next row.", K(ret));
-          } else if (can_retry_ && !go_brute_force_&& OB_FAIL(check_pre_filter_need_retry())) {
-            LOG_WARN("ret of check iter filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
+          } else if (can_retry_ && !go_brute_force_ && OB_FAIL(check_pre_filter_need_retry())) {
+            LOG_WARN("ret of check pre filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
           } else {
             ObEvalCtx::BatchInfoScopeGuard guard(*vec_aux_rtdef_->eval_ctx_);
             guard.set_batch_size(scan_row_cnt);
@@ -1766,7 +1801,7 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
         adaptive_ctx_.iter_res_row_cnt_ += added_cnt;
         adaptive_ctx_.iter_filter_row_cnt_ += unfiltered_vid_cnt;
         if (can_retry_ && OB_FAIL(check_iter_filter_need_retry())) {
-          LOG_WARN("ret of check pre filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
+          LOG_WARN("ret of check iter filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
         } else if (need_cnt_next > 0) {
           float need_ratio = static_cast<float>(need_cnt_next) / static_cast<float>(added_cnt);
           float select_ratio = static_cast<float>(added_cnt) / static_cast<float>(unfiltered_vid_cnt);

@@ -2254,6 +2254,7 @@ int ObLogTableScan::get_plan_object_info(PlanText &plan_text,
     //print object alias
     const ObString &name = get_table_name();
     const ObString &index_name = get_index_name();
+    ObVecIndexInfo &vc_info = get_vector_index_info();
     BEGIN_BUF_PRINT;
     if (OB_FAIL(BUF_PRINTF("%.*s", name.length(), name.ptr()))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
@@ -2289,6 +2290,9 @@ int ObLogTableScan::get_plan_object_info(PlanText &plan_text,
       if (OB_FAIL(BUF_PRINTF("%s", LEFT_BRACKET))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else if (OB_FAIL(BUF_PRINTF("%.*s", index_name.length(), index_name.ptr()))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (vc_info.is_vec_adaptive_iter_scan() && (OB_FAIL(BUF_PRINTF(","))
+                || OB_FAIL(BUF_PRINTF("%.*s", vc_info.get_vec_index_name().length(), vc_info.get_vec_index_name().ptr())))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else if (is_descending_direction(get_scan_direction()) &&
                  OB_FAIL(BUF_PRINTF("%s", COMMA_REVERSE))) {
@@ -2768,6 +2772,7 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
   ObItemType index_type = T_INDEX_HINT;
   const ObDMLStmt *stmt = NULL;
   bool use_desc_hint = get_scan_direction() == default_desc_direction();
+  ObVecIndexInfo &vc_info = get_vector_index_info();
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2790,6 +2795,8 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
     use_desc_hint &= stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5);
   }
   if (OB_FAIL(ret)) {
+  } else if (vc_info.is_vec_adaptive_iter_scan()) {
+    index_name = &vc_info.get_vec_index_name();
   } else if (is_skip_scan()) {
     index_type = use_desc_hint ? T_INDEX_SS_DESC_HINT : T_INDEX_SS_HINT;
     if (ref_table_id_ == index_table_id_) {

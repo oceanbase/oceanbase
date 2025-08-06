@@ -265,7 +265,8 @@ public:
       vec_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
       vec_idx_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
       adaptive_ctx_(),
-      can_retry_(false) {
+      can_retry_(false),
+      idx_iter_first_scan_(true) {
         extra_in_rowkey_idxs_.set_attr(ObMemAttr(MTL_ID(), "ExtraIdx"));
       }
 
@@ -406,7 +407,7 @@ private:
 private:
   static const uint64_t MAX_VSAG_QUERY_RES_SIZE = 16384;
   static const uint64_t VSAG_MAX_EF_SEARCH = 1000;
-  static constexpr double FIXED_MAGNIFICATION_RATIO = 1.0;
+  static constexpr double FIXED_MAGNIFICATION_RATIO = 2.0;
   static constexpr double ITER_CONSIDER_LAST_SEARCH_SELETIVITY = 0.05;
   static const uint64_t MAX_OPTIMIZE_BATCH_COUNT = 16;
   static const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
@@ -481,6 +482,7 @@ private:
   ObVecIdxAdaTryPath vec_idx_try_path_;
   ObHnswAadaptiveCtx adaptive_ctx_;
   bool can_retry_;
+  bool idx_iter_first_scan_;
 };
 
 
