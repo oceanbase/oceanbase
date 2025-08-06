@@ -393,6 +393,10 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_GRANT_REVOKE_SENSITIVE_RULE, = 2151)                \
   ACT(OB_DDL_DEL_SENSITIVE_RULE_PRIV, = 2152)                    \
   ACT(OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_END, = 2153)          \
+  ACT(OB_DDL_AI_MODEL_OPERATION_BEGIN, = 2154)                   \
+  ACT(OB_DDL_CREATE_AI_MODEL, = 2155)                            \
+  ACT(OB_DDL_DROP_AI_MODEL, = 2156)                              \
+  ACT(OB_DDL_AI_MODEL_OPERATION_END, = 2157)                     \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);

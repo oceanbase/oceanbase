@@ -8272,6 +8272,9 @@ def_table_schema(**gen_history_table_def(555, all_external_resource))
 # 567: __all_backup_validate_ls_task
 # 568: __all_backup_validate_ls_task_history
 # 569: __all_tenant_ss_storage_stat
+# 570: __all_ai_model
+# 571: __all_ai_model_history
+# 572: __all_ai_model_endpoint
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -16892,7 +16895,9 @@ def_table_schema(
   in_tenant_space = True,
 )
 
-
+# 12572: __all_virtual_ai_model
+# 12573: __all_virtual_ai_model_history
+# 12574: __all_virtual_ai_model_endpoint
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -43025,7 +43030,10 @@ WHERE
 # 21686: DBA_OB_SS_SPACE_USAGE
 # 21687: GV$OB_HMS_CLIENT_POOL_STAT
 # 21688: V$OB_HMS_CLIENT_POOL_STAT
-
+# 21689: DBA_OB_AI_MODELS
+# 21690: DBA_OB_AI_MODEL_ENDPOINTS
+# 21691: CDB_OB_AI_MODELS
+# 21692: CDB_OB_AI_MODEL_ENDPOINTS
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################

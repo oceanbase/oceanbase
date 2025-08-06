@@ -2041,6 +2041,14 @@ constexpr int OB_INVALID_HMS_METASTORE = -11108;
 constexpr int OB_HMS_PARTITION_ERROR = -11109;
 constexpr int OB_HMS_DB_NOT_FOUND = -11110;
 constexpr int OB_HMS_TABLE_NOT_FOUND = -11111;
+constexpr int OB_AI_FUNC_ENDPOINT_NOT_FOUND = -11112;
+constexpr int OB_AI_FUNC_ENDPOINT_EXISTS = -11113;
+constexpr int OB_AI_FUNC_PARAM_EMPTY = -11114;
+constexpr int OB_AI_FUNC_PARAM_INVALID = -11115;
+constexpr int OB_AI_FUNC_PARAM_VALUE_INVALID = -11116;
+constexpr int OB_AI_FUNC_PARAM_TYPE_INVALID = -11117;
+constexpr int OB_AI_FUNC_MODEL_NOT_FOUND = -11118;
+constexpr int OB_AI_FUNC_MODEL_EXISTS = -11119;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -4532,6 +4540,14 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_HMS_PARTITION_ERROR__USER_ERROR_MSG "HMS partition error"
 #define OB_HMS_DB_NOT_FOUND__USER_ERROR_MSG "HMS database: '%.*s' not found"
 #define OB_HMS_TABLE_NOT_FOUND__USER_ERROR_MSG "HMS table: '%.*s' not found"
+#define OB_AI_FUNC_ENDPOINT_NOT_FOUND__USER_ERROR_MSG "This ai model endpoint \'%.*s\' not found in the tenant"
+#define OB_AI_FUNC_ENDPOINT_EXISTS__USER_ERROR_MSG "This ai model endpoint \'%.*s\' is already exists"
+#define OB_AI_FUNC_PARAM_EMPTY__USER_ERROR_MSG "The param \'%.*s\' is empty or null"
+#define OB_AI_FUNC_PARAM_INVALID__USER_ERROR_MSG "The param \'%.*s\' is invalid"
+#define OB_AI_FUNC_PARAM_VALUE_INVALID__USER_ERROR_MSG "The value of param \'%.*s\' is invalid"
+#define OB_AI_FUNC_PARAM_TYPE_INVALID__USER_ERROR_MSG "This type of param \'%.*s\' is invalid, should be %.*s"
+#define OB_AI_FUNC_MODEL_NOT_FOUND__USER_ERROR_MSG "This ai model \'%.*s\' not found in the tenant"
+#define OB_AI_FUNC_MODEL_EXISTS__USER_ERROR_MSG "This ai model \'%.*s\' is already exists"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -9503,6 +9519,22 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_HMS_DB_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11110, HMS database: '%.*s' not found"
 #define OB_HMS_TABLE_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11111, HMS table: '%.*s' not found"
 #define OB_HMS_TABLE_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11111, HMS table: '%.*s' not found"
+#define OB_AI_FUNC_ENDPOINT_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11112, This ai model endpoint \'%.*s\' not found in the tenant"
+#define OB_AI_FUNC_ENDPOINT_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11112, This ai model endpoint \'%.*s\' not found in the tenant"
+#define OB_AI_FUNC_ENDPOINT_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11113, This ai model endpoint \'%.*s\' is already exists"
+#define OB_AI_FUNC_ENDPOINT_EXISTS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11113, This ai model endpoint \'%.*s\' is already exists"
+#define OB_AI_FUNC_PARAM_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11114, The param \'%.*s\' is empty or null"
+#define OB_AI_FUNC_PARAM_EMPTY__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11114, The param \'%.*s\' is empty or null"
+#define OB_AI_FUNC_PARAM_INVALID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11115, The param \'%.*s\' is invalid"
+#define OB_AI_FUNC_PARAM_INVALID__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11115, The param \'%.*s\' is invalid"
+#define OB_AI_FUNC_PARAM_VALUE_INVALID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11116, The value of param \'%.*s\' is invalid"
+#define OB_AI_FUNC_PARAM_VALUE_INVALID__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11116, The value of param \'%.*s\' is invalid"
+#define OB_AI_FUNC_PARAM_TYPE_INVALID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11117, This type of param \'%.*s\' is invalid, should be %.*s"
+#define OB_AI_FUNC_PARAM_TYPE_INVALID__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11117, This type of param \'%.*s\' is invalid, should be %.*s"
+#define OB_AI_FUNC_MODEL_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11118, This ai model \'%.*s\' not found in the tenant"
+#define OB_AI_FUNC_MODEL_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11118, This ai model \'%.*s\' not found in the tenant"
+#define OB_AI_FUNC_MODEL_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11119, This ai model \'%.*s\' is already exists"
+#define OB_AI_FUNC_MODEL_EXISTS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11119, This ai model \'%.*s\' is already exists"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9522,7 +9554,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2487];
+extern int g_all_ob_errnos[2495];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

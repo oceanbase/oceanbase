@@ -2927,6 +2927,14 @@ DEFINE_ERROR_EXT(OB_INVALID_HMS_METASTORE, -11108, -1, "HY000", "Invalid HMS met
 DEFINE_ERROR(OB_HMS_PARTITION_ERROR, -11109, -1, "HY000", "HMS partition error");
 DEFINE_ERROR_EXT(OB_HMS_DB_NOT_FOUND, -11110, -1, "HY000", "HMS database not found", "HMS database: '%.*s' not found");
 DEFINE_ERROR_EXT(OB_HMS_TABLE_NOT_FOUND, -11111, -1, "HY000", "HMS table not found", "HMS table: '%.*s' not found");
+DEFINE_ERROR_EXT(OB_AI_FUNC_ENDPOINT_NOT_FOUND, -11112, -1, "HY000", "This ai model endpoint is not found in the tenant", "This ai model endpoint \'%.*s\' not found in the tenant");
+DEFINE_ERROR_EXT(OB_AI_FUNC_ENDPOINT_EXISTS, -11113, -1, "HY000", "This ai model endpoint is already exists", "This ai model endpoint \'%.*s\' is already exists");
+DEFINE_ERROR_EXT(OB_AI_FUNC_PARAM_EMPTY, -11114, -1, "HY000", "The param is empty or null", "The param \'%.*s\' is empty or null");
+DEFINE_ERROR_EXT(OB_AI_FUNC_PARAM_INVALID, -11115, -1, "HY000", "The param is invalid", "The param \'%.*s\' is invalid");
+DEFINE_ERROR_EXT(OB_AI_FUNC_PARAM_VALUE_INVALID, -11116, -1, "HY000", "The param value is invalid", "The value of param \'%.*s\' is invalid");
+DEFINE_ERROR_EXT(OB_AI_FUNC_PARAM_TYPE_INVALID, -11117, -1, "HY000", "This param type is invalid", "This type of param \'%.*s\' is invalid, should be %.*s");
+DEFINE_ERROR_EXT(OB_AI_FUNC_MODEL_NOT_FOUND, -11118, -1, "HY000", "This ai model is not found in the tenant", "This ai model \'%.*s\' not found in the tenant");
+DEFINE_ERROR_EXT(OB_AI_FUNC_MODEL_EXISTS, -11119, -1, "HY000", "This ai model is already exists", "This ai model \'%.*s\' is already exists");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)

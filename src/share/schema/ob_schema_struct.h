@@ -1329,6 +1329,7 @@ typedef enum {
   LOCATION_SCHEMA = 45,
   OBJ_MYSQL_PRIV = 46,
   EXTERNAL_RESOURCE_SCHEMA = 47,
+  AI_MODEL_SCHEMA = 48,
   ///<<< add schema type before this line
   OB_MAX_SCHEMA
 } ObSchemaType;
