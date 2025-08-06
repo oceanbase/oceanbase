@@ -2927,6 +2927,7 @@ typedef enum ObItemType
   T_TYPE_ALTER_ATTR_LIST = 4905,
   T_COMMON_IDENTIFIER_LIST = 4906,
   T_ALTER_ATTRIBUTE_DEFINITION_LIST = 4907,
+  T_REPLACE_TENANT = 4908,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
