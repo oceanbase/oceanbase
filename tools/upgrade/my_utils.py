@@ -4,7 +4,6 @@
 import mysql.connector
 from mysql.connector import errorcode
 from my_error import MyError
-from actions import QueryCursor
 import logging
 
 def results_to_str(desc, results):
@@ -45,3 +44,47 @@ def query_and_dump_results(query_cur, sql):
   result_str = results_to_str(desc, results)
   logging.info('dump query results, sql: %s, results:\n%s', sql, result_str)
 
+upgrade_session_timeout_set = False
+
+# set_session_timeout_for_upgrade这个函数只能被调用一次，设置当前升级流程里所有SQL的timeout，单个步骤需要改timeout请使用SetSessionTimeout
+# 用法：
+# with SetSessionTimeout(cur, timeout):
+#   # some code here
+#   pass
+def set_session_timeout_for_upgrade(cur, time):
+  global upgrade_session_timeout_set
+  if upgrade_session_timeout_set:
+    raise MyError('error in upgrade script, set_session_timeout_for_upgrade should only be called once')
+  upgrade_session_timeout_set = True
+  sql = "set @@session.ob_query_timeout = {0}".format(time)
+  logging.info(sql)
+  cur.execute(sql)
+
+class SetSessionTimeout:
+  def set_session_timeout(self, cur, time):
+    sql = "set @@session.ob_query_timeout = {0}".format(time)
+    logging.info(sql)
+    cur.execute(sql)
+
+  def get_session_timeout(self, cur):
+    sql = "select @@session.ob_query_timeout"
+    cur.execute(sql)
+    results = cur.fetchall()
+    if len(results) != 1 or len(results[0]) != 1:
+      logging.exception('results unexpected')
+    else:
+      return int(results[0][0])
+
+  def __init__(self, cur, seconds):
+    self.cur = cur
+    self.query_timeout_before = self.get_session_timeout(cur)
+    self.timeout_overall = seconds * 1000 * 1000
+
+  # 类似于C++里的RAII，会在with语句入口处调用__enter__，出口处调用__exit__
+  def __enter__(self):
+    if self.timeout_overall != 0:
+      self.set_session_timeout(self.cur, self.timeout_overall)
+
+  def __exit__(self, exc_type, exc_val, exc_tb):
+    if self.timeout_overall != 0:
+      self.set_session_timeout(self.cur, self.query_timeout_before)
