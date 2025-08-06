@@ -1010,18 +1010,6 @@ public:
 struct ObCreateIndexArg;//Forward declaration
 struct ObCreateForeignKeyArg;//Forward declaration
 
-struct ObMVAdditionalInfo
-{
-  OB_UNIS_VERSION(1);
-public:
-  share::schema::ObTableSchema container_table_schema_;
-  ObMVRefreshInfo mv_refresh_info_;
-
-  int assign(const ObMVAdditionalInfo &other);
-
-  TO_STRING_KV(K_(container_table_schema), K_(mv_refresh_info));
-};
-
 struct ObCreateTableArg : ObDDLArg
 {
   OB_UNIS_VERSION(1);
