@@ -438,7 +438,7 @@ int ObTableCkmItems::validate_column_ckm_sum(
     LOG_WARN("failed to build column ckm sum map for index table", KR(ret));
   } else if (OB_UNLIKELY(data_row_cnt != index_row_cnt)) {
     ret = OB_CHECKSUM_ERROR;
-    LOG_ERROR("sum row count in data & global index is not equal", KR(ret), K(data_row_cnt), K(index_row_cnt));
+    LOG_WARN("sum row count in data & global index is not equal", KR(ret), K(data_row_cnt), K(index_row_cnt));
   } else if (OB_FAIL(compare_ckm_by_column_ids(
                  data_ckm,
                  index_ckm,
