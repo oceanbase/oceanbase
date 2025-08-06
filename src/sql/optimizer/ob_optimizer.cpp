@@ -271,9 +271,8 @@ int ObOptimizer::get_session_parallel_info(int64_t &force_parallel_dop,
   if (OB_ISNULL(session_info = ctx_.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(session_info), K(ret));
-  } else if (!session_info->is_user_session() && !session_info->get_ddl_info().is_refreshing_mview()) {
-    // sys var是依赖于schema的方式实现的，获得最新的sys var需要通过inner SQL的方式，会产生循环依赖
-    // 因此inner SQL情况下不考虑系统变量`SYS_VAR__ENABLE_PARALLEL_QUERY`的值
+  } else if (!allowed_get_session_parallel_param(*session_info)) {
+    /* do nothing */
   } else if (OB_FAIL(session_info->get_parallel_degree_policy_enable_auto_dop(enable_auto_dop))) {
     LOG_WARN("failed to get sys variable for parallel degree policy", K(ret));
   } else if (enable_auto_dop) {
@@ -370,7 +369,7 @@ int ObOptimizer::check_parallel_das_dml_enabled(const ObDMLStmt &stmt,
     // It can be supported, but we won’t let it go for now and wait for the follow-up.
     can_use_parallel_das_dml = false;
     LOG_TRACE("has var_assign, can't support parallel_das_dml now");
-  } else if (!session.is_user_session()) {
+  } else if (!allowed_get_session_parallel_param(session)) {
     // not user request
     can_use_parallel_das_dml = false;
     LOG_TRACE("not user request, can't support parallel_das_dml");
@@ -480,12 +479,12 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
     can_use_pdml = false; // 1. disable parallel dml by hint
   } else if (ctx_.get_global_hint().enable_auto_dop()) {
     // 2.1 enable parallel dml by auto dop
-  } else if (session.is_user_session() &&
+  } else if (allowed_get_session_parallel_param(session) &&
              OB_FAIL(session.get_parallel_degree_policy_enable_auto_dop(enable_auto_dop))) {
     LOG_WARN("failed to get sys variable for parallel degree policy", K(ret));
   } else if (enable_auto_dop && !ctx_.get_global_hint().has_parallel_hint()) {
     // 2.2 enable parallel dml by auto dop
-  } else if (!session.is_user_session() && !session.get_ddl_info().is_refreshing_mview()) {
+  } else if (!allowed_get_session_parallel_param(session)) {
     can_use_pdml = false;
   } else if (OB_FAIL(session.get_enable_parallel_dml(session_enable_pdml))
              || OB_FAIL(session.get_force_parallel_dml_dop(session_pdml_dop))) {
@@ -979,8 +978,8 @@ int ObOptimizer::init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &s
   } else if (ctx_.get_query_ctx()->get_query_hint().has_outline_data()) {
     ctx_.set_parallel_rule(PXParallelRule::MANUAL_HINT);
     ctx_.set_parallel(ObGlobalHint::DEFAULT_PARALLEL);
-  } else if (session.is_user_session() && !ctx_.get_global_hint().enable_manual_dop() &&
-             OB_FAIL(OB_E(EventTable::EN_ENABLE_AUTO_DOP_FORCE_PARALLEL_PLAN) OB_SUCCESS)) {
+  } else if (allowed_get_session_parallel_param(session) && !ctx_.get_global_hint().enable_manual_dop()
+             && OB_FAIL(OB_E(EventTable::EN_ENABLE_AUTO_DOP_FORCE_PARALLEL_PLAN) OB_SUCCESS)) {
     ret = OB_SUCCESS;
     ctx_.set_parallel_rule(PXParallelRule::AUTO_DOP);
   } else if (OB_FAIL(get_session_parallel_info(session_force_parallel_dop,
@@ -1131,13 +1130,20 @@ int ObOptimizer::init_table_access_policy(ObDMLStmt &stmt, const ObSQLSessionInf
   return ret;
 }
 
+// sys var是依赖于schema的方式实现的，获得最新的sys var需要通过inner SQL的方式，会产生循环依赖
+// 因此inner SQL情况下不考虑系统变量`SYS_VAR__ENABLE_PARALLEL_QUERY`等值
+bool ObOptimizer::allowed_get_session_parallel_param(const ObSQLSessionInfo &session)
+{
+  return session.is_user_session() || session.get_ddl_info().is_refreshing_mview();
+}
+
 int ObOptimizer::set_auto_dop_params(const ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   uint64_t parallel_degree_limit = 0;
   uint64_t parallel_min_scan_time_threshold = 1000;
   AutoDOPParams params;
-  if (!session.is_user_session()) {
+  if (!allowed_get_session_parallel_param(session)) {
     /* do nothing */
   } else if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_PARALLEL_DEGREE_LIMIT, parallel_degree_limit))) {
     LOG_WARN("failed to get sys variable parallel degree limit", K(ret));
@@ -1151,7 +1157,7 @@ int ObOptimizer::set_auto_dop_params(const ObSQLSessionInfo &session)
     if (OB_ISNULL(tenant = MTL_CTX())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
-    } else if (session.is_user_session() &&
+    } else if (allowed_get_session_parallel_param(session) &&
                OB_FAIL(ObSchemaUtils::get_tenant_int_variable(session.get_effective_tenant_id(),
                                                               SYS_VAR_PARALLEL_SERVERS_TARGET,
                                                               parallel_servers_target))) {

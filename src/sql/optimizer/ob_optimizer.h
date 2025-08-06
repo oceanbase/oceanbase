@@ -206,6 +206,7 @@ namespace sql
     int init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &session);
     int init_replica_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &session);
     int set_auto_dop_params(const ObSQLSessionInfo &session);
+    bool allowed_get_session_parallel_param(const ObSQLSessionInfo &session);
     int check_pdml_enabled(const ObDMLStmt &stmt,
                            const ObSQLSessionInfo &session);
     int check_direct_load_enabled(const ObDMLStmt &stmt,
