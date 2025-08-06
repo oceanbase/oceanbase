@@ -214,7 +214,8 @@ public:
       uint64_t is_index_merge_               : 1; // whether used for index merge
       uint64_t is_new_query_range_           : 1; // whether use new query range
       uint64_t enable_new_false_range_       : 1; // whether use new false range
-      uint64_t reserved_                     : 61;
+      uint64_t has_local_dynamic_filter_     : 1; // whether has local dynamic filter
+      uint64_t reserved_                     : 60;
     };
   };
   ObFixedArray<share::DomainIdxs, common::ObIAllocator> domain_id_idxs_;
@@ -270,7 +271,8 @@ public:
       row_scan_cnt_(0),
       task_type_(ObDASScanTaskType::SCAN),
       das_execute_local_info_(nullptr),
-      das_execute_remote_info_(nullptr)
+      das_execute_remote_info_(nullptr),
+      local_dynamic_filter_params_()
   { }
 
   virtual ~ObDASScanRtDef();
@@ -295,7 +297,8 @@ public:
                        K_(scan_op_id),
                        K_(scan_rows_size),
                        K_(das_tasks_key),
-                       K_(in_row_cache_threshold));
+                       K_(in_row_cache_threshold),
+                       K_(local_dynamic_filter_params));
   int init_pd_op(ObExecContext &exec_ctx, const ObDASScanCtDef &scan_ctdef);
 
   storage::ObRow2ExprsProjector *p_row2exprs_projector_;
@@ -333,6 +336,7 @@ public:
   ObDASScanTaskType task_type_;
   ObDasExecuteLocalInfo *das_execute_local_info_;
   ObDasExecuteRemoteInfo *das_execute_remote_info_;
+  common::ObSEArray<common::ObDatum, 1> local_dynamic_filter_params_;
 
 private:
   union {

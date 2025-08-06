@@ -515,6 +515,7 @@
 #include "sql/engine/expr/ob_expr_tmp_file_close.h"
 #include "sql/engine/expr/ob_expr_tmp_file_write.h"
 #include "sql/engine/expr/ob_expr_tmp_file_read.h"
+#include "sql/engine/expr/ob_expr_local_dynamic_filter.h"
 
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
@@ -1297,6 +1298,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprInnerInfoColsColumnKeyPrinter);
     REG_OP(ObExprCheckLocationAccess);
     REG_OP(ObExprStartUpMode);
+    REG_OP(ObExprLocalDynamicFilter);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1645,6 +1647,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprTmpFileWrite);
   REG_OP_ORCL(ObExprTmpFileRead);
 #endif
+  REG_OP_ORCL(ObExprLocalDynamicFilter);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

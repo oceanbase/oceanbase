@@ -106,7 +106,8 @@ OB_DEF_SERIALIZE(ObDASScanRtDef)
     row_width_,
     das_tasks_key_,
     row_scan_cnt_,
-    task_type_);
+    task_type_,
+    local_dynamic_filter_params_);
   return ret;
 }
 
@@ -136,7 +137,8 @@ OB_DEF_DESERIALIZE(ObDASScanRtDef)
     row_width_,
     das_tasks_key_,
     row_scan_cnt_,
-    task_type_);
+    task_type_,
+    local_dynamic_filter_params_);
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
   }
@@ -169,7 +171,8 @@ OB_DEF_SERIALIZE_SIZE(ObDASScanRtDef)
     row_width_,
     das_tasks_key_,
     row_scan_cnt_,
-    task_type_);
+    task_type_,
+    local_dynamic_filter_params_);
   return len;
 }
 

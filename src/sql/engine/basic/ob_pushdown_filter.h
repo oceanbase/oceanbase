@@ -113,6 +113,7 @@ enum DynamicFilterType
 {
   JOIN_RUNTIME_FILTER= 0,
   PD_TOPN_FILTER = 1,
+  LOCAL_FILTER = 2,
   MAX_DYNAMIC_FILTER_TYPE
 };
 

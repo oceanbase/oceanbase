@@ -454,6 +454,7 @@
 #include "ob_expr_tmp_file_write.h"
 #include "ob_expr_tmp_file_read.h"
 #include "ob_expr_tmp_file_close.h"
+#include "ob_expr_local_dynamic_filter.h"
 
 namespace oceanbase
 {
@@ -1426,6 +1427,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL,//ObExprUDF::eval_mysql_udtf,                                  /* 861 */
   NULL,//ObExprHiddenClusteringKey::eval_hidden_clustering_key,       /* 862 */
   NULL,//ObExprFormatProfile::format_profile,                         /* 863 */
+  ObExprLocalDynamicFilter::eval_local_dynamic_filter,                /* 864 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1608,6 +1610,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   NULL, // ObExprArrayReplace::eval_array_replace_batch,              /* 176 */
   NULL, // ObExprArrayPopfront::eval_array_popfront_batch,            /* 177 */
   ObExprUDF::eval_udf_batch,                                          /* 178 */
+  ObExprLocalDynamicFilter::eval_local_dynamic_filter_batch,          /* 179 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
