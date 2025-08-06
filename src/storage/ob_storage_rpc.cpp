@@ -5553,6 +5553,7 @@ int ObStorageRpc::get_micro_block_key_set(
   int ret = OB_SUCCESS;
   res.reset();
   obrpc::ObGetMicroBlockKeyArg arg;
+  const int64_t FETCH_MICRO_BLOCK_KEY_SET_TIMEOUT = 60 * 1000 * 1000LL; // 60s
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -5569,6 +5570,7 @@ int ObStorageRpc::get_micro_block_key_set(
     arg.job_info_ = job_info;
     if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_)
         .by(tenant_id)
+        .timeout(FETCH_MICRO_BLOCK_KEY_SET_TIMEOUT)
         .group_id(share::OBCG_STORAGE)
         .fetch_micro_block_keys(arg, res))) {
       LOG_WARN("fail to fetch micro block keys", K(ret), K(tenant_id), K(ls_id), K(src_info));
