@@ -2996,12 +2996,36 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
   ObArray<ObRawExpr*> replace_ref_exprs;
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
     ObQualifiedName& q_name = columns.at(i);
+    ObQualifiedName tmp_q_name = q_name;
     ObRawExpr* real_ref_expr = NULL;
     params_.is_column_ref_ = expr->is_column_ref_expr();
 
     if (OB_FAIL(replace_col_ref_prefix(q_name))) {
       LOG_WARN("replace col udt qname failed", K(ret), K(q_name));
     } else if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr))) {
+      // try to resolve nextval(seq) or currval(seq)
+      if (ret == OB_ERR_BAD_FIELD_ERROR) {
+        if (i + 1 < columns.count()) {
+          ObQualifiedName& q_name_next = columns.at(i + 1);
+          if ((q_name_next.is_pl_udf() || q_name_next.is_pl_var() || q_name_next.is_col_ref_access()) && !q_name_next.access_idents_.empty()) {
+            ObString &access_name = q_name_next.access_idents_.at(0).access_name_;
+            if (ObSequenceNamespaceChecker::is_curr_or_next_val(access_name)) {
+              tmp_q_name.tbl_name_.assign_ptr(const_cast<char *>(q_name.col_name_.ptr()),
+                                          static_cast<int32_t>(q_name.col_name_.length()));
+              tmp_q_name.col_name_.assign_ptr(const_cast<char *>(access_name.ptr()),
+                                          static_cast<int32_t>(access_name.length()));
+              ret = OB_SUCCESS;
+              q_name.ref_expr_ = static_cast<ObColumnRefRawExpr *>(expr);
+              if (OB_FAIL(resolve_qualified_identifier(tmp_q_name, columns, real_exprs, real_ref_expr))) {
+                LOG_WARN("resolve column ref expr failed", K(ret), K(tmp_q_name));
+              }
+              i++;
+            }
+          }
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref expr failed", K(ret), K(q_name));
       report_user_error_msg(ret, expr, q_name);
     } else if (OB_FAIL(real_exprs.push_back(real_ref_expr))) {
