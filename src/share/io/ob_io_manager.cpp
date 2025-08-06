@@ -1623,6 +1623,7 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
   } else {
     tenant_id_ = tenant_id;
     io_scheduler_ = io_scheduler;
+    local_iops_util_ = 0;
     inc_ref();
     is_inited_ = true;
   }
@@ -2747,6 +2748,8 @@ int ObTenantIOManager::print_io_status()
     if (need_print_io_config) {
       int64_t iops = ips + ops;
       double failed_iops = failed_ips + failed_ops;
+      int64_t iops_limit = io_clock_.get_unit_limit(ObIOMode::MAX_MODE) == 0 ? INT64_MAX : io_clock_.get_unit_limit(ObIOMode::MAX_MODE);
+      local_iops_util_ = iops * 100 / iops_limit;
       LOG_INFO("[IO STATUS TENANT]", K_(tenant_id), K_(ref_cnt), K_(io_config),
           "hold_mem", io_allocator_.get_allocated_size(),
           "[FAILED]: "
@@ -2759,9 +2762,10 @@ int ObTenantIOManager::print_io_status()
           "ips", ips,
           "ops", ops,
           "iops", iops,
+          "local_iops_util", local_iops_util_,
           "ibw", ibw,
           "obw", obw,
-          "iops_limit", io_clock_.get_unit_limit(ObIOMode::MAX_MODE),
+          "iops_limit", iops_limit,
           "ibw_limit", io_clock_.get_unit_limit(ObIOMode::READ),
           "obw_limit", io_clock_.get_unit_limit(ObIOMode::WRITE));
     }
