@@ -100,6 +100,10 @@ public:
   int get_need_sync_baseline_keys(ObIAllocator& allocator,
                                   const uint64_t tenant_id,
                                   const int64_t last_sync_time,
+                                  const ObString& sql_id_str,
+                                  const uint64_t database_id,
+                                  const int64_t batch_size,
+                                  int64_t& new_sync_time,
                                   ObIArray<ObBaselineKey>& keys);
 
   int sync_baseline_from_table(ObPlanCache* lib_cache,
