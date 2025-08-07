@@ -125,12 +125,11 @@ public:
     return ret;
   }
 
-  static int gc_tenant_in_ss_with_gc_start_and_end_scn_(
-      const bool is_for_sslog_table,
-      LastSuccSCNs &last_succ_scns,
-      const GCType &gc_type,
-      const SCN &gc_start_scn,
-      const SCN &gc_end_scn)
+  static int gc_tenant_in_ss_with_gc_start_and_end_scn_(const bool is_for_sslog_table,
+                                                        LastSuccSCNs &last_succ_scns,
+                                                        const GCType &gc_type,
+                                                        const SCN &gc_start_scn,
+                                                        const SCN &gc_end_scn)
   {
     int ret = OB_SUCCESS;
     ObArenaAllocator allocator;
@@ -142,7 +141,7 @@ public:
     ObArray<ObFunction<SSGCTaskRet(const ObLSID, const ObTabletID, const SCN)>> gc_task_execute_list;
     ObArray<ObLSID> ls_id_list;
 
-    if (OB_FAIL(MTL(ObSSMetaService *)->get_max_committed_meta_scn(snapshot))) {
+    if (OB_FAIL(MTL(ObSSMetaService *)->get_max_committed_meta_scn(SYS_LS, snapshot))) {
       LOG_WARN("get max_committed_meta_scn from ss_meta_srv failed", KR(ret), K(snapshot));
     } else if (OB_FAIL(get_ls_id_list_(snapshot, ls_id_list))) {
       LOG_WARN("get ls_id_list failed", KR(ret), K(snapshot));
@@ -155,9 +154,18 @@ public:
                                                                 allocator,
                                                                 gc_task_execute_list))) {
       LOG_WARN("build gc_task with gc_start_scn and gc_end_scn failed", KR(ret), K(snapshot));
-    } else if (OB_FAIL(gc_log_streams_in_ss_(snapshot, ls_id_list, gc_task_execute_list, tenant_gc_scn, results))) {
-      LOG_WARN("gc log_streams in ss failed", KR(ret), K(snapshot));
-    } else if (OB_FAIL(set_last_succ_scns_(tenant_gc_scn, results, last_succ_scns))) {
+    } else {
+      for (int64_t i = 0; i < ls_id_list.count() && OB_SUCC(ret); i++) {
+        const ObLSID ls_id = ls_id_list.at(i);
+        SCN ls_gc_scn;
+        if (OB_FAIL(gc_log_stream_in_ss_(snapshot, ls_id, gc_task_execute_list, ls_gc_scn, results))) {
+          LOG_WARN("gc log_streams in ss failed", KR(ret), K(snapshot));
+        } else if (ls_gc_scn.is_valid()) {
+          tenant_gc_scn = SCN::min(tenant_gc_scn, ls_gc_scn);
+        }
+      }
+    }
+    if (FAILEDx(set_last_succ_scns_(tenant_gc_scn, results, last_succ_scns))) {
       LOG_WARN("set last success scns failed", KR(ret), K(tenant_gc_scn));
     }
 
@@ -182,17 +190,26 @@ public:
     } else if (is_for_sslog_table) {
       ObLSID ls_id = SSLOG_LS;
       if (OB_UNLIKELY(OB_SYS_TENANT_ID != MTL_ID())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("should not recycle sslog_table if tenant is not sys", KR(ret));
-      } else if (OB_FAIL(gc_log_stream_in_ss_(snapshot, ls_id, gc_task_execute_list, tenant_gc_scn, results))) {
-        LOG_WARN("gc sslog ls in sys tenant failed", KR(ret), K(snapshot), K(ls_id), K(last_succ_scns));
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("should not recycle sslog_table if tenant is not sys", KR(ret));
+      } else if (OB_FAIL(ls_id_list.push_back(ls_id))) {
+          LOG_WARN("add ls_id into ls_id_list failed", KR(ret), K(ls_id), K(last_succ_scns));
       }
-    } else if (OB_FAIL(get_ls_id_list_(snapshot, ls_id_list))) {
-      LOG_WARN("get ls_id_list failed", KR(ret), K(snapshot));
-    } else if (OB_FAIL(gc_log_streams_in_ss_(snapshot, ls_id_list, gc_task_execute_list, tenant_gc_scn, results))) {
-      LOG_WARN("gc ts in ss failed", KR(ret), K(snapshot), K(last_succ_scns));
-    } else if (OB_FAIL(set_last_succ_scns_(tenant_gc_scn, results, last_succ_scns))) {
-      LOG_WARN("set last success scns failed", KR(ret), K(tenant_gc_scn));
+    } else {
+      ObSSMetaService *ss_meta_srv = nullptr;
+      SCN snapshot;
+      if (OB_ISNULL(ss_meta_srv = MTL(ObSSMetaService *))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ObSSMetaService should not be null", KR(ret));
+      } else if (OB_FAIL(ss_meta_srv->get_max_committed_meta_scn(SYS_LS, snapshot))) {
+          LOG_WARN("get snapshot failed", KR(ret));
+      } else if (OB_FAIL(get_ls_id_list_(snapshot, ls_id_list))) {
+          LOG_WARN("get ls_id_list failed", KR(ret), K(snapshot));
+      }
+    }
+
+    if (FAILEDx(OB_FAIL(gc_log_streams_in_ss_(ls_id_list, is_for_sslog_table, last_succ_scns)))) {
+      LOG_WARN("gc ts in ss failed", KR(ret), K(last_succ_scns));
     }
     return ret;
   }
