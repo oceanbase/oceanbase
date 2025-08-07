@@ -157,6 +157,8 @@ public:
   int update_tenant_preallocated_seqs(const ObTenantMonotonicIncSeqs &preallocated_seqs);
   int get_meta_block_list(common::ObIArray<blocksstable::MacroBlockId> &block_list);
   int read_empty_shell_file(const ObMetaDiskAddr &phy_addr, common::ObArenaAllocator &allocator, char *&buf, int64_t &buf_len);
+  int update_hidden_sys_tenant_super_block_to_real(omt::ObTenant &sys_tenant);
+  int update_real_sys_tenant_super_block_to_hidden(omt::ObTenant &sys_tenant);
 
 private:
   class ObWriteCheckpointTask : public common::ObTimerTask

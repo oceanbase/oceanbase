@@ -597,6 +597,36 @@ int ObTenantStorageMetaService::read_from_disk(
   return ret;
 }
 
+int ObTenantStorageMetaService::update_hidden_sys_tenant_super_block_to_real(omt::ObTenant &sys_tenant)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!common::is_sys_tenant(sys_tenant.id()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only sys tenant can call this method", K(ret), K(sys_tenant.id()));
+  } else if (OB_FAIL(ckpt_slog_handler_.update_hidden_sys_tenant_super_block_to_real(sys_tenant))) {
+    LOG_WARN("failed to update hidden sys tenant super block to real", K(ret), K(sys_tenant.id()));
+  }
+  return ret;
+}
+
+int ObTenantStorageMetaService::update_real_sys_tenant_super_block_to_hidden(omt::ObTenant &sys_tenant)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!common::is_sys_tenant(sys_tenant.id()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only sys tenant can call this method", K(ret), K(sys_tenant.id()));
+  } else if (OB_FAIL(ckpt_slog_handler_.update_real_sys_tenant_super_block_to_hidden(sys_tenant))) {
+    LOG_WARN("failed to update hidden sys tenant super block to real", K(ret), K(sys_tenant.id()));
+  }
+  return ret;
+}
+
 int ObTenantStorageMetaService::read_from_share_blk(
     const ObMetaDiskAddr &addr,
     const int64_t ls_epoch,

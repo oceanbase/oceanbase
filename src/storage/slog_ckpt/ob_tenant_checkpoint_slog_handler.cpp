@@ -1747,6 +1747,79 @@ int ObTenantCheckpointSlogHandler::read_empty_shell_file(
   return ret;
 }
 
+int ObTenantCheckpointSlogHandler::update_hidden_sys_tenant_super_block_to_real(omt::ObTenant &sys_tenant)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantCheckpointSlogHandler not init", K(ret));
+  } else if (OB_UNLIKELY(!common::is_sys_tenant(sys_tenant.id()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only sys tenant can call this method", K(ret), K(sys_tenant.id()));
+  } else {
+    lib::ObMutexGuard guard(super_block_mutex_);
+    if (OB_FAIL(guard.get_ret())) {
+      LOG_WARN("failed to hold super block mutex", K(ret));
+    } else {
+      HEAP_VAR(ObTenantSuperBlock, new_super_block) {
+        new_super_block = sys_tenant.get_super_block();
+        new_super_block.is_hidden_ = false;
+        if (OB_FAIL(SERVER_STORAGE_META_SERVICE.update_tenant_super_block(sys_tenant.get_epoch(), new_super_block))) {
+          LOG_WARN("failed to update tenant super block", K(ret), K(new_super_block));
+        } else {
+          sys_tenant.set_tenant_super_block(new_super_block);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantCheckpointSlogHandler::update_real_sys_tenant_super_block_to_hidden(omt::ObTenant &sys_tenant)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantCheckpointSlogHandler not init", K(ret));
+  } else if (OB_UNLIKELY(!common::is_sys_tenant(sys_tenant.id()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only sys tenant can call this method", K(ret), K(sys_tenant.id()));
+  } else {
+    lib::ObMutexGuard guard(super_block_mutex_);
+    if (OB_FAIL(guard.get_ret())) {
+      LOG_WARN("failed to hold super block mutex", K(ret));
+    } else {
+      HEAP_VARS_2((ObTenantSuperBlock, super_block, OB_SYS_TENANT_ID, /*is_hidden*/true), (ObTenantSuperBlock, old_tenant_super_block)) {
+        if (OB_FAIL(TENANT_SLOGGER.get_active_cursor(super_block.replay_start_point_))) {
+          LOG_WARN("get slog current cursor failed", K(ret));
+        } else if (OB_UNLIKELY(!super_block.replay_start_point_.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("cur_cursor is invalid", K(ret), K_(super_block.replay_start_point));
+        } else {
+          // acquire auto_inc_ls_epoch and preallocated_seqs from old tenant super block.
+          // the tenant epoch is not changed.
+          old_tenant_super_block = sys_tenant.get_super_block();
+          super_block.auto_inc_ls_epoch_ = old_tenant_super_block.auto_inc_ls_epoch_;
+          super_block.preallocated_seqs_ = old_tenant_super_block.preallocated_seqs_;
+          if (GCTX.is_shared_storage_mode()) {
+            super_block.min_file_id_ = old_tenant_super_block.min_file_id_;
+            super_block.max_file_id_ = old_tenant_super_block.max_file_id_;
+          }
+        }
+
+        if (FAILEDx(SERVER_STORAGE_META_SERVICE.update_tenant_super_block(
+            sys_tenant.get_epoch(), super_block))) {
+          LOG_WARN("fail to update tenant super block", K(ret), K(super_block));
+        } else {
+          sys_tenant.set_tenant_super_block(super_block);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+
 int ObTenantCheckpointSlogHandler::create_tenant_ls_item(const ObLSID ls_id, int64_t &ls_epoch)
 {
   int ret = OB_SUCCESS;

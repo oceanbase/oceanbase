@@ -936,19 +936,24 @@ int ObMultiTenant::convert_hidden_to_real_sys_tenant(const ObUnitInfoGetter::ObT
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("must be hidden sys tenant", K(ret));
   } else {
-    HEAP_VAR(ObTenantSuperBlock, new_super_block) {
-      new_super_block = tenant->get_super_block();
-      new_super_block.is_hidden_ = false;
-      if (OB_FAIL(update_tenant_unit_no_lock(unit))) {
-        LOG_WARN("fail to update_tenant_unit_no_lock", K(ret), K(unit));
-      } else if (OB_FAIL(SERVER_STORAGE_META_SERVICE.update_tenant_super_block(
-          tenant->get_epoch(), new_super_block))) {
-        LOG_WARN("fail to update tenant super block", K(ret), K(new_super_block));
-      } else {
-        tenant->set_tenant_super_block(new_super_block);
-        // clear sys tenant prepare gc state
-        tenant->clear_prepare_unit_gc();
+    {
+      ObTenantStorageMetaService *tsms = nullptr;
+      MAKE_TENANT_SWITCH_SCOPE_GUARD(switch_guard);
+      if (OB_FAIL(switch_guard.switch_to(tenant_id))) {
+        LOG_WARN("switch tenant failed", K(ret), K(tenant_id));
+      } else if (OB_ISNULL(tsms = MTL(ObTenantStorageMetaService*))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null tenant storage meta service", K(ret), K(tenant_id));
+      } else if (OB_FAIL(tsms->update_hidden_sys_tenant_super_block_to_real(*tenant))) {
+        LOG_WARN("failed to update tenant super block", K(ret), K(tenant_id));
       }
+    }
+
+    if (FAILEDx(update_tenant_unit_no_lock(unit))) {
+      LOG_WARN("fail to update_tenant_unit_no_lock", K(ret), K(unit));
+    } else {
+      // clear sys tenant prepare gc state
+      tenant->clear_prepare_unit_gc();
     }
   }
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -2316,7 +2321,7 @@ int ObMultiTenant::convert_real_to_hidden_sys_tenant()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("has been hidden sys", K(ret));
   } else {
-    HEAP_VARS_2((ObTenantMeta, tenant_meta), (ObTenantSuperBlock, old_tenant_super_block)) {
+    HEAP_VAR(ObTenantMeta, tenant_meta) {
       if (OB_FAIL(construct_meta_for_hidden_sys(tenant_meta))) {
         LOG_WARN("fail to construct_meta_for_hidden_sys", K(ret));
       }
@@ -2344,29 +2349,22 @@ int ObMultiTenant::convert_real_to_hidden_sys_tenant()
       } else if (FALSE_IT(lock_succ = true)) {
       } else if (OB_FAIL(update_tenant_unit_no_lock(tenant_meta.unit_))) {
         LOG_WARN("fail to update_tenant_unit_no_lock", K(ret), K(tenant_meta));
-      } else if (!GCTX.is_shared_storage_mode()) {
-        ObTenantSwitchGuard guard(tenant);
-        if (OB_FAIL(TENANT_SLOGGER.get_active_cursor(tenant_meta.super_block_.replay_start_point_))) {
-          LOG_WARN("get slog current cursor fail", K(ret));
-        } else if (OB_UNLIKELY(!tenant_meta.super_block_.replay_start_point_.is_valid())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("cur_cursor is invalid", K(ret), K(tenant_meta));
-        }
       }
 
       if (OB_SUCC(ret)) {
-        // acquire auto_inc_ls_epoch and preallocated_seqs from old tenant super block.
-        // the tenant epoch is not changed.
-        old_tenant_super_block = tenant->get_super_block();
-        tenant_meta.super_block_.auto_inc_ls_epoch_ = old_tenant_super_block.auto_inc_ls_epoch_;
-        tenant_meta.super_block_.preallocated_seqs_ = old_tenant_super_block.preallocated_seqs_;
-
-        if (OB_FAIL(SERVER_STORAGE_META_SERVICE.update_tenant_super_block(
-            tenant->get_epoch(), tenant_meta.super_block_))) {
-          LOG_WARN("fail to update tenant super block", K(ret), K(tenant_meta));
-        } else {
-          tenant->set_tenant_super_block(tenant_meta.super_block_);
-          // clear sys tenant prepare gc state
+        {
+          ObTenantStorageMetaService *tsms = nullptr;
+          MAKE_TENANT_SWITCH_SCOPE_GUARD(switch_guard);
+          if (OB_FAIL(switch_guard.switch_to(tenant_id))) {
+            LOG_WARN("switch tenant failed", K(ret), K(tenant_id));
+          } else if (OB_ISNULL(tsms = MTL(ObTenantStorageMetaService*))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null tenant storage meta service", K(ret), K(tenant_id));
+          } else if (OB_FAIL(tsms->update_real_sys_tenant_super_block_to_hidden(*tenant))) {
+            LOG_WARN("failed to update tenant super block", K(ret), K(tenant_id));
+          }
+        }
+        if (OB_SUCC(ret)) {
           tenant->clear_prepare_unit_gc();
         }
       }
