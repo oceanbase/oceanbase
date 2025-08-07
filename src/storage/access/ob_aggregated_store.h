@@ -132,7 +132,7 @@ public:
     void reuse();
     void reset();
     OB_INLINE ObDatum *get_datums() { return datums_; }
-    TO_STRING_KV(K_(size), K_(datums), K_(buf));
+    TO_STRING_KV(K_(size), KP_(datums), K_(buf));
   private:
     int64_t size_;
     ObDatum *datums_;
