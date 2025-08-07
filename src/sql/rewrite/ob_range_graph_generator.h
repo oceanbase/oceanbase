@@ -115,7 +115,7 @@ private:
 
   static int and_two_range_node(ObRangeNode *&l_node,
                                 ObRangeNode *&r_node,
-                                const int64_t column_cnt,
+                                const ObQueryRangeCtx &ctx,
                                 bool &is_merge);
 
   static int or_two_range_node(ObRangeNode *&l_node,

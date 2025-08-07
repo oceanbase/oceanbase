@@ -74,6 +74,16 @@ int ObExprRangeConverter::convert_expr_to_range_node(const ObRawExpr *expr,
     if (OB_FAIL(convert_is_expr(expr, expr_depth, range_node))) {
       LOG_WARN("failed to convert is expr");
     }
+  } else if (T_OP_IS_NOT == expr->get_expr_type() &&
+             ((COMPAT_VERSION_4_2_5_BP6 <= GET_MIN_CLUSTER_VERSION() &&
+               GET_MIN_CLUSTER_VERSION() < COMPAT_VERSION_4_3_0) ||
+              COMPAT_VERSION_4_3_5_BP4 <= GET_MIN_CLUSTER_VERSION()) &&
+             ((COMPAT_VERSION_4_2_5_BP6 <= ctx_.optimizer_features_enable_version_ &&
+               ctx_.optimizer_features_enable_version_ < COMPAT_VERSION_4_3_0) ||
+              COMPAT_VERSION_4_3_5_BP4 <= ctx_.optimizer_features_enable_version_)) {
+    if (OB_FAIL(convert_is_not_expr(expr, expr_depth, range_node))) {
+      LOG_WARN("failed to convert is not expr");
+    }
   } else if (T_OP_BTW == expr->get_expr_type()) {
     if (OB_FAIL(convert_between_expr(expr, expr_depth, range_node))) {
       LOG_WARN("failed to convert between expr");
@@ -670,6 +680,34 @@ int ObExprRangeConverter::convert_is_expr(const ObRawExpr *expr, int64_t expr_de
   return ret;
 }
 
+/**
+ * convert `c1 is not null` to range node
+ * this is for transform "fast min/max", details are in dima-2025032400107742164
+*/
+int ObExprRangeConverter::convert_is_not_expr(const ObRawExpr *expr, int64_t expr_depth, ObRangeNode *&range_node)
+{
+  int ret = OB_SUCCESS;
+  const ObRawExpr* l_expr = nullptr;
+  const ObRawExpr* r_expr = nullptr;
+  ctx_.cur_is_precise_ = false;
+  if (OB_ISNULL(expr) ||
+      OB_ISNULL(l_expr = expr->get_param_expr(0)) ||
+      OB_ISNULL(r_expr = expr->get_param_expr(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null expr", K(expr), K(l_expr), K(r_expr));
+  } else if (ObNullType == r_expr->get_result_type().get_type()) {
+    if (OB_FAIL(gen_is_not_null_range_node(l_expr, expr_depth, range_node))) {
+      LOG_WARN("failed to gen is null expr", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && nullptr == range_node) {
+    if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
+      LOG_WARN("failed to generate always true or fasle node");
+    }
+  }
+  return ret;
+}
+
 int ObExprRangeConverter::gen_is_null_range_node(const ObRawExpr *l_expr, int64_t expr_depth, ObRangeNode *&range_node)
 {
   int ret = OB_SUCCESS;
@@ -691,6 +729,40 @@ int ObExprRangeConverter::gen_is_null_range_node(const ObRawExpr *l_expr, int64_
   } else if (OB_FAIL(fill_range_node_for_basic_cmp(T_OP_NSEQ, key_idx, OB_RANGE_NULL_VALUE, *range_node))) {
     LOG_WARN("get normal cmp keypart failed", K(ret));
   } else if (expr_depth == 0 && OB_FAIL(set_column_flags(key_idx, T_OP_IS))) {
+      LOG_WARN("failed to set column flags", K(ret));
+  } else {
+    ctx_.cur_is_precise_ = true;
+  }
+
+  if (OB_SUCC(ret) && nullptr == range_node) {
+    if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
+      LOG_WARN("failed to generate always true or fasle node");
+    }
+  }
+  return ret;
+}
+
+int ObExprRangeConverter::gen_is_not_null_range_node(const ObRawExpr *l_expr, int64_t expr_depth, ObRangeNode *&range_node)
+{
+  int ret = OB_SUCCESS;
+  int64_t key_idx = -1;
+  range_node = nullptr;
+  ctx_.cur_is_precise_ = false;
+  bool use_implicit_cast_feature = true;
+  if (OB_ISNULL(l_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(l_expr, l_expr, use_implicit_cast_feature))) {
+    LOG_WARN("failed to get expr without lossless cast", K(ret));
+  } else if (!l_expr->has_flag(IS_COLUMN)) {
+    // do nothing
+  } else if (!is_range_key(static_cast<const ObColumnRefRawExpr*>(l_expr)->get_column_id(), key_idx)) {
+    // do nothing
+  } else if (OB_FAIL(alloc_range_node(range_node))) {
+    LOG_WARN("failed to alloc common range node");
+  } else if (OB_FAIL(fill_range_node_for_is_not_null(key_idx, *range_node))) {
+    LOG_WARN("get normal cmp keypart failed", K(ret));
+  } else if (expr_depth == 0 && OB_FAIL(set_column_flags(key_idx, T_OP_IS_NOT))) {
       LOG_WARN("failed to set column flags", K(ret));
   } else {
     ctx_.cur_is_precise_ = true;
@@ -1878,7 +1950,8 @@ int ObExprRangeConverter::fill_range_node_for_basic_cmp(ObItemType cmp_type,
       // c2 <= 10  => (ept, min, min; ept, 10, max)
       // c3 <  10  => (ept, ept, min; ept, ept, 10)
       // c3 <= 10  => (ept, ept, min; ept, ept, 10]
-      range_node.start_keys_[key_idx] = lib::is_oracle_mode() ? OB_RANGE_MIN_VALUE : OB_RANGE_NULL_VALUE;
+      int64_t mysql_start_value = is_contain(ctx_.null_safe_value_idxs_, val_idx) ? OB_RANGE_MIN_VALUE : OB_RANGE_NULL_VALUE;
+      range_node.start_keys_[key_idx] = lib::is_oracle_mode() ? OB_RANGE_MIN_VALUE : mysql_start_value;
       range_node.end_keys_[key_idx] = val_idx;
       if (need_set_flag) {
         range_node.include_start_ = false;
@@ -1904,7 +1977,8 @@ int ObExprRangeConverter::fill_range_node_for_basic_cmp(ObItemType cmp_type,
       // c3 >  10  => (ept, ept, 10; ept, ept, max)
       // c3 >= 10  => [ept, ept, 10; ept, ept, max)
       range_node.start_keys_[key_idx] = val_idx;
-      range_node.end_keys_[key_idx] = lib::is_oracle_mode() ? OB_RANGE_NULL_VALUE : OB_RANGE_MAX_VALUE;
+      int64_t oracle_end_value = is_contain(ctx_.null_safe_value_idxs_, val_idx) ? OB_RANGE_MAX_VALUE : OB_RANGE_NULL_VALUE;
+      range_node.end_keys_[key_idx] = lib::is_oracle_mode() ? oracle_end_value : OB_RANGE_MAX_VALUE;
       if (need_set_flag) {
         range_node.include_start_ = (T_OP_GE == cmp_type);
         range_node.include_end_ = false;
@@ -2007,7 +2081,8 @@ int ObExprRangeConverter::fill_range_node_for_basic_row_cmp(ObItemType cmp_type,
             if (lib::is_oracle_mode()) {
               range_node.start_keys_[key_idx] = OB_RANGE_MIN_VALUE;
             } else {
-              range_node.start_keys_[key_idx] = OB_RANGE_NULL_VALUE;
+              int64_t start_value = is_contain(ctx_.null_safe_value_idxs_, val_idx) ? OB_RANGE_MIN_VALUE : OB_RANGE_NULL_VALUE;
+              range_node.start_keys_[key_idx] = start_value;
             }
           } else {
             if (lib::is_oracle_mode()) {
@@ -2054,7 +2129,8 @@ int ObExprRangeConverter::fill_range_node_for_basic_row_cmp(ObItemType cmp_type,
           range_node.start_keys_[key_idx] = val_idx;
           if (0 == i) {
             if (lib::is_oracle_mode()) {
-              range_node.end_keys_[key_idx] = OB_RANGE_NULL_VALUE;
+              int64_t end_value = is_contain(ctx_.null_safe_value_idxs_, val_idx) ? OB_RANGE_MAX_VALUE : OB_RANGE_NULL_VALUE;
+              range_node.end_keys_[key_idx] = end_value;
             } else {
               range_node.end_keys_[key_idx] = OB_RANGE_MAX_VALUE;
             }
@@ -2105,6 +2181,39 @@ int ObExprRangeConverter::fill_range_node_for_like(const int64_t key_idx,
   } else {
     for (int64_t i = key_idx + 1; i < ctx_.column_cnt_; ++i) {
       range_node.start_keys_[i] = OB_RANGE_MIN_VALUE;
+      range_node.end_keys_[i] = OB_RANGE_MAX_VALUE;
+    }
+  }
+  return ret;
+}
+
+
+int ObExprRangeConverter::fill_range_node_for_is_not_null(const int64_t key_idx,
+                                                          ObRangeNode &range_node) const
+{
+  // range of IS NOT NULL predicate:
+  // mysql mode: (NULL; MAX), (NULL, MAX; MAX, MAX) ...
+  // oralce mode: (MIN; NULL), (MIN, MIN; NULL, MIN) ...
+  int ret = OB_SUCCESS;
+  OB_ASSERT(key_idx < ctx_.column_cnt_);
+  range_node.min_offset_ = key_idx;
+  range_node.max_offset_ = key_idx;
+  for (int64_t i = 0; i < key_idx; ++i) {
+    range_node.start_keys_[i] = OB_RANGE_EMPTY_VALUE;
+    range_node.end_keys_[i] = OB_RANGE_EMPTY_VALUE;
+  }
+  if (is_oracle_mode()) {
+    range_node.start_keys_[key_idx] = OB_RANGE_MIN_VALUE;
+    range_node.end_keys_[key_idx] = OB_RANGE_NULL_VALUE;
+    for (int64_t i = key_idx + 1; i < ctx_.column_cnt_; ++i) {
+      range_node.start_keys_[i] = OB_RANGE_MIN_VALUE;
+      range_node.end_keys_[i] = OB_RANGE_MIN_VALUE;
+    }
+  } else if (is_mysql_mode()) {
+    range_node.start_keys_[key_idx] = OB_RANGE_NULL_VALUE;
+    range_node.end_keys_[key_idx] = OB_RANGE_MAX_VALUE;
+    for (int64_t i = key_idx + 1; i < ctx_.column_cnt_; ++i) {
+      range_node.start_keys_[i] = OB_RANGE_MAX_VALUE;
       range_node.end_keys_[i] = OB_RANGE_MAX_VALUE;
     }
   }
@@ -2536,6 +2645,12 @@ int64_t ObExprRangeConverter::get_expr_category(ObItemType type)
       T_OP_IS == type) {
     catagory = RANGE_EXPR_EQUAL;
   } else if (IS_BASIC_CMP_OP(type)) {
+    catagory = RANGE_EXPR_CMP;
+  } else if (T_OP_IS_NOT == type) {
+    // range of IS NOT NULL predicate:
+    // mysql mode: (NULL; MAX), (NULL, MAX; MAX, MAX) ...
+    // oralce mode: (MIN; NULL), (MIN, MIN; NULL, MIN) ...
+    // so, it can be regarded as a range expr cmp
     catagory = RANGE_EXPR_CMP;
   } else if (T_OP_IN  == type) {
     catagory = RANGE_EXPR_IN;

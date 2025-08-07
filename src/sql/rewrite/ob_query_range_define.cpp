@@ -1758,6 +1758,15 @@ int ObPreRangeGraph::range_node_to_expr(ObQueryRangeCtx &ctx,
              node->end_keys_[node->max_offset_ + 1] == OB_RANGE_MAX_VALUE)) {
           op_type = T_OP_LE;
         }
+      } else if ((is_mysql_mode() && start_val_idx == OB_RANGE_NULL_VALUE && end_val_idx == OB_RANGE_MAX_VALUE) ||
+                 (is_oracle_mode() && start_val_idx == OB_RANGE_MIN_VALUE && end_val_idx == OB_RANGE_NULL_VALUE)) {
+        // is not null expr
+        // mysql mode: (null, max)
+        // oracle mode: (min, null)
+        op_type = T_OP_IS;
+        if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(expr_factory, column_expr, true, expr))) {
+          LOG_WARN("failed to build is null expr");
+        }
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected range node", KPC(node));
