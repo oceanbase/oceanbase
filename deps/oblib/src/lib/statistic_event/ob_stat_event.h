@@ -820,6 +820,13 @@ STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_REORGAN_FREE_BLK_COUNT, "ss_micro_cache releas
 
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_STORAGE_CACHE_POLICY_PREWARM, "ss_micro_cache storage_cache_policy prewarm count", ObStatClassIds::CACHE, 240031, true, true, true)
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_STORAGE_CACHE_POLICY_PREWARM_BYTES, "ss_micro_cache storage_cache_policy prewarm bytes", ObStatClassIds::CACHE, 240032, true, true, true)
+STAT_EVENT_ADD_DEF(EXTERNAL_TABLE_PREBUFFER_CNT, "external table pre-buffer calls", ObStatClassIds::CACHE, 240033, true, true, true)
+STAT_EVENT_ADD_DEF(EXTERNAL_TABLE_PREBUFFER_MISS_CNT, "external table pre-buffer miss count", ObStatClassIds::CACHE, 240034, true, true, true)
+STAT_EVENT_ADD_DEF(EXTERNAL_TABLE_MEM_CACHE_HIT_BYTES, "external table memory cache hit bytes", ObStatClassIds::CACHE, 240035, true, true, true)
+STAT_EVENT_ADD_DEF(EXTERNAL_TABLE_MEM_CACHE_MISS_BYTES, "external table memory cache miss bytes", ObStatClassIds::CACHE, 240036, true, true, true)
+STAT_EVENT_ADD_DEF(EXTERNAL_TABLE_IO_CNT, "external table io count", ObStatClassIds::CACHE, 240037, true, true, true)
+STAT_EVENT_ADD_DEF(EXTERNAL_TABLE_IO_TIME, "external table io time", ObStatClassIds::CACHE, 240038, true, true, true)
+STAT_EVENT_ADD_DEF(EXTERNAL_TABLE_IO_SIZE, "external table io size", ObStatClassIds::CACHE, 240039, true, true, true)
 
 // shared-storage diagnose(2401xx)
 STAT_EVENT_ADD_DEF(SS_META_READ_COUNT, "ss meta read count", ObStatClassIds::OBSERVER, 240101, true, true, true)
