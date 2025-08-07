@@ -2489,6 +2489,7 @@ int ObOdpsPartitionDownloaderMgr::fetch_row_count(uint64_t tenant_id,
         try {
           *(const_cast<int64_t*>(&odps_partition.file_size_)) = odps_partition_downloader->GetRecordCount();
           odps_partition_downloader->Complete();
+          LOG_TRACE("fetch row count odps file", K(ret), K(i), K(odps_partition.part_id_), K(odps_partition.file_url_), K(odps_partition.file_size_));
         } catch (apsara::odps::sdk::OdpsException& ex) {
           if (OB_SUCC(ret)) {
             ret = OB_ODPS_ERROR;

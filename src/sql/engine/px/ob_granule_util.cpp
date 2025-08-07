@@ -108,7 +108,7 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
       int64_t file_row_count = external_info.row_count_ ? external_info.row_count_ : (external_info.file_size_ > 0 ? external_info.file_size_ : INT64_MAX);
       int64_t file_start = external_info.row_count_ ? external_info.row_start_ : 0;
       if (OB_FAIL(ObExternalTableUtils::make_external_table_scan_range(external_info.file_url_,
-                                                  external_info.file_id_,
+                                                  0,
                                                   external_info.part_id_,
                                                   file_start,
                                                   file_row_count,
