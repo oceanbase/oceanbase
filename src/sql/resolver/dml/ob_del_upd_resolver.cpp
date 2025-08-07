@@ -1900,6 +1900,7 @@ bool ObDelUpdResolver::need_all_columns(const ObTableSchema &table_schema,
           table_schema.get_trigger_list().count() > 0 ||
           table_schema.has_check_constraint() ||
           table_schema.has_generated_and_partkey_column() ||
+          table_schema.is_delete_insert_merge_engine() || // delete insert mode needs all columns in old rows
           binlog_row_image == ObBinlogRowImage::FULL ||
           binlog_row_image == ObBinlogRowImage::MINIMAL);
 }
