@@ -134,9 +134,9 @@ TEST_F(TestSSTmpFileSubModule, test_async_remove_task)
 
     int64_t flush_size = 0;
     ObSSTmpFileAsyncFlushWaitTaskHandle wait_task_handle;
-    ASSERT_EQ(OB_ERR_UNEXPECTED, ss_tmp_file->flush(true, io_info.io_desc_, ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS, flush_size, wait_task_handle));
+    ASSERT_EQ(OB_ERR_UNEXPECTED, ss_tmp_file->flush(true, flush_size, wait_task_handle));
     ASSERT_EQ(OB_SUCCESS, set_ss_tmp_file_flushing(*ss_tmp_file));
-    ASSERT_EQ(OB_SUCCESS, ss_tmp_file->flush(true, io_info.io_desc_, ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS, flush_size, wait_task_handle));
+    ASSERT_EQ(OB_SUCCESS, ss_tmp_file->flush(true, flush_size, wait_task_handle));
     ASSERT_EQ(OB_SUCCESS, wait_task_handle.wait(ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS));
     ASSERT_EQ(0, ss_tmp_file->get_data_page_nums(false /* all pages */));
     tmp_file_handle.reset();
@@ -181,9 +181,9 @@ TEST_F(TestSSTmpFileSubModule, test_async_remove_task)
     ASSERT_EQ(fd, tmp_file_handle.get()->get_fd());
     int64_t flush_size = 0;
     ObSSTmpFileAsyncFlushWaitTaskHandle wait_task_handle;
-    ASSERT_EQ(OB_ERR_UNEXPECTED, ss_tmp_file->flush(true, io_info.io_desc_, ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS, flush_size, wait_task_handle));
+    ASSERT_EQ(OB_ERR_UNEXPECTED, ss_tmp_file->flush(true, flush_size, wait_task_handle));
     ASSERT_EQ(OB_SUCCESS, set_ss_tmp_file_flushing(*ss_tmp_file));
-    ASSERT_EQ(OB_SUCCESS, ss_tmp_file->flush(true, io_info.io_desc_, ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS, flush_size, wait_task_handle));
+    ASSERT_EQ(OB_SUCCESS, ss_tmp_file->flush(true, flush_size, wait_task_handle));
     ASSERT_EQ(OB_SUCCESS, wait_task_handle.wait(ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS));
     ASSERT_EQ(0, ss_tmp_file->get_data_page_nums(false /* all pages */));
 
@@ -253,9 +253,9 @@ TEST_F(TestSSTmpFileSubModule, test_reboot_gc)
     ASSERT_EQ(fd, tmp_file_handle.get()->get_fd());
     int64_t flush_size = 0;
     ObSSTmpFileAsyncFlushWaitTaskHandle wait_task_handle;
-    ASSERT_EQ(OB_ERR_UNEXPECTED, ss_tmp_file->flush(true, io_info.io_desc_, ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS, flush_size, wait_task_handle));
+    ASSERT_EQ(OB_ERR_UNEXPECTED, ss_tmp_file->flush(true, flush_size, wait_task_handle));
     ASSERT_EQ(OB_SUCCESS, set_ss_tmp_file_flushing(*ss_tmp_file));
-    ASSERT_EQ(OB_SUCCESS, ss_tmp_file->flush(true, io_info.io_desc_, ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS, flush_size, wait_task_handle));
+    ASSERT_EQ(OB_SUCCESS, ss_tmp_file->flush(true, flush_size, wait_task_handle));
     ASSERT_EQ(OB_SUCCESS, wait_task_handle.wait(ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS));
     ASSERT_EQ(0, ss_tmp_file->get_data_page_nums(false /* all pages */));
   }
@@ -294,9 +294,9 @@ TEST_F(TestSSTmpFileSubModule, test_reboot_gc)
     ASSERT_EQ(fd, tmp_file_handle.get()->get_fd());
     int64_t flush_size = 0;
     ObSSTmpFileAsyncFlushWaitTaskHandle wait_task_handle;
-    ASSERT_EQ(OB_ERR_UNEXPECTED, ss_tmp_file->flush(true, io_info.io_desc_, ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS, flush_size, wait_task_handle));
+    ASSERT_EQ(OB_ERR_UNEXPECTED, ss_tmp_file->flush(true, flush_size, wait_task_handle));
     ASSERT_EQ(OB_SUCCESS, set_ss_tmp_file_flushing(*ss_tmp_file));
-    ASSERT_EQ(OB_SUCCESS, ss_tmp_file->flush(true, io_info.io_desc_, ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS, flush_size, wait_task_handle));
+    ASSERT_EQ(OB_SUCCESS, ss_tmp_file->flush(true, flush_size, wait_task_handle));
     ASSERT_EQ(OB_SUCCESS, wait_task_handle.wait(ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS));
     ASSERT_EQ(0, ss_tmp_file->get_data_page_nums(false /* all pages */));
   }
@@ -386,7 +386,7 @@ TEST_F(TestSSTmpFileSubModule, test_remove_in_destroy)
     int64_t flush_size = 0;
     ObSSTmpFileAsyncFlushWaitTaskHandle wait_task_handle;
     ASSERT_EQ(OB_SUCCESS, set_ss_tmp_file_flushing(*ss_tmp_file));
-    ASSERT_EQ(OB_SUCCESS, ss_tmp_file->flush(true, io_info.io_desc_, ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS, flush_size, wait_task_handle));
+    ASSERT_EQ(OB_SUCCESS, ss_tmp_file->flush(true, flush_size, wait_task_handle));
     ASSERT_EQ(OB_SUCCESS, wait_task_handle.wait(ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS));
     ASSERT_EQ(0, ss_tmp_file->get_data_page_nums(false /* all pages */));
 

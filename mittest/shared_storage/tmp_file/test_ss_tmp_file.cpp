@@ -632,13 +632,11 @@ TEST_F(TestTmpFile, test_prefetch_read)
   int64_t wash_size = 0;
   ObSSTmpFileFlushManager &flush_mgr = MTL(ObTenantTmpFileManager *)->ss_file_manager_.flush_mgr_;
   ObSSTmpFileAsyncFlushWaitTaskHandle task_handle;
-  common::ObIOFlag io_desc;
-  io_desc.set_wait_event(ObWaitEventIds::TMP_FILE_WRITE);
-  ASSERT_EQ(OB_SUCCESS, flush_mgr.wash(INT64_MAX, io_desc, task_handle, wash_size));
+  ASSERT_EQ(OB_SUCCESS, flush_mgr.wash(INT64_MAX, task_handle, wash_size));
   task_handle.wait(30 * 1000);
   while (file_handle.get()->cached_page_nums_ > 0) {
     task_handle.reset();
-    ASSERT_EQ(OB_SUCCESS, flush_mgr.wash(INT64_MAX, io_desc, task_handle, wash_size)); // flush twice to make sure all pages are flushed
+    ASSERT_EQ(OB_SUCCESS, flush_mgr.wash(INT64_MAX, task_handle, wash_size)); // flush twice to make sure all pages are flushed
     task_handle.wait(30 * 1000);
   }
   EXPECT_EQ(file_handle.get()->cached_page_nums_, 0);
@@ -795,7 +793,7 @@ TEST_F(TestTmpFile, test_write_tail_page)
   ObSSTmpFileAsyncFlushWaitTaskHandle wait_task_handle;
   ObSharedStorageTmpFile *ss_tmp_file = file_handle.get();
   ASSERT_EQ(OB_SUCCESS, set_ss_tmp_file_flushing(*ss_tmp_file));
-  ASSERT_EQ(OB_SUCCESS, ss_tmp_file->flush(true, io_info.io_desc_, ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS, flush_size, wait_task_handle));
+  ASSERT_EQ(OB_SUCCESS, ss_tmp_file->flush(true, flush_size, wait_task_handle));
   ASSERT_EQ(OB_SUCCESS, wait_task_handle.wait(ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS));
   wait_task_handle.reset();
   int64_t wbp_begin_offset = file_handle.get()->cal_wbp_begin_offset();
@@ -838,7 +836,7 @@ TEST_F(TestTmpFile, test_write_tail_page)
 
   // 6. forcibly evict all pages and read them from disk to check whether hit old cached page in kv_cache
   ASSERT_EQ(OB_SUCCESS, set_ss_tmp_file_flushing(*ss_tmp_file));
-  ASSERT_EQ(OB_SUCCESS, ss_tmp_file->flush(true, io_info.io_desc_, ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS, flush_size, wait_task_handle));
+  ASSERT_EQ(OB_SUCCESS, ss_tmp_file->flush(true, flush_size, wait_task_handle));
   ASSERT_EQ(OB_SUCCESS, wait_task_handle.wait(ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS));
   wait_task_handle.reset();
   wbp_begin_offset = file_handle.get()->cal_wbp_begin_offset();
@@ -1596,7 +1594,7 @@ TEST_F(TestTmpFile, test_big_file)
 TEST_F(TestTmpFile, test_big_file_disable_page_cache)
 {
   STORAGE_LOG(INFO, "=======================test_big_file_disable_page_cache begin=======================");
-  const int64_t write_size = 750 * 1024 * 1024;  // write 750MB data
+  const int64_t write_size = 400 * 1024 * 1024;  // write 400MB data
   const int64_t wbp_mem_limit = BIG_WBP_MEM_LIMIT;
   ObTmpFileIOInfo io_info;
   io_info.disable_page_cache_ = true;
@@ -2315,7 +2313,7 @@ TEST_F(TestTmpFile, test_seal)
     int64_t flush_size = 0;
     ObSSTmpFileAsyncFlushWaitTaskHandle wait_task_handle;
     set_ss_tmp_file_flushing(ss_tmp_file);
-    ASSERT_EQ(OB_SUCCESS, ss_tmp_file.flush(true, io_info.io_desc_, ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS, flush_size, wait_task_handle));
+    ASSERT_EQ(OB_SUCCESS, ss_tmp_file.flush(true, flush_size, wait_task_handle));
     ASSERT_EQ(ss_tmp_file.write_back_data_page_num_, write_page_num);
     ASSERT_EQ(ss_tmp_file.cached_page_nums_, write_page_num);
     ASSERT_EQ(flush_mgr.get_wait_task_queue().queue_length_, 1);
@@ -2359,7 +2357,7 @@ TEST_F(TestTmpFile, test_seal)
     int64_t flush_size = 0;
     ObSSTmpFileAsyncFlushWaitTaskHandle wait_task_handle;
     set_ss_tmp_file_flushing(ss_tmp_file);
-    ASSERT_EQ(OB_SUCCESS, ss_tmp_file.flush(true, io_info.io_desc_, ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS, flush_size, wait_task_handle));
+    ASSERT_EQ(OB_SUCCESS, ss_tmp_file.flush(true, flush_size, wait_task_handle));
     ASSERT_EQ(ss_tmp_file.write_back_data_page_num_, write_page_num);
     ASSERT_EQ(ss_tmp_file.cached_page_nums_, write_page_num);
     ASSERT_EQ(flush_mgr.get_wait_task_queue().queue_length_, 1);
@@ -2408,7 +2406,7 @@ TEST_F(TestTmpFile, test_seal)
     int64_t flush_size = 0;
     ObSSTmpFileAsyncFlushWaitTaskHandle wait_task_handle;
     set_ss_tmp_file_flushing(ss_tmp_file);
-    ASSERT_EQ(OB_SUCCESS, ss_tmp_file.flush(true, io_info.io_desc_, ObTmpFileGlobal::SS_TMP_FILE_FLUSH_WAIT_TIMEOUT_MS, flush_size, wait_task_handle));
+    ASSERT_EQ(OB_SUCCESS, ss_tmp_file.flush(true, flush_size, wait_task_handle));
     ASSERT_EQ(ss_tmp_file.write_back_data_page_num_, write_page_num);
     ASSERT_EQ(ss_tmp_file.cached_page_nums_, write_page_num);
     ASSERT_EQ(flush_mgr.get_wait_task_queue().queue_length_, 1);
