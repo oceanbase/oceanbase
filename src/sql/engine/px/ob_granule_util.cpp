@@ -120,7 +120,7 @@ bool ObGranuleUtil::use_partition_granule(int64_t partition_count,
   return partition_granule;
 }
 
-int ObGranuleUtil::split_granule_by_partition_line(ObIAllocator &allocator, const ObIArray<ObDASTabletLoc *> &tablets,
+int ObGranuleUtil::split_granule_by_partition_line_tunnel(ObIAllocator &allocator, const ObIArray<ObDASTabletLoc *> &tablets,
     const ObIArray<ObExternalFileInfo> &external_table_files, ObIArray<ObDASTabletLoc *> &granule_tablets,
     ObIArray<ObNewRange> &granule_ranges, ObIArray<int64_t> &granule_idx)
 {
@@ -129,15 +129,20 @@ int ObGranuleUtil::split_granule_by_partition_line(ObIAllocator &allocator, cons
   for (int64_t i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {
     const ObExternalFileInfo &external_info = external_table_files.at(i);
     ObNewRange new_range;
-    int64_t file_row_count = external_info.row_count_
-                                 ? external_info.row_count_
-                                 : (external_info.file_size_ > 0 ? external_info.file_size_ : INT64_MAX);
-    int64_t file_start = external_info.row_count_ ? external_info.row_start_ : 0;
+    int64_t file_start = external_info.row_count_ != 0 ? external_info.row_start_ : 0;
+    int64_t file_end = 0;
+    if (external_info.row_count_ == INT64_MAX) {
+      file_end = INT64_MAX;
+    } else if (external_info.row_count_ == 0) {
+      file_end = external_info.file_size_ > 0 ? external_info.file_size_ : INT64_MAX;
+    } else {
+      file_end = file_start + external_info.row_count_;
+    }
     if (OB_FAIL(ObExternalTableUtils::make_external_table_scan_range(external_info.file_url_,
             external_info.file_id_,
             external_info.part_id_,
             file_start,
-            file_row_count,
+            file_end,
             ObString::make_empty_string(),
             0,
             0,
@@ -198,7 +203,7 @@ int ObGranuleUtil::split_granule_by_total_row(ObIAllocator &allocator, int64_t p
     ObString session_str = external_table_files.at(i).session_id_;
     ObString part_str = external_table_files.at(i).file_url_;
     int64_t start_row_count = external_table_files.at(i).row_start_;
-    int64_t split_count = external_table_files.at(i).row_count_;
+    int64_t end_row_count = start_row_count + external_table_files.at(i).row_count_;
     ObNewRange *range = NULL;
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(range = OB_NEWx(ObNewRange, (&allocator)))) {
@@ -208,7 +213,7 @@ int ObGranuleUtil::split_granule_by_total_row(ObIAllocator &allocator, int64_t p
                     0,  // external_info.part_id_ 原来partid会存在列中可以反解出分区列的值, 现在不需要了
                     0,                // table id不需要用外表的参数
                     start_row_count,  // start index of all table
-                    split_count,        // number of records
+                    end_row_count,        // number of records
                     session_str,
                     0,  // split by size won't use in this branch
                     0,  // split by size won't use in this branch
@@ -262,7 +267,7 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
     LOG_TRACE("odps external table granule switch", K(ret), K(external_table_files.count()), K(external_table_files));
     if (!GCONF._use_odps_jni_connector) {
 #if defined(OB_BUILD_CPP_ODPS)
-      if (OB_FAIL(split_granule_by_partition_line(allocator, tablets, external_table_files, granule_tablets, granule_ranges, granule_idx))) {
+      if (OB_FAIL(split_granule_by_partition_line_tunnel(allocator, tablets, external_table_files, granule_tablets, granule_ranges, granule_idx))) {
         LOG_WARN("failed to split granule by partition line", K(ret));
       }
 #else
@@ -284,7 +289,7 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
         }
       } else {
         // tunnel api
-        if (OB_FAIL(split_granule_by_partition_line(
+        if (OB_FAIL(split_granule_by_partition_line_tunnel(
                 allocator, tablets, external_table_files, granule_tablets, granule_ranges, granule_idx))) {
           LOG_WARN("failed to split granule by partition line", K(ret));
         }

@@ -151,7 +151,12 @@ int ObExternalTableUtils::resolve_odps_start_step(const ObNewRange &range,
     const ObObj &start_obj = range.get_start_key().get_obj_ptr()[column_idx];
     const ObObj &end_obj = range.get_end_key().get_obj_ptr()[column_idx];
     start = start_obj.get_int();
-    step = end_obj.get_int();
+    int64_t end = end_obj.get_int();
+    if (end != INT64_MAX) {
+      step = end - start;
+    } else {
+      step = INT64_MAX;
+    }
   }
   return ret;
 }

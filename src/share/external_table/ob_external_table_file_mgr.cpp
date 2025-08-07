@@ -287,6 +287,7 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
         }
 
         if (found) {
+          file.file_size_ = -1;
           file.file_id_ = i + 1;
           file.file_addr_ = GCTX.self_addr();
           OZ (external_files.push_back(file));
@@ -294,6 +295,7 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
       }
     } else {
       ObExternalFileInfo file;
+      file.file_size_ = -1;
       file.file_id_ = 1;
       file.file_addr_ = GCTX.self_addr();
       OZ (external_files.push_back(file));
