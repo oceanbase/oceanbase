@@ -1640,7 +1640,7 @@ Outline Data:
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       INDEX(@"SEL$2" "test"."t2"@"SEL$2" "primary")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.3.5.3')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1743,7 +1743,7 @@ Outline Data:
       PQ_SUBQUERY(@"SEL$1" ("SEL$2") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       INDEX(@"SEL$2" "test"."t2"@"SEL$2" "primary")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.3.5.3')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1849,7 +1849,7 @@ Outline Data:
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       INDEX(@"SEL$2" "test"."t2"@"SEL$2" "primary")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.3.5.3')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1962,7 +1962,7 @@ Outline Data:
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       INDEX(@"SEL$3" "test"."t2"@"SEL$3" "primary")
       USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.3.5.3')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2087,7 +2087,7 @@ Outline Data:
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       INDEX(@"SEL$3" "test"."t2"@"SEL$3" "primary")
       USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.3.5.3')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2212,7 +2212,7 @@ Outline Data:
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       INDEX(@"SEL$3" "test"."t2"@"SEL$3" "primary")
       USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.3.5.3')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2337,7 +2337,7 @@ Outline Data:
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
       INDEX(@"SEL$3" "test"."t2"@"SEL$3" "primary")
       USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.3.5.3')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2471,7 +2471,7 @@ Outline Data:
       USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
       INDEX(@"SEL$4" "test"."t2"@"SEL$4" "primary")
       USE_DAS(@"SEL$4" "test"."t2"@"SEL$4")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.3.5.3')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2658,7 +2658,7 @@ Outline Data:
       USE_DAS(@"SEL$7" "test"."t2"@"SEL$7")
       INDEX(@"SEL$8" "test"."t2"@"SEL$8" "primary")
       USE_DAS(@"SEL$8" "test"."t2"@"SEL$8")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.3.5.3')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2895,7 +2895,7 @@ Outline Data:
       USE_DAS(@"SEL$7" "test"."t2"@"SEL$7")
       INDEX(@"SEL$8" "test"."t2"@"SEL$8" "primary")
       USE_DAS(@"SEL$8" "test"."t2"@"SEL$8")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.3.5.3')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -3133,7 +3133,7 @@ Outline Data:
       USE_DAS(@"SEL$7" "test"."t2"@"SEL$7")
       INDEX(@"SEL$8" "test"."t2"@"SEL$8" "primary")
       USE_DAS(@"SEL$8" "test"."t2"@"SEL$8")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.3.5.3')
       END_OUTLINE_DATA
   */
 Optimization Info:

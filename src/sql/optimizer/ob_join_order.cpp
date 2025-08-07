@@ -4644,7 +4644,7 @@ int ObJoinOrder::compute_cost_and_prune_access_path(PathHelper &helper,
         LOG_WARN("failed to estimate cost", K(ret));
       } else if (OB_FAIL(ap->compute_pipeline_info())) {
         LOG_WARN("failed to compute pipelined path", K(ret));
-      } else if (OB_FAIL(ap->compute_valid_inner_path())) {
+      } else if (OB_FAIL(compute_valid_inner_path(ap,helper.pushdown_filters_))) {
         LOG_WARN("failed to compute inner path with pushdown filters", K(ret));
       } else if (!helper.is_inner_path_) {
         if (OB_FAIL(add_path(ap))) {
@@ -4665,6 +4665,38 @@ int ObJoinOrder::compute_cost_and_prune_access_path(PathHelper &helper,
         LOG_TRACE("path not add ", K(helper.force_inner_nl_));
       }
     } // add path end
+  }
+  return ret;
+}
+
+int ObJoinOrder::prune_none_range_path(ObIArray<Path*> &inner_paths)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<Path*, 8> range_scan_paths;
+  for (int64_t i = 0; OB_SUCC(ret) && i < inner_paths.count(); ++i) {
+    if (OB_ISNULL(inner_paths.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null path", K(ret));
+    } else if (inner_paths.at(i)->is_valid_inner_path_) {
+      if (OB_FAIL(range_scan_paths.push_back(inner_paths.at(i)))) {
+        LOG_WARN("failed to push back range scan path", K(ret));
+      }
+    } else if (inner_paths.at(i)->is_access_path()) {
+      AccessPath *ap = static_cast<AccessPath*>(inner_paths.at(i));
+      ObQueryRangeProvider *pre_range = ap->get_query_range_provider();
+      if (NULL != pre_range &&
+        (!pre_range->get_range_exprs().empty() ||
+         !pre_range->get_unprecise_range_exprs().empty())) {
+        if (OB_FAIL(range_scan_paths.push_back(inner_paths.at(i)))) {
+          LOG_WARN("failed to push back range scan path", K(ret));
+        }
+      }
+    } else if (OB_FAIL(range_scan_paths.push_back(inner_paths.at(i)))) {
+      LOG_WARN("failed to push back range scan path", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(inner_paths.assign(range_scan_paths))) {
+    LOG_WARN("failed to assign range scan paths", K(ret));
   }
   return ret;
 }
@@ -7355,6 +7387,7 @@ int oceanbase::sql::Path::assign(const Path &other, common::ObIAllocator *alloca
   server_cnt_ = other.server_cnt_;
   is_pipelined_path_ = other.is_pipelined_path_;
   is_nl_style_pipelined_path_ = other.is_nl_style_pipelined_path_;
+  is_valid_inner_path_ = other.is_valid_inner_path_;
 
   if (OB_FAIL(ordering_.assign(other.ordering_))) {
     LOG_WARN("failed to assign nested loop params", K(ret));
@@ -7540,7 +7573,6 @@ int AccessPath::assign(const AccessPath &other, common::ObIAllocator *allocator)
   for_update_ = other.for_update_;
   use_skip_scan_ = other.use_skip_scan_;
   use_column_store_ = other.use_column_store_;
-  is_valid_inner_path_ = other.is_valid_inner_path_;
   pre_query_range_ = NULL;
   pre_range_graph_ = NULL;
   can_batch_rescan_ = other.can_batch_rescan_;
@@ -8139,31 +8171,6 @@ int AccessPath::check_adj_index_cost_valid(double &stats_phy_query_range_row_cou
 const ObIArray<ObNewRange>& AccessPath::get_query_ranges() const
 {
   return est_cost_info_.ranges_;
-}
-
-int AccessPath::compute_valid_inner_path()
-{
-  int ret = OB_SUCCESS;
-  is_valid_inner_path_ = false;
-  if (OB_ISNULL(parent_) || OB_ISNULL(parent_->get_plan())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(parent_), K(ret));
-  } else {
-    const ObIArray<ObRawExpr*> &filters = est_cost_info_.pushdown_prefix_filters_;
-    for (int64_t i = 0; OB_SUCC(ret) && !is_valid_inner_path_ && i < filters.count(); i ++) {
-      const ObRawExpr *expr = filters.at(i);
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret));
-      } else if (!expr->has_flag(CNT_DYNAMIC_PARAM) ||
-                  expr->has_flag(CNT_ONETIME)) {
-        // do nothing
-      } else if (ObOptimizerUtil::find_item(parent_->get_plan()->get_pushdown_filters(), expr)) {
-        is_valid_inner_path_ = true;
-      }
-    }
-  }
-  return ret;
 }
 
 int AccessPath::compute_access_path_batch_rescan()
@@ -18297,6 +18304,7 @@ int ObJoinOrder::generate_inner_subquery_paths(const ObDMLStmt &parent_stmt,
   ObSelectStmt *child_stmt = NULL;
   const TableItem *table_item = NULL;
   helper.is_inner_path_ = true;
+  helper.force_inner_nl_ = inner_path_info.force_inner_nl_;
   helper.is_semi_anti_join_ = IS_SEMI_ANTI_JOIN(inner_path_info.join_type_);
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info()) ||
@@ -18352,6 +18360,8 @@ int ObJoinOrder::generate_inner_subquery_paths(const ObDMLStmt &parent_stmt,
     LOG_WARN("failed to append", K(ret));
   } else if (OB_FAIL(generate_subquery_paths(helper))) {
     LOG_WARN("failed to generate subquery path", K(ret));
+  } else if (OB_FAIL(compute_valid_inner_path(helper.inner_paths_, helper.pushdown_filters_))) {
+    LOG_WARN("failed to compute inner path with pushdown filters", K(ret));
   } else if (OB_FAIL(check_and_fill_inner_path_info(helper,
                                                     parent_stmt,
                                                     get_output_equal_sets(),
@@ -18363,60 +18373,163 @@ int ObJoinOrder::generate_inner_subquery_paths(const ObDMLStmt &parent_stmt,
   return ret;
 }
 
-int ObJoinOrder::check_and_fill_inner_path_info(PathHelper &helper,
-                                                const ObDMLStmt &stmt,
-                                                const EqualSets &equal_sets,
-                                                InnerPathInfo &inner_path_info,
-                                                const ObIArray<ObRawExpr *> &pushdown_quals,
-                                                ObIArray<ObExecParamRawExpr *> &nl_params)
+
+int ObJoinOrder::compute_valid_inner_path(ObIArray<Path*> &inner_paths,
+                                          const ObIArray<ObRawExpr*> &pushdown_filters)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 8> exec_params;
-  ObSEArray<Path*, 8> valid_inner_paths;
-  UNUSED(stmt);
-  if (OB_FAIL(append(exec_params, nl_params))) {
-    LOG_WARN("failed to append nl params", K(ret));
-  }
-  // check inner path valid, and fill other informations
-  for (int64_t i = 0; OB_SUCC(ret) && i < helper.inner_paths_.count(); ++i) {
-    ObSEArray<ObRawExpr*, 32> range_exprs;
-    ObSEArray<ObRawExpr*, 32> all_table_filters;
-    ObSEArray<ObRawExpr*, 32> range_params;
-    ObSEArray<ObRawExpr*, 32> all_params;
-    ObSEArray<ObRawExpr*, 8> pushdown_params;
-    ObSEArray<ObRawExpr*, 8> all_pushdown_params;
-    Path *inner_path = helper.inner_paths_.at(i);
-    if (OB_ISNULL(inner_path) || OB_ISNULL(inner_path->parent_)) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < inner_paths.count(); ++i) {
+    Path *inner_path = inner_paths.at(i);
+    if (OB_ISNULL(inner_path)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null path", K(ret));
-    }  else if (OB_FAIL(get_range_params(inner_path, range_exprs, all_table_filters))) {
-      LOG_WARN("failed to get range_exprs", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::extract_params(range_exprs, range_params))) {
-      LOG_WARN("failed to extract range params", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::extract_params(all_table_filters, all_params))) {
-      LOG_WARN("failed to extract range params", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::intersect(exec_params, range_params, pushdown_params))) {
-      LOG_WARN("failed to get intersect params", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::intersect(exec_params, all_params, all_pushdown_params))) {
-      LOG_WARN("failed to get intersect params", K(ret));
-    } else if (!inner_path_info.force_inner_nl_ && pushdown_params.empty()) {
-      //pushdown quals do not contribute query range
-      LOG_TRACE("pushdown filters can not extend any query range");
-    } else if (OB_FAIL(append(inner_path->pushdown_filters_, pushdown_quals))) {
+    } else if (OB_FAIL(compute_valid_inner_path(inner_path, pushdown_filters))) {
+      LOG_WARN("failed to compute valid inner path", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::compute_valid_inner_path(Path *inner_path,
+                                          const ObIArray<ObRawExpr*> &pushdown_filters)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 8> all_pushdown_filters;
+  ObSEArray<ObRawExpr*, 8> all_range_filters;
+  ObSEArray<ObRawExpr*, 8> range_params;
+  ObSEArray<ObRawExpr*, 8> all_pushdown_params;
+  ObSEArray<ObRawExpr*, 8> pushdown_range_params;
+  if (OB_FAIL(append(all_pushdown_filters, pushdown_filters))) {
+    LOG_WARN("failed to append pushdown filters", K(ret));
+  } else if (OB_FAIL(append(all_pushdown_filters, get_plan()->get_pushdown_filters()))) {
+    LOG_WARN("failed to append pushdown filters", K(ret));
+  } else if (OB_FAIL(extract_range_filters(inner_path, all_range_filters))) {
+    LOG_WARN("failed to extract range filters", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_dynamic_params(all_range_filters, range_params, true))) {
+    LOG_WARN("failed to extract range params", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_dynamic_params(all_pushdown_filters, all_pushdown_params, true))) {
+    LOG_WARN("failed to extract range params", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::intersect(all_pushdown_params, range_params, pushdown_range_params))) {
+    LOG_WARN("failed to get intersect params", K(ret));
+  } else {
+    inner_path->is_valid_inner_path_ = pushdown_range_params.count() > 0;
+    LOG_TRACE("check valid inner path", K(all_range_filters), K(all_pushdown_filters), K(pushdown_range_params));
+  }
+  return ret;
+}
+
+int ObJoinOrder::extract_range_filters(Path *inner_path, ObIArray<ObRawExpr*> &all_range_filters)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(inner_path)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null inner path", K(ret));
+  } else if (inner_path->is_access_path()) {
+    AccessPath *access_path = static_cast<AccessPath*>(inner_path);
+    if (OB_FAIL(append(all_range_filters, access_path->est_cost_info_.pushdown_prefix_filters_))) {
+      LOG_WARN("failed to append pushdown filters", K(ret));
+    } else if (access_path->is_index_merge_path()) {
+      IndexMergePath *index_merge_path = static_cast<IndexMergePath *>(access_path);
+      ObSEArray<AccessPath*, 4> scan_paths;
+      if (OB_FAIL(index_merge_path->get_all_scan_access_paths(scan_paths))) {
+        LOG_WARN("failed to get all scan access paths", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < scan_paths.count(); ++i) {
+        if (OB_FAIL(SMART_CALL(extract_range_filters(scan_paths.at(i), all_range_filters)))) {
+          LOG_WARN("failed to get scan node range param", K(ret), KPC(scan_paths.at(i)));
+        }
+      }
+    } else {
+      ObQueryRangeProvider *pre_range = access_path->get_query_range_provider();
+      if (NULL == pre_range) {
+        //do nothing
+      } else if (OB_FAIL(append(all_range_filters, pre_range->get_range_exprs()))) {
+        LOG_WARN("failed to append range exprs", K(ret));
+      } else if (OB_FAIL(append(all_range_filters, pre_range->get_unprecise_range_exprs()))) {
+        LOG_WARN("failed to append unprecise range exprs", K(ret));
+      }
+    }
+  } else if (inner_path->is_subquery_path()) {
+    SubQueryPath *subquery_path = static_cast<SubQueryPath*>(inner_path);
+    if (OB_FAIL(extract_range_filters(subquery_path->root_, all_range_filters))) {
+      LOG_WARN("failed to extract range filters", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::extract_range_filters(ObLogicalOperator *root, ObIArray<ObRawExpr*> &all_range_filters)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(root)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null root", K(ret));
+  } else if (log_op_def::LOG_TABLE_SCAN == root->get_type()) {
+    ObLogTableScan *table_scan = static_cast<ObLogTableScan*>(root);
+    const ObQueryRangeProvider *pre_range = table_scan->get_pre_graph();
+    const ObCostTableScanInfo *est_cost_info = table_scan->get_est_cost_info();
+    if (NULL == pre_range) {
+      //do nothing
+    } else if (OB_FAIL(append(all_range_filters, pre_range->get_range_exprs()))) {
+      LOG_WARN("failed to append range exprs", K(ret));
+    } else if (OB_FAIL(append(all_range_filters, pre_range->get_unprecise_range_exprs()))) {
+      LOG_WARN("failed to append unprecise range exprs", K(ret));
+    }
+    if (NULL == est_cost_info || OB_FAIL(ret)) {
+      //do nothing
+    } else if (OB_FAIL(append(all_range_filters, est_cost_info->pushdown_prefix_filters_))) {
+      LOG_WARN("failed to append pushdown filters", K(ret));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < root->get_num_of_child(); ++i) {
+      if (OB_FAIL(SMART_CALL(extract_range_filters(root->get_child(i), all_range_filters)))) {
+        LOG_WARN("failed to extract range filters", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_and_fill_inner_path_info(PathHelper &helper,
+                                               const ObDMLStmt &stmt,
+                                               const EqualSets &equal_sets,
+                                               InnerPathInfo &inner_path_info,
+                                               const ObIArray<ObRawExpr *> &pushdown_quals,
+                                               ObIArray<ObExecParamRawExpr *> &nl_params)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<Path*, 8> valid_inner_paths;
+  UNUSED(stmt);
+  // check inner path valid, and fill other informations
+  for (int64_t i = 0; OB_SUCC(ret) && i < helper.inner_paths_.count(); ++i) {
+    Path *inner_path = helper.inner_paths_.at(i);
+    if (OB_FAIL(append(inner_path->pushdown_filters_, pushdown_quals))) {
       LOG_WARN("failed to append exprs", K(ret));
     } else if (OB_FAIL(append(inner_path->nl_params_, nl_params))) {
       LOG_WARN("failed to append exprs", K(ret));
     } else if (FALSE_IT(inner_path->is_inner_path_ = true)) {
       /*do nothing*/
+    } else if (!OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP6,
+                                                                  COMPAT_VERSION_4_3_0,
+                                                                  COMPAT_VERSION_4_3_5_BP4) &&
+               !helper.force_inner_nl_ &&
+               !inner_path->is_valid_inner_path_) {
+      LOG_TRACE("skip none valid inner path");
     } else if (OB_FAIL(valid_inner_paths.push_back(inner_path))) {
       LOG_WARN("failed to push back inner paths", K(ret));
     } else { /*do nothing*/ }
   }
   if (OB_SUCC(ret) && !valid_inner_paths.empty()) {
     ObSEArray<ObSEArray<Path*, 16>, 16> path_list;
-    if (OB_FAIL(classify_paths_based_on_sharding(valid_inner_paths,
-                                                 equal_sets,
-                                                 path_list))) {
+    if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP6,
+                                                          COMPAT_VERSION_4_3_0,
+                                                          COMPAT_VERSION_4_3_5_BP4) &&
+        !helper.force_inner_nl_ &&
+        OB_FAIL(prune_none_range_path(valid_inner_paths))) {
+      LOG_WARN("failed to prune none valid inner path", K(ret));
+    } else if (OB_FAIL(classify_paths_based_on_sharding(valid_inner_paths,
+                                                        equal_sets,
+                                                        path_list))) {
       LOG_WARN("failed to classify paths based on sharding", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < path_list.count(); i++) {
@@ -18426,6 +18539,12 @@ int ObJoinOrder::check_and_fill_inner_path_info(PathHelper &helper,
         } else if (OB_ISNULL(temp_path)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
+        } else if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP6,
+                                                                     COMPAT_VERSION_4_3_0,
+                                                                     COMPAT_VERSION_4_3_5_BP4) &&
+                   !helper.force_inner_nl_ &&
+                   !temp_path->is_valid_inner_path_) {
+          LOG_TRACE("skip none valid inner path");
         } else if (OB_FAIL(inner_path_info.inner_paths_.push_back(temp_path))) {
           LOG_WARN("failed to push back inner paths", K(ret));
         } else { /*do nothing*/ }
@@ -18945,45 +19064,6 @@ int ObJoinOrder::check_match_to_type(ObRawExpr *to_type_expr, ObRawExpr *candi_e
       if (is_same) {
         is_same = to_type_child->same_as(*(candi_expr->get_param_expr(0)), &equal_ctx);
       }
-    }
-  }
-  return ret;
-}
-
-int ObJoinOrder::get_range_params(const Path *path,
-                                  ObIArray<ObRawExpr*> &range_exprs,
-                                  ObIArray<ObRawExpr*> &all_table_filters)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(path)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (path->is_access_path()) {
-    const AccessPath *access_path = static_cast<const AccessPath *>(path);
-    if (OB_FAIL(append(range_exprs, access_path->est_cost_info_.pushdown_prefix_filters_))) {
-      LOG_WARN("failed to append pushdown prefix filters", K(ret));
-    } else if (OB_FAIL(append(all_table_filters, access_path->est_cost_info_.pushdown_prefix_filters_))) {
-      LOG_WARN("failed to append pushdown prefix filters", K(ret));
-    } else if (OB_FAIL(append(all_table_filters, access_path->est_cost_info_.postfix_filters_))) {
-      LOG_WARN("failed to append pushdown prefix filters", K(ret));
-    } else if (OB_FAIL(append(all_table_filters, access_path->est_cost_info_.table_filters_))) {
-      LOG_WARN("failed to append pushdown prefix filters", K(ret));
-    } else if (access_path->is_index_merge_path()) {
-      const IndexMergePath *index_merge_path = static_cast<const IndexMergePath *>(access_path);
-      ObSEArray<AccessPath*, 4> scan_paths;
-      if (OB_FAIL(index_merge_path->get_all_scan_access_paths(scan_paths))) {
-        LOG_WARN("failed to get all scan access paths", K(ret));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < scan_paths.count(); ++i) {
-        if (OB_FAIL(get_range_params(scan_paths.at(i), range_exprs, all_table_filters))) {
-          LOG_WARN("failed to get scan node range param", K(ret), KPC(scan_paths.at(i)));
-        }
-      }
-    }
-  } else if (path->is_subquery_path()) {
-    const SubQueryPath *sub_path = static_cast<const SubQueryPath *>(path);
-    if (OB_FAIL(ObOptimizerUtil::get_range_params(sub_path->root_, range_exprs, all_table_filters))) {
-      LOG_WARN("failed to get range params", K(ret));
     }
   }
   return ret;

@@ -59,7 +59,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.3.5.3')
       END_OUTLINE_DATA
   */
 drop table sd;
