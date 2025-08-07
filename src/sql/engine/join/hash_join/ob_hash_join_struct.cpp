@@ -171,6 +171,10 @@ int JoinTableCtx::get_unmatched_rows(OutputInfo &output_info)
 {
   int ret = OB_SUCCESS;
   int64_t batch_idx = 0;
+  if (OB_ISNULL(left_part_rows_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("left part rows is null", K(ret));
+  }
   while (OB_SUCC(ret) && batch_idx < *max_output_cnt_) {
     if (read_row_idx_ >= left_part_rows_->count()) {
       ret = OB_ITER_END;

@@ -1188,10 +1188,11 @@ int ObHashJoinOp::reuse_for_next_chunk()
     hash_table.collisions_ = 0;
     hash_table.used_buckets_ = 0;
 
-    left_part_rows_->reuse();
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(left_part_rows_->reserve(row_count))) {
-      LOG_WARN("failed to reserve left part rows", K(ret), K(row_count));
+    if (OB_SUCC(ret) && OB_NOT_NULL(left_part_rows_)) {
+      left_part_rows_->reuse();
+      if (OB_FAIL(left_part_rows_->reserve(row_count))) {
+        LOG_WARN("failed to reserve left part rows", K(ret), K(row_count));
+      }
     }
 
     if (OB_FAIL(ret)) {
@@ -5557,6 +5558,10 @@ int ObHashJoinOp::read_hashrow_func_end()
 int ObHashJoinOp::find_next_matched_tuple(ObHashJoinStoredJoinRow *&tuple)
 {
   int ret = OB_SUCCESS;
+  if (OB_ISNULL(left_part_rows_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("left part rows is null", K(ret));
+  }
   while (OB_SUCC(ret)) {
     if (cur_row_idx_ >= left_part_rows_->count()) {
       ret = OB_ITER_END;
@@ -5700,6 +5705,10 @@ int ObHashJoinOp::prepare_part_rows_array(uint64_t row_num)
 int ObHashJoinOp::find_next_unmatched_tuple(ObHashJoinStoredJoinRow *&tuple)
 {
   int ret = OB_SUCCESS;
+  if (OB_ISNULL(left_part_rows_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("left part rows is null", K(ret));
+  }
   while (OB_SUCC(ret)) {
     if (cur_row_idx_ >= left_part_rows_->count()) {
       ret = OB_ITER_END;
@@ -5724,6 +5733,10 @@ int ObHashJoinOp::fill_left_join_result_batch()
     brs_.skip_->reset(brs_.size_);
   }
   const ObHashJoinStoredJoinRow **left_result_rows = hj_part_stored_rows_;
+  if (OB_ISNULL(left_part_rows_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("left part rows is null", K(ret));
+  }
   while (OB_SUCC(ret) && batch_idx < max_output_cnt_) {
     if (cur_row_idx_ >= left_part_rows_->count()) {
       ret = OB_ITER_END;
