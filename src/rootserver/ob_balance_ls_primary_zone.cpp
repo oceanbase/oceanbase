@@ -24,19 +24,21 @@ using namespace share;
 namespace rootserver
 {
 
-int ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(const share::schema::ObTenantSchema &tenant_schema)
+int ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   share::ObLSStatusOperator status_op;
   share::ObLSPrimaryZoneInfoArray info_array;
   ObArray<common::ObZone> primary_zone;
-  const uint64_t tenant_id = tenant_schema.get_tenant_id();
+  share::schema::ObTenantSchema tenant_schema;
   if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", KR(ret), KP(GCTX.sql_proxy_), KP(GCTX.schema_service_));
-  } else if (!is_user_tenant(tenant_id) || !tenant_schema.is_valid()) {
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tenant iS invalid", KR(ret), K(tenant_id), K(tenant_schema));
+    LOG_WARN("tenant is invalid", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObTenantThreadHelper::get_tenant_schema(tenant_id, tenant_schema))) {
+    LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObPrimaryZoneUtil::get_tenant_primary_zone_array(
                    tenant_schema, primary_zone))) {
     LOG_WARN("failed to get tenant primary zone array", KR(ret), K(tenant_schema));
@@ -426,6 +428,5 @@ int ObBalanceLSPrimaryZone::check_sys_ls_primary_zone_balanced(const uint64_t te
   }
   return ret;
 }
-
 }//end of rootserver
 }

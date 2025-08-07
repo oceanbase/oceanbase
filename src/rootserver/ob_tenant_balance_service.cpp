@@ -134,8 +134,12 @@ void ObTenantBalanceService::do_work()
           LOG_WARN("failed to do ls balance", KR(ret));
         }
 
-        if (OB_SUCC(ret) && 0 == job_cnt && ObShareUtil::is_tenant_enable_transfer(tenant_id_)) {
-          if (OB_FAIL(try_do_partition_balance_(last_partition_balance_time))) {
+        if (OB_SUCC(ret) && 0 == job_cnt) {
+          if (ObShareUtil::is_tenant_enable_ls_leader_balance(tenant_id_)
+            && OB_FAIL(ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(tenant_id_))) {
+            LOG_WARN("failed to adjust user tenant primary zone", KR(ret), K(tenant_id_));
+          } else if (ObShareUtil::is_tenant_enable_transfer(tenant_id_)
+            && OB_FAIL(try_do_partition_balance_(last_partition_balance_time))) {
             LOG_WARN("try do partition balance failed", KR(ret), K(last_partition_balance_time));
           }
         }

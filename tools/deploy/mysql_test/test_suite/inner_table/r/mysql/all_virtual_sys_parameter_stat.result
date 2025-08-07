@@ -98,6 +98,7 @@ enable_global_background_resource_isolation
 enable_gts_standalone
 enable_kv_ttl
 enable_lock_priority
+enable_ls_leader_balance
 enable_major_freeze
 enable_monotonic_weak_read
 enable_ob_ratelimit

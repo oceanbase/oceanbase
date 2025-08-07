@@ -1117,7 +1117,6 @@ ERRSIM_POINT_DEF(ERRSIM_STANDBY_BALANCE);
 int ObRecoveryLSService::do_standby_balance_()
 {
   int ret = OB_SUCCESS;
-  ObTenantSchema tenant_schema;
   uint64_t meta_data_version = 0;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -1162,7 +1161,11 @@ int ObRecoveryLSService::do_standby_balance_()
         ObBalanceJobID()))) {
       LOG_WARN("failed to generate task", KR(ret));
     } else if (!ls_balance_helper.need_ls_balance()) {
-      // do nothing
+      // do primary_zone balance when no need to balance ls
+      if (ObShareUtil::is_tenant_enable_ls_leader_balance(tenant_id_)
+        && OB_FAIL(ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(tenant_id_))) {
+        LOG_WARN("failed to adjust user ls primary zone", KR(ret), K(tenant_id_));
+      }
     } else if (OB_UNLIKELY(ls_balance_helper.get_balance_job().get_balance_strategy().has_balance_task())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("standby balance should not have balance task",

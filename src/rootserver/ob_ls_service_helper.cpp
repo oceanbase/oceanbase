@@ -20,6 +20,7 @@
 #include "rootserver/ob_ls_balance_helper.h"//ObTenantLSBalanceInfo
 #include "rootserver/ob_tenant_balance_service.h"
 #include "logservice/ob_log_service.h"//ObLogService
+#include "share/balance/ob_balance_task_table_operator.h"//ObBalanceTaskTableOperator
 
 namespace oceanbase
 {
@@ -561,6 +562,41 @@ int ObLSServiceHelper::check_if_need_wait_user_ls_sync_scn_(
   return ret;
 }
 
+// check if new LS is being split from a src LS.
+// If yes, inherit primary_zone of src LS.
+// Otherwise, set primary_zone empty here, and need following steps to determine
+int ObLSServiceHelper::try_get_src_ls_primary_zone_(
+  const uint64_t tenant_id, const share::ObLSID &ls_id, ObZone &primary_zone)
+{
+  int ret = OB_SUCCESS;
+  primary_zone.reset();
+  ObBalanceTask task;
+  ObLSPrimaryZoneInfo primary_zone_info;
+  ObLSStatusOperator ls_status_op;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tenant_id));
+  } else if (OB_FAIL(ObBalanceTaskTableOperator::get_split_task_by_dest_ls(tenant_id, ls_id, *GCTX.sql_proxy_, task))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get split task", KR(ret), K(tenant_id), K(ls_id));
+    }
+  } else if (OB_UNLIKELY(!task.get_task_status().is_create_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("split task status should be CREATE_LS", KR(ret), K(task));
+  } else if (OB_FAIL(ls_status_op.get_ls_primary_zone_info(tenant_id, task.get_src_ls_id(), primary_zone_info, *GCTX.sql_proxy_))) {
+    LOG_WARN("failed to get ls primary zone info", KR(ret), K(tenant_id), K(task.get_src_ls_id()));
+  } else {
+    LOG_INFO("new ls created by split task, inherit primary zone from src ls", KR(ret), K(task), K(primary_zone_info));
+    primary_zone = primary_zone_info.get_primary_zone();
+  }
+  return ret;
+}
+
 int ObLSServiceHelper::revision_to_equal_status_(const ObLSStatusMachineParameter &machine,
                                       const share::ObTenantSwitchoverStatus &working_sw_status,
                                       const int64_t switchover_epoch,
@@ -607,11 +643,15 @@ int ObLSServiceHelper::revision_to_equal_status_(const ObLSStatusMachineParamete
     if (!status_info.is_valid()) {
       //create ls
       START_TRANSACTION(GCTX.sql_proxy_, ObLSLifeIAgent::get_exec_tenant_id(tenant_id));
-      if (FAILEDx(create_new_ls_in_trans(ls_info.get_ls_id(),
+      ObZone primary_zone;
+      if (OB_FAIL(try_get_src_ls_primary_zone_(tenant_id, ls_info.get_ls_id(), primary_zone))) {
+        LOG_WARN("failed to get src ls primary zone", KR(ret), K(tenant_id), K(ls_info));
+      } else if (OB_FAIL(create_new_ls_in_trans(ls_info.get_ls_id(),
                                          ls_info.get_ls_group_id(),
                                          ls_info.get_create_scn(),
                                          switchover_epoch,
-                                         tenant_ls_info, trans, ls_info.get_ls_flag()))) {
+                                         tenant_ls_info, trans, ls_info.get_ls_flag(),
+                                         primary_zone))) {
         LOG_WARN("failed to create new ls in trans", KR(ret), K(ls_info), K(tenant_ls_info));
       }
       END_TRANSACTION(trans);
@@ -786,7 +826,8 @@ int ObLSServiceHelper::create_new_ls_in_trans(
     const int64_t switchover_epoch,
     ObTenantLSInfo& tenant_ls_info,
     ObMySQLTransaction &trans,
-    const share::ObLSFlag &ls_flag)
+    const share::ObLSFlag &ls_flag,
+    const ObZone &specified_primary_zone)
 {
   int ret = OB_SUCCESS;
   int64_t info_index = OB_INVALID_INDEX_INT64;
@@ -811,24 +852,27 @@ int ObLSServiceHelper::create_new_ls_in_trans(
       unit_group_id = 0;
       if (!ls_flag.is_duplicate_ls()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ls without ls group must be duplate", KR(ret),
+        LOG_WARN("ls without ls group must be duplicate", KR(ret),
                  K(ls_group_id), K(ls_id), K(ls_flag));
-      } else if (OB_FAIL(primary_zone.assign(tenant_ls_info.get_primary_zone().at(0)))) {
+      } else if (OB_FAIL(primary_zone.assign(specified_primary_zone.is_empty() ?
+          tenant_ls_info.get_primary_zone().at(0) : specified_primary_zone))) {
         LOG_WARN("failed to assign primary zone", KR(ret), K(tenant_ls_info));
       }
-    } else if (OB_SUCC(tenant_ls_info.get_ls_group_info(
-            ls_group_id, group_info))) {
-      // need a new primary zone
+    } else if (OB_SUCC(tenant_ls_info.get_ls_group_info(ls_group_id, group_info))) {
       unit_group_id = group_info.unit_group_id_;
-      if (OB_FAIL(tenant_ls_info.get_next_primary_zone(group_info, primary_zone))) {
+      if (!specified_primary_zone.is_empty()) {
+        primary_zone = specified_primary_zone;
+      } else if (OB_FAIL(tenant_ls_info.get_next_primary_zone(group_info, primary_zone))) {
         LOG_WARN("failed to get next primary zone", KR(ret), K(group_info));
-      } else if (OB_FAIL(unit_list.assign(group_info.unit_list_))) {
+      }
+      if (FAILEDx(unit_list.assign(group_info.unit_list_))) {
         LOG_WARN("failed to assign", KR(ret), K(group_info));
       }
     } else if (OB_ENTRY_NOT_EXIST == ret) {
       // need a new unit group
       ret = OB_SUCCESS;
-      if (OB_FAIL(primary_zone.assign(tenant_ls_info.get_primary_zone().at(0)))) {
+      if (OB_FAIL(primary_zone.assign(specified_primary_zone.is_empty() ?
+          tenant_ls_info.get_primary_zone().at(0) : specified_primary_zone))) {
         LOG_WARN("failed to assign primary zone", KR(ret), K(tenant_ls_info));
       } else if (OB_FAIL(choose_new_unit_group_or_list_(ls_id, trans, tenant_ls_info,
               unit_group_id, unit_list))) {

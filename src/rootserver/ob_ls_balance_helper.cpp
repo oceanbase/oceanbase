@@ -4267,6 +4267,37 @@ int ObLSGroupCountBalance::construct_lg_shrink_task_(
   }
   return ret;
 }
+
+// used only in ObLSGroupCountBalance::construct_lg_shrink_transfer_task_
+struct CompareByPrimaryZone
+{
+  bool operator() (const ObSplitLSParam &left, const ObSplitLSParam &right)
+  {
+    int ret = OB_SUCCESS; // only for logging
+    bool bret = false;
+    if (OB_UNLIKELY(!left.is_valid() || !right.is_valid())) {
+      ret_ = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret_), K(left), K(right));
+    } else {
+      bret = left.get_ls_info()->primary_zone_ < right.get_ls_info()->primary_zone_;
+    }
+    return bret;
+  }
+  bool operator() (const ObLSStatusInfo *left, const ObLSStatusInfo *right)
+  {
+    int ret = OB_SUCCESS; // only for logging
+    bool bret = false;
+    if (OB_UNLIKELY(NULL == left || NULL == right)) {
+      ret_ = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret_), KP(left), KP(right));
+    } else {
+      bret = left->primary_zone_ < right->primary_zone_;
+    }
+    return bret;
+  }
+  int ret_ = OB_SUCCESS;
+};
+
 /*
  * 开启transfer，构造分裂源端和分裂目的端
  * 分裂源端：shrink_lg内所以得日志流组
@@ -4285,6 +4316,7 @@ int ObLSGroupCountBalance::construct_lg_shrink_transfer_task_(
     ObSplitLSParamArray src_ls;
     ObArray<ObSplitLSParamArray> dest_ls;
     ObArray<ObLSStatusInfo*> ls_array;
+    CompareByPrimaryZone compare;
     for (int64_t i = 0; OB_SUCC(ret) && i < target_lg.count(); ++i) {
       ObLSGroupStat* lg = target_lg.at(i);
       CK(OB_NOT_NULL(lg))
@@ -4299,6 +4331,20 @@ int ObLSGroupCountBalance::construct_lg_shrink_transfer_task_(
         LOG_WARN("failed to construct src split param", KR(ret), KPC(lg));
       }
     }
+    // sort src_ls and ls_array(target ls) by primary_zone
+    if (OB_SUCC(ret)) {
+      lib::ob_sort(src_ls.begin(), src_ls.end(), compare);
+      if (OB_FAIL(compare.ret_)) {
+        LOG_WARN("failed to sort src_ls", KR(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      lib::ob_sort(ls_array.begin(), ls_array.end(), compare);
+      if (OB_FAIL(compare.ret_)) {
+        LOG_WARN("failed to sort ls_array", KR(ret));
+      }
+    }
+
     const int64_t target_ls_count = ls_array.count();
     if (FAILEDx(construct_shrink_src_param(target_ls_count, src_ls, dest_ls))) {
       LOG_WARN("failed to construct shrink src param", KR(ret), K(target_ls_count));

@@ -450,6 +450,23 @@ bool ObShareUtil::is_tenant_enable_transfer(const uint64_t tenant_id)
   return bret;
 }
 
+bool ObShareUtil::is_tenant_enable_ls_leader_balance(const uint64_t tenant_id)
+{
+  bool bret = false;
+  if (is_valid_tenant_id(tenant_id)) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "tenant config is invalid", K(tenant_id));
+    } else if (!tenant_config->enable_rebalance) {
+      // if enable_rebalance is disabled, ls leader balance is not allowed
+      bret = false;
+    } else {
+      bret = tenant_config->enable_ls_leader_balance;
+    }
+  }
+  return bret;
+}
+
 int ObShareUtil::mtl_get_tenant_role(const uint64_t tenant_id, ObTenantRole::Role &tenant_role)
 {
   int ret = OB_SUCCESS;

@@ -47,7 +47,7 @@ public:
 
 public:
   static int try_update_sys_ls_primary_zone(const uint64_t tenant_id);
-  static int try_adjust_user_ls_primary_zone(const share::schema::ObTenantSchema &tenant_schema);
+  static int try_adjust_user_ls_primary_zone(const uint64_t tenant_id);
   static int try_update_ls_primary_zone(
     const share::ObLSPrimaryZoneInfo &primary_zone_info,
     const common::ObZone &new_primary_zone,

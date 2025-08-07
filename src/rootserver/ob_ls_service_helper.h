@@ -206,13 +206,16 @@ public:
       ObTenantLSInfo& tenant_ls_info);
   //for recovery tenant, create new ls according to ls_id and ls_group_id
   //TODO
+  // if primary_zone is specified, it will be used as initial primary_zone.
+  // else, a primary_zone will be choosed.
   static int create_new_ls_in_trans(const share::ObLSID &ls_id,
       const uint64_t ls_group_id,
       const share::SCN &create_scn,
       const int64_t switchover_epoch,
       ObTenantLSInfo& tenant_ls_info,
       common::ObMySQLTransaction &trans,
-      const share::ObLSFlag &ls_flag);
+      const share::ObLSFlag &ls_flag,
+      const ObZone &specified_primary_zone = ObZone());
   static int life_agent_create_new_ls_in_trans(
       const share::ObLSStatusInfo &new_info,
       const share::SCN &create_scn,
@@ -248,6 +251,7 @@ public:
       ObMySQLTransaction *trans = NULL);
 private:
   static int check_if_need_wait_user_ls_sync_scn_(const uint64_t tenant_id, const share::SCN &sys_ls_target_scn);
+  static int try_get_src_ls_primary_zone_(const uint64_t tenant_id, const share::ObLSID &ls_id, ObZone &primary_zone);
   static int revision_to_equal_status_(
       const ObLSStatusMachineParameter &status_machine,
       const share::ObTenantSwitchoverStatus &working_sw_status,

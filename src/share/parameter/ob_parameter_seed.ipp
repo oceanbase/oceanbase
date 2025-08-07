@@ -2298,3 +2298,7 @@ DEF_CAP(ob_deterministic_udf_cache_max_size, OB_TENANT_PARAMETER, "16M", "[0B,)"
 DEF_BOOL(_prexec_prepare_with_params, OB_TENANT_PARAMETER, "False",
          "Control the prexec protocol prepare with or without parameters during the prepare phase.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_ls_leader_balance, OB_TENANT_PARAMETER, "True",
+         "controls whether LS leaders balance is turned on."
+         "Value:  True:turned on  False: turned off",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
