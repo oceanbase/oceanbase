@@ -554,7 +554,7 @@ int TriggerHandle::check_and_update_new_row(
           LOG_WARN("datum is NULL", K(ret));
         } else if (OB_FAIL(datum->to_obj(new_obj, new_row_exprs.at(i)->obj_meta_))) {
           LOG_WARN("failed to to obj", K(ret));
-        } else {
+        } else if (columns.get_flags()[i].is_update_) {
           bool is_strict_equal = false;
           if (new_obj.is_lob_storage()) {
             common::ObArenaAllocator lob_allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
@@ -578,14 +578,8 @@ int TriggerHandle::check_and_update_new_row(
           } else {
             is_strict_equal = new_obj.strict_equal(new_cells[i]);
           }
-          if (OB_FAIL(ret)) {
-          } else if(!is_strict_equal) {
-            if (lib::is_oracle_mode() && !columns.get_flags()[i].is_update_) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify column not in update column list in before update row trigger");
-            } else {
-              updated = true;
-            }
+          if (OB_SUCC(ret)) {
+            updated = !is_strict_equal;
           }
         }
       }

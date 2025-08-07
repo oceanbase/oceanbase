@@ -11239,7 +11239,7 @@ int ObResolverUtils::check_whether_assigned_for_before_update_trigger(ObResolver
   if (OB_UNLIKELY(!tenant_config.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get tenant config", K(ret));
-  } else if (tenant_config->_update_all_columns_for_trigger) {
+  } else if (tenant_config->_update_all_columns_for_trigger || params.is_prepare_stage_) {
     need = true;
   } else {
     need = false;
