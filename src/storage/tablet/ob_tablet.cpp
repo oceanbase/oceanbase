@@ -6225,13 +6225,13 @@ int ObTablet::fetch_tablet_autoinc_seq_cache(
 }
 
 // MIN { ls min_reserved_snapshot, freeze_info, all_acquired_snapshot}
+ERRSIM_POINT_DEF(ERRSIM_MULTI_VERSION_START)
 int ObTablet::get_kept_snapshot_info(
     const int64_t min_reserved_snapshot_on_ls,
     ObStorageSnapshotInfo &snapshot_info,
     const bool skip_tablet_snapshot_and_undo_retention) const
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   snapshot_info.reset();
   const share::ObLSID &ls_id = tablet_meta_.ls_id_;
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
@@ -6299,13 +6299,28 @@ int ObTablet::get_kept_snapshot_info(
     } else {
       snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_ON_TABLET, get_snapshot_version());
     }
-    const int64_t current_time = common::ObTimeUtility::fast_current_time();
-    if (current_time - (snapshot_info.snapshot_ / 1000 /*use microsecond here*/) > 40_min) {
+#ifdef ERRSIM
+    if (OB_UNLIKELY(ERRSIM_MULTI_VERSION_START)) {
+      // set snapshot info for multi version start
+      snapshot_info.snapshot_type_ = ObStorageSnapshotInfo::SNAPSHOT_MULTI_VERSION_START_ON_TABLET;
+      snapshot_info.snapshot_ = 1;
+      LOG_INFO("ERRSIM_MULTI_VERSION_START: get multi version start snapshot", K(snapshot_info));
+    }
+#endif
+    const int64_t snapshot_version = get_snapshot_version();
+    if (snapshot_version - (snapshot_info.snapshot_ / 1000 /*use microsecond here*/) > 40_min) {
       if (REACH_THREAD_TIME_INTERVAL(10_s)) {
-        LOG_INFO("tablet multi version start not advance for a long time", K(ret),
-                 "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
-                 K(snapshot_info), K(old_snapshot_info), K(min_medium_snapshot),
-                 K(min_reserved_snapshot_on_ls));
+        LOG_INFO("tablet multi version start dont advance for a long time", K(ret),
+                "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
+                K(snapshot_info), K(old_snapshot_info), K(min_medium_snapshot),
+                K(snapshot_version), K(min_reserved_snapshot_on_ls));
+        ADD_SUSPECT_INFO(MAJOR_MERGE,
+                        share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE,
+                        ls_id,
+                        tablet_id,
+                        ObSuspectInfoType::SUSPECT_MULTI_VERSION_START_NOT_ADVANCE,
+                        snapshot_info.snapshot_,
+                        snapshot_version);
       }
     }
   }

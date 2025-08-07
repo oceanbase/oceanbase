@@ -52,6 +52,8 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_SS_TABLET_REORG_SKIP_MAJOR_MERGE, ObDiagnoseInfoPr
 #endif
 SUSPECT_INFO_TYPE_DEF(SUSPECT_MV_IN_CREATION, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false,
                       "materialized view creation has not finished", 2, {"schedule_scn", "is_row_store"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_MULTI_VERSION_START_NOT_ADVANCE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "multi version start not advance for a long time",
+    2, {"multi_version_start", "current_time"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_INFO_TYPE_MAX, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "", 0, {})
 #endif
 

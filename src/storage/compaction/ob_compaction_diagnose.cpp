@@ -1047,6 +1047,9 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
         if (OB_TMP_FAIL(diagnose_tablet_minor_merge(ls_id, *tablet))) {
           LOG_WARN("failed to get diagnose minor merge", K(tmp_ret));
         }
+        if (OB_TMP_FAIL(diagnose_tablet_multi_version_start(*ls, *tablet))) {
+          LOG_WARN("failed to get diagnose multi version start", K(tmp_ret));
+        }
       }
       // don't have any diagnose info, push_back this tablet
       if (normal_) {
@@ -1242,6 +1245,39 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_minor_merge(const ObLSID &ls_id, Ob
       LOG_WARN("diagnose failed", K(ret), K(ls_id), "tablet_id", tablet.get_tablet_meta().tablet_id_);
     }
   }
+  return ret;
+}
+
+int ObCompactionDiagnoseMgr::diagnose_tablet_multi_version_start(storage::ObLS &ls, ObTablet &tablet){
+  int ret = OB_SUCCESS;
+  const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
+  const int64_t current_time = common::ObTimeUtility::fast_current_time();
+  const ObLSID ls_id = ls.get_ls_id();
+  ObStorageSnapshotInfo snapshot_info;
+  if (OB_FAIL(tablet.get_kept_snapshot_info(ls.get_min_reserved_snapshot(), snapshot_info, false))) {
+    LOG_WARN("failed to get kept snapshot info", K(ret), K(ls_id), K(tablet_id));
+  } else {
+    // if multi version start not advance for a long time, diagnose major merge
+    const int64_t snapshot_version = tablet.get_snapshot_version();
+    if (snapshot_version - (snapshot_info.snapshot_ / 1000 /*use microsecond here*/) > 40_min) {
+      LOG_INFO("tablet multi version start not advance for a long time", K(ret),
+              "ls_id", ls_id, K(tablet_id), K(current_time), K(snapshot_info));
+      if (OB_FAIL(ADD_DIAGNOSE_INFO_FOR_TABLET(
+        MAJOR_MERGE,
+        ObCompactionDiagnoseInfo::DIA_STATUS_RUNNING,
+        ObTimeUtility::fast_current_time(),
+        "tablet_id", tablet_id.id(),
+        K(snapshot_info),
+        K(snapshot_version),
+        "status", "table multi version start not advance for a long time"
+        ))) {
+        LOG_WARN("failed to add diagnose info", K(ret), K(ls_id), K(tablet_id));
+      }
+    }
+  }
+  LOG_TRACE("tablet multi version start diagnose", K(ret),
+          "ls_id", ls_id, K(ls.get_min_reserved_snapshot()), K(tablet.get_multi_version_start()),
+          K(tablet_id), K(current_time), K(snapshot_info));
   return ret;
 }
 
@@ -1738,7 +1774,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_merge_for_ss()
 
 
 /*
- * ObTabletCompactionProgressIterator implement
+ * ObCompactionProgressIterator implement
  * */
 
 int ObCompactionDiagnoseIterator::get_diagnose_info(const int64_t tenant_id)
