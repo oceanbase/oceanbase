@@ -654,7 +654,11 @@ int ObBasicTabletMergeCtx::swap_tablet()
   const ObTabletMapKey key(get_ls_id(), get_tablet_id());
   if (OB_FAIL(get_ls()->get_tablet_svr()->get_tablet_without_memtables(
       WashTabletPriority::WTP_LOW, key, mem_ctx_.get_allocator(), tablet_handle_))) {
-    LOG_WARN("failed to get alloc tablet handle", K(ret), K(key));
+    LOG_WARN("failed to get tablet without memtables", K(ret), K(key));
+  } else if (OB_FAIL(ObTablet::check_transfer_seq_equal(*get_tablet(), get_schedule_transfer_seq()))) {
+    LOG_WARN("new tablet transfer seq not eq with old transfer seq", K(ret),
+        "new_tablet_meta", get_tablet()->get_tablet_meta(),
+        "old_transfer_seq", get_schedule_transfer_seq());
   } else {
     static_param_.rowkey_read_info_ = static_cast<const ObRowkeyReadInfo *>(&(get_tablet()->get_rowkey_read_info()));
     LOG_INFO("success to swap tablet handle", K(ret), K(tablet_handle_),
@@ -1385,10 +1389,6 @@ int ObBasicTabletMergeCtx::swap_tablet(ObGetMergeTablesResult &get_merge_table_r
       tables_handle.reset(); // clear tables array
       if (OB_FAIL(swap_tablet())) {
         LOG_WARN("failed to get alloc tablet handle", KR(ret));
-      } else if (OB_FAIL(ObTablet::check_transfer_seq_equal(*get_tablet(), get_schedule_transfer_seq()))) {
-        LOG_WARN("new tablet transfer seq not eq with old transfer seq", K(ret),
-            "new_tablet_meta", get_tablet()->get_tablet_meta(),
-            "old_transfer_seq", get_schedule_transfer_seq());
       } else if (GCTX.is_shared_storage_mode() &&
                 OB_FAIL(ObTablet::check_transfer_seq_equal(*get_tablet(), get_merge_table_result.transfer_seq_))) {
         LOG_WARN("new tablet transfer seq not eq with old transfer seq in ss", K(ret),
