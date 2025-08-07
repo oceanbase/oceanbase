@@ -564,7 +564,7 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
     }
   } else if (OB_RENEW_LEASE == pkt.get_pcode()) {
     queue = &lease_queue_->queue_;
-  } else if (10 == pkt.get_priority()) {
+  } else if (ORPR_DDL == pkt.get_priority()) {
     if (rootserver::is_parallel_ddl(pkt.get_pcode())) {
       queue = &ddl_parallel_queue_->queue_;
     } else {
@@ -574,7 +574,14 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
     const uint64_t priv_tenant_id = pkt.get_priv_tenant_id();
     if (NULL != gctx_.omt_) {
       tenant = NULL;
-      if (OB_FAIL(gctx_.omt_->get_tenant(tenant_id, tenant)) || NULL == tenant) {
+      if (req.get_nio_protocol() == ObRequest::TRANSPORT_PROTO_POC) {
+        // pkt-nio has locked the omt tenants, so use `get_tenant_unsafe`
+        if (OB_FAIL(gctx_.omt_->get_tenant_unsafe(tenant_id, tenant)) || NULL == tenant) {
+          if (OB_FAIL(gctx_.omt_->get_tenant_unsafe(priv_tenant_id, tenant)) || NULL == tenant) {
+            ret = OB_TENANT_NOT_IN_SERVER;
+          }
+        }
+      } else if (OB_FAIL(gctx_.omt_->get_tenant(tenant_id, tenant)) || NULL == tenant) {
         if (OB_FAIL(gctx_.omt_->get_tenant(priv_tenant_id, tenant)) || NULL == tenant) {
           ret = OB_TENANT_NOT_IN_SERVER;
         }
@@ -915,4 +922,20 @@ int ObSrvDeliver::deliver(rpc::ObRequest &req)
   }
 
   return ret;
+}
+
+int ObSrvDeliver::lock_tenant_list()
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(NULL != gctx_.omt_)) {
+    ret = gctx_.omt_->lock_tenant_list();
+  } else {
+    ret = OB_NOT_INIT;
+  }
+  return ret;
+}
+
+int ObSrvDeliver::unlock_tenant_list()
+{
+  return gctx_.omt_->unlock_tenant_list();
 }

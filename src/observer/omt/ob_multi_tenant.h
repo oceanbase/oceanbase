@@ -130,6 +130,7 @@ public:
   int update_checkpoint_diagnose_config();
   int update_tenant_audit_log_config();
   int update_tenant_query_response_time_flush_config();
+  int get_tenant_unsafe(const uint64_t tenant_id, ObTenant *&tenant) const;
   int get_tenant(const uint64_t tenant_id, ObTenant *&tenant) const;
   int get_tenant_with_tenant_lock(const uint64_t tenant_id, common::ObLDHandle &handle, ObTenant *&tenant) const;
   int get_active_tenant_with_tenant_lock(const uint64_t tenant_id, common::ObLDHandle &handle, ObTenant *&tenant) const;
@@ -177,7 +178,6 @@ public:
 
 protected:
   void run1();
-  int get_tenant_unsafe(const uint64_t tenant_id, ObTenant *&tenant) const;
   int construct_meta_for_hidden_sys(ObTenantMeta &meta);
   int construct_meta_for_virtual_tenant(const uint64_t tenant_id,
                                         const double min_cpu,
