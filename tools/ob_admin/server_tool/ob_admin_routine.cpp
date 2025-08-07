@@ -1073,6 +1073,7 @@ DEF_COMMAND(SERVER, dump_ss_macro_block, 1,  "tenant_id:ver:mode:obj_type:incar_
       } else if (OB_FAIL(client_->get_ss_macro_block(arg, result))) {
         COMMON_LOG(ERROR, "send req fail", KR(ret), K(arg), K(result));
       } else {
+        const ObDumpMacroBlockParam param(ObDumpMacroBlockContext(), false/*hex_print*/);
         int64_t pos = 0;
         char *macro_buf = result.macro_buf_.ptr();
         int64_t buf_size = result.macro_buf_.length();
@@ -1083,12 +1084,12 @@ DEF_COMMAND(SERVER, dump_ss_macro_block, 1,  "tenant_id:ver:mode:obj_type:incar_
         } else if (OB_FAIL(common_header.check_integrity())) {
           COMMON_LOG(ERROR, "invalid common header", KR(ret), K(common_header));
         } else if (ObMacroBlockCommonHeader::SharedSSTableData == common_header.get_type()) {
-          if (OB_FAIL(ObAdminCommonUtils::dump_shared_macro_block(ObDumpMacroBlockContext(), macro_buf, buf_size))) {
-            COMMON_LOG(ERROR, "dump shared block fail", KR(ret), K(buf_size));
+          if (OB_FAIL(ObAdminCommonUtils::dump_shared_macro_block(param, macro_buf, buf_size))) {
+            COMMON_LOG(ERROR, "dump shared block fail", KR(ret), K(buf_size), K(param));
           }
         } else {
-          if (OB_FAIL(ObAdminCommonUtils::dump_single_macro_block(ObDumpMacroBlockContext(), macro_buf, buf_size))) {
-            COMMON_LOG(ERROR, "dump single block fail", KR(ret), K(buf_size));
+          if (OB_FAIL(ObAdminCommonUtils::dump_single_macro_block(param, macro_buf, buf_size))) {
+            COMMON_LOG(ERROR, "dump single block fail", KR(ret), K(buf_size), K(param));
           }
         }
       }
@@ -1274,6 +1275,7 @@ DEF_COMMAND(SERVER, dump_ss_macro_block_by_uri, 1, "tenant_id:uri")
   } else if (OB_FAIL(client_->get_ss_macro_block_by_uri(arg, result))) {
     COMMON_LOG(ERROR, "send req fail", K(ret));
   } else {
+    const ObDumpMacroBlockParam param(ObDumpMacroBlockContext(), false/*hex_print*/);
     int64_t pos = 0;
     char *macro_buf = result.macro_buf_.ptr();
     int64_t buf_size = result.macro_buf_.length();
@@ -1284,12 +1286,12 @@ DEF_COMMAND(SERVER, dump_ss_macro_block_by_uri, 1, "tenant_id:uri")
     } else if (OB_FAIL(common_header.check_integrity())) {
       COMMON_LOG(ERROR, "invalid common header", KR(ret), K(common_header));
     } else if (ObMacroBlockCommonHeader::SharedSSTableData == common_header.get_type()) {
-      if (OB_FAIL(ObAdminCommonUtils::dump_shared_macro_block(ObDumpMacroBlockContext(), macro_buf, buf_size))) {
-        COMMON_LOG(ERROR, "dump shared block fail", KR(ret), K(buf_size));
+      if (OB_FAIL(ObAdminCommonUtils::dump_shared_macro_block(param, macro_buf, buf_size))) {
+        COMMON_LOG(ERROR, "dump shared block fail", KR(ret), K(buf_size), K(param));
       }
     } else {
-      if (OB_FAIL(ObAdminCommonUtils::dump_single_macro_block(ObDumpMacroBlockContext(), macro_buf, buf_size))) {
-        COMMON_LOG(ERROR, "dump single block fail", KR(ret), K(buf_size));
+      if (OB_FAIL(ObAdminCommonUtils::dump_single_macro_block(param, macro_buf, buf_size))) {
+        COMMON_LOG(ERROR, "dump single block fail", KR(ret), K(buf_size), K(param));
       }
     }
   }
