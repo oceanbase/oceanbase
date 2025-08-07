@@ -1428,6 +1428,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL,//ObExprHiddenClusteringKey::eval_hidden_clustering_key,       /* 862 */
   NULL,//ObExprFormatProfile::format_profile,                         /* 863 */
   ObExprLocalDynamicFilter::eval_local_dynamic_filter,                /* 864 */
+  NULL, // ObExprVecChunk::generate_vec_chunk,                        /* 865 */
+  NULL, // ObExprEmbeddedVec::generate_embedded_vec,                  /* 866 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
