@@ -448,8 +448,8 @@ int ObRsAutoSplitScheduler::pop_tasks(const int64_t num_tasks_can_pop, const boo
     if (polling_mgr_.is_empty() && task_direct_cache_.empty()) {
       //do nothing
     } else {
-      if (OB_FAIL(polling_mgr_.pop_tasks(num_tasks_pop_from_poll_mgr, false, tmp_tenant_task_arrays, allocator))) {
-       LOG_WARN("fail to pop tasks from tree", K(ret));
+      if (num_tasks_pop_from_poll_mgr > 0 && OB_FAIL(polling_mgr_.pop_tasks(num_tasks_pop_from_poll_mgr, false, tmp_tenant_task_arrays, allocator))) {
+        LOG_WARN("fail to pop tasks from tree", K(ret));
       }
       ObArray<ObAutoSplitTask> tmp_task_array;
       for (int64_t i = 0; OB_SUCC(ret) && i < tmp_tenant_task_arrays.count(); ++i) {
@@ -470,7 +470,7 @@ int ObRsAutoSplitScheduler::pop_tasks(const int64_t num_tasks_can_pop, const boo
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(push_to_direct_cache(tenant_task_arrays))) {
+      } else if (num_tasks_pop_from_poll_mgr > 0 && OB_FAIL(push_to_direct_cache(tenant_task_arrays))) {
         LOG_WARN("failed to push to direct cache", K(ret));
       } else if (OB_FAIL(pop_from_direct_cache(num_tasks_can_pop, task_array))) {
        LOG_WARN("failed ot pop from direct cache", K(ret));

@@ -436,6 +436,7 @@ public:
   static int check_ls_migrating(const uint64_t tenant_id, const ObTabletID &tablet_id, bool &is_migrating);
   static bool can_retry(const ObAutoSplitTask &task, const int ret);
   int gc_deleted_tenant_caches();
+  void reset_direct_cache() { task_direct_cache_.reset(); }
 private:
   ObRsAutoSplitScheduler ()
     : polling_mgr_(true/*is_root_server*/, ObSplitCacheType::AUTO_SPLIT_CACHE_TYPE)
