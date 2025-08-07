@@ -253,6 +253,7 @@ public:
       tmp_adaptor_vid_iter_(nullptr),
       limit_param_(),
       vec_index_param_(),
+      search_param_(),
       query_cond_(),
       dim_(0),
       search_vec_(nullptr),
@@ -388,6 +389,7 @@ private:
   int prepare_extra_objs(ObIAllocator &allocator, ObObj *&objs);
   int build_extra_info_rowkey(const ObRowkey &rowkey, ObRowkey &extra_rowkey);
   int build_extra_info_range(const ObNewRange &range, const ObNewRange *&const_extra_range);
+  int64_t get_reorder_count(const int64_t ef_search, const int64_t topK, const ObVectorIndexParam& param);
   inline bool is_pre_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_PRE
                       || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER);}
   inline bool is_in_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_IN_FILTER;}
@@ -466,6 +468,7 @@ private:
   common::ObLimitParam limit_param_;
 
   ObString vec_index_param_;
+  ObVectorIndexParam search_param_;
   ObVectorQueryConditions query_cond_;
   int64_t dim_;
   ObExpr* search_vec_;

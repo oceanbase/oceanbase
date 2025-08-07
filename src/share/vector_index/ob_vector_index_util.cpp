@@ -195,6 +195,47 @@ int ObVectorIndexUtil::parser_params_from_string(
               LOG_WARN("not support vector index extra_info_actual_size value", K(ret), K(int_value), K(new_param_value));
             }
           }
+        } else if (new_param_name == "REFINE_TYPE") {
+          if (new_param_value == "FP32") {
+            param.refine_type_ = 0;
+          } else if (new_param_value == "SQ8") {
+            param.refine_type_ = 1;
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid vector index param", K(ret), K(new_param_name), K(new_param_value));
+          }
+        } else if (new_param_name == "BQ_BITS_QUERY") {
+          int64_t int_value = 0;
+          if (OB_FAIL(ObSchemaUtils::str_to_int(new_param_value, int_value))) {
+            LOG_WARN("fail to str_to_int", K(ret), K(new_param_value));
+          } else if (int_value != 0 && int_value != 4 && int_value != 32) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support vector index bq_bits_query value", K(ret), K(int_value), K(new_param_value));
+          } else {
+            param.bq_bits_query_ = int_value;
+          }
+        } else if (new_param_name == "REFINE_K") {
+          int err = 0;
+          char *endptr = NULL;
+          double out_val = ObCharset::strntod(new_param_value.ptr(), new_param_value.length(), &endptr, &err);
+          if (err != 0 || (new_param_value.ptr() + new_param_value.length()) != endptr) {
+            ret = OB_DATA_OUT_OF_RANGE;
+            LOG_WARN("fail to cast string to double", K(ret), K(new_param_value), K(err), KP(endptr));
+          } else if (out_val < 1.0 || out_val > 1e6) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support vector index refine_k value", K(ret), K(out_val), K(new_param_value));
+          } else {
+            param.refine_k_ = out_val;
+          }
+        } else if (new_param_name == "BQ_USE_FHT") {
+          if (new_param_value == "FALSE") {
+            param.bq_use_fht_ = false;
+          } else if (new_param_value == "TRUE") {
+            param.bq_use_fht_ = true;
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support vector index bq_use_fht value", K(ret), K(new_param_name), K(new_param_value));
+          }
         } else if (new_param_name == "NBITS") {
           int64_t int_value = 0;
           if (OB_FAIL(ObSchemaUtils::str_to_int(new_param_value, int_value))) {
@@ -282,6 +323,86 @@ int ObVectorIndexUtil::is_int_val(const ObString &str, bool &is_int)
       LOG_WARN("id_buf is not long enough", K(ret), K(n), LITERAL_K(OB_MAX_BIT_LENGTH));
     } else {
       is_int = ::obsys::ObStringUtil::is_int(buf);
+    }
+  }
+  return ret;
+}
+
+int ObVectorIndexParam::build(const ObString &index_param_str, const ObVectorIndexQueryParam &query_param, const ObVectorIndexType index_type, ObVectorIndexParam &index_param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(index_param_str, index_type, index_param))) {
+    LOG_WARN("fail to parser params from string", K(ret), K(index_param));
+  } else {
+    if (query_param.is_set_ef_search_) {
+      index_param.ef_search_ = query_param.ef_search_;
+    }
+    if (query_param.is_set_refine_k_) {
+      if (ObVectorIndexAlgorithmType::VIAT_HNSW_BQ != index_param.type_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("refine_k is not support parameter for current index", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "refine_k parameter for current index is");
+      } else {
+        index_param.refine_k_ = query_param.refine_k_;
+      }
+    }
+    LOG_TRACE("vector param", K(index_param_str), K(query_param), K(index_param));
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::resolve_query_param(
+    const ParseNode *param_list_node,
+    ObVectorIndexQueryParam &param)
+{
+  int ret = OB_SUCCESS;
+  const ParseNode *param_node = nullptr;
+  for (int32_t i = 0; OB_SUCC(ret) && i < param_list_node->num_child_; i+=2) {
+    if (i + 1 >= param_list_node->num_child_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("num_child is incorrect", K(ret), K(i), K(param_node->num_child_), K(param_node->type_));
+    } else {
+      ObString param_name;
+      const ParseNode *key_node = param_list_node->children_[i];
+      const ParseNode *value_node = param_list_node->children_[i + 1];
+      param_name.assign_ptr(key_node->str_value_, static_cast<int32_t>(key_node->str_len_));
+      if (param_name.case_compare("EF_SEARCH") == 0) {
+        if (param.is_set_ef_search_) {
+          ret = OB_ERR_PARAM_DUPLICATE;
+          LOG_WARN("duplicate ef_search param", K(ret), K(i));
+        } else if (value_node->type_ != T_INT && value_node->type_ != T_NUMBER) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid query param", K(ret), K(i), K(param_name), K(value_node->type_));
+        } else if (! (value_node->value_ >= 1 && value_node->value_ <= 1000)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid query param", K(ret), K(i), K(param_name), K(value_node->type_), K(value_node->value_));
+        } else {
+          param.ef_search_ = value_node->value_;
+          param.is_set_ef_search_ = 1;
+        }
+      } else if (param_name.case_compare("REFINE_K") == 0) {
+        int err = 0;
+        char *endptr = NULL;
+        ObString value_str(static_cast<int32_t>(value_node->str_len_), value_node->str_value_);
+        double out_val = 0;
+        if (param.is_set_refine_k_) {
+          ret = OB_ERR_PARAM_DUPLICATE;
+          LOG_WARN("duplicate refine_k param", K(ret), K(i));
+        } else if (OB_FALSE_IT(out_val = ObCharset::strntod(value_str.ptr(), value_str.length(), &endptr, &err))) {
+        } else if (err != 0 || (value_str.ptr() + value_str.length()) != endptr) {
+          ret = OB_DATA_OUT_OF_RANGE;
+          LOG_WARN("fail to cast string to double", K(ret), K(value_str), K(err), KP(endptr));
+        } else if (out_val < 1.0 || out_val > 1000) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid vector index refine_k value", K(ret), K(out_val), K(value_str));
+        } else {
+          param.refine_k_ = out_val;
+          param.is_set_refine_k_ = 1;
+        }
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid query param", K(ret), K(i), K(param_name));
+      }
     }
   }
   return ret;
@@ -2171,6 +2292,14 @@ int ObVectorIndexUtil::check_index_param(
     bool type_ivf_sq8_is_set = false;   // ivf
     bool type_ivf_pq_is_set = false;    // ivf
     bool type_hnsw_bq_is_set = false;   // hnsw_bq
+    bool refine_type_is_set = false; // hnsw_bq
+    bool refine_k_is_set = false;    // hnsw_bq
+    bool bq_use_fht_is_set = false;    // hnsw_bq
+    bool bq_bits_query_set = false;    // hnsw_bq
+
+    // [4.3.5.3, 4.4.0.0) or [4.4.1.0, )
+    bool is_enable_bp_param = (tenant_data_version >= MOCK_DATA_VERSION_4_3_5_3 && tenant_data_version < DATA_VERSION_4_4_0_0)
+        || (tenant_data_version >= DATA_VERSION_4_4_1_0);
 
     const int64_t default_m_value = 16;
     const int64_t default_ef_construction_value = 200;
@@ -2201,6 +2330,10 @@ int ObVectorIndexUtil::check_index_param(
                    new_variable_name != "NLIST" &&
                    new_variable_name != "SAMPLE_PER_NLIST" &&
                    new_variable_name != "EXTRA_INFO_MAX_SIZE" &&
+                   new_variable_name != "REFINE_TYPE" &&
+                   new_variable_name != "BQ_BITS_QUERY" &&
+                   new_variable_name != "REFINE_K" &&
+                   new_variable_name != "BQ_USE_FHT" &&
                    new_variable_name != "NBITS") {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("unexpected vector variable name", K(ret), K(new_variable_name));
@@ -2327,6 +2460,44 @@ int ObVectorIndexUtil::check_index_param(
             LOG_WARN("invalid vector index extra_info_max_size value", K(ret), K(parser_value));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index extra_info_max_size is");
           }
+        } else if (last_variable == "REFINE_TYPE") {
+          if (! is_enable_bp_param || ! (new_parser_name == "FP32" || new_parser_name == "SQ8")) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support vector index vector index refine_type value", K(ret), K(is_enable_bp_param), K(new_parser_name));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index refine_type is");
+          } else {
+            refine_type_is_set = true;
+          }
+        } else if (last_variable == "BQ_BITS_QUERY") {
+          if (! is_enable_bp_param || (parser_value != 4 && parser_value != 32)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support vector index bq_bits_query value", K(ret), K(is_enable_bp_param), K(parser_value));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index bq_bits_query is");
+          } else {
+            bq_bits_query_set = true;
+          }
+        } else if (last_variable == "REFINE_K") {
+          int err = 0;
+          char *endptr = NULL;
+          double out_val = ObCharset::strntod(new_parser_name.ptr(), new_parser_name.length(), &endptr, &err);
+          if (err != 0 || (new_parser_name.ptr() + new_parser_name.length()) != endptr) {
+            ret = OB_DATA_OUT_OF_RANGE;
+            LOG_WARN("fail to cast string to double", K(ret), K(new_parser_name), K(err), KP(endptr));
+          } else if (! is_enable_bp_param || (out_val < 1.0 || out_val > 1000)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support vector index refine_k value", K(ret), K(is_enable_bp_param), K(out_val), K(new_parser_name));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index refine_k is");
+          } else {
+            refine_k_is_set = true;
+          }
+        } else if (last_variable == "BQ_USE_FHT") {
+          if (! is_enable_bp_param || (! (0 == parser_value || 1 == parser_value))) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support vector index bq_use_fht value", K(ret), K(is_enable_bp_param), K(parser_value));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "this value of vector index bq_use_fht is");
+          } else {
+            bq_use_fht_is_set = true;
+          }
         } else if (last_variable == "NBITS") {
           if (parser_value >= 1 && parser_value <= 24) {
             nbits_is_set = true;
@@ -2354,6 +2525,15 @@ int ObVectorIndexUtil::check_index_param(
         LOG_WARN("not support distance algorithm for hnsw bq index", K(ret), K(distance_name));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "current distance algorithm for hnsw bq index is");
       }
+    }
+
+    if (OB_SUCC(ret) && ! type_hnsw_bq_is_set
+        && (refine_type_is_set || refine_k_is_set
+            || bq_use_fht_is_set || bq_bits_query_set)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support parameter for current index", K(ret),
+          K(refine_type_is_set), K(refine_k_is_set), K(bq_use_fht_is_set), K(bq_bits_query_set));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "parameter for current index is");
     }
     if (OB_SUCC(ret) && extra_info_max_size_is_set) {
       if (tenant_data_version < DATA_VERSION_4_3_5_2) {
@@ -2493,6 +2673,12 @@ int ObVectorIndexUtil::check_index_param(
         } else if (extra_info_actual_size > 0 && extra_info_max_size <= 0) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("extra_info_actual_size > 0 && extra_info_max_size <= 0", K(ret), K(extra_info_actual_size), K(extra_info_max_size));
+        } else if (is_enable_bp_param && type_hnsw_bq_is_set &&! refine_type_is_set &&
+            OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", REFINE_TYPE=SQ8"))) {
+          LOG_WARN("fail to printf databuff", K(ret));
+        } else if (is_enable_bp_param && type_hnsw_bq_is_set && ! bq_use_fht_is_set
+            && OB_FAIL(databuff_printf(not_set_params_str, OB_MAX_TABLE_NAME_LENGTH, pos, ", BQ_USE_FHT=TRUE"))) {
+          LOG_WARN("fail to printf databuff", K(ret));
         } else {
           char *buf = nullptr;
           const int64_t alloc_len = index_params.length() + pos;
@@ -4353,7 +4539,7 @@ int ObVectorIndexUtil::estimate_hnsw_memory(uint64_t num_vectors,
 {
   int ret = OB_SUCCESS;
   est_mem = 0;
-  obvectorlib::VectorIndexPtr index_handler = nullptr;
+  obvsag::VectorIndexPtr index_handler = nullptr;
   const char* const DATATYPE_FLOAT32 = "float32";
   ObVectorIndexAlgorithmType build_type = param.type_;
   int64_t build_metric = param.m_;
@@ -4375,7 +4561,6 @@ int ObVectorIndexUtil::estimate_hnsw_memory(uint64_t num_vectors,
                                                 param.ef_search_,
                                                 nullptr, /* memory ctx, use default */
                                                 param.extra_info_actual_size_))) {
-    ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
     LOG_WARN("failed to create vsag index.", K(ret), K(param));
   } else if (OB_ISNULL(index_handler)) {
     ret = OB_ERR_UNEXPECTED;
@@ -4618,7 +4803,7 @@ int ObVectorIndexUtil::estimate_vector_memory_used(
   estimate_memory = 0;
 
   const char* const DATATYPE_FLOAT32 = "float32";
-  obvectorlib::VectorIndexPtr index_handler = nullptr;
+  obvsag::VectorIndexPtr index_handler = nullptr;
   ObVectorIndexParam param;
   int64_t dim = 0;
   ObSEArray<uint64_t , 1> col_ids;
@@ -4670,8 +4855,10 @@ int ObVectorIndexUtil::estimate_vector_memory_used(
                                            param.ef_construction_,
                                            param.ef_search_,
                                            nullptr, /* memory ctx, use default */
-                                           param.extra_info_actual_size_))) {
-      ret = ObPluginVectorIndexHelper::vsag_errcode_2ob(ret);
+                                           param.extra_info_actual_size_,
+                                           param.refine_type_,
+                                           param.bq_bits_query_,
+                                           param.bq_use_fht_))) {
       LOG_WARN("failed to create vsag index.", K(ret), K(param));
     } else if (OB_ISNULL(index_handler)) {
       ret = OB_ERR_UNEXPECTED;

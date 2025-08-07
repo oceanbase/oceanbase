@@ -132,7 +132,7 @@ struct ObVectorParamData
   TO_STRING_KV(K_(dim), K_(count), K_(curr_idx), KP_(vectors), KP_(vids), KP_(extra_info_objs));
 };
 
-class ObHnswBitmapFilter : public obvectorlib::FilterInterface
+class ObHnswBitmapFilter : public obvsag::FilterInterface
 {
 public:
   static const uint64_t NORMAL_BITMAP_MAX_SIZE = 10000000;
@@ -226,10 +226,35 @@ public:
   const ObIArray<int64_t> *extra_in_rowkey_idxs_;
 };
 
+class ObVsagSearchAlloc : public vsag::Allocator
+{
+public:
+  ObVsagSearchAlloc(uint64_t tenant_id):
+    alloc_("VsagSearch", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id)
+  {}
+
+  std::string Name() override { return "ObVsagSearchAlloc"; }
+  void* Allocate(size_t size) override;
+  void Deallocate(void* p) override { alloc_.free(p); };
+  void* Reallocate(void* p, size_t size) override;
+  int64_t hold() { return alloc_.total(); }
+  int64_t used() { return alloc_.used(); }
+  void reset() { alloc_.reset(); }
+  void reuse() { alloc_.reuse(); }
+
+private:
+  ObArenaAllocator alloc_;
+
+  constexpr static int64_t MEM_PTR_HEAD_SIZE = sizeof(int64_t);
+};
+
 class ObVectorQueryAdaptorResultContext {
 public:
   friend class ObPluginVectorIndexAdaptor;
-  ObVectorQueryAdaptorResultContext(uint64_t tenant_id, int64_t extra_column_count, ObIAllocator *allocator, ObIAllocator *tmp_allocator)
+  ObVectorQueryAdaptorResultContext(uint64_t tenant_id,
+                                    int64_t extra_column_count,
+                                    ObIAllocator *allocator,
+                                    ObIAllocator *tmp_allocator)
     : status_(PVQ_START),
       flag_(PVQP_MAX),
       tenant_id_(tenant_id),
@@ -242,6 +267,7 @@ public:
       allocator_(allocator),
       tmp_allocator_(tmp_allocator),
       batch_allocator_("BATCHALLOC", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      search_allocator_(tenant_id),
       ls_leader_(true) {};
   ~ObVectorQueryAdaptorResultContext();
   int init_bitmaps();
@@ -295,6 +321,7 @@ private:
   ObIAllocator *allocator_;       // allocator for vec_lookup_op, used to allocate memory for final query result
   ObIAllocator *tmp_allocator_;   // used to temporarily allocate memory during the query process and does not affect the final query results
   ObArenaAllocator batch_allocator_; // Used to complete_delta_buffer_data in batches, reuse after each batch of data is completed
+  ObVsagSearchAlloc search_allocator_;
   bool ls_leader_;
 };
 

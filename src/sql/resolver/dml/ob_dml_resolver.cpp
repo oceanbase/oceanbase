@@ -9257,6 +9257,27 @@ int ObDMLResolver::resolve_approx_clause(const ParseNode *approx_node)
   return ret;
 }
 
+int ObDMLResolver::resolve_vector_index_params(const ParseNode *params_node)
+{
+  int ret = OB_SUCCESS;
+  ObDMLStmt *stmt = get_stmt();
+  uint64_t data_version = 0;
+  if (OB_ISNULL(params_node)) { // no vector index parameters, so skip
+  } else if (OB_ISNULL(stmt) || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null pointer", KPC(stmt), KPC(session_info_), K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version))) {
+    LOG_WARN("fail to get data_version", K(session_info_->get_effective_tenant_id()), K(data_version), K(ret));
+  } else if (data_version < MOCK_DATA_VERSION_4_3_5_3 || (DATA_VERSION_4_4_0_0 <= data_version && data_version < DATA_VERSION_4_4_1_0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("in current version vector index query param is not support", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "in current version vector index query param is");
+  } else if (OB_FAIL(ObVectorIndexUtil::resolve_query_param(params_node, stmt->get_vector_index_query_param()))){
+    LOG_WARN("resolve_query_param fail", K(ret));
+  }
+  return ret;
+}
+
 int ObDMLResolver::resolve_limit_clause(const ParseNode *node, bool disable_offset/*= false*/)
 {
   int ret = OB_SUCCESS;

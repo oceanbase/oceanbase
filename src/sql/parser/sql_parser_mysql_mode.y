@@ -556,7 +556,7 @@ END_P SET_VAR DELIMITER
 %type <node> external_table_partitions external_table_partition
 %type <node> skip_index_type opt_skip_index_type_list
 %type <node> opt_rebuild_column_store
-%type <node> vec_index_params vec_index_param vec_index_param_value
+%type <node> vec_index_params vec_index_param vec_index_param_value opt_with_vector_index_parameters
 %type <node> json_table_expr rb_iterate_expr unnest_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def
 %type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
@@ -11044,8 +11044,8 @@ dml_table_name values_clause
     malloc_non_terminal_node(into_node, result->malloc_pool_, T_INSERT_INTO_CLAUSE, 2, $1, column_list_node);
     malloc_non_terminal_node(values_list_node, result->malloc_pool_, T_VALUES_ROW_LIST, 1, value_vector_node);
     malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, values_list_node);
-    malloc_select_values_stmt(subquery_node, result, values_node, NULL, NULL, NULL);
-    malloc_select_values_stmt(select_node, result, subquery_node, NULL, NULL, NULL);
+    malloc_select_values_stmt(subquery_node, result, values_node, NULL, NULL, NULL, NULL);
+    malloc_select_values_stmt(select_node, result, subquery_node, NULL, NULL, NULL, NULL);
     select_node->children_[PARSE_SELECT_FROM]->children_[0]->children_[1] = $4;
     val_list = select_node;
     val_list->reserved_ = 1;
@@ -11069,8 +11069,8 @@ value_or_values insert_vals_list opt_insert_row_alias
     ParseNode *values_node = NULL;
     $2->type_ = T_VALUES_ROW_LIST;
     malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, $2);
-    malloc_select_values_stmt(subquery_node, result, values_node, NULL, NULL, NULL);
-    malloc_select_values_stmt($$, result, subquery_node, NULL, NULL, NULL);
+    malloc_select_values_stmt(subquery_node, result, values_node, NULL, NULL, NULL, NULL);
+    malloc_select_values_stmt($$, result, subquery_node, NULL, NULL, NULL, NULL);
     $$->children_[PARSE_SELECT_FROM]->children_[0]->children_[1] = $3;
     $$->reserved_ = 1;
   } else {
@@ -11646,6 +11646,18 @@ APPROX
 }
 ;
 
+opt_with_vector_index_parameters:
+PARAMETERS '(' vec_index_params ')'
+{
+  merge_nodes($$, result, T_VEC_INDEX_PARAMS, $3);
+  dup_expr_string($$, result, @3.first_column, @3.last_column);
+}
+|/*empty*/
+{
+  $$ = NULL;
+}
+;
+
 simple_select_with_order_and_limit:
 simple_select order_by
 {
@@ -11658,13 +11670,15 @@ simple_select order_by
   $$->children_[PARSE_SELECT_ORDER] = $2;
   $$->children_[PARSE_SELECT_APPROX] = NULL;
   $$->children_[PARSE_SELECT_LIMIT] = $3;
+  $$->children_[PARSE_SELECT_VECTOR_INDEX_PARAMS] = NULL;
 }
-| simple_select order_by opt_approx limit_clause
+| simple_select order_by opt_approx limit_clause opt_with_vector_index_parameters
 {
   $$ = $1;
   $$->children_[PARSE_SELECT_ORDER] = $2;
   $$->children_[PARSE_SELECT_APPROX] = $3;
   $$->children_[PARSE_SELECT_LIMIT] = $4;
+  $$->children_[PARSE_SELECT_VECTOR_INDEX_PARAMS] = $5;
 }
 ;
 
@@ -15379,7 +15393,7 @@ VALUES values_row_list
   ParseNode *value_list = NULL;
   merge_nodes(value_list, result, T_VALUES_ROW_LIST, $2);
   malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, value_list);
-  malloc_select_values_stmt($$, result, values_node, NULL, NULL, NULL);
+  malloc_select_values_stmt($$, result, values_node, NULL, NULL, NULL, NULL);
 }
 ;
 
@@ -15390,7 +15404,7 @@ VALUES values_row_list order_by
   ParseNode *value_list = NULL;
   merge_nodes(value_list, result, T_VALUES_ROW_LIST, $2);
   malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, value_list);
-  malloc_select_values_stmt($$, result, values_node, $3, NULL, NULL);
+  malloc_select_values_stmt($$, result, values_node, $3, NULL, NULL, NULL);
 }
 | VALUES values_row_list opt_order_by limit_clause
 {
@@ -15398,7 +15412,7 @@ VALUES values_row_list order_by
   ParseNode *value_list = NULL;
   merge_nodes(value_list, result, T_VALUES_ROW_LIST, $2);
   malloc_non_terminal_node(values_node, result->malloc_pool_, T_VALUES_TABLE_EXPRESSION, 1, value_list);
-  malloc_select_values_stmt($$, result, values_node, $3, NULL, $4);
+  malloc_select_values_stmt($$, result, values_node, $3, NULL, $4, NULL);
 }
 ;
 

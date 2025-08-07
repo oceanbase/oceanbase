@@ -2198,6 +2198,9 @@ int ObTscCgService::generate_vec_idx_ctdef(const ObLogTableScan &op,
   bool is_aux_table_all_inited = false;
   const ObVecIndexInfo &vc_info = op.get_vector_index_info();
   ObVectorAuxTableIdx main_index_tid = ObVectorAuxTableIdx::VEC_FIRST_AUX_TBL_IDX;
+  const ObDMLStmt *stmt = nullptr;
+  const ObVectorIndexQueryParam& query_param = vc_info.get_query_param();
+
   if (OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null pointer", K(ret));
@@ -2254,6 +2257,8 @@ int ObTscCgService::generate_vec_idx_ctdef(const ObLogTableScan &op,
         LOG_WARN("allocate ir scan ctdef children failed", K(ret));
       } else if (OB_FAIL(ob_write_string(ctdef_alloc, main_index_table_schema->get_index_params(), vec_scan_ctdef->vec_index_param_))) {
         LOG_WARN("fail to get index param", K(ret));
+      } else if (OB_FAIL(vec_scan_ctdef->vec_query_param_.assign(query_param))) {
+        LOG_WARN("fail to copy vector index query param", K(ret), K(query_param));
       } else {
         vec_scan_ctdef->children_cnt_ = vec_child_task_cnt; // number of ObDASScanCtDef
         vec_scan_ctdef->children_[0] = inv_idx_scan_ctdef;

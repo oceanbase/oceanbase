@@ -25,6 +25,7 @@
 #include "sql/resolver/dml/ob_raw_expr_sets.h"
 #include "sql/resolver/expr/ob_raw_expr_copier.h"
 #include "sql/resolver/dml/ob_stmt_expr_visitor.h"
+#include "share/vector_index/ob_vector_index_param.h"
 
 namespace oceanbase
 {
@@ -999,6 +1000,8 @@ public:
   inline bool is_reverse_link() const { return is_reverse_link_; }
   inline void set_has_vec_approx(bool has_vec_approx) { has_vec_approx_ = has_vec_approx; }
   inline bool has_vec_approx() const { return has_vec_approx_; }
+  const share::ObVectorIndexQueryParam& get_vector_index_query_param() const { return vector_index_query_param_; }
+  share::ObVectorIndexQueryParam& get_vector_index_query_param() { return vector_index_query_param_; }
   bool is_contain_vector_origin_distance_calc() const;
   int add_subquery_ref(ObQueryRefRawExpr *query_ref);
   virtual int get_child_stmt_size(int64_t &child_size) const;
@@ -1080,7 +1083,8 @@ public:
                N_USER_VARS, user_var_exprs_,
                K_(dblink_id),
                K_(is_reverse_link),
-               K_(has_vec_approx));
+               K_(has_vec_approx),
+               K_(vector_index_query_param));
 
   int check_if_contain_inner_table(bool &is_contain_inner_table) const;
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -1281,6 +1285,7 @@ protected:
   bool has_vec_approx_;
   // fulltext search exprs
   common::ObSEArray<ObMatchFunRawExpr*, 2, common::ModulePageAllocator, true> match_exprs_;
+  share::ObVectorIndexQueryParam vector_index_query_param_;
 };
 
 template <typename T>

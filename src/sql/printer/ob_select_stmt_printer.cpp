@@ -237,6 +237,8 @@ int ObSelectStmtPrinter::print_basic_stmt()
     LOG_WARN("fail to print order by", K(ret), K(*stmt_));
   } else if (OB_FAIL(print_limit())) {
     LOG_WARN("fail to print limit", K(ret), K(*stmt_));
+  } else if (OB_FAIL(print_vector_index_query_param())) {
+    LOG_WARN("fail to print vector index query params", K(ret), K(*stmt_));
   } else if (OB_FAIL(print_fetch())) {
     LOG_WARN("fail to print fetch", K(ret), K(*stmt_));
   } else if (OB_FAIL(print_with_check_option())) {

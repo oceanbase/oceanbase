@@ -236,6 +236,7 @@ struct ObVecIndexInfo
     selectivity_(0),
     row_count_(0),
     can_use_vec_pri_opt_(false),
+    query_param_(),
     vector_index_param_(),
     adaptive_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
     is_multi_value_index_(false),
@@ -247,7 +248,7 @@ struct ObVecIndexInfo
 
   TO_STRING_KV(K_(sort_key), KPC_(topk_limit_expr), KPC_(topk_offset_expr), KPC_(target_vec_column),
               KPC_(vec_id_column), K_(aux_table_column), K_(aux_table_id), K_(main_table_tid),
-              K_(vec_type), K_(vector_index_param), K_(vec_index_name));
+              K_(vec_type), K_(vector_index_param), K_(query_param), K_(vec_index_name));
   bool need_sort() const { return sort_key_.expr_ != nullptr; }
   inline void set_vec_algorithm_type(ObVectorIndexAlgorithmType type) { vector_index_param_.type_ = type; }
   inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
@@ -290,6 +291,8 @@ struct ObVecIndexInfo
   int check_vec_aux_column_is_all_inited(bool& is_all_null) const;
   int check_vec_aux_table_is_all_inited(bool& is_all_null) const;
   const ObString &get_vec_index_name() const { return vec_index_name_; }
+  const ObVectorIndexQueryParam& get_query_param() const { return query_param_; }
+  int set_query_param(const ObVectorIndexQueryParam &param) { return query_param_.assign(param); }
   // topn infos
   OrderItem sort_key_;
   ObRawExpr *topk_limit_expr_;
@@ -307,6 +310,7 @@ struct ObVecIndexInfo
   double selectivity_;
   int64_t row_count_;
   bool can_use_vec_pri_opt_;
+  ObVectorIndexQueryParam query_param_;
   ObVectorIndexParam vector_index_param_;
   ObVecIdxAdaTryPath adaptive_try_path_;
   bool is_multi_value_index_;

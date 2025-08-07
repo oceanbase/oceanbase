@@ -21,6 +21,7 @@
 #include "rootserver/ob_ddl_service.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "share/vector_type/ob_vector_common_util.h"
+#include "share/vector_index/ob_vector_index_param.h"
 
 namespace oceanbase
 {
@@ -234,6 +235,9 @@ public:
   TO_STRING_KV(K_(type), K_(lib), K_(dist_algorithm), K_(dim), K_(m), K_(ef_construction), K_(ef_search),
     K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size),
     K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht), K_(sync_interval_type), K_(sync_interval_value), K_(endpoint), K_(nbits));
+
+public:
+  static int build(const ObString &index_param_str, const ObVectorIndexQueryParam &query_param, const ObVectorIndexType index_type, ObVectorIndexParam &param);
 };
 
 struct ObVecIdxExtraInfo
@@ -379,6 +383,9 @@ public:
       ObVectorIndexType vector_index_type,
       ObVectorIndexParam &param,
       const bool set_default=true);
+  static int resolve_query_param(
+      const ParseNode *option_node,
+      ObVectorIndexQueryParam& query_param);
   static int filter_index_param(
     const ObString &index_param_str,
     const char *to_filter,

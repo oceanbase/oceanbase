@@ -219,6 +219,14 @@ int ObDASHNSWScanIter::inner_init(ObDASIterParam &param)
     } else if (OB_NOT_NULL(rowkey_vid_iter_)) {
       rowkey_vid_iter_->set_scan_param(rowkey_vid_scan_param_);
     }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObVectorIndexParam::build(vec_aux_ctdef_->vec_index_param_, vec_aux_ctdef_->vec_query_param_, ObVectorIndexType::VIT_HNSW_INDEX, search_param_))) {
+        LOG_WARN("fail to build index param", K(vec_aux_ctdef_->vec_index_param_), K(vec_aux_ctdef_->vec_query_param_));
+      } else {
+        LOG_TRACE("search param", K(vec_aux_ctdef_->vec_index_param_), K(vec_aux_ctdef_->vec_query_param_), K(search_param_));
+      }
+    }
   }
   LOG_TRACE("vector index show basic hnsw search info", K(dim_), K(extra_column_count_), K(is_primary_pre_with_rowkey_with_filter_),
                                                         K(data_filter_ctdef_), K(vec_index_type_), K(vec_idx_try_path_), K(adaptive_ctx_));
@@ -1716,9 +1724,7 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
       int64_t extra_info_actual_size = 0;
 
       if (is_hnsw_bq()) {
-        // normally topK(real_limit) should be the same as ef_search for bq
-        // but if topK is larger than ef_search, use topK
-        final_res_cnt = OB_MIN(OB_MAX(final_res_cnt, query_cond_.ef_search_), MAX_VSAG_QUERY_RES_SIZE);
+        final_res_cnt = get_reorder_count(query_cond_.ef_search_, final_res_cnt, search_param_);
       }
 
       if (OB_FAIL(adaptor->get_extra_info_actual_size(extra_info_actual_size))) {
@@ -2098,7 +2104,10 @@ int ObDASHNSWScanIter::get_ob_hnsw_ef_search(uint64_t &ob_hnsw_ef_search)
   const uint64_t OB_HNSW_EF_SEARCH_DEFAULT = 64;  // same as SYS_VAR_OB_HNSW_EF_SEARCH
 
   ObSQLSessionInfo *session = nullptr;
-  if (OB_ISNULL(session = exec_ctx_->get_my_session())) {
+  if (OB_NOT_NULL(vec_aux_ctdef_) && vec_aux_ctdef_->vec_query_param_.is_set_ef_search_) {
+    ob_hnsw_ef_search =  vec_aux_ctdef_->vec_query_param_.ef_search_;
+    LOG_TRACE("use stmt ef_search", K(ob_hnsw_ef_search));
+  } else if (OB_ISNULL(session = exec_ctx_->get_my_session())) {
     ob_hnsw_ef_search = OB_HNSW_EF_SEARCH_DEFAULT;
     LOG_WARN("session is null", K(ret), KP(exec_ctx_));
   } else if (OB_FAIL(session->get_ob_hnsw_ef_search(ob_hnsw_ef_search))) {
@@ -2106,6 +2115,16 @@ int ObDASHNSWScanIter::get_ob_hnsw_ef_search(uint64_t &ob_hnsw_ef_search)
   }
 
   return ret;
+}
+
+int64_t ObDASHNSWScanIter::get_reorder_count(const int64_t ef_search, const int64_t topK, const ObVectorIndexParam& param)
+{
+  // max is ef_search
+  const float refine_k = param.refine_k_;
+  int64_t refine_cnt = refine_k * topK;
+  if (refine_cnt < topK) refine_cnt = topK;
+  LOG_TRACE("reorder count info", K(ef_search), K(topK), K(refine_k), K(refine_cnt));
+  return OB_MIN(OB_MAX(topK, OB_MIN(refine_cnt, ef_search)), MAX_VSAG_QUERY_RES_SIZE);
 }
 
 int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query_cond)
@@ -2131,7 +2150,7 @@ int ObDASHNSWScanIter::set_vector_query_condition(ObVectorQueryConditions &query
       if (is_hnsw_bq()) {
         // normally topK(real_limit) should be the same as ef_search for bq
         // but if topK is larger than ef_search, use topK
-        real_limit = OB_MIN(OB_MAX(real_limit, ob_hnsw_ef_search), MAX_VSAG_QUERY_RES_SIZE);
+        real_limit = get_reorder_count(ob_hnsw_ef_search, real_limit, search_param_);
       }
       query_cond.query_limit_ = real_limit;
     }

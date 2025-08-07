@@ -2280,6 +2280,28 @@ int ObDMLStmtPrinter::print_approx()
   return ret;
 }
 
+int ObDMLStmtPrinter::print_vector_index_query_param()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt_) || OB_ISNULL(buf_) || OB_ISNULL(pos_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt_ is NULL or buf_ is NULL or pos_ is NULL", K(ret));
+  } else {
+    const ObVectorIndexQueryParam& param = stmt_->get_vector_index_query_param();
+    if (param.is_valid()) {
+      DATA_PRINTF(" parameters(");
+      if (OB_SUCC(ret) && param.is_set_ef_search_) {
+        DATA_PRINTF("ef_search=%d", param.ef_search_);
+      }
+      if (OB_SUCC(ret) && param.is_set_refine_k_) {
+        DATA_PRINTF(", refine_k=%f", param.refine_k_);
+      }
+      DATA_PRINTF(") ");
+    }
+  }
+  return ret;
+}
+
 int ObDMLStmtPrinter::print_limit()
 {
   int ret = OB_SUCCESS;

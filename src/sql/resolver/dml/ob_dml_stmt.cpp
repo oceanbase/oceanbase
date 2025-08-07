@@ -484,6 +484,8 @@ int ObDMLStmt::assign(const ObDMLStmt &other)
     LOG_WARN("faield to assign check constraint items", K(ret));
   } else if (OB_FAIL(match_exprs_.assign(other.match_exprs_))) {
     LOG_WARN("faield to assign fulltext search exprs", K(ret));
+  } else if (OB_FAIL(vector_index_query_param_.assign(other.vector_index_query_param_))) {
+    LOG_WARN("faield to assign vector index query param", K(ret));
   } else {
     limit_count_expr_ = other.limit_count_expr_;
     limit_offset_expr_ = other.limit_offset_expr_;
@@ -654,6 +656,8 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     LOG_WARN("failed to assign sequence ids", K(ret));
   } else if (OB_FAIL(currval_sequence_ids_.assign(other.currval_sequence_ids_))) {
     LOG_WARN("failed to assign sequence ids", K(ret));
+  } else if (OB_FAIL(vector_index_query_param_.assign(other.vector_index_query_param_))) {
+    LOG_WARN("faield to assign vector index query param", K(ret));
   } else {
     is_calc_found_rows_ = other.is_calc_found_rows_;
     has_top_limit_ = other.has_top_limit_;

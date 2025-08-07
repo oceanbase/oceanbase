@@ -3350,7 +3350,7 @@ question_mask_size: 0
 			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-		|--[18],[T_HINT_OPTION_LIST], str_value_=[], value=[9223372036854775807]
+		|--[19],[T_HINT_OPTION_LIST], str_value_=[], value=[9223372036854775807]
 
 **************   Case 172   ***************
 select /*+max_concurrent(10)*/* from t1;
@@ -3365,7 +3365,7 @@ question_mask_size: 0
 			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-		|--[18],[T_HINT_OPTION_LIST], str_value_=[], value=[9223372036854775807]
+		|--[19],[T_HINT_OPTION_LIST], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_MAX_CONCURRENT], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_INT], str_value_=[10], value=[10]
 

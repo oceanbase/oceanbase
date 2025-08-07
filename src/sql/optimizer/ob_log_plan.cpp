@@ -15830,7 +15830,9 @@ int ObLogPlan::prepare_vector_index_info(AccessPath *ap,
       vc_info.can_extract_range_ = ap->domain_idx_info_.vec_extra_info_.can_extract_range_;
       vc_info.is_spatial_index_ =  ap->domain_idx_info_.vec_extra_info_.is_spatial_index_;
       vc_info.is_multi_value_index_ = ap->domain_idx_info_.vec_extra_info_.is_multi_value_index_;
-      if (vc_info.is_hnsw_vec_scan()) {
+      if (OB_FAIL(vc_info.set_query_param(stmt->get_vector_index_query_param()))) {
+        LOG_WARN("set query param fail", K(ret));
+      } else if (vc_info.is_hnsw_vec_scan()) {
         if (OB_FAIL(prepare_hnsw_vector_index_scan(schema_guard, *table_schema, vec_col_id, table_scan))) {
           LOG_WARN("fail to init hnsw aux index table info",
             K(ret), K(table_scan->get_table_id()), K(vec_col_id), K(vc_info), K(table_schema->get_table_name_str()));
