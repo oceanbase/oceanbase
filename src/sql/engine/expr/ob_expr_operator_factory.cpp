@@ -1648,6 +1648,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprTmpFileRead);
 #endif
   REG_OP_ORCL(ObExprLocalDynamicFilter);
+  REG_OP_ORCL(ObExprCheckLocationAccess);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

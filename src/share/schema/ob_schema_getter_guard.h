@@ -1040,7 +1040,8 @@ public:
                                      common::ObIArray<const ObLocationSchema *> &location_schemas);
   int check_location_access(const ObSessionPrivInfo &session_priv,
                             const common::ObIArray<uint64_t> &enable_role_id_array,
-                            const ObString &location_name);
+                            const ObString &location_name,
+                            bool is_write = false);
   int check_location_show(const ObSessionPrivInfo &session_priv,
                           const common::ObIArray<uint64_t> &enable_role_id_array,
                           const common::ObString &location_name,

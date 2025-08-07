@@ -53,6 +53,7 @@
 #include "sql/resolver/dcl/ob_alter_user_profile_stmt.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/resolver/cmd/ob_event_stmt.h"
+#include "sql/resolver/cmd/ob_location_utils_stmt.h"
 
 namespace oceanbase {
 using namespace share;
@@ -2527,6 +2528,40 @@ int get_location_privs(const ObSessionPrivInfo &session_priv,
         need_priv.priv_set_ = OB_PRIV_CREATE_LOCATION;
         need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
         ADD_NEED_PRIV(need_priv);
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("Stmt type not in types dealt in this function", K(ret), K(stmt_type));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int get_location_util_privs(const ObSessionPrivInfo &session_priv,
+                            const ObStmt *basic_stmt,
+                            ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (lib::is_oracle_mode()) {
+    ret = no_priv_needed(session_priv, basic_stmt, need_privs);
+  } else {
+    ObNeedPriv need_priv;
+    stmt::StmtType stmt_type = basic_stmt->get_stmt_type();
+    const ObLocationUtilsStmt *stmt = static_cast<const ObLocationUtilsStmt*>(basic_stmt);
+    switch (stmt_type) {
+      case stmt::T_LOCATION_UTILS: {
+        ObNeedPriv tmp_need_priv;
+        tmp_need_priv.table_ = stmt->get_location_name();
+        tmp_need_priv.priv_level_ = OB_PRIV_OBJECT_LEVEL;
+        tmp_need_priv.priv_set_ = OB_PRIV_WRITE;
+        tmp_need_priv.obj_type_ = ObObjectType::LOCATION;
+        ADD_NEED_PRIV(tmp_need_priv);
         break;
       }
       default: {

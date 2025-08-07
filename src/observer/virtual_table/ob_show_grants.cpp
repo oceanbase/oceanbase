@@ -549,7 +549,7 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
                                                                        loc_schema))) {
                     SERVER_LOG(WARN, "Get location schema with loc id error", K(ret));
                     } else if (loc_schema == NULL) {
-                      ret = OB_LOCATION_NOT_EXIST;
+                      ret = OB_LOCATION_OBJ_NOT_EXIST;
                       SERVER_LOG(WARN, "Location not exist", K(ret));
                     } else {
                       obj_name = loc_schema->get_location_name_str();
