@@ -3788,7 +3788,7 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
     }
     if (convert) {
       int tmp_ret = ObUserDefinedType::destruct_objparam(*ctx->allocator_, dummy_result, &session_info);
-      if (OB_FAIL(tmp_ret)) {
+      if (OB_SUCCESS != tmp_ret) {
         LOG_WARN("failed to destruct obj", K(tmp_ret));
       }
       ret = ret == OB_SUCCESS ? tmp_ret : ret;
