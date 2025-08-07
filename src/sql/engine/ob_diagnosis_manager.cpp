@@ -411,6 +411,8 @@ void ObDiagnosisManager::reuse()
   col_names_.reuse();
   data_.reuse();
   missing_col_idxs_.reuse();
+
+  allocator_.reuse();
 }
 
 int ObDiagnosisManager::do_diagnosis(ObBitVector &skip,
