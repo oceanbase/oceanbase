@@ -764,6 +764,7 @@ int ObAllVirtualProxySchema::get_view_decoded_schema_(
                (ObPhysicalPlanCtx, phy_plan_ctx, *allocator_)) {
     LinkExecCtxGuard link_guard(empty_session, exec_ctx);
     ObSqlCtx empty_ctx;
+    empty_ctx.schema_guard_ = &schema_guard_;
     exec_ctx.set_sql_ctx(&empty_ctx);
     exec_ctx.set_my_session(&empty_session);
     exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
