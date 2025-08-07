@@ -4354,6 +4354,7 @@ int ObIvfCenterSliceStore::init(
     LOG_WARN("invalid argument", K(ret), KPC(tablet_direct_load_mgr));
   } else {
     ObLSID ls_id = tablet_direct_load_mgr->get_ls_id();
+    ls_id_ = ls_id;
     tablet_id_ = tablet_direct_load_mgr->get_tablet_id();
     vec_idx_param_ = vec_idx_param;
     vec_dim_ = vec_dim;
@@ -4430,6 +4431,13 @@ int ObIvfCenterSliceStore::append_row(const blocksstable::ObDatumRow &datum_row)
     }
   }
   tmp_allocator_.reuse();
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    ObIvfHelperKey key(tablet_id_, context_id_);
+    if (OB_TMP_FAIL(ObPluginVectorIndexUtils::erase_ivf_build_helper(ls_id_, key))) {
+      LOG_WARN("failed to erase ivf build helper", K(tmp_ret), K(ls_id_), K(tablet_id_));
+    }
+  }
   return ret;
 }
 
@@ -4592,6 +4600,7 @@ int ObIvfSq8MetaSliceStore::init(
     LOG_WARN("invalid null tablet_direct_load_mgr", K(ret));
   } else {
     ObLSID ls_id = tablet_direct_load_mgr->get_ls_id();
+    ls_id_ = ls_id;
     tablet_id_ = tablet_direct_load_mgr->get_tablet_id();
     vec_idx_param_ = vec_idx_param;
     vec_dim_ = vec_dim;
@@ -4667,6 +4676,13 @@ int ObIvfSq8MetaSliceStore::append_row(const blocksstable::ObDatumRow &datum_row
     }
   }
   tmp_allocator_.reuse();
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    ObIvfHelperKey key(tablet_id_, context_id_);
+    if (OB_TMP_FAIL(ObPluginVectorIndexUtils::erase_ivf_build_helper(ls_id_, key))) {
+      LOG_WARN("failed to erase ivf build helper", K(tmp_ret), K(ls_id_), K(tablet_id_));
+    }
+  }
   return ret;
 }
 
@@ -4790,6 +4806,7 @@ int ObIvfPqSliceStore::init(
     LOG_WARN("invalid argument", K(ret), KPC(tablet_direct_load_mgr));
   } else {
     ObLSID ls_id = tablet_direct_load_mgr->get_ls_id();
+    ls_id_ = ls_id;
     tablet_id_ = tablet_direct_load_mgr->get_tablet_id();
     table_id_ = tablet_direct_load_mgr->get_sqc_build_ctx().build_param_.runtime_only_param_.table_id_;
     vec_idx_param_ = vec_idx_param;
@@ -4867,6 +4884,13 @@ int ObIvfPqSliceStore::append_row(const blocksstable::ObDatumRow &datum_row)
     }
   }
   tmp_allocator_.reuse();
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    ObIvfHelperKey key(tablet_id_, context_id_);
+    if (OB_TMP_FAIL(ObPluginVectorIndexUtils::erase_ivf_build_helper(ls_id_, key))) {
+      LOG_WARN("failed to erase ivf build helper", K(tmp_ret), K(ls_id_), K(tablet_id_));
+    }
+  }
   return ret;
 }
 

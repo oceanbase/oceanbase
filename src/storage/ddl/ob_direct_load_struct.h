@@ -662,7 +662,8 @@ public:
       tmp_allocator_("IvfSSTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       helper_guard_(),
       context_id_(-1),
-      lob_inrow_threshold_(-1)
+      lob_inrow_threshold_(-1),
+      ls_id_()
   {}
 
   virtual ~ObIvfSliceStore() {}
@@ -681,6 +682,7 @@ protected:
   ObIvfBuildHelperGuard helper_guard_;
   int64_t context_id_;
   int64_t lob_inrow_threshold_;
+  ObLSID ls_id_;
 };
 
 template<typename HelperType>
