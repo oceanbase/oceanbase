@@ -4438,6 +4438,9 @@ int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
     log_block.get_header().set_log_entry_no(exec_info_.next_log_entry_no_);
     if (OB_FAIL(log_block.seal(replay_hint_v, barrier))) {
       TRANS_LOG(WARN, "seal log block fail", K(ret));
+    } else if (OB_FAIL(log_cb->get_cb_arg_array().assign(log_block.get_cb_arg_array()))) {
+      TRANS_LOG(WARN, "assign cb_arg_array failed", K(ret), K(trans_id_), K(ls_id_), K(log_block),
+                KPC(log_cb));
     } else if (OB_SUCC(ls_tx_ctx_mgr_->get_ls_log_adapter()
                        ->submit_log(log_block.get_buf(),
                                     log_block.get_size(),
@@ -4635,8 +4638,8 @@ int ObPartTransCtx::after_submit_log_(ObTxLogBlock &log_block,
   if (cb_arg_array.count() == 0) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(*this));
-  } else if (OB_FAIL(log_cb->get_cb_arg_array().assign(cb_arg_array))) {
-    TRANS_LOG(WARN, "assign cb arg array failed", K(ret));
+  } else if (log_cb->get_cb_arg_array().empty()
+           && OB_FAIL(log_cb->get_cb_arg_array().assign(cb_arg_array))) {
   } else {
     for (int i = 0; i < cb_arg_array.count(); i++) {
       bitmap |= (uint64_t)cb_arg_array.at(i).get_log_type();

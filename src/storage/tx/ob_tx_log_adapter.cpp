@@ -12,6 +12,7 @@
 
 #include "ob_tx_log_adapter.h"
 #include "src/storage/ls/ob_ls.h"
+#include "storage/tx/ob_tx_log.h"
 
 namespace oceanbase
 {
@@ -115,6 +116,27 @@ int ObLSTxLogAdapter::init(ObITxLogParam *param, ObTxTable *tx_table)
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_TX_APPEND_LOG_ENTRY)
+ERRSIM_POINT_DEF(EN_TX_APPEND_LOG_TYPE)
+OB_NOINLINE int ObLSTxLogAdapter::append_log_errsim_(ObTxBaseLogCb *cb)
+{
+  int ret = OB_SUCCESS;
+
+  int append_log_ret = EN_TX_APPEND_LOG_ENTRY;
+  int64_t append_log_type = EN_TX_APPEND_LOG_TYPE;
+  ObTxLogCb *tx_log_cb = static_cast<ObTxLogCb *>(cb);
+  if (append_log_ret != OB_SUCCESS) {
+    if (append_log_type == OB_SUCCESS) {
+      ret = append_log_ret;
+    } else if (is_contain(tx_log_cb->get_cb_arg_array(),
+                          static_cast<ObTxLogType>(append_log_type))) {
+      ret = append_log_ret;
+    }
+  }
+
+  return ret;
+}
+
 int ObLSTxLogAdapter::submit_log(const char *buf,
                                  const int64_t size,
                                  const SCN &base_scn,
@@ -156,12 +178,17 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
       block_flag = false;
     }
     do {
-      if (is_big_log && OB_FAIL(log_handler_->append_big_log(buf, size, base_scn, block_flag,
-                                                              allow_compression, cb, lsn, scn))) {
+      if (OB_FAIL(append_log_errsim_(cb))) {
+        TRANS_LOG(WARN, "append log errsim", K(ret), KP(buf), K(size), K(base_scn), KPC(cb),
+                  K(need_nonblock));
+      } else if (is_big_log
+                 && OB_FAIL(log_handler_->append_big_log(buf, size, base_scn, block_flag,
+                                                         allow_compression, cb, lsn, scn))) {
         TRANS_LOG(WARN, "append big log to palf failed", K(ret), KP(log_handler_), KP(buf), K(size), K(base_scn),
               K(need_nonblock), K(block_flag), K(expire_us), K(is_big_log));
-      } else if (!is_big_log && OB_FAIL(log_handler_->append(buf, size, base_scn, block_flag,
-                                                         allow_compression, cb, lsn, scn))) {
+      } else if (!is_big_log
+                 && OB_FAIL(log_handler_->append(buf, size, base_scn, block_flag, allow_compression,
+                                                 cb, lsn, scn))) {
         TRANS_LOG(WARN, "append log to palf failed", K(ret), KP(log_handler_), KP(buf), K(size), K(base_scn),
               K(need_nonblock), K(block_flag), K(expire_us));
       } else {

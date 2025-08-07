@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "lib/utility/utility.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 
 namespace oceanbase
@@ -29,6 +30,8 @@ int ObPartTransCtx::init_log_cbs_(const share::ObLSID &ls_id, const ObTransID &t
   } else if (OB_FAIL(reserve_log_cb_group_.init(ObTxLogCbGroup::RESERVED_LOG_CB_GROUP_NO))) {
     TRANS_LOG(WARN, "init a log cb group failed", K(ret), K(ls_id), K(tx_id),
               K(reserve_log_cb_group_));
+  } else if (OB_FALSE_IT(trans_id_ = tx_id)) {
+    // do nothing
   } else if (OB_FAIL(reserve_log_cb_group_.occupy_by_tx(this))) {
     TRANS_LOG(WARN, "set tx id in log cb group failed", K(ret), K(ls_id), K(tx_id),
               K(reserve_log_cb_group_));
