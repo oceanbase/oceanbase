@@ -944,6 +944,13 @@ void pn_print_diag_info(pn_comm_t* pn_comm) {
   rk_info("client_send:%lu/%lu, client_queue_time=%lu, cnt=%ld, server_send:%lu/%lu, server_queue_time=%lu, cnt=%ld",
             pn->pktc.diag_info.send_cnt, pn->pktc.diag_info.send_size, pn->pktc.diag_info.sc_queue_time, client_cnt,
             pn->pkts.diag_info.send_cnt, pn->pkts.diag_info.send_size, pn->pkts.diag_info.sc_queue_time, server_cnt);
+  int64_t current_time_us = rk_get_us();
+  if (current_time_us - pn->pktc.cb_tw.finished_us > 10 * 1000000) {
+    int err = -EIO;
+    rk_error("timer fd has been blocked for too long, check the timerfd has been closed unexpectedly or os error,"
+             "finished_us=%ld, timer_fd=%d, err=%d",
+             pn->pktc.cb_tw.finished_us, pn->pktc.cb_timerfd.fd, err);
+  }
 }
 
 void pn_check_thread_count() {
