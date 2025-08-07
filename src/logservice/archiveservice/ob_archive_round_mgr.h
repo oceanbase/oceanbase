@@ -74,6 +74,8 @@ public:
                K_(compatible),
                K_(log_archive_state),
                K_(backup_dest));
+private:
+  int get_backup_path_str_(char *buf, const int64_t buf_size) const;
 
 private:
   typedef common::SpinRWLock RWLock;
