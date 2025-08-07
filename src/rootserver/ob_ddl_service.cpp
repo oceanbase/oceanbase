@@ -18507,11 +18507,16 @@ int ObDDLService::check_alter_split_partitions(const share::schema::ObTableSchem
   int ret = OB_SUCCESS;
   AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   const uint64_t tenant_id = orig_table_schema.get_tenant_id();
-  ObPartitionLevel target_part_level = alter_table_arg.is_auto_split_partition() ?
-                                       orig_table_schema.get_target_part_level_for_auto_partitioned_table() :
-                                       orig_table_schema.get_part_level();
-
-  if (alter_table_arg.is_auto_split_partition() && !orig_table_schema.is_auto_partitioned_table()) {
+  ObPartitionLevel target_part_level = PARTITION_LEVEL_MAX;
+  if (alter_table_arg.is_auto_split_partition()) {
+    if (OB_FAIL(orig_table_schema.get_target_part_level_for_auto_partitioned_table(target_part_level))) {
+      LOG_WARN("fail to get target part level for auto partitioned table", KR(ret), K(orig_table_schema));
+    }
+  } else {
+    target_part_level = orig_table_schema.get_part_level();
+  }
+  if (OB_FAIL(ret)) {
+  } else if (alter_table_arg.is_auto_split_partition() && !orig_table_schema.is_auto_partitioned_table()) {
     // the table might be disabled auto-partition after trigger auto splitting partition
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("attempt to auto split partition for non-auto-partitioned table", KR(ret),
@@ -38101,9 +38106,9 @@ int ObDDLService::generate_split_info_for_schemas_(const obrpc::ObAlterTableArg:
   } else if (OB_UNLIKELY(ori_table_schemas.at(0)->is_global_index_table() && ori_table_schemas.count() != 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("global index should not have aux table", KR(ret), KPC(ori_table_schemas.at(0)), K(ori_table_schemas.count()));
-  } else if (FALSE_IT(target_part_level = obrpc::ObAlterTableArg::AUTO_SPLIT_PARTITION == type ?
-                                          ori_table_schemas.at(0)->get_target_part_level_for_auto_partitioned_table() :
-                                          ori_table_schemas.at(0)->get_part_level())) {
+  } else if (obrpc::ObAlterTableArg::AUTO_SPLIT_PARTITION == type && OB_FAIL(ori_table_schemas.at(0)->get_target_part_level_for_auto_partitioned_table(target_part_level))) {
+    LOG_WARN("fail to get target part level for auto partitioned table", KR(ret), KPC(ori_table_schemas.at(0)));
+  } else if (obrpc::ObAlterTableArg::AUTO_SPLIT_PARTITION != type && FALSE_IT(target_part_level = ori_table_schemas.at(0)->get_part_level())) {
   } else if (target_part_level == PARTITION_LEVEL_TWO) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support to split subpartition", KR(ret), K(type), K(target_part_level),

@@ -7846,27 +7846,34 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
 // PARTITION_LEVEL_MAX is invalid partition level which means the function run failed or
 // the table can not auto split partition (such as no-primary-key table).
 // caller should check whether can continue if get target_part_level of PARTITION_LEVEL_MAX.
-ObPartitionLevel ObTableSchema::get_target_part_level_for_auto_partitioned_table() const
+int ObTableSchema::get_target_part_level_for_auto_partitioned_table(ObPartitionLevel &target_part_level) const
 {
   int ret = OB_SUCCESS;
-  ObPartitionLevel target_part_level = PARTITION_LEVEL_MAX;
+  target_part_level = PARTITION_LEVEL_MAX;
   if (is_auto_partitioned_table()) {
     bool match_rowkey_prefix = false;
     if (is_table_without_pk()) {
       // not allow to auto partitioning no primary key table
       // target_part_level = PARTITION_LEVEL_MAX
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_NOT_SUPPORTED;
       LOG_WARN("get target part level from a no primary key table", KR(ret), KPC(this));
     } else if (part_level_ == PARTITION_LEVEL_ZERO) {
       if (OB_FAIL(is_presetting_partition_key_match_rowkey_prefix(match_rowkey_prefix))) {
         // target_part_level = PARTITION_LEVEL_MAX;
-        LOG_WARN("fail to check whether presetting partition key matches rowkey prefix", KR(ret), KPC(this));
+        if (OB_ERR_BAD_FIELD_ERROR == ret) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support to split partition of non-partitioned table with mismatching between presetting partition key and rowkey prefix", KR(ret), KPC(this));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mismatching between presetting partition key and rowkey prefix is");
+        } else {
+          LOG_WARN("fail to check whether presetting partition key matches rowkey prefix", KR(ret), KPC(this));
+        }
       } else if (match_rowkey_prefix) {
         // when trigger auto partitioning, the non-partitioned table will be set as partitioned table
         target_part_level = PARTITION_LEVEL_ONE;
       } else {
-        // when trigger auto partitioning, the non-partitioned table will be set as sub-partitioned table
-        target_part_level = PARTITION_LEVEL_TWO;
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support to split partition of non-partitioned table with mismatching between presetting partition key and rowkey prefix", KR(ret), KPC(this));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "mismatching between presetting partition key and rowkey prefix is");
       }
     } else if (OB_FAIL(is_partition_key_match_rowkey_prefix(match_rowkey_prefix))) {
       // target_part_level = PARTITION_LEVEL_MAX;
@@ -7876,8 +7883,9 @@ ObPartitionLevel ObTableSchema::get_target_part_level_for_auto_partitioned_table
         // when trigger auto partitioning, the partition will be split into two partitions
         target_part_level = PARTITION_LEVEL_ONE;
       } else {
-        // when trigger auto partitioning, the partitioned table will be set as sub-partitioned table,
-        target_part_level = PARTITION_LEVEL_TWO;
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support to split partition of non-partitioned table with mismatching between presetting partition key and rowkey prefix", KR(ret), KPC(this));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "mismatching between presetting partition key and rowkey prefix is");
       }
     } else if (part_level_ == PARTITION_LEVEL_TWO) {
       if (match_rowkey_prefix) {
@@ -7886,7 +7894,7 @@ ObPartitionLevel ObTableSchema::get_target_part_level_for_auto_partitioned_table
       } else {
         // not allow to split
         // target_part_level = PARTITION_LEVEL_MAX;
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_NOT_SUPPORTED;
         LOG_WARN("get target part level from a subpartitioned table"
                  "with mismatching between partition key, subpartition key and primary key prefix",
                  KR(ret), KPC(this));
@@ -7897,11 +7905,10 @@ ObPartitionLevel ObTableSchema::get_target_part_level_for_auto_partitioned_table
     }
   } else {
     // target_part_level = PARTITION_LEVEL_MAX
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NOT_SUPPORTED;
     LOG_WARN("get target part level from a non-auto-partitioned table", KR(ret), KPC(this));
   }
-
-  return target_part_level;
+  return ret;
 }
 
 int ObTableSchema::check_validity_for_auto_partition() const
@@ -8037,9 +8044,14 @@ int ObTableSchema::check_enable_split_partition(bool is_auto_partitioning) const
     }
   }
 
-  ObPartitionLevel target_part_level = is_auto_partitioning ?
-                                       get_target_part_level_for_auto_partitioned_table() :
-                                       get_part_level();
+  ObPartitionLevel target_part_level = PARTITION_LEVEL_MAX;
+  if (OB_FAIL(ret)) {
+  } else if (is_auto_partitioning && OB_FAIL(get_target_part_level_for_auto_partitioned_table(target_part_level))) {
+    LOG_WARN("fail to get target part level for auto partitioned table", KR(ret), KPC(this));
+  } else if (!is_auto_partitioning) {
+    target_part_level = get_part_level();
+  }
+
   if (OB_FAIL(ret)) {
   } else if (!is_valid_split_part_type()) {
     ret = OB_NOT_SUPPORTED;
@@ -8203,13 +8215,17 @@ int ObTableSchema::get_presetting_partition_keys(common::ObIArray<uint64_t> &par
   return ret;
 }
 
-int ObTableSchema::get_partition_keys_by_part_func_expr(common::ObString &part_func_expr_str, common::ObIArray<uint64_t> &partition_key_ids) const
+int ObTableSchema::get_partition_keys_by_part_func_expr(const common::ObString &part_func_expr_str, common::ObIArray<uint64_t> &partition_key_ids) const
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
   ObArray<ObString> partkey_strs;
   bool is_oracle_mode = false;
-  if (OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
+  const int64_t table_id = get_table_id();
+  const uint64_t tenant_id = get_tenant_id();
+  if (OB_INVALID_ID != table_id && OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check oracle mode", KR(ret));
+  } else if (OB_INVALID_ID == table_id && OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret));
   } else if (OB_FAIL(ObDDLResolver::get_partition_keys_by_part_func_expr(part_func_expr_str, is_oracle_mode, allocator, partkey_strs))) {
     LOG_WARN("failed to get part keys", K(ret), K(part_func_expr_str), K(is_oracle_mode));
@@ -9387,12 +9403,26 @@ int ObTableSchema::is_partition_key_match_rowkey_prefix(bool &is_prefix) const
     int64_t j = 0;
     uint64_t rowkey_column_id = OB_INVALID_ID;
     uint64_t partkey_column_id = OB_INVALID_ID;
+    ObArenaAllocator alloc;
+    ObArray<uint64_t> partition_key_ids;
+    const ObString &ori_part_func_str = part_option_.get_part_func_expr_str();
+    if (ori_part_func_str.empty()) {
+      is_prefix = false;
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("part_func_str is empty", KR(ret), KPC(this));
+    }else if (OB_FAIL(get_partition_keys_by_part_func_expr(ori_part_func_str, partition_key_ids))) {
+      is_prefix = false;
+      if (OB_ERR_BAD_FIELD_ERROR == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get part keys", K(ret), K(ori_part_func_str));
+      }
+    }
     while (OB_SUCC(ret) && is_prefix &&
-           i < rowkey_info_.get_size() && j < partition_key_info_.get_size()) {
+           i < rowkey_info_.get_size() && j < partition_key_ids.size()) {
       if (OB_FAIL(rowkey_info_.get_column_id(i, rowkey_column_id))) {
         LOG_WARN("failed to get rowkey column id", K(ret), K(i));
-      } else if (OB_FAIL(partition_key_info_.get_column_id(j, partkey_column_id))) {
-        LOG_WARN("failed to get partition key column id", K(ret));
+      } else if (FALSE_IT(partkey_column_id = partition_key_ids.at(j))) {
       } else if (rowkey_column_id == partkey_column_id) {
         ++i;
         ++j;
@@ -9403,13 +9433,27 @@ int ObTableSchema::is_partition_key_match_rowkey_prefix(bool &is_prefix) const
     if (OB_SUCC(ret)) {
       if (PARTITION_LEVEL_TWO == get_part_level()) {
         j = 0;
+        uint64_t sub_partkey_column_id = OB_INVALID_ID;
+        ObArray<uint64_t> sub_partition_key_ids;
+        const ObString &ori_sub_part_func_str = sub_part_option_.get_part_func_expr_str();
+        if (ori_sub_part_func_str.empty()) {
+          is_prefix = false;
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sub_part_func_str is empty", KR(ret), KPC(this));
+        } else if (OB_FAIL(get_partition_keys_by_part_func_expr(ori_sub_part_func_str, sub_partition_key_ids))) {
+          is_prefix = false;
+          if (OB_ERR_BAD_FIELD_ERROR == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("failed to get part keys", K(ret), K(ori_sub_part_func_str));
+          }
+        }
         while (OB_SUCC(ret) && is_prefix &&
-               i < rowkey_info_.get_size() && j < subpartition_key_info_.get_size()) {
+               i < rowkey_info_.get_size() && j < sub_partition_key_ids.size()) {
           if (OB_FAIL(rowkey_info_.get_column_id(i, rowkey_column_id))) {
             LOG_WARN("failed to get rowkey column id", K(ret), K(i));
-          } else if (OB_FAIL(subpartition_key_info_.get_column_id(j, partkey_column_id))) {
-            LOG_WARN("failed to get partition key column id", K(ret));
-          } else if (rowkey_column_id == partkey_column_id) {
+          } else if (FALSE_IT(sub_partkey_column_id = sub_partition_key_ids.at(j))) {
+          } else if (rowkey_column_id == sub_partkey_column_id) {
             ++i;
             ++j;
           } else {

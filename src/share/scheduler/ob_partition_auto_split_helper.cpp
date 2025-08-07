@@ -1665,9 +1665,10 @@ int ObAutoSplitArgBuilder::build_alter_table_schema_(const uint64_t tenant_id,
   const int64_t part_num = ranges.size();
   const ObString& part_func_expr = table_schema.get_part_option().get_part_func_expr_str();
   const ObPartitionFuncType part_func_type = table_schema.get_part_option().get_part_func_type();
-  const ObPartitionLevel target_part_level = table_schema.get_target_part_level_for_auto_partitioned_table();
-
-  if (OB_FAIL(alter_table_schema.set_origin_database_name(db_name))) {
+  ObPartitionLevel target_part_level = PARTITION_LEVEL_MAX;
+  if (OB_FAIL(table_schema.get_target_part_level_for_auto_partitioned_table(target_part_level))) {
+    LOG_WARN("fail to get target part level for auto partitioned table", KR(ret), K(table_schema));
+  } else if (OB_FAIL(alter_table_schema.set_origin_database_name(db_name))) {
     LOG_WARN("fail to set origin database name", KR(ret), K(db_name));
   } else if (OB_FAIL(alter_table_schema.set_origin_table_name(table_name))) {
     LOG_WARN("fail to set origin table name", KR(ret), K(table_name));

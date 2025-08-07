@@ -1879,11 +1879,11 @@ public:
   int check_enable_split_partition(bool is_auto_partitioning) const;
   int check_validity_for_auto_partition() const;
   int check_can_do_manual_split_partition() const;
-  ObPartitionLevel get_target_part_level_for_auto_partitioned_table() const;
+  int get_target_part_level_for_auto_partitioned_table(ObPartitionLevel &target_part_level) const;
   int get_part_func_expr_str(ObString &part_func_expr, common::ObIAllocator &allocator,
                              const bool using_auto_partitioned_mode) const;
   int get_presetting_partition_keys(common::ObIArray<uint64_t> &partition_key_ids) const;
-  int get_partition_keys_by_part_func_expr(common::ObString &part_func_expr_str, common::ObIArray<uint64_t> &partition_key_ids) const;
+  int get_partition_keys_by_part_func_expr(const common::ObString &part_func_expr_str, common::ObIArray<uint64_t> &partition_key_ids) const;
   int extract_actual_index_rowkey_columns_name(ObIArray<ObString> &rowkey_columns_name) const;
   int is_presetting_partition_key(const uint64_t partition_key_id, bool &is_presetting_partition_key) const;
   int check_primary_key_cover_partition_column();
