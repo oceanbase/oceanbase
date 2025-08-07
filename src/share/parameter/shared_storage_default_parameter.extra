@@ -45,6 +45,11 @@
           "name": "log_storage_compress_all",
           "value": 1,
           "comment": "specifies whether to compress logs before storing"
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 0,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
         }
       ]
     }
@@ -83,7 +88,7 @@
         },
         {
           "name": "log_transport_compress_all",
-          "value": 1,
+          "value": 0,
           "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
         },
         {
@@ -95,6 +100,11 @@
           "name": "_io_read_batch_size",
           "value": "128KB",
           "comment": "Maximum batch size in one read io request"
+        },
+        {
+          "name": "log_storage_compress_all",
+          "value": 1,
+          "comment": "specifies whether to compress logs before storing"
         }
       ]
     }
@@ -140,6 +150,16 @@
           "name": "_io_read_redundant_limit_percentage",
           "value": 50,
           "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
+        },
+        {
+          "name": "log_storage_compress_all",
+          "value": 1,
+          "comment": "specifies whether to compress logs before storing"
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 0,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
         }
       ]
     }
@@ -173,7 +193,7 @@
         },
         {
           "name": "log_transport_compress_all",
-          "value": 1,
+          "value": 0,
           "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
         },
         {
@@ -185,6 +205,11 @@
           "name": "_io_read_batch_size",
           "value": "128KB",
           "comment": "Maximum batch size in one read io request"
+        },
+        {
+          "name": "log_storage_compress_all",
+          "value": 1,
+          "comment": "specifies whether to compress logs before storing"
         }
       ]
     }
@@ -223,7 +248,7 @@
         },
         {
           "name": "log_transport_compress_all",
-          "value": 1,
+          "value": 0,
           "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
         },
         {
@@ -235,6 +260,11 @@
           "name": "_io_read_batch_size",
           "value": "128KB",
           "comment": "Maximum batch size in one read io request"
+        },
+        {
+          "name": "log_storage_compress_all",
+          "value": 1,
+          "comment": "specifies whether to compress logs before storing"
         }
       ]
     }
@@ -280,6 +310,16 @@
           "name": "_io_read_batch_size",
           "value": "128KB",
           "comment": "Maximum batch size in one read io request"
+        },
+        {
+          "name": "log_storage_compress_all",
+          "value": 1,
+          "comment": "specifies whether to compress logs before storing"
+        },
+        {
+          "name": "log_transport_compress_all",
+          "value": 0,
+          "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
         }
       ]
     }
