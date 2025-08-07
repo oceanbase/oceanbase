@@ -419,9 +419,9 @@ int ObRsAutoSplitScheduler::pop_tasks(const int64_t num_tasks_can_pop, const boo
     int64_t num_tasks_pop_from_poll_mgr = MAX_SPLIT_TASK_DIRECT_CACHE_SIZE - task_direct_cache_.count();
     if (polling_mgr_.empty()) {
       //do nothing
-    } else if (OB_FAIL(polling_mgr_.pop_tasks(num_tasks_pop_from_poll_mgr, tenant_task_arrays))) {
+    } else if (num_tasks_pop_from_poll_mgr > 0 && OB_FAIL(polling_mgr_.pop_tasks(num_tasks_pop_from_poll_mgr, tenant_task_arrays))) {
       LOG_WARN("fail to pop tasks from tree", K(ret));
-    } else if (OB_FAIL(push_to_direct_cache(tenant_task_arrays))) {
+    } else if (num_tasks_pop_from_poll_mgr > 0 && OB_FAIL(push_to_direct_cache(tenant_task_arrays))) {
       LOG_WARN("failed to push to direct cache", K(ret));
     }
     if (OB_FAIL(ret)) {
