@@ -39,8 +39,8 @@ int64_t ObCheckPointService::TRAVERSAL_FLUSH_INTERVAL = 5000 * 1000L;
 // Update ss checkpoint scn each 10 seconds
 int64_t ObCheckPointService::SS_UPDATE_CKPT_INTERVAL = 10LL * 1000LL * 1000LL;
 
-// Flush all CLOG module each 10 minutes
-int64_t ObCheckPointService::SS_ADVANCE_CKPT_INTERVAL = 10LL * 60LL * 1000LL * 1000LL;
+// Check if need flush all CLOG module each 1 minute
+int64_t ObCheckPointService::SS_TRY_ADVANCE_CKPT_INTERVAL = 60LL * 1000LL * 1000LL;
 
 // try schedule full/emergency upload each second
 int64_t ObCheckPointService::SS_TRY_SCHEDULE_UPLOAD_INTERVAL = 1LL * 1000LL * 1000LL;
@@ -61,6 +61,9 @@ int ObCheckPointService::init(const int64_t tenant_id)
     LOG_WARN("fail to initialize freeze thread", K(ret));
   } else {
     is_inited_ = true;
+#ifdef OB_BUILD_SHARED_STORAGE
+    prev_ss_advance_ckpt_task_ts_ = 0;
+#endif
   }
   return ret;
 }
@@ -122,7 +125,7 @@ int ObCheckPointService::start()
                               ss_advance_ckpt_task_,
                               "SSAdvanceCKPT",
                               "SSAdvanceTimer",
-                              SS_ADVANCE_CKPT_INTERVAL,
+                              SS_TRY_ADVANCE_CKPT_INTERVAL,
                               true/* repeat */);
     INIT_AND_START_TIMER_TASK(ss_schedule_upload_timer_,
                               ss_schedule_upload_task_,
@@ -662,11 +665,25 @@ public:
 void ObCheckPointService::ObSSAdvanceCkptTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
-  STORAGE_LOG(INFO, "====== SS Advance Checkpoint Task ======");
   INIT_TRACE_GUARD;
-  SSAdvanceCkptFunctorForLS advance_ckpt_func_for_ls;
-  if (OB_FAIL(MTL(ObLSService *)->foreach_ls(advance_ckpt_func_for_ls))) {
-    STORAGE_LOG(WARN, "for each ls functor failed", KR(ret));
+
+  // set 10 minutes as defualt value
+  int64_t advance_checkpoint_interval = 10LL * 60LL * 1000LL * 1000LL;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    // use config value if config is valid
+    advance_checkpoint_interval = tenant_config->_ss_advance_checkpoint_interval;
+  }
+
+  const int64_t current_ts = ObClockGenerator::getClock();
+  if (current_ts - MTL(ObCheckPointService *)->prev_ss_advance_ckpt_task_ts() > advance_checkpoint_interval) {
+    STORAGE_LOG(INFO, "====== SS Advance Checkpoint Task ======");
+    SSAdvanceCkptFunctorForLS advance_ckpt_func_for_ls;
+    if (OB_FAIL(MTL(ObLSService *)->foreach_ls(advance_ckpt_func_for_ls))) {
+      STORAGE_LOG(WARN, "for each ls functor failed", KR(ret));
+    } else {
+      MTL(ObCheckPointService *)->set_prev_ss_advance_ckpt_task_ts(current_ts);
+    }
   }
 }
 

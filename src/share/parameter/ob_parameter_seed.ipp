@@ -2725,6 +2725,10 @@ DEF_TIME(_ss_schedule_upload_interval, OB_TENANT_PARAMETER, "10m", "[1s,12h]",
          "The execution interval for the inc sstable upload task"
          "Range: [1s, 12h]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_ss_advance_checkpoint_interval, OB_TENANT_PARAMETER, "10m", "[1m,12h]",
+         "The execution interval for the ss advance checkpoint task"
+         "Range: [1m, 12h]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_ss_clog_retention_period, OB_TENANT_PARAMETER, "1d", "[1h,7d]",
          "Minimum retention period for CLOG data in the log service. Default: 1 day. Range: [1h, 7d]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
