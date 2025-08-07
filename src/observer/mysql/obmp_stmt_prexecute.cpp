@@ -387,6 +387,10 @@ int ObMPStmtPrexecute::prepare_sql_with_params(ObSQLSessionInfo &session, const 
   if (FAILEDx(
           request_params(&session, *allocator_, pos, params_num_, input_param_num, param_types))) {
     LOG_WARN("fail to request params", K(params_num_), K(input_param_num));
+  } else if (is_arraybinding_) {
+    OV (arraybinding_size_ > 0, OB_NOT_SUPPORTED, "arraybinding has no parameters", arraybinding_size_);
+    // use first group of params for arraybinding sql prepare
+    OZ (construct_execute_param_for_arraybinding(0));
   }
   // 3. resolve sql with params, retry if needed, will reuse the parse result
   //    resolve is not neccessary here, because resolve will be redo in execute phase.
