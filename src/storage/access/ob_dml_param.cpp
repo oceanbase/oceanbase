@@ -247,7 +247,8 @@ DEF_TO_STRING(ObDMLBaseParam)
        K_(direct_insert_task_id),
        K_(check_schema_version),
        K_(ddl_task_id),
-       KPC_(data_row_for_lob));
+       KPC_(data_row_for_lob),
+       K_(is_main_table_in_fts_ddl));
   J_OBJ_END();
   return pos;
 }

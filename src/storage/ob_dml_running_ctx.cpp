@@ -215,8 +215,12 @@ int ObDMLRunningCtx::check_need_old_row_legitimacy()
     is_udf_ = true;
   } else if (GCONF.enable_defensive_check()) {
     is_need_check_old_row_ = true;
-    if (relative_table_.is_index_table() && !relative_table_.can_read_index()) {
-      //index can not be read during building index, so does not check old index row
+    if ((relative_table_.is_index_table() && !relative_table_.can_read_index())
+        || dml_param_.is_main_table_in_fts_ddl_ ) {
+      // We should not check old row because domain row may be generated instead of scanned
+      // from domain table when:
+      // 1) index can not be read during building index
+      // 2) or schema shows index ready, but fts ddl is on going when dml start snapshot
       is_need_check_old_row_ = false;
     }
     if (ObDmlFlag::DF_LOCK == dml_flag_) {

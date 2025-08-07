@@ -1624,6 +1624,7 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   dml_param.prelock_ = base_rtdef.prelock_;
   dml_param.is_batch_stmt_ = base_ctdef.is_batch_stmt_;
   dml_param.dml_allocator_ = &das_alloc;
+  dml_param.is_main_table_in_fts_ddl_ = base_ctdef.is_main_table_in_fts_ddl_;
   if (OB_FAIL(dml_param.snapshot_.assign(snapshot))) {
     LOG_WARN("assign snapshot fail", K(ret));
   }
