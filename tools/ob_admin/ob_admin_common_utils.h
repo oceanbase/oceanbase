@@ -44,10 +44,22 @@ public:
   char prewarm_index_[common::OB_MAX_FILE_NAME_LENGTH] = {0};
 };
 
+struct ObDumpMacroBlockParam final
+{
+public:
+  ObDumpMacroBlockParam(const ObDumpMacroBlockContext &macro_context, const bool hex_print)
+    : macro_context_(macro_context), hex_print_(hex_print) {}
+  ~ObDumpMacroBlockParam() = default;
+  TO_STRING_KV(K_(macro_context), K_(hex_print));
+public:
+  const ObDumpMacroBlockContext &macro_context_;
+  bool hex_print_;
+};
+
 class ObAdminCommonUtils {
 public:
-  static int dump_single_macro_block(const ObDumpMacroBlockContext &macro_context, const char *buf, const int64_t size);
-  static int dump_shared_macro_block(const ObDumpMacroBlockContext &macro_context, const char *buf, const int64_t size);
+  static int dump_single_macro_block(const ObDumpMacroBlockParam &param, const char *buf, const int64_t size);
+  static int dump_shared_macro_block(const ObDumpMacroBlockParam &param, const char *buf, const int64_t size);
 };
 
 } //namespace tools
