@@ -88,6 +88,7 @@ int ObPluginVectorIndexMgr::init(uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   int64_t hash_capacity = common::hash::cal_next_prime(DEFAULT_ADAPTER_HASH_SIZE);
+  DISABLE_SQL_MEMLEAK_GUARD;
   if (OB_FAIL(complete_index_adpt_map_.create(hash_capacity, "VecIdxAdptMap", "VecIdxAdptMap", tenant_id))) {
     LOG_WARN("fail to create full index adapter map", KR(ret), K(ls_id));
   } else if (OB_FAIL(partial_index_adpt_map_.create(hash_capacity, "VecIdxAdptMap", "VecIdxAdptMap", tenant_id))) {

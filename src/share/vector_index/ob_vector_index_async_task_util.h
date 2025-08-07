@@ -189,6 +189,8 @@ public:
     allocator_(mem_attr_),
     ls_task_cnt_(0)
   {
+    SET_IGNORE_MEM_VERSION(mem_attr_);
+    allocator_.set_attr(mem_attr_);
   }
 
   ~ObVecIndexAsyncTaskOption();
