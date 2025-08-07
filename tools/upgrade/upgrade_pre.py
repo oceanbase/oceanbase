@@ -1414,6 +1414,10 @@
 #  across_version = upgrade_across_version(cur)
 #  if across_version:
 #    run_upgrade_job(conn, cur, "UPGRADE_ALL", timeout)
+#  else:
+#    # 开源版4353和4353hotfix之间有视图差异，需要执行UPGRADE_VIRTUAL_SCHEMA使得用户对于升级无感知
+#    # 临时修改，后续其他版本不需要修正虚拟表
+#    run_upgrade_job(conn, cur, "UPGRADE_VIRTUAL_SCHEMA", timeout)
 #
 #  run_root_inspection(cur, timeout)
 #####========******####======== actions begin ========####******========####
