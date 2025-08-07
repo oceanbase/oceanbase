@@ -10,10 +10,10 @@ Query Plan
 ======================================================================
 |ID|OPERATOR                 |NAME             |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------
-|0 |PX COORDINATOR           |                 |1       |290         |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000         |1       |289         |
-|2 |  └─PX PARTITION ITERATOR|                 |1       |289         |
-|3 |    └─TABLE FULL SCAN    |partition_t1(idx)|1       |289         |
+|0 |PX COORDINATOR           |                 |1       |372         |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000         |1       |372         |
+|2 |  └─PX PARTITION ITERATOR|                 |1       |370         |
+|3 |    └─TABLE RANGE SCAN   |partition_t1(idx)|1       |370         |
 ======================================================================
 Outputs & filters:
 -------------------------------------
@@ -61,10 +61,10 @@ Query Plan
 =============================================================
 |ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |290         |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |289         |
-|2 |  └─PX PARTITION ITERATOR|        |1       |289         |
-|3 |    └─TABLE FULL SCAN    |t1(idx) |1       |289         |
+|0 |PX COORDINATOR           |        |1       |372         |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |372         |
+|2 |  └─PX PARTITION ITERATOR|        |1       |370         |
+|3 |    └─TABLE RANGE SCAN   |t1(idx) |1       |370         |
 =============================================================
 Outputs & filters:
 -------------------------------------
@@ -177,12 +177,12 @@ Query Plan
 ========================================================================================
 |ID|OPERATOR                     |NAME                           |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------------------
-|0 |SCALAR GROUP BY              |                               |1       |32285       |
-|1 |└─PX COORDINATOR             |                               |1       |32285       |
-|2 |  └─EXCHANGE OUT DISTR       |:EX10000                       |1       |32285       |
-|3 |    └─MERGE GROUP BY         |                               |1       |32285       |
-|4 |      └─PX PARTITION ITERATOR|                               |1       |32285       |
-|5 |        └─TABLE FULL SCAN    |geo_maxpt_coords_100y(geo_pwkt)|1       |32285       |
+|0 |SCALAR GROUP BY              |                               |1       |32366       |
+|1 |└─PX COORDINATOR             |                               |1       |32366       |
+|2 |  └─EXCHANGE OUT DISTR       |:EX10000                       |1       |32366       |
+|3 |    └─MERGE GROUP BY         |                               |1       |32366       |
+|4 |      └─PX PARTITION ITERATOR|                               |1       |32365       |
+|5 |        └─TABLE RANGE SCAN   |geo_maxpt_coords_100y(geo_pwkt)|1       |32365       |
 ========================================================================================
 Outputs & filters:
 -------------------------------------
@@ -216,12 +216,12 @@ Query Plan
 ========================================================================================
 |ID|OPERATOR                     |NAME                           |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------------------
-|0 |SCALAR GROUP BY              |                               |1       |32285       |
-|1 |└─PX COORDINATOR             |                               |1       |32285       |
-|2 |  └─EXCHANGE OUT DISTR       |:EX10000                       |1       |32285       |
-|3 |    └─MERGE GROUP BY         |                               |1       |32285       |
-|4 |      └─PX PARTITION ITERATOR|                               |1       |32285       |
-|5 |        └─TABLE FULL SCAN    |geo_maxpt_coords_100y(geo_pwkt)|1       |32285       |
+|0 |SCALAR GROUP BY              |                               |1       |32366       |
+|1 |└─PX COORDINATOR             |                               |1       |32366       |
+|2 |  └─EXCHANGE OUT DISTR       |:EX10000                       |1       |32366       |
+|3 |    └─MERGE GROUP BY         |                               |1       |32366       |
+|4 |      └─PX PARTITION ITERATOR|                               |1       |32365       |
+|5 |        └─TABLE RANGE SCAN   |geo_maxpt_coords_100y(geo_pwkt)|1       |32365       |
 ========================================================================================
 Outputs & filters:
 -------------------------------------
@@ -255,12 +255,12 @@ Query Plan
 ========================================================================================
 |ID|OPERATOR                     |NAME                           |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------------------
-|0 |SCALAR GROUP BY              |                               |1       |10762       |
-|1 |└─PX COORDINATOR             |                               |1       |10762       |
-|2 |  └─EXCHANGE OUT DISTR       |:EX10000                       |1       |10762       |
-|3 |    └─MERGE GROUP BY         |                               |1       |10762       |
-|4 |      └─PX PARTITION ITERATOR|                               |1       |10762       |
-|5 |        └─TABLE FULL SCAN    |geo_maxpt_coords_100y(geo_pwkt)|1       |10762       |
+|0 |SCALAR GROUP BY              |                               |1       |10789       |
+|1 |└─PX COORDINATOR             |                               |1       |10789       |
+|2 |  └─EXCHANGE OUT DISTR       |:EX10000                       |1       |10789       |
+|3 |    └─MERGE GROUP BY         |                               |1       |10789       |
+|4 |      └─PX PARTITION ITERATOR|                               |1       |10789       |
+|5 |        └─TABLE RANGE SCAN   |geo_maxpt_coords_100y(geo_pwkt)|1       |10789       |
 ========================================================================================
 Outputs & filters:
 -------------------------------------
@@ -291,12 +291,12 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846983,MAX,MAX)
 explain select count(*) from geo_maxpt_coords_100y_2  where st_intersects(geo_maxpt_coords_100y_2.geo_pwkt, st_geomfromtext('polygon((0 0,5 0,5 5,0 5,0 0))', 0));
 Query Plan
-==============================================================================
-|ID|OPERATOR         |NAME                             |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------------------------
-|0 |SCALAR GROUP BY  |                                 |1       |155         |
-|1 |└─TABLE FULL SCAN|geo_maxpt_coords_100y_2(geo_pwkt)|1       |155         |
-==============================================================================
+===============================================================================
+|ID|OPERATOR          |NAME                             |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY   |                                 |1       |235         |
+|1 |└─TABLE RANGE SCAN|geo_maxpt_coords_100y_2(geo_pwkt)|1       |235         |
+===============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT(*)]), filter(nil)
@@ -319,12 +319,12 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846983,MAX,MAX)
 explain select /*+ parallel(1) */ count(*) from geo_maxpt_coords_100y_2  where st_intersects(geo_maxpt_coords_100y_2.geo_pwkt, st_geomfromtext('polygon((0 0,5 0,5 5,0 5,0 0))', 0));
 Query Plan
-==============================================================================
-|ID|OPERATOR         |NAME                             |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------------------------
-|0 |SCALAR GROUP BY  |                                 |1       |155         |
-|1 |└─TABLE FULL SCAN|geo_maxpt_coords_100y_2(geo_pwkt)|1       |155         |
-==============================================================================
+===============================================================================
+|ID|OPERATOR          |NAME                             |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY   |                                 |1       |235         |
+|1 |└─TABLE RANGE SCAN|geo_maxpt_coords_100y_2(geo_pwkt)|1       |235         |
+===============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT(*)]), filter(nil)
@@ -347,12 +347,12 @@ Outputs & filters:
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846983,MAX,MAX)
 explain select /*+ parallel(3) */ count(*) from geo_maxpt_coords_100y_2  where st_intersects(geo_maxpt_coords_100y_2.geo_pwkt, st_geomfromtext('polygon((0 0,5 0,5 5,0 5,0 0))', 0));
 Query Plan
-==============================================================================
-|ID|OPERATOR         |NAME                             |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------------------------
-|0 |SCALAR GROUP BY  |                                 |1       |155         |
-|1 |└─TABLE FULL SCAN|geo_maxpt_coords_100y_2(geo_pwkt)|1       |155         |
-==============================================================================
+===============================================================================
+|ID|OPERATOR          |NAME                             |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------------------------
+|0 |SCALAR GROUP BY   |                                 |1       |235         |
+|1 |└─TABLE RANGE SCAN|geo_maxpt_coords_100y_2(geo_pwkt)|1       |235         |
+===============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT(*)]), filter(nil)
@@ -397,10 +397,10 @@ Query Plan
 ====================================================================
 |ID|OPERATOR                 |NAME           |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------------
-|0 |PX COORDINATOR           |               |1       |420         |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000       |1       |420         |
-|2 |  └─PX PARTITION ITERATOR|               |1       |419         |
-|3 |    └─TABLE FULL SCAN    |ptgeom1(pgidx1)|1       |419         |
+|0 |PX COORDINATOR           |               |1       |502         |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000       |1       |502         |
+|2 |  └─PX PARTITION ITERATOR|               |1       |500         |
+|3 |    └─TABLE RANGE SCAN   |ptgeom1(pgidx1)|1       |500         |
 ====================================================================
 Outputs & filters:
 -------------------------------------
@@ -447,15 +447,15 @@ insert into group_change_info values(1, st_geomfromtext('point(1 1)', 0), 10, 'S
 explain select id, st_astext(geom) from group_change_info where st_intersects(geom, st_geomfromtext('point(1 1)', 0)) and city_code = 10
 and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') and change_date != '2023-06-06 00:00:00';
 Query Plan
-======================================================================
-|ID|OPERATOR       |NAME                       |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |TABLE FULL SCAN|group_change_info(idx_geom)|1       |156         |
-======================================================================
+=======================================================================
+|ID|OPERATOR        |NAME                       |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |TABLE RANGE SCAN|group_change_info(idx_geom)|1       |196         |
+=======================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([group_change_info.id], [st_astext(group_change_info.geom)]), filter([group_change_info.city_code = 10], [group_change_info.change_date != 
-      INTERNAL_FUNCTION('2023-06-06 00:00:00', 116, 17)], [st_intersects(group_change_info.geom, st_geomfromtext('point(1 1)', 0))], [group_change_info.change_status 
+      cast('2023-06-06 00:00:00', MYSQL_DATETIME(-1, -1))], [st_intersects(group_change_info.geom, st_geomfromtext('point(1 1)', 0))], [group_change_info.change_status 
       IN ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG')])
       access([group_change_info.id], [group_change_info.city_code], [group_change_info.geom], [group_change_info.change_status], [group_change_info.change_date]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[true,false,false,false], 
@@ -481,15 +481,15 @@ id	st_astext(geom)
 explain select id, st_astext(geom) from group_change_info where city_code = 10 and st_intersects(geom, st_geomfromtext('point(1 1)', 0))
 and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') and change_date != '2023-06-06 00:00:00';
 Query Plan
-======================================================================
-|ID|OPERATOR       |NAME                       |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |TABLE FULL SCAN|group_change_info(idx_geom)|1       |137         |
-======================================================================
+=======================================================================
+|ID|OPERATOR        |NAME                       |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |TABLE RANGE SCAN|group_change_info(idx_geom)|1       |170         |
+=======================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([group_change_info.id], [st_astext(group_change_info.geom)]), filter([group_change_info.city_code = 10], [group_change_info.change_date != 
-      INTERNAL_FUNCTION('2023-06-06 00:00:00', 116, 17)], [st_intersects(group_change_info.geom, st_geomfromtext('point(1 1)', 0))], [group_change_info.change_status 
+      cast('2023-06-06 00:00:00', MYSQL_DATETIME(-1, -1))], [st_intersects(group_change_info.geom, st_geomfromtext('point(1 1)', 0))], [group_change_info.change_status 
       IN ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG')])
       access([group_change_info.id], [group_change_info.city_code], [group_change_info.geom], [group_change_info.change_status], [group_change_info.change_date]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[true,false,false,false], 
@@ -515,15 +515,15 @@ id	st_astext(geom)
 explain select id, st_astext(geom) from group_change_info where city_code = 10 and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') 
 and change_date != '2023-06-06 00:00:00' and st_intersects(geom, st_geomfromtext('point(1 1)', 0));
 Query Plan
-======================================================================
-|ID|OPERATOR       |NAME                       |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |TABLE FULL SCAN|group_change_info(idx_geom)|1       |136         |
-======================================================================
+=======================================================================
+|ID|OPERATOR        |NAME                       |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |TABLE RANGE SCAN|group_change_info(idx_geom)|1       |169         |
+=======================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([group_change_info.id], [st_astext(group_change_info.geom)]), filter([group_change_info.city_code = 10], [group_change_info.change_date != 
-      INTERNAL_FUNCTION('2023-06-06 00:00:00', 116, 17)], [st_intersects(group_change_info.geom, st_geomfromtext('point(1 1)', 0))], [group_change_info.change_status 
+      cast('2023-06-06 00:00:00', MYSQL_DATETIME(-1, -1))], [st_intersects(group_change_info.geom, st_geomfromtext('point(1 1)', 0))], [group_change_info.change_status 
       IN ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG')])
       access([group_change_info.id], [group_change_info.city_code], [group_change_info.geom], [group_change_info.change_status], [group_change_info.change_date]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[true,false,false,false], 
@@ -549,15 +549,15 @@ id	st_astext(geom)
 explain select id, st_astext(geom) from group_change_info where city_code = 10 and change_status in ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG') 
 and st_intersects(geom, st_geomfromtext('point(1 1)', 0)) and change_date != '2023-06-06 00:00:00';
 Query Plan
-======================================================================
-|ID|OPERATOR       |NAME                       |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------
-|0 |TABLE FULL SCAN|group_change_info(idx_geom)|1       |136         |
-======================================================================
+=======================================================================
+|ID|OPERATOR        |NAME                       |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |TABLE RANGE SCAN|group_change_info(idx_geom)|1       |169         |
+=======================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([group_change_info.id], [st_astext(group_change_info.geom)]), filter([group_change_info.city_code = 10], [group_change_info.change_date != 
-      INTERNAL_FUNCTION('2023-06-06 00:00:00', 116, 17)], [st_intersects(group_change_info.geom, st_geomfromtext('point(1 1)', 0))], [group_change_info.change_status 
+      cast('2023-06-06 00:00:00', MYSQL_DATETIME(-1, -1))], [st_intersects(group_change_info.geom, st_geomfromtext('point(1 1)', 0))], [group_change_info.change_status 
       IN ('INIT', 'PROCESSING', 'SUCCESS', 'DIFF_NG')])
       access([group_change_info.id], [group_change_info.city_code], [group_change_info.geom], [group_change_info.change_status], [group_change_info.change_date]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[true,false,false,false], 

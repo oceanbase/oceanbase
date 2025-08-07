@@ -1097,6 +1097,7 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
                                                                       ? agent_table_filter
                                                                         : helper.filters_,
                                                                       domain_columnInfo_map,
+                                                                      range_info.get_expr_constraints(),
                                                                       query_range_provider))) {
       LOG_WARN("failed to extract query range", K(ret), K(index_id));
     } else if (is_multi_index
@@ -5477,6 +5478,7 @@ int ObJoinOrder::check_enable_better_inlist(int64_t table_id,
 int ObJoinOrder::extract_geo_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
                                                      const ObIArray<ObRawExpr*> &predicates,
                                                      const ColumnIdInfoMap &column_schema_info,
+                                                     ObIArray<ObExprConstraint> &expr_constraints,
                                                      ObQueryRangeProvider *&query_range)
 {
   int ret = OB_SUCCESS;
@@ -5499,9 +5501,11 @@ int ObJoinOrder::extract_geo_preliminary_query_range(const ObIArray<ColumnItem> 
       pre_range_graph = new(ptr)ObPreRangeGraph(*allocator_);
       if (OB_FAIL(pre_range_graph->preliminary_extract_query_range(range_columns, predicates,
                                                                    opt_ctx->get_exec_ctx(),
-                                                                   nullptr,
+                                                                   &expr_constraints,
                                                                    params, false, true,
-                                                                   -1, NULL, &column_schema_info))) {
+                                                                   -1, NULL,
+                                                                   &column_schema_info,
+                                                                   &opt_ctx->get_expr_factory()))) {
         LOG_WARN("failed to preliminary extract query range", K(ret));
       }
     }

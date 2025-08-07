@@ -35,6 +35,7 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
   ObSEArray<ObPriciseExprItem, 4> unprecise_exprs;
   ObSEArray<ObRawExpr*, 4> sorted_exprs;
   ObSEArray<ObFastFinalPos, 8> pos_arr;
+  ObSEArray<ObRangeNode*, 4> domain_range_nodes;
   if (OB_FAIL(range_node_generator.sort_range_exprs(exprs, sorted_exprs))) {
     LOG_WARN("failed to sort range exprs", K(ret));
   }
@@ -48,7 +49,11 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
     } else if (OB_FAIL(generate_range_node(expr, range_node_generator, range_node, 0, is_precise, offset_desc))) {
       LOG_WARN("faield to generate range node", K(ret));
     } else if (!range_node->always_true_ &&
+               !range_node->is_domain_node_ &&
                OB_FAIL(range_nodes.push_back(range_node))) {
+      LOG_WARN("failed to push back range node");
+    } else if (range_node->is_domain_node_ &&
+               OB_FAIL(domain_range_nodes.push_back(range_node))) {
       LOG_WARN("failed to push back range node");
     } else if (expr->is_const_expr()) {
       // isolated const expr which can be used as startup filter. Consider it imprecise.
@@ -69,13 +74,24 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
     LOG_INFO("use too much memory during extract query range, fall back to whole range",
         K(ctx_.max_mem_size_));
   }
-  if (OB_SUCC(ret) && ctx_.is_geo_range_ && range_nodes.count() > 1) {
-    ObRangeNode *final_geo_range = nullptr;
-    if (OB_FAIL(or_range_nodes(range_node_generator, range_nodes, ctx_.column_cnt_, final_geo_range))) {
-      LOG_WARN("failed to or range nodes");
-    } else if (OB_FALSE_IT(range_nodes.reuse())) {
-    } else if (OB_FAIL(range_nodes.push_back(final_geo_range))) {
-      LOG_WARN("failed to push back range nodes");
+  if (OB_SUCC(ret) && ctx_.is_geo_range_ && !domain_range_nodes.empty()) {
+    if (domain_range_nodes.count() == 1) {
+      if (OB_FAIL(range_nodes.push_back(domain_range_nodes.at(0)))) {
+        LOG_WARN("failed to push back range nodes");
+      }
+    } else {
+      ObRangeNode *final_geo_range = nullptr;
+      if (OB_FAIL(or_range_nodes(range_node_generator, domain_range_nodes, ctx_.column_cnt_, final_geo_range))) {
+        LOG_WARN("failed to or range nodes");
+      } else if (OB_FAIL(range_nodes.push_back(final_geo_range))) {
+        LOG_WARN("failed to push back range nodes");
+      }
+    }
+    domain_range_nodes.reuse();
+  }
+  if (OB_SUCC(ret) && !domain_range_nodes.empty()) {
+    if (OB_FAIL(append(range_nodes, domain_range_nodes))) {
+      LOG_WARN("failed to append domain range nodes");
     }
   }
   if (OB_SUCC(ret)) {
