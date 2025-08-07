@@ -1902,6 +1902,7 @@ int ObSplitSampler::query_ranges(const uint64_t tenant_id,
                             range_num, used_disk_space,
                             table_schema.is_global_index_table(),
                             is_oracle_mode,
+                            table_schema.is_user_hidden_table(),
                             low_bound_val, high_bound_val,
                             range_allocator, ranges))) {
     LOG_WARN("fail to acquire ranges for split partition", KR(ret), K(tenant_id), K(db_name),
@@ -1963,6 +1964,7 @@ int ObSplitSampler::query_ranges(const uint64_t tenant_id,
                                    range_num, used_disk_space,
                                    false /*query_index*/,
                                    is_oracle_mode,
+                                   data_table_schema.is_user_hidden_table(),
                                    low_bound_val, high_bound_val,
                                    range_allocator, ranges))) {
     LOG_WARN("fail to acquire ranges for split partition", KR(ret), K(tenant_id), K(db_name),
@@ -2076,6 +2078,7 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
                                   const int64_t range_num, const int64_t used_disk_space,
                                   const bool query_index,
                                   const bool is_oracle_mode,
+                                  const bool is_query_table_hidden,
                                   common::ObRowkey &low_bound_val,
                                   common::ObRowkey &high_bound_val,
                                   common::ObArenaAllocator& range_allocator,
@@ -2086,30 +2089,32 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
   if (nullptr != part_meta.part_) {
     part_name = &part_meta.part_->get_part_name();
   }
-  ObOracleSqlProxy oracle_sql_proxy(*GCTX.sql_proxy_);
   ObSqlString sql;
-  ObSingleConnectionProxy single_conn_proxy;
   static const int64_t MAX_SAMPLE_SCALE = 128L * 1024 * 1024; // at most sample 128MB
   double sample_pct = MAX_SAMPLE_SCALE >= used_disk_space ?
                       100 :
                       static_cast<double>(MAX_SAMPLE_SCALE) / used_disk_space * 100;
   ranges.reset();
 
+  ObCompatibilityMode compat_mode = is_oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE;
+  ObCommonSqlProxy *sql_proxy = GCTX.ddl_sql_proxy_;
   if (is_oracle_mode) {
-    if (OB_FAIL(single_conn_proxy.connect(tenant_id, 0/*group_id*/, &oracle_sql_proxy))) {
-      LOG_WARN("failed to get mysql connect", KR(ret), K(tenant_id));
-    }
-  } else if (OB_FAIL(single_conn_proxy.connect(tenant_id, 0/*group_id*/, GCTX.sql_proxy_))) {
-    LOG_WARN("failed to get mysql connect", KR(ret), K(tenant_id));
+    sql_proxy = GCTX.ddl_oracle_sql_proxy_;
   }
+  ObSessionParam session_param;
+  session_param.sql_mode_ = nullptr;
+  session_param.tz_info_wrap_ = nullptr;
+  session_param.ddl_info_.set_is_ddl(true); // force Px.
+  session_param.ddl_info_.set_source_table_hidden(is_query_table_hidden);
+
   if (OB_FAIL(ret)) {
   } else if (query_index) {
     ObSqlString set_sql;
     int64_t affected_rows = 0;
     if (OB_FAIL(set_sql.assign_fmt("SET session %s = true", share::OB_SV_ENABLE_INDEX_DIRECT_SELECT))) {
       LOG_WARN("failed to assign sql", KR(ret));
-    } else if (OB_FAIL(single_conn_proxy.write(tenant_id, set_sql.ptr(), affected_rows))) {
-      LOG_WARN("single_conn_proxy write failed", KR(ret), K(set_sql));
+    } else if (OB_FAIL(sql_proxy->write(tenant_id, set_sql.ptr(), affected_rows, compat_mode, &session_param))) {
+      LOG_WARN("sql_proxy write failed", KR(ret), K(set_sql));
     }
   }
 
@@ -2124,7 +2129,7 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *sql_result = nullptr;
-      if (OB_FAIL(single_conn_proxy.read(res, tenant_id, sql.ptr()))) {
+      if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr(), &session_param))) {
         LOG_WARN("execute sql failed", KR(ret), K(sql));
       } else if (OB_ISNULL(sql_result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;

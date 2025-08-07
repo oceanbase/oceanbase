@@ -389,6 +389,7 @@ private:
                     const int64_t range_num, const int64_t used_disk_space,
                     const bool query_index,
                     const bool is_oracle_mode,
+                    const bool is_query_table_hidden,
                     common::ObRowkey &low_bound_val,
                     common::ObRowkey &high_bound_val,
                     common::ObArenaAllocator &range_allocator,
