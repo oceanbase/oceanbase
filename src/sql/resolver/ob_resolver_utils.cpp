@@ -9569,16 +9569,17 @@ int ObResolverUtils::calc_returning_param_count_recursive(const ParseNode &parse
     CK (OB_NOT_NULL(parse_tree.children_));
     CK (OB_NOT_NULL(parse_tree.children_[0]));
     CK (OB_LIKELY(T_PROJECT_LIST == parse_tree.children_[0]->type_));
-    CK (OB_NOT_NULL(into_variables = parse_tree.children_[1]));
-    CK (OB_LIKELY(T_INTO_VARIABLES == into_variables->type_));
-    CK (OB_NOT_NULL(into_variables->children_));
-    CK (OB_NOT_NULL(into_vars_list = into_variables->children_[0]));
-    CK (OB_LIKELY(T_INTO_VARS_LIST == into_vars_list->type_));
-    for (int64_t i = 0; OB_SUCC(ret) && i < into_vars_list->num_child_; ++i) {
-      const ParseNode *into_var = into_vars_list->children_[i];
-      CK (OB_NOT_NULL(into_var));
-      if (OB_SUCC(ret) && OB_NOT_NULL(into_var) && T_QUESTIONMARK == into_var->type_) {
-        ++returning_param_count;
+    if (OB_NOT_NULL(into_variables = parse_tree.children_[1])) {
+      CK (OB_LIKELY(T_INTO_VARIABLES == into_variables->type_));
+      CK (OB_NOT_NULL(into_variables->children_));
+      CK (OB_NOT_NULL(into_vars_list = into_variables->children_[0]));
+      CK (OB_LIKELY(T_INTO_VARS_LIST == into_vars_list->type_));
+      for (int64_t i = 0; OB_SUCC(ret) && i < into_vars_list->num_child_; ++i) {
+        const ParseNode *into_var = into_vars_list->children_[i];
+        CK (OB_NOT_NULL(into_var));
+        if (OB_SUCC(ret) && OB_NOT_NULL(into_var) && T_QUESTIONMARK == into_var->type_) {
+          ++returning_param_count;
+        }
       }
     }
   } else if (parse_tree.num_child_ > 0) {
