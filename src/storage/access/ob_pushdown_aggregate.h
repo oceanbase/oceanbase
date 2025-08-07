@@ -116,7 +116,6 @@ public:
   virtual bool finished() const { return false; }
   virtual int reserve_group_by_buf(const int64_t size);
   virtual int output_extra_group_by_result(const int64_t start, const int64_t count);
-  virtual int pad_column_in_group_by(const int64_t row_cap, common::ObIAllocator &allocator);
   OB_INLINE bool is_aggregated() const { return aggregated_; }
   OB_INLINE int32_t get_col_offset() const { return basic_info_.col_offset_; }
   OB_INLINE common::ObDatum *get_col_datums() const { return col_datums_; }
@@ -223,7 +222,6 @@ public:
       const int64_t distinct_cnt,
       const bool is_group_by_col = false,
       const bool is_default_datum = false) override;
-  virtual int pad_column_in_group_by(const int64_t row_cap, common::ObIAllocator &allocator) override;
   INHERIT_TO_STRING_KV("ObAggCell", ObAggCell, K_(cmp_fun));
 private:
   virtual bool can_use_index_info() const override
@@ -257,7 +255,6 @@ public:
       const int64_t distinct_cnt,
       const bool is_group_by_col = false,
       const bool is_default_datum = false) override;
-  virtual int pad_column_in_group_by(const int64_t row_cap, common::ObIAllocator &allocator) override;
   INHERIT_TO_STRING_KV("ObAggCell", ObAggCell, K_(cmp_fun));
 private:
   virtual bool can_use_index_info() const override
