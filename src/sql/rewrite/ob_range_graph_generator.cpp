@@ -99,7 +99,7 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
         pre_range_graph_->set_is_get(false);
         update_max_precise_offset(0);
       }
-    } else if (OB_FAIL(and_range_nodes(range_nodes, ctx_.column_cnt_, final_range_node))) {
+    } else if (OB_FAIL(and_range_nodes(range_nodes, ctx_, final_range_node))) {
       LOG_WARN("failed to and range nodes");
     } else if (is_standard_range(final_range_node) && OB_FAIL(relink_standard_range_if_needed(final_range_node))) {
       LOG_WARN("failed to relink standard range if needed");
@@ -200,7 +200,7 @@ int ObRangeGraphGenerator::generate_and_range_node(ObRawExpr *and_expr,
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(and_range_nodes(range_nodes, ctx_.column_cnt_, range_node))) {
+      if (OB_FAIL(and_range_nodes(range_nodes, ctx_, range_node))) {
         LOG_WARN("failed to do and range nodes", K(ret));
       }
     }
@@ -256,7 +256,7 @@ int ObRangeGraphGenerator::generate_or_range_node(ObRawExpr *or_expr,
  *  2. 两个range node的参数必须存在交集或相邻
 */
 int ObRangeGraphGenerator::and_range_nodes(ObIArray<ObRangeNode*> &range_nodes,
-                                           const int64_t column_cnt,
+                                           const ObQueryRangeCtx &ctx,
                                            ObRangeNode *&range_node)
 {
   int ret = OB_SUCCESS;
@@ -302,7 +302,7 @@ int ObRangeGraphGenerator::and_range_nodes(ObIArray<ObRangeNode*> &range_nodes,
                nullptr == last_node->and_next_ && nullptr == last_node->or_next_ &&
                !(cur_node->contain_in_ && last_node->contain_in_)) {
       bool merged = false;
-      if (OB_FAIL(and_two_range_node(last_node, cur_node, column_cnt, merged))) {
+      if (OB_FAIL(and_two_range_node(last_node, cur_node, ctx, merged))) {
         LOG_WARN("failed to and two range node");
       } else if (merged && last_node->always_false_) {
         range_node = last_node;
@@ -331,11 +331,12 @@ int ObRangeGraphGenerator::and_range_nodes(ObIArray<ObRangeNode*> &range_nodes,
 
 int ObRangeGraphGenerator::and_two_range_node(ObRangeNode *&l_node,
                                               ObRangeNode *&r_node,
-                                              const int64_t column_cnt,
+                                              const ObQueryRangeCtx &ctx,
                                               bool &is_merge)
 {
   int ret = OB_SUCCESS;
   is_merge = false;
+  const int64_t column_cnt = ctx.column_cnt_;
   if (OB_ISNULL(l_node) || OB_ISNULL(r_node) ||
       OB_UNLIKELY(l_node->min_offset_ > r_node->min_offset_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -394,6 +395,10 @@ int ObRangeGraphGenerator::and_two_range_node(ObRangeNode *&l_node,
         } else if (s2 == OB_RANGE_NULL_VALUE) {
           continue;
         } else if (s2 < OB_RANGE_EXTEND_VALUE) {
+          if (is_contain(ctx.null_safe_value_idxs_, s2)) {
+            // s1 is null and s2 is null safe, can not compare
+            break;
+          }
           if (lib::is_oracle_mode()) {
             merge_start = true;
           } else {
@@ -408,6 +413,10 @@ int ObRangeGraphGenerator::and_two_range_node(ObRangeNode *&l_node,
           use_r_start = true;
           merge_start = true;
         } else if (s2 == OB_RANGE_NULL_VALUE) {
+          if (is_contain(ctx.null_safe_value_idxs_, s1)) {
+            // s2 is null and s1 is null safe, can not compare
+            break;
+          }
           if (lib::is_oracle_mode()) {
             use_r_start = true;
             merge_start = true;
@@ -461,6 +470,10 @@ int ObRangeGraphGenerator::and_two_range_node(ObRangeNode *&l_node,
         } else if (e2 == OB_RANGE_NULL_VALUE) {
           continue;
         } else if (e2 < OB_RANGE_EXTEND_VALUE) {
+          if (is_contain(ctx.null_safe_value_idxs_, e2)) {
+            // e1 is null and e2 is null safe, can not compare
+            break;
+          }
           if (lib::is_oracle_mode()) {
             use_r_end = true;
             merge_end = true;
@@ -475,6 +488,10 @@ int ObRangeGraphGenerator::and_two_range_node(ObRangeNode *&l_node,
         } else if (e2 == OB_RANGE_MAX_VALUE) {
           merge_end = true;
         } else if (e2 == OB_RANGE_NULL_VALUE) {
+          if (is_contain(ctx.null_safe_value_idxs_, e1)) {
+            // e2 is null and e1 is null safe, can not compare
+            break;
+          }
           if (lib::is_oracle_mode()) {
             merge_end = true;
           } else {
@@ -1394,7 +1411,7 @@ int ObRangeGraphGenerator::relink_standard_range_if_needed(ObRangeNode *&range_n
     }
     if (OB_SUCC(ret)) {
       range_node = nullptr;
-      if (OB_FAIL(and_range_nodes(range_nodes, ctx_.column_cnt_, range_node))) {
+      if (OB_FAIL(and_range_nodes(range_nodes, ctx_, range_node))) {
         LOG_WARN("failed to and range nodes");
       }
     }

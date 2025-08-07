@@ -83,7 +83,7 @@ public:
   int generate_range_graph(const ObIArray<ObRawExpr*> &exprs,
                            ObExprRangeConverter &range_node_generator);
   static int and_range_nodes(ObIArray<ObRangeNode*> &range_nodes,
-                             const int64_t column_cnt,
+                             const ObQueryRangeCtx &ctx,
                              ObRangeNode *&range_node);
   static int or_range_nodes(ObExprRangeConverter &range_node_generator,
                             ObIArray<ObRangeNode*> &range_nodes,
@@ -115,7 +115,7 @@ private:
 
   static int and_two_range_node(ObRangeNode *&l_node,
                                 ObRangeNode *&r_node,
-                                const int64_t column_cnt,
+                                const ObQueryRangeCtx &ctx,
                                 bool &is_merge);
 
   static int or_two_range_node(ObRangeNode *&l_node,
