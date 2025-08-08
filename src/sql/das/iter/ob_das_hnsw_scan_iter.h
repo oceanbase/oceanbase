@@ -320,6 +320,12 @@ private:
   int process_adaptor_state_pre_filter_brute_force(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
                                                     int64_t *&brute_vids, int& brute_cnt, bool& need_complete_data,
                                                     bool check_need_complete_data = true);
+  int process_adaptor_state_pre_filter_brute_force_not_bq(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
+                                                    int64_t *&brute_vids, int& brute_cnt, bool& need_complete_data,
+                                                    bool check_need_complete_data = true);
+  int process_adaptor_state_pre_filter_brute_force_bq(ObVectorQueryAdaptorResultContext *ada_ctx, ObPluginVectorIndexAdaptor* adaptor,
+                                                    int64_t *&brute_vids, int& brute_cnt, bool& need_complete_data,
+                                                    bool check_need_complete_data = true);
   int set_rowkey_by_vid(ObNewRow *row);
   int post_query_vid_with_filter(ObVectorQueryAdaptorResultContext *ada_ctx,
                                 ObPluginVectorIndexAdaptor* adaptor,
@@ -390,6 +396,7 @@ private:
   int build_extra_info_rowkey(const ObRowkey &rowkey, ObRowkey &extra_rowkey);
   int build_extra_info_range(const ObNewRange &range, const ObNewRange *&const_extra_range);
   int64_t get_reorder_count(const int64_t ef_search, const int64_t topK, const ObVectorIndexParam& param);
+  int64_t get_reorder_count_for_brute_force(const int64_t ef_search, const int64_t topK, const ObVectorIndexParam& param);
   inline bool is_pre_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_PRE
                       || (vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER);}
   inline bool is_in_filter() { return vec_index_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN && vec_idx_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_IN_FILTER;}
@@ -415,6 +422,8 @@ private:
   static const uint64_t MAX_HNSW_BRUTE_FORCE_SIZE = 20000;
   static const int32_t CHANGE_PATH_WINDOW_SIZE = 30;
   static constexpr double DECAY_FACTOR = 0.5;
+  static const uint64_t MIN_BQ_REORDER_SIZE_FOR_BRUTE_FORCE = 100;
+
 private:
   lib::MemoryContext mem_context_;
   ObArenaAllocator vec_op_alloc_;
@@ -486,6 +495,50 @@ private:
   ObHnswAadaptiveCtx adaptive_ctx_;
   bool can_retry_;
   bool idx_iter_first_scan_;
+
+private:
+
+  struct BruteForceContext {
+    ObString search_vec;
+    uint64_t limit;
+    ObExprVectorDistance::ObVecDisType dis_type;
+
+    BruteForceContext() : limit(0), dis_type(ObExprVectorDistance::ObVecDisType::MAX_TYPE) {}
+  };
+
+  struct DistanceResult {
+    const float* distances_inc;
+    const float* distances_snap;
+    int brute_cnt;
+
+    DistanceResult() : distances_inc(nullptr), distances_snap(nullptr), brute_cnt(0) {}
+  };
+
+  int init_brute_force_params(ObVectorQueryAdaptorResultContext *ada_ctx,
+                              ObPluginVectorIndexAdaptor* adaptor,
+                              BruteForceContext& ctx);
+
+  int query_brute_force_distances(ObPluginVectorIndexAdaptor* adaptor,
+                                  const ObString& search_vec,
+                                  int64_t* brute_vids,
+                                  int brute_cnt,
+                                  DistanceResult& dist_result);
+
+  int merge_and_sort_brute_force_results_bq(const DistanceResult& dist_result,
+                                            int64_t* brute_vids,
+                                            int brute_cnt,
+                                            ObSimpleMaxHeap& snap_heap,
+                                            ObSimpleMaxHeap& incr_heap,
+                                            bool& need_complete_data,
+                                            bool check_need_complete_data);
+
+  int build_brute_force_result_iterator_bq(ObPluginVectorIndexAdaptor* adaptor,
+                                           const ObSimpleMaxHeap& snap_heap,
+                                           const ObSimpleMaxHeap& incr_heap,
+                                           ObVectorQueryVidIterator*& result_iter);
+
+  void release_brute_force_distance_memory(ObPluginVectorIndexAdaptor* adaptor,
+                                          const DistanceResult& dist_result);
 };
 
 
