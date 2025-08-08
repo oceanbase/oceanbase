@@ -6901,7 +6901,7 @@
   "plsql_optimize_level": {
     "id": 10393,
     "name": "plsql_optimize_level",
-    "default_value": "2",
+    "default_value": "0",
     "base_value": "2",
     "data_type": "int",
     "min_val": "0",
