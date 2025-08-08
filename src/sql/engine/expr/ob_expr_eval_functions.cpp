@@ -1850,6 +1850,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprAIRerank::eval_ai_rerank_vector,                               /* 231 */
   NULL, // ObExprMd5ConcatWs::calc_md5_concat_ws_vector                         /* 232 */
   NULL, // ObExprHiddenClusteringKey::eval_vector_hidden_clustering_key,         /* 233 */
+  NULL, // ObExprToPinyin::eval_to_pinyin_vector,                        /* 234 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
