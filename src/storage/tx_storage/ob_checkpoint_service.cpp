@@ -485,7 +485,6 @@ public:
     } else if (sn_checkpoint_lsn < ss_checkpoint_lsn) {
       FLOG_INFO("local ckpt less than ss ckpt", K(ls_id), K(sn_checkpoint_lsn), K(ss_checkpoint_lsn));
     } else {
-
       ObSSMetaService *meta_svr = MTL(ObSSMetaService *);
       UpdateSSCkptFunctorForMetaSvr func(ObIMetaFunction::MetaFuncType::UPDATE_SS_CKPT_FUNC, ls_id);
       ObSSWriterKey sswriter_key(ObSSWriterType::META, ls_id);
@@ -528,10 +527,10 @@ private:
     return is_leader;
   }
 
-#define PRINT_CKPT_INFO_WRAPPER                                                                 \
-  "ls_id", ls.get_ls_id(), K(sn_ckpt_lsn), K(ss_ckpt_lsn), K(sn_ckpt_scn), K(ss_ckpt_scn),       \
-      KTIME(sn_ckpt_scn.convert_to_ts()), KTIME(ss_ckpt_scn.convert_to_ts()), "MAX LSN GAP(MB)", \
-      max_lsn_gap / 1024 / 1024
+#define PRINT_CKPT_INFO_WRAPPER                                                                   \
+  "ls_id", ls.get_ls_id(), K(sn_ckpt_lsn), K(ss_ckpt_lsn), K(sn_ckpt_scn), K(ss_ckpt_scn),        \
+      KTIME(sn_ckpt_scn.convert_to_ts()), KTIME(ss_ckpt_scn.convert_to_ts()), "SCN GAP(seconds)", \
+      scn_ts_gap / 1000 / 1000, "MAX LSN GAP(MB)", max_lsn_gap / 1024 / 1024
   void throttle_flush_if_needed(const ObSSLSMeta &ss_ls_meta, LSN sn_ckpt_lsn, LSN ss_ckpt_lsn, ObLS &ls)
   {
     if (is_leader_(ls)) {
@@ -544,8 +543,16 @@ private:
       // use 1/8 freeze_trigger as lsn_gap
       max_lsn_gap = max_lsn_gap * freeze_trigger / 100 / 8;
 
+      // get advance_checkpoint interval
+      int64_t advance_ckpt_interval = 10LL * 60LL * 1000LL * 1000LL; // default 10 minutes
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (tenant_config.is_valid()) {
+        advance_ckpt_interval = tenant_config->_ss_advance_checkpoint_interval;
+      }
+
       const SCN sn_ckpt_scn = ls.get_clog_checkpoint_scn();
       const SCN ss_ckpt_scn = ss_ls_meta.get_ss_checkpoint_scn();
+      const int64_t scn_ts_gap = (sn_ckpt_scn.convert_to_ts() - ss_ckpt_scn.convert_to_ts());
 
       if (!ls.get_inc_sstable_uploader().finish_reloading()) {
         (void)ls.disable_flush();
@@ -553,7 +560,8 @@ private:
       } else if (ls.get_inc_sstable_uploader().task_overflowed()) {
         (void)ls.disable_flush();
         FLOG_INFO("disable ls flush to handle current tasks", PRINT_CKPT_INFO_WRAPPER);
-      } else if ((sn_ckpt_lsn > ss_ckpt_lsn) && (sn_ckpt_lsn - ss_ckpt_lsn > max_lsn_gap)) {
+      } else if ((sn_ckpt_lsn > ss_ckpt_lsn) && (sn_ckpt_lsn - ss_ckpt_lsn > max_lsn_gap) &&
+                 (scn_ts_gap > 2 * advance_ckpt_interval)) {
         (void)ls.disable_flush();
         ckpt_lag_too_large = true;
         FLOG_INFO("disable ls flush to throttle writes and allow ss checkpoint to catch up with sn checkpoint",
