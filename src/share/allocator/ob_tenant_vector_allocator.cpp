@@ -142,6 +142,9 @@ void *ObTenantVectorAllocator::alloc(const int64_t size, const int64_t abs_expir
   return alloc(size);
 }
 
+// !!!!! NOTICE
+// This function will throw an exception when memory allocation fails,
+// so it can only be called within vsag and cannot be used elsewhere
 void *ObVsagMemContext::Allocate(size_t size)
 {
   void *ret_ptr = nullptr;
@@ -154,6 +157,12 @@ void *ObVsagMemContext::Allocate(size_t size)
 
       *(int64_t*)ptr = actual_size;
       ret_ptr = (char*)ptr + MEM_PTR_HEAD_SIZE;
+    } else {
+      // NOTICE: ObVsagMemContext is used in vsag lib. And may be used for some c++ std container.
+      // For this scenario, if memory allocation fails, an exception should be thrown instead of returning a null pointer
+      // or will access null point in std container, eg std::vector
+      SHARE_LOG(WARN, "fail to allocate memory", K(size), K(actual_size), K(lbt()));
+      throw std::bad_alloc();
     }
   }
 
