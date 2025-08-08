@@ -11229,6 +11229,8 @@ def_table_schema(
   vtable_route_policy = 'local',
 )
 
+# 11130: __all_virtual_ss_diagnose_info
+
 ################################################################
 # INFORMATION SCHEMA
 ################################################################
@@ -17471,6 +17473,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15523', all_def_keyword
 # 15531: __all_virtual_tenant_ss_storage_stat
 # 15532: __all_virtual_hms_client_pool_stat
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15533', all_def_keywords['__all_virtual_dba_source_v1']))
+# 15534: __all_virtual_ss_diagnose_info
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
