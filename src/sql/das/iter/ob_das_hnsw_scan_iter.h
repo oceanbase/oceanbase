@@ -415,7 +415,7 @@ private:
   int prepare_follower_query_cond(ObVectorQueryConditions &query_cond);
 private:
   static const uint64_t MAX_VSAG_QUERY_RES_SIZE = 16384;
-  static const uint64_t VSAG_MAX_EF_SEARCH = 1000;
+  static const uint64_t VSAG_MAX_EF_SEARCH = 160000;
   static constexpr double FIXED_MAGNIFICATION_RATIO = 2.0;
   static constexpr double ITER_CONSIDER_LAST_SEARCH_SELETIVITY = 0.05;
   static const uint64_t MAX_OPTIMIZE_BATCH_COUNT = 16;

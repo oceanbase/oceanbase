@@ -785,6 +785,14 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
     HnswIndexHandler *hnsw = static_cast<HnswIndexHandler *>(index_handler);
     const IndexType index_type = static_cast<IndexType>(hnsw->get_index_type());
     char result_param_str[1024]= {0};
+    const int64_t EF_SEARCH_LIMIT = 1000L;
+    const int64_t AMPLIFICATION_FACTOR = 10;
+    if (ef_search > EF_SEARCH_LIMIT) {
+      int64_t index_number = hnsw->get_index_number();
+      topk = topk < index_number ? topk : index_number;
+      int64_t ef_search_threshold = AMPLIFICATION_FACTOR * topk > EF_SEARCH_LIMIT ? AMPLIFICATION_FACTOR * topk : EF_SEARCH_LIMIT;
+      ef_search = ef_search > ef_search_threshold ? ef_search : ef_search_threshold;
+    }
     if (OB_FAIL(construct_vsag_search_param(uint8_t(index_type), ef_search, use_extra_info_filter, result_param_str))) {
       LOG_WARN("[OBVSAG] construct_vsag_search_param fail", K(ret), K(index_type), K(ef_search), K(use_extra_info_filter));
     } else {
@@ -817,6 +825,14 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
     HnswIndexHandler *hnsw = static_cast<HnswIndexHandler *>(index_handler);
     const IndexType index_type = static_cast<IndexType>(hnsw->get_index_type());
     char result_param_str[1024]= {0};
+    const int64_t EF_SEARCH_LIMIT = 1000L;
+    const int64_t AMPLIFICATION_FACTOR = 10;
+    if (ef_search > EF_SEARCH_LIMIT) {
+      int64_t index_number = hnsw->get_index_number();
+      topk = topk < index_number ? topk : index_number;
+      int64_t ef_search_threshold = AMPLIFICATION_FACTOR * topk > EF_SEARCH_LIMIT ? AMPLIFICATION_FACTOR * topk : EF_SEARCH_LIMIT;
+      ef_search = ef_search > ef_search_threshold ? ef_search : ef_search_threshold;
+    }
     if (OB_FAIL(construct_vsag_search_param(uint8_t(index_type), ef_search, use_extra_info_filter, result_param_str))) {
       LOG_WARN("[OBVSAG] construct_vsag_search_param fail", K(ret), K(index_type), K(ef_search), K(use_extra_info_filter));
     } else {
