@@ -391,8 +391,9 @@ int ObArrowDataLoaderFactory::select_loader(ObIAllocator &allocator,
   if (OB_SUCC(ret) && OB_ISNULL(loader)) {
     ret = OB_NOT_SUPPORTED;
     ObSqlString message;
+    ObCStringHelper helper;
     message.assign_fmt("Convert from type '%s' to type '%s' ",
-                          arrow_type.ToString().c_str(), to_cstring(datum_type));
+                          arrow_type.ToString().c_str(), helper.convert(datum_type));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, message.ptr());
     LOG_WARN("convert from arrow type to oceanbase data type is not supported yet",
              K(arrow_type.ToString().c_str()), K(datum_type));

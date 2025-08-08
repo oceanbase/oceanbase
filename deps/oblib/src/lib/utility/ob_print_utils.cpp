@@ -297,30 +297,18 @@ int64_t to_string<bool>(const bool &v, char *buffer, const int64_t buffer_size)
   } else {}
   return pos;
 }
-
-template <>
-const char *to_cstring<const char *>(const char *const &str)
-{
-  return str;
-}
-
-template <>
-const char *to_cstring<int64_t>(const int64_t &v)
-{
-  return to_cstring<int64_t>(v, BoolType<false>());
-}
 ////////////////////////////////////////////////////////////////
 
-const int64_t ObCStringHelperV2::EXPAND_BUF_LEN;
-const int64_t ObCStringHelperV2::HELPER_MEMORY_LIMIT;
+const int64_t ObCStringHelper::EXPAND_BUF_LEN;
+const int64_t ObCStringHelper::HELPER_MEMORY_LIMIT;
 
 ERRSIM_POINT_DEF(EN_CSTRING_HELPER_FORCE_MALLOC);
-bool ObCStringHelperV2::is_force_alloc()
+bool ObCStringHelper::is_force_alloc()
 {
   return EN_CSTRING_HELPER_FORCE_MALLOC;
 }
 
-void ObCStringHelperV2::force_alloc()
+void ObCStringHelper::force_alloc()
 {
   buf_ = reinterpret_cast<char *>(allocator_.alloc(buf_len_));
   if (nullptr == buf_) {

@@ -1332,7 +1332,8 @@ int ObWrCollector::collect_sqltext()
               int64_t affected_rows = 0;
               uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
               query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
-              const char* query_sql = to_cstring(ObHexEscapeSqlStr(ObString::make_string(sqltext.query_sql_)));
+              ObCStringHelper helper;
+              const char* query_sql = helper.convert(ObHexEscapeSqlStr(ObString::make_string(sqltext.query_sql_)));
               if (OB_UNLIKELY(query_timeout <= 0)) {
                 ret = OB_TIMEOUT;
                 LOG_WARN("wr snapshot timeout", KR(tmp_ret), K_(timeout_ts));

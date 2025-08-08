@@ -2329,7 +2329,7 @@ int ObRawExprResolverImpl::is_explict_func_expr(const ParseNode &node, bool &is_
       } else {
         //do nothing
         //ret = OB_ERR_FUNCTION_UNKNOWN;
-        //LOG_USER_ERROR(ret, "FUNCTION", to_cstring(func_name));//throw this error to user
+        //LOG_USER_ERROR(ret, "FUNCTION", helper.convert(func_name));//throw this error to user
       }
       LOG_DEBUG("is_explict_func_expr", K(func_name), K(is_func), K(exist), "node", SJ(ObParserResultPrintWrapper(node)));
     } else if (IS_FUN_SYS_TYPE(node.children_[0]->type_) || IS_AGGR_FUN(node.children_[0]->type_)) {
@@ -6095,7 +6095,8 @@ int ObRawExprResolverImpl::process_timestamp_node(const ParseNode *node, ObStrin
 
       if (OB_UNLIKELY(scale > OB_MAX_DATETIME_PRECISION)) {
         ret = OB_ERR_TOO_BIG_PRECISION;
-        LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, to_cstring(err_info), OB_MAX_DATETIME_PRECISION);
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, helper.convert(err_info), OB_MAX_DATETIME_PRECISION);
       } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, c_expr))) {
         LOG_WARN("fail to create raw expr", K(ret));
       } else if (OB_ISNULL(c_expr)) {

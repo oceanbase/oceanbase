@@ -3734,7 +3734,8 @@ int ObTenantDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, 
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename special tenant");
     } else if (NULL != schema_guard.get_tenant_info(new_tenant_name)) {
       ret = OB_TENANT_EXIST;
-      LOG_USER_ERROR(OB_TENANT_EXIST, to_cstring(new_tenant_name));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TENANT_EXIST, helper.convert(new_tenant_name));
       LOG_WARN("tenant already exists", K(ret), K(new_tenant_name));
     } else if (OB_FAIL(schema_guard.get_schema_version(OB_SYS_TENANT_ID, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret));
@@ -4216,8 +4217,9 @@ int ObTenantDDLService::check_create_tenant_schema(
     LOG_WARN("variable is not init", KR(ret));
   } else if (tenant_schema.get_tenant_name_str().length() > OB_MAX_TENANT_NAME_LENGTH) {
     ret = OB_INVALID_TENANT_NAME;
+    ObCStringHelper helper;
     LOG_USER_ERROR(OB_INVALID_TENANT_NAME,
-        to_cstring(tenant_schema.get_tenant_name_str()), OB_MAX_TENANT_NAME_LENGTH);
+        helper.convert(tenant_schema.get_tenant_name_str()), OB_MAX_TENANT_NAME_LENGTH);
     LOG_WARN("tenant name can't over max_tenant_name_length", KR(ret), K(OB_MAX_TENANT_NAME_LENGTH));
   } else if (OB_FAIL(check_create_tenant_locality(pool_list, tenant_schema, schema_guard))) {
     LOG_WARN("fail to check create tenant locality", KR(ret), K(pool_list), K(tenant_schema));
@@ -4575,7 +4577,8 @@ int ObTenantDDLService::check_schema_zone_list(
   for (int64_t i = 0; OB_SUCC(ret) && i < zone_list.count() - 1; ++i) {
     if (zone_list.at(i) == zone_list.at(i+1)) {
       ret = OB_ZONE_DUPLICATED;
-      LOG_USER_ERROR(OB_ZONE_DUPLICATED, to_cstring(zone_list.at(i)), to_cstring(zone_list));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_ZONE_DUPLICATED, helper.convert(zone_list.at(i)), helper.convert(zone_list));
       LOG_WARN("duplicate zone in zone list", K(zone_list), K(ret));
     }
   }
@@ -4586,7 +4589,8 @@ int ObTenantDDLService::check_schema_zone_list(
         LOG_WARN("check_zone_exist failed", "zone", zone_list.at(i), K(ret));
       } else if (!zone_exist) {
         ret = OB_ZONE_INFO_NOT_EXIST;
-        LOG_USER_ERROR(OB_ZONE_INFO_NOT_EXIST, to_cstring(zone_list.at(i)));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_ZONE_INFO_NOT_EXIST, helper.convert(zone_list.at(i)));
         LOG_WARN("zone not exist", "zone", zone_list.at(i), K(ret));
         break;
       }
@@ -6099,11 +6103,13 @@ int ObTenantDDLService::create_tenant_check_(const obrpc::ObCreateTenantArg &arg
     } else if (tenant_exist) {
       if (arg.if_not_exist_) {
         ret = OB_SUCCESS;
-        LOG_USER_NOTE(OB_TENANT_EXIST, to_cstring(tenant_name));
+        ObCStringHelper helper;
+        LOG_USER_NOTE(OB_TENANT_EXIST, helper.convert(tenant_name));
         LOG_INFO("tenant already exists, not need to create", KR(ret), K(tenant_name));
       } else {
         ret = OB_TENANT_EXIST;
-        LOG_USER_ERROR(OB_TENANT_EXIST, to_cstring(tenant_name));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_TENANT_EXIST, helper.convert(tenant_name));
         LOG_WARN("tenant already exists", KR(ret), K(tenant_name));
       }
     } else {

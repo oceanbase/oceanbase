@@ -6339,8 +6339,9 @@ int ObSchemaPrinter::print_heap_table_pk_info(const ObTableSchema &table_schema,
     }
     if (OB_SUCC(ret)) {
       if (!is_oracle_mode && table_schema.get_pk_comment_str().length() > 0) {
+        ObCStringHelper helper;
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, " COMMENT '%s'" ,
-            to_cstring(ObHexEscapeSqlStr(table_schema.get_pk_comment_str()))))) {
+            helper.convert(ObHexEscapeSqlStr(table_schema.get_pk_comment_str()))))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print primary key comment", K(ret), K(table_schema));
         }
       }

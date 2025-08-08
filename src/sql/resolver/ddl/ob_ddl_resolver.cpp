@@ -599,7 +599,8 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
           int32_t time_val = 0;
           if (OB_FAIL(ObTimeConverter::str_to_date(time_str, time_val, date_sql_mode))) {
             ret = OB_ERR_WRONG_VALUE;
-            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", to_cstring(time_str));
+            ObCStringHelper helper;
+            LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DATE", helper.convert(time_str));
           } else {
             default_value.set_date(time_val);
           }

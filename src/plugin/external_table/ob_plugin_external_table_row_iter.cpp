@@ -254,7 +254,6 @@ int ObPluginExternalTableRowIterator::get_next_rows(int64_t &count, int64_t capa
       }
     }
     const ObBitVector *skip = nullptr;
-    PRINT_VECTORIZED_ROWS_BY_COLUMN(SHARE, DEBUG, *eval_ctx, *file_column_exprs, record_batch_slice->num_rows(), skip);
 
     // assign data from column_convert_expr to column_expr
     for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
@@ -316,10 +315,8 @@ int ObPluginExternalTableRowIterator::get_next_rows(int64_t &count, int64_t capa
       }
     }
     LOG_DEBUG("ext column convert rows dump");
-    PRINT_VECTORIZED_ROWS_BY_COLUMN(SHARE, DEBUG, *eval_ctx, *scan_param_->ext_column_convert_exprs_,
-                                    record_batch_slice->num_rows(), skip);
+
     LOG_DEBUG("column rows dump");
-    PRINT_VECTORIZED_ROWS_BY_COLUMN(SHARE, DEBUG, *eval_ctx, column_exprs_, record_batch_slice->num_rows(), skip);
 
     // calc the file id and line num
     OZ (calc_exprs_for_rowid(record_batch_slice->num_rows(), iterator_state_));

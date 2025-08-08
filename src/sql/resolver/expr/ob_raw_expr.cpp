@@ -4774,8 +4774,9 @@ int ObSysFunRawExpr::check_param_num()
   if (OB_UNLIKELY(T_INVALID == (type = ObExprOperatorFactory::get_type_by_name(func_name_)))) {
     ret = OB_ERR_FUNCTION_UNKNOWN;
     // 不向USER报错，外部会根据这个错误码继续尝试解析为UDF
+    ObCStringHelper helper;
     LOG_WARN("system function not exists, maybe a user define function", K(func_name_), K(ret));
-    // LOG_USER_ERROR(ret, "FUNCTION", to_cstring(func_name_)); //throw to user
+    // LOG_USER_ERROR(ret, "FUNCTION", helper.convert(func_name_)); //throw to user
   } else if (OB_UNLIKELY(NULL == (op = get_op()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to make function", K(func_name_), K(ret));
@@ -4799,7 +4800,7 @@ int ObSysFunRawExpr::check_param_num(int32_t param_count)
     ret = OB_ERR_FUNCTION_UNKNOWN;
     // 不向USER报错，外部会根据这个错误码继续尝试解析为UDF
     LOG_WARN("system function not exists, maybe a user define function", K(func_name_), K(ret));
-    // LOG_USER_ERROR(ret, "FUNCTION", to_cstring(func_name_)); //throw to user
+    // LOG_USER_ERROR(ret, "FUNCTION", helper.convert(func_name_)); //throw to user
   } else if (OB_UNLIKELY(NULL == (op = get_op()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to make function", K(func_name_), K(ret));

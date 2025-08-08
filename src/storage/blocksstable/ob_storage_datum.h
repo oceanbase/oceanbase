@@ -65,7 +65,6 @@ struct ObStorageDatum : public common::ObDatum
   OB_INLINE ObStorageDatum& operator=(const ObStorageDatum &other);
   OB_INLINE int64_t storage_to_string(char *buf, int64_t buf_len, const bool for_dump = false) const;
   OB_INLINE bool need_copy_for_encoding_column_with_flat_format(const ObObjDatumMapType map_type) const;
-  OB_INLINE const char *to_cstring2(const bool for_dump = false) const;
   //only for unittest
   OB_INLINE bool operator==(const ObStorageDatum &other) const;
   OB_INLINE bool operator==(const ObObj &other) const;
@@ -417,12 +416,6 @@ OB_INLINE int64_t ObStorageDatum::storage_to_string(char *buf, int64_t buf_len, 
   }
 
   return pos;
-}
-
-OB_INLINE const char *ObStorageDatum::to_cstring2(const bool for_dump) const
-{
-  char *buffer = NULL;
-  return buffer;
 }
 
 OB_INLINE bool ObStorageDatum::need_copy_for_encoding_column_with_flat_format(const ObObjDatumMapType map_type) const

@@ -2636,16 +2636,16 @@ int ObMemtable::set_(
     // Step5.2: record the latest schema info on the memtable
     set_max_data_schema_version(ctx.table_version_);
     set_max_column_cnt(new_row->count_);
-
+    ObCStringHelper helper;
     TRANS_LOG(TRACE, "set end, success",
               "ret", ret,
               "tablet_id_", key_.tablet_id_,
               "dml_flag", writer_dml_flag,
               "columns", strarray<ObColDesc>(*columns),
-              "old_row", to_cstring(old_row),
-              "new_row", to_cstring(new_row),
-              "update_idx", (update_idx == NULL ? "" : to_cstring(update_idx)),
-              "mtd", to_cstring(mtd),
+              "old_row", helper.convert(old_row),
+              "new_row", helper.convert(new_row),
+              "update_idx", (update_idx == NULL ? "" : helper.convert(update_idx)),
+              "mtd", helper.convert(mtd),
               KPC(this));
   } else {
     // Step5.1: undo the side effects of mvcc_write which ensure the interface
@@ -2657,12 +2657,13 @@ int ObMemtable::set_(
     (void)cleanup_old_row_(mem_ctx, tx_node_arg);
 
     if (!is_mvcc_write_related_error_(ret)) {
+      ObCStringHelper helper;
       TRANS_LOG(WARN, "set end, fail",
                 "ret", ret,
                 "tablet_id_", key_.tablet_id_,
                 "columns", strarray<ObColDesc>(*columns),
-                "new_row", to_cstring(new_row),
-                "mem_ctx", mem_ctx ? to_cstring(mem_ctx) : "nil",
+                "new_row", helper.convert(new_row),
+                "mem_ctx", mem_ctx ? helper.convert(mem_ctx) : "nil",
                 "store_ctx", ctx);
     } else {
       // Tip1: we need notice that txn cannot be serializable when TSC occurs in

@@ -712,7 +712,7 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
   info.data_tablet_id_ = data_tablet_id_.id();
   ObVectorIndexParam *param;
   int64_t pos = 0;
-
+  ObCStringHelper helper;
   if (OB_FAIL(databuff_printf(info.statistics_,
                  sizeof(info.statistics_), pos,
                  "is_complete=%d;", is_complete()))) {
@@ -723,7 +723,7 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
     LOG_WARN("get hnsw param failed.", K(ret));
   } else if (OB_FAIL(databuff_printf(info.statistics_,
                  sizeof(info.statistics_), pos,
-                 "param=%s;", to_cstring(*param)))) {
+                 "param=%s;", helper.convert(*param)))) {
     LOG_WARN("failed to fill statistics", K(ret), K(this));
   } else if (OB_FAIL(databuff_printf(info.statistics_,
                       sizeof(info.statistics_), pos,
@@ -739,7 +739,7 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
     LOG_WARN("failed to fill statistics", K(ret), K(this));
   } else if (!index_identity_.empty() && OB_FAIL(databuff_printf(
              info.statistics_, sizeof(info.statistics_), pos,
-             "index=%s;", to_cstring(index_identity_)))) {
+             "index=%s;", helper.convert(index_identity_)))) {
     LOG_WARN("failed to fill statistic", K(ret), K(this));
   } else if (nullptr != incr_data_ && OB_FAIL(databuff_printf(
              info.statistics_, sizeof(info.statistics_), pos,

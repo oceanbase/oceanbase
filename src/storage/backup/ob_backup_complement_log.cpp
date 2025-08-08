@@ -2318,7 +2318,8 @@ int ObBackupLSLogGroupFinishDag::fill_info_param(compaction::ObIBasicInfoParam *
 int ObBackupLSLogGroupFinishDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(databuff_printf(buf, buf_len, "ls_id=%s", to_cstring(ctx_->ls_id_)))) {
+  ObCStringHelper helper;
+  if (OB_FAIL(databuff_printf(buf, buf_len, "ls_id=%s", helper.convert(ctx_->ls_id_)))) {
     LOG_WARN("failed to fill dag_key", K(ret), KPC_(ctx));
   }
   return ret;

@@ -139,145 +139,6 @@ public:
   virtual int64_t to_string(char *buffer, const int64_t length) const = 0;
 };
 
-class CStringBufMgr
-{
-public:
-  static const int BUF_SIZE = 32 * 1024;
-  static const int MIN_SIZE = 12 * 1024;
-  struct BufNode
-  {
-    BufNode() : pre_(NULL), pos_(0) {}
-    ~BufNode() {}
-    char buf_[BUF_SIZE];
-    struct BufNode *pre_;
-    int64_t pos_;
-  };
-  struct BufList
-  {
-    BufList() : head_(nullptr) {}
-    BufNode *head_;
-  };
-  CStringBufMgr() : list_(), level_(-1), pos_(0), curr_(NULL) {}
-  ~CStringBufMgr() {}
-  static CStringBufMgr &get_thread_local_instance()
-  {
-    thread_local CStringBufMgr mgr;
-    return mgr;
-  }
-  void inc_level() { level_++; }
-  void dec_level() { level_--; }
-  void update_position(int64_t pos)
-  {
-    if (0 == level_) {
-      pos_ += pos;
-      if (MIN_SIZE > BUF_SIZE - pos_) {
-        pos_ = 0;
-      }
-    } else if (NULL != curr_) {
-      curr_->pos_ += pos;
-      if (MIN_SIZE > BUF_SIZE - curr_->pos_) {
-        curr_->pos_ = 0;
-      }
-      BufNode *outer_layer = curr_->pre_;
-      curr_->pre_ = list_.head_;
-      list_.head_ = curr_;
-      curr_ = outer_layer;
-    }
-  }
-  int64_t acquire(char *&buffer)
-  {
-    int64_t buf_len = 0;
-    if (0 == level_) {
-      buffer = local_buf_ + pos_;
-      buf_len = BUF_SIZE - pos_;
-    } else {
-      BufNode *node = NULL;
-      node = list_.head_;
-      if (NULL != node) {
-        list_.head_ = node->pre_;
-      }
-      if ((NULL != node)
-        || (NULL != (node = OB_NEW(BufNode, ObModIds::OB_THREAD_BUFFER)))) {
-        buffer = node->buf_ + node->pos_;
-        node->pre_ = curr_;
-        curr_ = node;
-        buf_len = BUF_SIZE - node->pos_;
-      } else {
-        buffer = NULL;
-      }
-    }
-    return buf_len;
-  }
-  void try_clear_list()
-  {
-    if (0 == level_) {
-      while (NULL != list_.head_) {
-        BufNode *node = list_.head_;
-        list_.head_ = node->pre_;
-        OB_DELETE(BufNode, ObModIds::OB_THREAD_BUFFER, node);
-      }
-    }
-  }
-private:
-  char local_buf_[BUF_SIZE];
-  BufList list_;
-  int64_t level_;
-  int64_t pos_;
-  BufNode *curr_;
-};
-
-template <typename T>
-const char *to_cstring(const T &obj, FalseType)
-{
-  char *buffer = NULL;
-  int64_t str_len = 0;
-  CStringBufMgr &mgr = CStringBufMgr::get_thread_local_instance();
-  mgr.inc_level();
-  const int64_t buf_len = mgr.acquire(buffer);
-  if (OB_ISNULL(buffer)) {
-    LIB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "buffer is NULL");
-  } else {
-    str_len = to_string(obj, buffer, buf_len -1);
-    if (str_len >= 0 && str_len < buf_len) {
-      buffer[str_len] = '\0';
-    } else {
-      buffer[0] = '\0';
-    }
-    mgr.update_position(str_len + 1);
-  }
-  mgr.try_clear_list();
-  mgr.dec_level();
-  return buffer;
-}
-
-template <typename T>
-const char *to_cstring(const T &obj, TrueType)
-{
-  return obj.to_cstring();
-}
-
-template <typename T>
-const char *to_cstring(const T &obj)
-{
-  return to_cstring(obj, BoolType<HAS_MEMBER(T, to_cstring)>());
-}
-
-template <>
-const char *to_cstring<const char *>(const char *const &str);
-template <>
-const char *to_cstring<int64_t>(const int64_t &v);
-
-template <typename T>
-const char *to_cstring(T *obj)
-{
-  const char *str_ret = NULL;
-  if (NULL == obj) {
-    str_ret = "NULL";
-  } else {
-    str_ret = to_cstring(*obj);
-  }
-  return str_ret;
-}
 ////////////////////////////////////////////////////////////////
 // databuff stuff
 ////////////////////////////////////////////////////////////////
@@ -383,12 +244,12 @@ int databuff_print_multi_objs(char* buf, const int64_t buf_len, int64_t &pos, co
 ObCStringHelper: convert the object to cstring with an inner buffer
 If you need a persistent cstring, you cannot use this class.
 */
-class ObCStringHelperV2
+class ObCStringHelper
 {
   const static int64_t EXPAND_BUF_LEN = 16L << 10;
   const static int64_t HELPER_MEMORY_LIMIT = 64L << 20;
 public:
-  ObCStringHelperV2()
+  ObCStringHelper()
     : allocator_(SET_USE_500("CStringHelper"))
   {
 #ifdef ENABLE_DEBUG_LOG
@@ -472,7 +333,7 @@ private:
   void force_alloc();
 
 private:
-  DISABLE_COPY_ASSIGN(ObCStringHelperV2);
+  DISABLE_COPY_ASSIGN(ObCStringHelper);
 private:
   ObArenaAllocator allocator_;
   char reserve_buf_[1024];
@@ -480,25 +341,6 @@ private:
   int64_t buf_len_ = ARRAYSIZEOF(reserve_buf_);
   int64_t pos_= 0;
   int ob_errno_ = OB_SUCCESS;
-};
-
-class ObCStringHelper
-{
-public:
-  template<typename T>
-  const char *convert(const T &obj)
-  {
-    return to_cstring(obj);
-  }
-  template<typename T>
-  int convert(const T &obj, const char *&str)
-  {
-    str = to_cstring(obj);
-    return NULL == str ? OB_ERROR : OB_SUCCESS;
-  }
-  void reset()
-  {
-  }
 };
 
 /// @return OB_SUCCESS or OB_ALLOCATE_MEMORY_FAILED
@@ -1129,7 +971,5 @@ struct ObIntegerCombine {
 };
 #define KT(var) K(var)
 #define KT_(var) K_(var)
-#define S(X) to_cstring((X))
-#define STR_PTR(p) ((p) ? to_cstring(*p) : "nil")
 
 #endif /* LIB_UTILITY_OB_PRINT_UTILS_ */

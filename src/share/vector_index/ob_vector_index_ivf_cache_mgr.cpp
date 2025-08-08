@@ -220,6 +220,7 @@ int ObIvfCacheMgr::fill_cache_info(ObVectorIndexInfo &info){
   info.rowkey_vid_table_id_ = table_id_;
   ObVectorIndexParam *param;
   int64_t pos = 0;
+  ObCStringHelper helper;
   if (OB_FAIL(databuff_printf(
           info.statistics_, sizeof(info.statistics_), pos, "actual_memory_used=%ld;", get_actual_memory_used()))) {
     LOG_WARN("failed to fill statistics", K(ret), K(this));
@@ -234,7 +235,7 @@ int ObIvfCacheMgr::fill_cache_info(ObVectorIndexInfo &info){
   } else if (OB_FAIL(databuff_printf(info.statistics_, sizeof(info.statistics_), pos, "is_inited=%d;", is_inited_))) {
     LOG_WARN("failed to fill statistics", K(ret), K(this));
   } else if (OB_FAIL(databuff_printf(
-                 info.statistics_, sizeof(info.statistics_), pos, "index_param=%s;", to_cstring(vec_param_)))) {
+                 info.statistics_, sizeof(info.statistics_), pos, "index_param=%s;", helper.convert(vec_param_)))) {
     LOG_WARN("failed to fill statistics", K(ret), K(this));
   } else {
     if (OB_FAIL(databuff_printf(info.statistics_, sizeof(info.statistics_), pos, "["))) {

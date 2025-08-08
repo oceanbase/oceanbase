@@ -239,7 +239,8 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
   } else if (NULL == table_schema) {
     ret = OB_TABLE_NOT_EXIST;
     if (!(ignore_for_domain_index = ignore_error_code_for_domain_index(ret, arg))) {
-      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(arg.database_name_), to_cstring(arg.table_name_));
+      ObCStringHelper helper;
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(arg.database_name_), helper.convert(arg.table_name_));
     }
     LOG_WARN("table not found", K(arg), K(ret));
   } else if (arg.is_in_recyclebin_) {
@@ -296,9 +297,10 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &const_arg, obrpc::ObDropInd
     } else if (OB_ISNULL(index_table_schema)) {
       if (is_mlog) {
         ret = OB_ERR_TABLE_NO_MLOG;
+        ObCStringHelper helper;
         LOG_WARN("table does not have a materialized view log", KR(ret),
             K(arg.database_name_), K(arg.index_name_));
-        LOG_USER_ERROR(OB_ERR_TABLE_NO_MLOG, to_cstring(arg.database_name_), to_cstring(arg.index_name_));
+        LOG_USER_ERROR(OB_ERR_TABLE_NO_MLOG, helper.convert(arg.database_name_), helper.convert(arg.index_name_));
       } else {
         ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
         LOG_WARN("index table schema should not be null", K(arg.index_name_), K(index_table_name), K(ret));
@@ -1491,7 +1493,8 @@ int ObIndexBuilder::do_create_index(
     LOG_WARN("get_table_schema failed", K(arg), K(ret));
   } else if (NULL == table_schema) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(arg.database_name_), to_cstring(arg.table_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(arg.database_name_), helper.convert(arg.table_name_));
     LOG_WARN("table not exist", K(arg), K(ret));
   } else if (FALSE_IT(table_id = table_schema->get_table_id())) {
   } else if (!arg.is_inner_
@@ -1604,8 +1607,9 @@ int ObIndexBuilder::generate_schema(
       if (!GCONF.enable_sys_table_ddl) {
         if (!data_schema.is_user_table() && !data_schema.is_tmp_table()) {
           ret = OB_ERR_WRONG_OBJECT;
-          LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(arg.database_name_),
-                         to_cstring(arg.table_name_), "BASE_TABLE");
+          ObCStringHelper helper;
+          LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(arg.database_name_),
+                         helper.convert(arg.table_name_), "BASE_TABLE");
           ObTableType table_type = data_schema.get_table_type();
           LOG_WARN("Not support to create index on non-normal table", K(table_type), K(arg), K(ret));
         } else if (OB_INVALID_ID != arg.index_table_id_ || OB_INVALID_ID != arg.data_table_id_) {

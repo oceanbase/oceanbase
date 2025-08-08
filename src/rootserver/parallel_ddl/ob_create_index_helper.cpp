@@ -179,7 +179,8 @@ int ObCreateIndexHelper::lock_objects_by_id_()
     LOG_WARN("fail to get orig table schema", KR(ret), K(table_id));
   } else if (OB_ISNULL(orig_data_table_schema_)) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(arg_.database_name_), to_cstring(arg_.table_name_));
+    ObCStringHelper helper;
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(arg_.database_name_), helper.convert(arg_.table_name_));
     LOG_WARN("table not exist", KR(ret), K_(arg));
   } else if (OB_FAIL(add_lock_table_udt_id_(*orig_data_table_schema_))) {
     LOG_WARN("fail to add lock table udt id", KR(ret));

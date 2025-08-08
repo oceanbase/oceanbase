@@ -190,15 +190,17 @@ int ObSetCommentHelper::check_table_legitimacy_()
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter materialized view is");
   } else if (OB_UNLIKELY(orig_table_schema_->is_ctas_tmp_table())) {
     ret = OB_ERR_WRONG_OBJECT;
+    ObCStringHelper helper;
     LOG_USER_ERROR(OB_ERR_WRONG_OBJECT,
-    to_cstring(arg_.database_name_), to_cstring(arg_.table_name_), "BASE TABLE");
+    helper.convert(arg_.database_name_), helper.convert(arg_.table_name_), "BASE TABLE");
   } else if (OB_UNLIKELY((!orig_table_schema_->is_user_table()
                           && !orig_table_schema_->is_tmp_table()
                           && !orig_table_schema_->is_view_table()
                           && !orig_table_schema_->is_external_table()))) {
     ret = OB_ERR_WRONG_OBJECT;
+    ObCStringHelper helper;
     LOG_USER_ERROR(OB_ERR_WRONG_OBJECT,
-    to_cstring(arg_.database_name_), to_cstring(arg_.table_name_), "BASE TABLE");
+    helper.convert(arg_.database_name_), helper.convert(arg_.table_name_), "BASE TABLE");
   } else if (OB_UNLIKELY(orig_table_schema_->is_sys_view() && !GCONF.enable_sys_table_ddl)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("comment on sys view is not allowed", KR(ret), K(orig_table_schema_->get_table_id()));

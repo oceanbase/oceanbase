@@ -3629,7 +3629,8 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
         LOG_USER_ERROR(OB_ERR_UNKNOWN_TABLE, table_name.length(), table_name.ptr(), database_name.length(), database_name.ptr());
       } else {
         ret = OB_TABLE_NOT_EXIST;
-        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name), to_cstring(table_name));
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(database_name), helper.convert(table_name));
       }
     } else {
       LOG_WARN("fail to resolve table name", K(ret));
@@ -7531,9 +7532,10 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
         //allow the inner sql to access, like gather virtual table stats.
         if (!in_sysview && !(session_info_->is_inner() && !session_info_->is_user_session())) {
           ret = OB_TABLE_NOT_EXIST;
+          ObCStringHelper helper;
           LOG_WARN("restrict accessible virtual table can not access directly",
               K(ret), K(db_name), K(tbl_name));
-          LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name), to_cstring(tbl_name));
+          LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(db_name), helper.convert(tbl_name));
         }
       }
     }
@@ -11395,8 +11397,9 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
           synonym_db_name.reset();
         }
         ret = OB_ERR_SYNONYM_TRANSLATION_INVALID;
+        ObCStringHelper helper;
         LOG_WARN("Synonym translation is no longer valid");
-        LOG_USER_ERROR(OB_ERR_SYNONYM_TRANSLATION_INVALID, to_cstring(orig_name));
+        LOG_USER_ERROR(OB_ERR_SYNONYM_TRANSLATION_INVALID, helper.convert(orig_name));
       }
     }
     // synonym_db_name.reset();
