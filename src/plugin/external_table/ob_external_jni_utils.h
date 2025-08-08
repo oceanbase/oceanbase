@@ -72,7 +72,7 @@ public:
   /// a helper function
   jclass class_handle() const { return static_cast<jclass>(handle_); }
 
-  int clear();
+  int clear(JNIEnv *jni_env = nullptr);
 
 private:
   jobject handle_ = nullptr;
@@ -88,7 +88,7 @@ public:
   ~ObJniExceptionPrinter();
 
   int init(JNIEnv *jni_env);
-  void destroy();
+  void destroy(JNIEnv *jni_env = nullptr);
   int throwable_to_string(JNIEnv *jni_env, jthrowable throwable, bool log_stack,
                           char buf[], int64_t buf_len, int64_t &pos);
 
@@ -138,7 +138,7 @@ public:
   static void destroy_global_instance();
 
   int init();
-  void destroy();
+  void destroy(JNIEnv *jni_env = nullptr);
 
   int get_jni_env(JNIEnv *&jni_env);
   JavaVM *get_jvm() const { return jvm_; }

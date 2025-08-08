@@ -156,12 +156,11 @@ int ObJavaGlobalRef::from_local_ref(jobject local_ref, JNIEnv *jni_env)
   return ret;
 }
 
-int ObJavaGlobalRef::clear()
+int ObJavaGlobalRef::clear(JNIEnv *jni_env /*=nullptr*/)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(handle_)) {
-    JNIEnv *jni_env = nullptr;
-    if (OB_FAIL(ObJniTool::instance().get_jni_env(jni_env))) {
+    if (OB_ISNULL(jni_env) && OB_FAIL(ObJniTool::instance().get_jni_env(jni_env))) {
       LOG_WARN("failed to get jni env, cannot release java global handle", K(ret));
     } else {
       jni_env->DeleteGlobalRef(handle_);
@@ -236,9 +235,9 @@ int ObJniExceptionPrinter::init(JNIEnv *jni_env)
   return ret;
 }
 
-void ObJniExceptionPrinter::destroy()
+void ObJniExceptionPrinter::destroy(JNIEnv *jni_env/* = nullptr */)
 {
-  jni_utils_class_.clear();
+  jni_utils_class_.clear(jni_env);
 }
 int ObJniExceptionPrinter::throwable_to_string(JNIEnv *jni_env, jthrowable throwable, bool log_stack,
                                                char buf[], int64_t buf_len, int64_t &pos)
@@ -376,27 +375,33 @@ int ObJniTool::init()
   }
 
   if (OB_FAIL(ret)) {
-    destroy();
+    destroy(jni_env);
   }
   LOG_INFO("init jni tool done", K(ret));
   inited_ = true;
   return ret;
 }
 
-void ObJniTool::destroy()
+void ObJniTool::destroy(JNIEnv *jni_env/*=nullptr*/)
 {
-  if (OB_NOT_NULL(exceptions_)) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(jni_env) && OB_FAIL(get_jni_env(jni_env))) {
+    LOG_WARN("fail to get jni env", K(ret));
+  }
+  if (OB_NOT_NULL(jni_env) && OB_NOT_NULL(exceptions_)) {
     for (int64_t i = 0; i < num_exceptions_; i++) {
       JniException &exception_struct = exceptions_[i];
       if (exception_struct.retcode != 0) {
-        exception_struct.exception_class_ref.clear();
+        exception_struct.exception_class_ref.clear(jni_env);
       }
     }
     ob_free(exceptions_);
     exceptions_ = nullptr;
     num_exceptions_ = 0;
   }
-  exception_printer_.destroy();
+  if (OB_NOT_NULL(jni_env)) {
+    exception_printer_.destroy(jni_env);
+  }
   hash_map_class_.clear();
   array_list_class_.clear();
   inited_ = false;
