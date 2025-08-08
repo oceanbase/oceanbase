@@ -807,6 +807,7 @@ int ObPluginVectorIndexAdaptor::init_mem_data(ObVectorIndexRecordType type, ObVe
         // Note. sq/bq must use hgraph to build incr index.
         build_type = build_type == VIAT_HNSW_SQ || build_type == VIAT_HNSW_BQ ? VIAT_HGRAPH : build_type;
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+        lib::ObLightBacktraceGuard light_backtrace_guard(false);
         if (OB_FAIL(obvectorutil::create_index(incr_data_->index_,
                                                       build_type,
                                                       DATATYPE_FLOAT32,
@@ -888,6 +889,7 @@ int ObPluginVectorIndexAdaptor::init_mem_data(ObVectorIndexRecordType type, ObVe
         ObVectorIndexAlgorithmType build_type = enforce_type == VIAT_MAX ? param->type_ : enforce_type;
         int64_t build_metric = param->type_ == VIAT_HNSW_SQ ? ObVectorIndexUtil::get_hnswsq_type_metric(param->m_) : param->m_;
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+        lib::ObLightBacktraceGuard light_backtrace_guard(false);
         if (OB_FAIL(obvectorutil::create_index(snap_data_->index_,
                                                build_type,
                                                DATATYPE_FLOAT32,
@@ -934,6 +936,7 @@ int ObPluginVectorIndexAdaptor::init_snap_data_without_lock(ObVectorIndexAlgorit
       ObVectorIndexAlgorithmType build_type = enforce_type == VIAT_MAX ? param->type_ : enforce_type;
       int64_t build_metric = param->type_ == VIAT_HNSW_SQ ? ObVectorIndexUtil::get_hnswsq_type_metric(param->m_) : param->m_;
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+      lib::ObLightBacktraceGuard light_backtrace_guard(false);
       if (OB_FAIL(obvectorutil::create_index(snap_data_->index_,
                                              build_type,
                                              DATATYPE_FLOAT32,
@@ -1244,6 +1247,7 @@ int ObPluginVectorIndexAdaptor::insert_rows(blocksstable::ObDatumRow *rows,
     }
     if (OB_SUCC(ret) && incr_vid_count > 0) {
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+      lib::ObLightBacktraceGuard light_backtrace_guard(false);
       TCWLockGuard lock_guard(incr_data_->mem_data_rwlock_);
       if (OB_FAIL(obvectorutil::add_index(incr_data_->index_,
                                               vectors,
@@ -1354,6 +1358,7 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
           LOG_WARN("failed to encode extra info.", K(ret), K(param->extra_info_actual_size_));
         } else {
           lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+          lib::ObLightBacktraceGuard light_backtrace_guard(false);
           if (OB_FAIL(obvectorutil::add_index(snap_data_->index_, vectors, vids, dim, extra_info_buf, num))) {
             LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
           }
@@ -1377,6 +1382,7 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
           if (snap_data_->has_build_sq_) {
             // directly write into index
             lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+            lib::ObLightBacktraceGuard light_backtrace_guard(false);
             if (OB_FAIL(obvectorutil::add_index(snap_data_->index_, vectors, vids, dim, extra_info_buf, num))) {
               LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
             } else {
@@ -1423,6 +1429,7 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
                  then when thread b waits for thread a to release the lock_guard, it will find that snap_data_->index_ != null.
                  At this point, thread a should call add_index to write the data; otherwise, the data will be lost. */
               lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+              lib::ObLightBacktraceGuard light_backtrace_guard(false);
               if (OB_FAIL(obvectorutil::add_index(snap_data_->index_, vectors, vids, dim, extra_info_buf, num))) {
                 LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
               } else {
@@ -1457,6 +1464,7 @@ int ObPluginVectorIndexAdaptor::build_hnswsq_index(ObVectorIndexParam *param)
     } else {
       LOG_INFO("HgraphIndex build hnswsq index success", K(ret), K(param->dim_), K(vid_array->count()));
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+      lib::ObLightBacktraceGuard light_backtrace_guard(false);
       if (OB_FAIL(ret)) {
       }else if (OB_FAIL(obvectorutil::create_index(snap_data_->index_,
                                              param->type_,
@@ -1650,6 +1658,7 @@ int ObPluginVectorIndexAdaptor::check_snap_hnswsq_index()
       ObVectorIndexAlgorithmType build_type = param->extra_info_actual_size_ > 0 ?  VIAT_HGRAPH : VIAT_HNSW;
       int64_t build_metric = param->type_ == VIAT_HNSW_SQ ? ObVectorIndexUtil::get_hnswsq_type_metric(param->m_) : param->m_;
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+      lib::ObLightBacktraceGuard light_backtrace_guard(false);
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(obvectorutil::create_index(snap_data_->index_,
                                              build_type,
@@ -1812,6 +1821,7 @@ int ObPluginVectorIndexAdaptor::write_into_delta_mem(ObVectorQueryAdaptorResultC
         }
       }
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+      lib::ObLightBacktraceGuard light_backtrace_guard(false);
       if (OB_SUCC(ret) && OB_FAIL(obvectorutil::add_index(incr_data_->index_,
                                                  vectors,
                                                  reinterpret_cast<int64_t *>(vids),
@@ -2572,6 +2582,7 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
   dfilter.is_snap_ = false;
   if (OB_SUCC(ret)) {
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+    lib::ObLightBacktraceGuard light_backtrace_guard(false);
     TCRLockGuard lock_guard(incr_data_->mem_data_rwlock_);
     if (!is_incr_search_with_iter_ctx && is_mem_data_init_atomic(VIRT_INC) &&
         OB_FAIL(obvectorutil::knn_search(get_incr_index(),
@@ -2619,6 +2630,7 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
   }
   if (OB_SUCC(ret)) {
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+    lib::ObLightBacktraceGuard light_backtrace_guard(false);
     TCRLockGuard lock_guard(snap_data_->mem_data_rwlock_);
     ifilter.is_snap_ = true;
     dfilter.is_snap_ = true;
@@ -2795,6 +2807,7 @@ int ObPluginVectorIndexAdaptor::query_next_result(ObVectorQueryAdaptorResultCont
 
     if (OB_SUCC(ret)) {
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+      lib::ObLightBacktraceGuard light_backtrace_guard(false);
       TCRLockGuard lock_guard(incr_data_->mem_data_rwlock_);
       if (incr_cnt > 0 && is_mem_data_init_atomic(VIRT_INC) &&
          OB_FAIL(obvectorutil::knn_search(get_incr_index(),
@@ -2824,6 +2837,7 @@ int ObPluginVectorIndexAdaptor::query_next_result(ObVectorQueryAdaptorResultCont
     }
     if (OB_SUCC(ret)) {
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+      lib::ObLightBacktraceGuard light_backtrace_guard(false);
       TCRLockGuard lock_guard(snap_data_->mem_data_rwlock_);
 
       bool is_pre_filter = ctx->is_prefilter_valid();
