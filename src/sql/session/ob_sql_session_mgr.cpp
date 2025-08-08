@@ -28,6 +28,7 @@
 #include "sql/monitor/ob_security_audit_utils.h"
 #include "sql/session/ob_user_resource_mgr.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
+#include "storage/memtable/ob_lock_wait_mgr.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 
 using namespace oceanbase::common;
@@ -619,6 +620,16 @@ int ObSQLSessionMgr::kill_session(ObSQLSessionInfo &session)
                K(tmp_ret), KPC(session.get_tx_desc()),
                "query_str", session.get_current_query_string(),
                K(need_disconnect));
+    }
+  }
+
+  {
+    memtable::ObLockWaitMgr *mgr = nullptr;
+    if (OB_ISNULL(mgr = MTL(memtable::ObLockWaitMgr *))) {
+      LOG_WARN("can't get lock wait mgr", K(ret), K(session.get_sessid()));
+    } else {
+      LOG_INFO("notify lockwaitmgr killed session", K(session.get_sessid()));
+      mgr->notify_killed_session(session.get_sessid());
     }
   }
 

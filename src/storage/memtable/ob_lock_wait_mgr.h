@@ -196,7 +196,7 @@ public:
     uint32_t sess_id_;
     TO_STRING_KV(K(sess_id_));
   };
-  typedef ObSEArray<SessPair, OB_SESSPAIR_COUNT> DeadlockedSessionArray;
+  typedef ObSEArray<SessPair, OB_SESSPAIR_COUNT> KilledSessionArray;
 
 public:
   ObLockWaitMgr();
@@ -342,20 +342,20 @@ private:
 
 public:
   int fullfill_row_key(uint64_t hash, char *row_key, int64_t length);
-  int notify_deadlocked_session(const uint32_t sess_id);
+  int notify_killed_session(const uint32_t sess_id);
 private:
   // helper function for deadlock detector
   // register to the deadlock detector
   int register_to_deadlock_detector_(const transaction::ObTransID &self_tx_id,
                                      const transaction::ObTransID &blocked_tx_id,
                                      const Node * const node);
-  bool is_deadlocked_session_(DeadlockedSessionArray *sessions,
+  bool is_killed_session_(KilledSessionArray *sessions,
                               const uint32_t sess_id);
-  void fetch_deadlocked_sessions_(DeadlockedSessionArray *&sessions);
+  void fetch_killed_sessions_(KilledSessionArray *&sessions);
 private:
-  ObSpinLock deadlocked_sessions_lock_;
-  int32_t deadlocked_sessions_index_;
-  DeadlockedSessionArray deadlocked_sessions_[2];
+  ObSpinLock killed_sessions_lock_;
+  int32_t killed_sessions_index_;
+  KilledSessionArray killed_sessions_[2];
 private:
   RowHolderMapper row_holder_mapper_;
 };

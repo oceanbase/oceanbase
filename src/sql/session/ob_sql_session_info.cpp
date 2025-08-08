@@ -27,6 +27,7 @@
 #include "pl/ob_pl.h"
 #include "pl/ob_pl_package.h"
 #include "pl/sys_package/ob_dbms_sql.h"
+#include "storage/memtable/ob_lock_wait_mgr.h"
 #include "observer/mysql/ob_mysql_request_manager.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 #include "observer/mysql/ob_query_driver.h"
@@ -1829,6 +1830,16 @@ int ObSQLSessionInfo::kill_query()
   ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
   update_last_active_time();
   set_session_state(QUERY_KILLED);
+  {
+    int ret = OB_SUCCESS;
+    memtable::ObLockWaitMgr *mgr = nullptr;
+    if (OB_ISNULL(mgr = MTL(memtable::ObLockWaitMgr *))) {
+      LOG_WARN("can't get lock wait mgr", K(get_sessid()));
+    } else {
+      LOG_INFO("notify lockwaitmgr killed session", K(get_sessid()));
+      mgr->notify_killed_session(get_sessid());
+    }
+  }
   return OB_SUCCESS;
 }
 
