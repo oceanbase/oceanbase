@@ -221,10 +221,10 @@ int ObDASHNSWScanIter::inner_init(ObDASIterParam &param)
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObVectorIndexParam::build(vec_aux_ctdef_->vec_index_param_, vec_aux_ctdef_->vec_query_param_, ObVectorIndexType::VIT_HNSW_INDEX, search_param_))) {
-        LOG_WARN("fail to build index param", K(vec_aux_ctdef_->vec_index_param_), K(vec_aux_ctdef_->vec_query_param_));
+      if (OB_FAIL(ObVectorIndexParam::build_search_param(vec_aux_ctdef_->vector_index_param_, vec_aux_ctdef_->vec_query_param_, search_param_))) {
+        LOG_WARN("build search param fail", K(vec_aux_ctdef_->vector_index_param_), K(vec_aux_ctdef_->vec_query_param_));
       } else {
-        LOG_TRACE("search param", K(vec_aux_ctdef_->vec_index_param_), K(vec_aux_ctdef_->vec_query_param_), K(search_param_));
+        LOG_TRACE("search param", K(vec_aux_ctdef_->vector_index_param_), K(vec_aux_ctdef_->vec_query_param_), K(search_param_));
       }
     }
   }
@@ -1832,6 +1832,8 @@ int ObDASHNSWScanIter::post_query_vid_with_filter(
             }
           }
           query_cond_.query_limit_ = new_limit;
+          // hnsw_bq will reoder by top-N operator, so the limit needs to be increased
+          if (is_hnsw_bq()) query_cond_.query_limit_ = get_reorder_count(new_ef, new_limit, search_param_);
           query_cond_.ef_search_ = new_ef;
           LOG_TRACE("iteractive filter arg log:", K(total_after_add), K(total_before_add), K(unfiltered_vid_cnt), K(select_ratio),  K(old_limit), K(new_limit),
                                                   K(old_ef), K(new_ef), K(query_cond_.query_limit_), K(query_cond_.ef_search_));

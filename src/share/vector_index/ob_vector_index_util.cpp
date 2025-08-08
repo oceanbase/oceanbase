@@ -328,14 +328,16 @@ int ObVectorIndexUtil::is_int_val(const ObString &str, bool &is_int)
   return ret;
 }
 
-int ObVectorIndexParam::build(const ObString &index_param_str, const ObVectorIndexQueryParam &query_param, const ObVectorIndexType index_type, ObVectorIndexParam &index_param)
+int ObVectorIndexParam::build_search_param(const ObVectorIndexParam &index_param,
+                                           const ObVectorIndexQueryParam &query_param,
+                                           ObVectorIndexParam &search_param)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(index_param_str, index_type, index_param))) {
+  if (OB_FAIL(search_param.assign(index_param))) {
     LOG_WARN("fail to parser params from string", K(ret), K(index_param));
   } else {
     if (query_param.is_set_ef_search_) {
-      index_param.ef_search_ = query_param.ef_search_;
+      search_param.ef_search_ = query_param.ef_search_;
     }
     if (query_param.is_set_refine_k_) {
       if (ObVectorIndexAlgorithmType::VIAT_HNSW_BQ != index_param.type_) {
@@ -343,10 +345,10 @@ int ObVectorIndexParam::build(const ObString &index_param_str, const ObVectorInd
         LOG_WARN("refine_k is not support parameter for current index", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "refine_k parameter for current index is");
       } else {
-        index_param.refine_k_ = query_param.refine_k_;
+        search_param.refine_k_ = query_param.refine_k_;
       }
     }
-    LOG_TRACE("vector param", K(index_param_str), K(query_param), K(index_param));
+    LOG_TRACE("vector param", K(index_param), K(query_param), K(search_param));
   }
   return ret;
 }

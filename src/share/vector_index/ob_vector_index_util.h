@@ -237,7 +237,9 @@ public:
     K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht), K_(sync_interval_type), K_(sync_interval_value), K_(endpoint), K_(nbits));
 
 public:
-  static int build(const ObString &index_param_str, const ObVectorIndexQueryParam &query_param, const ObVectorIndexType index_type, ObVectorIndexParam &param);
+  static int build_search_param(const ObVectorIndexParam &index_param,
+                                const ObVectorIndexQueryParam &query_param,
+                                ObVectorIndexParam &param);
 };
 
 struct ObVecIdxExtraInfo
