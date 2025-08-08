@@ -92,6 +92,7 @@ ob_set_subtarget(ob_share SCHEMA_CPPS
 
 ob_set_subtarget(ob_share aggregates
   aggregate/grouping.cpp
+  aggregate/agg_reuse_cell.cpp
 )
 
 ob_set_subtarget(ob_share allocator

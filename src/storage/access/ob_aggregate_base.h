@@ -17,6 +17,7 @@
 #include "share/aggregate/agg_ctx.h"
 #include "share/ob_compute_property.h"
 #include "storage/blocksstable/ob_datum_row.h"
+#include "share/aggregate/agg_reuse_cell.h"
 
 namespace oceanbase
 {
@@ -413,6 +414,7 @@ public:
   int64_t agg_row_num_;
   common::ObIAllocator &allocator_;
   common::ObArenaAllocator row_allocator_;
+  aggregate::ReuseAggCellMgr reuse_aggrow_mgr_;
 };
 
 class ObAggDatumBuf

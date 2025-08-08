@@ -102,7 +102,7 @@ struct ReuseAggCell<T_FUN_APPROX_COUNT_DISTINCT>
     int cell_len = agg_ctx.row_meta().get_cell_len(agg_col_id, agg_row);
     *reinterpret_cast<const char **>(agg_cell + cell_len) = store->bucket_buf_;
     NotNullBitVector &not_nulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
-    if (not_nulls.at(agg_col_id) && store->bucket_buf_ != nullptr) {
+    if (store->bucket_buf_ != nullptr) {
       MEMSET(const_cast<char *>(store->bucket_buf_), 0, llc_num_buckets);
     }
     return ret;
@@ -137,7 +137,7 @@ struct ReuseAggCell<T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS>
     StoredValue *store = reinterpret_cast<StoredValue *>(store_v);
     *reinterpret_cast<const char **>(agg_cell) = store->res_buf_;
     NotNullBitVector &not_nulls = agg_ctx.row_meta().locate_notnulls_bitmap(agg_row);
-    if (not_nulls.at(agg_col_id) && store->res_buf_ != nullptr) {
+    if (store->res_buf_ != nullptr) {
       MEMSET(const_cast<char *>(store->res_buf_), 0, llc_num_buckets);
     }
     return ret;
@@ -182,6 +182,25 @@ private:
     const char *str_buf_;
     int32_t str_buf_size_;
   };
+};
+
+struct ReuseAggCellMgr
+{
+  ReuseAggCellMgr(ObIAllocator &allocator, int32_t agg_cnt) :
+    tmp_store_vals_(allocator, agg_cnt), allocator_(allocator), extra_store_idx_(-1)
+  {}
+  int init(RuntimeContext &agg_ctx);
+  int save(RuntimeContext &agg_ctx, const char *agg_row);
+  int restore(RuntimeContext &agg_ctx, char *agg_row);
+
+private:
+  int save_extra_stores(RuntimeContext &agg_ctx, const char *agg_row);
+  int restore_extra_stores(RuntimeContext &agg_ctx, char *agg_row);
+
+private:
+  ObFixedArray<void *, ObIAllocator> tmp_store_vals_;
+  ObIAllocator &allocator_;
+  int32_t extra_store_idx_;
 };
 }
 }
