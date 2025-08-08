@@ -1698,6 +1698,11 @@ int ObDDLScheduler::cache_auto_split_task(const obrpc::ObAutoSplitTabletBatchArg
                                           obrpc::ObAutoSplitTabletBatchRes &res)
 {
   int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  const int64_t limit = 1024;
+  char buf[1024];
+  bool need_to_print = true;
+  const ObSArray<obrpc::ObAutoSplitTabletArg> &single_arg_array = arg.args_;
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(arg));
@@ -1705,7 +1710,6 @@ int ObDDLScheduler::cache_auto_split_task(const obrpc::ObAutoSplitTabletBatchArg
     ObRsAutoSplitScheduler &split_task_scheduler = ObRsAutoSplitScheduler::get_instance();
     ObArray<ObAutoSplitTask> task_array;
     ObAutoSplitTask task;
-    const ObSArray<obrpc::ObAutoSplitTabletArg> &single_arg_array = arg.args_;
     res.suggested_next_valid_time_ = OB_INVALID_TIMESTAMP;
     res.rets_.reuse();
     for (int64_t i = 0; OB_SUCC(ret) && i < single_arg_array.size(); ++i) {
@@ -1732,6 +1736,22 @@ int ObDDLScheduler::cache_auto_split_task(const obrpc::ObAutoSplitTabletBatchArg
         res.suggested_next_valid_time_ = cur_time + (is_busy ? ObServerAutoSplitScheduler::OB_SERVER_DELAYED_TIME : 0);
       }
     }
+  }
+  if (OB_FAIL(ret)) {
+    for (int64_t i = 0; i < single_arg_array.size(); ++i) {
+      const obrpc::ObAutoSplitTabletArg &single_arg = single_arg_array.at(i);
+      if (need_to_print) {
+        int64_t count = snprintf(buf + pos, limit - pos, "(%lu,%ld)", single_arg.tenant_id_, single_arg.tablet_id_.id());
+        if (count >= 0 && pos + count < limit) {
+          pos += count;
+        } else {
+          need_to_print = false; // buf not enough
+        }
+      }
+    }
+    ROOTSERVICE_EVENT_ADD("ddl scheduler", "cache split task",
+      "ret_code", ret,
+      "task_list:(tenant_id, tablet_id)", buf);
   }
   return ret;
 }
@@ -1761,6 +1781,12 @@ int ObDDLScheduler::schedule_auto_split_task()
     ObArray<ObAutoSplitTask> failed_task;
     obrpc::ObAlterTableRes unused_res;
     common::ObMalloc allocator(common::ObMemAttr(OB_SERVER_TENANT_ID, "split_sched"));
+    // for event record
+    int64_t pos = 0;
+    const int64_t limit = 512;
+    char print_buf[512];
+    bool need_to_print = true;
+    bool has_failed_task = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < task_array.count(); ++i) {
       tmp_ret = OB_SUCCESS;
       unused_res.reset();
@@ -1768,8 +1794,8 @@ int ObDDLScheduler::schedule_auto_split_task()
       void *buf = nullptr;
       obrpc::ObAlterTableArg *single_arg = nullptr;
       bool is_ls_migrating = false;
-      if (OB_FAIL(ObRsAutoSplitScheduler::check_ls_migrating(task.tenant_id_, task.tablet_id_, is_ls_migrating))) {
-        LOG_WARN("check ls migrating failed", K(ret), K(task));
+      if (OB_TMP_FAIL(ObRsAutoSplitScheduler::check_ls_migrating(task.tenant_id_, task.tablet_id_, is_ls_migrating))) {
+        LOG_WARN("check ls migrating failed", K(tmp_ret), K(task));
       } else if (is_ls_migrating) {
         LOG_TRACE("ls migrating, delay auto split", K(task));
       } else if (OB_ISNULL(buf = allocator.alloc(sizeof(obrpc::ObAlterTableArg)))) {
@@ -1792,14 +1818,28 @@ int ObDDLScheduler::schedule_auto_split_task()
           && OB_TMP_FAIL(GCTX.rs_rpc_proxy_->to(GCTX.self_addr()).timeout(GCONF._ob_ddl_timeout).alter_table(*single_arg, unused_res))) {
         LOG_WARN("alter table failed", K(tmp_ret), K(single_arg), K(unused_res));
       }
-      if (OB_TMP_FAIL(tmp_ret) && split_task_scheduler.can_retry(task, tmp_ret)) {
-        failed_task.reuse();
-        task.increment_retry_times();
-        if (OB_TMP_FAIL(failed_task.push_back(task))) {
-          LOG_WARN("fail to push back into failed task", K(tmp_ret), K(task));
-        } else if (OB_TMP_FAIL(split_task_scheduler.push_tasks(failed_task))) {
-          LOG_WARN("fail to push tasks", K(tmp_ret), K(failed_task));
+    #ifdef ERRSIM
+      tmp_ret = OB_E(EventTable::EN_AUTO_SPLIT_SCHEDULER_ERR) tmp_ret;
+      LOG_INFO("errsim: auto split scheduler err", K(tmp_ret));
+    #endif
+      if (OB_TMP_FAIL(tmp_ret)) {
+        if (split_task_scheduler.can_retry(task, tmp_ret)) {
+          task.increment_retry_times();
+          if (OB_TMP_FAIL(failed_task.push_back(task))) {
+            LOG_WARN("fail to push back into failed task", K(tmp_ret), K(task));
+          } else if (OB_TMP_FAIL(split_task_scheduler.push_tasks(failed_task))) {
+            LOG_WARN("fail to push tasks", K(tmp_ret), K(failed_task));
+          }
         }
+        if (need_to_print) {
+          int64_t count = snprintf(print_buf + pos, limit - pos, "(%lu,%ld,%d)", task.tenant_id_, task.tablet_id_.id(), tmp_ret);
+          if (count >= 0 && pos + count < limit) {
+            pos += count;
+          } else {
+            need_to_print = false; // print_buf not enough
+          }
+        }
+        has_failed_task = true;
       }
       if (OB_NOT_NULL(single_arg)) {
         single_arg->~ObAlterTableArg();
@@ -1807,7 +1847,13 @@ int ObDDLScheduler::schedule_auto_split_task()
         single_arg = nullptr;
       }
     }
+    if (has_failed_task) {
+      ROOTSERVICE_EVENT_ADD("ddl scheduler", "schedule split task",
+        "ret_code", ret,
+        "task_list:(tenant_id, tablet_id, ret_code)", print_buf);
+    }
   }
+
   return ret;
 }
 

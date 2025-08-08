@@ -628,4 +628,15 @@ GLOBAL_ERRSIM_POINT_DEF(2550, EN_SPI_SQL_EXEC, "Used to check spi sql");
 GLOBAL_ERRSIM_POINT_DEF(2551, EN_SPI_GET_NEXT_ROW, "Used to check cursor fetch");
 // PL end
 
+// HTable Parallel DDL begin 2621 - 2650
+GLOBAL_ERRSIM_POINT_DEF(2621, EN_CREATE_HTABLE_TG_FINISH_ERR, "create htable tablegroup finish error");
+GLOBAL_ERRSIM_POINT_DEF(2622, EN_CREATE_HTABLE_CF_FINISH_ERR, "create htable table finish error");
+GLOBAL_ERRSIM_POINT_DEF(2623, EN_DISABLE_HTABLE_CF_FINISH_ERR, "disable htable table finish error");
+GLOBAL_ERRSIM_POINT_DEF(2624, EN_DELETE_HTABLE_CF_FINISH_ERR, "delete htable table finish error");
+GLOBAL_ERRSIM_POINT_DEF(2625, EN_DELETE_HTABLE_SKIP_CF_ERR, "delete htable table without delete cf");
+// HTable Parallel DDL end
+
+// DDL begin 2651 - 2700
+GLOBAL_ERRSIM_POINT_DEF(2651, EN_AUTO_SPLIT_SCHEDULER_ERR, "inject error in auto split schedule step");
+// DDL end
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/
