@@ -71,7 +71,8 @@ public:
       is_multi_value_index_(false),
       is_spatial_index_(false),
       can_extract_range_(false),
-      block_max_spec_(alloc) {}
+      block_max_spec_(alloc),
+      relevance_col_cnt_(0) {}
 
   inline bool is_pre_filter() const { return ObVecIndexType::VEC_INDEX_PRE == vec_type_;  }
   inline bool is_vec_adaptive_scan() const { return ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN == vec_type_ && ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN != adaptive_try_path_; }
@@ -156,6 +157,7 @@ public:
   bool is_spatial_index_;
   bool can_extract_range_;
   ObSPIVBlockMaxSpec block_max_spec_;
+  int64_t relevance_col_cnt_;
 };
 
 struct ObDASVecAuxScanRtDef : ObDASAttachRtDef
