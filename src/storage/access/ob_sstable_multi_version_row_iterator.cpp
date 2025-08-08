@@ -103,6 +103,8 @@ int ObSSTableMultiVersionRowGetter::inner_get_next_row(const ObDatumRow *&row)
   if (OB_ISNULL(base_rowkey_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), KP(base_rowkey_));
+  } else if (range_idx_ > 0) {
+    ret = OB_ITER_END;
   } else if (OB_FAIL(ObSSTableRowScanner::inner_get_next_row(row))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("failed to get next row", K(ret));
