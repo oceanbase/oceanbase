@@ -394,9 +394,10 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_DEL_SENSITIVE_RULE_PRIV, = 2152)                    \
   ACT(OB_DDL_SENSITIVE_RULE_PRIV_OPERATION_END, = 2153)          \
   ACT(OB_DDL_AI_MODEL_OPERATION_BEGIN, = 2154)                   \
-  ACT(OB_DDL_CREATE_AI_MODEL, = 2155)                            \
-  ACT(OB_DDL_DROP_AI_MODEL, = 2156)                              \
-  ACT(OB_DDL_AI_MODEL_OPERATION_END, = 2157)                     \
+  ACT(OB_DDL_CREATE_AI_MODEL, )                                  \
+  ACT(OB_DDL_ALTER_AI_MODEL, )                                   \
+  ACT(OB_DDL_DROP_AI_MODEL, )                                    \
+  ACT(OB_DDL_AI_MODEL_OPERATION_END, = 2163)                     \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
@@ -500,6 +501,7 @@ public:
     uint64_t obj_type_;
     uint64_t ccl_rule_id_;
     uint64_t external_resource_id_;
+    uint64_t ai_model_id_;
   };
   union {
     common::ObString table_name_;
@@ -513,6 +515,7 @@ public:
     common::ObString catalog_name_;
     common::ObString obj_name_;
     common::ObString external_resource_name_;
+    common::ObString ai_model_name_;
   };
   ObSchemaOperationType op_type_;
   common::ObString ddl_stmt_str_;

@@ -111,6 +111,7 @@ struct SchemaKey
     uint64_t catalog_id_;
     uint64_t external_resource_id_;
     uint64_t location_id_;
+    uint64_t ai_model_id_;
   };
   union {
     common::ObString table_name_;
@@ -123,6 +124,7 @@ struct SchemaKey
     common::ObString mock_fk_parent_table_namespace_;
     common::ObString catalog_name_;
     common::ObString obj_name_;
+    common::ObString ai_model_name_;
   };
   int64_t schema_version_;
   uint64_t col_id_;
