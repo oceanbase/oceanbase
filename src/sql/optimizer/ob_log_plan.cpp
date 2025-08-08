@@ -14032,8 +14032,10 @@ int ObLogPlan::gen_calc_part_id_expr(uint64_t table_id,
   return ret;
 }
 
-// this function is used to allocate the material operator to the for-update operator
-int ObLogPlan::candi_allocate_for_update_material()
+// this function is used to allocate the material operator for dml plan
+// to prevent data from being returned during the DML execution process,
+// which would cause the -6005 error to be non-retryable
+int ObLogPlan::candi_allocate_material_for_dml()
 {
   int ret = OB_SUCCESS;
   ObSEArray<CandidatePlan, 8> best_plans;
