@@ -56,15 +56,7 @@ private:
   int init_multi_version_column_descs();
 
 public:
-  TO_STRING_KV(K_(dag_param), K_(scn_range), K_(version_range),
-      K_(is_full_merge), K_(concurrent_cnt), K_(merge_level), K_(major_sstable_status),
-      "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(merge_reason_),
-      "co_major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(co_major_merge_type_),
-      K_(sstable_logic_seq), K_(tables_handle), K_(is_rebuild_column_store), K_(is_schema_changed), K_(is_tenant_major_merge),
-      K_(is_cs_replica), K_(read_base_version), K_(merge_scn), K_(need_parallel_minor_merge),
-      KP_(schema), "multi_version_column_descs_cnt", multi_version_column_descs_.count(),
-      K_(ls_handle), K_(snapshot_info), K_(is_backfill), K_(tablet_schema_guard), K_(tablet_transfer_seq), K_(co_base_snapshot_version), K_(for_unittest),
-      K_(is_cs_replica_force_full_merge), K_(is_delete_insert_merge), K_(is_ha_compeleted));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObTabletMergeDagParam &dag_param_;
   bool is_full_merge_; // full merge or increment merge
@@ -120,7 +112,7 @@ struct ObCtxMergeInfoCollector final
   void prepare(ObBasicTabletMergeCtx &ctx);
   void finish(ObTabletMergeInfo &merge_info);
   void destroy(ObCompactionMemoryContext &merge_ctx);
-  TO_STRING_KV(KP_(merge_progress), K_(time_guard), K_(error_location));
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 public:
   ObPartitionMergeProgress *merge_progress_;
   // for row_store, record all event
@@ -302,8 +294,7 @@ public:
     const int64_t cost_time)
   { return OB_NOT_SUPPORTED; }
   virtual ObDagPrio::ObDagPrioEnum get_dag_priority() const;
-  VIRTUAL_TO_STRING_KV(K_(static_param), K_(static_desc), K_(parallel_merge_ctx), K_(tablet_handle),
-    K_(info_collector), KP_(merge_dag));
+  virtual int64_t to_string(char* buf, const int64_t buf_len) const;
 protected:
   int cal_major_merge_param(const bool force_full_merge,
                             ObProgressiveMergeMgr &progressive_mgr);

@@ -1006,6 +1006,26 @@ bool ObSSTableMeta::is_split_table() const
   return basic_meta_.table_shared_flag_.is_split_sstable();
 }
 
+int64_t ObSSTableMeta::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+  } else {
+    J_OBJ_START();
+    J_KV(K_(basic_meta), K_(column_ckm_struct), K_(data_root_info), K_(macro_info), K_(is_inited));
+    if (cg_sstables_.count() > 0) {
+      J_COMMA();
+      J_KV("cg_sstables", cg_sstables_);
+    }
+    if (tx_ctx_.get_count() > 0) {
+      J_COMMA();
+      J_KV("tx_ctx", tx_ctx_);
+    }
+    J_OBJ_END();
+  }
+  return pos;
+}
+
 //================================== ObMigrationSSTableParam ==================================
 ObMigrationSSTableParam::ObMigrationSSTableParam()
   : allocator_("SSTableParam", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),

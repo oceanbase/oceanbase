@@ -558,7 +558,9 @@ int ObSSTableIndexBuilder::init(const ObDataStoreDesc &data_desc,
     }
   }
   LOG_INFO("init sstable index builder", K(ret), K(data_desc),
-           K(index_store_desc_), K(container_store_desc_), K(leaf_store_desc_),
+           K(ObSimplePrintDataStoreDesc(index_store_desc_.get_desc())),
+           K(ObSimplePrintDataStoreDesc(container_store_desc_)),
+           K(ObSimplePrintDataStoreDesc(leaf_store_desc_)),
            KP(&object_cleaner_));
   return ret;
 }

@@ -58,6 +58,7 @@ struct ObParalleMergeInfo
       sum_value_ += value;
       ++count_;
     }
+    bool is_empty() const { return 0 == count_; }
     void reset()
     {
       min_value_ = 0;
@@ -108,15 +109,7 @@ struct ObMergeStaticInfo
   void reset();
   bool is_valid() const;
   void shallow_copy(const ObMergeStaticInfo &other);
-  TO_STRING_KV(K_(ls_id), K_(tablet_id), "merge_type", merge_type_to_str(merge_type_),
-    K_(compaction_scn), K_(is_full_merge), K_(concurrent_cnt),
-    "merge_level", merge_level_to_str(merge_level_),
-    "exec_mode", exec_mode_to_str(exec_mode_),
-    "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(merge_reason_),
-    "base_major_status", co_major_sstable_status_to_str(base_major_status_),
-    "co_major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(co_major_merge_type_),
-    K_(kept_snapshot_info), K_(participant_table_info), K_(mds_filter_info_str),
-    K_(progressive_merge_round), K_(progressive_merge_num), K_(is_fake));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
   static const int64_t MDS_FILTER_INFO_LENGTH = 256;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
@@ -168,6 +161,7 @@ public:
   ~ObMergeBlockInfo() {}
   void reset();
   bool is_valid() const;
+  bool is_empty() const { return 0 == macro_block_count_ && 0 == total_row_count_; }
   void shallow_copy(const ObMergeBlockInfo &other);
   void add(const ObMergeBlockInfo &block_info);
   void add_without_row_cnt(const ObMergeBlockInfo &block_info);
@@ -197,7 +191,7 @@ struct ObMergeDiagnoseInfo
   ~ObMergeDiagnoseInfo() {}
   void reset();
   void shallow_copy(const ObMergeDiagnoseInfo &other);
-  bool is_empty() const { return 0 == dag_ret_; }
+  bool is_empty() const { return 0 == dag_ret_ && 0 == retry_cnt_ && 0 == suspect_add_time_ && 0 == early_create_time_; }
   TO_STRING_KV(K_(dag_ret), K_(retry_cnt), K_(suspect_add_time), K_(early_create_time), K_(error_location));
   int64_t dag_ret_;
   int64_t retry_cnt_;
@@ -224,7 +218,7 @@ struct ObSSTableMergeHistory : public ObIDiagnoseInfo
   const ObNewMicroInfo &get_new_micro_info() const { return block_info_.new_micro_info_; }
   int fill_comment(char *buf, const int64_t buf_len, const char* other_info) const;
   void update_start_time();
-  TO_STRING_KV(K_(static_info), K_(running_info), K_(block_info), K_(diagnose_info));
+  int64_t to_string(char* buf, const int64_t buf_len) const;
 
   ObMergeStaticInfo static_info_;
   ObMergeRunningInfo running_info_;

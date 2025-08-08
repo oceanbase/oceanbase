@@ -872,6 +872,22 @@ int ObDataStoreDesc::shallow_copy(const ObDataStoreDesc &desc)
   data_store_type_ = desc.data_store_type_;
   return ret;
 }
+
+void ObDataStoreDesc::simple_to_string(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  if (OB_ISNULL(buf) || buf_len <= pos) {
+  } else {
+    J_OBJ_START();
+    J_KV("row_store_type", ObStoreFormat::get_row_store_name(row_store_type_),
+      K_(encoder_opt),
+      KP_(sstable_index_builder),
+      K_(need_pre_warm),
+      K_(need_build_hash_index_for_micro_block),
+      K_(data_store_type),
+      K_(micro_block_size));
+    J_OBJ_END();
+  }
+}
 /**
  * -------------------------------------------------------------------ObWholeDataStoreDesc-------------------------------------------------------------------
  */
@@ -1030,6 +1046,20 @@ int ObWholeDataStoreDesc::gen_index_store_desc(const ObDataStoreDesc &data_desc)
     STORAGE_LOG(TRACE, "success to gen index desc", K(ret), K(desc_), K(data_desc));
   }
   return ret;
+}
+
+int64_t ObSimplePrintDataStoreDesc::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+  } else {
+    J_OBJ_START();
+    J_KV("col_desc", desc_.get_col_desc());
+    J_COMMA();
+    desc_.simple_to_string(buf, buf_len, pos);
+    J_OBJ_END();
+  }
+  return pos;
 }
 
 } // namespace blocksstable

@@ -623,7 +623,9 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
       }
     }
     if (FAILEDx(refine_and_get_minor_merge_result(param, tablet, minor_compact_trigger, minor_merge_candidates, result))) {
-      LOG_WARN("refine and get minor merge result fail", K(ret));
+      if (OB_NO_NEED_MERGE != ret) {
+        LOG_WARN("refine and get minor merge result fail", K(ret));
+      }
     }
   }
   int64_t diagnose_table_cnt = DIAGNOSE_TABLE_CNT_IN_STORAGE;

@@ -256,6 +256,7 @@ public:
     OB_ASSERT_MSG(contain_full_col_descs(), "ObDataStoreDesc dose not promise a full stored col descs");
     return col_desc_->col_desc_array_;
   }
+  const ObColDataStoreDesc &get_col_desc() const { return *col_desc_; }
   bool contain_full_col_descs() const
   {
     return get_row_column_count() == get_col_desc_array().count();
@@ -334,7 +335,7 @@ public:
   static const uint64_t EMERGENCY_TENANT_ID_MAGIC = 0;
   static const uint64_t EMERGENCY_LS_ID_MAGIC = 0;
   static const ObTabletID EMERGENCY_TABLET_ID_MAGIC;
-
+  void simple_to_string(char *buf, const int64_t buf_len, int64_t &pos) const;
   TO_STRING_KV(
       KPC_(static_desc),
       "row_store_type", ObStoreFormat::get_row_store_name(row_store_type_),
@@ -411,6 +412,7 @@ struct ObWholeDataStoreDesc
   int assign(const ObWholeDataStoreDesc &desc);
   ObStaticDataStoreDesc &get_static_desc() { return static_desc_; }
   ObColDataStoreDesc &get_col_desc() {return col_desc_; }
+  const ObColDataStoreDesc &get_col_desc() const {return col_desc_; }
   ObDataStoreDesc &get_desc() { return desc_; }
   const ObDataStoreDesc &get_desc() const { return desc_; }
   bool is_valid() const
@@ -428,6 +430,18 @@ private:
   ObStaticDataStoreDesc static_desc_;
   ObColDataStoreDesc col_desc_;
   ObDataStoreDesc desc_;
+};
+
+struct ObSimplePrintDataStoreDesc
+{
+  ObSimplePrintDataStoreDesc(const ObDataStoreDesc &desc)
+    : desc_(desc)
+  {}
+  ~ObSimplePrintDataStoreDesc() {}
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+private:
+  const ObDataStoreDesc &desc_;
+  DISALLOW_COPY_AND_ASSIGN(ObSimplePrintDataStoreDesc);
 };
 
 
