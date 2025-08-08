@@ -403,35 +403,42 @@ int ObLogExprValues::construct_sequence_values()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
   } else if (get_stmt()->is_insert_stmt() && !value_exprs_.empty() && output_exprs_.count() >= 2) {
-    int64_t seq_expr_idx = -1;
+    ObSEArray<int64_t, 8> seq_expr_ids;
     for (int64_t i = 0; OB_SUCC(ret) && i < output_exprs_.count(); ++i) {
       if (OB_ISNULL(output_exprs_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("output expr is null", K(ret));
       } else if (T_FUN_SYS_SEQ_NEXTVAL == output_exprs_.at(i)->get_expr_type()) {
-        seq_expr_idx = i;
-        break;
+        if (OB_FAIL(seq_expr_ids.push_back(i))) {
+          LOG_WARN("failed to push back idx", K(ret));
+        }
       }
     }
-    if (OB_SUCC(ret) && -1 != seq_expr_idx) {
-      ObRawExpr *seq_expr = output_exprs_.at(seq_expr_idx);
+    if (OB_SUCC(ret) && !seq_expr_ids.empty()) {
       const int64_t value_count = value_exprs_.count();
       const int64_t output_count = output_exprs_.count();
-      if (OB_UNLIKELY((0 != value_count % (output_count - 1)) || (0 == seq_expr_idx))) {
+      if (OB_UNLIKELY((0 != value_count % (output_count - seq_expr_ids.count())) || (0 == seq_expr_ids.at(0)))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected value count", K(value_count), K(output_count), K(seq_expr_idx));
+        LOG_WARN("unexpected value count", K(value_count), K(output_count), K(seq_expr_ids));
       } else {
-        const int64_t group_num = value_count / (output_count - 1);
+        const int64_t group_size = output_count - seq_expr_ids.count();
+        const int64_t group_num = value_count / group_size;
         ObSEArray<ObRawExpr*, 8> new_value_exprs;
         if (OB_FAIL(new_value_exprs.reserve(group_num * output_count))) {
           LOG_WARN("failed to reserve array", K(ret));
         } else {
-          for (int64_t i = 0; OB_SUCC(ret) && i < value_exprs_.count(); ++i) {
-            if (OB_FAIL(new_value_exprs.push_back(value_exprs_.at(i)))) {
-              LOG_WARN("failed to push back expr", K(ret));
-            } else if (((i + 1) % seq_expr_idx == 0) &&
-                          OB_FAIL(new_value_exprs.push_back(seq_expr))) {
-              LOG_WARN("failed to push back sequence expr", K(ret));
+          for (int64_t i = 0; OB_SUCC(ret) && i < group_num; ++i) {
+            int64_t group_value_idx = 0;
+            for (int64_t j = 0; OB_SUCC(ret) && j < output_count; ++j) {
+              if (has_exist_in_array(seq_expr_ids, j)) {
+                if (OB_FAIL(new_value_exprs.push_back(output_exprs_.at(j)))) {
+                  LOG_WARN("failed to push back expr", K(ret));
+                }
+              } else if (OB_FAIL(new_value_exprs.push_back(value_exprs_.at(i * group_size + group_value_idx)))) {
+                LOG_WARN("failed to push back expr", K(ret));
+              } else {
+                group_value_idx++;
+              }
             }
           }
           if (OB_SUCC(ret) && OB_FAIL(value_exprs_.assign(new_value_exprs))) {
