@@ -101,7 +101,7 @@ private:
   int batch_load_table_stats_and_put_cache(const uint64_t tenant_id,
                                            ObIArray<const ObOptTableStat::Key *> &keys,
                                            ObIArray<ObOptTableStatHandle> &handles,
-                                           ObSEArray<int64_t, 4> regather_handles_indices);
+                                           ObIArray<int64_t> &regather_handles_indices);
 
 protected:
   bool inited_;
