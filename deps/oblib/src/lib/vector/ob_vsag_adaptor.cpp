@@ -136,7 +136,7 @@ public:
   int get_extra_info_by_ids(const int64_t *ids, int64_t count,
                             char *extra_infos);
   int get_vid_bound(int64_t &min_vid, int64_t &max_vid);
-  uint64_t estimate_memory(uint64_t row_count);
+  uint64_t estimate_memory(const uint64_t row_count, const bool is_build);
   int knn_search(const vsag::DatasetPtr &query, int64_t topk,
                  const std::string &parameters, const float *&dist,
                  const int64_t *&ids, int64_t &result_size, float valid_ratio,
@@ -259,9 +259,17 @@ int HnswIndexHandler::get_vid_bound(int64_t &min_vid, int64_t &max_vid)
   return ret;
 }
 
-uint64_t HnswIndexHandler::estimate_memory(uint64_t row_count)
+uint64_t HnswIndexHandler::estimate_memory(const uint64_t row_count, const bool is_build)
 {
-  return index_->EstimateMemory(row_count);
+  uint64_t size = index_->EstimateMemory(row_count);
+  if (HNSW_BQ_TYPE == index_type_ && is_build) {
+    if (QuantizationType::SQ8 == refine_type_) {
+      size += (row_count * dim_ * sizeof(uint8_t));
+    } else {
+      size += (row_count * dim_ * sizeof(float));
+    }
+  }
+  return size;
 }
 
 int HnswIndexHandler::knn_search(const vsag::DatasetPtr &query, int64_t topk,
@@ -948,12 +956,12 @@ int get_extra_info_by_ids(VectorIndexPtr &index_handler,
   return ret;
 }
 
-uint64_t estimate_memory(VectorIndexPtr &index_handler, uint64_t row_count)
+uint64_t estimate_memory(VectorIndexPtr &index_handler, const uint64_t row_count, const bool is_build)
 {
   uint64_t estimate_memory_size = 0;
   if (index_handler != nullptr) {
     HnswIndexHandler *hnsw = static_cast<HnswIndexHandler *>(index_handler);
-    estimate_memory_size = hnsw->estimate_memory(row_count);
+    estimate_memory_size = hnsw->estimate_memory(row_count, is_build);
   }
   return estimate_memory_size;
 }

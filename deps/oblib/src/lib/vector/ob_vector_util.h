@@ -75,7 +75,7 @@ int get_extra_info_by_ids(obvsag::VectorIndexPtr& index_handler,
                           int64_t count,
                           char *extra_infos);
 int get_vid_bound(obvsag::VectorIndexPtr index_handler, int64_t &min_vid, int64_t &max_vid);
-uint64_t estimate_memory(obvsag::VectorIndexPtr& index_handler, const uint64_t row_count, const uint64_t dim, const bool is_hnsw_bq_build);
+uint64_t estimate_memory(obvsag::VectorIndexPtr& index_handler, const uint64_t row_count, const bool is_build);
 int knn_search(obvsag::VectorIndexPtr index_handler,
                float *query_vector,
                int dim,

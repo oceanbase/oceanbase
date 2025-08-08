@@ -265,13 +265,13 @@ void delete_iter_ctx(void *iter_ctx)
 }
 
 // return byte
-uint64_t estimate_memory(obvsag::VectorIndexPtr& index_handler, const uint64_t row_count, const uint64_t dim, const bool is_hnsw_bq_build)
+uint64_t estimate_memory(obvsag::VectorIndexPtr& index_handler, const uint64_t row_count, const bool is_build)
 {
   INIT_SUCC(ret);
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
     return ret;
 #else
-  return obvsag::estimate_memory(index_handler, row_count) + (is_hnsw_bq_build ? (row_count * dim * sizeof(float)): 0);
+  return obvsag::estimate_memory(index_handler, row_count, is_build);
 #endif
 
 }

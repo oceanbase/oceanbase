@@ -111,7 +111,7 @@ int fserialize(VectorIndexPtr& index_handler, std::ostream& out_stream);
 int fdeserialize(VectorIndexPtr& index_handler, std::istream& in_stream);
 int delete_index(VectorIndexPtr& index_handler);
 void delete_iter_ctx(void *iter_ctx);
-uint64_t estimate_memory(VectorIndexPtr& index_handler, uint64_t row_count);
+uint64_t estimate_memory(VectorIndexPtr& index_handler, const uint64_t row_count, const bool is_build);
 int get_extra_info_by_ids(VectorIndexPtr& index_handler,
                           const int64_t* ids,
                           int64_t count,

@@ -4562,12 +4562,15 @@ int ObVectorIndexUtil::estimate_hnsw_memory(uint64_t num_vectors,
                                                 param.ef_construction_,
                                                 param.ef_search_,
                                                 nullptr, /* memory ctx, use default */
-                                                param.extra_info_actual_size_))) {
+                                                param.extra_info_actual_size_,
+                                                param.refine_type_,
+                                                param.bq_bits_query_,
+                                                param.bq_use_fht_))) {
     LOG_WARN("failed to create vsag index.", K(ret), K(param));
   } else if (OB_ISNULL(index_handler)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr", K(ret), KP(index_handler));
-  } else if (OB_FALSE_IT(est_mem = obvectorutil::estimate_memory(index_handler, num_vectors, param.dim_, is_build))) {
+  } else if (OB_FALSE_IT(est_mem = obvectorutil::estimate_memory(index_handler, num_vectors, is_build))) {
   } else if (OB_FALSE_IT(obvectorutil::delete_index(index_handler))) {
   }
   return ret;
@@ -4865,7 +4868,7 @@ int ObVectorIndexUtil::estimate_vector_memory_used(
     } else if (OB_ISNULL(index_handler)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr", K(ret), KP(index_handler));
-    } else if (OB_FALSE_IT(estimate_memory = obvectorutil::estimate_memory(index_handler, row_count, param.dim_, ObVectorIndexAlgorithmType::VIAT_HNSW_BQ == build_type))) {
+    } else if (OB_FALSE_IT(estimate_memory = obvectorutil::estimate_memory(index_handler, row_count, true/*is_build*/))) {
     } else if (OB_FALSE_IT(obvectorutil::delete_index(index_handler))) {
     }
   }
