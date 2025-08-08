@@ -2687,8 +2687,13 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
     const ObVsagQueryResult snap_data = {snap_res_cnt, snap_vids, snap_distances, snap_extra_info_ptr};
     uint64_t tmp_result_cnt = delta_res_cnt + snap_res_cnt;
     uint64_t max_res_cnt = 0;
-    // for iter-filter, return all result of delta_res and snap_res, the results will be filter later and make sure final res is less than limit K
-    if (query_cond->is_post_with_filter_) {
+    /*
+     *  for iter-filter or BQ, return all result of delta_res and snap_res, the results will be filter later and make sure final res is less than limit K
+     *  iter-filter need sort in this function, BQ doesn't need
+     */
+    ObVectorIndexAlgorithmType index_type = get_snap_index_type();
+    bool need_all_result = (query_cond->is_post_with_filter_ || index_type == VIAT_HNSW_BQ);
+    if (need_all_result) {
       max_res_cnt = tmp_result_cnt;
     } else {
     // but for other situation, merge and make sure result is less than limit K, cuz its the final res
@@ -2717,8 +2722,13 @@ int ObPluginVectorIndexAdaptor::vsag_query_vids(ObVectorQueryAdaptorResultContex
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObPluginVectorIndexHelper::merge_delta_and_snap_vids(
-                   delta_data, snap_data, query_cond->query_limit_, actual_res_cnt, merge_vids, merge_distance, merge_extra_info_ptr))) {
+    } else if (index_type == VIAT_HNSW_BQ) {
+      if (OB_FAIL(ObPluginVectorIndexHelper::driect_merge_delta_and_snap_vids(
+              delta_data, snap_data, actual_res_cnt, merge_vids, merge_distance, merge_extra_info_ptr))) {
+        LOG_WARN("failed to merge delta and snap vids.", K(ret));
+      }
+    } else if (OB_FAIL(ObPluginVectorIndexHelper::sort_merge_delta_and_snap_vids(
+                   delta_data, snap_data, max_res_cnt, actual_res_cnt, merge_vids, merge_distance, merge_extra_info_ptr))) {
       LOG_WARN("failed to merge delta and snap vids.", K(ret));
     }
 
@@ -2897,7 +2907,7 @@ int ObPluginVectorIndexAdaptor::query_next_result(ObVectorQueryAdaptorResultCont
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObPluginVectorIndexHelper::merge_delta_and_snap_vids(delta_data, snap_data,
+      } else if (OB_FAIL(ObPluginVectorIndexHelper::sort_merge_delta_and_snap_vids(delta_data, snap_data,
                                                                               query_cond->query_limit_,
                                                                               actual_res_cnt,
                                                                               merge_vids, merge_distance, merge_extra_info_ptr))) {
