@@ -2989,6 +2989,15 @@ int ObDelUpdResolver::build_column_conv_function_with_default_expr(ObInsertTable
     if (OB_SUCC(ret)) {
       table_info.column_conv_exprs_.at(idx) = function_expr;
       LOG_DEBUG("add column conv expr", K(*function_expr));
+      ObSEArray<ObRawExpr *, 8> pseudo_column_like_exprs;
+      if (OB_FAIL(ObTransformUtils::extract_pseudo_column_like_expr(function_expr, pseudo_column_like_exprs))) {
+        LOG_WARN("failed to extract pseudo column like expr", K(ret));
+      } else if (OB_ISNULL(get_stmt())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null stmt", K(ret));
+      } else if (OB_FAIL(append_array_no_dup(get_stmt()->get_pseudo_column_like_exprs(), pseudo_column_like_exprs))) {
+        LOG_WARN("failed to push back pseudo column like expr", K(ret));
+      }
     }
   }
   return ret;
