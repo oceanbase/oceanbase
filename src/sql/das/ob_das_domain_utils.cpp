@@ -19,6 +19,7 @@
 #include "sql/das/ob_das_dml_vec_iter.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "observer/omt/ob_tenant_srs.h"
+#include "storage/tx/ob_trans_service.h"
 
 using namespace oceanbase::common;
 
@@ -1195,12 +1196,29 @@ int ObFTDMLIterator::scan_ft_word_rows(const ObChunkDatumStore::StoredRow *store
     if (OB_ITER_END == ret || OB_SUCC(ret)) {
       ret = OB_SUCCESS;
       if (OB_UNLIKELY(rows_.count() != rows.count())) {
-        ret = OB_ERR_DEFENSIVE_CHECK;
-        common::ObDocId docid;
-        docid.from_string(doc_id);
-        LOG_ERROR("row count isn't equal between scan ft words and generate ft words", K(ret), K(rows_), K(rows),
-            K(is_fts_index_aux), K(doc_id), K(docid), K(ft_meta), K(ft), K(ft_parse_helper), KPC(store_row),
-            KPC(main_ctdef_));
+        bool need_check_tx_active = true;
+        if (OB_NOT_NULL(doc_word_info_) && doc_word_info_->snapshot_.tx_id().is_valid()) {
+          const transaction::ObTransID &tx_id = doc_word_info_->snapshot_.tx_id();
+          transaction::ObTransService *txs = MTL(transaction::ObTransService *);
+          bool is_tx_active = true;
+          if (OB_NOT_NULL(txs)) {
+            if (OB_FAIL(txs->is_tx_active(tx_id, is_tx_active))) {
+              LOG_WARN("fail to check if tx is active", K(ret), K(tx_id));
+            } else if (!is_tx_active) {
+              need_check_tx_active = false;
+              LOG_WARN("tx is aborted, skip this check.", K(tx_id));
+            }
+          }
+        }
+
+        if (OB_SUCC(ret) && need_check_tx_active) {
+          ret = OB_ERR_DEFENSIVE_CHECK;
+          common::ObDocId docid;
+          docid.from_string(doc_id);
+          LOG_ERROR("row count isn't equal between scan ft words and generate ft words", K(ret), K(rows_), K(rows),
+              K(is_fts_index_aux), K(doc_id), K(docid), K(ft_meta), K(ft), K(ft_parse_helper), KPC(store_row),
+              KPC(main_ctdef_));
+        }
       }
     }
   }
