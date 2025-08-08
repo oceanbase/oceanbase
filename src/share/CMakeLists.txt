@@ -104,6 +104,7 @@ ob_set_subtarget(ob_share allocator
   allocator/ob_tenant_mutil_allocator.cpp
   allocator/ob_tenant_mutil_allocator_mgr.cpp
   allocator/ob_tx_data_allocator.cpp
+  allocator/ob_lob_ext_info_log_allocator.cpp
   allocator/ob_tenant_vector_allocator.cpp
 )
 

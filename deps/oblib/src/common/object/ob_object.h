@@ -635,13 +635,15 @@ struct ObLobDataOutRowCtx
   // and this field is added later when bug is found, and may be a random value
   uint32_t reserved_;
 
-  bool is_empty_sql() const { return OpType::EMPTY_SQL == op_; }
+  bool is_append() const { return OpType::APPEND == op_; }
+  bool is_insert() const { return OpType::INSERT == op_; }
+  bool is_write() const { return OpType::WRITE == op_; }
+  bool is_erase() const { return OpType::ERASE == op_; }
   bool is_diff_v1() const { return OpType::DIFF == op_;}
   bool is_diff() const { return OpType::DIFF == op_ || OpType::DIFF_V2 == op_; }
   bool is_ext_info_log() const { return OpType::EXT_INFO_LOG == op_; }
-  bool is_valid_old_value_ext_info_log() const { return OpType::VALID_OLD_VALUE_EXT_INFO_LOG == op_; }
   bool is_valid_old_value() const { return OpType::VALID_OLD_VALUE == op_; }
-
+  bool is_valid_old_value_ext_info_log() const { return OpType::VALID_OLD_VALUE_EXT_INFO_LOG == op_; }
   int64_t get_real_chunk_size() const;
 };
 

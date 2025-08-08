@@ -2904,6 +2904,9 @@ DEF_INT_WITH_CHECKER(default_micro_block_format_version, OB_TENANT_PARAMETER, "1
 DEF_BOOL(_prexec_prepare_with_params, OB_TENANT_PARAMETER, "False",
          "Control the prexec protocol prepare with or without parameters during the prepare phase.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_disable_record_outrow_lob_in_clog, OB_TENANT_PARAMETER, "False",
+         "Whether to force outrow lob data to be written to CLOG for OBCDC synchronization when lob columns are not updated",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(_external_table_mem_cache_page_size, OB_TENANT_PARAMETER, "512KB", "[0,)",
         "page size of the external table memory cache. Range: [0,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

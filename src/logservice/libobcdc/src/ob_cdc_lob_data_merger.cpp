@@ -194,6 +194,56 @@ int ObCDCLobDataMerger::push_task_(
   return ret;
 }
 
+int ObCDCLobDataMerger::get_lob_data_out_row_ctx_(
+    ObLobDataGetCtx &lob_data_get_ctx,
+    const ObLobDataOutRowCtx *&lob_data_out_row_ctx)
+{
+  int ret = OB_SUCCESS;
+
+  if (lob_data_get_ctx.is_insert()) {
+    if (OB_FAIL(lob_data_get_ctx.get_lob_out_row_ctx(true/*is_new_col_*/, lob_data_out_row_ctx))) {
+      LOG_ERROR("lob_data_get_ctx get_lob_out_row_ctx failed", KR(ret), K(lob_data_get_ctx));
+    } else if (OB_ISNULL(lob_data_out_row_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("lob_data_out_row_ctx is nullptr", KR(ret), K(lob_data_get_ctx));
+    }
+  } else if (lob_data_get_ctx.is_update()) {
+    const ObLobDataOutRowCtx *new_lob_data_out_row_ctx = nullptr;
+    const ObLobDataOutRowCtx *old_lob_data_out_row_ctx = nullptr;
+    lob_data_get_ctx.get_lob_out_row_ctx(true/*is_newl_col*/, new_lob_data_out_row_ctx);
+    lob_data_get_ctx.get_lob_out_row_ctx(false/*is_newl_col*/, old_lob_data_out_row_ctx);
+
+    if (OB_ISNULL(new_lob_data_out_row_ctx) && OB_ISNULL(old_lob_data_out_row_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("new_lob_data_out_row_ctx and old_lob_data_out_row_ctx are both nullptr", KR(ret));
+    } else if (OB_NOT_NULL(new_lob_data_out_row_ctx)) {
+      // inrow -> outrow: new_lob_data is not null, old_lob_data_ is null, del_seq_no_cnt_ should be 0.
+      // outrow -> outrow: neither new_lob_data_ nor old_lob_data_ is null
+      lob_data_out_row_ctx = new_lob_data_out_row_ctx;
+    } else {
+      if ((OB_UNLIKELY(!old_lob_data_out_row_ctx->is_valid_old_value() && !old_lob_data_out_row_ctx->is_valid_old_value_ext_info_log()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("lob_data_out_row_ctx type is unexpected", KR(ret), K(lob_data_get_ctx));
+      } else {
+        // outrow -> inrow: new_lob_data_ is null, old_; old_lob_data_ is not null
+        lob_data_out_row_ctx = old_lob_data_out_row_ctx;
+      }
+    }
+  } else if (lob_data_get_ctx.is_delete()) {
+    if (OB_FAIL(lob_data_get_ctx.get_lob_out_row_ctx(false/*is_new_col_*/, lob_data_out_row_ctx))) {
+      LOG_ERROR("lob_data_get_ctx get_lob_out_row_ctx failed", KR(ret), K(lob_data_get_ctx));
+    } else if (OB_ISNULL(lob_data_out_row_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("lob_data_out_row_ctx is nullptr", KR(ret), K(lob_data_get_ctx));
+    } else if (OB_UNLIKELY(!lob_data_out_row_ctx->is_valid_old_value() && !lob_data_out_row_ctx->is_valid_old_value_ext_info_log())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("lob_data_out_row_ctx type is unexpected", KR(ret), K(lob_data_get_ctx));
+    }
+  }
+
+  return ret;
+}
+
 int ObCDCLobDataMerger::push_lob_column_(
     ObIAllocator &allocator,
     ObLobDataOutRowCtxList &lob_data_out_row_ctx_list,
@@ -204,16 +254,16 @@ int ObCDCLobDataMerger::push_lob_column_(
   const ObLobDataOutRowCtx *lob_data_out_row_ctx = nullptr;
   static const int64_t PUSH_LOB_DATA_MERGER_TIMEOUT = 1 * _MSEC_;
 
-  if (OB_FAIL(lob_data_get_ctx.get_lob_out_row_ctx(lob_data_out_row_ctx))) {
-    LOG_ERROR("lob_data_get_ctx get_lob_out_row_ctx failed", KR(ret), K(lob_data_get_ctx));
+  if (OB_FAIL(get_lob_data_out_row_ctx_(lob_data_get_ctx, lob_data_out_row_ctx))) {
+    LOG_ERROR("lob_data_get_ctx get lob data out row ctx failed", KR(ret), K(lob_data_get_ctx));
   } else if (OB_ISNULL(lob_data_out_row_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("lob_data_out_row_ctx is nullptr", KR(ret), K(lob_data_get_ctx));
   } else {
     LOG_DEBUG("push_lob_column_", K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
-    const bool is_empty_sql = lob_data_out_row_ctx->is_empty_sql();
+    const bool is_empty_sql = (ObLobDataOutRowCtx::OpType::EMPTY_SQL == lob_data_out_row_ctx->op_);
     bool is_update_outrow_lob_from_empty_to_empty = false;
-    const auto seq_no_st = transaction::ObTxSEQ::cast_from_int(lob_data_out_row_ctx->seq_no_st_);
+    const transaction::ObTxSEQ seq_no_st = transaction::ObTxSEQ::cast_from_int(lob_data_out_row_ctx->seq_no_st_);
     const uint32_t seq_no_cnt = lob_data_out_row_ctx->seq_no_cnt_;
     const uint32_t del_seq_no_cnt = lob_data_out_row_ctx->del_seq_no_cnt_;
     const uint32_t insert_seq_no_cnt = seq_no_cnt - del_seq_no_cnt;
@@ -252,8 +302,11 @@ int ObCDCLobDataMerger::push_lob_column_(
             K(insert_seq_no_cnt), K(new_lob_col_fra_ctx_list));
       }
     } else if (lob_data_get_ctx.is_delete()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("unexpected dml_type", KR(ret), K(lob_data_get_ctx));
+      if (OB_FAIL(lob_data_get_ctx.old_lob_col_ctx_.init(seq_no_cnt, allocator))) {
+        LOG_ERROR("lob_data_get_ctx old_lob_col_ctx_ init failed", KR(ret), K(seq_no_cnt), K(lob_data_get_ctx));
+      } else if (OB_FAIL(get_lob_col_fra_ctx_list_(false/*is_new_col*/, seq_no_st, del_seq_no_cnt, allocator, lob_data_get_ctx, old_lob_col_fra_ctx_list))) {
+        LOG_ERROR("get_lob_col_fra_ctx_list_ failed", KR(ret), K(seq_no_st), K(old_lob_col_fra_ctx_list));
+      }
     }
 
     if (OB_SUCC(ret)) {
@@ -414,15 +467,15 @@ int ObCDCLobDataMerger::handle_task_(
     ObLobDataGetCtx &lob_data_get_ctx = task.host_;
     ObLobDataOutRowCtxList *lob_data_out_row_ctx_list = static_cast<ObLobDataOutRowCtxList *>(lob_data_get_ctx.host_);
     const IStmtTask *stmt_task = lob_data_out_row_ctx_list->get_stmt_task();
-    const ObLobData *new_lob_data = lob_data_get_ctx.new_lob_data_;
     const bool is_new_col = task.is_new_col_;
+    const ObLobData *lob_data = lob_data_get_ctx.get_lob_data(is_new_col);
     ObString **fragment_cb_array= lob_data_get_ctx.get_fragment_cb_array(is_new_col);
     ObLobId lob_id;
 
-    if (OB_ISNULL(lob_data_out_row_ctx_list) || OB_ISNULL(new_lob_data) || OB_ISNULL(fragment_cb_array)) {
+    if (OB_ISNULL(lob_data_out_row_ctx_list) || OB_ISNULL(lob_data) || OB_ISNULL(fragment_cb_array)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("lob_data_out_row_ctx_list or new_lob_data or fragment_cb_array is nullptr", KR(ret),
-          K(lob_data_out_row_ctx_list), K(new_lob_data), K(fragment_cb_array));
+      LOG_ERROR("lob_data_out_row_ctx_list or lob_data or fragment_cb_array is nullptr", KR(ret),
+          K(lob_data_out_row_ctx_list), K(is_new_col), K(lob_data), K(fragment_cb_array));
     } else if (OB_ISNULL(stmt_task)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("stmt_task is nullptr", KR(ret), KPC(lob_data_out_row_ctx_list));
@@ -435,6 +488,7 @@ int ObCDCLobDataMerger::handle_task_(
       const transaction::ObTransID &trans_id = lob_data_out_row_ctx_list->get_trans_id();
       const uint64_t table_id = lob_data_out_row_ctx_list->get_table_id_of_lob_aux_meta_key(lob_data_get_ctx);
       const uint32_t idx = task.idx_;
+
       LobAuxMetaKey lob_aux_meta_key(commit_version, tenant_id, trans_id, table_id, lob_id, task.seq_no_);
       const char *lob_data_ptr = nullptr;
       int64_t lob_data_len = 0;
@@ -537,13 +591,12 @@ int ObCDCLobDataMerger::merge_fragments_(
   } else if (OB_ISNULL(lob_data = lob_data_get_ctx.get_lob_data(is_new_col))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("lob_data is nullptr", KR(ret), K(is_new_col), K(lob_data_get_ctx), K(task), K(lob_data_out_row_ctx_list));
-  } else if (OB_FAIL(lob_data_get_ctx.get_lob_out_row_ctx(lob_data_out_row_ctx))) {
+  } else if (OB_FAIL(lob_data_get_ctx.get_lob_out_row_ctx(is_new_col, lob_data_out_row_ctx))) {
     LOG_ERROR("lob_data_get_ctx get_lob_out_row_ctx failed", KR(ret), K(lob_data_get_ctx), K(task), K(lob_data_out_row_ctx_list));
   } else if (OB_FAIL(lob_data_get_ctx.get_data_length(is_new_col, data_len))) {
     LOG_ERROR("lob_data_get_ctx get_data_length failed", KR(ret), K(is_new_col), K(lob_data_get_ctx), K(task), K(lob_data_out_row_ctx_list));
   } else {
     LOG_DEBUG("lob_aux_meta_storager handle last fragment", K(data_len), K(task), K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
-    const bool is_new_col = task.is_new_col_;
     const uint32_t seq_no_cnt = task.ref_cnt_;
     char *buf = nullptr;
 
@@ -687,6 +740,11 @@ int ObCDCLobDataMerger::handle_ext_info_log_(
         is_progress_done = false;
       }
       break;
+    case storage::OB_VALID_OLD_LOB_VALUE_LOG: {
+      output_data.assign_ptr(src_data.ptr() + pos, src_data.length() - pos);
+      is_progress_done = true;
+      break;
+    }
     default:
       ret = OB_NOT_SUPPORTED;
       LOG_ERROR("unsupport ext info log type", KR(ret), K(type), K(ext_info_log_header), K(lob_data_get_ctx), K(lob_data_out_row_ctx_list));
