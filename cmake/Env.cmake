@@ -283,6 +283,8 @@ if (OB_USE_CLANG)
       NO_DEFAULT_PATH)
   endif()
 
+  set(OB_OBJCOPY_BIN "${DEVTOOLS_DIR}/bin/llvm-objcopy")
+
   find_file(GCC9 devtools
     PATHS ${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase
     NO_DEFAULT_PATH)
