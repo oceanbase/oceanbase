@@ -621,7 +621,9 @@ private:
                                    const TableItem *table_item,
                                    ObSqlBitSet<> &rel_ids);
 
-  int formalize_limit_expr(ObDMLStmt &stmt);
+  int formalize_limit_expr(ObDMLStmt &stmt, bool formalize_oracle_limit);
+  int formalize_limit_expr_oracle(ObDMLStmt &stmt);
+  int formalize_limit_expr_mysql(ObDMLStmt &stmt);
   int transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_happened);
   int get_rollup_const_exprs(ObSelectStmt *stmt,
                              ObIArray<ObRawExpr*> &const_exprs,
