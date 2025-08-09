@@ -1036,12 +1036,18 @@ public:
   int get_location_schema_by_id(const uint64_t tenant_id,
                                 const uint64_t location_id,
                                 const ObLocationSchema *&schema);
+  int get_location_schema_by_prefix_match_with_priv(const ObSessionPrivInfo &session_priv,
+                                                    const common::ObIArray<uint64_t> &enable_role_id_array,
+                                                    const uint64_t tenant_id,
+                                                    const common::ObString &access_path,
+                                                    const ObLocationSchema *&schema,
+                                                    const bool is_need_write_priv = false);
   int get_location_schemas_in_tenant(const uint64_t tenant_id,
                                      common::ObIArray<const ObLocationSchema *> &location_schemas);
   int check_location_access(const ObSessionPrivInfo &session_priv,
                             const common::ObIArray<uint64_t> &enable_role_id_array,
                             const ObString &location_name,
-                            bool is_write = false);
+                            const bool is_need_write_priv = false);
   int check_location_show(const ObSessionPrivInfo &session_priv,
                           const common::ObIArray<uint64_t> &enable_role_id_array,
                           const common::ObString &location_name,

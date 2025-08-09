@@ -306,6 +306,26 @@ int ObLocationMgr::get_location_schema_by_name(const uint64_t tenant_id,
   return ret;
 }
 
+int ObLocationMgr::get_location_schema_by_prefix_match(const uint64_t tenant_id,
+                                                       const common::ObString &access_path,
+                                                       ObArray<const ObLocationSchema*> &match_schemas) const
+{
+  // todo 后面使用前缀树优化
+  int ret = OB_SUCCESS;
+  match_schemas.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < location_infos_.count(); i++) {
+    const ObLocationSchema *tmp_schema = location_infos_.at(i);
+    if (OB_ISNULL(tmp_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null schema", K(ret));
+    } else if (tenant_id == tmp_schema->get_tenant_id()
+               && access_path.prefix_match(tmp_schema->get_location_url_str())) {
+      match_schemas.push_back(tmp_schema);
+    }
+  }
+  return ret;
+}
+
 int ObLocationMgr::get_location_schemas_in_tenant(const uint64_t tenant_id,
                                                     common::ObIArray<const ObLocationSchema *> &schemas) const
 {

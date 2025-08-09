@@ -1945,14 +1945,14 @@ int ObSchemaGetterGuard::check_priv_or(const ObSessionPrivInfo &session_priv,
 int ObSchemaGetterGuard::check_location_access(const ObSessionPrivInfo &session_priv,
                                                const common::ObIArray<uint64_t> &enable_role_id_array,
                                                const ObString &location_name,
-                                               bool is_write)
+                                               const bool is_need_write_priv)
 {
   int ret = OB_SUCCESS;
   ObNeedPriv tmp_need_priv;
   tmp_need_priv.db_ = session_priv.db_;
   tmp_need_priv.table_ = location_name;
   tmp_need_priv.priv_level_ = OB_PRIV_OBJECT_LEVEL;
-  tmp_need_priv.priv_set_ = is_write ? OB_PRIV_WRITE : OB_PRIV_READ;
+  tmp_need_priv.priv_set_ = is_need_write_priv ? OB_PRIV_WRITE : OB_PRIV_READ;
   tmp_need_priv.obj_type_ = ObObjectType::LOCATION;
 
   const ObSchemaMgr *mgr = NULL;
@@ -1985,7 +1985,7 @@ int ObSchemaGetterGuard::check_location_access(const ObSessionPrivInfo &session_
                                                                 location_schema->get_location_id(),
                                                                 OBJ_LEVEL_FOR_TAB_PRIV,
                                                                 static_cast<uint64_t>(ObObjectType::LOCATION),
-                                                                is_write ? OBJ_PRIV_ID_WRITE : OBJ_PRIV_ID_READ,
+                                                                is_need_write_priv ? OBJ_PRIV_ID_WRITE : OBJ_PRIV_ID_READ,
                                                                 CHECK_FLAG_NORMAL,
                                                                 OB_ORA_SYS_USER_ID,
                                                                 enable_role_id_array))) {

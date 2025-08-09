@@ -469,31 +469,68 @@ int ObSelectIntoOp::calc_url_and_set_access_info()
   } else if (T_INTO_OUTFILE == into_type && !MY_SPEC.is_single_ && OB_FAIL(calc_first_file_path(path))) {
     LOG_WARN("failed to calc first file path", K(ret));
   } else if (file_location_ != IntoFileLocation::SERVER_DISK) {
-    ObString temp_url = path.split_on('?');
-    temp_url.trim();
+    const char *storage_ptr = path.reverse_find('?');
     ObString storage_info;
-    if (OB_LIKELY(!temp_url.empty() && temp_url.prefix_match(OB_HDFS_PREFIX)) ||
-        OB_LIKELY(path.prefix_match(OB_HDFS_PREFIX))) {
-      access_info_ = &hdfs_info_;
-    } else {
-      access_info_ = &backup_info_;
-    }
-
-    // If the hdfs is with simple auth, temp url will be empty.
-    if (OB_LIKELY(temp_url.empty())) {
-      if (OB_FAIL(ob_write_string(ctx_.get_allocator(), path, basic_url_, true))) {
-        LOG_WARN("failed to append full path string", K(ret), K(path));
+    access_info_ = &backup_info_;
+    if (OB_ISNULL(storage_ptr)) {
+      ObSQLSessionInfo *session = NULL;
+      ObSessionPrivInfo session_priv;
+      share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+      const ObLocationSchema *schema_ptr = NULL;
+      if (OB_ISNULL(session = ctx_.get_my_session())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get session failed", K(ret));
+      } else if (OB_ISNULL(schema_guard = ctx_.get_sql_ctx()->schema_guard_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema guard is null", K(ret));
+      } else if (OB_FAIL(session->get_session_priv_info(session_priv))) {
+        LOG_WARN("get session priv failed", K(ret));
+      } else if (OB_FAIL(schema_guard->get_location_schema_by_prefix_match_with_priv(
+                                session_priv,
+                                session->get_enable_role_array(),
+                                session->get_effective_tenant_id(),
+                                path,
+                                schema_ptr,
+                                true))) {
+        LOG_WARN("get location schema failed", K(ret), K(session->get_effective_tenant_id()), K(path));
+      } else if (OB_ISNULL(schema_ptr)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("match location object failed", K(ret), K(session->get_effective_tenant_id()), K(path));
+      } else if (OB_FAIL(ob_write_string(ctx_.get_allocator(), path, basic_url_, true))) {
+        LOG_WARN("failed to append string", K(ret));
+      } else if (OB_FAIL(ob_write_string(ctx_.get_allocator(), schema_ptr->get_location_access_info(), storage_info, true))) {
+        LOG_WARN("failed to append string", K(ret));
+      } else if (path.prefix_match(OB_HDFS_PREFIX)) {
+        access_info_ = &hdfs_info_;
       }
     } else {
-      if (OB_FAIL(ob_write_string(ctx_.get_allocator(), temp_url, basic_url_, true))) {
+      ObString temp_url = path.split_on('?');
+      temp_url.trim();
+      if (OB_LIKELY(!temp_url.empty() && temp_url.prefix_match(OB_HDFS_PREFIX)) ||
+          OB_LIKELY(path.prefix_match(OB_HDFS_PREFIX))) {
+        access_info_ = &hdfs_info_;
+      }
+
+      // If the hdfs is with simple auth, temp url will be empty.
+      if (OB_LIKELY(temp_url.empty())) {
+        if (OB_FAIL(ob_write_string(ctx_.get_allocator(), path, basic_url_, true))) {
+          LOG_WARN("failed to append full path string", K(ret), K(path));
+        }
+      } else {
+        if (OB_FAIL(ob_write_string(ctx_.get_allocator(), temp_url, basic_url_, true))) {
+          LOG_WARN("failed to append string", K(ret));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+        /* do nothing */
+      } else if (OB_FAIL(ob_write_string(ctx_.get_allocator(), path, storage_info, true))) {
         LOG_WARN("failed to append string", K(ret));
       }
     }
 
     if (OB_FAIL(ret)) {
-      /* do nothing */
-    } else if (OB_FAIL(ob_write_string(ctx_.get_allocator(), path, storage_info, true))) {
-      LOG_WARN("failed to append string", K(ret));
+      // do nothing
     } else if (OB_FAIL(access_info_->set(basic_url_.ptr(), storage_info.ptr()))) {
       LOG_WARN("failed to set access info", K(ret), K(path));
     } else if (basic_url_.empty() || !access_info_->is_valid()) {
