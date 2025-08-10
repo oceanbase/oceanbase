@@ -15237,12 +15237,12 @@ int ObLogPlan::check_aggr_param_match_pushdown_rule(const uint64_t table_id,
   if (first_param->has_flag(ObExprInfoFlag::CNT_PL_UDF)) {
     can_push = false;
   } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(first_param, column_exprs,
-                      false/*need_pseudo_column*/, false/*can_extract_pseudo_column_ref*/))) {
+                      true/*need_pseudo_column*/, true/*can_extract_pseudo_column_ref*/))) {
     LOG_WARN("fail to extract column expr", K(ret));
   } else if (column_exprs.count() != 1) {
     can_push = false;
   } else if (FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr *>(column_exprs.at(0)))) {
-  } else if (table_id != col_expr->get_table_id()) {
+  } else if (table_id != col_expr->get_table_id() || col_expr->is_pseudo_column_ref()) {
     can_push = false;
   }
   return ret;
