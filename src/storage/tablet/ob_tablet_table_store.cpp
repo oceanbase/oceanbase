@@ -3581,10 +3581,22 @@ int ObTabletTableStore::build_split_new_table_store_(
       ha_status,
       split_start_scn))) {
     LOG_WARN("failed to inner build minor tables", K(ret), K(param), K(batch_tables));
-  } else if (OB_FALSE_IT(last_sstable = batch_tables.empty() ? nullptr : batch_tables.at(batch_tables.count() - 1))) {
-    // It must be the last one if there is a meta major sstable.
-  } else if (OB_FAIL(build_meta_major_table(allocator, static_cast<blocksstable::ObSSTable *>(last_sstable), old_store))) {
-    LOG_WARN("failed to build meta major tables", K(ret));
+  } else {
+    ObITable *last_major = nullptr;
+    // It must be the last one if there is a meta major sstable, which is decided by the `ObTabletSplitUtil::build_update_table_store_param`.
+    ObITable *last_sstable = batch_tables.empty() ? nullptr : batch_tables.at(batch_tables.count() - 1);
+    if (OB_NOT_NULL(last_sstable) && last_sstable->is_meta_major_sstable()) {
+      if (OB_ISNULL(last_major = major_tables_.get_boundary_table(true))) {
+        LOG_INFO("no major sstable exists, skip to try to build meta sstable", K(param));
+      } else if (last_sstable->get_max_merged_trans_version() <= last_major->get_snapshot_version()) {
+        LOG_INFO("the new meta merge sstable is covered by major", K(ret), KPC(last_sstable), KPC(last_major));
+      } else if (OB_FAIL(build_meta_major_table(allocator, static_cast<blocksstable::ObSSTable *>(last_sstable), old_store))) {
+        LOG_WARN("failed to build meta major tables", K(ret));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(build_memtable_array(tablet))) {
     LOG_WARN("failed to pull memtable from memtable_mgr", K(ret));
   } else if (OB_FAIL(pull_ddl_memtables(allocator, tablet))) {
