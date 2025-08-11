@@ -5348,6 +5348,8 @@ int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_detail(
             LOG_WARN("failed to has_exec_param");
           } else if (has_exec_param) {
             OPT_TRACE("[TopN Filter] can not pushdown to tsc with exec param");
+          } else if (OB_NOT_NULL(scan->get_limit_expr())) {
+            OPT_TRACE("[TopN Filter] can not pushdown tsc with limit");
           } else {
             scan_op = op;
             find_table_scan = true;
