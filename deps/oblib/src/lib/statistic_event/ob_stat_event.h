@@ -833,6 +833,10 @@ STAT_EVENT_ADD_DEF(SS_META_READ_COUNT, "ss meta read count", ObStatClassIds::OBS
 STAT_EVENT_ADD_DEF(SS_META_READ_DELAY, "ss meta read delay", ObStatClassIds::OBSERVER, 240102, true, true, true)
 STAT_EVENT_ADD_DEF(SS_META_WRITE_COUNT, "ss meta write count", ObStatClassIds::OBSERVER, 240103, true, true, true)
 STAT_EVENT_ADD_DEF(SS_META_WRITE_DELAY, "ss meta write delay", ObStatClassIds::OBSERVER, 240104, true, true, true)
+STAT_EVENT_ADD_DEF(SS_UPLOAD_TASK_TOTAL_COUNT, "The total count of all upload tasks", ObStatClassIds::STORAGE, 240105, false, true, true)
+STAT_EVENT_ADD_DEF(SS_UPLOAD_TASK_TOTAL_MACRO_BLOCK_COUNT, "The total macro block count of all upload tasks", ObStatClassIds::STORAGE, 240106, false, true, true)
+STAT_EVENT_ADD_DEF(SS_UPLOAD_TASK_TOTAL_EXEC_TIME, "The total execution time taken for all upload tasks", ObStatClassIds::STORAGE, 240107, false, true, true)
+STAT_EVENT_ADD_DEF(SS_UPLOAD_TASK_TOTAL_WAIT_SCHEDULE_TIME, "The total wait schedule time taken for all upload tasks", ObStatClassIds::STORAGE, 240108, false, true, true)
 //end
 STAT_EVENT_ADD_DEF(STAT_EVENT_ADD_END, "event add end", ObStatClassIds::DEBUG, 1, false, false, true)
 
