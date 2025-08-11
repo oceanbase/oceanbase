@@ -313,6 +313,8 @@ public:
   bool can_retry(const ObAutoSplitTask &task, const int ret);
   int init() { return polling_mgr_.init(); }
   void reset() { polling_mgr_.reset(); }
+
+  void reset_direct_cache() { task_direct_cache_.reset(); }
   static int check_ls_migrating(const uint64_t tenant_id, const ObTabletID &tablet_id, bool &is_migrating);
   int gc_deleted_tenant_caches();
 private:
