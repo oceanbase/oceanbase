@@ -3032,10 +3032,12 @@ int ObSql::generate_stmt(ParseResult &parse_result,
     }
     resolver_ctx.is_returning_ = parse_result.is_returning_;
     plan_ctx = result.get_exec_context().get_physical_plan_ctx();
-    if (OB_ISNULL(plan_ctx) || OB_ISNULL(result.get_exec_context().get_stmt_factory())
-        || OB_ISNULL(result.get_exec_context().get_expr_factory())) {
+    if (OB_ISNULL(plan_ctx) || OB_ISNULL(result.get_exec_context().get_stmt_factory())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Plan ctx should not be NULL", K(ret), KP(plan_ctx));
+    } else if (OB_ISNULL(resolver_ctx.expr_factory_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate expr factory failed", K(ret), KP(resolver_ctx.expr_factory_));
     } else if (OB_ISNULL(resolver_ctx.query_ctx_ =
         result.get_exec_context().get_stmt_factory()->get_query_ctx())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
