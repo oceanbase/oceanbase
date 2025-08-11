@@ -17,11 +17,6 @@
           "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
         },
         {
-          "name": "global_index_auto_split_policy",
-          "value": "OFF",
-          "comment": "Temporarily disable the automatic partitioning and splitting of the global index. Enable it again after the stability is tested"
-        },
-        {
           "name": "inc_sstable_upload_thread_score",
           "value": 30,
           "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
@@ -72,11 +67,6 @@
           "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
         },
         {
-          "name": "global_index_auto_split_policy",
-          "value": "OFF",
-          "comment": "Temporarily disable the automatic partitioning and splitting of the global index. Enable it again after the stability is tested"
-        },
-        {
           "name": "inc_sstable_upload_thread_score",
           "value": 30,
           "comment": "The number of upload threads needs to be increased. This value needs to be explored and is tentatively set at 30"
@@ -121,11 +111,6 @@
         }
       ],
       "tenant": [
-        {
-          "name": "global_index_auto_split_policy",
-          "value": "OFF",
-          "comment": "Temporarily disable the automatic partitioning and splitting of the global index. Enable it again after the stability is tested"
-        },
         {
           "name": "_tempstore_read_alignment_size",
           "value": "1MB",
@@ -227,11 +212,6 @@
       ],
       "tenant": [
         {
-          "name": "global_index_auto_split_policy",
-          "value": "OFF",
-          "comment": "Temporarily disable the automatic partitioning and splitting of the global index. Enable it again after the stability is tested"
-        },
-        {
           "name": "_tempstore_read_alignment_size",
           "value": "1MB",
           "comment": "The size of data read by tempstore each time is 1MB in shared storage mode."
@@ -281,11 +261,6 @@
         }
       ],
       "tenant": [
-        {
-          "name": "global_index_auto_split_policy",
-          "value": "OFF",
-          "comment": "Temporarily disable the automatic partitioning and splitting of the global index. Enable it again after the stability is tested"
-        },
         {
           "name": "_tempstore_read_alignment_size",
           "value": "1MB",
