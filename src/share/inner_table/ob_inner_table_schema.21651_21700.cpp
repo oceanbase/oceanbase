@@ -366,7 +366,7 @@ int ObInnerTableSchema::dba_ob_external_resources_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(         SELECT           RESOURCE_ID,           DATABASE_ID,           NAME,           CASE TYPE WHEN 1 THEN 'JAVA_JAR' ELSE 'INVALID_TYPE' END AS TYPE,           CONTENT,           COMMENT         FROM oceanbase.__all_external_resource         )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(         SELECT           ER.RESOURCE_ID AS RESOURCE_ID,           ER.DATABASE_ID AS DATABASE_ID,           DB.DATABASE_NAME AS DATABASE_NAME,           ER.NAME AS NAME,           CASE ER.TYPE WHEN 1 THEN 'JAVA_JAR' WHEN 2 THEN 'PYTHON_PY' ELSE 'INVALID_TYPE' END AS TYPE,           ER.CONTENT AS CONTENT,           ER.COMMENT AS COMMENT         FROM oceanbase.__all_external_resource ER           LEFT JOIN oceanbase.__all_database DB           ON ER.TENANT_ID = DB.TENANT_ID AND ER.DATABASE_ID = DB.DATABASE_ID           WHERE ER.TENANT_ID = 0         )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

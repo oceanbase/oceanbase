@@ -18331,8 +18331,8 @@ def_table_schema(
                       ) AS DTD_IDENTIFIER,
                       CAST('SQL' AS CHAR(8)) as ROUTINE_BODY,
                       CAST(mp.body AS CHAR(4194304)) as ROUTINE_DEFINITION,
-                      CAST(NULL AS CHAR(64)) as EXTERNAL_NAME,
-                      CAST(NULL AS CHAR(64)) as EXTERNAL_LANGUAGE,
+                      CAST(IF(r.external_routine_type = 0, NULL, JSON_OBJECT('file', CASE WHEN r.external_routine_type in (1, 3) THEN r.external_routine_url WHEN r.external_routine_type in (2, 4) THEN r.external_routine_resource ELSE NULL END, 'symbol', r.external_routine_entry, 'inner_type', CONCAT(CASE WHEN r.external_routine_type IN (1, 2) THEN 'JAVA' WHEN r.external_routine_type IN (3, 4) THEN 'PYTHON' ELSE NULL END, CASE WHEN r.flag & 16384 != 0 THEN ' UDAF' WHEN r.flag & 16777216 != 0 THEN ' UDTF' ELSE ' UDF' END))) AS CHAR(4194304)) as EXTERNAL_NAME,
+                      CAST(CASE WHEN r.external_routine_type IN (1, 2) THEN 'JAVA' WHEN r.external_routine_type IN (3, 4) THEN 'PYTHON' ELSE NULL END AS CHAR(64)) as EXTERNAL_LANGUAGE,
                       CAST('SQL' AS CHAR(8)) as PARAMETER_STYLE,
                       CAST(mp.IS_DETERMINISTIC AS CHAR(3)) AS IS_DETERMINISTIC,
                       CAST(mp.SQL_DATA_ACCESS AS CHAR(64)) AS SQL_DATA_ACCESS,
@@ -42886,13 +42886,17 @@ def_table_schema(
       view_definition =
       """
         SELECT
-          RESOURCE_ID,
-          DATABASE_ID,
-          NAME,
-          CASE TYPE WHEN 1 THEN 'JAVA_JAR' ELSE 'INVALID_TYPE' END AS TYPE,
-          CONTENT,
-          COMMENT
-        FROM oceanbase.__all_external_resource
+          ER.RESOURCE_ID AS RESOURCE_ID,
+          ER.DATABASE_ID AS DATABASE_ID,
+          DB.DATABASE_NAME AS DATABASE_NAME,
+          ER.NAME AS NAME,
+          CASE ER.TYPE WHEN 1 THEN 'JAVA_JAR' WHEN 2 THEN 'PYTHON_PY' ELSE 'INVALID_TYPE' END AS TYPE,
+          ER.CONTENT AS CONTENT,
+          ER.COMMENT AS COMMENT
+        FROM oceanbase.__all_external_resource ER
+          LEFT JOIN oceanbase.__all_database DB
+          ON ER.TENANT_ID = DB.TENANT_ID AND ER.DATABASE_ID = DB.DATABASE_ID
+          WHERE ER.TENANT_ID = 0
         """.replace("\n", " ")
 )
 

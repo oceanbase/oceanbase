@@ -353,7 +353,7 @@ COLLATION_NAME	varchar(64)	NO
 DTD_IDENTIFIER	longtext	NO			
 ROUTINE_BODY	varchar(8)	NO			
 ROUTINE_DEFINITION	longtext	NO			
-EXTERNAL_NAME	varchar(64)	NO			
+EXTERNAL_NAME	longtext	NO			
 EXTERNAL_LANGUAGE	varchar(64)	NO			
 PARAMETER_STYLE	varchar(8)	NO			
 IS_DETERMINISTIC	varchar(3)	NO			
@@ -10947,6 +10947,7 @@ desc oceanbase.DBA_OB_EXTERNAL_RESOURCES;
 Field	Type	Null	Key	Default	Extra
 RESOURCE_ID	bigint(20)	NO		NULL	
 DATABASE_ID	bigint(20)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
 NAME	varchar(256)	NO		NULL	
 TYPE	varchar(12)	NO		NULL	
 CONTENT	longblob	NO		NULL	
