@@ -323,7 +323,7 @@ OB_INLINE void ObPushdownAggContext::setup_agg_row(share::aggregate::AggrRowPtr 
 {
   OB_ASSERT(row_size == agg_ctx_.row_meta().row_size_);
   int ret = aggregate::Processor::reuse_agg_row(row, agg_ctx_, reuse_aggrow_mgr_);
-  OB_ASSERT(ret = OB_SUCCESS);
+  OB_ASSERT(ret == OB_SUCCESS);
 }
 
 ObAggDatumBuf::ObAggDatumBuf(common::ObIAllocator &allocator)
