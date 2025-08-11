@@ -2245,6 +2245,13 @@ int ObMicroBlockDecoder::get_group_by_aggregate_result(
         if (need_get_col_datum) {
           if (OB_FAIL(get_col_datums(agg_col_offset, row_ids, cell_datas, row_cap, col_datums))) {
             LOG_WARN("Failed to get col datums", K(ret), K(i), K(agg_col_offset), K(row_cap));
+          } else if (agg_cell->need_padding() && OB_FAIL(storage::pad_on_datums(
+                        col_param->get_accuracy(),
+                        col_param->get_meta_type().get_collation_type(),
+                        decoder_allocator_.get_inner_allocator(),
+                        row_cap,
+                        col_datums))) {
+            LOG_WARN("Failed to pad col datums", K(ret), K(i), K(agg_col_offset), K(row_cap), KPC(col_param), KPC(col_datums));
           } else if (iter_param.has_lob_column_out() && has_lob_out_row()
                     && nullptr != col_param && col_param->get_meta_type().is_lob_storage()
                     && OB_FAIL(fill_datums_lob_locator(iter_param, context, *col_param, row_cap, col_datums, false))) {

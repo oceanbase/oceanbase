@@ -241,11 +241,6 @@ int ObAggCell::output_extra_group_by_result(const int64_t start, const int64_t c
   return ret;
 }
 
-int ObAggCell::pad_column_in_group_by(const int64_t row_cap, common::ObIAllocator &allocator)
-{
-  return OB_SUCCESS;
-}
-
 int ObAggCell::prepare_def_datum()
 {
   int ret = OB_SUCCESS;
@@ -908,22 +903,6 @@ int ObMinAggCell::eval_batch_in_group_by(
   return ret;
 }
 
-int ObMinAggCell::pad_column_in_group_by(const int64_t row_cap, common::ObIAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  common::ObDatum *sql_result_datums = group_by_result_datum_buf_->get_basic_buf();
-  if (basic_info_.need_padding() &&
-      OB_FAIL(storage::pad_on_datums(
-              basic_info_.col_param_->get_accuracy(),
-              basic_info_.col_param_->get_meta_type().get_collation_type(),
-              allocator,
-              row_cap,
-              sql_result_datums))) {
-    LOG_WARN("Failed to pad aggregate column in group by", K(ret), KPC(this));
-  }
-  return ret;
-}
-
 ObMaxAggCell::ObMaxAggCell(const ObAggCellBasicInfo &basic_info, common::ObIAllocator &allocator)
     : ObAggCell(basic_info, allocator),
       group_by_ref_array_(nullptr),
@@ -1102,22 +1081,6 @@ int ObMaxAggCell::eval_batch_in_group_by(
         }
       }
     }
-  }
-  return ret;
-}
-
-int ObMaxAggCell::pad_column_in_group_by(const int64_t row_cap, common::ObIAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  common::ObDatum *sql_result_datums = group_by_result_datum_buf_->get_basic_buf();
-  if (basic_info_.need_padding() &&
-      OB_FAIL(storage::pad_on_datums(
-              basic_info_.col_param_->get_accuracy(),
-              basic_info_.col_param_->get_meta_type().get_collation_type(),
-              allocator,
-              row_cap,
-              sql_result_datums))) {
-    LOG_WARN("Failed to pad aggregate column in group by", K(ret), KPC(this));
   }
   return ret;
 }
@@ -3352,11 +3315,6 @@ int ObGroupByCell::pad_column_in_group_by(const int64_t row_cap)
               row_cap,
               sql_result_datums))) {
     LOG_WARN("Failed to pad group by column", K(ret), K(row_cap), KPC_(group_by_col_param));
-  }
-  for (int i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
-    if (OB_FAIL(agg_cells_.at(i)->pad_column_in_group_by(row_cap, padding_allocator_))) {
-      LOG_WARN("Failed to pad column for aggregate datums", K(ret), K(row_cap));
-    }
   }
   return ret;
 }
