@@ -6987,6 +6987,60 @@ int ObSelectResolver::check_window_exprs()
     }
   }
 
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_grouping_sets_items_size(); ++i) {
+    const ObGroupingSetsItem &grouping_set_item = select_stmt->get_grouping_sets_items().at(i);
+    const ObIArray<ObRollupItem> &rollup_items = grouping_set_item.rollup_items_;
+    const ObIArray<ObCubeItem> &cube_items = grouping_set_item.cube_items_;
+    if (OB_FAIL(check_window_func_in_group_by_exprs(grouping_set_item.grouping_sets_exprs_))) {
+      LOG_WARN("check window function in grouping sets exprs failed", K(ret), K(i));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < rollup_items.count(); ++j) {
+      const ObRollupItem &rollup_item = rollup_items.at(j);
+      if (OB_FAIL(check_window_func_in_group_by_exprs(rollup_item.rollup_list_exprs_))) {
+        LOG_WARN("check window function in rollup items in grouping sets failed", K(ret), K(i), K(j));
+      }
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < cube_items.count(); ++j) {
+      const ObCubeItem &cube_item = cube_items.at(j);
+      if (OB_FAIL(check_window_func_in_group_by_exprs(cube_item.cube_list_exprs_))) {
+        LOG_WARN("check window function in cube items in grouping sets failed", K(ret), K(i), K(j));
+      }
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_rollup_items_size(); ++i) {
+    const ObRollupItem &rollup_item = select_stmt->get_rollup_items().at(i);
+    if (OB_FAIL(check_window_func_in_group_by_exprs(rollup_item.rollup_list_exprs_))) {
+      LOG_WARN("check window function in rollup items failed", K(ret), K(i));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_cube_items_size(); ++i) {
+    const ObCubeItem &cube_item = select_stmt->get_cube_items().at(i);
+    if (OB_FAIL(check_window_func_in_group_by_exprs(cube_item.cube_list_exprs_))) {
+      LOG_WARN("check window function in cube items failed", K(ret), K(i));
+    }
+  }
+
+  return ret;
+}
+
+int ObSelectResolver::check_window_func_in_group_by_exprs(const ObIArray<ObGroupbyExpr> &group_by_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < group_by_exprs.count(); ++i) {
+    const ObIArray<ObRawExpr *> &group_exprs = group_by_exprs.at(i).groupby_exprs_;
+    for (int64_t j = 0; OB_SUCC(ret) && j < group_exprs.count(); ++j) {
+      ObRawExpr *expr = group_exprs.at(j);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret));
+      } else if (OB_UNLIKELY(expr->has_flag(CNT_WINDOW_FUNC))) {
+        ret = OB_ERR_INVALID_WINDOW_FUNC_USE;
+        LOG_WARN("window function exists in group by not supported", K(ret), K(*expr), K(i), K(j));
+      }
+    }
+  }
   return ret;
 }
 

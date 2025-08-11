@@ -270,6 +270,7 @@ protected:
   int check_grouping_columns();
   int check_grouping_columns(ObSelectStmt &stmt, ObRawExpr *&expr);
   int check_window_exprs();
+  int check_window_func_in_group_by_exprs(const ObIArray<ObGroupbyExpr> &group_by_exprs);
   int check_sequence_exprs();
   int check_udt_set_query();
   int set_having_self_column(const ObRawExpr *real_ref_expr);
