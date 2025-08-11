@@ -80,7 +80,9 @@ void FakeAllocatorForTxShare::adaptive_update_limit(const int64_t tenant_id,
 
   int64_t cur_ts = ObClockGenerator::getClock();
   int64_t old_ts = last_update_limit_ts;
-  if (OB_UNLIKELY(old_ts - cur_ts > (1LL * 1000LL * 1000LL /* 1 second */))) {
+  if (is_meta_tenant(tenant_id)) {
+    // skip adaptive update throttle limit for meta tenant
+  } else if (OB_UNLIKELY(old_ts - cur_ts > (1LL * 1000LL * 1000LL /* 1 second */))) {
     SHARE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "invalid timestamp", K(cur_ts), K(old_ts));
   } else if ((cur_ts - old_ts > UPDATE_LIMIT_INTERVAL) && ATOMIC_BCAS(&last_update_limit_ts, old_ts, cur_ts)) {
     int64_t remain_memory = lib::get_tenant_memory_remain(tenant_id);
