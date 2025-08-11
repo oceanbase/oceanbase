@@ -425,7 +425,9 @@ int ObSequenceCache::nextval(const ObSequenceSchema &schema,
   } else if (OB_FAIL(tenant_info_loader->get_switchover_epoch(switchover_epoch))) {
     LOG_WARN("fail to get switchover_epoch", K(ret));
   } else if (item->epoch_version_ != switchover_epoch) {
+    sequence_cache_.revert(item);
     remove(schema.get_tenant_id(), schema.get_sequence_id());
+    item = nullptr;
     ret = OB_AUTOINC_CACHE_NOT_EQUAL;
     LOG_WARN("cache is out of date, need to be cleared and retry", K(ret));
   } else {
