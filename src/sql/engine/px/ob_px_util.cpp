@@ -2301,7 +2301,9 @@ int ObPxTreeSerializer::serialize_tree(char *buf,
   int ret = OB_SUCCESS;
   is_fulltree = is_fulltree || IS_PX_COORD(root.type_);
   int32_t child_cnt = (!is_fulltree && IS_RECEIVE(root.type_)) ? 0 : root.get_child_cnt();
-  if (OB_FAIL(serialization::encode_vi32(buf, buf_len, pos, root.type_))) {
+  if (OB_FAIL(common::check_stack_overflow())) {
+    LOG_WARN("failed to check_stack_overflow");
+  } else if (OB_FAIL(serialization::encode_vi32(buf, buf_len, pos, root.type_))) {
     LOG_WARN("fail to encode op type", K(ret));
   } else if (OB_FAIL(serialization::encode(buf, buf_len, pos, child_cnt))) {
     LOG_WARN("fail to encode op type", K(ret));
@@ -2632,7 +2634,10 @@ int64_t ObPxTreeSerializer::get_serialize_op_input_tree_size(
   int64_t index = op_spec.id_;
   ObOperatorKit *kit = op_kit_store.get_operator_kit(index);
   int64_t len = 0;
-  if (nullptr == kit) {
+  if (OB_FAIL(common::check_stack_overflow())) {
+    LOG_ERROR("failed to check_stack_overflow");
+    len = 0;
+  } else if (nullptr == kit) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("op input is NULL", K(ret), K(index));
   } else if (nullptr != (op_spec_input = kit->input_)) {
