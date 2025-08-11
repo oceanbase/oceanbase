@@ -1470,7 +1470,7 @@ int ObLSTypeTransformTask::execute(
     ret_comment = ObDRTaskRetComment::FAIL_TO_SEND_RPC;
     LOG_WARN("fail to send ls type transform rpc", KR(ret), K(arg));
   } else {
-    LOG_INFO("start to execute ls type transform", K(arg));
+    LOG_INFO("start to execute ls type transform", K(arg), K(get_dst_server()));
   }
   return ret;
 }
