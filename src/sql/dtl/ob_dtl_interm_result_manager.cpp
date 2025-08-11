@@ -284,14 +284,12 @@ int ObDTLIntermResultManager::insert_interm_result_info(ObDTLIntermResultKey &ke
   if (!result_info->is_store_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("row store is null", K(ret));
-  } else if (-1 == dir_id_) {
+  } else if (DTL_IR_STORE_DO(*result_info, get_file_dir_id) <= 0) {
     // The code here is mainly for the use of the temp_table.
     // For the px module,
     // the dir_id has already been set in the previous access_mem_profile.
-    if (OB_FAIL(FILE_MANAGER_INSTANCE_WITH_MTL_SWITCH.alloc_dir(result_info->get_tenant_id(), dir_id_))) {
-      LOG_WARN("allocate file directory failed", K(ret));
-    } else {
-      DTL_IR_STORE_DO(*result_info, set_dir_id, dir_id_);
+    if (OB_FAIL(DTL_IR_STORE_DO(*result_info, alloc_dir_id))) {
+      LOG_WARN("alloc dir id failed", K(ret));
     }
   }
 
