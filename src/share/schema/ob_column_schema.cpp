@@ -787,8 +787,10 @@ int ObColumnSchemaV2::get_each_column_group_name(ObString &cg_name) const {
   /* to avoid column_name_str not end with \0, write cg_name using ObString::write*/
   char tmp_cg_name[OB_MAX_COLUMN_GROUP_NAME_LENGTH] = {'\0'};
   int32_t write_len = snprintf(tmp_cg_name, OB_MAX_COLUMN_GROUP_NAME_LENGTH, "%.*s_%.*s",
-                               static_cast<int>(sizeof(OB_COLUMN_GROUP_NAME_PREFIX)),
-                               OB_COLUMN_GROUP_NAME_PREFIX, column_name_.length(), column_name_.ptr());
+                               static_cast<int>(strlen(OB_COLUMN_GROUP_NAME_PREFIX)),
+                               OB_COLUMN_GROUP_NAME_PREFIX,
+                               column_name_.length(),
+                               column_name_.ptr());
   if (write_len < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to format column group_name", K(ret), K(write_len));
