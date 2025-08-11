@@ -266,7 +266,11 @@ int to_string_and_strip(const char* str, const int64_t length, char* buf, const 
       }
     }
   }
-  if (OB_FAIL(ret) || pos + 2 >= buf_len) {
+  if (OB_FAIL(ret) || pos + 3 >= buf_len) {
+    // When the length of the tag exceeds buf_len, need ensure that the json format is legal when truncating.
+    // Pos in buf_len - 2 will fill ']' later.
+    buf[buf_len - 4] = '\"';
+    buf[buf_len - 3] = '}';
     buf[buf_len - 1] = 0;
   } else {
     buf[pos++] = '\"';
