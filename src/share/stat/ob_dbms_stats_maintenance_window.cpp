@@ -84,10 +84,11 @@ int ObDbmsStatsMaintenanceWindow::get_stats_maintenance_window_jobs_sql(const Ob
       }
       if (OB_SUCC(ret)) {
         //set stats history manager job
-        if (OB_FAIL(get_stats_history_manager_job_info(is_oracle_mode, tenant_id,
-                                                      job_id, exec_env, job_info))) {
+        if (OB_FAIL(get_stats_history_manager_job_info(
+                is_oracle_mode, tenant_id, job_id, offset_sec, exec_env, job_info))) {
           LOG_WARN("failed to get stats history manager job sql", K(ret));
-        } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::create_dbms_sched_job(sql_client, tenant_id, job_id, job_info))) {
+        } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::create_dbms_sched_job(
+                       sql_client, tenant_id, job_id, job_info))) {
           LOG_WARN("failed to create dbms sched job", K(ret), K(job_info));
         } else {
           ++ job_id;
@@ -157,32 +158,49 @@ int ObDbmsStatsMaintenanceWindow::get_stat_window_job_info(const bool is_oracle_
 int ObDbmsStatsMaintenanceWindow::get_stats_history_manager_job_info(const bool is_oracle_mode,
                                                                     const uint64_t tenant_id,
                                                                     const int64_t job_id,
+                                                                    const int64_t offset_sec,
                                                                     const ObString &exec_env,
                                                                     dbms_scheduler::ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
   int64_t interval_ts = DEFAULT_DAY_INTERVAL_USEC;
-  int64_t end_date = 64060560000000000;//4000-01-01 00:00:00.000000
-  int64_t current = ObTimeUtility::current_time() + DEFAULT_DAY_INTERVAL_USEC;
-  job_info.tenant_id_ = tenant_id;
-  job_info.job_name_ = ObString(opt_stats_history_manager);
-  job_info.job_ = job_id;
-  job_info.job_action_ = ObString("DBMS_STATS.PURGE_STATS(NULL)");
-  job_info.lowner_ = is_oracle_mode ? ObString("SYS") : ObString("root@%");
-  job_info.powner_ = is_oracle_mode ? ObString("SYS") : ObString("root@%");
-  job_info.cowner_ = is_oracle_mode ? ObString("SYS") : ObString("oceanbase");
-  job_info.job_style_ = ObString("regular");
-  job_info.job_type_ = ObString("STORED_PROCEDURE");
-  job_info.job_class_ = ObString("DEFAULT_JOB_CLASS");
-  job_info.start_date_ = current;
-  job_info.end_date_ = end_date;
-  job_info.repeat_interval_ = ObString("FREQ=DAYLY; INTERVAL=1");
-  job_info.enabled_ = true;
-  job_info.auto_drop_ = false;
-  job_info.max_run_duration_ = DEFAULT_HISTORY_MANAGER_DURATION_SEC;
-  job_info.exec_env_ = exec_env;
-  job_info.comments_ = ObString("used to stats history manager");
-  job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::STAT_MAINTENANCE_JOB;
+  int64_t end_date = 64060560000000000;  // 4000-01-01 00:00:00.000000
+
+  ObTime ob_time;
+  int64_t current_time = ObTimeUtility::current_time();
+  if (OB_UNLIKELY(current_time <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(current_time));
+  } else if (OB_FAIL(ObTimeConverter::usec_to_ob_time(current_time + offset_sec * 1000000, ob_time))) {
+    LOG_WARN("failed to usec to ob time", K(ret), K(current_time));
+  } else {
+    // history_manager purge stats at 02:00 every day before stats collect
+    int64_t default_start_hour = 2;
+    int64_t total_hour_with_trunc = current_time / USEC_OF_HOUR;
+    int64_t current_hour = ob_time.parts_[DT_HOUR];
+    int64_t offset_hour = 1 * HOUR_OF_DAY + default_start_hour - current_hour;
+    int64_t start_usec = (total_hour_with_trunc + offset_hour) * USEC_OF_HOUR;
+
+    job_info.tenant_id_ = tenant_id;
+    job_info.job_name_ = ObString(opt_stats_history_manager);
+    job_info.job_ = job_id;
+    job_info.job_action_ = ObString("DBMS_STATS.PURGE_STATS(NULL)");
+    job_info.lowner_ = is_oracle_mode ? ObString("SYS") : ObString("root@%");
+    job_info.powner_ = is_oracle_mode ? ObString("SYS") : ObString("root@%");
+    job_info.cowner_ = is_oracle_mode ? ObString("SYS") : ObString("oceanbase");
+    job_info.job_style_ = ObString("regular");
+    job_info.job_type_ = ObString("STORED_PROCEDURE");
+    job_info.job_class_ = ObString("DEFAULT_JOB_CLASS");
+    job_info.start_date_ = start_usec;
+    job_info.end_date_ = end_date;
+    job_info.repeat_interval_ = ObString("FREQ=DAYLY; INTERVAL=1");
+    job_info.enabled_ = true;
+    job_info.auto_drop_ = false;
+    job_info.max_run_duration_ = DEFAULT_HISTORY_MANAGER_DURATION_SEC;
+    job_info.exec_env_ = exec_env;
+    job_info.comments_ = ObString("used to stats history manager");
+    job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::STAT_MAINTENANCE_JOB;
+  }
   return ret;
 }
 
