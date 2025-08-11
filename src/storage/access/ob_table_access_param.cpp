@@ -76,6 +76,11 @@ ObTableIterParam::~ObTableIterParam()
   ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
 }
 
+void ObTableIterParam::reuse()
+{
+  ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
+}
+
 void ObTableIterParam::reset()
 {
   table_id_ = 0;
@@ -248,6 +253,11 @@ ObTableAccessParam::ObTableAccessParam()
 
 ObTableAccessParam::~ObTableAccessParam()
 {
+}
+
+void ObTableAccessParam::reuse()
+{
+  iter_param_.reuse();
 }
 
 void ObTableAccessParam::reset()
