@@ -3851,7 +3851,7 @@ int ObStaticEngineCG::generate_ins_auto_inc_expr(ObLogInsert &op,
     LOG_WARN("fail to get all auto_inc column ids", K(ret));
   } else {
     bool founded = false;
-    for (int64_t i = 0; !founded && OB_SUCC(ret) && i < ins_pri_dml_info->rowkey_cnt_; i++) {
+    for (int64_t i = 0; !founded && OB_SUCC(ret) && i < ins_pri_dml_info->column_exprs_.count(); i++) {
       ObColumnRefRawExpr *col_expr = ins_pri_dml_info->column_exprs_.at(i);
       ObRawExpr *new_auto_inc_expr = ins_pri_dml_info->column_convert_exprs_.at(i);
       uint64_t base_cid = OB_INVALID_ID;
