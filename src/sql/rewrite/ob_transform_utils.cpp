@@ -11041,11 +11041,13 @@ int ObTransformUtils::check_correlated_condition_isomorphic(ObSelectStmt *left_q
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(left_query_ref,
                                                left_where_exprs,
-                                               left_new_select_exprs))) {
+                                               left_new_select_exprs,
+                                               false))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(left_query_ref,
                                                left_having_exprs,
-                                               left_new_select_exprs))) {
+                                               left_new_select_exprs,
+                                               false))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(right_query_ref,
                                                right_select_exprs,
@@ -11054,11 +11056,13 @@ int ObTransformUtils::check_correlated_condition_isomorphic(ObSelectStmt *left_q
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(right_query_ref,
                                                right_where_exprs,
-                                               right_new_select_exprs))) {
+                                               right_new_select_exprs,
+                                               false))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(pullup_correlated_exprs(right_query_ref,
                                                right_having_exprs,
-                                               right_new_select_exprs))) {
+                                               right_new_select_exprs,
+                                               false))) {
       LOG_WARN("failed to pullup correlated exprs", K(ret));
     } else if (OB_FAIL(check_result_type_same(left_new_select_exprs, 
                                               right_new_select_exprs, 
@@ -11603,7 +11607,8 @@ int ObTransformUtils::create_spj_and_pullup_correlated_exprs(const ObQueryRefRaw
                OB_FAIL(replace_none_correlated_exprs(subquery->get_condition_exprs(), 
                                                      query_ref,
                                                      pos, 
-                                                     new_column_list))) {
+                                                     new_column_list,
+                                                     false))) {
       LOG_WARN("failed to replace exprs", K(ret));
     }
   }
@@ -11981,7 +11986,8 @@ int ObTransformUtils::pullup_correlated_conditions(const ObQueryRefRawExpr &quer
     } else if (OB_FAIL(pullup_correlated_expr(query_ref,
                                               expr,
                                               new_select_list,
-                                              is_correlated))) {
+                                              is_correlated,
+                                              false))) {
       LOG_WARN("failed to pullup correlated expr", K(ret));
     } else if (OB_FAIL(pullup_exprs.push_back(expr))) {
       LOG_WARN("failed to push back expr", K(ret));
