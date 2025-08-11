@@ -1168,11 +1168,11 @@ int ObXMLExprHelper::check_doc_validity(ObMulModeMemCtx* mem_ctx, ObXmlDocument 
 }
 
 // not all udts sql types based on lobs, so not handle xml in process_lob_locator_results
-int ObXMLExprHelper::process_sql_udt_results(ObObj& value, sql::ObResultSet &result)
+int ObXMLExprHelper::process_sql_udt_results(ObObj& value, sql::ObResultSet &result, common::ObIAllocator *alloc)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator *allocator = NULL;
-  if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
+  ObIAllocator *allocator = alloc;
+  if (OB_ISNULL(allocator) && OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
     LOG_WARN("fail to get convert charset allocator", K(ret));
   } else if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;

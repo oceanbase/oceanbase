@@ -1266,6 +1266,7 @@ inline bool ob_is_interval_tc(ObObjType type) { return ObIntervalTC == ob_obj_ty
 inline bool ob_is_lob_tc(ObObjType type) { return ObLobTC == ob_obj_type_class(type); }
 inline bool ob_is_json_tc(ObObjType type) { return ObJsonTC == ob_obj_type_class(type); }
 inline bool ob_is_geometry_tc(ObObjType type) { return ObGeometryTC == ob_obj_type_class(type); }
+inline bool ob_is_extend_tc(ObObjType type) { return ObExtendTC == ob_obj_type_class(type); }
 
 inline bool is_lob(ObObjType type) { return ob_is_text_tc(type); }
 inline bool is_lob_locator(ObObjType type) { return ObLobType == type; }
