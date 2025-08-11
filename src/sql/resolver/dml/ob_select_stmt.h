@@ -705,6 +705,8 @@ public:
   int is_query_deterministic(bool &is_deterministic) const;
   inline bool is_oracle_compat_groupby() const {return is_oracle_compat_groupby_; }
   inline void set_is_oracle_compat_groupby(bool v) { is_oracle_compat_groupby_ = v; }
+  inline bool is_recursive_union_branch() const { return is_recursive_union_branch_; }
+  inline void set_is_recursive_union_branch(bool v) { is_recursive_union_branch_ = v; }
 
 private:
   SetOperator set_op_;
@@ -773,6 +775,7 @@ private:
   // optimizer can assign or remove DISTINCT for this stmt
   bool is_implicit_distinct_;
   bool is_oracle_compat_groupby_; // true if has rollup/cube/grouping sets in mysql mode
+  bool is_recursive_union_branch_; // true if the stmt is a branch of a recursive union
 };
 }
 }

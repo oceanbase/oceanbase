@@ -264,6 +264,8 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     is_expanded_mview_ = other.is_expanded_mview_;
     is_select_straight_join_ = other.is_select_straight_join_;
     is_implicit_distinct_ = false; // it is a property from upper stmt, do not copy
+    is_oracle_compat_groupby_ = other.is_oracle_compat_groupby_;
+    is_recursive_union_branch_ = other.is_recursive_union_branch_;
   }
   return ret;
 }
@@ -361,6 +363,8 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     is_expanded_mview_ = other.is_expanded_mview_;
     is_select_straight_join_ = other.is_select_straight_join_;
     is_implicit_distinct_ = false; // it is a property from upper stmt, do not copy
+    is_oracle_compat_groupby_ = other.is_oracle_compat_groupby_;
+    is_recursive_union_branch_ = other.is_recursive_union_branch_;
     // copy insert into statement
     if (OB_SUCC(ret) && NULL != other.into_item_) {
       ObSelectIntoItem *temp_into_item = NULL;
@@ -579,6 +583,7 @@ ObSelectStmt::ObSelectStmt()
   is_select_straight_join_ = false;
   is_implicit_distinct_ = false;
   is_oracle_compat_groupby_ = false;
+  is_recursive_union_branch_ = false;
 }
 
 ObSelectStmt::~ObSelectStmt()

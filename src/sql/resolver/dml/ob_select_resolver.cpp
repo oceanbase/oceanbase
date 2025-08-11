@@ -1495,6 +1495,7 @@ int ObSelectResolver::resolve(const ParseNode &parse_tree)
       select_stmt->set_tenant_id(params_.show_tenant_id_);
     }
     select_stmt->set_show_seed(params_.show_seed_);
+    select_stmt->set_is_recursive_union_branch(cte_ctx_.is_set_left_resolver_ || NULL != cte_ctx_.left_select_stmt_);
     /* -----------------------------------------------------------------
      * The later resolve may need some information resolved by the former one,
      * so please follow the resolving orders:
