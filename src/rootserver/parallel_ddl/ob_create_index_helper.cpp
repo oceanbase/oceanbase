@@ -371,14 +371,22 @@ int ObCreateIndexHelper::generate_index_schema_()
       LOG_WARN("fail to get index info", KR(ret), K(database_id_), K(index_schema->get_table_name()));
     } else if (index_info.is_valid()) {
       if (arg_.if_not_exist_) {
-          // executor rely on invalid index id when arg_.if_not_exists_
-          res_.schema_version_ = index_info.get_schema_version();
+        if (OB_FAIL(ObIndexBuilderUtil::check_index_for_if_not_exist(
+                    tenant_id_, index_info.get_index_id(), res_.task_id_))) {
+          LOG_WARN("fail to check index status for if not exist", KR(ret), K_(tenant_id), K(index_info.get_index_id()));
+        } else if (res_.task_id_ > 0) {
+          res_.index_table_id_ = index_info.get_index_id();
+        }
+        res_.schema_version_ = index_info.get_schema_version();
+        // executor rely on invalid index id when arg_.if_not_exists_
       }
-      ret = OB_ERR_KEY_NAME_DUPLICATE;
-      LOG_WARN("duplicate index name", KR(ret), K_(tenant_id),
-              "database_id", orig_data_table_schema_->get_database_id(),
-              "data_table_id", orig_data_table_schema_->get_table_id(),
-              "index_name", arg_.index_name_);
+      if (OB_SUCC(ret)) {
+        ret = OB_ERR_KEY_NAME_DUPLICATE;
+        LOG_WARN("duplicate index name", KR(ret), K_(tenant_id),
+                 "database_id", orig_data_table_schema_->get_database_id(),
+                 "data_table_id", orig_data_table_schema_->get_table_id(),
+                 "index_name", arg_.index_name_);
+      }
     }
   } else {
     bool name_exist = false;
@@ -390,9 +398,9 @@ int ObCreateIndexHelper::generate_index_schema_()
     } else if (name_exist) {
       ret = OB_ERR_KEY_NAME_DUPLICATE;
       LOG_WARN("duplicate index name", KR(ret), K_(tenant_id),
-              "database_id", orig_data_table_schema_->get_database_id(),
-              "data_table_id", orig_data_table_schema_->get_table_id(),
-              "index_name", arg_.index_name_);
+               "database_id", orig_data_table_schema_->get_database_id(),
+               "data_table_id", orig_data_table_schema_->get_table_id(),
+               "index_name", arg_.index_name_);
     }
   }
   uint64_t object_id = OB_INVALID_ID;

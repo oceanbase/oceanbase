@@ -78,6 +78,10 @@ public:
       const ObString &src_column_name,
       const uint64_t src_column_id,
       ObColumnSchemaV2 &shadow_column_schema);
+  static int check_index_for_if_not_exist(const uint64_t tenant_id,
+                                          const uint64_t index_id,
+                                          int64_t &task_id);
+
 private:
   static const int SPATIAL_MBR_COLUMN_MAX_LENGTH = 32;
   static int generate_prefix_column(
