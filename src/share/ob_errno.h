@@ -2242,7 +2242,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_CURL_ERROR__USER_ERROR_MSG "curl error"
 #define OB_MAJOR_FREEZE_NOT_ALLOW__USER_ERROR_MSG "%s"
 #define OB_PREPARE_FREEZE_FAILED__USER_ERROR_MSG "prepare freeze failed"
-#define OB_INVALID_DATE_VALUE__USER_ERROR_MSG "Incorrect datetime value: '%.*s' for column '%s'"
+#define OB_INVALID_DATE_VALUE__USER_ERROR_MSG "Incorrect datetime value: '%.*s'%s"
 #define OB_INACTIVE_SQL_CLIENT__USER_ERROR_MSG "Inactive sql client, only read allowed"
 #define OB_INACTIVE_RPC_PROXY__USER_ERROR_MSG "Inactive rpc proxy, can not send RPC request"
 #define OB_INTERVAL_WITH_MONTH__USER_ERROR_MSG "Interval with year or month can not be converted to microseconds"
