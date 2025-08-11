@@ -1328,6 +1328,8 @@ int ObTransformSimplifySubquery::subquery_can_be_eliminated_in_exists(const ObIt
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(ret));
+  } else if (stmt->is_recursive_union_branch()) {
+    // do not eliminate left branch of recursive union
   } else if (stmt->is_set_stmt()) {
     if (ObSelectStmt::UNION == stmt->get_set_op() && !stmt->is_recursive_union()) {
       const ObIArray<ObSelectStmt*> &child_stmts = stmt->get_set_query();

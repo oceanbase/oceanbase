@@ -216,6 +216,7 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     has_prior_ = other.has_prior_;
     has_reverse_link_ = other.has_reverse_link_;
     is_select_straight_join_ = other.is_select_straight_join_;
+    is_recursive_union_branch_ = other.is_recursive_union_branch_;
   }
   return ret;
 }
@@ -309,6 +310,7 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     has_prior_ = other.has_prior_;
     has_reverse_link_ = other.has_reverse_link_;
     is_select_straight_join_ = other.is_select_straight_join_;
+    is_recursive_union_branch_ = other.is_recursive_union_branch_;
     // copy insert into statement
     if (OB_SUCC(ret) && NULL != other.into_item_) {
       ObSelectIntoItem *temp_into_item = NULL;
@@ -515,6 +517,7 @@ ObSelectStmt::ObSelectStmt()
   has_prior_ = false;
   has_reverse_link_ = false;
   is_select_straight_join_ = false;
+  is_recursive_union_branch_ = false;
 }
 
 ObSelectStmt::~ObSelectStmt()

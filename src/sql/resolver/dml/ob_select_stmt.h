@@ -656,6 +656,8 @@ public:
   void set_select_straight_join(bool flag) { is_select_straight_join_ = flag; }
   bool is_select_straight_join() const { return is_select_straight_join_; }
   int is_query_deterministic(bool &is_deterministic) const;
+  inline bool is_recursive_union_branch() const { return is_recursive_union_branch_; }
+  inline void set_is_recursive_union_branch(bool v) { is_recursive_union_branch_ = v; }
 
 private:
   SetOperator set_op_;
@@ -717,6 +719,7 @@ private:
   bool has_reverse_link_;
   //denote if the query option 'STRAIGHT_JOIN' has been specified
   bool is_select_straight_join_;
+  bool is_recursive_union_branch_; // true if the stmt is a branch of a recursive union
 };
 }
 }
