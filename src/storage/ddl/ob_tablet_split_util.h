@@ -76,19 +76,10 @@ static bool is_valid_tablet_split_info_status(const ObSplitTabletInfoStatus &typ
 struct ObTabletSplitUtil final
 {
 public:
-  static int check_split_mds_can_be_accepted(
-      const bool is_shared_storage_mode,
-      const share::SCN &split_start_scn,
-      const ObSSTableArray &old_store_mds_sstables,
-      const ObIArray<ObITable *> &tables_array,
-      bool &need_put_split_mds);
   static int check_split_minors_can_be_accepted(
-      const bool is_shared_storage_mode,
-      const share::SCN &split_start_scn,
       const ObSSTableArray &old_store_minors,
       const ObIArray<ObITable *> &tables_array,
-      share::ObScnRange &new_input_range,
-      share::ObScnRange &old_store_range);
+      bool &is_update_firstly);
   static int get_tablet(
       common::ObArenaAllocator &allocator,
       const storage::ObLSHandle &ls_handle,
@@ -197,6 +188,7 @@ public:
       ObBatchUpdateTableStoreParam &param);
   static int get_storage_schema_from_mds(
       const ObTabletHandle &tablet_handle,
+      const int64_t data_format_version,
       ObStorageSchema *&storage_schema,
       ObIAllocator &allocator);
   static int register_split_info_mds(rootserver::ObDDLService &ddl_service, const ObTabletSplitRegisterMdsArg &arg);
@@ -205,6 +197,9 @@ public:
       const ObTabletHandle &local_tablet_handle,
       bool &has_mds_table_for_dump);
 private:
+  static int check_and_determine_mds_end_scn(
+      const ObTabletHandle &dest_tablet_handle,
+      share::SCN &end_scn);
   static int check_and_build_mds_sstable_merge_ctx(
       const ObLSHandle &ls_handle,
       const ObTabletHandle &dest_tablet_handle,

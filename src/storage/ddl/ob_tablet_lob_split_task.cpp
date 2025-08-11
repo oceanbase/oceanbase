@@ -250,9 +250,11 @@ int ObLobSplitContext::init(const ObLobSplitParam& param)
     } else {
       split_scn_ = local_dest_tablet_hdl.get_obj()->get_tablet_meta().split_info_.get_split_start_scn();
       reorg_scn_ = local_dest_tablet_hdl.get_obj()->get_reorganization_scn();
-      if (OB_UNLIKELY(!split_scn_.is_valid() || !reorg_scn_.is_valid())) {
+      if (OB_UNLIKELY((!split_scn_.is_valid() && param.data_format_version_ >= DATA_VERSION_4_4_0_0) || !reorg_scn_.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected err", K(ret), K(split_scn_), K(reorg_scn_));
+        LOG_WARN("unexpected err", K(ret), K(split_scn_), K(reorg_scn_), "data_format_version", param.data_format_version_);
+      } else if (!split_scn_.is_valid()) {
+        FLOG_INFO("invalid split scn from tablet meta", K(ret), K(param));
       }
     }
   }
@@ -740,7 +742,7 @@ int ObTabletLobBuildMapTask::process()
     ObArray<ObRowScan*> iters;
     common::ObArenaAllocator tmp_arena("RowScanIter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObStorageSchema *main_storage_schema = nullptr;
-    if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(ctx_->main_tablet_handle_, main_storage_schema, tmp_arena))) {
+    if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(ctx_->main_tablet_handle_, param_->data_format_version_, main_storage_schema, tmp_arena))) {
       LOG_WARN("failed to get storage schema from mds", K(ret));
     } else if (OB_ISNULL(main_storage_schema)) {
       ret = OB_NULL_CHECK_ERROR;
@@ -1155,7 +1157,7 @@ int ObTabletLobWriteDataTask::process()
     LOG_WARN("check all major exist failed", K(ret));
   } else if (is_data_split_finished) {
     LOG_INFO("split task has alreay finished", KPC(param_));
-  } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(ctx_->lob_meta_tablet_handle_, lob_meta_storage_schema, tmp_arena))) {
+  } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(ctx_->lob_meta_tablet_handle_, param_->data_format_version_, lob_meta_storage_schema, tmp_arena))) {
     LOG_WARN("failed to get storage schema from mds", K(ret));
   } else if (OB_FAIL(ObTabletLobSplitUtil::generate_col_param(lob_meta_storage_schema, rk_cnt_))) {
     LOG_WARN("fail to generate col param", K(ret), K(task_id_));
@@ -1482,6 +1484,7 @@ int ObTabletLobWriteDataTask::prepare_sstable_index_builder(const ObTabletLobWri
   const int64_t snapshot_version = write_sstable_ctx.get_version();
   compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() ?
         ObExecMode::EXEC_MODE_OUTPUT : ObExecMode::EXEC_MODE_LOCAL;
+  const share::SCN split_reorganization_scn = ctx_->split_scn_.is_valid() ? ctx_->split_scn_ : SCN::min_scn()/*use min_scn to avoid invalid*/;
   if (OB_UNLIKELY(!ctx_->lob_meta_tablet_handle_.is_valid())) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("table is null", K(ret), K(ctx_->lob_meta_tablet_handle_));
@@ -1499,7 +1502,7 @@ int ObTabletLobWriteDataTask::prepare_sstable_index_builder(const ObTabletLobWri
         param_->data_format_version_,
         ctx_->lob_meta_tablet_handle_.get_obj()->get_tablet_meta().micro_index_clustered_,
         tablet_handle.get_obj()->get_transfer_seq(),
-        ctx_->split_scn_,
+        split_reorganization_scn,
         write_sstable_ctx.table_key_.get_end_scn(),
         nullptr/*cg_schema*/,
         0/*table_cg_idx*/,
@@ -2163,7 +2166,7 @@ int ObTabletLobSplitUtil::open_uncommitted_scan_iters(ObLobSplitParam *param,
     LOG_WARN("tablet is null", K(ret), K(tablet_handle));
   } else if (OB_FAIL(table_iter.assign(const_table_iter))) {
     LOG_WARN("failed to assign iterator", K(ret));
-  } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(tablet_handle, lob_meta_storage_schema, tmp_arena))) {
+  } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(tablet_handle, param->data_format_version_, lob_meta_storage_schema, tmp_arena))) {
     LOG_WARN("failed to get storage schema from mds", K(ret));
   } else {
     int64_t minor_index = 0; // the minor sstable index.
@@ -2245,7 +2248,7 @@ int ObTabletLobSplitUtil::open_snapshot_scan_iters(ObLobSplitParam *param,
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is null", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(tablet_handle, lob_meta_storage_schema, tmp_arena))) {
+  } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(tablet_handle, param->data_format_version_, lob_meta_storage_schema, tmp_arena))) {
     LOG_WARN("failed to get storage schema from mds", K(ret));
   } else if (OB_FAIL(table_iter.assign(const_table_iter))) {
     LOG_WARN("failed to assign iterator", K(ret));

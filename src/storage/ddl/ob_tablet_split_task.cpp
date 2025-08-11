@@ -299,9 +299,11 @@ int ObTabletSplitCtx::init(const ObTabletSplitParam &param)
     } else {
       split_scn_ = local_dest_tablet_hdl.get_obj()->get_tablet_meta().split_info_.get_split_start_scn();
       reorg_scn_ = local_dest_tablet_hdl.get_obj()->get_reorganization_scn();
-      if (OB_UNLIKELY(!split_scn_.is_valid() || !reorg_scn_.is_valid())) {
+      if (OB_UNLIKELY((!split_scn_.is_valid() && param.data_format_version_ >= DATA_VERSION_4_4_0_0) || !reorg_scn_.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected err", K(ret), K(split_scn_), K(reorg_scn_));
+        LOG_WARN("unexpected err", K(ret), K(split_scn_), K(reorg_scn_), "data_format_version", param.data_format_version_);
+      } else if (!split_scn_.is_valid()) {
+        FLOG_INFO("invalid split scn from tablet meta", K(ret), K(param));
       }
     }
   }
@@ -492,7 +494,7 @@ int ObTabletSplitCtx::prepare_index_builder(
   } else if (OB_FAIL(ObTabletSplitUtil::get_participants(
     param.split_sstable_type_, table_store_iterator_, false, skipped_split_major_keys_, sstables))) {
     LOG_WARN("get participant sstables failed", K(ret));
-  } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(tablet_handle_, storage_schema, tmp_arena))) {
+  } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(tablet_handle_, param.data_format_version_, storage_schema, tmp_arena))) {
     LOG_WARN("failed to get storage schema", K(ret));
   } else if (OB_ISNULL(storage_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -502,6 +504,7 @@ int ObTabletSplitCtx::prepare_index_builder(
     ObTabletHandle tablet_handle;
     compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() ?
         ObExecMode::EXEC_MODE_OUTPUT : ObExecMode::EXEC_MODE_LOCAL;
+    const share::SCN split_reorganization_scn = split_scn_.is_valid() ? split_scn_ : SCN::min_scn()/*use min_scn to avoid invalid*/;
     for (int64_t i = 0; OB_SUCC(ret) && i < sstables.count(); i++) {
       ObSSTable *sstable = static_cast<ObSSTable *>(sstables.at(i));
       for (int64_t j = 0; OB_SUCC(ret) && j < param.dest_tablets_id_.count(); j++) {
@@ -530,7 +533,7 @@ int ObTabletSplitCtx::prepare_index_builder(
             dst_tablet_id, merge_type, snapshot_version, param.data_format_version_,
             tablet_handle.get_obj()->get_tablet_meta().micro_index_clustered_,
             tablet_handle.get_obj()->get_transfer_seq(),
-            split_scn_, sstable->get_end_scn(),
+            split_reorganization_scn, sstable->get_end_scn(),
             nullptr/*cg_schema*/,
             0/*table_cg_idx*/,
             exec_mode))) {
@@ -1157,7 +1160,7 @@ int ObTabletSplitWriteTask::prepare_context(const ObStorageSchema *&clipped_stor
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(context_->tablet_handle_, storage_schema, allocator_))) {
+  } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(context_->tablet_handle_, param_->data_format_version_, storage_schema, allocator_))) {
     LOG_WARN("failed to get storage schema from mds", K(ret));
   } else if (OB_FAIL(context_->get_clipped_storage_schema_on_demand(
       param_->source_tablet_id_, *sstable_, *storage_schema,
@@ -1323,6 +1326,7 @@ int ObTabletSplitWriteTask::prepare_macro_block_writer(
   ObWholeDataStoreDesc data_desc;
   ObTabletHandle tablet_handle;
   const bool micro_index_clustered = context_->tablet_handle_.get_obj()->get_tablet_meta().micro_index_clustered_;
+  const share::SCN split_reorganization_scn = context_->split_scn_.is_valid() ? context_->split_scn_ : SCN::min_scn();
   for (int64_t i = 0; OB_SUCC(ret) && i < param_->dest_tablets_id_.count(); i++) {
     macro_seq_param.reset();
     pre_warm_param.reset();
@@ -1353,7 +1357,7 @@ int ObTabletSplitWriteTask::prepare_macro_block_writer(
                                       param_->data_format_version_,
                                       micro_index_clustered,
                                       tablet_handle.get_obj()->get_transfer_seq(),
-                                      context_->split_scn_,
+                                      split_reorganization_scn,
                                       sstable_->get_end_scn(),
                                       nullptr/*cg_schema*/,
                                       0/*table_cg_idx*/,
