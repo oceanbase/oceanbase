@@ -9401,7 +9401,9 @@ int JoinPath::compute_join_path_parallel_and_server_info(ObOptimizerContext *opt
                  ? left_path->parallel_ : right_path->parallel_;
       parallel = (has_nl_param && !right_path->is_single() && opt_ctx->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_0)) ?
                  std::max(left_path->parallel_, right_path->parallel_) : parallel;
-      parallel = std::max(auto_dop, parallel);
+      if (has_nl_param && !right_path->is_single()) {
+        parallel = std::max(auto_dop, parallel);
+      }
       server_cnt = right_path->server_cnt_;
       available_parallel = right_path->available_parallel_;
       if (OB_FAIL(server_list.assign(right_path->server_list_))) {
