@@ -1405,20 +1405,20 @@ int ObRangeGraphGenerator::generate_expr_final_info()
       }
     } else if (expr->has_flag(IS_CONST)) {
       const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr *>(expr);
-      void *ptr = exec_ctx->get_allocator().alloc(sizeof(ObObj));
+      void *ptr = allocator_.alloc(sizeof(ObObj));
       if (OB_ISNULL(ptr)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memeory for ObObj");
       } else {
         expr_info.const_val_ = new(ptr)ObObj();
         expr_info.is_const_ = true;
-        if (OB_FAIL(ob_write_obj(exec_ctx->get_allocator(), const_expr->get_value(), *expr_info.const_val_))) {
+        if (OB_FAIL(ob_write_obj(allocator_, const_expr->get_value(), *expr_info.const_val_))) {
           LOG_WARN("failed to deep copy obj", K(const_expr->get_value()));
         }
       }
     } else if (OB_FAIL(ObStaticEngineExprCG::gen_expr_with_row_desc(
             expr, row_desc,
-            exec_ctx->get_allocator(),
+            allocator_,
             exec_ctx->get_my_session(),
             exec_ctx->get_sql_ctx()->schema_guard_,
             expr_info.temp_expr_,
