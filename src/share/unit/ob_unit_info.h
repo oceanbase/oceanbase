@@ -67,6 +67,7 @@ public:
   bool is_manual_migrate_;
   Status status_;
   common::ObReplicaType replica_type_;
+  int64_t time_stamp_ =  OB_INVALID_TIMESTAMP;
 };
 
 inline bool ObUnit::operator <(const ObUnit &unit) const
