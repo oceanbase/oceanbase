@@ -288,12 +288,12 @@ int ObSequenceSqlService::clean_and_write_back_cache(common::ObISQLClient *sql_c
     }
   }
   ObNumber write_val;
-  if (OB_FAIL(ret) || !need_write_back) {
+  if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(clean_sequence_cache(tenant_id, sequence_id, inner_next_value, cache_res,
                                           allocator))) {
     LOG_WARN("clean sequence cache failed", K(ret));
-  } else if (!cache_res.inited_) {
+  } else if (!need_write_back || !cache_res.inited_) {
     // do nothing
   } else if (OB_FAIL(cache_res.cache_node_.start().add(sequence_schema.get_increment_by(),
                                                        write_val, allocator))) {
