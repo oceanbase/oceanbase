@@ -1369,7 +1369,7 @@ int ObTabletSplitWriteTask::prepare_macro_block_writer(
     } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMacroBlockWriter)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc mem failed", K(ret));
-    } else if (FALSE_IT(macro_block_writer = new (buf) ObMacroBlockWriter())) {
+    } else if (FALSE_IT(macro_block_writer = new (buf) ObMacroBlockWriter(true/*is_need_macro_buffer*/))) {
     } else if (OB_FAIL(pre_warm_param.init(param_->ls_id_, dst_tablet_id))) {
       LOG_WARN("failed to init pre warm param", K(ret), K(dst_tablet_id), KPC(param_));
     } else if (OB_FAIL(ObSSTablePrivateObjectCleaner::get_cleaner_from_data_store_desc(
@@ -2534,8 +2534,8 @@ int ObSplitDownloadSSTableTask::prewarm_for_split(const ObTabletHandle &dest_tab
                                                   ObSSTable &sstable)
 {
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator allocator("splprewarm",
-      OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID);
+  ObMalloc allocator;
+  allocator.set_attr(ObMemAttr(MTL_ID(), "splprewarm"));
   const ObTabletID &dest_tablet_id = dest_tablet_handle.get_obj()->get_tablet_id();
   const ObITableReadInfo *read_info = nullptr;
   bool is_from_rewrite_warm_macro = false;
@@ -2549,7 +2549,6 @@ int ObSplitDownloadSSTableTask::prewarm_for_split(const ObTabletHandle &dest_tab
     LOG_WARN("fail to get index read info ", KR(ret), K(sstable));
   } else {
     SMART_VAR(ObDualMacroMetaIterator, meta_iter) {
-      int64_t dest_tablet_index = 0;
       ObDatumRange whole_range;
       whole_range.set_whole_range();
       const bool is_small_sstable = sstable.is_small_sstable();
@@ -2566,6 +2565,9 @@ int ObSplitDownloadSSTableTask::prewarm_for_split(const ObTabletHandle &dest_tab
         LOG_WARN("failed to try prewamr split point macro", K(ret), K(sstable), K(dest_macro_end_keys));
       }
     }
+  }
+  for (int64_t i = 0; i < dest_macro_end_keys.count(); i++) {
+    dest_macro_end_keys.at(i).end_key_.destroy(allocator);
   }
   return ret;
 }
@@ -3446,7 +3448,7 @@ int ObSnapshotRowScan::init(
     ObQueryFlag query_flag(ObQueryFlag::Forward,
         false, /* daily merge*/
         true,  /* use *optimize */
-        false,  /* use whole macro scan*/
+        true,  /* use whole macro scan*/
         false, /* not full row*/
         false, /* not index_back*/
         false);/* query stat */

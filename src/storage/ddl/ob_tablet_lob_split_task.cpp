@@ -1450,7 +1450,7 @@ int ObTabletLobWriteDataTask::prepare_sstable_macro_writer(const ObTabletLobWrit
                                data_desc.get_desc(),
                                object_cleaner))) {
       LOG_WARN("failed to get cleaner from data store desc", K(ret));
-    } else if (FALSE_IT(slice_writer = new (buf) ObMacroBlockWriter())) {
+    } else if (FALSE_IT(slice_writer = new (buf) ObMacroBlockWriter(true/*is_need_macro_buffer*/))) {
     } else if (OB_FAIL(slice_writer->open(data_desc.get_desc(), task_id_/*parallel_idx*/,
         macro_seq_param, pre_warm_param, *object_cleaner))) {
       LOG_WARN("open macro_block_writer failed", K(ret), K(data_desc));
