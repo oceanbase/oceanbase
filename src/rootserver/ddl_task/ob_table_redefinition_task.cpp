@@ -1395,8 +1395,8 @@ int ObTableRedefinitionTask::get_direct_load_job_stat(common::ObArenaAllocator &
   SMART_VAR(ObMySQLProxy::MySQLResult, select_res) {
     if (OB_FAIL(select_sql.assign_fmt(
         "SELECT JOB_ID, BATCH_SIZE, PARALLEL, MAX_ALLOWED_ERROR_ROWS, DETECTED_ERROR_ROWS, "
-        "COORDINATOR_RECEIVED_ROWS, COORDINATOR_STATUS FROM %s WHERE TENANT_ID=%lu "
-        "AND JOB_ID=%ld AND JOB_TYPE='direct' AND COORDINATOR_STATUS!='none'",
+        "STORE_PROCESSED_ROWS, COORDINATOR_STATUS FROM %s WHERE TENANT_ID=%lu "
+        "AND JOB_ID=%ld AND JOB_TYPE='direct'",
         OB_ALL_VIRTUAL_LOAD_DATA_STAT_TNAME, tenant_id_, object_id_))) {
       LOG_WARN("failed to assign sql", KR(ret));
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, TABLE_REDEF_TASK_GET_DIRECT_LOAD_JOB_STAT_FAILED))) {
@@ -1418,17 +1418,30 @@ int ObTableRedefinitionTask::get_direct_load_job_stat(common::ObArenaAllocator &
           LOG_WARN("failed to get next row", KR(ret));
         }
       } else {
+        int64_t batch_size = 0;
+        int64_t parallel = 0;
+        int64_t max_allowed_error_rows = 0;
+        int64_t detected_error_rows = 0;
+        int64_t store_processed_rows = 0;
         ObString load_status;
         EXTRACT_INT_FIELD_MYSQL(*select_result, "JOB_ID", job_stat.job_id_, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(*select_result, "BATCH_SIZE", job_stat.batch_size_, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(*select_result, "PARALLEL", job_stat.parallel_, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(*select_result, "MAX_ALLOWED_ERROR_ROWS", job_stat.max_allowed_error_rows_, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(*select_result, "DETECTED_ERROR_ROWS", job_stat.detected_error_rows_, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(*select_result, "COORDINATOR_RECEIVED_ROWS", job_stat.coordinator_.received_rows_, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*select_result, "BATCH_SIZE", batch_size, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*select_result, "PARALLEL", parallel, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*select_result, "MAX_ALLOWED_ERROR_ROWS", max_allowed_error_rows, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*select_result, "DETECTED_ERROR_ROWS", detected_error_rows, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*select_result, "STORE_PROCESSED_ROWS", store_processed_rows, int64_t);
         EXTRACT_VARCHAR_FIELD_MYSQL(*select_result, "COORDINATOR_STATUS", load_status);
-        if (OB_SUCC(ret)
-            && OB_FAIL(ob_write_string(allocator, load_status, job_stat.coordinator_.status_))) {
-          LOG_WARN("failed to write string", KR(ret));
+        if (OB_SUCC(ret)) {
+          job_stat.detected_error_rows_ += detected_error_rows;
+          job_stat.store_.processed_rows_ += store_processed_rows;
+          if (0 != load_status.case_compare("none")) {
+            job_stat.batch_size_ = batch_size;
+            job_stat.parallel_ = parallel;
+            job_stat.max_allowed_error_rows_ = max_allowed_error_rows;
+            if (OB_FAIL(ob_write_string(allocator, load_status, job_stat.coordinator_.status_))) {
+              LOG_WARN("failed to write string", KR(ret));
+            }
+          }
         }
       }
     }
