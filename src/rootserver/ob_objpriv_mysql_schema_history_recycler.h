@@ -46,10 +46,12 @@ public:
   int64_t user_id_;
   int64_t obj_type_;
   int64_t all_priv_;
-  ObString obj_name_;
-  ObString grantor_;
-  ObString grantor_host_;
-  ObArenaAllocator alloc_;
+  char obj_name_[OB_MAX_CORE_TALBE_NAME_LENGTH+1];
+  int64_t obj_name_len_;
+  char grantor_[OB_MAX_USER_NAME_LENGTH_STORE+1];
+  int64_t grantor_len_;
+  char grantor_host_[OB_MAX_HOST_NAME_LENGTH+1];
+  int64_t grantor_host_len_;
 };
 
 struct ObObjectPrivMysqlCompressSchemaInfo
