@@ -355,16 +355,16 @@ struct ObGlobalHint {
   static bool is_valid_opt_features_version(uint64_t version)
   { return COMPAT_VERSION_4_0 <= version && (LASTED_COMPAT_VERSION >= version || CLUSTER_CURRENT_VERSION >= version); }
 
-  static const common::ObConsistencyLevel UNSET_CONSISTENCY = common::INVALID_CONSISTENCY;
-  static const int64_t UNSET_QUERY_TIMEOUT = -1;
-  static const int64_t UNSET_MAX_CONCURRENT = -1;
-  static const uint64_t UNSET_OPT_FEATURES_VERSION = 0;
-  static const int64_t DEFAULT_PARALLEL = 1;
-  static const int64_t UNSET_PARALLEL = 0;
-  static const int64_t SET_ENABLE_AUTO_DOP = -1;
-  static const int64_t SET_ENABLE_MANUAL_DOP = -2;
-  static const int64_t UNSET_DYNAMIC_SAMPLING = -1;
-  static const int64_t UNSET_PX_NODE_COUNT = -1;
+  static constexpr common::ObConsistencyLevel UNSET_CONSISTENCY = common::INVALID_CONSISTENCY;
+  static constexpr int64_t UNSET_QUERY_TIMEOUT = -1;
+  static constexpr int64_t UNSET_MAX_CONCURRENT = -1;
+  static constexpr uint64_t UNSET_OPT_FEATURES_VERSION = 0;
+  static constexpr int64_t DEFAULT_PARALLEL = 1;
+  static constexpr int64_t UNSET_PARALLEL = 0;
+  static constexpr int64_t SET_ENABLE_AUTO_DOP = -1;
+  static constexpr int64_t SET_ENABLE_MANUAL_DOP = -2;
+  static constexpr int64_t UNSET_DYNAMIC_SAMPLING = -1;
+  static constexpr int64_t UNSET_PX_NODE_COUNT = -1;
 
   int merge_global_hint(const ObGlobalHint &other);
   int merge_dop_hint(uint64_t dfo, uint64_t dop);
