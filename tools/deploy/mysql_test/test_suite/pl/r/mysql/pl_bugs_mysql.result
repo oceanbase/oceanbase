@@ -484,7 +484,27 @@ drop table t4;
 drop procedure pro_hr;
 drop view v2;
 
-#### 
+### 
+drop temporary table if exists temp_t/
+drop procedure if exists bug36021834/
+create procedure bug36021834()
+begin
+  create temporary table temp_t ( c1 VARCHAR(50));
+  insert into temp_t values('create temp table in pl');
+end/
+
+call bug36021834()/
+select * from temp_t/
++-------------------------+
+| c1                      |
++-------------------------+
+| create temp table in pl |
++-------------------------+
+
+
+drop temporary table temp_t;
+drop procedure bug36021834;
+
 ### 
 drop table if exists t1;
 drop procedure if exists bug36052430;

@@ -61,6 +61,7 @@ RPC_F(obrpc::OB_SET_MEMBER_LIST, obrpc::ObSetMemberListArgV2, obrpc::ObSetMember
 RPC_F(obrpc::OB_BATCH_BROADCAST_SCHEMA, obrpc::ObBatchBroadcastSchemaArg, obrpc::ObBatchBroadcastSchemaResult, ObBatchBroadcastSchemaProxy);
 RPC_F(obrpc::OB_DROP_TABLET, obrpc::ObBatchRemoveTabletArg, obrpc::ObRemoveTabletRes, ObTabletDropProxy);
 RPC_F(obrpc::OB_SWITCH_SCHEMA, obrpc::ObSwitchSchemaArg, obrpc::ObSwitchSchemaResult, ObSwitchSchemaProxy);
+RPC_F(obrpc::OB_DETECT_CLIENT_SESSION_ALIVE, obrpc::UInt64, obrpc::Bool, ObDetectClientSessionAliveProxy);
 RPC_F(obrpc::OB_GET_LS_ACCESS_MODE, obrpc::ObGetLSAccessModeInfoArg, obrpc::ObLSAccessModeInfo, ObGetLSAccessModeProxy);
 RPC_F(obrpc::OB_CHANGE_LS_ACCESS_MODE, obrpc::ObLSAccessModeInfo, obrpc::ObChangeLSAccessModeRes, ObChangeLSAccessModeProxy);
 RPC_F(obrpc::OB_BATCH_GET_TABLET_AUTOINC_SEQ, obrpc::ObBatchGetTabletAutoincSeqArg,
@@ -102,6 +103,7 @@ RPC_F(obrpc::OB_KILL_QUERY_CLIENT_SESSION, obrpc::ObKillQueryClientSessionArg, o
 RPC_RS(obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT, obrpc::ObParallelCreateNormalTenantArg, obrpc::ObRpcProxy::NoneT, ObParallelCreateNormalTenantProxy);
 RPC_F(obrpc::OB_LOAD_TENANT_TABLE_SCHEMA, obrpc::ObLoadTenantTableSchemaArg, obrpc::ObRpcProxy::NoneT, ObLoadTenantTableSchemaProxy);
 RPC_F(obrpc::OB_ALL_SERVER_TRACER_BROADCAST, obrpc::ObRefreshTenantInfoArg, obrpc::Int64, ObAllServerTracerProxy);
+
 
 }//end namespace rootserver
 }//end namespace oceanbase

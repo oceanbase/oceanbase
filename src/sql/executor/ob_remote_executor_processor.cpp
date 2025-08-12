@@ -650,6 +650,7 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
     LOG_ERROR("sql engine is NULL", K(ret), K(gctx_.sql_engine_));
   } else if (OB_FAIL(schema_guard_.get_schema_version(session->get_effective_tenant_id(), local_tenant_schema_version))) {
     LOG_WARN("get schema version from schema_guard failed", K(ret));
+  } else if (FALSE_IT(schema_guard_.set_session_id(session->get_sessid_for_table()))) {
   } else {
     enable_sql_audit = enable_sql_audit && session->get_local_ob_enable_sql_audit();
   }

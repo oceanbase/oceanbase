@@ -136,8 +136,9 @@ int ObSetCommentHelper::lock_objects_by_name_()
   const ObString &table_name = arg_.table_name_;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(add_lock_object_by_name_(database_name, table_name,
-      share::schema::TABLE_SCHEMA, transaction::tablelock::EXCLUSIVE))) {
+  // comment on no need to consider temp table now
+  } else if (OB_FAIL(add_lock_table_by_name_with_session_id_zero_(database_name, table_name,
+                     transaction::tablelock::EXCLUSIVE, arg_.session_id_))) {
     LOG_WARN("fail to lock object by table name", KR(ret), K_(tenant_id), K(database_name), K(table_name));
   } else if (OB_FAIL(lock_existed_objects_by_name_())) {
     LOG_WARN("fail to lock objects by name", KR(ret), K_(tenant_id));

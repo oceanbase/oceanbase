@@ -604,6 +604,7 @@ public:
       const ObSimpleTableSchemaV2 *&table_schema) const;
   int get_hidden_table_schema(const uint64_t tenant_id,
                               const uint64_t database_id,
+                              const uint64_t session_id,
                               const common::ObString &table_name,
                               const ObSimpleTableSchemaV2 *&table_schema) const;
   int get_index_schema(

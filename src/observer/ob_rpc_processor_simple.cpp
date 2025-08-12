@@ -3227,6 +3227,10 @@ int ObRpcDetectSessionAliveP::process()
 {
   return ObTableLockDetectFuncList::detect_session_alive_for_rpc(arg_, result_);
 }
+int ObRpcDetectClientSessionAliveP::process()
+{
+  return ObTableLockDetectFuncList::do_session_at_least_one_alive_detect_for_rpc(arg_, result_);
+}
 
 int ObRpcGetServerResourceInfoP::process()
 {

@@ -15262,6 +15262,25 @@ int ObInnerTableSchema::all_virtual_temp_table_schema(ObTableSchema &table_schem
       create_host_default,
       create_host_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj table_session_id_default;
+    table_session_id_default.set_uint64(0);
+    ADD_COLUMN_SCHEMA_T("table_session_id", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObUInt64Type, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(uint64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      table_session_id_default,
+      table_session_id_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);

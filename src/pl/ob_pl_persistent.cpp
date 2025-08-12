@@ -355,7 +355,7 @@ int ObRoutinePersistentInfo::has_same_name_dependency_with_public_synonym(
   ObSynonymChecker synonym_checker;
   ObString obj_name;
   uint64_t obj_id;
-  OZ (schema_checker.init(schema_guard, session_info.get_server_sid()));
+  OZ (schema_checker.init(schema_guard, session_info.get_sessid_for_table()));
   for (int64_t i = 0; !exist && OB_SUCC(ret) && i < dep_schema_objs.count(); ++i) {
     obj_id = dep_schema_objs.at(i).object_id_;
     if (dep_schema_objs.at(i).is_db_explicit() &&

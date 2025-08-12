@@ -714,12 +714,6 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
     }
     SQL_ENG_LOG(INFO, "finish create table execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
 
-    // only CTAS or create temporary table will make session_id != 0. If such table detected, set
-    // need ctas cleanup task anyway to do some cleanup jobs
-    if (0 != table_schema.get_session_id()) {
-      LOG_TRACE("CTAS or temporary table create detected", K(table_schema));
-      ATOMIC_STORE(&OBSERVER.need_ctas_cleanup_, true);
-    }
   }
   return ret;
 }
@@ -1118,6 +1112,11 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
       if (NULL == my_session) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get my session", K(ret), K(ctx));
+      // need to set seesion_id_ before check_alter_part_key since it get a new guard and get session_id_
+      } else if (OB_INVALID_ID == alter_table_arg.session_id_
+                 && 0 != my_session->get_sessid_for_table()
+                 && FALSE_IT(alter_table_arg.session_id_ = my_session->get_sessid_for_table())) {
+                 //impossible
       } else if (FALSE_IT(alter_table_arg.sql_mode_ = my_session->get_sql_mode())) {
         // do nothing
       } else if (FALSE_IT(alter_table_arg.parallelism_ = stmt.get_parallelism())) {
@@ -1132,10 +1131,6 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
         LOG_WARN("fail to set index_arg_list", K(ret));
       } else if (OB_FAIL(ObResolverUtils::check_sync_ddl_user(my_session, is_sync_ddl_user))) {
         LOG_WARN("Failed to check sync_dll_user", K(ret));
-      } else if (OB_INVALID_ID == alter_table_arg.session_id_
-                && 0 != my_session->get_sessid_for_table()
-                && FALSE_IT(alter_table_arg.session_id_ = my_session->get_sessid_for_table())) {
-        //impossible
       } else {
         int64_t foreign_key_checks = 0;
         my_session->get_foreign_key_checks(foreign_key_checks);

@@ -3413,6 +3413,7 @@ Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
 table_id	bigint(20)	NO	PRI	NULL	
 create_host	varchar(128)	NO			
+table_session_id	bigint(20) unsigned	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_temp_table;
 IF(count(*) >= 0, 1, 0)
 1

@@ -2450,13 +2450,23 @@ int ObRemoteScan::init(const uint64_t tenant_id,
       dest_schema_version_ = dest_schema_version;
       src_tablet_id_ = src_tablet_id;
       datum_range_ = &datum_range;
-      if (OB_FAIL(ObBackupUtils::get_tenant_sys_time_zone_wrap(dest_tenant_id_, time_zone, tz_info_wrap_))) {
+      ObSessionParam session_param;
+      ObSQLMode sql_mode = SMO_STRICT_ALL_TABLES;
+      session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode);
+      session_param.tz_info_wrap_ = &tz_info_wrap_;
+      InnerDDLInfo ddl_info;
+      ddl_info.set_is_ddl(true);
+      ddl_info.set_source_table_hidden(false);
+      ddl_info.set_dest_table_hidden(false);
+      if (OB_FAIL(session_param.ddl_info_.init(ddl_info, hidden_table_schema->get_session_id()))) {
+        LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info), K(hidden_table_schema->get_session_id()));
+      } else if (OB_FAIL(ObBackupUtils::get_tenant_sys_time_zone_wrap(dest_tenant_id_, time_zone, tz_info_wrap_))) {
         LOG_WARN("failed to get tenant sys time zone wrap", K(dest_tenant_id_));
       } else if (OB_FAIL(generate_build_select_sql(sql_string))) {
         LOG_WARN("fail to generate build replica sql", K(ret), K(sql_string));
-      } else if (is_oracle_mode && OB_FAIL(prepare_iter(sql_string, GCTX.ddl_oracle_sql_proxy_))) {
+      } else if (is_oracle_mode && OB_FAIL(prepare_iter(sql_string, session_param, GCTX.ddl_oracle_sql_proxy_))) {
         LOG_WARN("prepare iter under oracle mode failed", K(ret), K(sql_string));
-      } else if (!is_oracle_mode && OB_FAIL(prepare_iter(sql_string, GCTX.ddl_sql_proxy_))) {
+      } else if (!is_oracle_mode && OB_FAIL(prepare_iter(sql_string, session_param, GCTX.ddl_sql_proxy_))) {
         LOG_WARN("prepare iter under mysql mode failed", K(ret), K(sql_string));
       } else {
         schema_rowkey_cnt_ = hidden_table_schema->get_rowkey_column_num();
@@ -2857,16 +2867,9 @@ int ObRemoteScan::get_next_row(const blocksstable::ObDatumRow *&datum_row)
   return ret;
 }
 
-int ObRemoteScan::prepare_iter(const ObSqlString &sql_string, common::ObCommonSqlProxy *sql_proxy)
+int ObRemoteScan::prepare_iter(const ObSqlString &sql_string, const ObSessionParam &session_param, common::ObCommonSqlProxy *sql_proxy)
 {
   int ret = OB_SUCCESS;
-  ObSessionParam session_param;
-  ObSQLMode sql_mode = SMO_STRICT_ALL_TABLES;
-  session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode);
-  session_param.tz_info_wrap_ = &tz_info_wrap_;
-  session_param.ddl_info_.set_is_ddl(true);
-  session_param.ddl_info_.set_source_table_hidden(false);
-  session_param.ddl_info_.set_dest_table_hidden(false);
   const int64_t sql_total_timeout = ObDDLUtil::calc_inner_sql_execute_timeout();
   if (OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;

@@ -418,9 +418,13 @@ int ObInnerSQLConnection::init_session_info(
           } else {
             session->set_database_id(OB_SYS_DATABASE_ID);
             //TODO shengle ?
-            session->get_ddl_info().set_is_ddl(is_ddl);
+            InnerDDLInfo ddl_info;
+            ddl_info.set_is_ddl(is_ddl);
             session->reset_timezone();
             session->init_use_rich_format();
+            if (OB_FAIL(session->get_ddl_info().init(ddl_info, 0 /*session_id*/))) {
+              LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info));
+            }
           }
         }
       }

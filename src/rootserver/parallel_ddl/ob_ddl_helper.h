@@ -147,12 +147,31 @@ protected:
       const ObString &database_name,
       const transaction::tablelock::ObTableLockMode lock_mode);
   int lock_databases_by_name_();
+
+  /*--------------------------------*/
   // lock object name
+  // MySQL temporary tables introduce parallel scenarios with objects of the same name,
+  // therefore session_id need to be considered when lock table by name
+
+  // add_lock_object_by_name_ is used to lock object by name, session id is 0 by default,
+  // with default session id 0 means no need to consider temp table.
+
+  // add_lock_table_by_name_with_session_id_zero_ is used to lock table by name, must pass session id,
+  // it will lock both session_id and session_id 0.
+
   int add_lock_object_by_name_(
       const ObString &database_name,
       const ObString &object_name,
       const share::schema::ObSchemaType schema_type,
-      const transaction::tablelock::ObTableLockMode lock_mode);
+      const transaction::tablelock::ObTableLockMode lock_mode,
+      const uint64_t session_id = 0);
+
+  int add_lock_table_by_name_with_session_id_zero_(
+      const ObString &database_name,
+      const ObString &object_name,
+      const transaction::tablelock::ObTableLockMode lock_mode,
+      const uint64_t session_id);
+  /*--------------------------------*/
   int lock_existed_objects_by_name_();
   // lock object id
   int add_lock_object_by_id_(

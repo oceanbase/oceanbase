@@ -81,7 +81,11 @@ int ObMViewTransaction::ObSessionParamSaved::save(ObSQLSessionInfo *session_info
         database_id_ = session_info->get_database_id();
         session_info->set_inner_session();
         session_info->set_autocommit(false);
-        session_info_->get_ddl_info().set_refreshing_mview(true);
+        InnerDDLInfo ddl_info;
+        ddl_info.set_refreshing_mview(true);
+        if (OB_FAIL(session_info->get_ddl_info().init(ddl_info, 0 /*session_id*/))) {
+          LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info));
+        }
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(session_info->get_sys_variable(
@@ -116,7 +120,7 @@ int ObMViewTransaction::ObSessionParamSaved::restore()
     session_info_->set_autocommit(autocommit_);
     session_info_->set_database_id(database_id_);
     database_id_ = OB_INVALID_ID;
-    session_info_->get_ddl_info().set_refreshing_mview(false);
+    session_info_->get_ddl_info().reset();
     session_info_->update_sys_variable(ObSysVarClassType::SYS_VAR_COLLATION_CONNECTION, collation_connection_var_);
     session_info_ = nullptr;
   }

@@ -124,8 +124,8 @@ int ObCreateIndexHelper::lock_objects_by_name_()
   } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
              tenant_id_, is_oracle_mode))) {
     LOG_WARN("fail to check is oracle mode", KR(ret));
-  } else if (OB_FAIL(add_lock_object_by_name_(database_name, table_name,
-    share::schema::TABLE_SCHEMA, transaction::tablelock::EXCLUSIVE))) {
+  } else if (OB_FAIL(add_lock_table_by_name_with_session_id_zero_(database_name, table_name,
+                     transaction::tablelock::SHARE, arg_.session_id_))) {
     LOG_WARN("fail to add lock object by name", KR(ret), K_(tenant_id), K(database_name), K(table_name));
   } else if (is_oracle_mode) {
     const ObString &index_name = arg_.index_name_;

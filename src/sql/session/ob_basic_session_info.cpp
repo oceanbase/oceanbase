@@ -4971,6 +4971,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
   OB_UNIS_ENCODE(is_diagnosis_enabled_);
   OB_UNIS_ENCODE(diagnosis_limit_num_);
   OB_UNIS_ENCODE(client_sessid_);
+  OB_UNIS_ENCODE(client_create_time_);
   return ret;
 }
 
@@ -5260,6 +5261,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   OB_UNIS_DECODE(is_diagnosis_enabled_);
   OB_UNIS_DECODE(diagnosis_limit_num_);
   OB_UNIS_DECODE(client_sessid_);
+  OB_UNIS_DECODE(client_create_time_);
   return ret;
 }
 
@@ -5548,6 +5550,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   OB_UNIS_ADD_LEN(is_diagnosis_enabled_);
   OB_UNIS_ADD_LEN(diagnosis_limit_num_);
   OB_UNIS_ADD_LEN(client_sessid_);
+  OB_UNIS_ADD_LEN(client_create_time_);
   return len;
 }
 

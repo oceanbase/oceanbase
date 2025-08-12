@@ -220,6 +220,7 @@ namespace observer
   class ObTabletTableUpdater;
   class ObTenantQueryRespTimeCollector;
   class ObTableQueryASyncMgr;
+  class ObSessionTmpTableCleaner;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -452,6 +453,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       table::ObHTableRowkeyMgr*,                     \
       rootserver::ObDDLServiceLauncher*,             \
       rootserver::ObDDLScheduler*,                   \
+      observer::ObSessionTmpTableCleaner*,           \
       sql::ObSQLCCLRuleManager*                      \
   )
 

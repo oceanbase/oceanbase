@@ -849,9 +849,18 @@ int ObUnitTableOperator::get_units_by_resource_pools(
   return ret;
 }
 
-int ObUnitTableOperator::get_alive_servers_by_tenant(
-    const uint64_t tenant_id,
-    common::ObIArray<common::ObAddr> &server_array) const
+// what is_strict means?
+// it means need to get all the server has the tenant's unit.
+// when a unit just finished migrate from A server to B server,
+// the unit on A would not GC immediatly but to wait a while.
+// so most alive sessions on A won't kill after a migration.
+// at this time, the unit on A can't be attached by __all_unit_table.
+// so, the is_strict mode would wait the time of 'unit_gc_wait_time' by report retry,
+// if there is a unit just created or migrated.
+int ObUnitTableOperator::get_all_servers_by_tenant(
+  const uint64_t tenant_id,
+  common::ObIArray<common::ObAddr> &server_array,
+  bool is_strict) const
 {
   int ret = OB_SUCCESS;
   server_array.reset();
@@ -865,26 +874,59 @@ int ObUnitTableOperator::get_alive_servers_by_tenant(
   } else if (OB_FAIL(get_units_by_tenant(tenant_id, units))) {
     LOG_WARN("fail to get units", KR(ret), K(tenant_id));
   } else {
+    const int64_t unit_gc_wait_time = GCONF.unit_gc_wait_time;
+    int64_t time_gap = 0;
     for (int64_t index = 0; OB_SUCC(ret) && index < units.count(); ++index) {
       const common::ObAddr &unit_addr = units.at(index).server_;
       const common::ObAddr &unit_migrate_from_server_addr = units.at(index).migrate_from_server_;
       bool is_alive = false;
+      if (is_strict) {
+        time_gap = 0;
+        if (OB_INVALID_TIMESTAMP == units.at(index).time_stamp_) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("timestamp invalid, can't do strict check", KR(ret), K(units));
+        } else {
+          time_gap = ObTimeUtility::current_time() - units.at(index).time_stamp_;
+          if (time_gap < unit_gc_wait_time) {
+            ret = OB_EAGAIN;
+            LOG_WARN("there may unit not gc but not in list, need wait", KR(ret), K(time_gap), K(unit_gc_wait_time),
+                                                                         K(units.at(index)));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(server_array.push_back(unit_addr))) {
+          LOG_WARN("push_back failed", KR(ret), K(unit_addr));
+        } else if (unit_migrate_from_server_addr.is_valid()
+            && OB_FAIL(server_array.push_back(unit_migrate_from_server_addr))) {
+          LOG_WARN("push_back failed", KR(ret), K(unit_migrate_from_server_addr));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObUnitTableOperator::get_alive_servers_by_tenant(
+    const uint64_t tenant_id,
+    common::ObIArray<common::ObAddr> &server_array,
+    bool is_strict) const
+{
+  int ret = OB_SUCCESS;
+  server_array.reset();
+  common::ObArray<common::ObAddr> all_server_array;
+  if (OB_FAIL(get_all_servers_by_tenant(tenant_id, all_server_array, is_strict))) {
+    LOG_WARN("fail to get servers by tenant", KR(ret), K(is_strict));
+  } else {
+    bool is_alive = false;
+    for (int i = 0; i < all_server_array.count() && OB_SUCC(ret); ++i) {
+      is_alive = false;
+      ObAddr unit_addr = all_server_array.at(i);
       if (OB_FAIL(SVR_TRACER.check_server_alive(unit_addr, is_alive))) {
         LOG_WARN("check_server_alive failed", KR(ret), K(unit_addr));
       } else if (is_alive) {
         if (OB_FAIL(server_array.push_back(unit_addr))) {
           LOG_WARN("push_back failed", KR(ret), K(unit_addr));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (unit_migrate_from_server_addr.is_valid()) {
-          if (OB_FAIL(SVR_TRACER.check_server_alive(unit_migrate_from_server_addr, is_alive))) {
-            LOG_WARN("check_server_alive failed", KR(ret), K(unit_migrate_from_server_addr));
-          } else if (is_alive) {
-            if (OB_FAIL(server_array.push_back(unit_migrate_from_server_addr))) {
-              LOG_WARN("push_back failed", KR(ret), K(unit_migrate_from_server_addr));
-            }
-          }
         }
       }
     }
@@ -1111,6 +1153,7 @@ int ObUnitTableOperator::read_unit(const ObMySQLResult &result, ObUnit &unit)
   EXTRACT_BOOL_FIELD_MYSQL(result, "manual_migrate", unit.is_manual_migrate_);
   EXTRACT_STRBUF_FIELD_MYSQL(result, "status", status, MAX_UNIT_STATUS_LENGTH, tmp_real_str_len);
   EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "replica_type", unit.replica_type_, common::ObReplicaType);
+  EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(result, "gmt_modified", unit.time_stamp_);
   (void) tmp_real_str_len; // make compiler happy
   unit.server_.set_ip_addr(ip, static_cast<int32_t>(port));
   unit.migrate_from_server_.set_ip_addr(

@@ -15,7 +15,7 @@
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tablelock/ob_table_lock_rpc_struct.h"
 #include "deps/oblib/src/lib/mysqlclient/ob_isql_client.h"
-
+#include "sql/session/ob_sql_session_mgr.h"
 namespace oceanbase
 {
 namespace observer
@@ -57,6 +57,9 @@ public:
   static int detect_session_alive(const uint32_t session_id, bool &is_alive);
   static int detect_session_alive_for_rpc(const uint32_t session_id, obrpc::Bool &is_alive);
   static int do_session_alive_detect();
+  static int do_session_at_least_one_alive_detect(const uint64_t tenant_id, const uint32_t session_id, const ObArray<ObAddr> *dest_server, bool &is_alive);
+  static int do_session_at_least_one_alive_detect_for_rpc(const uint32_t session_id, obrpc::Bool &is_alive);
+  static int get_tenant_servers(const uint64_t tenant_id, common::ObIArray<common::ObAddr> &server_array);
 
 private:
   static int do_session_alive_detect_for_a_client_session_(const int64_t &client_session_id, bool &all_alive);
@@ -231,6 +234,26 @@ public:
   // detect session alive
   static ObTableLockDetectFunc<> func1;
 };
+
+class ObSessionAliveChecker
+{
+public:
+  ObSessionAliveChecker() = delete;
+  ~ObSessionAliveChecker() {}
+  explicit ObSessionAliveChecker(uint32_t session_id) : session_id_(session_id),
+                                                        is_alive_(false) {}
+  bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo *sess_info);
+  static bool is_proxy_sid(const uint32_t session_id) {return session_id <= 0x7FFFFFFFU;};
+  uint32_t get_sid() const {return session_id_;}
+  inline void set_alive(const bool is_alive) {is_alive_ = is_alive;}
+  inline bool is_alive() const {return is_alive_;}
+  TO_STRING_KV(K_(session_id), K_(is_alive));
+private:
+  uint32_t session_id_;
+  bool is_alive_;
+  DISALLOW_COPY_AND_ASSIGN(ObSessionAliveChecker);
+};
+
 }  // namespace tablelock
 }  // namespace transaction
 }  // namespace oceanbase

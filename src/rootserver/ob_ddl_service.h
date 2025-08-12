@@ -1467,9 +1467,9 @@ int check_will_be_having_domain_index_operation(
       common::ObIAllocator &allocator,
       share::schema::ObTableSchema &hidden_table_schema,
       const ObString &index_name);
-  int clear_ctas_hidden_table_session_id_(
+  int clear_hidden_table_session_id_(
       share::schema::ObTableSchema &hidden_table_schema);
-  int swap_ctas_hidden_table_session_id_(
+  int swap_hidden_table_session_id_(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
       share::schema::ObTableSchema &new_orig_table_schema,

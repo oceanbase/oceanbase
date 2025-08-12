@@ -179,18 +179,6 @@ int ObDDLRedefinitionSSTableBuildTask::process()
       } else if (is_mview_complete_refresh_) {
         sql_mode_ = SMO_STRICT_ALL_TABLES;
       }
-      ObSessionParam session_param;
-      session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode_);
-      session_param.tz_info_wrap_ = &tz_info_wrap_;
-      session_param.ddl_info_.set_is_ddl(!is_mview_complete_refresh_);
-      session_param.ddl_info_.set_source_table_hidden(false);
-      session_param.ddl_info_.set_dest_table_hidden(true);
-      session_param.ddl_info_.set_heap_table_ddl(use_heap_table_ddl_plan_);
-      session_param.ddl_info_.set_mview_complete_refresh(is_mview_complete_refresh_);
-      session_param.ddl_info_.set_refreshing_mview(is_mview_complete_refresh_);
-      session_param.ddl_info_.set_retryable_ddl(is_retryable_ddl_);
-      session_param.use_external_session_ = true;  // means session id dispatched by session mgr
-      session_param.consumer_group_id_ = consumer_group_id_;
 
       common::ObAddr *sql_exec_addr = nullptr;
       const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
@@ -203,10 +191,25 @@ int ObDDLRedefinitionSSTableBuildTask::process()
       } else {
         user_sql_proxy = GCTX.ddl_sql_proxy_;
       }
+      ObSessionParam session_param;
+      session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode_);
+      session_param.tz_info_wrap_ = &tz_info_wrap_;
+      InnerDDLInfo ddl_info;
+      ddl_info.set_is_ddl(!is_mview_complete_refresh_);
+      ddl_info.set_source_table_hidden(false);
+      ddl_info.set_dest_table_hidden(true);
+      ddl_info.set_heap_table_ddl(use_heap_table_ddl_plan_);
+      ddl_info.set_mview_complete_refresh(is_mview_complete_refresh_);
+      ddl_info.set_refreshing_mview(is_mview_complete_refresh_);
+      ddl_info.set_retryable_ddl(is_retryable_ddl_);
+      session_param.use_external_session_ = true;  // means session id dispatched by session mgr
+      session_param.consumer_group_id_ = consumer_group_id_;
       add_event_info(ret, "ddl redefinition sstable build task generate innersql");
       LOG_INFO("execute sql" , K(sql_string), K(data_table_id_), K(tenant_id_),
-              "is_strict_mode", is_strict_mode(sql_mode_), K(sql_mode_), K(parallelism_), K(DDL_INNER_SQL_EXECUTE_TIMEOUT), "ddl_event_info", ObDDLEventInfo());
-      if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+      "is_strict_mode", is_strict_mode(sql_mode_), K(sql_mode_), K(parallelism_), K(DDL_INNER_SQL_EXECUTE_TIMEOUT), "ddl_event_info", ObDDLEventInfo());
+      if (OB_FAIL(session_param.ddl_info_.init(ddl_info, data_table_schema->get_session_id()))) {
+        LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info), K(data_table_schema->get_session_id()));
+      } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
         LOG_WARN("set trx timeout failed", K(ret));
       } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
         LOG_WARN("set timeout failed", K(ret));

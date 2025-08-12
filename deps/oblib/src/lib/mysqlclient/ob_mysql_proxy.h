@@ -33,16 +33,14 @@ class ObISQLConnectionPool;
 class ObDbLinkConnectionPool;
 }
 
-struct ObSessionDDLInfo final
+
+struct InnerDDLInfo final
 {
 public:
-  ObSessionDDLInfo()
-    : is_ddl_(false), is_source_table_hidden_(false), is_dest_table_hidden_(false), is_heap_table_ddl_(false),
-      is_ddl_check_default_value_bit_(false), is_mview_complete_refresh_(false), is_refreshing_mview_(false),
-      is_retryable_ddl_(false), is_dummy_ddl_for_inner_visibility_(false), is_major_refreshing_mview_(false), reserved_bit_(0)
-  {
-  }
-  ~ObSessionDDLInfo() = default;
+  InnerDDLInfo() : is_ddl_(false), is_source_table_hidden_(false), is_dest_table_hidden_(false), is_heap_table_ddl_(false),
+  is_ddl_check_default_value_bit_(false), is_mview_complete_refresh_(false), is_refreshing_mview_(false),
+  is_retryable_ddl_(false), is_dummy_ddl_for_inner_visibility_(false), is_major_refreshing_mview_(false), reserved_bit_(0)
+  {}
   void set_is_ddl(const bool is_ddl) { is_ddl_ = is_ddl; }
   bool is_ddl() const { return is_ddl_; }
   void set_source_table_hidden(const bool is_hidden) { is_source_table_hidden_ = is_hidden; }
@@ -98,6 +96,39 @@ public:
       uint64_t reserved_bit_ : RESERVED_BIT;
     };
   };
+};
+struct ObSessionDDLInfo final
+{
+public:
+  ObSessionDDLInfo()
+    : ddl_info_(), session_id_(OB_INVALID_ID)
+  {
+  }
+  ~ObSessionDDLInfo() = default;
+  inline int init (const InnerDDLInfo ddl_info,
+                   const uint64_t session_id) { ddl_info_ = ddl_info;
+                                                session_id_ = session_id;
+                                                return is_valid() ? OB_SUCCESS
+                                                                    : OB_INVALID_ARGUMENT; }
+  bool is_ddl() const { return ddl_info_.is_ddl(); }
+  bool is_source_table_hidden() const { return ddl_info_.is_source_table_hidden(); }
+  bool is_dest_table_hidden() const { return ddl_info_.is_dest_table_hidden(); }
+  bool is_heap_table_ddl() const { return ddl_info_.is_heap_table_ddl(); }
+  bool is_ddl_check_default_value() const { return ddl_info_.is_ddl_check_default_value(); }
+  bool is_mview_complete_refresh() const { return ddl_info_.is_mview_complete_refresh(); }
+  bool is_refreshing_mview() const { return ddl_info_.is_refreshing_mview(); }
+  bool is_retryable_ddl() const { return ddl_info_.is_retryable_ddl(); }
+  bool is_dummy_ddl_for_inner_visibility() const { return ddl_info_.is_dummy_ddl_for_inner_visibility(); }
+  bool is_major_refreshing_mview() const { return ddl_info_.is_major_refreshing_mview(); }
+  inline uint64_t get_session_id() const { return session_id_;}
+  inline void reset() { session_id_ = OB_INVALID_ID;
+                        ddl_info_.reset();}
+  bool is_valid() { return !(is_ddl() && OB_INVALID_ID == session_id_); }
+  TO_STRING_KV(K_(ddl_info), K_(session_id));
+  OB_UNIS_VERSION(1);
+private:
+  InnerDDLInfo ddl_info_;
+  uint64_t session_id_;
 };
 
 struct ObSessionParam final

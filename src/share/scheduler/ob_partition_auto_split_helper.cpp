@@ -2118,10 +2118,14 @@ int ObSplitSampler::query_ranges_(const uint64_t tenant_id, const ObString &db_n
   ObSessionParam session_param;
   session_param.sql_mode_ = nullptr;
   session_param.tz_info_wrap_ = nullptr;
-  session_param.ddl_info_.set_is_ddl(true); // force Px.
-  session_param.ddl_info_.set_source_table_hidden(is_query_table_hidden);
+  InnerDDLInfo ddl_info;
+  ddl_info.set_is_ddl(true); // force Px.
+  ddl_info.set_source_table_hidden(is_query_table_hidden);
+
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(session_param.ddl_info_.init(ddl_info, 0/*session_id*/))) {
+    LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info));
   } else if (query_index) {
     ObSqlString set_sql;
     int64_t affected_rows = 0;

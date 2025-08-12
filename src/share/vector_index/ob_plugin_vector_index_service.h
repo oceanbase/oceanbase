@@ -468,15 +468,18 @@ int ObPluginVectorIndexService::process_ivf_aux_info(
   } else if (OB_FAIL(generate_get_aux_info_sql(table_id, tablet_id, is_hidden_table, sql_string))) {
     OB_LOG(WARN, "failed to generate sql", K(ret), K(table_id));
   } else {
+    InnerDDLInfo ddl_info;
     ObSessionParam session_param;
     session_param.sql_mode_ = nullptr;
     session_param.tz_info_wrap_ = nullptr;
-    session_param.ddl_info_.set_is_dummy_ddl_for_inner_visibility(true);
-    session_param.ddl_info_.set_source_table_hidden(is_hidden_table);
-    session_param.ddl_info_.set_dest_table_hidden(false);
+    ddl_info.set_is_dummy_ddl_for_inner_visibility(true);
+    ddl_info.set_source_table_hidden(is_hidden_table);
+    ddl_info.set_dest_table_hidden(false);
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql_proxy_->read(res, tenant_id_, sql_string.ptr(), &session_param))) {
+      if (OB_FAIL(session_param.ddl_info_.init(ddl_info, 0 /*session id*/))) {
+        OB_LOG(WARN, "fail to init ddl info", KR(ret), K(ddl_info));
+      } else if (OB_FAIL(sql_proxy_->read(res, tenant_id_, sql_string.ptr(), &session_param))) {
         OB_LOG(WARN, "failed to execute sql", K(ret), K(sql_string));
       } else if (NULL == (result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;

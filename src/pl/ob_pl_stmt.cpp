@@ -1487,8 +1487,7 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
   const ObDatabaseSchema *db_schema = nullptr;
   ObSchemaChecker schema_checker;
   ObSchemaObjVersion obj_version;
-
-  if (OB_FAIL(schema_checker.init(schema_guard, resolve_ctx_.session_info_.get_server_sid()))) {
+  if (OB_FAIL(schema_checker.init(schema_guard))) {
     LOG_WARN("fail to init shcema checker", K(ret));
   } else if (OB_FAIL(schema_checker.get_database_schema(tenant_id, object_db_id, db_schema))) {
     LOG_WARN("fail to get db schema", K(ret));
@@ -1926,7 +1925,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         }
 
         if (OB_SUCC(ret) && OB_INVALID_ID != db_id) {
-          OZ (schema_checker.init(schema_guard, session_info.get_server_sid()));
+          OZ (schema_checker.init(schema_guard));
           OZ (ObResolverUtils::resolve_synonym_object_recursively(
             schema_checker, synonym_checker,
             tenant_id, db_id, name, object_db_id, object_name, exist, OB_INVALID_INDEX == parent_id));
@@ -2254,7 +2253,7 @@ int ObPLExternalNS::resolve_external_type_by_name(const ObString &db_name, const
         ObString object_name;
         ObSchemaChecker schema_checker;
         ObSynonymChecker synonym_checker;
-        OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_server_sid()));
+        OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid_for_table()));
         OZ (resolve_ctx_.schema_guard_.get_udt_info(tenant_id, db_id, OB_INVALID_ID, type_name, udt_info));
       }
       if (OB_SUCC(ret) && (is_oracle_sys_user || OB_ISNULL(udt_info))) {
@@ -2288,7 +2287,7 @@ int ObPLExternalNS::resolve_external_type_by_name(const ObString &db_name, const
       ObString object_name;
       ObSchemaChecker schema_checker;
       ObSynonymChecker synonym_checker;
-      if (OB_FAIL(schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_server_sid()))) {
+      if (OB_FAIL(schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid_for_table()))) {
         LOG_WARN("failed to init schema checker for resolve synonym", K(ret));
       } else if (!package_name.empty()) {
         if (OB_FAIL(ObResolverUtils::resolve_synonym_object_recursively(schema_checker,
@@ -2496,7 +2495,7 @@ int ObPLExternalNS::check_routine_exists(const ObString &db_name,
   }
   if (OB_SUCC(ret) && !exists) {
     ObSchemaChecker schema_checker;
-    if (OB_FAIL(schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_server_sid()))) {
+    if (OB_FAIL(schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid_for_table()))) {
       LOG_WARN("schema checker init failed", K(ret));
     } else if (OB_FAIL(ObResolverUtils::check_routine_exists(schema_checker, resolve_ctx_.session_info_, db_name,
       package_name, routine_name, routine_type, exists, udt_id))) {

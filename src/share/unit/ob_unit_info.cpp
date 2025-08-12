@@ -55,6 +55,7 @@ void ObUnit::reset()
   is_manual_migrate_ = false;
   status_ = UNIT_STATUS_MAX;
   replica_type_ = REPLICA_TYPE_FULL;
+  time_stamp_ = OB_INVALID_TIMESTAMP;
 }
 
 int ObUnit::assign(const ObUnit& that)
@@ -73,6 +74,7 @@ int ObUnit::assign(const ObUnit& that)
     is_manual_migrate_ = that.is_manual_migrate_;
     status_ = that.status_;
     replica_type_ = that.replica_type_;
+    time_stamp_ = that.time_stamp_;
   }
   return ret;
 }
@@ -113,7 +115,8 @@ DEF_TO_STRING(ObUnit)
        K_(migrate_from_server),
        K_(is_manual_migrate),
        K_(status),
-       K_(replica_type));
+       K_(replica_type),
+       K_(time_stamp));
   return pos;
 }
 
@@ -126,7 +129,8 @@ OB_SERIALIZE_MEMBER(ObUnit,
                     migrate_from_server_,
                     is_manual_migrate_,
                     status_,
-                    replica_type_);
+                    replica_type_,
+                    time_stamp_);
 
 int ObUnitInfo::assign(const ObUnitInfo &other)
 {

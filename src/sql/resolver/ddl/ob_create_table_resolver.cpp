@@ -278,13 +278,26 @@ int ObCreateTableResolver::add_udt_hidden_column(ObTableSchema &table_schema,
 int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, ParseNode *commit_option_node)
 {
   int ret = OB_SUCCESS;
-  session_info_->set_has_temp_table_flag();
-  if (OB_FAIL(set_table_name(table_name_))) {
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is null", KR(ret));
+  } else if (FALSE_IT(session_info_->set_has_temp_table_flag())) {
+  } else if (OB_FAIL(session_info_->set_session_temp_table_used(true))) {
+    LOG_WARN("fail to set session temp table used", KR(ret));
+  } else if (OB_FAIL(set_table_name(table_name_))) {
       LOG_WARN("failed to set table name", K(ret), K(table_name_));
   } else if (session_info_->is_obproxy_mode() && 0 == session_info_->get_sess_create_time()) {
     ret = OB_NOT_SUPPORTED;
     SQL_RESV_LOG(WARN, "can't create temporary table via obproxy, upgrade obproxy first", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "obproxy version is too old, create temporary table");
+  } else if (!is_oracle_mode()
+             && (!((session_info_->is_client_sessid_support()
+                  || !session_info_->is_obproxy_mode())
+                && session_info_->get_client_sid() != INVALID_SESSID))) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_RESV_LOG(WARN, "can't create temporary table via obproxy, upgrade obproxy first", KR(ret), K(session_info_->is_client_sessid_support()),
+                                                                                          K(session_info_->is_obproxy_mode()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "obproxy version is too old or config not right, create temporary table");
   } else {
     if (is_oracle_mode()) {
       if (OB_ISNULL(commit_option_node) || T_TRANSACTION == commit_option_node->type_) {
@@ -499,17 +512,16 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
     if (OB_SUCC(ret)) {
       if (NULL != create_table_node->children_[0]) {
           switch (create_table_node->children_[0]->type_) {
-            case T_TEMPORARY:
+            case T_TEMPORARY: {
+              uint64_t tenant_version = 0;
               if (create_table_node->children_[5] != NULL) { //临时表不支持分区
                 ret = OB_ERR_TEMPORARY_TABLE_WITH_PARTITION;
-              } else if (lib::is_mysql_mode()) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "MySQL compatible temporary table");
               } else {
                 is_temporary_table = true;
                 is_oracle_temp_table_ = (is_mysql_mode == false);
               }
               break;
+            }
             case T_EXTERNAL: {
               uint64_t tenant_version = 0;
               if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
@@ -2584,12 +2596,16 @@ int ObCreateTableResolver::generate_index_arg(const bool process_heap_table_prim
             LOG_WARN("tenant is not user tenant vector index not supported ", K(ret), K(tenant_id));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.3, not user tenant create vector index is");
           } else {
-#ifndef OB_BUILD_SYS_VEC_IDX
+            #ifndef OB_BUILD_SYS_VEC_IDX
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("sys tenant vector index not supported ", K(ret), K(tenant_id));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant create vector index is");
-#endif
+            #endif
           }
+        } else if (table_schema.is_mysql_tmp_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("mysql temp table not support vector index", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table create vector index is");
         }
         if (OB_SUCC(ret)) {
           type = INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL; // 需要考虑ivf、hnsw、spiv这三种模式，其中ivf索引又分成ivfflat，ivfsq8，ivfpq三类
@@ -2603,6 +2619,10 @@ int ObCreateTableResolver::generate_index_arg(const bool process_heap_table_prim
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support global fts index now", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "global fulltext index is");
+        } else if (table_schema.is_mysql_tmp_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("mysql temp table not support fulltext index", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table create fulltext index is");
         } else {
           // set type to fts_doc_rowkey first, append other fts arg later
           type = INDEX_TYPE_FTS_INDEX_LOCAL;
@@ -2615,6 +2635,10 @@ int ObCreateTableResolver::generate_index_arg(const bool process_heap_table_prim
         } else if (global_) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support global fts index now", K(ret));
+        } else if (table_schema.is_mysql_tmp_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("mysql temp table not support multivalue index", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table create multivalue index is");
         } else {
           type = INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL;
         }
@@ -2626,6 +2650,10 @@ int ObCreateTableResolver::generate_index_arg(const bool process_heap_table_prim
         } else if (global_) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support global multivalue index now", K(ret));
+        } else if (table_schema.is_mysql_tmp_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("mysql temp table not support multivalue index", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql temporary table create multivalue index is");
         } else {
           type = INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
         }
