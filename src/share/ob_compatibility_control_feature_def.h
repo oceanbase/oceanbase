@@ -57,4 +57,9 @@ DEF_COMPAT_CONTROL_FEATURE(OUT_ANONYMOUS_COLLECTION_IS_ALLOW,
     "type which is not empty for inout anonymous array which used in anonymous block",
     MOCK_CLUSTER_VERSION_4_2_5_5, CLUSTER_VERSION_4_3_0_0,
     CLUSTER_VERSION_4_3_5_3)
+
+DEF_COMPAT_CONTROL_FEATURE(IMPLICIT_FIRST_CENTURY_YEAR,
+    "The result of cast('x-xx-xx', date) is different in ob and MySQL",
+    MOCK_CLUSTER_VERSION_4_2_5_5, CLUSTER_VERSION_4_3_0_0,
+    CLUSTER_VERSION_4_3_5_4)
 #endif

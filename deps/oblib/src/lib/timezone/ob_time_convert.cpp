@@ -2394,7 +2394,9 @@ int ObTimeConverter::get_time_zone(const ObTimeDelims *delims, ObTime &ob_time, 
   return ret;
 }
 
-int ObTimeConverter::str_to_digit_with_date(const ObString &str, ObTimeDigits *digits, ObTime &ob_time, const bool &need_truncate)
+int ObTimeConverter::str_to_digit_with_date(const ObString &str, ObTimeDigits *digits,
+                                            ObTime &ob_time, const bool &need_truncate,
+                                            const bool implicit_first_century_year)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str.ptr()) || OB_UNLIKELY(str.length() <= 0) || OB_ISNULL(digits)) {
@@ -2478,7 +2480,7 @@ int ObTimeConverter::str_to_digit_with_date(const ObString &str, ObTimeDigits *d
         if (0 == digits[DT_YEAR].value_ && 0 == digits[DT_MON].value_ && 0 == digits[DT_MDAY].value_) {
           // zero date, do nothing
         } else {
-          apply_date_year2_rule(digits[DT_YEAR]);
+          apply_date_year2_rule(digits[DT_YEAR], implicit_first_century_year);
         }
 
         //if HAS_TYPE_ORACLE, digits[DT_USEC] store nanosecond in fact
@@ -2514,7 +2516,8 @@ int ObTimeConverter::str_to_ob_time_with_date(const ObString &str, ObTime &ob_ti
     LOG_WARN("datetime string is invalid", K(ret), K(str));
   } else {
     ObTimeDigits digits[DATETIME_PART_CNT];
-    if (OB_FAIL(str_to_digit_with_date(str, digits, ob_time, need_truncate))) {
+    if (OB_FAIL(str_to_digit_with_date(str, digits, ob_time, need_truncate,
+                                       date_sql_mode.implicit_first_century_year_))) {
       LOG_WARN("failed to get digits", K(ret), K(str));
     } else if (OB_FAIL(validate_datetime(ob_time, date_sql_mode))) {
       // OK, it seems like a valid format, now we need check its value.
@@ -6353,9 +6356,10 @@ OB_INLINE int ObTimeConverter::apply_date_space_rule(const ObTimeDelims *delims)
   return ret;
 }
 
-OB_INLINE void ObTimeConverter::apply_date_year2_rule(ObTimeDigits &year)
+OB_INLINE void ObTimeConverter::apply_date_year2_rule(ObTimeDigits &year,
+                                                      const bool implicit_first_century_year)
 {
-  if (year.len_ <= 2) {
+  if (year.len_ == 2 || (year.len_ == 1 && !implicit_first_century_year)) {
     year.value_ += (year.value_ < EPOCH_YEAR2 ? 2000 : 1900);
   }
 }

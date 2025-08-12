@@ -3508,6 +3508,14 @@ int ObSQLUtils::merge_solidified_vars_into_type_ctx(ObExprTypeCtx &type_ctx,
       type_ctx.set_max_allowed_packet(max_allowed_packet);
     }
   }
+  if (OB_SUCC(ret)) {
+    uint64_t compat_version = type_ctx.get_compat_version();
+    if (OB_FAIL(merge_solidified_var_into_compat_version(&session_vars_snapshot, compat_version))) {
+      LOG_WARN("get sql mode failed", K(ret));
+    } else {
+      type_ctx.set_compat_version(compat_version);
+    }
+  }
   return ret;
 }
 
@@ -3612,6 +3620,7 @@ void ObSQLUtils::init_type_ctx(const ObSQLSessionInfo *session, ObExprTypeCtx &t
 {
   if (NULL != session) {
     ObCollationType coll_type = CS_TYPE_INVALID;
+    uint64_t compat_version = 0;
     int64_t div_precision_increment = OB_INVALID_COUNT;
     int64_t ob_max_allowed_packet;
     // 对于type_ctx的collation_type，我理解这里需要初始化一个默认值，
@@ -3620,6 +3629,9 @@ void ObSQLUtils::init_type_ctx(const ObSQLSessionInfo *session, ObExprTypeCtx &t
     if (lib::is_mysql_mode()) {
       if (OB_SUCCESS == (session->get_collation_connection(coll_type))) {
         type_ctx.set_coll_type(coll_type);
+      }
+      if (OB_SUCCESS == (session->get_compatibility_version(compat_version))) {
+        type_ctx.set_compat_version(compat_version);
       }
     } else if (lib::is_oracle_mode()) {
       type_ctx.set_coll_type(session->get_nls_collation());
