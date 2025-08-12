@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_PC
 #include "ob_plan_cache_value.h"
+#include "sql/ob_sql.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/plan_cache/ob_pcv_set.h"
 #include "sql/udr/ob_udr_mgr.h"
@@ -1206,7 +1207,7 @@ int ObPlanCacheValue::get_one_group_params(int64_t pos, const ParamStore &src_pa
     } else if (array_obj->count_ <= pos) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parameters pos", K(ret), K(i), K(pos), K(objparam));
-    } else if (OB_FAIL(dst_params.push_back(array_obj->data_[pos]))) {
+    } else if (OB_FAIL(ObSql::add_param_to_param_store(array_obj->data_[pos], dst_params))) {
       LOG_WARN("fail to push param_obj to param_store", K(i), K(pos), K(array_obj->data_[pos]), K(ret));
     } else {
       LOG_TRACE("get one batch obj", K(pos), K(i), K(array_obj->data_[pos]));
