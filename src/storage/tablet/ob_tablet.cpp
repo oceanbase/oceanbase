@@ -6308,7 +6308,7 @@ int ObTablet::get_kept_snapshot_info(
     }
 #endif
     const int64_t snapshot_version = get_snapshot_version();
-    if (snapshot_version - (snapshot_info.snapshot_ / 1000 /*use microsecond here*/) > 40_min) {
+    if (snapshot_info.snapshot_ < snapshot_version && (snapshot_version - snapshot_info.snapshot_) / 1000 /*use microsecond here*/ > 40_min) {
       if (REACH_THREAD_TIME_INTERVAL(10_s)) {
         LOG_INFO("tablet multi version start dont advance for a long time", K(ret),
                 "ls_id", get_tablet_meta().ls_id_, K(tablet_id),

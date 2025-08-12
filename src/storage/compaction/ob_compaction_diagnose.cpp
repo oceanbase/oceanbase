@@ -1259,7 +1259,7 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_multi_version_start(storage::ObLS &
   } else {
     // if multi version start not advance for a long time, diagnose major merge
     const int64_t snapshot_version = tablet.get_snapshot_version();
-    if (snapshot_version - (snapshot_info.snapshot_ / 1000 /*use microsecond here*/) > 40_min) {
+    if (snapshot_info.snapshot_ < snapshot_version && (snapshot_version - snapshot_info.snapshot_) / 1000 /*use microsecond here*/ > 40_min) {
       LOG_INFO("tablet multi version start not advance for a long time", K(ret),
               "ls_id", ls_id, K(tablet_id), K(current_time), K(snapshot_info));
       if (OB_FAIL(ADD_DIAGNOSE_INFO_FOR_TABLET(
