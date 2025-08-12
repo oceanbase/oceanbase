@@ -322,6 +322,7 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
     new(&obj_version)ObSchemaObjVersion(table_info->get_table_id(),
                                         table_info->get_schema_version(),
                                         is_view ? DEPENDENCY_VIEW : DEPENDENCY_TABLE);
+    obj_version.is_db_explicit_ = session_info.get_database_id() != table_info->get_database_id();
     OZ (deps->push_back(obj_version));
   }
   return ret;
