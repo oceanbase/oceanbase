@@ -239,7 +239,7 @@ public:
   static const int64_t MEDIUM_COMPAT_VERSION_LATEST = MEDIUM_COMPAT_VERSION_V5;
 private:
   static const int32_t SCS_ONE_BIT = 1;
-  static const int32_t SCS_RESERVED_BITS = 26;
+  static const int32_t SCS_RESERVED_BITS = 25;
 
 public:
   union {
@@ -254,6 +254,7 @@ public:
       uint64_t co_major_merge_type_             : 4;
       uint64_t is_skip_tenant_major_            : SCS_ONE_BIT;
       uint64_t contain_mds_filter_info_         : SCS_ONE_BIT;
+      uint64_t contain_inc_major_info_          : SCS_ONE_BIT;
       uint64_t reserved_                        : SCS_RESERVED_BITS;
     };
   };
