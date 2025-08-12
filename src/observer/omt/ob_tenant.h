@@ -425,6 +425,7 @@ public:
   void set_unit_min_cpu(double cpu);
   OB_INLINE int64_t total_worker_cnt() const { return total_worker_cnt_; }
   int64_t cpu_quota_concurrency() const;
+  int64_t min_active_worker_cnt() const;
   int64_t min_worker_cnt() const;
   int64_t max_worker_cnt() const;
   lib::Worker::CompatMode get_compat_mode() const;

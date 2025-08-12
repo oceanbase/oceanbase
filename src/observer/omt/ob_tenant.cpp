@@ -42,7 +42,7 @@ using namespace oceanbase::obrpc;
 const int64_t var_name##_offset = ((int64_t)addr - (int64_t)pthread_self()); \
 decltype(*addr) var_name = *(decltype(addr))(thread_base + var_name##_offset);
 
-#define EXPAND_INTERVAL (1 * 1000 * 1000)
+#define EXPAND_INTERVAL (500 * 1000)
 #define SHRINK_INTERVAL (1 * 1000 * 1000)
 #define SLEEP_INTERVAL (60 * 1000 * 1000)
 
@@ -1208,6 +1208,17 @@ int64_t ObTenant::cpu_quota_concurrency() const
   return static_cast<int64_t>((tenant_config.is_valid() ? tenant_config->cpu_quota_concurrency : 4));
 }
 
+int64_t ObTenant::min_active_worker_cnt() const
+{
+  ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
+  bool enable_more_aggressive_dynamic_worker = tenant_config.is_valid() ? tenant_config->_enable_more_aggressive_dynamic_worker : false;
+  int64_t cnt = 3;
+  if (is_user_tenant(id()) && enable_more_aggressive_dynamic_worker) {
+    cnt = min_worker_cnt();
+  }
+  return cnt;
+}
+
 int64_t ObTenant::min_worker_cnt() const
 {
   ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
@@ -1786,7 +1797,7 @@ void ObTenant::check_worker_count()
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(workers_lock_.trylock())) {
-    int64_t token = 3;
+    int64_t token = min_active_worker_cnt();
     int64_t now = ObTimeUtility::current_time();
     bool enable_dynamic_worker = true;
     int64_t threshold = 3 * 1000;

@@ -412,6 +412,7 @@ _enable_log_cache
 _enable_malloc_v2
 _enable_memleak_light_backtrace
 _enable_mock_stmt_flush_table
+_enable_more_aggressive_dynamic_worker
 _enable_mysql_compatible_dates
 _enable_newsort
 _enable_new_query_range_extraction
