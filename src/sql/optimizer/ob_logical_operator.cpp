@@ -5357,6 +5357,8 @@ int ObLogicalOperator::check_sort_key_can_pushdown_to_tsc_detail(
             OPT_TRACE("[TopN Filter] can not pushdown to tsc with exec param");
           } else if (scan->use_index_merge()) {
             OPT_TRACE("[TopN Filter] can not pushdown to index merge table scan");
+          } else if (OB_NOT_NULL(scan->get_limit_expr())) {
+            OPT_TRACE("[TopN Filter] can not pushdown tsc with limit");
           } else {
             scan_op = op;
             find_table_scan = true;
