@@ -256,7 +256,7 @@ public:
     OB_ASSERT_MSG(contain_full_col_descs(), "ObDataStoreDesc dose not promise a full stored col descs");
     return col_desc_->col_desc_array_;
   }
-  const ObColDataStoreDesc &get_col_desc() const { return *col_desc_; }
+  const ObColDataStoreDesc *get_col_desc() const { return col_desc_; }
   bool contain_full_col_descs() const
   {
     return get_row_column_count() == get_col_desc_array().count();

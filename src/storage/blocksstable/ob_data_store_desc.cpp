@@ -1054,7 +1054,11 @@ int64_t ObSimplePrintDataStoreDesc::to_string(char *buf, const int64_t buf_len) 
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
     J_OBJ_START();
-    J_KV("col_desc", desc_.get_col_desc());
+    if (nullptr != desc_.get_col_desc()) {
+      J_KV("col_desc", *desc_.get_col_desc());
+    } else {
+      J_KV("col_desc", "nullptr");
+    }
     J_COMMA();
     desc_.simple_to_string(buf, buf_len, pos);
     J_OBJ_END();
