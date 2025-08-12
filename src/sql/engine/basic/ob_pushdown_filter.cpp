@@ -2852,7 +2852,8 @@ ObPushdownExprSpec::ObPushdownExprSpec(ObIAllocator &alloc)
     auto_split_params_(alloc),
     ext_tbl_filter_pd_level_(0),
     ext_mapping_column_exprs_(alloc),
-    ext_mapping_column_ids_(alloc)
+    ext_mapping_column_ids_(alloc),
+    ext_enable_late_materialization_(false)
 {
 }
 
@@ -2879,7 +2880,8 @@ OB_DEF_SERIALIZE(ObPushdownExprSpec)
               auto_split_params_,
               ext_tbl_filter_pd_level_,
               ext_mapping_column_exprs_,
-              ext_mapping_column_ids_);
+              ext_mapping_column_ids_,
+              ext_enable_late_materialization_);
   return ret;
 }
 
@@ -2906,7 +2908,8 @@ OB_DEF_DESERIALIZE(ObPushdownExprSpec)
               auto_split_params_,
               ext_tbl_filter_pd_level_,
               ext_mapping_column_exprs_,
-              ext_mapping_column_ids_);
+              ext_mapping_column_ids_,
+              ext_enable_late_materialization_);
   return ret;
 }
 
@@ -2933,7 +2936,8 @@ OB_DEF_SERIALIZE_SIZE(ObPushdownExprSpec)
               auto_split_params_,
               ext_tbl_filter_pd_level_,
               ext_mapping_column_exprs_,
-              ext_mapping_column_ids_);
+              ext_mapping_column_ids_,
+              ext_enable_late_materialization_);
   return len;
 }
 
