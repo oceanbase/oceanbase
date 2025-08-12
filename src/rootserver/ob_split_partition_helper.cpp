@@ -292,9 +292,6 @@ int ObSplitPartitionHelper::check_enable_global_index_auto_split(
   auto_part_size = -1;
   if (data_table_schema.is_mysql_tmp_table() || data_table_schema.is_sys_table()) {
     // not supported table type
-  } else if (data_table_schema.is_auto_partitioned_table()) {
-    enable_auto_split = true;
-    auto_part_size = data_table_schema.get_part_option().get_auto_part_size();
   } else {
     const uint64_t tenant_id = data_table_schema.get_tenant_id();
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
