@@ -126,7 +126,11 @@ public:
                                 const ObString &input_str,
                                 ObString &output_str);
 
-  static OB_INLINE ObString truncate_sql_string(const ObString &input_str);
+  static OB_INLINE ObString truncate_sql_string(const ObString &input_str)
+  {
+    int64_t length = input_str.length() > OB_MAX_SQL_LENGTH ? OB_MAX_SQL_LENGTH : input_str.length();
+    return ObString(length, input_str.ptr());
+  }
 
   int update_plan_baselines_result(const uint64_t tenant_id,
                                    ObPlanCache *lib_cache,

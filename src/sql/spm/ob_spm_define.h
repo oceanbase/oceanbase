@@ -431,7 +431,8 @@ public:
     end_time_(0),
     update_baseline_outline_(false),
     type_(-1),
-    records_(NULL)
+    records_(NULL),
+    evo_plan_is_baseline_(false)
   {}
   ~EvolutionTaskResult() {}
   int deep_copy(common::ObIAllocator& allocator, const EvolutionTaskResult& other);
@@ -457,6 +458,7 @@ public:
   bool update_baseline_outline_;
   int64_t type_;  //  0 OnlineEvolve, 1 FirstBaseline, 2 UnReproducible, 3 BaselineFirst, 4 BestBaselinem, 5 FixedBaseline
   ObEvolutionRecords *records_;
+  bool evo_plan_is_baseline_;
 };
 
 } // namespace sql end

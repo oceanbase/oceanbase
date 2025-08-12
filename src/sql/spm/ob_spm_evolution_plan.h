@@ -87,7 +87,8 @@ public:
       best_plan_cnt_(0),
       current_stage_cnt_(0),
       type_(-1),
-      evolution_records_(NULL)
+      evolution_records_(NULL),
+      evo_plan_is_baseline_(false)
   {
   }
   void reset();
@@ -181,6 +182,7 @@ protected:
   int64_t current_stage_cnt_;
   int64_t type_;
   ObEvolutionRecords *evolution_records_;
+  bool evo_plan_is_baseline_;
 };
 
 } //namespace sql end
