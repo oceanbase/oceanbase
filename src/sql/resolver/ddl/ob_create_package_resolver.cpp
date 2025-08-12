@@ -27,6 +27,9 @@ namespace sql
 int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
+  bool need_reset_default_database = false;
+  uint64_t old_database_id = OB_INVALID_ID;
+  ObSqlString old_database_name;
   CK (T_PACKAGE_CREATE == parse_tree.type_);
   CK (CREATE_PACKAGE_NODE_CHILD_COUNT == parse_tree.num_child_);
   CK (OB_NOT_NULL(parse_tree.children_));
@@ -83,6 +86,25 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
       OZ (resolve_invoke_accessible(package_clause_node,
                                     is_invoker_right,
                                     has_accessible_by));
+      if (OB_SUCC(ret)) {
+        uint64_t database_id = OB_INVALID_ID;
+        const share::schema::ObDatabaseSchema *database_schema = NULL;
+        OZ (schema_checker_->get_schema_guard()->get_database_id(session_info_->get_effective_tenant_id(), db_name, database_id));
+        OZ (schema_checker_->get_schema_guard()->get_database_schema(session_info_->get_effective_tenant_id(), database_id, database_schema));
+        if (OB_FAIL(ret) || OB_ISNULL(database_schema)) {
+          ret = OB_ERR_BAD_DATABASE;
+          LOG_WARN("fail to get database schema", K(ret));
+          LOG_USER_ERROR(OB_ERR_BAD_DATABASE, db_name.length(), db_name.ptr());
+        }
+        if (OB_FAIL(ret)) {
+        } else if (database_schema->get_database_name_str() != session_info_->get_database_name()) {
+          OZ (old_database_name.append(session_info_->get_database_name()));
+          OX (old_database_id = session_info_->get_database_id());
+          OZ (session_info_->set_default_database(database_schema->get_database_name_str()));
+          OX (session_info_->set_database_id(database_id));
+          OX (need_reset_default_database = true);
+        }
+      }
       //NOTE: null package stmts is possible
       if (OB_SUCC(ret) && OB_NOT_NULL(package_stmts_node)) {
         uint64_t db_id = OB_INVALID_ID;
@@ -270,6 +292,15 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
       // 比如: Create Package pack IS Procedure proc(x Boolean := 1); End;会报错Boolean表达式默认值非法的Warning
       // 2274的升级脚本还会用最新的Package脚本重建这个包, 为了避免产生的Warning使得升级失败, 这里把Warning清理掉
       common::ob_reset_tsi_warning_buffer();
+    }
+    if (need_reset_default_database) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = session_info_->set_default_database(old_database_name.string()))) {
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+        LOG_ERROR("failed to reset default database", K(ret), K(tmp_ret), K(old_database_name));
+      } else {
+        session_info_->set_database_id(old_database_id);
+      }
     }
   }
   return ret;
