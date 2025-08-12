@@ -2419,6 +2419,7 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
             || MYSQL_TYPE_JSON == type
             || MYSQL_TYPE_GEOMETRY == type) {
           int64_t extra_len = 0;
+          bool has_inrow_data = false;
           if (MYSQL_TYPE_ORA_CLOB == type) {
             ObLobLocatorV2 lob(str);
             if (lob.is_lob_locator_v1()) {
@@ -2436,10 +2437,18 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
               if (!lob.is_valid()) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("got invalid ps lob param", K(length), K(lob), K(type), K(cs_type));
-              } // if INROW, does it need to do copy_or_convert_str?
+              } else if (lob.has_inrow_data()) {
+                has_inrow_data = true;
+                int64_t data_len = 0;
+                if (OB_FAIL(lob.get_lob_data_byte_len(data_len))) {
+                  LOG_WARN("fail to get inrow data len", K(ret), K(lob));
+                } else {
+                  extra_len = str.length() - data_len;
+                }
+              }
             }
           }
-          if (is_lob_v1 || MYSQL_TYPE_ORA_CLOB != type) {
+          if (is_lob_v1 || MYSQL_TYPE_ORA_CLOB != type || has_inrow_data) {
             OZ(copy_or_convert_str(allocator,
                                 cur_cs_type,
                                 cs_type,
@@ -2448,11 +2457,11 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
                                 extra_len));
           }
           if (OB_SUCC(ret) && MYSQL_TYPE_ORA_CLOB == type) {
-            if (is_lob_v1) {
+            if (is_lob_v1 || has_inrow_data) {
               // copy lob header
               dst.assign_ptr(dst.ptr() - extra_len, dst.length() + extra_len);
               MEMCPY(dst.ptr(), str.ptr(), extra_len);
-              reinterpret_cast<ObLobLocator *>(dst.ptr())->payload_size_ = dst.length() - extra_len;
+              if (is_lob_v1) reinterpret_cast<ObLobLocator *>(dst.ptr())->payload_size_ = dst.length() - extra_len;
             } else {
               if (OB_FAIL(ob_write_string(allocator, str, dst))) {
                 LOG_WARN("Failed to write str", K(ret));
