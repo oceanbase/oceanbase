@@ -1837,7 +1837,11 @@ int ObFtsIndexBuildTask::submit_drop_fts_index_task()
   } else if (drop_index_arg.index_ids_.count() <= 0) {
     LOG_INFO("no table need to be drop, skip", K(ret)); // no table exist, skip drop
   } else if (schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema)) {
+    drop_index_task_submitted_ = true;
     LOG_WARN("fail to get table schema", K(ret), K(object_id_));
+  } else if (create_index_arg_.is_offline_rebuild_ && OB_ISNULL(data_table_schema)) {
+    drop_index_task_submitted_ = true;
+    LOG_INFO("the data table schema is null, skip drop for the offline ddl rebuild fulltext index", K(ret), K(object_id_));
   } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data table schema is null", K(ret), KP(data_table_schema));
@@ -2049,6 +2053,7 @@ int ObFtsIndexBuildTask::cleanup_impl()
     const ObString &parser_name = create_index_arg_.index_option_.parser_name_;
     ObTenantDicLoaderHandle dic_loader_handle;
     ObCharsetType charset_type = CHARSET_INVALID;
+    bool is_skip_unlock = false;
     if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_,
                                                        schema_guard))) {
       LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
@@ -2056,14 +2061,19 @@ int ObFtsIndexBuildTask::cleanup_impl()
                                                      data_table_id,
                                                      data_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(data_table_id));
+    } else if (create_index_arg_.is_offline_rebuild_ && OB_ISNULL(data_schema)) {
+      is_skip_unlock = true;
+      LOG_INFO("the data table schema is null, skip unlock for the offline ddl rebuild fulltext index", K(ret), K(object_id_));
     } else if (OB_ISNULL(data_schema)) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("fail to get table schema", K(ret), KPC(data_schema));
-    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, dst_tenant_id_))) {
+    }
+    if (FAILEDx(trans.start(GCTX.sql_proxy_, dst_tenant_id_))) {
       LOG_WARN("start transaction failed", K(ret));
     } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, task_id_))) {
       LOG_WARN("failed to get owner id", K(ret), K(task_id_));
-    } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_schema,
+    } else if (!is_skip_unlock &&
+               OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_schema,
                                                             index_table_id,
                                                             false /* is_global_index = false */,
                                                             owner_id,
