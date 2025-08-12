@@ -4101,6 +4101,7 @@ int ObVectorIndexSliceStore::append_row(const blocksstable::ObDatumRow &datum_ro
       int64_t vec_vid;
       ObVecExtraInfoObj *extra_obj = nullptr;
       int64_t extra_column_count = extra_column_idx_types_.count();
+      int64_t extra_info_actual_size = 0;
       if (datum_row.get_column_count() <= vector_vid_col_idx_ || datum_row.get_column_count() <= vector_col_idx_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get valid vector index col idx", K(ret), K(vector_col_idx_), K(vector_vid_col_idx_), K(datum_row));
@@ -4116,8 +4117,11 @@ int ObVectorIndexSliceStore::append_row(const blocksstable::ObDatumRow &datum_ro
         LOG_WARN("fail to get real data.", K(ret), K(vec_str));
       } else if (vec_str.length() == 0) {
         // do nothing
+      } else if (OB_NOT_NULL(adaptor_guard.get_adatper()) &&
+                 OB_FAIL(adaptor_guard.get_adatper()->get_extra_info_actual_size(extra_info_actual_size))) {
+        LOG_WARN("failed to get extra info actual size.", K(ret));
       } else {
-        if (extra_column_count > 0) {
+        if (extra_column_count > 0 && extra_info_actual_size > 0) {
           char *buf = nullptr;
           if (OB_ISNULL(buf = static_cast<char *>(tmp_allocator_.alloc(sizeof(ObVecExtraInfoObj) * extra_column_count)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
