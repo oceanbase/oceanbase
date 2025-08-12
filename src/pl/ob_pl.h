@@ -765,7 +765,7 @@ public:
   int init(const ParamStore *params = NULL, bool is_anonymous = false);
   int defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type, int64_t param_idx, bool is_anonymous);
   int check_anonymous_collection_compatible(const ObPLComposite &composite, const ObPLDataType &dest_type, bool &need_cast);
-  int convert_composite(ObObjParam &param, const ObPLDataType &dest_type);
+  static int convert_composite(ObPLExecCtx &ctx, ObObjParam &param, const ObPLDataType &dest_type);
   int init_params(const ParamStore *params = NULL, bool is_anonymous = false);
   int execute();
   int final(int ret);
@@ -976,6 +976,11 @@ public:
                                     int64_t package_id,
                                     int64_t routine_id,
                                     ObPLFunction *&routine);
+  static int get_subprogram_var_type(ObExecContext *exec_ctx,
+                                      uint64_t package_id,
+                                      uint64_t routine_id,
+                                      int64_t var_idx,
+                                      pl::ObPLDataType &type);
   static int get_subprogram_var_from_local(sql::ObSQLSessionInfo &session_info,
                                     int64_t package_id,
                                     int64_t routine_id,

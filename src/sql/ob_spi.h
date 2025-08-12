@@ -455,6 +455,10 @@ public:
                              uint64_t package_id,
                              int64_t var_idx,
                              const ObObj &value);
+  static int spi_get_package_var_type(ObExecContext *exec_ctx,
+                              uint64_t package_id,
+                              int64_t var_idx,
+                              pl::ObPLDataType &type);
   static int check_and_deep_copy_result(ObIAllocator &alloc,
                                         const ObObj &src,
                                         ObObj &dst);

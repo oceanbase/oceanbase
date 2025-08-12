@@ -2492,6 +2492,30 @@ int ObOpaqueType::generate_assign_with_null(ObPLCodeGenerator &generator,
   return ret;
 }
 
+int ObOpaqueType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(src));
+  CK (OB_NOT_NULL(dst));
+  if (OB_FAIL(ret)) {
+  } else if (src->is_null() || src->get_ext() == 0) {
+    dst->set_null();
+  } else {
+    ObPLOpaque *src_opaque = NULL;
+    CK (src->is_ext());
+    OX (src_opaque = reinterpret_cast<ObPLOpaque *>(src->get_ext()));
+    if (OB_FAIL(ret)) {
+    } else if (src_opaque->get_type() == ObPLOpaque::get_type(get_user_type_id())) {
+      OZ (ObUserDefinedType::deep_copy_obj(ctx.allocator_, *src, *dst));
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN_RET(OB_NOT_SUPPORTED, "failed to convert to different opaque type");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "convert to different opaque type");
+    }
+  }
+  return ret;
+}
+
 //---------- for ObCollectionType ----------
 
 int ObCollectionType::deep_copy(common::ObIAllocator &alloc, const ObCollectionType &other)
@@ -3633,10 +3657,26 @@ int ObVArrayType::init_session_var(const ObPLResolveCtx &resolve_ctx,
 
 int ObVArrayType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
 {
-  UNUSEDx(ctx, src, dst);
-  LOG_WARN_RET(OB_NOT_SUPPORTED, "failed to convert to varray type");
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "convert to varray");
-  return OB_NOT_SUPPORTED;
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(src));
+  CK (OB_NOT_NULL(dst));
+  if (OB_FAIL(ret)) {
+  } else if (src->is_null() || src->get_ext() == 0) {
+    dst->set_null();
+  } else {
+    ObPLComposite *src_composite = NULL;
+    CK (src->is_ext());
+    OX (src_composite = reinterpret_cast<ObPLComposite *>(src->get_ext()));
+    if (OB_FAIL(ret)) {
+    } else if (src_composite->get_id() == get_user_type_id()) {
+      OZ (ObUserDefinedType::deep_copy_obj(ctx.allocator_, *src, *dst));
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN_RET(OB_NOT_SUPPORTED, "failed to convert to different varray type");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "convert to different varray");
+    }
+  }
+  return ret;
 }
 
 //---------- for ObAssocArrayType ----------
@@ -3784,10 +3824,26 @@ int ObAssocArrayType::deserialize(
 
 int ObAssocArrayType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
 {
-  UNUSEDx(ctx, src, dst);
-  LOG_WARN_RET(OB_NOT_SUPPORTED, "failed to convert to assoc array type");
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "convert to associtive array");
-  return OB_NOT_SUPPORTED;
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(src));
+  CK (OB_NOT_NULL(dst));
+  if (OB_FAIL(ret)) {
+  } else if (src->is_null() || src->get_ext() == 0) {
+    dst->set_null();
+  } else {
+    ObPLComposite *src_composite = NULL;
+    CK (src->is_ext());
+    OX (src_composite = reinterpret_cast<ObPLComposite *>(src->get_ext()));
+    if (OB_FAIL(ret)) {
+    } else if (src_composite->get_id() == get_user_type_id()) {
+      OZ (ObUserDefinedType::deep_copy_obj(ctx.allocator_, *src, *dst));
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN_RET(OB_NOT_SUPPORTED, "failed to convert to different varray type");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "convert to different varray");
+    }
+  }
+  return ret;
 }
 #endif
 
