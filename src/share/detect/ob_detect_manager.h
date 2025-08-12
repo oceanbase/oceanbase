@@ -273,6 +273,11 @@ public:
     return OB_HASH_EXIST == detectable_ids_.exist_refactored(detectable_id);
   }
 
+  bool has_check_item_with_detectable_id(const ObDetectableId &detectable_id)
+  {
+    return nullptr != all_check_items_.get(detectable_id);
+  }
+
   lib::MemoryContext &get_mem_context() { return mem_context_; }
 
 private:
