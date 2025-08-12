@@ -114,7 +114,8 @@ ObLogPlan::ObLogPlan(ObOptimizerContext &ctx, const ObDMLStmt *stmt)
     alloc_sfu_list_(),
     onetime_copier_(NULL),
     nonrecursive_plan_for_fake_cte_(NULL),
-    has_allocated_range_shuffle_(false)
+    has_allocated_range_shuffle_(false),
+    need_accurate_cardinality_(false)
 {
 }
 

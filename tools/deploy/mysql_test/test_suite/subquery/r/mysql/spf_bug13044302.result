@@ -16,15 +16,15 @@ Query Plan
 =======================================================================
 |ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------
-|0 |MERGE JOIN                         |        |3       |31          |
+|0 |MERGE JOIN                         |        |2       |30          |
 |1 |├─TABLE FULL SCAN                  |s       |3       |3           |
-|2 |└─SORT                             |        |3       |28          |
-|3 |  └─SUBPLAN SCAN                   |VIEW1   |3       |28          |
-|4 |    └─UNION ALL                    |        |3       |28          |
-|5 |      ├─PX COORDINATOR             |        |2       |13          |
-|6 |      │ └─EXCHANGE OUT DISTR       |:EX10000|2       |12          |
-|7 |      │   └─PX PARTITION ITERATOR  |        |2       |11          |
-|8 |      │     └─TABLE FULL SCAN      |a       |2       |11          |
+|2 |└─SORT                             |        |2       |27          |
+|3 |  └─SUBPLAN SCAN                   |VIEW1   |2       |27          |
+|4 |    └─UNION ALL                    |        |2       |27          |
+|5 |      ├─PX COORDINATOR             |        |1       |12          |
+|6 |      │ └─EXCHANGE OUT DISTR       |:EX10000|1       |12          |
+|7 |      │   └─PX PARTITION ITERATOR  |        |1       |11          |
+|8 |      │     └─TABLE FULL SCAN      |a       |1       |11          |
 |9 |      └─HASH RIGHT SEMI JOIN       |        |1       |16          |
 |10|        ├─TABLE FULL SCAN          |r       |1       |3           |
 |11|        └─PX COORDINATOR           |        |2       |13          |
@@ -75,15 +75,15 @@ Query Plan
 ===========================================================================
 |ID|OPERATOR                               |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------------
-|0 |MERGE JOIN                             |        |3       |33          |
+|0 |MERGE JOIN                             |        |2       |32          |
 |1 |├─TABLE FULL SCAN                      |s       |3       |3           |
-|2 |└─SORT                                 |        |3       |30          |
-|3 |  └─SUBPLAN SCAN                       |VIEW1   |3       |30          |
-|4 |    └─UNION ALL                        |        |3       |30          |
-|5 |      ├─PX COORDINATOR                 |        |2       |13          |
-|6 |      │ └─EXCHANGE OUT DISTR           |:EX10000|2       |12          |
-|7 |      │   └─PX PARTITION ITERATOR      |        |2       |11          |
-|8 |      │     └─TABLE FULL SCAN          |a       |2       |11          |
+|2 |└─SORT                                 |        |2       |29          |
+|3 |  └─SUBPLAN SCAN                       |VIEW1   |2       |29          |
+|4 |    └─UNION ALL                        |        |2       |29          |
+|5 |      ├─PX COORDINATOR                 |        |1       |12          |
+|6 |      │ └─EXCHANGE OUT DISTR           |:EX10000|1       |12          |
+|7 |      │   └─PX PARTITION ITERATOR      |        |1       |11          |
+|8 |      │     └─TABLE FULL SCAN          |a       |1       |11          |
 |9 |      └─MERGE SEMI JOIN                |        |1       |18          |
 |10|        ├─SORT                         |        |1       |15          |
 |11|        │ └─NESTED-LOOP SEMI JOIN      |        |1       |15          |
@@ -228,15 +228,15 @@ Query Plan
 =========================================================================
 |ID|OPERATOR                             |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |MERGE GROUP BY                       |        |3       |31          |
-|1 |└─MERGE JOIN                         |        |3       |31          |
-|2 |  ├─SORT                             |        |3       |28          |
-|3 |  │ └─SUBPLAN SCAN                   |VIEW2   |3       |28          |
-|4 |  │   └─UNION ALL                    |        |3       |28          |
-|5 |  │     ├─PX COORDINATOR             |        |2       |13          |
-|6 |  │     │ └─EXCHANGE OUT DISTR       |:EX10000|2       |12          |
-|7 |  │     │   └─PX PARTITION ITERATOR  |        |2       |11          |
-|8 |  │     │     └─TABLE FULL SCAN      |a       |2       |11          |
+|0 |MERGE GROUP BY                       |        |2       |30          |
+|1 |└─MERGE JOIN                         |        |2       |30          |
+|2 |  ├─SORT                             |        |2       |27          |
+|3 |  │ └─SUBPLAN SCAN                   |VIEW2   |2       |27          |
+|4 |  │   └─UNION ALL                    |        |2       |27          |
+|5 |  │     ├─PX COORDINATOR             |        |1       |12          |
+|6 |  │     │ └─EXCHANGE OUT DISTR       |:EX10000|1       |12          |
+|7 |  │     │   └─PX PARTITION ITERATOR  |        |1       |11          |
+|8 |  │     │     └─TABLE FULL SCAN      |a       |1       |11          |
 |9 |  │     └─HASH JOIN                  |        |1       |16          |
 |10|  │       ├─TABLE FULL SCAN          |r       |1       |3           |
 |11|  │       └─PX COORDINATOR           |        |2       |13          |
@@ -290,15 +290,15 @@ Query Plan
 =========================================================================
 |ID|OPERATOR                             |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |MERGE GROUP BY                       |        |3       |31          |
-|1 |└─MERGE JOIN                         |        |3       |31          |
-|2 |  ├─SORT                             |        |3       |28          |
-|3 |  │ └─SUBPLAN SCAN                   |VIEW2   |3       |28          |
-|4 |  │   └─UNION ALL                    |        |3       |28          |
-|5 |  │     ├─PX COORDINATOR             |        |2       |13          |
-|6 |  │     │ └─EXCHANGE OUT DISTR       |:EX10000|2       |12          |
-|7 |  │     │   └─PX PARTITION ITERATOR  |        |2       |11          |
-|8 |  │     │     └─TABLE FULL SCAN      |a       |2       |11          |
+|0 |MERGE GROUP BY                       |        |2       |30          |
+|1 |└─MERGE JOIN                         |        |2       |30          |
+|2 |  ├─SORT                             |        |2       |27          |
+|3 |  │ └─SUBPLAN SCAN                   |VIEW2   |2       |27          |
+|4 |  │   └─UNION ALL                    |        |2       |27          |
+|5 |  │     ├─PX COORDINATOR             |        |1       |12          |
+|6 |  │     │ └─EXCHANGE OUT DISTR       |:EX10000|1       |12          |
+|7 |  │     │   └─PX PARTITION ITERATOR  |        |1       |11          |
+|8 |  │     │     └─TABLE FULL SCAN      |a       |1       |11          |
 |9 |  │     └─HASH JOIN                  |        |1       |16          |
 |10|  │       ├─TABLE FULL SCAN          |r       |1       |3           |
 |11|  │       └─PX COORDINATOR           |        |2       |13          |

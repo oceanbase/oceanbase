@@ -375,10 +375,18 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
   bool is_complex_scene = false;
   bool can_use_ds = valid_methods & (EST_DS_FULL | EST_DS_BASIC);
   bool can_use_storage = valid_methods & EST_STORAGE;
+  ObJoinOrder *join_order = nullptr;
+  ObLogPlan *log_plan = nullptr;
+  const ObDMLStmt *stmt = nullptr;
+  const OptSelectivityCtx* sel_ctx = nullptr;
 
-  if (OB_ISNULL(ctx.get_session_info())) {
+  if (OB_ISNULL(ctx.get_session_info()) || OB_UNLIKELY(paths.empty()) ||
+      OB_ISNULL(paths.at(0)) || OB_ISNULL(join_order = paths.at(0)->parent_) ||
+      OB_ISNULL(log_plan = join_order->get_plan()) ||
+      OB_ISNULL(stmt = log_plan->get_stmt()) ||
+      OB_ISNULL(sel_ctx = paths.at(0)->est_cost_info_.sel_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null param", K(ret));
+    LOG_WARN("unexpected null param", K(ret), K(paths), K(join_order), K(log_plan), K(stmt));
   }
 
   // check is simple scene
@@ -394,11 +402,13 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
   }
   is_simple_scene = is_table_get;
   if (OB_SUCC(ret) && !is_simple_scene && can_use_ds) {
-    ObLogPlan *log_plan = paths.at(0)->parent_->get_plan();
     ObSEArray<ObRawExpr*, 16> ds_col_exprs;
     if (!(valid_methods & EST_STORAGE)) {
       // path which can not use storage estimation is not simple
-    } else if (OB_FAIL(get_need_dynamic_sampling_columns(paths.at(0)->parent_->get_plan(),
+    } else if ((!filter_exprs.empty() && stmt->has_multi_base_tables()) ||
+               log_plan->get_need_accurate_cardinality()) {
+      // need accurate join table rowcount
+    } else if (OB_FAIL(get_need_dynamic_sampling_columns(log_plan,
                                                          paths.at(0)->table_id_,
                                                          filter_exprs, true, true,
                                                          ds_col_exprs))) {
@@ -413,13 +423,6 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
   // check is complex scene
   if (OB_SUCC(ret) && !is_simple_scene && !is_complex_scene && (valid_methods & EST_DS_FULL)) {
     ObSelEstimatorFactory factory(ctx.get_session_info()->get_effective_tenant_id());
-    const OptSelectivityCtx* sel_ctx = NULL;
-    if (OB_UNLIKELY(paths.empty()) ||
-        OB_ISNULL(paths.at(0)) ||
-        OB_ISNULL(sel_ctx = paths.at(0)->est_cost_info_.sel_ctx_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpeted param", K(paths));
-    }
     for (int64_t i = 0; OB_SUCC(ret) && !is_complex_scene && i < filter_exprs.count(); ++i) {
       const ObRawExpr *filter = filter_exprs.at(i);
       ObSelEstimator *estimator = NULL;

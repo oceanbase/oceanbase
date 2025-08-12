@@ -747,6 +747,11 @@ public:
   common::ObIArray<JoinedTable*> &get_joined_tables() { return joined_tables_; }
   inline int64_t get_order_item_size() const { return order_items_.count(); }
   inline bool is_single_table_stmt() const { return (1 == get_table_size()); }
+  inline bool has_multi_base_tables() const {
+    return !get_semi_infos().empty() ||
+           get_from_item_size() > 1 ||
+           (get_from_item_size() == 1 && get_from_item(0).is_joined_);
+  }
   int add_semi_info(SemiInfo* info) { return semi_infos_.push_back(info); }
   int remove_semi_info(SemiInfo* info);
   inline common::ObIArray<SemiInfo*> &get_semi_infos() { return semi_infos_; }
