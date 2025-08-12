@@ -13917,5 +13917,91 @@ int ObFetchArbMemberArg::init(const uint64_t tenant_id, const ObLSID &ls_id)
 
 OB_SERIALIZE_MEMBER(ObFetchArbMemberArg, tenant_id_, ls_id_);
 #endif
+
+OB_SERIALIZE_MEMBER(ObCheckBackupDestRWConsistencyArg, tenant_id_, backup_dest_str_, data_checksum_, file_len_);
+bool ObCheckBackupDestRWConsistencyArg::is_valid() const
+{
+  return is_valid_tenant_id(tenant_id_)
+         && !backup_dest_str_.empty()
+         && data_checksum_ > 0
+         && file_len_ > 0;
+}
+
+int ObCheckBackupDestRWConsistencyArg::assign(const ObCheckBackupDestRWConsistencyArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else {
+    tenant_id_ = arg.tenant_id_;
+    backup_dest_str_ = arg.backup_dest_str_;
+    data_checksum_ = arg.data_checksum_;
+    file_len_ = arg.file_len_;
+  }
+  return ret;
+}
+
+int ObCheckBackupDestRWConsistencyArg::init(const uint64_t tenant_id, const ObString &backup_dest_str,
+                                            const uint64_t data_checksum, const int64_t file_len)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(tenant_id)
+      || backup_dest_str.empty()
+      || file_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(backup_dest_str), K(file_len));
+  } else {
+    tenant_id_ = tenant_id;
+    backup_dest_str_ = backup_dest_str;
+    data_checksum_ = data_checksum;
+    file_len_ = file_len;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObRemoteCheckBackupDestValidityArg, tenant_id_, dest_type_, backup_dest_str_, need_format_file_);
+bool ObRemoteCheckBackupDestValidityArg::is_valid() const
+{
+  return is_valid_tenant_id(tenant_id_)
+         && ObBackupDestType::is_valid(static_cast<ObBackupDestType::TYPE>(dest_type_))
+         && !backup_dest_str_.empty();
+}
+
+int ObRemoteCheckBackupDestValidityArg::assign(const ObRemoteCheckBackupDestValidityArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else {
+    tenant_id_ = arg.tenant_id_;
+    dest_type_ = arg.dest_type_;
+    backup_dest_str_ = arg.backup_dest_str_;
+    need_format_file_ = arg.need_format_file_;
+  }
+  return ret;
+}
+
+int ObRemoteCheckBackupDestValidityArg::init(
+    const uint64_t tenant_id,
+    const int64_t dest_type,
+    const ObString &backup_dest_str,
+    const bool need_format_file)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(tenant_id)
+      || !ObBackupDestType::is_valid(static_cast<ObBackupDestType::TYPE>(dest_type))
+      || backup_dest_str.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(dest_type), K(backup_dest_str));
+  } else {
+    tenant_id_ = tenant_id;
+    dest_type_ = dest_type;
+    backup_dest_str_ = backup_dest_str;
+    need_format_file_ = need_format_file;
+  }
+  return ret;
+}
 }//end namespace obrpc
 }//end namespace oceanbase

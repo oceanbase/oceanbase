@@ -4525,5 +4525,115 @@ int ObClearFetchedLogCacheP::process()
   return ret;
 }
 
+int ObRpcCheckBackupDestRWConsistencyP::process()
+{
+  int ret = OB_SUCCESS;
+  ObBackupConsistencyCheckDesc desc;
+  share::ObBackupDest backup_dest;
+  common::ObBackupIoAdapter io_util;
+  int64_t read_size = 0;
+  int64_t read_file_len = 0;
+
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_) {
+      if (OB_FAIL(backup_dest.set(arg_.backup_dest_str_))) {
+        LOG_WARN("fail to set backup_dest", K(ret), K_(arg));
+      } else if (OB_FAIL(io_util.get_file_length(backup_dest.get_root_path(), backup_dest.get_storage_info(), read_file_len))) {
+        // case 1: file not exist
+        if (OB_OBJECT_NOT_EXIST == ret) {
+          ret = OB_BACKUP_DEVICE_NOT_MOUNTED;
+          LOG_WARN("backup device may be not mounted on this server", KR(ret), K_(arg));
+        } else {
+          LOG_WARN("fail to get file length", K(ret), K_(arg));
+        }
+        // case 2: file len not match
+      } else if (read_file_len != arg_.file_len_) {
+        ret = OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT;
+        LOG_WARN("file length does not match, backup device is not read & write strong consistent", KR(ret), K(read_file_len), K_(arg));
+      } else {
+        ObArenaAllocator allocator;
+        char *buf = nullptr;
+        const int64_t buf_len = read_file_len;
+        int64_t read_size = 0;
+        if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_len)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc mem", K(ret), K(buf_len));
+        } else if (OB_FAIL(io_util.read_single_file(backup_dest.get_root_path(),
+                                                    backup_dest.get_storage_info(),
+                                                    buf,
+                                                    buf_len,
+                                                    read_size,
+                                                    ObStorageIdMod::get_default_backup_id_mod()))) {
+          LOG_WARN("fail to read single file", K(ret), K(backup_dest));
+          // case 3: file content not match
+        } else if (arg_.data_checksum_ != common::ob_crc64(buf, buf_len)) {
+          ret = OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT;
+          LOG_WARN("crc64 does not match, backup device is not read & write strong consistent", KR(ret), K_(arg));
+        }
+      }
+    }
+  }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "receive backup_device_rw_consistency_check",
+                     "tenant_id", arg_.tenant_id_,
+                     "backup_dest", arg_.backup_dest_str_.ptr(),
+                     "receiver", GCONF.self_addr_);
+  }
+#endif
+  return ret;
+}
+
+int ObRpcCheckBackupDestVaildityP::process()
+{
+  int ret = OB_SUCCESS;
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K_(arg));
+  } else if (OB_ISNULL(gctx_.sql_proxy_) || OB_ISNULL(gctx_.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("gctx sql proxy or gctx rpc proxy is null", KR(ret));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_) {
+      share::ObBackupDestMgr dest_mgr;
+      if (OB_FAIL(dest_mgr.init_for_rpc(
+            arg_.tenant_id_,
+            static_cast<ObBackupDestType::TYPE>(arg_.dest_type_),
+            arg_.backup_dest_str_,
+            *gctx_.sql_proxy_))) {
+        LOG_WARN("fail to init dest mgr", K(ret), K_(arg));
+      } else if (OB_FAIL(dest_mgr.check_dest_validity(*gctx_.srv_rpc_proxy_, arg_.need_format_file_))) {
+        LOG_WARN("fail to check dest validity", K(ret), K_(arg));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRpcWriteBackupDestFormatFileP::process()
+{
+  int ret = OB_SUCCESS;
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_) {
+      share::ObBackupDestMgr dest_mgr;
+      if (OB_FAIL(dest_mgr.init_for_rpc(
+            arg_.tenant_id_,
+            static_cast<ObBackupDestType::TYPE>(arg_.dest_type_),
+            arg_.backup_dest_str_,
+            *gctx_.sql_proxy_))) {
+        LOG_WARN("fail to init dest mgr", K(ret), K_(arg));
+      } else if (OB_FAIL(dest_mgr.write_format_file())) {
+        LOG_WARN("fail to write format file", K(ret), K_(arg));
+      }
+    }
+  }
+  return ret;
+}
 } // end of namespace observer
 } // end of namespace oceanbase

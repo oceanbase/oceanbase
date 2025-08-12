@@ -16,6 +16,7 @@
 #include "ob_backup_struct.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/backup/ob_backup_store.h"
+#include "share/backup/ob_backup_path.h"
 namespace oceanbase
 {
 namespace share
@@ -31,14 +32,17 @@ public:
       common::ObISQLClient &sql_proxy);
   int check_backup_dest_connectivity(const share::ObBackupDest &backup_dests);
 private:
-  int schedule_connectivity_check_(
-      const share::ObBackupDest &backup_dest,
-      const share::ObBackupPath &path);
   int prepare_connectivity_check_file_(const share::ObBackupDest &backup_dest);
   int check_io_permission_(const share::ObBackupDest &backup_dest);
   int set_connectivity_check_path_(
       const share::ObBackupDest &backup_dest,
       share::ObBackupPath &path);
+  int schedule_check_read_write_consistency_(const share::ObBackupDest &backup_dest);
+  int check_server_rw_consistency_(
+      const common::ObArray<ObAddr> &server_list,
+      const ObString &file_path,
+      const int64_t file_len,
+      const uint64_t data_checksum);
   int set_last_check_time_(const share::ObBackupDest &backup_dest);
   bool is_inited_;
   uint64_t tenant_id_;
@@ -88,6 +92,30 @@ private:
   char permission_file_name_[OB_MAX_BACKUP_CHECK_FILE_NAME_LENGTH];
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupCheckFile);
+};
+
+class ObBackupConsistencyCheckFile final
+{
+public:
+  ObBackupConsistencyCheckFile();
+  ~ObBackupConsistencyCheckFile();
+  int init(const uint64_t tenant_id, const ObBackupDest &backup_dest);
+  int write_check_file(int64_t &file_len, uint64_t &data_checksum);
+  int overwrite_check_file(int64_t &file_len, uint64_t &data_checksum);
+  int append_check_file(int64_t &file_len, uint64_t &data_checksum);
+  // file:///backup_data/backup_set_1_full/check_file/1002_nfs_connectivity_check_1741844011000000.obbak
+  int get_file_dest_str(ObBackupPathString &file_dest_str);
+  TO_STRING_KV(K_(backup_dest), K_(check_desc), K_(path));
+private:
+  int init_file_path_(const int64_t curr_time_us);
+  int generate_append_data_(char *&append_data, int64_t &append_len);
+  int get_data_checksum_(uint64_t &data_checksum);
+  bool is_inited_;
+  ObBackupDest backup_dest_;
+  ObBackupPath path_;
+  ObBackupConsistencyCheckDesc check_desc_;
+  ObArenaAllocator allocator_;
+  DISALLOW_COPY_AND_ASSIGN(ObBackupConsistencyCheckFile);
 };
 
 class ObBackupDestCheck final

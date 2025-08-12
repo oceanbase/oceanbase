@@ -39,7 +39,6 @@ class ObBackupLSMetaInfosDesc;
 }
 namespace share
 {
-
 // for log archive and data backup, exclude backup lease service inner table
 enum ObBackupInnerTableVersion {
   OB_BACKUP_INNER_TABLE_V1 = 1, // since 2.2.60
@@ -975,9 +974,9 @@ public:
   int is_backup_path_equal(const ObBackupDest &backup_dest, bool &is_equal) const;
   bool is_assume_role_mode() const { return OB_ISNULL(storage_info_) ? false : storage_info_->is_assume_role_mode(); }
   bool is_enable_worm() const { return OB_ISNULL(storage_info_) ? false : storage_info_->is_enable_worm(); }
-  bool is_storage_type_file(){ return OB_ISNULL(storage_info_) ?
+  bool is_storage_type_file() const { return OB_ISNULL(storage_info_) ?
       false : ObStorageType::OB_STORAGE_FILE == storage_info_->get_type(); }
-  bool is_storage_type_s3(){ return OB_ISNULL(storage_info_) ? false : ObStorageType::OB_STORAGE_S3 == storage_info_->get_type(); }
+  bool is_storage_type_s3() const { return OB_ISNULL(storage_info_) ? false : ObStorageType::OB_STORAGE_S3 == storage_info_->get_type(); }
   int get_backup_dest_str(char *buf, const int64_t buf_size) const;
   int get_backup_dest_str_with_primary_attr(char *buf, const int64_t buf_size) const;
   int get_backup_path_str(char *buf, const int64_t buf_size) const;
@@ -1098,7 +1097,17 @@ public:
   static int get_tenant_sys_time_zone_wrap(const uint64_t tenant_id,
                                            ObFixedLengthString<common::OB_MAX_TIMESTAMP_TZ_LENGTH> &time_zone,
                                            ObTimeZoneInfoWrap &time_zone_info_wrap);
+  static int get_tenant_backup_servers(
+      const uint64_t tenant_id,
+      common::ObArray<ObAddr> &server_list,
+      bool &is_self_tenant_server);
 private:
+  static int get_full_type_zones_in_locality_(const uint64_t tenant_id, ObArray<ObZone> &full_zones);
+  static int get_tenant_alive_servers_in_zone_(
+      const uint64_t tenant_id,
+      const ObArray<ObZone> &zone_list,
+      ObArray<ObAddr> &server_list,
+      bool &is_self_tenant_server);
   static const int64_t  RETRY_INTERVAL = 10 * 1000 * 1000;
   static const int64_t  MAX_RETRY_TIMES = 3;
 };

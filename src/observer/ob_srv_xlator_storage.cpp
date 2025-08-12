@@ -164,4 +164,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
 #endif
     RPC_PROCESSOR(ObRpcStartArchiveP, gctx_);
     RPC_PROCESSOR(ObWriteInnerTabletP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckBackupDestRWConsistencyP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckBackupDestVaildityP, gctx_);
+    RPC_PROCESSOR(ObRpcWriteBackupDestFormatFileP, gctx_);
 }

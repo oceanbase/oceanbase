@@ -15,6 +15,8 @@
 #include "share/backup/ob_backup_config.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "storage/tx/ob_ts_mgr.h"
+#include "src/share/ob_all_server_tracer.h" //SVR_TRACER
+#include "storage/ob_locality_manager.h"
 
 
 using namespace oceanbase;
@@ -2416,6 +2418,108 @@ int ObBackupUtils::check_is_tmp_file(const common::ObString &file_name, bool &is
         is_tmp_file = true;
       } else {
         is_tmp_file = false;
+      }
+    }
+  }
+  return ret;
+}
+
+//TODO(xingzhi): adapt backup zone
+int ObBackupUtils::get_tenant_backup_servers(
+    const uint64_t tenant_id,
+    common::ObArray<ObAddr> &server_list,
+    bool &is_self_tenant_server)
+{
+  int ret = OB_SUCCESS;
+  server_list.reuse();
+  is_self_tenant_server = false;
+  ObArray<ObZone> full_zones;
+
+  if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_full_type_zones_in_locality_(tenant_id, full_zones))) {
+    LOG_WARN("fail to get F zones in locality", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_tenant_alive_servers_in_zone_(tenant_id, full_zones, server_list, is_self_tenant_server))) {
+    LOG_WARN("fail to get tenant alive servers", K(ret), K(tenant_id), K(full_zones));
+  }
+  return ret;
+}
+
+
+
+int ObBackupUtils::get_full_type_zones_in_locality_(const uint64_t tenant_id, ObArray<ObZone> &full_zones)
+{
+  int ret = OB_SUCCESS;
+  full_zones.reuse();
+  ObArray<share::ObZoneReplicaNumSet> zone_locality_array;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const ObTenantSchema *tenant_schema = NULL;
+
+  if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service or nuit mgr is null", K(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+    LOG_WARN("fail to get tenant schema", K(ret), K(tenant_id), KP(tenant_schema));
+  } else if (OB_ISNULL(tenant_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant schema is null", K(ret), K(tenant_id));
+  } else if (OB_FAIL(tenant_schema->get_zone_replica_attr_array(zone_locality_array))) {
+    LOG_WARN("fail to get zone_locality_array", K(ret), K(tenant_id));
+  } else {
+    FOREACH_CNT_X(zone_locality, zone_locality_array, OB_SUCC(ret)) {
+      if (OB_NOT_NULL(zone_locality) && zone_locality->get_full_replica_num() > 0) {
+        const ObZone &zone = zone_locality->get_zone_set().at(0);
+        if (OB_FAIL(full_zones.push_back(zone))) {
+          LOG_WARN("fail to push back", K(ret), K(zone));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupUtils::get_tenant_alive_servers_in_zone_(
+    const uint64_t tenant_id,
+    const ObArray<ObZone> &zone_list,
+    ObArray<ObAddr> &server_list,
+    bool &is_self_tenant_server)
+{
+  int ret = OB_SUCCESS;
+  is_self_tenant_server = false;
+  const ObLocalityManager *locality_manager = GCTX.locality_manager_;
+  ObArray<ObAddr> alive_servers;
+  int64_t renew_time = 0; //unused
+  ObArray<ObServerLocality> all_server_locality;
+  bool has_read_only_zone = false; //unused
+
+  if (!is_valid_tenant_id(tenant_id) || zone_list.empty()) {
+   ret = OB_INVALID_ARGUMENT;
+   LOG_WARN("invalid args", K(tenant_id), K(zone_list));
+  } else if (OB_ISNULL(locality_manager)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("locality manager is null", K(ret));
+  } else if (OB_FAIL(SVR_TRACER.get_alive_tenant_servers(tenant_id, alive_servers, renew_time))) {
+    LOG_WARN("fail to get tenant alive servers", K(ret), K(tenant_id));
+  } else if (OB_FAIL(locality_manager->get_server_locality_array(all_server_locality, has_read_only_zone))) {
+    LOG_WARN("fail to get server locality array", K(ret));
+  } else {
+    ARRAY_FOREACH_X(alive_servers, i, cnt, OB_SUCC(ret)) {
+      const ObAddr &server = alive_servers.at(i);
+      ARRAY_FOREACH_X(all_server_locality, j, cnt1, OB_SUCC(ret)) {
+        const ObServerLocality &server_locality = all_server_locality.at(j);
+        if (server_locality.get_addr() != server) {
+        } else if (!has_exist_in_array(zone_list, server_locality.get_zone())) {
+        } else if (OB_FAIL(server_list.push_back(server))) {
+          LOG_WARN("fail to push back", K(ret), K(server));
+        } else if (GCONF.self_addr_ == server) {
+          is_self_tenant_server = true;
+        }
       }
     }
   }

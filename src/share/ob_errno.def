@@ -2283,7 +2283,7 @@ DEFINE_ERROR(OB_AGENT_HAS_SUSPENDED, -9065, -1, "HY000", "agent has suspended");
 DEFINE_ERROR_EXT(OB_BACKUP_CONFLICT_VALUE, -9066, -1, "HY000", "Conflict value", "%.*s is conflict with %.*s");
 
 DEFINE_ERROR(OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED, -9069, -1, "HY000", "deleting backup piece is not allowed");
-DEFINE_ERROR(OB_BACKUP_DEST_NOT_CONNECT, -9070, -1, "HY000", "can not connect to backup destination");
+DEFINE_ERROR_EXT_DEP(OB_BACKUP_DEST_NOT_CONNECT, -9070, -1, "HY000", "can not connect to backup destination", "please check server %s");
 DEFINE_ERROR_DEP(OB_BACKUP_PERMISSION_DENIED, -9071, -1, "HY000", "no I/O operation permission at the backup destination");
 
 DEFINE_ERROR(OB_ESI_SESSION_CONFLICTS, -9072, -1, "HY000", "obesi process session conflicts");
@@ -2381,6 +2381,8 @@ DEFINE_ERROR(OB_DISK_QUOTA_EXCEEDED, -9148, -1, "HY000", "disk quota is exceeded
 DEFINE_ERROR(OB_BACKUP_DEST_NOT_ALLOWED_TO_SET, -9149, -1, "HY000", "backup dest is not allowed to set when log_only policy exists");
 DEFINE_ERROR(OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET, -9150, -1, "HY000", "log_only policy is not allowed to set when backup dest exists");
 DEFINE_ERROR_EXT(OB_BACKUP_CLEAN_CAN_NOT_START, -9151, -1, "HY000", "backup clean can not start", "backup clean can not start, because %s");
+DEFINE_ERROR_EXT_DEP(OB_BACKUP_DEVICE_NOT_MOUNTED, -9152, -1, "HY000", "backup device may be not mounted", "backup device may be not mounted, %s did not read any data written by %s");
+DEFINE_ERROR_EXT_DEP(OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT, -9153, -1, "HY000", "backup device is not read & write strongly consistent", "backup device is not read and write strongly consistent. %s did not read the latest data written by %s.");
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////

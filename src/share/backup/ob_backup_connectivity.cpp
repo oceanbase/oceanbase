@@ -14,6 +14,7 @@
 #include "rootserver/ob_root_service.h"
 #include "ob_backup_connectivity.h"
 #include "lib/restore/ob_object_device.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -49,54 +50,6 @@ int ObBackupConnectivityCheckManager::init(
     rpc_proxy_ = &rpc_proxy;
     is_inited_ = true;
   }
-  return ret;
-}
-
-int ObBackupConnectivityCheckManager::schedule_connectivity_check_(
-    const share::ObBackupDest &backup_dest,
-    const share::ObBackupPath &path)
-{
-  int ret = OB_SUCCESS;
-  // TODO(mingqiao) in 4.3, this code logic needs to be rewritten. Since server_mgr needs to be removed, first comment the code
-  // obrpc::ObCheckBackupConnectivityArg args;
-  // args.tenant_id_ = tenant_id_;
-  // common::ObArray<ObAddr> server_list;
-  // if (!is_inited_) {
-  //   ret = OB_NOT_INIT;
-  //   LOG_WARN("connectivity check manager not init", K(ret));
-  // } else if (OB_FAIL(backup_dest.get_backup_path_str(args.backup_path_, sizeof(args.backup_path_)))) {
-  //   LOG_WARN("failed to set args.backup_dest_", K(ret), K_(tenant_id));
-  // } else if (OB_FAIL(databuff_printf(args.check_path_, sizeof(args.check_path_), "%s", path.get_ptr()))) {
-  //   LOG_WARN("failed to set args.check_path_", K(ret), K_(tenant_id), K(path));
-  // } else if (OB_FAIL(server_mgr_->get_all_server_list(server_list))) {
-  //   LOG_WARN("failed to get all server list", K(ret), K_(tenant_id));
-  // } else if (OB_UNLIKELY(server_list.empty())) {
-  //   ret = OB_ERR_UNEXPECTED;
-  //   LOG_WARN("no server exist", K(ret), K_(tenant_id));
-  // } else {
-  //   for (int64_t i = 0; OB_SUCC(ret) && i < server_list.count(); ++i) {
-  //     const common::ObAddr &dest = server_list.at(i);
-  //     bool is_active = false;
-  //     if (OB_FAIL(server_mgr_->check_server_active(dest, is_active))) {
-  //       LOG_WARN("failed to check server active", K(ret), K_(tenant_id), K(dest));
-  //     } else if (!is_active) {
-  //       LOG_WARN("server is not active", K(OB_SERVER_NOT_ACTIVE), K(dest));
-  //       continue;
-  //     } else if (OB_FAIL(rpc_proxy_->to(dest).check_backup_dest_connectivity(args))) {
-  //       if (OB_BACKUP_DEST_NOT_CONNECT == ret) {
-  //         char ip[common::OB_MAX_SERVER_ADDR_SIZE] = "";
-  //         int tmp_ret = OB_SUCCESS;
-  //         if (OB_SUCCESS != (tmp_ret = dest.ip_port_to_string(ip, sizeof(ip)))) {
-  //           LOG_WARN("fail to convert ip to string", K(tmp_ret), K(dest));
-  //         } else {
-  //           ROOTSERVICE_EVENT_ADD("connectivity_check", "backup_dest_not_connectivity", "ip:port", ip,
-  //               "tenant_id", tenant_id_, "error_code", ret, "comment", "backup_dest is disconnect");
-  //         }
-  //       }
-  //       LOG_WARN("failed to check backup_dest connectivity", KR(ret), K_(tenant_id), K(dest)); 
-  //     }
-  //   }
-  // }
   return ret;
 }
 
@@ -197,13 +150,134 @@ int ObBackupConnectivityCheckManager::check_backup_dest_connectivity(
     LOG_WARN("failed to check oss/cos io permission", K(ret), K_(tenant_id), K(backup_dest)); 
   } else if (OB_FAIL(set_connectivity_check_path_(backup_dest, path))) {
     LOG_WARN("failed to get check file", K(ret), K_(tenant_id), K(backup_dest));
-  // TODO(mingqiao) in 4.3, support check connectivity
-  //} else if (OB_FAIL(schedule_connectivity_check_(backup_dest, path))) {
-  //  LOG_WARN("failed to schedule connectivity check", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(schedule_check_read_write_consistency_(backup_dest))) {
+    LOG_WARN("fail to check nfs connectivity", K(ret), K_(tenant_id), K(backup_dest));
   } else if (OB_FAIL(set_last_check_time_(backup_dest))) {
     LOG_WARN("failed to set last check time", K(ret), K_(tenant_id), K(backup_dest));
   } else {
     FLOG_INFO("[BACKUP_DEST_CHECK] succeed to finish backup_dest connectivity check", K_(tenant_id), K(backup_dest));
+  }
+  return ret;
+}
+
+int ObBackupConnectivityCheckManager::schedule_check_read_write_consistency_(const share::ObBackupDest &backup_dest)
+{
+  int ret = OB_SUCCESS;
+  ObBackupConsistencyCheckFile check_file;
+  ObBackupPathString check_file_path;
+  common::ObArray<ObAddr> server_list;
+  int64_t renew_time = 0;
+  bool is_self_tenant_server = false;
+  int64_t file_len = 0;
+  uint64_t data_checksum = 0;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup check manager do not init", KR(ret));
+  } else if (!backup_dest.is_valid() || !backup_dest.get_storage_info()->is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("backup dest is valid", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(ObBackupUtils::get_tenant_backup_servers(tenant_id_, server_list, is_self_tenant_server))) {
+    LOG_WARN("fail to get tenant alive servers", K(ret), K_(tenant_id));
+  } else if (!is_self_tenant_server) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("this server is not in tenant's server list", KR(ret), "curr_server", GCONF.self_addr_, K(server_list));
+  } else if (OB_FAIL(check_file.init(tenant_id_, backup_dest))) {
+    LOG_WARN("fail to init ObBackupCheckFile", K(ret), K_(tenant_id), K(backup_dest));
+  } else if (OB_FAIL(check_file.write_check_file(file_len, data_checksum))) {
+    LOG_WARN("fail to create nfs connectivity check file", K(ret), K(backup_dest));
+  } else if (OB_FAIL(check_file.get_file_dest_str(check_file_path))) {
+    LOG_WARN("fail to get check file path", K(ret), K(check_file));
+  } else if (OB_FAIL(check_server_rw_consistency_(server_list,
+                                                  check_file_path.str(),
+                                                  file_len,
+                                                  data_checksum))) { // check PUT
+    LOG_WARN("[RW CONSISTENCY CHECK] fail to check RW consistency after PUT", K(ret), K(server_list), K(check_file_path));
+  } else if (backup_dest.is_enable_worm()) {
+    // no need to check overwrite and append
+  } else if (OB_FAIL(check_file.overwrite_check_file(file_len, data_checksum))) {
+    LOG_WARN("fail to create check file", K(ret), K(check_file));
+  } else if (OB_FAIL(check_server_rw_consistency_(server_list,
+                                                  check_file_path.str(),
+                                                  file_len,
+                                                  data_checksum))) { // check OVERWRITE
+    LOG_WARN("fail to check RW consistency after OVERWRITE", K(ret), K(server_list), K(check_file_path));
+  } else if (!backup_dest.is_storage_type_file()) {
+    // normal object is not appendablw
+  } else if (OB_FAIL(check_file.append_check_file(file_len, data_checksum))) {
+    LOG_WARN("fail to append check file", K(ret), K(check_file));
+  } else if (OB_FAIL(check_server_rw_consistency_(server_list,
+                                                  check_file_path.str(),
+                                                  file_len,
+                                                  data_checksum))) { // check APPEND
+    LOG_WARN("fail to check RW consistency after APPEND", K(ret), K(server_list), K(check_file_path));
+  }
+  if (OB_SUCC(ret)) {
+    LOG_INFO("succeed to schedule check RW consistency", K_(tenant_id));
+#ifdef ERRSIM
+    SERVER_EVENT_ADD("storage_ha", "send backup_device_rw_consistency_check",
+                     "tenant_id", tenant_id_,
+                     "backup_dest", backup_dest.get_root_path().ptr(),
+                     "sender", GCONF.self_addr_);
+#endif
+  }
+  return ret;
+}
+
+int ObBackupConnectivityCheckManager::check_server_rw_consistency_(
+    const common::ObArray<ObAddr> &server_list,
+    const ObString &file_path,
+    const int64_t file_len,
+    const uint64_t data_checksum)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObCheckBackupDestRWConsistencyArg arg;
+  if (server_list.empty() || file_path.empty() || file_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(server_list), K(file_path), K(file_len));
+  } else if (OB_FAIL(arg.init(tenant_id_, file_path, data_checksum, file_len))) {
+  } else {
+    rootserver::ObCheckBackupDestRWConsistencyProxy proxy(
+    *rpc_proxy_, &obrpc::ObSrvRpcProxy::check_backup_dest_rw_consistency);
+    //send
+    ARRAY_FOREACH_X(server_list, i, cnt, OB_SUCC(ret)) {
+      const ObAddr &dest = server_list.at(i);
+      if (OB_FAIL(proxy.call(dest, GCONF.rpc_timeout, arg))) {
+        LOG_WARN("fail to send rpc", K(ret), K(dest), K(arg));
+      }
+    }
+    //wait
+    ObArray<int> return_code_array;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+      LOG_WARN("fail to wait all", KR(tmp_ret), KR(ret));
+      ret = COVER_SUCC(tmp_ret);
+    } else if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(proxy.check_return_cnt(return_code_array.count()))) {
+      LOG_WARN("fail to check return cnt", KR(ret), "return_cnt", return_code_array.count());
+    } else {
+      //check result
+      for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); i++) {
+        ret = return_code_array.at(i);
+        const ObAddr &server = proxy.get_dests().at(i);
+        char receiver_addr_str[OB_MAX_SERVER_ADDR_SIZE] = { 0 };
+        char sender_addr_str[OB_MAX_SERVER_ADDR_SIZE] = { 0 };
+        if (OB_TMP_FAIL(server.ip_port_to_string(receiver_addr_str, sizeof(receiver_addr_str)))) {
+          LOG_WARN("fail to convert ip_port to string", K(tmp_ret), K(ret), K(server));
+        } else if (OB_TMP_FAIL(GCONF.self_addr_.ip_port_to_string(sender_addr_str, sizeof(sender_addr_str)))) {
+          LOG_WARN("fail to convert ip_port to string", K(tmp_ret), K(ret));
+        }
+        if (OB_BACKUP_DEVICE_NOT_MOUNTED == ret) {
+          LOG_USER_ERROR(OB_BACKUP_DEVICE_NOT_MOUNTED, receiver_addr_str, sender_addr_str);
+          LOG_WARN("backup device may be not mounted", KR(ret), K(server));
+        } else if (OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT == ret) {
+          LOG_USER_ERROR(OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT, receiver_addr_str, sender_addr_str);
+          LOG_WARN("backup device is not read & write strong consistent", KR(ret), K(server));
+        } else {
+          LOG_WARN("fail to check server read & write consistency", K(ret), K(server), K(arg));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -701,6 +775,219 @@ int ObBackupCheckFile::check_io_permission(const ObBackupDest &backup_dest)
     LOG_WARN("failed to check multipart permission", K(ret), K(backup_dest));
   }
 
+  return ret;
+}
+
+//***********************ObBackupConsistencyCheckFile*********************
+
+ObBackupConsistencyCheckFile::ObBackupConsistencyCheckFile()
+  : is_inited_(false),
+    backup_dest_(),
+    path_(),
+    check_desc_(),
+    allocator_()
+{
+}
+
+ObBackupConsistencyCheckFile::~ObBackupConsistencyCheckFile()
+{
+}
+
+int ObBackupConsistencyCheckFile::init(const uint64_t tenant_id, const ObBackupDest &backup_dest)
+{
+  int ret = OB_SUCCESS;
+  const int64_t curr_time_us = ObTimeUtility::current_time(); //used as part of the file name
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret));
+  } else if (!is_valid_tenant_id(tenant_id)
+             || !backup_dest.is_valid()
+             || !backup_dest.get_storage_info()->is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(backup_dest));
+  } else if (OB_FAIL(backup_dest_.deep_copy(backup_dest))) {
+    LOG_WARN("fail to deep copy backup dest", K(ret), K(backup_dest));
+  } else if (OB_FAIL(check_desc_.init(tenant_id))) {
+    LOG_WARN("fail to init check desc", K(ret), K(tenant_id));
+  } else if (OB_FAIL(init_file_path_(curr_time_us))) {
+    LOG_WARN("fail to get file path", K(ret));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObBackupConsistencyCheckFile::write_check_file(int64_t &file_len, uint64_t &data_checksum)
+{
+  int ret = OB_SUCCESS;
+  ObBackupStore store;
+  ObBackupIoAdapter io_util;
+  file_len = 0;
+  data_checksum = 0;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("check file not init", K(ret));
+  } else if (OB_FAIL(store.init(backup_dest_))) {
+    LOG_WARN("fail to init ObBackupStore", K(ret), K(backup_dest_));
+  } else if (OB_FAIL(store.write_rw_consistency_check_file(path_.get_obstr(), check_desc_))) {
+    LOG_WARN("fail to write check file", K(ret), K_(path), K_(check_desc));
+  } else if (OB_FAIL(io_util.get_file_length(path_.get_obstr(), backup_dest_.get_storage_info(), file_len))) {
+    LOG_WARN("fail to get file length", K(ret), K_(path));
+  } else if (OB_FAIL(get_data_checksum_(data_checksum))) {
+    LOG_WARN("fail to get data data checksum", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+int ObBackupConsistencyCheckFile::overwrite_check_file(int64_t &file_len, uint64_t &data_checksum)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = check_desc_.get_tenant_id();
+  check_desc_.reset();
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("check file not init", K(ret));
+  } else if (OB_FAIL(check_desc_.init(tenant_id))) { //random content will re-generate
+    LOG_WARN("fail to init check desc", K(ret), K(tenant_id));
+  } else if (OB_FAIL(write_check_file(file_len, data_checksum))) {
+    LOG_WARN("fail to write check file", K(ret), K_(check_desc));
+  }
+  return ret;
+}
+
+int ObBackupConsistencyCheckFile::append_check_file(int64_t &file_len, uint64_t &data_checksum)
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter io_util;
+  char *append_data = nullptr;
+  int64_t append_data_len = 0;
+  file_len = 0;
+  data_checksum = 0;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("check file not init",  K(ret));
+  } else {
+    const int64_t write_offset =  check_desc_.get_serialize_size();
+    int64_t write_size = 0;
+    if (OB_FAIL(generate_append_data_(append_data, append_data_len))) {
+      LOG_WARN("fail to generate append data", K(ret));
+    } else if (OB_FAIL(io_util.pwrite(path_.get_obstr(),
+                                      backup_dest_.get_storage_info(),
+                                      append_data,
+                                      write_offset,
+                                      append_data_len,
+                                      common::ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER,
+                                      write_size,
+                                      false /*is_can_seal*/,
+                                      ObStorageIdMod::get_default_backup_id_mod()))) {
+      LOG_WARN("fail to append check file", K(ret), K_(path), K_(check_desc));
+    } else if (OB_FAIL(io_util.get_file_length(path_.get_obstr(), backup_dest_.get_storage_info(), file_len))) {
+      LOG_WARN("fail to get file length", K(ret), K_(path), K_(backup_dest));
+    } else if (OB_FAIL(get_data_checksum_(data_checksum))) {
+      LOG_WARN("fail to get data checksum", K(ret), KPC(this));
+    }
+  }
+  return ret;
+}
+
+int ObBackupConsistencyCheckFile::generate_append_data_(char *&append_data, int64_t &append_len)
+{
+  int ret = OB_SUCCESS;
+  ObBackupConsistencyCheckDesc check_desc;
+  if (OB_FAIL(check_desc.init(check_desc_.get_tenant_id()))) {
+    LOG_WARN("fail to init check desc", K(ret));
+  } else {
+    const int64_t ser_len = check_desc.get_serialize_size();
+    int64_t ser_pos = 0;
+    if (OB_ISNULL(append_data = static_cast<char*>(allocator_.alloc(ser_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc mem",  K(ret), K(ser_len));
+    } else if (OB_FAIL(check_desc.serialize(append_data, ser_len, ser_pos))) {
+      LOG_WARN("fail to serialize check desc");
+    } else {
+      append_len = ser_len;
+    }
+  }
+  return ret;
+}
+
+int ObBackupConsistencyCheckFile::get_data_checksum_(uint64_t &data_checksum)
+{
+  int ret = OB_SUCCESS;
+  data_checksum = 0;
+  common::ObBackupIoAdapter io_util;
+  int64_t file_len = 0;
+  char *buf = nullptr;
+  int64_t read_size = 0;
+
+  if (OB_FAIL(io_util.get_file_length(path_.get_obstr(),
+                                      backup_dest_.get_storage_info(),
+                                      file_len))) {
+    LOG_WARN("fail to get file len", K(ret), KPC(this));
+  } else if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(file_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc mem", K(ret), K(file_len));
+  } else if (OB_FAIL(io_util.read_single_file(path_.get_obstr(),
+                                              backup_dest_.get_storage_info(),
+                                              buf,
+                                              file_len,
+                                              read_size,
+                                              ObStorageIdMod::get_default_backup_id_mod()))) {
+    LOG_WARN("fail to read single file", K(ret), KPC(this));
+  } else if (file_len != read_size) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("file_len and read_size are not equal", K(ret), K(file_len), K(read_size));
+  } else {
+    data_checksum = common::ob_crc64(buf, file_len);
+  }
+  return ret;
+}
+
+int ObBackupConsistencyCheckFile::init_file_path_(const int64_t curr_time_us)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  char file_name[OB_MAX_BACKUP_CHECK_FILE_NAME_LENGTH] = { 0 };
+  path_.reset();
+
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), KPC(this));
+  } else if (OB_FAIL(path_.init(backup_dest_.get_root_path()))) {
+    LOG_WARN("failed to init path", K(ret));
+  } else if (OB_FAIL(path_.join(OB_STR_BACKUP_CHECK_FILE, ObBackupFileSuffix::NONE))) {
+    LOG_WARN("failed to join check_file", K(ret));
+  }else if (OB_FAIL(databuff_printf(file_name,
+                                    OB_MAX_BACKUP_CHECK_FILE_NAME_LENGTH,
+                                    pos,
+                                    "%lu_%s_%ld",
+                                    check_desc_.get_tenant_id(),
+                                    "nfs_connectivity_check",
+                                    curr_time_us))) {
+    LOG_WARN("fail to databuff printf", K(ret));
+  } else if (OB_FAIL(path_.join(file_name, ObBackupFileSuffix::BACKUP) )) {
+    LOG_WARN("fail to join check file path", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupConsistencyCheckFile::get_file_dest_str(ObBackupPathString &file_dest_str)
+{
+  int ret = OB_SUCCESS;
+  file_dest_str.reset();
+  ObBackupDest tmp_dest;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("check file not init", K(ret));
+  } else if (OB_FAIL(tmp_dest.set(path_.get_ptr(), backup_dest_.get_storage_info()))) {
+    LOG_WARN("fail to set tmp dest", K(ret), K_(path), K_(backup_dest));
+  } else if (OB_FAIL(tmp_dest.get_backup_dest_str(file_dest_str.ptr(), file_dest_str.capacity()))) {
+    LOG_WARN("fail to get backup dest str", K(ret), K(tmp_dest));
+  }
   return ret;
 }
 
