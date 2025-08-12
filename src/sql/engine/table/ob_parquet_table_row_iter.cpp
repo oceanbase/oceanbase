@@ -1160,10 +1160,10 @@ int ObParquetTableRowIterator::DataLoader::load_uint32_to_int64_vec()
       int j = 0;
       for (int i = 0; i < row_count_; i++) {
         if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels_buf_.at(i))) {
-          int32_vec->set_null(i);
+          int32_vec->set_null(i + row_offset_);
         } else {
           uint32_t uint_value = static_cast<uint32_t>(values.at(j));
-          int32_vec->set_int(i, static_cast<int64_t>(uint_value));
+          int32_vec->set_int(i + row_offset_, static_cast<int64_t>(uint_value));
           j++;
         }
       }
@@ -1276,9 +1276,9 @@ int ObParquetTableRowIterator::DataLoader::load_year_col()
     int j = 0;
     for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
       if (IS_PARQUET_COL_VALUE_IS_NULL(def_levels_buf_.at(i))) {
-        file_col_expr_->get_vector(eval_ctx_)->set_null(i);
+        file_col_expr_->get_vector(eval_ctx_)->set_null(i + row_offset_);
       } else {
-        dec_vec->set_year(i, values.at(j++));
+        dec_vec->set_year(i + row_offset_, values.at(j++));
       }
     }
   }
