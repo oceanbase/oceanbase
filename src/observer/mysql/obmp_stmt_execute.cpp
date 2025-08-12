@@ -786,6 +786,7 @@ int ObMPStmtExecute::parse_request_param_value(ObIAllocator &alloc,
               K(ob_type), K(param_type), K(ret));
   } else {
     param.set_type(ob_type);
+    param.set_param_meta();
     if (OB_FAIL(parse_param_value(alloc,
                                          param_type,
                                          charset,
@@ -2651,6 +2652,7 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         ObPLCursorInfo *cursor = NULL;
         // OZ (ctx_.session_info_->make_cursor(cursor));
         OX (param.set_extend(reinterpret_cast<int64_t>(cursor), PL_CURSOR_TYPE));
+        OX (param.set_param_meta());
       }
     } else {
       bool is_unsigned = NULL == type_info || !type_info->elem_type_.get_meta_type().is_unsigned_integer() ? false : true;
@@ -2658,7 +2660,8 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
                                           data, tz_info, param, false, &analysis_checker_, is_unsigned))) {
         LOG_WARN("failed to parse basic param value", K(ret));
       } else {
-        param.set_length(param.get_val_len());
+        OX (param.set_length(param.get_val_len()));
+        OX (param.set_param_meta());
       }
     }
     OX (param.set_param_meta());
