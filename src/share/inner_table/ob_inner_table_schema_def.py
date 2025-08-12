@@ -17445,7 +17445,7 @@ def_table_schema(
   in_tenant_space = True,
 
   view_definition = """
-                    select /*+ leading(a) no_use_nl(ts)*/
+                    select /*+ no_use_nl(ts)*/
                     cast('def' as char(512)) as TABLE_CATALOG,
                     cast(b.database_name as char(64) IGNORE) collate utf8mb4_name_case as TABLE_SCHEMA,
                     cast(a.table_name as char(64) IGNORE) collate utf8mb4_name_case as TABLE_NAME,
