@@ -1559,7 +1559,11 @@ int ObTransposeResolver::get_combine_name(ObIArray<ObString> &names, ObString &c
       LOG_WARN("failed to append fmt", K(ret));
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (str.length() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected str with its length equals to 0", K(ret));
+  } else {
     char *buf = NULL;
     if (OB_ISNULL(buf = static_cast<char *>(allocator->alloc(str.length() - 1)))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
@@ -1599,7 +1603,11 @@ int ObTransposeResolver::get_combine_name(ObIArray<ObRawExpr *> &exprs, ObString
       LOG_WARN("failed to append fmt", K(ret));
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (str.length() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected str with its length equals to 0", K(ret));
+  } else {
     char *buf = NULL;
     if (OB_ISNULL(buf = static_cast<char *>(allocator->alloc(str.length() - 1)))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
