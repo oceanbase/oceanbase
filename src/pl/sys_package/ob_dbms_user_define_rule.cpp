@@ -82,6 +82,55 @@ int ObUDRProcessor::sync_rule_from_inner_table()
   return ret;
 }
 
+int ObUDRProcessor::priv_check()
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = nullptr;
+  ObSchemaChecker schema_checker;
+
+  if (OB_ISNULL(session = ctx_.get_my_session())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the args is null", K(ret), KP(session));
+  } else if (OB_ISNULL(ctx_.get_sql_ctx()->schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(schema_checker.init(*(ctx_.get_sql_ctx()->schema_guard_)))) {
+    LOG_WARN("fail to init schema checker", K(ret));
+  } else if (ObSchemaChecker::is_ora_priv_check()) {
+    if (OB_FAIL(schema_checker.check_ora_ddl_priv(
+        session->get_effective_tenant_id(),
+        session->get_priv_user_id(),
+        ObString(""),
+        // why use T_ALTER_SYSTEM_SET_PARAMETER?
+        // because T_ALTER_SYSTEM_SET_PARAMETER has following traits:
+        // T_ALTER_SYSTEM_SET_PARAMETER can allow dba to do an operation
+        // and prohibit other user to do this operation
+        // so we reuse this.
+        stmt::T_ALTER_SYSTEM_SET_PARAMETER,
+        session->get_enable_role_array()))) {
+      LOG_WARN("failed to check privilege", K(session->get_effective_tenant_id()), K(session->get_user_id()));
+    }
+  } else {
+    ObNeedPriv need_priv;
+    ObStmtNeedPrivs stmt_need_privs;
+    ObSessionPrivInfo session_priv;
+    const common::ObIArray<uint64_t> &enable_role_id_array = session->get_enable_role_array();
+    stmt_need_privs.need_privs_.set_allocator(&ctx_.get_allocator());
+    need_priv.priv_set_ = OB_PRIV_ALTER_SYSTEM;
+    need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+    if (OB_FAIL(session->get_session_priv_info(session_priv))) {
+      LOG_WARN("faile to get session priv info", K(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.init(1))) {
+      LOG_WARN("Failed to init stmt need priv", K(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv))) {
+      LOG_WARN("Failed to add need priv", K(ret));
+    } else if (OB_FAIL(schema_checker.check_priv(session_priv, enable_role_id_array, stmt_need_privs))) {
+      LOG_WARN("Failed to check acc", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObUDRProcessor::process()
 {
   int ret = OB_SUCCESS;
@@ -99,6 +148,8 @@ int ObUDRProcessor::process()
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "user-defined_rules with minimal data version < 4100");
     LOG_WARN("user-defined_rules with minimal data version < 4100", K(ret));
+  } else if (OB_FAIL(priv_check())) {
+    LOG_WARN("failed to privilege check", K(ret));
   } else if (OB_FAIL(parse_request_param())) {
     LOG_WARN("failed to parse request param", K(ret));
   } else if (OB_FAIL(generate_exec_arg())) {
