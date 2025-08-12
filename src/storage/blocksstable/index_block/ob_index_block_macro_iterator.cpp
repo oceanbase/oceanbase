@@ -231,6 +231,7 @@ int ObIndexBlockMacroIterator::open(
   int ret = OB_SUCCESS;
   bool start_beyond_range = false;
   bool end_beyond_range = false;
+  ObArenaAllocator tmp_arena("MacroIterTmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
   ObDatumRowkey sstable_endkey;
   int cmp_ret = 0;
 
@@ -242,7 +243,7 @@ int ObIndexBlockMacroIterator::open(
     LOG_WARN("SSTable is not valid", K(ret), K(sstable), K(range));
   } else if (sstable.no_data_to_read()) {
     is_iter_end_ = true;
-  } else if (OB_FAIL(sstable.get_last_rowkey(allocator, sstable_endkey))) {
+  } else if (OB_FAIL(sstable.get_last_rowkey(tmp_arena, sstable_endkey))) {
     LOG_WARN("Fail to get last rowkey of sstable", K(ret));
   } else if (OB_FAIL(sstable_endkey.compare(
       range.get_start_key(), rowkey_read_info.get_datum_utils(), cmp_ret))) {
