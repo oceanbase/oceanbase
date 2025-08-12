@@ -1117,7 +1117,10 @@ int ObExprInOrNotIn::eval_batch_in_without_row_fallback(const ObExpr &expr,
       input_left = expr.args_[0]->locate_batch_datums(ctx);
       ObDatum *right = nullptr;
       ObDatum *left = nullptr;
-      ObDatum *right_store[expr.inner_func_cnt_]; //store all right param ptrs
+      ObSEArray<ObDatum*, 2> right_store; // store all right param ptrs
+      if (OB_FAIL(right_store.prepare_allocate(expr.inner_func_cnt_))) {
+        LOG_WARN("failed to reserve array", K(ret), K(expr.inner_func_cnt_));
+      }
       bool cnt_null = false; //right param has null
       /*
       * CAN_CMP_MEM used for common short path 
@@ -1199,6 +1202,7 @@ int ObExprInOrNotIn::eval_batch_in_without_row_fallback(const ObExpr &expr,
           }
         }
       }
+      right_store.reset();
     }
   }
   return ret;
