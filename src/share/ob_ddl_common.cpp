@@ -4820,7 +4820,8 @@ int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
       } else if (!inner_sql_exec_addr.is_valid()) {
         if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
               " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
-              " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\" ",
+              " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\""
+              " and id != connection_id()",
             OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
             charater,
             trace_id_like,
@@ -4841,7 +4842,8 @@ int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
           LOG_WARN("ip to string failed", K(ret), K(inner_sql_exec_addr));
         } else if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
               " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
-              " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\" ",
+              " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\""
+              " and id != connection_id()",
             OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
             charater,
             trace_id_like,
