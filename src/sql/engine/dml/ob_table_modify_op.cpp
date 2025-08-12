@@ -760,7 +760,7 @@ ObDasParallelType ObTableModifyOp::check_das_parallel_type()
   } else if (execute_single_row_) {
     type = DAS_SERIALIZATION;
     LOG_TRACE("execute_single_row is true, can't submit task parallel", K(execute_single_row_));
-  } else if (session->is_inner()) {
+  } else if (session->is_inner() && !session->is_user_session()) {
     type = DAS_SERIALIZATION;
     LOG_TRACE("session is inner, can't submit task parallel", K(session->is_inner()));
   } else if (MY_SPEC.plan_->has_nested_sql()) {
