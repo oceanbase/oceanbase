@@ -437,8 +437,8 @@ static void update_sslog(
   ASSERT_EQ(OB_SUCCESS, ObAtomicFile::update_sslog_row(param.meta_type_,
                                                        meta_key.get_string_key(),
                                                        value,
+                                                       info,
                                                        extra_info,
-                                                       check_extra_info,
                                                        false,
                                                        affected_rows));
 }
