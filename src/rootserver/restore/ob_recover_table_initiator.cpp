@@ -99,6 +99,8 @@ int ObRecoverTableInitiator::start_recover_table_(const obrpc::ObRecoverTableArg
     LOG_WARN("failed to set description", K(ret));
   } else if (OB_FAIL(fill_aux_tenant_restore_info_(arg, job, physical_restore_job))) {
     LOG_WARN("failed to fill aux tenant resetore info", K(ret), K(arg));
+  } else if (OB_FAIL(check_aux_tenant_restore_type_(physical_restore_job))) {
+    LOG_WARN("failed to check aux tenant restore type", K(ret));
   } else if (OB_FAIL(fill_recover_table_arg_(arg, job))) {
     LOG_WARN("failed to fill recover table arg", K(ret));
   } else if (OB_FAIL(check_recover_table_target_schema_(job))) {
@@ -174,7 +176,6 @@ int ObRecoverTableInitiator::insert_sys_job_(
     } else if (OB_FALSE_IT(physical_restore_job.set_initiator_job_id(job.get_job_id()))) {
     } else if (OB_FALSE_IT(physical_restore_job.set_initiator_tenant_id(OB_SYS_TENANT_ID))) {
     } else if (OB_FALSE_IT(physical_restore_job.set_recover_table(true))) {
-    } else if (OB_FAIL(fill_recover_table_restore_type_(physical_restore_job))) {
     } else if (OB_FAIL(ObRestoreUtil::record_physical_restore_job(trans, physical_restore_job))) {
       LOG_WARN("failed to record physical restore job", K(ret));
     }
@@ -234,7 +235,8 @@ int ObRecoverTableInitiator::fill_aux_tenant_restore_info_(
   } else if (OB_FAIL(tenant_restore_arg.assign(arg.restore_tenant_arg_))) {
     LOG_WARN("failed to assign tenant restore arg", K(ret), K(arg.restore_tenant_arg_));
   } else if (OB_FALSE_IT(tenant_restore_arg.tenant_name_ = job.get_aux_tenant_name())) {
-  } else if (OB_FAIL(ObRestoreUtil::fill_physical_restore_job(1/*fake job id*/, tenant_restore_arg, physical_restore_job))) {
+  } else if (OB_FAIL(ObRestoreUtil::fill_physical_restore_job(1/*fake job id*/, tenant_restore_arg,
+    physical_restore_job, true/*is_recover_table*/))) {
     LOG_WARN("failed to fill physical restore job", K(ret), K(tenant_restore_arg));
   } else if (OB_FALSE_IT(job.set_restore_scn(physical_restore_job.get_restore_scn()))) {
   } else if (OB_FAIL(job.set_restore_option(physical_restore_job.get_restore_option()))) {
@@ -520,26 +522,39 @@ int ObRecoverTableInitiator::fill_recover_table_arg_(
   return ret;
 }
 
-int ObRecoverTableInitiator::fill_recover_table_restore_type_(share::ObPhysicalRestoreJob &job)
+int ObRecoverTableInitiator::check_aux_tenant_restore_type_(const share::ObPhysicalRestoreJob &job)
 {
   int ret = OB_SUCCESS;
-  /* 4.3.3 share noting mode support quick restore; 4.3.5 support mds table standby tenant read.
-   * In share noting mode, backup set data_version >= 4.3.5, recover table use quick physical restore.
-   * In other condition, recover table use full physical restore. */
-  /* tenant_compatible_ & backup_compatible has been check in fill physical restore job */
+  /* 4.3.3 share noting mode support quick restore.
+   * 4.3.5 support mds table standby tenant read.
+   * tenant_compatible_ & backup_compatible has been check in fill physical restore job. */
   const uint64_t source_data_version = job.get_source_data_version();
   const ObBackupSetFileDesc::Compatible backup_compatible =
     static_cast<ObBackupSetFileDesc::Compatible>(job.get_backup_compatible());
   const bool is_allow_quick_restore = ObBackupSetFileDesc::is_allow_quick_restore(backup_compatible);
   const bool is_allow_mds_standby_read = ObTransferUtils::enable_transfer_dml_ctrl(source_data_version);
-  // use quick restore should set table cnt display mode.
-  if (is_allow_quick_restore && is_allow_mds_standby_read) {
-    job.set_restore_type(QUICK_RESTORE_TYPE);
-    job.set_progress_display_mode(TABLET_CNT_DISPLAY_MODE);
-  }
+  const bool is_allow_quick_restore_aux_tenant = is_allow_quick_restore && is_allow_mds_standby_read;
 
-  LOG_INFO("[RECOVER_TABLE] set recover table restore type", "restore_type", QUICK_RESTORE_TYPE,
-    "progress_display_mode", TABLET_CNT_DISPLAY_MODE);
+  if (job.get_restore_type().is_quick_restore() && !is_allow_quick_restore_aux_tenant) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Quick restore of auxiliary tenant is not support when data_version < 4.3.5.0.", K(ret), K(backup_compatible),
+      K(is_allow_quick_restore), K(source_data_version), K(is_allow_mds_standby_read), K(is_allow_quick_restore_aux_tenant));
+    int tmp_ret = OB_SUCCESS;
+    ObFixedLengthString<DEFAULT_BUF_LENGTH> message_to_user;
+    ObFixedLengthString<OB_SERVER_VERSION_LENGTH> version_str;
+    if (OB_INVALID_INDEX ==
+      VersionUtil::print_version_str(version_str.ptr(), version_str.capacity(), source_data_version)) {
+      LOG_WARN("fail to print data_version str", K(source_data_version));
+    } else if (OB_TMP_FAIL(databuff_printf(message_to_user.ptr(), message_to_user.capacity(),
+      "Quick restore of auxiliary tenant when data_version(%.*s) < 4.3.5.0 is", static_cast<int>(version_str.size()), version_str.ptr()))) {
+      LOG_WARN("failed to databuff printf", K(tmp_ret));
+    } else {
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, message_to_user.ptr());
+    }
+  } else {
+    LOG_INFO("[RECOVER_TABLE] set restore type", "restore_type", job.get_restore_type(),
+      "progress_display_mode", job.get_progress_display_mode());
+  }
 
   return ret;
 }

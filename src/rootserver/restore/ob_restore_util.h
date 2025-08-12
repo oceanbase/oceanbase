@@ -40,7 +40,8 @@ public:
   static int fill_physical_restore_job(
              const int64_t job_id,
              const obrpc::ObPhysicalRestoreTenantArg &arg,
-             share::ObPhysicalRestoreJob &job);
+             share::ObPhysicalRestoreJob &job,
+             bool is_recover_table=false);
   static int record_physical_restore_job(
              common::ObISQLClient &sql_client,
              const share::ObPhysicalRestoreJob &job);
