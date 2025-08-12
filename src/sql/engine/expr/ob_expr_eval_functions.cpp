@@ -1814,6 +1814,14 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprOracleInstr::calc_oracle_instr_expr_vector,                      /* 224 */
   NULL, // ObLocationExprOperator::calc_location_expr_vector,                     /* 225 */
   ObExprConvertTZ::calc_convert_tz_vector,                               /* 226 */
+  NULL, // ObExprMul::mul_decimalint64_int64_int64_vector,                        /* 227 */
+  NULL, // ObExprHash::calc_hash_value_expr_vector,                               /* 228 */
+  NULL, // ObExprAIComplete::eval_ai_complete_vector,                           /* 229 */
+  NULL, // ObExprAIEmbed::eval_ai_embed_vector,                                 /* 230 */
+  NULL, // ObExprAIRerank::eval_ai_rerank_vector,                               /* 231 */
+  NULL, // ObExprMd5ConcatWs::calc_md5_concat_ws_vector                         /* 232 */
+  NULL, // ObExprHiddenClusteringKey::eval_vector_hidden_clustering_key,         /* 233 */
+  NULL, // ObExprToPinyin::eval_to_pinyin_vector,                        /* 234 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
