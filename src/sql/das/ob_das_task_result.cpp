@@ -20,6 +20,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/px/ob_px_util.h"
 #include "share/detect/ob_detect_manager_utils.h"
+#include "share/detect/ob_detect_manager.h"
 namespace oceanbase
 {
 using namespace common;
@@ -1127,17 +1128,33 @@ bool ObDASTaskResultGC::operator() (const DASTCBInfo &tcb_info, ObDASTCB *tcb)
 {
   int ret = OB_SUCCESS;
   bool remove = false;
-  if (OB_ISNULL(tcb)) {
+  bool killed = false;
+  bool timeout = false;
+  ObDetectManager *dm = nullptr;
+
+  if (OB_ISNULL(tcb) ||
+      OB_ISNULL(dm = MTL(ObDetectManager*))) {
     ret = OB_ERR_UNEXPECTED;
     remove = false;
-    LOG_WARN("tcb is null", KR(ret), K(tcb_info), KP(tcb));
-  } else if (tcb->expire_ts_ < cur_time_) {
-    if (OB_FAIL(task_result_mgr_->erase_task_result(tcb_info.get_value(), true))) {
-      remove = false;
-      LOG_WARN("erase task result failed", KR(ret), K(tcb_info));
-    } else {
-      remove = true;
+    LOG_WARN("unexpected nullptr", KR(ret), K(tcb_info), KP(tcb), KP(dm));
+  } else {
+    if (!tcb->interrupt_info_.detectable_id_.is_invalid() &&
+        !dm->has_check_item_with_detectable_id(tcb->interrupt_info_.detectable_id_)) {
+      // if the tcb's detectable_id is valid but the detect manager does not have a check item with this id,
+      // it means the control has killed the task corresponding to this detectable_id_, so we consider this tcb as killed and need to GC it
+      killed = true;
     }
+    timeout = tcb->expire_ts_ < cur_time_;
+
+    if (killed || timeout) {
+      if (OB_FAIL(task_result_mgr_->erase_task_result(tcb_info.get_value(), true))) {
+        remove = false;
+        LOG_WARN("erase task result failed", KR(ret), K(tcb_info));
+      } else {
+        remove = true;
+      }
+    }
+    LOG_TRACE("GC erase tcb", K(ret), K(remove), K(killed), K(timeout), K(tcb_info.get_value()), KPC(tcb));
   }
   return remove;
 }

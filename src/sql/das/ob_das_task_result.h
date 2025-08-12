@@ -20,6 +20,7 @@
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/ob_tenant_sql_memory_manager.h"
 #include "sql/engine/ob_sql_mem_mgr_processor.h"
+#include "share/detect/ob_detectable_id.h"
 namespace oceanbase
 {
 namespace sql

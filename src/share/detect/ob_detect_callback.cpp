@@ -304,18 +304,16 @@ int ObP2PDataHubDetectCB::do_callback()
 int ObDASRemoteTaskDetectCB::do_callback()
 {
   int ret = OB_SUCCESS;
-  ObDataAccessService *das = MTL(ObDataAccessService *);
   ObInterruptCode int_code(OB_RPC_CONNECT_ERROR,
                            GETTID(),
                            from_svr_addr_,
                            "Dm interrupt das task");
-  if (OB_ISNULL(das)) {
-    ret = OB_ERR_UNEXPECTED;
-    LIB_LOG(WARN, "[DM] das is null", K(ret), K(key_));
-  } else if (OB_FAIL(ObGlobalInterruptManager::getInstance()->interrupt(tid_, int_code))) {
+  // In this function, we no longer clean up tcb resources here,
+  // because the result manager will be destroyed before the detect manager.
+  // In some abnormal cases, this may lead to access of invalid memory.
+  // Therefore, all tcb cleanup work is solely handled by the result manager and the GC thread.
+  if (OB_FAIL(ObGlobalInterruptManager::getInstance()->interrupt(tid_, int_code))) {
     LIB_LOG(WARN, "[DM] fail to send interrupt message", K(int_code), K(tid_), K_(trace_id));
-  } else if (OB_FAIL(das->get_task_res_mgr().erase_task_result(key_.get_value(), false /* need unregister dm */))) {
-    LIB_LOG(WARN, "[DM] erase task result failed", K(ret), K(key_));
   }
   LIB_LOG(WARN, "[DM] interrupt das task and erase extra result", K(ret), K(tid_), K(key_), K(trace_id_));
   return ret;
