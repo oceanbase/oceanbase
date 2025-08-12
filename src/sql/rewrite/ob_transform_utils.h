@@ -1544,7 +1544,8 @@ public:
                                                    bool &is_valid,
                                                    ObIArray<ObRawExpr*> &left_new_select_exprs,
                                                    ObIArray<ObRawExpr*> &right_new_select_exprs,
-                                                   const bool skip_const_select_item = true);
+                                                   const bool skip_const_in_select = true,
+                                                   const bool skip_const_in_cond = true);
 
   static int check_result_type_same(ObIArray<ObRawExpr*> &left_exprs, 
                                     ObIArray<ObRawExpr*> &right_exprs,
@@ -1565,6 +1566,7 @@ public:
 
   static int is_correlated_expr_isomorphic(ObRawExpr *left_expr,
                                            ObRawExpr* right_expr,
+                                           bool check_same_as,
                                            bool &is_isomorphic);
 
   static int check_fixed_expr_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
@@ -1601,13 +1603,13 @@ public:
   static int create_spj_and_pullup_correlated_exprs(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                     ObSelectStmt *&subquery,
                                                     ObTransformerCtx *ctx,
-                                                    const bool ignore_select_item = false,
-                                                    const bool skip_const_select_item = true);
+                                                    const bool skip_const_in_select = false,
+                                                    const bool skip_const_in_cond = true);
 
   static int create_spj_and_pullup_correlated_exprs_for_set(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                                             ObSelectStmt *&stmt,
                                                             ObTransformerCtx *ctx,
-                                                            const bool ignore_select_item);
+                                                            const bool skip_const_in_select);
 
   static int adjust_select_item_pos(ObIArray<ObRawExpr*> &right_select_exprs,
                                     ObSelectStmt *right_query);
@@ -1644,7 +1646,8 @@ public:
   static int pullup_correlated_conditions(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                           ObIArray<ObRawExpr *> &exprs,
                                           ObIArray<ObRawExpr *> &pullup_exprs,
-                                          ObIArray<ObRawExpr *> &new_select_list);
+                                          ObIArray<ObRawExpr *> &new_select_list,
+                                          const bool skip_const);
 
   static int extract_rowid_exprs(const ObDMLStmt *stmt,
                                  ObIArray<TableItem*> &table_items,
