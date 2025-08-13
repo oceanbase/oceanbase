@@ -480,12 +480,12 @@ int ObWhereSubQueryPullup::do_transform_pullup_subquery(ObDMLStmt *stmt,
                                                                    ctx_))) {
     LOG_WARN("failed to add const param constraints", K(ret));
   } else if (trans_param.need_create_spj_) {
-    bool ignore_select_item = T_OP_EXISTS == expr->get_expr_type() ||
-                              T_OP_NOT_EXISTS == expr->get_expr_type();
+    bool skip_const_in_select = T_OP_EXISTS == expr->get_expr_type() ||
+                                T_OP_NOT_EXISTS == expr->get_expr_type();
     if (OB_FAIL(ObTransformUtils::create_spj_and_pullup_correlated_exprs(query_ref->get_exec_params(),
                                                                          subquery,
                                                                          ctx_,
-                                                                         ignore_select_item))) {
+                                                                         skip_const_in_select))) {
       LOG_WARN("failed to create spj and pullup correlated exprs", K(ret));
     } else {
       query_ref->set_ref_stmt(subquery);
