@@ -876,7 +876,7 @@ int ObInnerTableSchema::gv_ob_units_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,            SVR_PORT,            UNIT_ID,            TENANT_ID,            ZONE,            ZONE_TYPE,            REGION,            MAX_CPU,            MIN_CPU,            MEMORY_SIZE,            MAX_IOPS,            MIN_IOPS,            IOPS_WEIGHT,            MAX_NET_BANDWIDTH,            NET_BANDWIDTH_WEIGHT,            LOG_DISK_SIZE,            LOG_DISK_IN_USE,            DATA_DISK_SIZE,            DATA_DISK_IN_USE,            STATUS,            usec_to_time(create_time) AS CREATE_TIME     FROM oceanbase.__all_virtual_unit )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,            SVR_PORT,            UNIT_ID,            TENANT_ID,            ZONE,            ZONE_TYPE,            REGION,            MAX_CPU,            MIN_CPU,            MEMORY_SIZE,            MAX_IOPS,            MIN_IOPS,            IOPS_WEIGHT,            MAX_NET_BANDWIDTH,            NET_BANDWIDTH_WEIGHT,            LOG_DISK_SIZE,            LOG_DISK_IN_USE,            DATA_DISK_SIZE,            DATA_DISK_IN_USE,            STATUS,            usec_to_time(create_time) AS CREATE_TIME,            CASE replica_type                WHEN 0 THEN "FULL"                WHEN 5 THEN "LOGONLY"                ELSE NULL            END AS REPLICA_TYPE     FROM oceanbase.__all_virtual_unit )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -927,7 +927,7 @@ int ObInnerTableSchema::v_ob_units_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,            SVR_PORT,            UNIT_ID,            TENANT_ID,            ZONE,            ZONE_TYPE,            REGION,            MAX_CPU,            MIN_CPU,            MEMORY_SIZE,            MAX_IOPS,            MIN_IOPS,            IOPS_WEIGHT,            MAX_NET_BANDWIDTH,            NET_BANDWIDTH_WEIGHT,            LOG_DISK_SIZE,            LOG_DISK_IN_USE,            DATA_DISK_SIZE,            DATA_DISK_IN_USE,            STATUS,            CREATE_TIME     FROM oceanbase.GV$OB_UNITS     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,            SVR_PORT,            UNIT_ID,            TENANT_ID,            ZONE,            ZONE_TYPE,            REGION,            MAX_CPU,            MIN_CPU,            MEMORY_SIZE,            MAX_IOPS,            MIN_IOPS,            IOPS_WEIGHT,            MAX_NET_BANDWIDTH,            NET_BANDWIDTH_WEIGHT,            LOG_DISK_SIZE,            LOG_DISK_IN_USE,            DATA_DISK_SIZE,            DATA_DISK_IN_USE,            STATUS,            CREATE_TIME,            CASE replica_type                WHEN 0 THEN "FULL"                WHEN 5 THEN "LOGONLY"                ELSE NULL            END AS REPLICA_TYPE     FROM oceanbase.GV$OB_UNITS     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

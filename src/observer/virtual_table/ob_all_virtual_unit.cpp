@@ -318,6 +318,9 @@ int ObAllVirtualUnit::inner_get_next_row(ObNewRow *&row)
         case CREATE_TIME:
           cur_row_.cells_[i].set_int(tenant_meta.unit_.create_timestamp_);
           break;
+        case REPLICA_TYPE:
+          cur_row_.cells_[i].set_int(tenant_meta.unit_.replica_type_);
+          break;
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

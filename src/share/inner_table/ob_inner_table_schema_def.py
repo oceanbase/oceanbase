@@ -811,6 +811,7 @@ def_table_schema(
         ('migrate_from_svr_port', 'int'),
         ('manual_migrate', 'bool', 'true', '0'),
         ('status', 'varchar:MAX_UNIT_STATUS_LENGTH', 'false', 'ACTIVE'),
+        ('replica_type', 'int', 'false', '0'),
     ],
 )
 
@@ -13282,6 +13283,7 @@ def_table_schema(
       ('data_disk_size', 'int', 'true'),
       ('max_net_bandwidth', 'int', 'true'),
       ('net_bandwidth_weight', 'int', 'true'),
+      ('replica_type', 'int', 'false', '0'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -22169,7 +22171,13 @@ SELECT T.unit_id AS UNIT_ID,
        U.MIN_IOPS AS MIN_IOPS,
        U.IOPS_WEIGHT AS IOPS_WEIGHT,
        U.MAX_NET_BANDWIDTH AS MAX_NET_BANDWIDTH,
-       U.NET_BANDWIDTH_WEIGHT AS NET_BANDWIDTH_WEIGHT
+       U.NET_BANDWIDTH_WEIGHT AS NET_BANDWIDTH_WEIGHT,
+
+       CASE T.replica_type
+           WHEN 0 THEN "FULL"
+           WHEN 5 THEN "LOGONLY"
+           ELSE NULL
+       END AS REPLICA_TYPE
 FROM
   oceanbase.__all_unit T,
   oceanbase.__all_resource_pool R,
@@ -26931,7 +26939,12 @@ def_table_schema(
            DATA_DISK_SIZE,
            DATA_DISK_IN_USE,
            STATUS,
-           usec_to_time(create_time) AS CREATE_TIME
+           usec_to_time(create_time) AS CREATE_TIME,
+           CASE replica_type
+               WHEN 0 THEN "FULL"
+               WHEN 5 THEN "LOGONLY"
+               ELSE NULL
+           END AS REPLICA_TYPE
     FROM oceanbase.__all_virtual_unit
 """.replace("\n", " ")
 )
@@ -26966,7 +26979,12 @@ def_table_schema(
            DATA_DISK_SIZE,
            DATA_DISK_IN_USE,
            STATUS,
-           CREATE_TIME
+           CREATE_TIME,
+           CASE replica_type
+               WHEN 0 THEN "FULL"
+               WHEN 5 THEN "LOGONLY"
+               ELSE NULL
+           END AS REPLICA_TYPE
     FROM oceanbase.GV$OB_UNITS
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")

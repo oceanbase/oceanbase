@@ -735,7 +735,8 @@ int ObMultiTenant::construct_meta_for_hidden_sys(ObTenantMeta &meta)
                         has_memstore,
                         false /*is_removed*/,
                         hidden_sys_data_disk_config_size,
-                        0 /*actual_data_disk_size*/))) {
+                        0 /*actual_data_disk_size*/,
+                        ObReplicaType::REPLICA_TYPE_FULL/*replica_type*/))) {
     LOG_WARN("fail to init hidden sys tenant unit", K(ret), K(tenant_id));
   } else if (OB_FAIL(meta.build(unit, super_block))) {
     LOG_WARN("fail to build tenant meta", K(ret), K(tenant_id));
@@ -771,7 +772,8 @@ int ObMultiTenant::construct_meta_for_virtual_tenant(const uint64_t tenant_id,
                           has_memstore,
                           false /*is_removed*/,
                           0 /*hidden_sys_data_disk_config_size*/,
-                          0 /*actual_data_disk_size*/))) {
+                          0 /*actual_data_disk_size*/,
+                          ObReplicaType::REPLICA_TYPE_FULL/*replica_type*/))) {
       LOG_WARN("fail to init virtual tenant unit", K(ret), K(tenant_id));
     } else if (OB_FAIL(meta.build(unit, super_block))) {
       LOG_WARN("fail to build tenant meta", K(ret), K(tenant_id));

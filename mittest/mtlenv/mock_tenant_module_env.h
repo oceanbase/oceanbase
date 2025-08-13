@@ -500,7 +500,8 @@ int MockTenantModuleEnv::construct_default_tenant_meta(const uint64_t tenant_id,
                         has_memstore,
                         false /*is_removed*/,
                         hidden_sys_data_disk_config_size,
-                        0 /*actual_data_disk_size*/))) {
+                        0/*actual_data_disk_size*/,
+                        ObReplicaType::REPLICA_TYPE_FULL/*replica_type*/))) {
     STORAGE_LOG(WARN, "fail to init tenant unit", K(ret), K(tenant_id));
   } else if (OB_FAIL(meta.build(unit, super_block))) {
     STORAGE_LOG(WARN, "fail to build tenant meta", K(ret), K(tenant_id));
