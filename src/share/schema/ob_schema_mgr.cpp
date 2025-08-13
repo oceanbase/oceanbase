@@ -2931,9 +2931,9 @@ int ObSchemaMgr::add_foreign_keys_in_table(
       int hash_ret = foreign_key_name_map_.set_refactored(foreign_key_name_wrapper,
                                                           const_cast<ObSimpleForeignKeyInfo*> (simple_foreign_key_info),
                                                           over_write);
-      if (OB_SUCCESS != hash_ret) {
-        ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : OB_ERR_UNEXPECTED;
-        LOG_ERROR("build fk name hashmap failed", K(ret), K(hash_ret),
+      if (OB_SUCCESS != hash_ret && OB_HASH_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("build fk name hashmap failed", KR(ret), K(hash_ret),
                   "fk_id", simple_foreign_key_info->foreign_key_id_,
                   "fk_name", simple_foreign_key_info->foreign_key_name_);
       }
