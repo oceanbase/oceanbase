@@ -87,16 +87,18 @@ void ObTmpFileBlockAllocatingPriorityManager::destroy()
   LOG_INFO("ObTmpFileBlockAllocatingPriorityManager destroy succ");
 }
 
-ObTmpFileBlockAllocatingPriorityManager::GetAllocatableBlockOp::GetAllocatableBlockOp(
-    int64_t candidate_page_num,
-    int64_t necessary_page_num,
+GetAllocatableBlockOp::GetAllocatableBlockOp(
+    const int64_t necessary_page_num,
+    int64_t &candidate_page_num,
+    ObTmpFileBlockHandleList &list,
     ObIArray<ObTmpFileBlockHandle> &candidate_blocks) :
-    candidate_page_num_(candidate_page_num),
     necessary_page_num_(necessary_page_num),
+    candidate_page_num_(candidate_page_num),
+    list_(list),
     candidate_blocks_(candidate_blocks)
 {}
 
-bool ObTmpFileBlockAllocatingPriorityManager::GetAllocatableBlockOp::operator()(ObTmpFileBlkNode *node)
+bool GetAllocatableBlockOp::operator()(ObTmpFileBlkNode *node)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node)) {
@@ -113,6 +115,8 @@ bool ObTmpFileBlockAllocatingPriorityManager::GetAllocatableBlockOp::operator()(
       LOG_ERROR("block has no free page", KR(ret), K(handle));
     } else if (OB_FAIL(candidate_blocks_.push_back(handle))) {
       LOG_ERROR("fail to push back block handle", KR(ret), K(handle));
+    } else if (OB_FAIL(list_.remove_without_lock_(handle))) {
+      LOG_ERROR("fail to remove block handle", KR(ret), K(handle));
     } else {
       candidate_page_num_ += handle->get_free_page_num_without_lock();
     }
@@ -150,8 +154,7 @@ int ObTmpFileBlockAllocatingPriorityManager::alloc_page_range(const int64_t nece
     while (OB_SUCC(ret) && level < BlockPreAllocLevel::MAX && level != BlockPreAllocLevel::INVALID &&
            candidate_alloc_page_num < necessary_page_num &&
            candidate_blocks.count() < ObTmpFileGlobal::TMP_FILE_MAX_SHARED_PRE_ALLOC_BLOCK_NUM) {
-      GetAllocatableBlockOp alloc_op(expected_page_num, necessary_page_num, candidate_blocks);
-      // TODO: 对比一下原始代码，看退出条件是否等价
+      GetAllocatableBlockOp alloc_op(necessary_page_num, candidate_alloc_page_num, alloc_lists_[level], candidate_blocks);
       alloc_lists_[level].for_each(alloc_op);
       level = get_next_level_(level);
     } // end while

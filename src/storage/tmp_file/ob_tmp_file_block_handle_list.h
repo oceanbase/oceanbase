@@ -23,6 +23,7 @@ namespace oceanbase
 namespace tmp_file
 {
 
+struct GetAllocatableBlockOp;
 class PopBlockOperator;
 class ObTmpFileBlockHandle;
 
@@ -36,6 +37,7 @@ struct PrintOperator {
 class ObTmpFileBlockHandleList
 {
   friend class PopBlockOperator;
+  friend struct GetAllocatableBlockOp;
 public:
   enum ListType {
     INVALID = -1,

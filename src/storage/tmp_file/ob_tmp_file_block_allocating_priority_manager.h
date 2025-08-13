@@ -42,6 +42,18 @@ public:
   TO_STRING_KV(K(block_index_), K(page_index_), K(page_cnt_));
 };
 
+struct GetAllocatableBlockOp {
+  GetAllocatableBlockOp(const int64_t necessary_page_num,
+                        int64_t &candidate_page_num,
+                        ObTmpFileBlockHandleList &list,
+                        ObIArray<ObTmpFileBlockHandle> &candidate_blocks);
+  bool operator()(ObTmpFileBlkNode *node);
+  int64_t necessary_page_num_;
+  int64_t &candidate_page_num_;
+  ObTmpFileBlockHandleList &list_;
+  ObIArray<ObTmpFileBlockHandle> &candidate_blocks_;
+};
+
 class ObTmpFileBlockAllocatingPriorityManager final
 {
 public:
@@ -71,15 +83,6 @@ private:
     L2,     // free page num is in (64, 128]
     L3,     // free page num is in (0, 64]
     MAX
-  };
-  struct GetAllocatableBlockOp {
-    GetAllocatableBlockOp(int64_t candidate_page_num,
-                          int64_t necessary_page_num,
-                          ObIArray<ObTmpFileBlockHandle> &candidate_blocks);
-    bool operator()(ObTmpFileBlkNode *node);
-    int64_t candidate_page_num_;
-    int64_t necessary_page_num_;
-    ObIArray<ObTmpFileBlockHandle> &candidate_blocks_;
   };
   BlockPreAllocLevel get_block_list_level_(const int64_t free_page_num) const;
   BlockPreAllocLevel get_next_level_(const BlockPreAllocLevel level) const;
