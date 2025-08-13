@@ -37554,9 +37554,9 @@ def_table_schema(
             LICENSE_CODE,
             LICENSE_TYPE,
             PRODUCT_TYPE,
-            DATE_FORMAT(ISSUANCE_DATE, '%Y-%m-%d %H:%i:%s') as ISSUANCE_DATE,
-            DATE_FORMAT(ACTIVATION_TIME, '%Y-%m-%d %H:%i:%s') as ACTIVATION_TIME,
-            DATE_FORMAT(EXPIRED_TIME, '%Y-%m-%d %H:%i:%s') as EXPIRED_TIME,
+            ISSUANCE_DATE,
+            ACTIVATION_TIME,
+            EXPIRED_TIME,
             OPTIONS,
             NODE_NUM,
             CLUSTER_ULID FROM OCEANBASE.__ALL_LICENSE
