@@ -103,6 +103,7 @@ private:
   int create_set_view_stmt(ObSelectStmt *stmt, TableItem *view_table_item);
   int create_cte_for_groupby_items(ObSelectStmt &select_stmt);
   int expand_stmt_groupby_items(ObSelectStmt &select_stmt);
+  int try_add_materialize_hint_for_stmt(ObDMLStmt *stmt);
 
   int is_subquery_correlated(const ObSelectStmt *stmt,
                              bool &is_correlated);

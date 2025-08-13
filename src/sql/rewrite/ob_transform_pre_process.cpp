@@ -893,15 +893,12 @@ int ObTransformPreProcess::create_cte_for_groupby_items(ObSelectStmt &stmt)
   ObSelectStmt *view_stmt = NULL;
   if (OB_FAIL(check_pre_aggregate(stmt, can_pre_aggregate))) {
     LOG_WARN("failed to check pre aggregate", K(ret));
-  } else if (!can_pre_aggregate) {
-    if (OB_FAIL(ObTransformUtils::create_simple_view(ctx_, &stmt, view_stmt))) {
-      LOG_WARN("failed to create simple view", K(ret), K(stmt));
-    }
-  } else if (OB_FAIL(ObTransformUtils::create_view_with_pre_aggregate(&stmt, view_stmt, ctx_))) {
+  } else if (!can_pre_aggregate
+             && OB_FAIL(ObTransformUtils::create_simple_view(ctx_, &stmt, view_stmt))) {
+    LOG_WARN("failed to create simple view", K(ret), K(stmt));
+  } else if (can_pre_aggregate
+             && OB_FAIL(ObTransformUtils::create_view_with_pre_aggregate(&stmt, view_stmt, ctx_))) {
     LOG_WARN("failed to create view with pushdown groupby", K(ret), K(stmt));
-  } else { /* do nothing */ }
-
-  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(view_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("view stmt is null", K(ret), K(view_stmt));
@@ -911,9 +908,30 @@ int ObTransformPreProcess::create_cte_for_groupby_items(ObSelectStmt &stmt)
     ret = OB_NOT_SUPPORTED; // TODO GROUPING_SETS
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "correlated temp table now");
     LOG_WARN("correlated temp table is not support now!", K(ret));
+  } else if (OB_FAIL(try_add_materialize_hint_for_stmt(view_stmt))) {
+    LOG_WARN("failed to add materialized hint for cte referred by groupby items", K(ret));
   } else if (OB_FAIL(add_generated_table_as_temp_table(ctx_, &stmt))) {
     LOG_WARN("failed to add generated table as temp table", K(ret));
   } else { /* do nothing */ }
+  return ret;
+}
+
+int ObTransformPreProcess::try_add_materialize_hint_for_stmt(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  ObMaterializeHint *materialize_hint = NULL;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(stmt), K(ctx_));
+  } else if (ctx_->is_force_inline_ || ctx_->is_force_materialize_) {
+    OPT_TRACE("skip adding materialized hint for cte referred by groupby items");
+  } else if (OB_FAIL(ObQueryHint::create_hint(ctx_->allocator_, T_MATERIALIZE, materialize_hint))) {
+    LOG_WARN("failed to create materialized hint", K(ret));
+  } else if (OB_FAIL(stmt->get_stmt_hint().normal_hints_.push_back(materialize_hint))) {
+    LOG_WARN("failed to push back", K(ret));
+  } else {
+    OPT_TRACE("added materialized hint for cte referred by groupby items");
+  }
   return ret;
 }
 
