@@ -10487,6 +10487,10 @@ int ObOptimizerUtil::preprocess_multivalue_range_exprs(ObIAllocator &allocator,
 
   if (OB_FAIL(ret)) {
   } else if (flatten_exprs.count() == 0) {
+  } else if (flatten_exprs.count() == 1) {
+    if (OB_FAIL(out_range_exprs.assign(range_exprs))) {
+      LOG_WARN("failed to assign range exprs", K(ret));
+    }
   } else {
     ObOpRawExpr *or_expr = nullptr;
     if (OB_FAIL(expr_factory.create_raw_expr(T_OP_OR, or_expr))) {

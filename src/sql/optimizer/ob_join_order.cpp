@@ -21156,7 +21156,7 @@ int ObJoinOrder::check_simple_gen_col_cmp_expr(ObRawExpr *expr,
           LOG_WARN("param expr is null", K(ret));
         } else {
           matched_expr = expr->get_json_domain_param_expr();
-          is_precise_deduced = false;
+          is_precise_deduced = expr->get_expr_type() == T_FUN_SYS_JSON_MEMBER_OF;
         }
       }
       // collect param constraints
