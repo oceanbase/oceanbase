@@ -1428,6 +1428,9 @@ int ObBasicStatsEstimator::get_async_gather_stats_tables(ObExecContext &ctx,
                                                          ObIArray<AsyncStatTable> &stat_tables)
 {
   int ret = OB_SUCCESS;
+  //  avoid too many index tablet-id,
+  // set 11*10^12 as max_tablet_id from experiments
+  const int64_t MAX_TABLE_TABLET_ID = 110000000000000000 ;
   ObSqlString select_sql;
   if (OB_FAIL(select_sql.append_fmt(
           "SELECT table_id, tablet_id, avg(changed_ratio) over (partition by table_id)  ratio from "\
@@ -1444,6 +1447,7 @@ int ObBasicStatsEstimator::get_async_gather_stats_tables(ObExecContext &ctx,
           " double) "\
           "    ELSE (m.inserts - m.last_inserts + m.updates - m.last_updates + m.deletes - m.last_deletes) * 1.0 "\
           " / (m.last_inserts-m.last_deletes) END) > cast(coalesce(up.valchar, gp.spare4) as double))t "\
+          " and m.tablet_id < %lu "\
           " order by ratio desc,table_id  limit %lu ",
           share::OB_ALL_MONITOR_MODIFIED_TNAME,
           share::OB_ALL_OPTSTAT_USER_PREFS_TNAME,
