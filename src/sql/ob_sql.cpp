@@ -3223,7 +3223,8 @@ int ObSql::generate_stmt(ParseResult &parse_result,
               result.set_is_calc_found_rows(dml_stmt->is_calc_found_rows());
               plan_ctx->set_is_affect_found_row(dml_stmt->is_affect_found_rows());
               context.force_print_trace_ = global_hint.force_trace_log_;
-              if (MpQuery == context.exec_type_ && global_hint.log_level_.length() > 0) {
+              if ((MpQuery == context.exec_type_ || PLSql == context.exec_type_)
+                && global_hint.log_level_.length() > 0) {
                 const ObString &log_level = global_hint.log_level_;
                 if (OB_UNLIKELY(OB_SUCCESS != process_thread_log_id_level_map(log_level.ptr(),
                                                                               log_level.length()))) {
@@ -4964,7 +4965,8 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
         ObPhyPlanHint &phy_plan_hint = phy_plan->get_phy_plan_hint();
         pc_ctx.sql_ctx_.force_print_trace_ = phy_plan_hint.force_trace_log_;
         //log_level just deal mpquery now.
-        if (MpQuery == pc_ctx.sql_ctx_.exec_type_ && phy_plan_hint.log_level_.length() > 0) {
+        if ((MpQuery == pc_ctx.sql_ctx_.exec_type_ || PLSql == pc_ctx.sql_ctx_.exec_type_)
+            && phy_plan_hint.log_level_.length() > 0) {
           if (OB_FAIL(process_thread_log_id_level_map(phy_plan_hint.log_level_.ptr(),
                                                       phy_plan_hint.log_level_.length()))) {
             LOG_WARN("Failed to process thread log id level map", K(ret));

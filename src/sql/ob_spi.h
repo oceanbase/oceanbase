@@ -175,6 +175,7 @@ public:
       nested_session_value_(NULL),
       out_params_(),
       exec_params_str_() {
+        sql_ctx_.exec_type_ = PLSql;
       }
   ~ObSPIResultSet() { reset(); }
   int init(sql::ObSQLSessionInfo &session_info);
