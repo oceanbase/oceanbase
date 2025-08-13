@@ -596,37 +596,40 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
           db_name_.assign_ptr(db_name_var_, db_name_.length());
         }
       }
-
+      ObString proxied_user;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(get_proxy_user_name(proxied_user))) {
+        LOG_WARN("get proxy user info failed", K(ret));
+      }
       lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(conn->tenant_id_, compat_mode))) {
         LOG_WARN("fail to get tenant mode in convert_oracle_object_name", K(ret));
-      } else if (compat_mode == lib::Worker::CompatMode::ORACLE) {
-        ObString proxied_user;
-        if (OB_FAIL(get_proxy_user_name(proxied_user))) {
-          LOG_WARN("get proxy user info failed", K(ret));
-        } else if (!proxied_user.empty()) {
-          uint64_t tenant_data_version = 0;
-          if (OB_FAIL(GET_MIN_DATA_VERSION(conn->tenant_id_, tenant_data_version))) {
-            LOG_WARN("get tenant data version failed", K(ret));
-          } else if (!ObSQLUtils::is_data_version_ge_423_or_432(tenant_data_version)) {
-            ret = OB_PASSWORD_WRONG;
-            LOG_WARN("tenant version is below 423 or 432", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "connect proxy user is not supported when data version is below 4.2.3 or 4.3.2");
-          } else if (proxied_user.length() > OB_MAX_USER_NAME_BUF_LENGTH) {
-            ret = OB_SIZE_OVERFLOW;
-            LOG_WARN("proxy user name too long", K(ret));
-          } else {
-            MEMCPY(proxied_user_name_var_, proxied_user.ptr(), proxied_user.length());
-            proxied_user_name_var_[proxied_user.length()] = '\0';
-            proxied_user_name_.assign(proxied_user_name_var_, proxied_user.length());
-            if (OB_FAIL(convert_oracle_object_name(conn->tenant_id_, proxied_user_name_))) {
-              LOG_WARN("fail to convert oracle db name", K(ret));
-            }
-          }
+      } else if (!proxied_user.empty()) {
+        uint64_t tenant_data_version = 0;
+        if (compat_mode == lib::Worker::CompatMode::MYSQL) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("mysql mode use proxy user name is not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mysql mode use proxy user name");
+        } else if (OB_FAIL(GET_MIN_DATA_VERSION(conn->tenant_id_, tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (!ObSQLUtils::is_data_version_ge_423_or_432(tenant_data_version)) {
+          ret = OB_PASSWORD_WRONG;
+          LOG_WARN("tenant version is below 423 or 432", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "connect proxy user is not supported when data version is below 4.2.3 or 4.3.2");
+        } else if (proxied_user.length() > OB_MAX_USER_NAME_BUF_LENGTH) {
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("proxy user name too long", K(ret));
         } else {
-          proxied_user_name_.reset();
+          MEMCPY(proxied_user_name_var_, proxied_user.ptr(), proxied_user.length());
+          proxied_user_name_var_[proxied_user.length()] = '\0';
+          proxied_user_name_.assign(proxied_user_name_var_, proxied_user.length());
+          if (OB_FAIL(convert_oracle_object_name(conn->tenant_id_, proxied_user_name_))) {
+            LOG_WARN("fail to convert oracle db name", K(ret));
+          }
         }
+      } else {
+        proxied_user_name_.reset();
       }
       share::schema::ObSessionPrivInfo session_priv;
       EnableRoleIdArray enable_role_id_array;
