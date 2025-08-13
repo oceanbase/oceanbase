@@ -1790,8 +1790,9 @@ int ObExprOperator::aggregate_collection_sql_type(
       if (ob_is_null(types[i].get_type())) {
         // do nothing
       } else if (!ob_is_collection_sql_type(types[i].get_type())) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("invalid type for op", K(ret), K(types[i].get_type()));
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported type for merge", K(ret), K(types[i].get_type()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "merge array with other type is");
       } else if (first) {
         // choose the first collection subschema id now
         type.set_subschema_id(types[i].get_subschema_id());
