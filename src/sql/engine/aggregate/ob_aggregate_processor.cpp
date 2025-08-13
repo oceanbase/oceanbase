@@ -5453,6 +5453,9 @@ int ObAggregateProcessor::get_percentile_param(const ObAggrInfo &aggr_info,
   if (!ob_is_number_tc(param_datum_meta.type_)) {//deduce type时已经转换为number
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("percentile value invalid", K(ret), K(param_datum_meta), K(param));
+  } else if (param.is_null()) {
+    ret = OB_ERR_PERCENTILE_VALUE_INVALID;
+    LOG_WARN("percentile value is null", K(ret));
   } else if (OB_FAIL(percentile.from(ObNumber(param.get_number()), local_allocator))) {
     LOG_WARN("failed to create number percentile", K(ret));
   } else if (percentile.is_negative()
