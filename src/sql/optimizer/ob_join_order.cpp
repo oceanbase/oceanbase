@@ -19966,6 +19966,9 @@ int ObJoinOrder::process_index_for_match_expr(const uint64_t table_id,
       }
     }
   }
+  if (FAILEDx(access_path.est_cost_info_.functional_lookup_exprs_.assign(access_path.domain_idx_info_.func_lookup_exprs_))) {
+    LOG_WARN("failed to assign functional lookup exprs", K(ret));
+  }
   return ret;
 }
 

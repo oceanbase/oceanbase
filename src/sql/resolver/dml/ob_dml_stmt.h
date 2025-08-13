@@ -1196,6 +1196,7 @@ public:
                                 ObIArray<ColumnItem> &partition_columns,
                                 ObIArray<ColumnItem> &generate_columns,
                                 const bool is_generate_column = false) const;
+  int formalize_special_domain_index_fields();
 
 protected:
   int create_table_item(TableItem *&table_item);

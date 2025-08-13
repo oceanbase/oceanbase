@@ -5158,6 +5158,46 @@ int ObDMLStmt::formalize_query_ref_exprs()
   return ret;
 }
 
+// For domain index (full-text index, vector index etc.), ObDMLStmt should maintain some special fields
+// to record the access requirements for domain indexes.
+// After rewriting, these fields need to be maintained.
+int ObDMLStmt::formalize_special_domain_index_fields()
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> relation_exprs;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
+  if (OB_FAIL(get_relation_exprs(relation_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else if (OB_FAIL(get_child_stmts(child_stmts))) {
+    LOG_WARN("failed to get child stmts", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    match_exprs_.reuse();
+    for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
+      if (OB_ISNULL(relation_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (relation_exprs.at(i)->has_flag(CNT_MATCH_EXPR)) {
+        ObSEArray<ObMatchFunRawExpr*, 2> match_exprs;
+        if (OB_FAIL(ObRawExprUtils::extract_match_exprs(relation_exprs.at(i), match_exprs))) {
+          LOG_WARN("failed to extract match exprs", K(ret));
+        } else if (OB_FAIL(append_array_no_dup(match_exprs_, match_exprs))) {
+          LOG_WARN("failed to append array no dup", K(ret));
+        }
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+    if (OB_ISNULL(child_stmts.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(SMART_CALL(child_stmts.at(i)->formalize_special_domain_index_fields()))) {
+      LOG_WARN("failed to formalize special domain index fields", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDMLStmt::do_formalize_query_ref_exprs_pre()
 {
   int ret = OB_SUCCESS;
