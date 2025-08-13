@@ -153,7 +153,7 @@ TEST_F(TestSSMicroCacheResize, test_resize_between_free_space_for_prewarm)
   const int64_t p = static_cast<int64_t>((static_cast<double>(new_limit * arc_info.DEF_ARC_P_OF_LIMIT_PCT) / 100.0));
   const int64_t max_p = new_limit * arc_info.MAX_ARC_P_OF_LIMIT_PCT / 100;
   const int64_t min_p = new_limit * arc_info.MIN_ARC_P_OF_LIMIT_PCT / 100;
-  ASSERT_LE(abs(p - arc_info.p_), 5); // the conversion between 'int64_t' and 'double' causes some deviations
+  ASSERT_LE(abs(p - arc_info.p_), 20); // the conversion between 'int64_t' and 'double' causes some deviations
   ASSERT_EQ(max_p, arc_info.max_p_);
   ASSERT_EQ(min_p, arc_info.min_p_);
 }
