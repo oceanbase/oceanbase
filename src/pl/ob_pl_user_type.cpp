@@ -3464,7 +3464,7 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
       for (int64_t i = 0; i < processed_count; i++) {
         ObObj *dst_table_pos = reinterpret_cast<ObObj*>(table_data) + i;
         int tmp_ret = ObUserDefinedType::destruct_objparam(*collection_allocator, *dst_table_pos, NULL, true);
-        if (OB_FAIL(tmp_ret)) {
+        if (OB_SUCCESS != tmp_ret) {
           LOG_WARN("failed to destruct objparam", K(tmp_ret));
         }
       }

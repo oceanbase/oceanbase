@@ -3884,7 +3884,7 @@ int ObPLExecState::convert_composite(ObPLExecCtx &ctx, ObObjParam &param, int64_
       *ctx.allocator_, *session, *schema_guard, *package_guard, *sql_proxy, false);
     OZ (pl_user_type->init_obj(*(schema_guard), *ctx.allocator_, dst, dst_size));
     OZ (pl_user_type->convert(resolve_ctx, src_ptr, dst_ptr));
-    if (OB_FAIL(ret)) {
+    if (OB_SUCCESS != ret) {
       ObUserDefinedType::destruct_objparam(*ctx.allocator_, dst, session);
     }
     OX (param = dst);
