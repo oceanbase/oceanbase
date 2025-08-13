@@ -401,6 +401,7 @@ GLOBAL_ERRSIM_POINT_DEF(563, EN_FORCE_SLAVE_MAPPING, "Whether force use slave ma
 GLOBAL_ERRSIM_POINT_DEF(564, EN_SQL_HUNG_DETECT, "Whether enable sql hung detect");
 GLOBAL_ERRSIM_POINT_DEF(565, EN_CHECK_EXPR_FORMALIZE, "Reporting error when expr not formalized after transform");
 GLOBAL_ERRSIM_POINT_DEF(566, EN_COST_MODEL_TEST, "test cost model for mysqltest case");
+GLOBAL_ERRSIM_POINT_DEF(567, EN_CHECK_STMT_VALID, "Reporting error when stmt not valid after transform");
 // 600-700 For PX use
 GLOBAL_ERRSIM_POINT_DEF(600, EN_PX_SQC_EXECUTE_FAILED, "");
 GLOBAL_ERRSIM_POINT_DEF(601, EN_PX_SQC_INIT_FAILED, "Used to simulate the scenario of failure to init sub query coordinator");

@@ -144,6 +144,8 @@ int ObWhereSubQueryPullup::transform_one_expr(ObDMLStmt *stmt,
     LOG_WARN("failed to check hierarchical for update", K(ret), KPC(stmt));
   } else if (is_hsfu) {
     // do nothing
+  } else if (stmt->is_unpivot_select()) {
+    // do nothing
   } else if (OB_FAIL(gather_transform_params(stmt, expr, trans_param))) {
     LOG_WARN("failed to check can be pulled up ", K(expr), K(stmt), K(ret));
   } else if (!trans_param.can_be_transform_) {
@@ -225,7 +227,8 @@ int ObWhereSubQueryPullup::can_be_unnested(const ObItemType op_type,
              || subquery->is_hierarchical_query()
              || subquery->has_group_by()
              || subquery->has_window_function()
-             || subquery->is_set_stmt()) {
+             || subquery->is_set_stmt()
+             || subquery->is_unpivot_select()) {
     can_be = false;
   } else if (OB_FAIL(subquery->has_rownum(has_rownum))) {
     LOG_WARN("failed to check has rownum expr", K(ret));

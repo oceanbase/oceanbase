@@ -795,6 +795,9 @@ public:
                                           ObSQLSessionInfo *session_info);
   int set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type);
   int check_pseudo_column_valid();
+  int check_stmt_valid();
+  int recursively_check_stmt_valid();
+  int check_unpivot_valid();
   int get_target_pseudo_column(const ObItemType target_type,
                                const uint64_t table_id,
                                ObPseudoColumnRawExpr *&pseudo_col);

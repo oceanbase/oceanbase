@@ -170,6 +170,8 @@ int ObTransformAggrSubquery::transform_with_aggregation_first(ObDMLStmt *&stmt,
     LOG_WARN("unexpected null", K(ret), K(ctx_), K(query_hint));
   } else if (stmt->is_hierarchical_query() || stmt->is_set_stmt() || !stmt->is_sel_del_upd()) {
     OPT_TRACE("hierarchical/set/insert/merge query can not transform");
+  } else if (stmt->is_unpivot_select()) {
+    OPT_TRACE("unpivot query can not transform");
   } else if (OB_FAIL(stmt->is_hierarchical_for_update(is_hsfu))) {
     LOG_WARN("failed to check hierarchical for update", K(ret));
   } else if (is_hsfu) {
@@ -544,7 +546,8 @@ int ObTransformAggrSubquery::check_aggr_first_validity(ObDMLStmt &stmt,
              subquery->has_window_function() ||
              subquery->has_sequence() ||
              subquery->is_set_stmt() ||
-             subquery->is_hierarchical_query()) {
+             subquery->is_hierarchical_query() ||
+             subquery->is_unpivot_select()) {
     is_valid = false;
     LOG_TRACE("invalid subquery", K(is_valid), K(*subquery));
     OPT_TRACE("subquery has rollup/having/limit offset/limit percent/win_func/sequence");
@@ -1459,7 +1462,8 @@ int ObTransformAggrSubquery::check_stmt_valid(ObDMLStmt &stmt, bool &is_valid, b
   if (stmt.is_set_stmt()
       || stmt.is_hierarchical_query()
       || stmt.has_for_update()
-      || !stmt.is_sel_del_upd()) {
+      || !stmt.is_sel_del_upd()
+      || stmt.is_unpivot_select()) {
     is_valid = false;
   } else if (OB_FAIL(StmtUniqueKeyProvider::check_can_set_stmt_unique(&stmt, can_set_unique))) {
     LOG_WARN("failed to check can set stmt unque", K(ret));
@@ -1529,7 +1533,8 @@ int ObTransformAggrSubquery::check_join_first_validity(ObQueryRefRawExpr &query_
              subquery->has_window_function() ||
              subquery->has_sequence() ||
              subquery->is_set_stmt() ||
-             subquery->is_hierarchical_query()) {
+             subquery->is_hierarchical_query() ||
+             subquery->is_unpivot_select()) {
     is_valid = false;
     LOG_TRACE("invalid subquery", K(is_valid), K(*subquery));
     OPT_TRACE("subquery has rollup/win_func/sequence");
@@ -2826,6 +2831,7 @@ int ObTransformAggrSubquery::check_can_trans_any_all_as_scalar_subquery(ObDMLStm
              subquery->has_sequence() ||
              subquery->is_set_stmt() ||
              subquery->is_hierarchical_query() ||
+             subquery->is_unpivot_select() ||
              has_rownum) {
     is_valid = false;
   } else {
@@ -2876,6 +2882,7 @@ int ObTransformAggrSubquery::check_can_trans_exists_as_scalar_subquery(ObQueryRe
              subquery->has_sequence() ||
              subquery->is_set_stmt() ||
              subquery->is_hierarchical_query() ||
+             subquery->is_unpivot_select() ||
              has_rownum) {
     // do nothing
   } else if (OB_NOT_NULL(subquery->get_limit_expr()) && limit_value < 1) {

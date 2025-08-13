@@ -4377,6 +4377,33 @@ int ObRawExprPrinter::print(ObMatchFunRawExpr *expr)
   return ret;
 }
 
+int ObRawExprPrinter::print(ObUnpivotRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(buf_), K(pos_), K(expr));
+  } else if (is_mysql_mode()) {
+    // do nothing
+  } else if (is_oracle_mode()) {
+    DATA_PRINTF("UNPIVOT(");
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_ISNULL(expr->get_param_expr(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        PRINT_EXPR(expr->get_param_expr(i));
+        DATA_PRINTF(",");
+      }
+    }
+    if (OB_SUCC(ret)) {
+      --*pos_;
+      DATA_PRINTF(")");
+    }
+  } else {}
+  return ret;
+}
+
 int ObRawExprPrinter::print_partition_exprs(ObWinFunRawExpr *expr)
 {
   int ret = OB_SUCCESS;
