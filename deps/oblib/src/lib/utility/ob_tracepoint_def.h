@@ -494,6 +494,7 @@ GLOBAL_ERRSIM_POINT_DEF(800, EN_END_PARTICIPANT, "");
 GLOBAL_ERRSIM_POINT_DEF(801, EN_FORCE_PARALLEL_MINI_MERGE, "used to force set parallel degree for mini merge");
 GLOBAL_ERRSIM_POINT_DEF(802, EN_COMPACTION_SKIP_WRITE_MDS_IN_MEDIUM_CLOG, "");
 GLOBAL_ERRSIM_POINT_DEF(803, EN_MOCK_LARGE_COLUMN_META, "used to mock large column meta");
+GLOBAL_ERRSIM_POINT_DEF(804, EN_COMPACTION_MLOG_MERGE_FAILED, "inject error during mlog table compaction merge");
 
 // compaction 801 - 899
 //LS Migration Related 900 - 1000

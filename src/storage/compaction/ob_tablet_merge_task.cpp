@@ -1210,6 +1210,17 @@ int ObTabletMergeTask::process()
     STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_MERGE_TASK", K(ret));
     return ret;
   }
+  // check if the table is mlog table, inject mlog merge failed error
+  if (OB_SUCC(ret) && OB_NOT_NULL(ctx_)) {
+    const ObStorageSchema *storage_schema = ctx_->get_schema();
+    if (OB_NOT_NULL(storage_schema) && storage_schema->is_mlog_table()) {
+      ret = OB_E(EventTable::EN_COMPACTION_MLOG_MERGE_FAILED) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(INFO, "ERRSIM EN_COMPACTION_MLOG_MERGE_FAILED for mlog table", K(ret), K(ctx_->get_tablet_id()));
+        return ret;
+      }
+    }
+  }
   if (OB_NOT_NULL(ctx_) && ctx_->get_tablet_id().id() > ObTabletID::MIN_USER_TABLET_ID) {
     DEBUG_SYNC(MERGE_TASK_PROCESS);
     if (is_major_merge_type(ctx_->get_merge_type())) {
