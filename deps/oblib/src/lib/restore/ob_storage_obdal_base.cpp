@@ -1072,7 +1072,10 @@ int ObStorageObDalUtil::list_directories(const common::ObString &uri, common::Ob
         } else if (OB_UNLIKELY(false == ObString(listed_dir_path).prefix_match(full_dir_path))) {
           ret = OB_OBJECT_STORAGE_IO_ERROR;
           OB_LOG(WARN, "returned object prefix not match", K(ret), K(uri), K(listed_dir_path), K(full_dir_path));
-        } else if (listed_dir_path_len > 0 && listed_dir_path[listed_dir_path_len - 1] == '/') {
+        } else if (listed_dir_path_len > full_dir_path_len
+                   && listed_dir_path[listed_dir_path_len - 1] == '/') {
+          // The condition listed_dir_path_len > full_dir_path_len is used to prevent the scenario where listed_dir_path is equal to full_dir_path.
+          // oss mkdir will create a empty file named ended with '/', althouth ob not do mkdir, the outer layer will.
           if (OB_FAIL(handle_listed_directory(op, listed_dir_path + full_dir_path_len, listed_dir_path_len - full_dir_path_len - 1))) {
             OB_LOG(WARN, "fail to handle obdal directory name", K(ret),
                 K(full_dir_path), K(listed_dir_path), K(listed_dir_path_len));
