@@ -403,6 +403,7 @@ _enable_hgby_llc_ndv_adaptive
 _enable_hgby_skew_detection
 _enable_index_merge
 _enable_inner_session_mgr
+_enable_insertup_column_store_opt
 _enable_insertup_replace_gts_opt
 _enable_in_range_optimization
 _enable_kvcache_hazard_pointer

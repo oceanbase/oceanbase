@@ -2926,3 +2926,7 @@ DEF_BOOL(_enable_more_aggressive_dynamic_worker, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_extend_sql_plan_monitor_metrics, OB_TENANT_PARAMETER, "False",
          "Extend sql plan monitor metrics.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_insertup_column_store_opt, OB_TENANT_PARAMETER, "True",
+         "Enable or disable insert up optimization path for column store.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
