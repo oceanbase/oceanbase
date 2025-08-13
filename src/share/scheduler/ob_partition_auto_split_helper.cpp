@@ -1292,6 +1292,18 @@ int ObAutoSplitArgBuilder::build_arg(const uint64_t tenant_id,
   } else if (OB_UNLIKELY(!table_schema->is_auto_partitioned_table())) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("attempt to auto split tablet of a non-auto-partitioned table", KR(ret), KPC(table_schema));
+  } else if (table_schema->is_global_index_table()) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    const ObString global_index_policy_str(tenant_config->global_index_auto_split_policy.str());
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      ret = OB_EAGAIN;
+      LOG_WARN("invalid tenant config", K(ret), K(tenant_id), K(tablet_id), K(table_schema->get_table_id()));
+    } else if (0 == global_index_policy_str.case_compare("off")) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_INFO("global index auto split disabled", KR(ret), K(tenant_id), K(tablet_id), K(table_schema->get_table_id()));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(table_schema->check_validity_for_auto_partition())) {
     LOG_WARN("table is invalid for auto partition", KR(ret), K(tenant_id), K(tablet_id), KPC(table_schema));
   } else if (OB_FAIL(sampler.query_ranges(tenant_id,

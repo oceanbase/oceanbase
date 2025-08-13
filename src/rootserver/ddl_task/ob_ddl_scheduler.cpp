@@ -1794,6 +1794,7 @@ int ObDDLScheduler::schedule_auto_split_task()
       void *buf = nullptr;
       obrpc::ObAlterTableArg *single_arg = nullptr;
       bool is_ls_migrating = false;
+      bool ignore_this_task = false;
       if (OB_TMP_FAIL(ObRsAutoSplitScheduler::check_ls_migrating(task.tenant_id_, task.tablet_id_, is_ls_migrating))) {
         LOG_WARN("check ls migrating failed", K(tmp_ret), K(task));
       } else if (is_ls_migrating) {
@@ -1805,7 +1806,11 @@ int ObDDLScheduler::schedule_auto_split_task()
       } else if (FALSE_IT(single_arg = new (buf) obrpc::ObAlterTableArg())) {
       } else if (OB_TMP_FAIL(split_helper.build_arg(task.tenant_id_, task.ls_id_, task.tablet_id_,
           task.auto_split_tablet_size_, task.used_disk_space_, *single_arg))) {
-        LOG_WARN("fail to build arg", K(tmp_ret), K(task));
+        if (OB_OP_NOT_ALLOW == ret) {
+          ignore_this_task = true;
+        } else {
+          LOG_WARN("fail to build arg", K(tmp_ret), K(task));
+        }
       } else if (!single_arg->is_auto_split_partition()) {
         //do nothing
       } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
@@ -1831,7 +1836,7 @@ int ObDDLScheduler::schedule_auto_split_task()
             LOG_WARN("fail to push tasks", K(tmp_ret), K(failed_task));
           }
         }
-        if (need_to_print) {
+        if (need_to_print && !ignore_this_task) {
           int64_t count = snprintf(print_buf + pos, limit - pos, "(%lu,%ld,%d)", task.tenant_id_, task.tablet_id_.id(), tmp_ret);
           if (count >= 0 && pos + count < limit) {
             pos += count;
@@ -1839,7 +1844,9 @@ int ObDDLScheduler::schedule_auto_split_task()
             need_to_print = false; // print_buf not enough
           }
         }
-        has_failed_task = true;
+        if (!ignore_this_task) {
+          has_failed_task = true;
+        }
       }
       if (OB_NOT_NULL(single_arg)) {
         single_arg->~ObAlterTableArg();
