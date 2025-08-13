@@ -6707,8 +6707,8 @@ int ObPLCodeGenerator::generate_reset_objparam(ObLLVMValue &result, int64_t udt_
     INIT_OBJPARAM_ELEMENT(scale, 8, -1);
     //init accuracy
     INIT_OBJPARAM_ELEMENT(accuracy, 64, udt_id);
-    //init flag
-    INIT_OBJPARAM_ELEMENT(flag, 8, 1);
+    //init flag, currently flag default is 9
+    INIT_OBJPARAM_ELEMENT(flag, 8, 9);
     //init raw_text_pos
     INIT_OBJPARAM_ELEMENT(raw_text_pos, 32, -1);
     //init raw_text_len
