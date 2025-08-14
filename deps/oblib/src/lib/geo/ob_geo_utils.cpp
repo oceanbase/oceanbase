@@ -851,6 +851,24 @@ int ObGeoTypeUtil::get_buffered_geo(ObArenaAllocator *allocator,
   return ret;
 }
 
+int ObGeoTypeUtil::geo_isvalid(ObArenaAllocator *allocator,
+                               const ObString &wkb_str,
+                               const ObSrsItem *srs,
+                               bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  ObGeoEvalCtx gis_context(CURRENT_CONTEXT, srs);
+  ObGeometry *geo = NULL;
+  ObGeoErrLogInfo log_info;
+  if (OB_FAIL(ObGeoTypeUtil::build_geometry(*allocator, wkb_str, geo, srs, log_info, ObGeoBuildFlag::GEO_ALLOW_3D))) {
+    LOG_WARN("fail to build geometry", K(ret));
+  } else if (OB_FAIL(gis_context.append_geo_arg(geo))) {
+    LOG_WARN("failed to append geo arg to gis context", K(ret));
+  } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::IsValid>::geo_func::eval(gis_context, is_valid))) {
+    LOG_WARN("eval geo func isvalid failed", K(ret));
+  }
+  return ret;
+}
 int ObGeoTypeUtil::get_header_info_from_wkb(const ObString &wkb, ObGeoWkbHeader &header) {
   int ret = OB_SUCCESS;
   if (wkb.length() < WKB_GEO_SRID_SIZE + WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE) {
