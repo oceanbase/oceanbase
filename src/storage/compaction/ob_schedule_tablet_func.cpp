@@ -20,8 +20,8 @@ ERRSIM_POINT_DEF(EN_COMPACTION_SKIP_CS_REPLICA_TO_REBUILD);
 
 ObScheduleTabletFunc::ObScheduleTabletFunc(
   const int64_t merge_version,
-  const int64_t loop_cnt,
-  const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason)
+  const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason,
+  const int64_t loop_cnt)
   : ObBasicScheduleTabletFunc(merge_version, loop_cnt),
     tablet_status_(),
     time_guard_(),
