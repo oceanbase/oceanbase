@@ -577,8 +577,15 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
     LOG_WARN("failed to check stmt functions", K(ret));
   } else {
     //TODO::unpivot open @xifeng
-    if (func.contain_unpivot_query_ || func.contain_enum_set_values_ || func.contain_geometry_values_) {
+    if (func.contain_unpivot_query_ || func.contain_geometry_values_) {
        disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
+    }
+    if (func.contain_enum_set_values_) {
+      uint64_t enum_set_enable_list = 0;
+      if (ctx_->exec_ctx_->support_enum_set_type_subschema(*ctx_->session_info_)) {
+        ObTransformRule::add_trans_type(enum_set_enable_list, ELIMINATE_OJ);
+      }
+      disable_list |= (~enum_set_enable_list);
     }
     if (func.contain_sequence_) {
       ObTransformRule::add_trans_type(disable_list, WIN_MAGIC);
