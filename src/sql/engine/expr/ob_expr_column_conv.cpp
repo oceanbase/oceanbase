@@ -907,17 +907,13 @@ int ObExprColumnConv::calc_column_name_for_diagnosis(const ObExpr &expr,
         && OB_SUCCESS == expr.args_[5]->eval(ctx, column_info)) {
       ObString column_name(column_info->get_string().length(), column_info->get_string().ptr());
 
-      ObString tmp_str;
-      if (OB_FAIL(ob_write_string(diagnosis_manager.allocator_, column_name, tmp_str, true))) {
-        LOG_WARN("failed to write string", K(ret));
-      } else {
-        int64_t gap_cnt = diagnosis_manager.rets_.count() - diagnosis_manager.col_names_.count();
-        for (int64_t i = 0; OB_SUCC(ret) && i < gap_cnt; i++) {
-          if (OB_FAIL(diagnosis_manager.col_names_.push_back(tmp_str))) {
-            LOG_WARN("failed to push back column name into array", K(ret), K(tmp_str));
-          }
+      int64_t gap_cnt = diagnosis_manager.rets_.count() - diagnosis_manager.col_names_.count();
+      for (int64_t i = 0; OB_SUCC(ret) && i < gap_cnt; i++) {
+        if (OB_FAIL(diagnosis_manager.col_names_.push_back(column_name))) {
+          LOG_WARN("failed to push back column name into array", K(ret), K(column_name));
         }
       }
+
     }
   } else {
     // do nothing
