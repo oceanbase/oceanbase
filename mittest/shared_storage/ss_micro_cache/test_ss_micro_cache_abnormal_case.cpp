@@ -275,15 +275,29 @@ TEST_F(TestSSMicroCacheAbnormalCase, test_phy_ckpt_timeout)
       phy_blk->alloc_time_s_ -= SS_FREE_BLK_MIN_REUSE_TIME_S;
     }
   }
-  ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.scan_reusable_ckpt_blocks_to_free());
-  ASSERT_EQ(0, phy_blk_mgr.get_reusable_blocks_cnt());
-  ASSERT_EQ(blk_ckpt_block_cnt / 2, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+
+  // some background thread might be using reusable_blk
+  const int64_t start_s = ObTimeUtility::current_time_s();
+  const int64_t max_retry_time_s = 200L;
+  bool is_passed = false;
+  while (ObTimeUtility::current_time_s() < (start_s + max_retry_time_s)) {
+    ASSERT_EQ(OB_SUCCESS, phy_blk_mgr.scan_reusable_ckpt_blocks_to_free());
+    const int64_t cur_reusable_blk_cnts = phy_blk_mgr.get_reusable_blocks_cnt();
+    if (0 == cur_reusable_blk_cnts) {
+      ASSERT_EQ(blk_ckpt_block_cnt / 2, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+      is_passed = true;
+      break;
+    }
+  }
+  ASSERT_EQ(true, is_passed);
 
   // 4. fourth execute phy_blk checkpoint task
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.start_op());
   blk_ckpt_task.ckpt_op_.blk_ckpt_ctx_.need_ckpt_ = true;
   ASSERT_EQ(OB_SUCCESS, blk_ckpt_task.ckpt_op_.gen_checkpoint());
   ASSERT_EQ(blk_ckpt_block_cnt / 2, blk_cnt_info.phy_ckpt_blk_used_cnt_);
+
+  LOG_INFO("TEST_CASE: finish test_phy_ckpt_timeout");
 }
 
 }  // namespace storage
