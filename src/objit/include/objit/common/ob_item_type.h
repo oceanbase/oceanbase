@@ -514,6 +514,7 @@ typedef enum ObItemType
   T_FUN_SYS_GET_MYSQL_ROUTINE_PARAMETER_TYPE_STR = 782,
   T_FUN_SYS_MYSQL_TO_CHAR = 783,
   T_FUN_INNER_TYPE_TO_ENUMSET = 784,
+  T_FUN_SYS_WHITESPACE_TOKENIZE = 799,
 
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,

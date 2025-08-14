@@ -216,6 +216,7 @@
 #include "ob_expr_dml_event.h"
 #include "ob_expr_to_base64.h"
 #include "ob_expr_from_base64.h"
+#include "ob_expr_whitespace_tokenize.h"
 #include "ob_expr_random_bytes.h"
 #include "ob_pl_expr_subquery.h"
 #include "ob_expr_encode_sortkey.h"
@@ -1404,6 +1405,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprUDF::eval_external_udf,                                        /* 850 */
   ObExprStartUpMode::eval_startup_mode,                                /* 851 */
   NULL, // ObExprVectorL2Squared::calc_l2_squared,                     /* 852 */
+  ObExprWhitespaceTokenize::eval_tokenize,                             /* 853 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

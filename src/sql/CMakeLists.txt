@@ -690,6 +690,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_width_bucket.cpp
   engine/expr/ob_expr_word_count.cpp
   engine/expr/ob_expr_word_segment.cpp
+  engine/expr/ob_expr_whitespace_tokenize.cpp
   engine/expr/ob_expr_wrapper_inner.cpp
   engine/expr/ob_expr_xor.cpp
   engine/expr/ob_infix_expression.cpp

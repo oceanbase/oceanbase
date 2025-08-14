@@ -60,6 +60,7 @@
 #include "sql/engine/expr/ob_expr_agg_param_list.h"
 #include "sql/engine/expr/ob_expr_is_serving_tenant.h"
 #include "sql/engine/expr/ob_expr_hex.h"
+#include "sql/engine/expr/ob_expr_whitespace_tokenize.h"
 #include "sql/engine/expr/ob_expr_password.h"
 #include "sql/engine/expr/ob_expr_int2ip.h"
 #include "sql/engine/expr/ob_expr_ip2int.h"
@@ -778,6 +779,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprTime);
     REG_OP(ObExprHour);
     REG_OP(ObExprRpad);
+    REG_OP(ObExprWhitespaceTokenize);
     REG_OP(ObExprLpad);
     REG_OP(ObExprColumnConv);
     REG_OP(ObExprFunValues);
