@@ -60,6 +60,7 @@ struct TransformTreeCtx
   bool ignore_scale_check_;
   bool is_from_pl_;
   ObItemType parent_type_;
+  int64_t ps_question_num_;
   TransformTreeCtx();
 };
 
@@ -122,7 +123,8 @@ TransformTreeCtx::TransformTreeCtx() :
  udr_fixed_params_(NULL),
  ignore_scale_check_(false),
  is_from_pl_(false),
- parent_type_(T_INVALID)
+ parent_type_(T_INVALID),
+ ps_question_num_(0)
 {
 }
 
@@ -367,8 +369,6 @@ bool ObSqlParameterization::is_tree_not_param(const ParseNode *tree)
     ret_bool = true;
   } else if (T_WIN_NAMED_WINDOWS == tree->type_) {//name window无法参数化，因为无法保证其参数化顺序
     ret_bool = true;
-  } else if (T_VEC_INDEX_PARAMS == tree->type_) {
-    ret_bool = true;
   } else {
     // do nothing
   }
@@ -537,6 +537,9 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
       // do nothing
     }
     if (OB_SUCC(ret)) {
+      if (T_QUESTIONMARK == ctx.tree_->type_) {
+        ctx.ps_question_num_++;
+      }
       ObObjParam value;
       ObAccuracy tmp_accuracy;
       bool is_fixed = true;
@@ -2109,8 +2112,8 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
       // UNIX_TIMESTAMP结果精度受参数控制,对于其参数化过程特殊处理。
       if (0 == func_name.case_compare("UNIX_TIMESTAMP")) {
         if (1 == node[1]->num_child_) {
-          // 父节点已经判断不可参数化 或 当前节点不可参数化
-          if (is_node_not_param(ctx) || is_tree_not_param(tree)) {
+          // EXECUTE模式但是子节点不为QUESTIONMARK 或 父节点已经判断不可参数化
+          if ((is_execute_mode(ctx.mode_) && node[1]->children_[0]->type_ != T_QUESTIONMARK) || ctx.not_param_ || is_tree_not_param(tree)) {
             const int64_t ARGS_NUMBER_ONE = 1;
             bool mark_arr[ARGS_NUMBER_ONE] = {1}; //0表示参数化, 1 表示不参数化
             if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_ONE, sql_info))) {
@@ -2125,7 +2128,7 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
               if (OB_ISNULL(buf)) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
               } else {
-                ObPCUnixTimestampParamConstraint *constraint = new(buf)ObPCUnixTimestampParamConstraint((ctx.question_num_));
+                ObPCUnixTimestampParamConstraint *constraint = new(buf)ObPCUnixTimestampParamConstraint((is_execute_mode(ctx.mode_) ? ctx.ps_question_num_ : ctx.question_num_));
                 sql_info.params_constraint_.push_back(constraint);
               }
             } else {
