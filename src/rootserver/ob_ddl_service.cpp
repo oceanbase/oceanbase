@@ -28303,9 +28303,9 @@ int ObDDLService::check_table_exists(const uint64_t tenant_id,
 
 int ObDDLService::construct_drop_sql(const ObTableItem &table_item,
                                      const ObTableType table_type,
-                                     ObSqlString &sql,
-                                     bool is_oracle_mode,
-                                     bool is_cascade_constrains)
+                                     const bool is_oracle_mode,
+                                     const bool is_cascade_constraints,
+                                     ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator("TmpDropSql");
@@ -28333,7 +28333,7 @@ int ObDDLService::construct_drop_sql(const ObTableItem &table_item,
                      new_db_name.length(), new_db_name.ptr(),
                      new_tbl_name.length(), new_tbl_name.ptr()))) {
     LOG_WARN("failed to append sql", K(ret));
-  } else if (is_cascade_constrains && OB_FAIL(sql.append_fmt(" CASCADE CONSTRAINTS"))) {
+  } else if (is_cascade_constraints && OB_FAIL(sql.append_fmt(" CASCADE CONSTRAINTS"))) {
     LOG_WARN("failed to append CASCADE CONSTRAINTS", K(ret));
   }
 
@@ -28742,9 +28742,9 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
             ddl_stmt_str = drop_table_arg.ddl_stmt_str_;
           } else if (OB_FAIL(construct_drop_sql(table_item,
                                                 drop_table_arg.table_type_,
-                                                drop_sql,
                                                 lib::Worker::CompatMode::ORACLE == compat_mode,
-                                                is_cascade_constrains))) {
+                                                is_cascade_constrains,
+                                                drop_sql))) {
             LOG_WARN("construct_drop_sql failed", K(ret));
           } else {
             ddl_stmt_str = drop_sql.string();

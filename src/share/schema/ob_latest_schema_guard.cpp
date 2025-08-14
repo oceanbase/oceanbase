@@ -543,6 +543,25 @@ int ObLatestSchemaGuard::get_default_audit_schemas(
   return ret;
 }
 
+int ObLatestSchemaGuard::get_audit_schemas_in_owner(
+    const oceanbase::share::schema::ObSAuditType audit_type,
+    const uint64_t object_id,
+    common::ObIArray<ObSAuditSchema> &audit_schemas)
+{
+  int ret = OB_SUCCESS;
+  audit_schemas.reset();
+  ObSchemaService *schema_service_impl = NULL;
+  ObMySQLProxy *sql_proxy = NULL;
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+    LOG_WARN("fail to check and get service", KR(ret));
+  } else if (OB_FAIL(schema_service_impl->get_audits_in_owner(
+             *sql_proxy, tenant_id_, audit_type, object_id,
+             audit_schemas))) {
+    LOG_WARN("fail to get audits in owner", KR(ret), K_(tenant_id), K(audit_type), K(object_id));
+  }
+  return ret;
+}
+
 int ObLatestSchemaGuard::check_oracle_object_exist(
     const uint64_t database_id,
     const uint64_t session_id,
@@ -788,7 +807,7 @@ int ObLatestSchemaGuard::get_tablespace_schema(
 
 int ObLatestSchemaGuard::get_udt_info(
     const uint64_t udt_id,
-    const ObUDTTypeInfo *udt_info)
+    const ObUDTTypeInfo *&udt_info)
 {
   int ret = OB_SUCCESS;
   udt_info = NULL;
@@ -844,6 +863,122 @@ int ObLatestSchemaGuard::get_coded_index_name_info_mysql(
         break;
       }
     }
+  }
+  return ret;
+}
+
+int ObLatestSchemaGuard::get_obj_privs(const uint64_t obj_id,
+                                       const ObObjectType obj_type,
+                                       common::ObIArray<ObObjPriv> &obj_privs)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLProxy *sql_proxy = nullptr;
+  ObSchemaService *schema_service_impl = nullptr;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == obj_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(obj_id));
+  } else if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) {
+    LOG_WARN("fail to check and get service", KR(ret));
+  } else if (OB_FAIL(schema_service_impl->get_obj_priv_with_obj_id(*sql_proxy, tenant_id_,
+             obj_id, static_cast<uint64_t>(obj_type), obj_privs))) {
+    LOG_WARN("fail to get obj priv", KR(ret), K_(tenant_id), K(obj_id));
+  }
+  return ret;
+}
+
+#ifndef GET_RLS_SCHEMA
+#define GET_RLS_SCHEMA(SCHEMA, SCHEMA_TYPE) \
+  int ObLatestSchemaGuard::get_##SCHEMA##s(const uint64_t rls_id, \
+                                           const SCHEMA_TYPE *&rls_schema) \
+  { \
+    int ret = OB_SUCCESS; \
+    rls_schema = nullptr; \
+    ObMySQLProxy *sql_proxy = nullptr; \
+    ObSchemaService *schema_service_impl = nullptr; \
+    if (OB_FAIL(check_inner_stat_())) { \
+      LOG_WARN("fail to check inner stat", KR(ret)); \
+    } else if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_proxy))) { \
+      LOG_WARN("fail to check and get service", KR(ret)); \
+    } else if (OB_UNLIKELY(OB_INVALID_ID == rls_id)) { \
+      ret = OB_INVALID_ARGUMENT; \
+      LOG_WARN("rls id is invalid", KR(ret), K(rls_id)); \
+    } else { \
+      ObArray<SchemaKey> rls_keys; \
+      SchemaKey rls_key; \
+      rls_key.tenant_id_ = tenant_id_; \
+      rls_key.SCHEMA##_id_ = rls_id; \
+      if (OB_FAIL(rls_keys.push_back(rls_key))) { \
+        LOG_WARN("fail to push back rls key", KR(ret), K(rls_key)); \
+      } \
+      ObRefreshSchemaStatus schema_status; \
+      schema_status.tenant_id_ = tenant_id_; \
+      const int64_t schema_version = INT64_MAX; \
+      common::ObArray<SCHEMA_TYPE> object_schema_array;\
+      SCHEMA_TYPE *tmp_object_schema = nullptr;\
+      if (FAILEDx(schema_service_impl->get_batch_##SCHEMA##s(schema_status, *sql_proxy, \
+                                                             schema_version, rls_keys, object_schema_array))) { \
+        LOG_WARN("fail to get batch rls", KR(ret), K(schema_status), K(rls_keys)); \
+      } else if (OB_UNLIKELY(1 != object_schema_array.count())) { \
+        if (0 == object_schema_array.count()) { \
+          /* the action of not exist is up to user */ \
+        } else { \
+          ret = OB_ERR_UNEXPECTED; \
+          LOG_WARN("unexpected schema count", KR(ret), K(object_schema_array)); \
+        } \
+      } else if (OB_FAIL(ObSchemaUtils::alloc_schema(local_allocator_, \
+                                                     object_schema_array.at(0), \
+                                                     tmp_object_schema))) { \
+        LOG_WARN("fail to alloc new var", KR(ret), K(rls_keys)); \
+      } else if (OB_ISNULL(tmp_object_schema)) { \
+        ret = OB_ERR_UNEXPECTED; \
+        LOG_WARN(#SCHEMA_TYPE "is NULL", KR(ret)); \
+      } else { \
+        rls_schema = tmp_object_schema; \
+      } \
+    } \
+    return ret; \
+  } \
+
+  GET_RLS_SCHEMA(rls_policy, ObRlsPolicySchema);
+  GET_RLS_SCHEMA(rls_group, ObRlsGroupSchema);
+  GET_RLS_SCHEMA(rls_context, ObRlsContextSchema);
+#undef GET_RLS_SCHEMA
+#endif
+
+int ObLatestSchemaGuard::get_sequence_schema(const uint64_t sequence_id,
+                                             const ObSequenceSchema *&sequence_schema)
+{
+  int ret = OB_SUCCESS;
+  sequence_schema = NULL;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == sequence_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sequence_id is invalid", KR(ret), K_(tenant_id), K(sequence_id));
+  } else if (OB_FAIL(get_schema_(SEQUENCE_SCHEMA, tenant_id_, sequence_id, sequence_schema))) {
+    LOG_WARN("fail to get sequence", KR(ret), K_(tenant_id), K(sequence_id));
+  } else if (OB_ISNULL(sequence_schema)) {
+    LOG_INFO("sequence not exist", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObLatestSchemaGuard::get_trigger_info(const uint64_t trigger_id,
+                                          const ObTriggerInfo *&trigger_info)
+{
+  int ret = OB_SUCCESS;
+  trigger_info = NULL;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == trigger_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("trigger_id is invalid", KR(ret), K_(tenant_id), K(trigger_id));
+  } else if (OB_FAIL(get_schema_(TRIGGER_SCHEMA, tenant_id_, trigger_id, trigger_info))) {
+    LOG_WARN("fail to get trigger", KR(ret), K_(tenant_id), K(trigger_id));
+  } else if (OB_ISNULL(trigger_info)) {
+    LOG_INFO("trigger not exist", KR(ret), K_(tenant_id), K(trigger_info));
   }
   return ret;
 }

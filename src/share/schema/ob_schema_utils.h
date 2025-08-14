@@ -110,6 +110,7 @@ public:
   static bool is_label_se_column(uint64_t flag);
   static int add_column_to_table_schema(ObColumnSchemaV2 &column, ObTableSchema &table_schema);
   static int convert_sys_param_to_sysvar_schema(const ObSysParam &sysparam, ObSysVarSchema &sysvar_schema);
+  static bool is_support_parallel_drop(const ObTableType table_type);
   static int get_tenant_int_variable(
       uint64_t tenant_id,
       share::ObSysVarClassType var_id,

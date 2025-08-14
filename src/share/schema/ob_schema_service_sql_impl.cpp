@@ -11137,6 +11137,39 @@ int ObSchemaServiceSQLImpl::fetch_external_resources(ObISQLClient &sql_client,
 
   return ret;
 }
+int ObSchemaServiceSQLImpl::get_obj_priv_with_obj_id(
+                            common::ObISQLClient &sql_client,
+                            const uint64_t tenant_id,
+                            const uint64_t obj_id,
+                            const uint64_t obj_type,
+                            ObIArray<ObObjPriv> &obj_privs)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == obj_id
+      || OB_INVALID_ID == obj_type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(obj_id), K(obj_type));
+  } else if (OB_FAIL(sql.append_fmt("SELECT *, 0 as is_deleted, -1 as schema_version FROM %s "
+             " WHERE tenant_id = 0 AND obj_id = %lu AND objtype = %lu",
+             OB_ALL_TENANT_OBJAUTH_TNAME, obj_id, obj_type))) {
+    LOG_WARN("append sql failed", KR(ret));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = nullptr;
+    if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get result", KR(ret));
+    } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_obj_priv_schema(tenant_id,
+                                              *result, obj_privs))) {
+      LOG_WARN("failed to retrieve obj priv schema", KR(ret));
+    }
+    } // smart var end
+  }
+  return ret;
+}
 
 }//namespace schema
 }//namespace share

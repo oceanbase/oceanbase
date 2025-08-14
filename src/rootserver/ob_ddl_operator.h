@@ -1027,6 +1027,11 @@ public:
                         ObMySQLTransaction &trans);
   inline share::schema::ObMultiVersionSchemaService &get_multi_schema_service() { return schema_service_; }
   inline common::ObMySQLProxy &get_sql_proxy() { return sql_proxy_; }
+  int cleanup_autoinc_cache(const share::schema::ObTableSchema &table_schema);
+  int sync_version_for_cascade_table(
+      const uint64_t tenant_id,
+      const common::ObIArray<uint64_t> &table_ids,
+      common::ObMySQLTransaction &trans);
   virtual int set_need_flush_ora(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObObjPrivSortKey &obj_priv_key,          /* in: obj priv key*/
@@ -1069,14 +1074,6 @@ private:
   int check_tenant_exist(share::schema::ObSchemaGetterGuard &schema_guard,
                          const common::ObString &tenant_name,
                          bool &is_exist);
-
-  int sync_version_for_cascade_table(
-      const uint64_t tenant_id,
-      const common::ObIArray<uint64_t> &table_ids,
-      common::ObMySQLTransaction &trans);
-
-  int cleanup_autoinc_cache(const share::schema::ObTableSchema &table_schema);
-
   bool is_aux_object(const share::schema::ObDatabaseSchema &schema);
   bool is_aux_object(const share::schema::ObTableSchema &schema);
   bool is_aux_object(const share::schema::ObTriggerInfo &schema);

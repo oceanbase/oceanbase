@@ -757,6 +757,32 @@ int ObDDLHelper::obj_lock_obj_id(
   }
   return ret;
 }
+
+int ObDDLHelper::check_dep_objs_consistent(
+    ObArray<std::pair<uint64_t, share::schema::ObObjectType>> &l,
+    ObArray<std::pair<uint64_t, share::schema::ObObjectType>> &r)
+{
+  int ret = OB_SUCCESS;
+  if (l.count() != r.count()) {
+    ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+    LOG_WARN("dep objs count not consistent", KR(ret), K(l.count()), K(r.count()));
+  } else {
+    lib::ob_sort(l.begin(), l.end(), dep_compare_func_);
+    lib::ob_sort(r.begin(), r.end(), dep_compare_func_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < l.count(); i++) {
+      if (l.at(i).first != r.at(i).first) {
+        ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+        LOG_WARN("dep objs not consistent", KR(ret), K(l.at(i).first), K(r.at(i).first));
+      } else if (l.at(i).second != r.at(i).second) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("different obj type with same obj id is unexpected", KR(ret), K(l.at(i).second), K(r.at(i).second));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObDDLHelper::obj_lock_with_lock_id_(
     ObDDLSQLTransaction &trans,
     const uint64_t tenant_id,

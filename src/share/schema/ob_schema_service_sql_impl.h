@@ -853,6 +853,13 @@ public:
                const ObString &dst,
                const bool case_compare,
                const bool compare_with_collation) override;
+
+  virtual int get_obj_priv_with_obj_id(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t obj_id,
+              const uint64_t obj_type,
+              ObIArray<ObObjPriv> &obj_privs) override;
   /*----------- interfaces for latest schema end -------------*/
 
 private:

@@ -38,6 +38,7 @@
   RPC_S(PRD drop_tablegroup, obrpc::OB_DROP_TABLEGROUP, (ObDropTablegroupArg));
   RPC_S(PRD alter_tablegroup, obrpc::OB_ALTER_TABLEGROUP, (ObAlterTablegroupArg));
   RPC_S(PRD drop_table, obrpc::OB_DROP_TABLE, (ObDropTableArg), ObDDLRes);
+  RPC_S(PRD parallel_drop_table, obrpc::OB_PARALLEL_DROP_TABLE, (ObDropTableArg), ObDropTableRes);
   RPC_S(PRD rename_table, obrpc::OB_RENAME_TABLE, (ObRenameTableArg));
   RPC_S(PRD truncate_table, obrpc::OB_TRUNCATE_TABLE, (ObTruncateTableArg), ObDDLRes);
   RPC_S(PRD truncate_table_v2, obrpc::OB_TRUNCATE_TABLE_V2, (ObTruncateTableArg), ObDDLRes);

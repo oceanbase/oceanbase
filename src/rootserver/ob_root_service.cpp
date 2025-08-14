@@ -72,6 +72,7 @@
 #include "parallel_ddl/ob_update_index_status_helper.h" // ObUpdateIndexStatusHelper
 #include "pl_ddl/ob_pl_ddl_service.h"
 #include "storage/ddl/ob_tablet_split_util.h"
+#include "parallel_ddl/ob_drop_table_helper.h" // ObDropTableHelper
 
 namespace oceanbase
 {
@@ -4987,6 +4988,51 @@ int ObRootService::drop_table(const obrpc::ObDropTableArg &arg, obrpc::ObDDLRes 
                         "session_id", arg.session_id_,
                         "schema_version", res.schema_id_);
   LOG_INFO("finish drop table ddl", K(ret), K(arg), "ddl_event_info", ObDDLEventInfo());
+  return ret;
+}
+
+int ObRootService::parallel_drop_table(const ObDropTableArg &arg, ObDropTableRes &res)
+{
+  int ret = OB_SUCCESS;
+
+  LOG_TRACE("receive parallel drop table arg", K(arg));
+  int64_t begin_time = ObTimeUtility::current_time();
+  const uint64_t tenant_id = arg.exec_tenant_id_;
+  uint64_t data_version = 0;
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (!((data_version >= MOCK_DATA_VERSION_4_2_5_1 && data_version < DATA_VERSION_4_3_0_0)
+               || (data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
+               || (data_version >= DATA_VERSION_4_4_1_0))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("parallel drop table is not supported", KR(ret), K(tenant_id), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "parallel drop table");
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(parallel_ddl_pre_check_(tenant_id))) {
+    LOG_WARN("pre check failed before parallel ddl execute", KR(ret), K(tenant_id));
+  } else {
+    ObDropTableHelper drop_table_helper(schema_service_, tenant_id, arg, res);
+    if (OB_FAIL(drop_table_helper.init(ddl_service_))) {
+      LOG_WARN("fail to init drop table helper", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(drop_table_helper.execute())) {
+      LOG_WARN("fail to execute drop table", KR(ret), K(tenant_id));
+    }
+  }
+  int64_t cost = ObTimeUtility::current_time() - begin_time;
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "drop table",
+                        "tenant_id", arg.tenant_id_,
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        "task_id", res.task_id_,
+                        "session_id", arg.session_id_,
+                        "schema_version", res.schema_version_);
+  LOG_INFO("finish parallel drop table ddl", KR(ret), K(arg), K(cost), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 

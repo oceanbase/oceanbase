@@ -1073,6 +1073,28 @@ public:
   bool do_nothing_;
 };
 
+struct ObDropTableRes
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObDropTableRes() :
+    schema_version_(OB_INVALID_VERSION),
+    task_id_(OB_INVALID_ID),
+    do_nothing_(false)
+  {}
+  int assign(const ObDropTableRes &other) {
+    schema_version_ = other.schema_version_;
+    task_id_ = other.task_id_;
+    do_nothing_ = other.do_nothing_;
+    return common::OB_SUCCESS;
+  }
+  TO_STRING_KV(K_(schema_version), K_(task_id), K_(do_nothing));
+  int64_t schema_version_;
+  int64_t task_id_;
+  bool do_nothing_;
+};
+
 struct ObCreateTableLikeArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
