@@ -249,7 +249,7 @@ public:
     :block_allocator_(NULL), bit_set_word_array_(NULL), desc_()
   {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(init_buf(MAX_BITSETWORD))) {
+    if (OB_FAIL(init_buf(DEFAULT_BITSETWORD_CNT))) {
       desc_.init_errcode_ = ret;
       SQL_RESV_LOG(WARN, "failed to init buf", K(ret));
     }
@@ -263,7 +263,7 @@ public:
       desc_.init_errcode_ = other.desc_.init_errcode_;
       SQL_RESV_LOG(WARN, "other not initied", K(other.desc_.init_errcode_));
     } else {
-      int64_t cap = MAX(other.bitset_word_count(), MAX_BITSETWORD);
+      int64_t cap = MAX(other.bitset_word_count(), DEFAULT_BITSETWORD_CNT);
       if (OB_FAIL(init_buf(cap))) {
         desc_.init_errcode_ = ret;
         SQL_RESV_LOG(WARN, "failed to init buf", K(ret));
@@ -279,7 +279,9 @@ public:
     :block_allocator_(NULL), bit_set_word_array_(NULL), desc_()
   {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(init_buf(bit_size))) {
+    const int64_t word_cnt = ((bit_size <= 0 ? DEFAULT_SQL_BITSET_SIZE : bit_size) - 1)
+                              / PER_BITSETWORD_BITS + 1;
+    if (OB_FAIL(init_buf(word_cnt))) {
       desc_.init_errcode_ = ret;
       SQL_RESV_LOG(WARN, "failed to init buf", K(ret));
     }
@@ -419,10 +421,7 @@ public:
       SQL_RESV_LOG(WARN, "negative bitmap member not allowed", K(ret), K(index));
     } else {
       int64_t pos = index >> PER_BITSETWORD_MOD_BITS;
-      if (OB_UNLIKELY(pos + 1 > INT16_MAX)) {
-        ret = OB_SIZE_OVERFLOW;
-        SQL_RESV_LOG(WARN, "ObSqlBitSet pos overflow", K(ret), K(index), K(pos));
-      } else if (OB_UNLIKELY(pos >= desc_.cap_)) {
+      if (OB_UNLIKELY(pos >= desc_.cap_)) {
         int64_t new_word_cnt = pos * 2;
         if (OB_FAIL(alloc_new_buf(new_word_cnt))) {
           SQL_RESV_LOG(WARN, "failed to alloc new buf", K(ret));
@@ -503,10 +502,7 @@ public:
       // do nothing
     } else {
       int64_t pos = mask_bits >> PER_BITSETWORD_MOD_BITS;
-      if (OB_UNLIKELY(pos + 1 > INT16_MAX)) {
-        ret = OB_SIZE_OVERFLOW;
-        SQL_RESV_LOG(WARN, "ObSqlBitSet pos overflow", K(ret), K(index), K(pos));
-      } else if (OB_UNLIKELY(pos >= desc_.cap_)) {
+      if (OB_UNLIKELY(pos >= desc_.cap_)) {
         int64_t new_word_cnt = pos + 1;
         if (OB_FAIL(alloc_new_buf(new_word_cnt))) {
           SQL_RESV_LOG(WARN, "failed to alloc new buf", K(ret));
@@ -902,11 +898,13 @@ public:
         bit_set_word_array_[i] = other.get_bitset_word(i);
       }
       desc_.len_ = static_cast<int16_t>(other.bitset_word_count());
-    }
-    if (OB_FAIL(ret)) {
-      // error happened, set inited flag to be false
-      desc_.init_errcode_ = ret;
-      desc_.inited_ = false;
+
+      if (OB_FAIL(ret)) {
+        // error happened, set inited flag to be false
+        destroy();
+        desc_.init_errcode_ = ret;
+        desc_.inited_ = false;
+      }
     }
     return *this;
   }
@@ -924,6 +922,9 @@ private:
       if (OB_FAIL(init_alloc_buf(word_cnt))) {
         SQL_RESV_LOG(WARN, "failed to init array buf", K(ret));
       }
+    } else if (OB_UNLIKELY(word_cnt > MAX_CAPACITY)) {
+      ret = OB_SIZE_OVERFLOW;
+      SQL_RESV_LOG(WARN, "ObSqlBitSet pos overflow", K(ret), K(word_cnt));
     } else if (OB_ISNULL(allocator = get_block_allocator())) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "invalid allocator", K(ret));
@@ -987,11 +988,14 @@ private:
     int ret = OB_SUCCESS;
     BitSetWord old_data[LOCAL_ARRAY_SIZE] = {0};
     bool use_local_array = desc_.cap_ <= LOCAL_ARRAY_SIZE;
-    word_cnt = MAX(word_cnt, MAX_BITSETWORD);
+    word_cnt = MAX(word_cnt, DEFAULT_BITSETWORD_CNT);
     if (use_local_array) {
       MEMCPY(old_data, bit_set_word_array_, desc_.len_ * sizeof(BitSetWord));
     }
-    if (OB_FAIL(init_block_allocator())) {
+    if (OB_UNLIKELY(word_cnt > MAX_CAPACITY)) {
+      ret = OB_SIZE_OVERFLOW;
+      SQL_RESV_LOG(WARN, "ObSqlBitSet pos overflow", K(ret), K(word_cnt));
+    } else if (OB_FAIL(init_block_allocator())) {
       SQL_RESV_LOG(WARN, "failed to init block allocator", K(ret));
     } else {
       int64_t words_size = sizeof(BitSetWord) * word_cnt;
@@ -1029,11 +1033,12 @@ private:
   static const int64_t PER_BITSETWORD_BITS = 32;
   static const int64_t PER_BITSETWORD_MOD_BITS = 5;
   static const int64_t PER_BITSETWORD_MASK = PER_BITSETWORD_BITS - 1;
-  static const int64_t MAX_BITSETWORD = ((N <= 0 ? DEFAULT_SQL_BITSET_SIZE : N) - 1)
+  static const int64_t DEFAULT_BITSETWORD_CNT = ((N <= 0 ? DEFAULT_SQL_BITSET_SIZE : N) - 1)
                                           / PER_BITSETWORD_BITS + 1;
   static const int64_t LOCAL_ARRAY_SIZE = sizeof(ObIAllocator*) / sizeof(BitSetWord);
   static_assert(LOCAL_ARRAY_SIZE * sizeof(BitSetWord) == sizeof(ObIAllocator*),
                 "LOCAL_ARRAY_SIZE must be positive integer");
+  static const int64_t MAX_CAPACITY = INT16_MAX;
 
   struct SqlBitSetDesc
   {

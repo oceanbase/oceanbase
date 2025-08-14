@@ -11,7 +11,9 @@
  */
 
 #include <gtest/gtest.h>
+#define private public
 #include "sql/resolver/expr/ob_raw_expr.h"
+#undef private
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::lib;
@@ -355,6 +357,31 @@ TEST_F(TestSqlBitSet, to_array)
   ASSERT_EQ(111, arr.at(3));
 }
 
+TEST_F(TestSqlBitSet, big_bitset)
+{
+  ObSqlBitSet<> bs1(40000);
+  ObSqlBitSet<> bs2;
+  ObSqlBitSet<> bs3((1 << 20) - 32);
+  ObSqlBitSet<> bs4((1 << 20) - 31);
+  ObSqlBitSet<> bs5;
+  EXPECT_GT(bs1.desc_.cap_, 0);
+  EXPECT_GT(bs2.desc_.cap_, 0);
+  EXPECT_TRUE(bs1.is_valid());
+  EXPECT_TRUE(bs2.is_valid());
+  EXPECT_TRUE(bs3.is_valid());
+  EXPECT_EQ(INT16_MAX, bs3.desc_.cap_);
+  EXPECT_FALSE(bs4.is_valid());
+  EXPECT_EQ(OB_SIZE_OVERFLOW, bs1.add_member(1 << 19));
+  EXPECT_EQ(OB_SUCCESS, bs1.add_member((1 << 19) - 1));
+  EXPECT_EQ(INT16_MAX - 1, bs1.desc_.cap_);
+  EXPECT_EQ(OB_SIZE_OVERFLOW, bs2.add_member(1 << 19));
+  EXPECT_EQ(OB_SUCCESS, bs2.add_member((1 << 19) - 1));
+  EXPECT_EQ(INT16_MAX - 1, bs2.desc_.cap_);
+  EXPECT_EQ(OB_SIZE_OVERFLOW, bs5.init_mask((1 << 20) - 32));
+  EXPECT_EQ(OB_SUCCESS, bs5.init_mask((1 << 20) - 33));
+  EXPECT_EQ(INT16_MAX, bs5.desc_.cap_);
+}
+
 TestSqlBitSet::TestSqlBitSet() {}
 TestSqlBitSet::~TestSqlBitSet() {}
 void TestSqlBitSet::SetUp() {}
@@ -366,6 +393,9 @@ int main(int argc, char **argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
   int ret = 0;
+  system("rm -rf test_sql_bitset.log*");
+  OB_LOGGER.set_file_name("test_sql_bitset.log", true);
+  OB_LOGGER.set_log_level("INFO");
   ContextParam param;
   param.set_mem_attr(1001, "SqlBitset", ObCtxIds::WORK_AREA)
     .set_page_size(OB_MALLOC_BIG_BLOCK_SIZE);
