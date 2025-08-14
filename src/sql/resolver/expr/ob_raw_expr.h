@@ -4319,6 +4319,9 @@ public:
   ObPLAssocIndexRawExpr()
     : ObOpRawExpr(), for_write_(false) {}
   virtual ~ObPLAssocIndexRawExpr() {}
+  virtual bool inner_same_as(const ObRawExpr &expr,
+                             ObExprEqualCheckContext *check_context) const;
+  virtual void inner_calc_hash() override;
   int assign(const ObRawExpr &other) override;
   inline void set_write(bool for_write) { for_write_ = for_write; }
   inline bool get_write() const { return for_write_; }

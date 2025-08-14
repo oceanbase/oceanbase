@@ -7738,7 +7738,7 @@ int ObResolverUtils::revert_external_param_info(ExternalParams &param_infos, ObR
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(revert_external_param_info(param_infos, expr_factory, child))) {
+        if (OB_FAIL(SMART_CALL(revert_external_param_info(param_infos, expr_factory, child)))) {
           LOG_WARN("failed to revert external param info", K(ret));
         }
       }

@@ -2994,6 +2994,30 @@ int ObPLAssocIndexRawExpr::assign(const ObRawExpr &other)
   return ret;
 }
 
+bool ObPLAssocIndexRawExpr::inner_same_as(const ObRawExpr &expr,
+                                          ObExprEqualCheckContext *check_context) const
+{
+  bool result = false;
+  if (get_expr_type() != expr.get_expr_type()) {
+  } else {
+    const ObPLAssocIndexRawExpr *c_expr = static_cast<const ObPLAssocIndexRawExpr*>(&expr);
+    result = c_expr->parent_type_ == parent_type_
+              && c_expr->for_write_ == for_write_
+              && c_expr->out_of_range_set_err_ == out_of_range_set_err_
+              && c_expr->is_index_by_varchar_ == is_index_by_varchar_;
+  }
+  return result;
+}
+
+void ObPLAssocIndexRawExpr::inner_calc_hash()
+{
+  expr_hash_ = common::do_hash(get_expr_type(), expr_hash_);
+  expr_hash_ = common::do_hash(parent_type_, expr_hash_);
+  expr_hash_ = common::do_hash(for_write_, expr_hash_);
+  expr_hash_ = common::do_hash(out_of_range_set_err_, expr_hash_);
+  expr_hash_ = common::do_hash(is_index_by_varchar_, expr_hash_);
+}
+
 int ObObjAccessRawExpr::assign(const ObRawExpr &other)
 {
   int ret = OB_SUCCESS;
