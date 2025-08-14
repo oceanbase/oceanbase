@@ -18,6 +18,7 @@ devdeps-libunwind-static-1.6.2-342024092715.al8.x86_64.rpm
 devdeps-mariadb-connector-c-3.1.12-42024100814.al8.x86_64.rpm
 devdeps-libaio-0.3.112-42024092715.al8.x86_64.rpm
 devdeps-relaxed-rapidjson-1.0.0-132024092715.al8.x86_64.rpm
+devdeps-openssl-static-1.1.1u-132024092718.al8.x86_64.rpm
 devdeps-libxml2-2.10.4-52024102517.al8.x86_64.rpm
 devdeps-mxml-2.12.0-52024092715.al8.x86_64.rpm
 devdeps-apr-1.6.5-342024100911.al8.x86_64.rpm
@@ -30,7 +31,6 @@ devdeps-boost-1.74.0-72024092811.al8.x86_64.rpm
 devdeps-abseil-cpp-20211102.0-62024122014.al8.x86_64.rpm
 devdeps-s2geometry-0.10.0-122024122617.al8.x86_64.rpm
 devdeps-icu-69.1-232024120517.al8.x86_64.rpm
-devdeps-cloud-qpl-1.1.0-312024092814.al8.x86_64.rpm
 devdeps-cos-c-sdk-5.0.21-282024102810.al8.x86_64.rpm
 devdeps-s3-cpp-sdk-1.11.156-222024100811.al8.x86_64.rpm
 devdeps-protobuf-c-1.4.1-100000132024092815.al8.x86_64.rpm
