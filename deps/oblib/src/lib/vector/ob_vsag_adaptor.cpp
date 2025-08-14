@@ -112,6 +112,8 @@ public:
                  int index_type, FilterInterface *bitmap, bool reverse_filter,
                  bool need_extra_info, const char *&extra_infos,
                  void *&iter_ctx, bool is_last_search, void *allocator);
+  int immutable_optimize();
+
   std::shared_ptr<vsag::Index> &get_index() { return index_; }
   void set_index(std::shared_ptr<vsag::Index> hnsw) { index_ = hnsw; }
   vsag::Allocator *get_allocator() const { return allocator_; }
@@ -127,6 +129,11 @@ public:
   inline int16_t get_refine_type() const { return refine_type_; }
   inline int16_t get_bq_bits_query() const { return bq_bits_query_; }
   inline bool get_bq_use_fht() const { return bq_use_fht_; };
+
+  TO_STRING_KV(KP(this), K_(is_created), K_(is_build), K_(use_static), KCSTRING_(dtype),
+      KCSTRING_(metric), K_(max_degree), K_(ef_construction), K_(ef_search), K_(dim),
+      K_(ef_search), K_(index_type), KP(index_.get()), KP_(allocator), K_(extra_info_size),
+      K_(refine_type), K_(bq_bits_query), K_(bq_use_fht));
 
 private:
   bool is_created_;
@@ -233,6 +240,19 @@ uint64_t HnswIndexHandler::estimate_memory(const uint64_t row_count, const bool 
     }
   }
   return size;
+}
+
+int HnswIndexHandler::immutable_optimize()
+{
+  int ret = OB_SUCCESS;
+  tl::expected<void, Error> res = index_->SetImmutable();
+  if (res.has_value()) {
+    LOG_INFO("[OBVSAG] set immutable success", KPC(this));
+  } else {
+    ret = vsag_errcode2ob(res.error().type);
+    LOG_WARN("[OBVSAG] index set immutable error", K(ret), K(res.error().type));
+  }
+  return ret;
 }
 
 int HnswIndexHandler::knn_search(const vsag::DatasetPtr &query, int64_t topk,
@@ -909,7 +929,7 @@ int fdeserialize(VectorIndexPtr &index_handler,
           LOG_INFO("[OBVSAG] fdeserialize success", KCSTRING(result_param_str));
         } else {
           ret = vsag_errcode2ob(bs.error().type);
-          LOG_WARN("[OBVSAG] fdeserialize error", K(ret), K(index.error().type));
+          LOG_WARN("[OBVSAG] fdeserialize error", K(ret), K(bs.error().type));
         }
       } else {
         ret = vsag_errcode2ob(index.error().type);
@@ -967,6 +987,21 @@ uint64_t estimate_memory(VectorIndexPtr &index_handler, const uint64_t row_count
     estimate_memory_size = hnsw->estimate_memory(row_count, is_build);
   }
   return estimate_memory_size;
+}
+
+int immutable_optimize(VectorIndexPtr& index_handler)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(index_handler)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("[OBVSAG] null pointer addr", K(ret), KP(index_handler));
+  } else {
+    HnswIndexHandler *hnsw = static_cast<HnswIndexHandler *>(index_handler);
+    if (OB_FAIL(hnsw->immutable_optimize())) {
+      LOG_WARN("[OBVSAG] immutable_optimize error happend", K(ret));
+    }
+  }
+  return ret;
 }
 
 } // namespace obvsag

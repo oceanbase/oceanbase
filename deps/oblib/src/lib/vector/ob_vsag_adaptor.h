@@ -116,6 +116,7 @@ int get_extra_info_by_ids(VectorIndexPtr& index_handler,
                           const int64_t* ids,
                           int64_t count,
                           char *extra_infos);
+int immutable_optimize(VectorIndexPtr& index_handler);
 
 } // namesapce obvsag
 } // namespace common
