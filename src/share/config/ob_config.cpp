@@ -349,7 +349,7 @@ bool ObConfigIntListItem::set(const char *str)
   value_.size_ = 0;
   int ret = OB_SUCCESS;
   SMART_VAR(char[OB_MAX_CONFIG_VALUE_LEN], tmp_value_str) {
-    MEMCPY(tmp_value_str, value_str_, sizeof (tmp_value_str));
+    MEMCPY(tmp_value_str, value_str_, std::min(sizeof(value_str_), sizeof(tmp_value_str)));
     s = STRTOK_R(tmp_value_str, ";", &saveptr);
     if (OB_LIKELY(NULL != s)) {
       do {
