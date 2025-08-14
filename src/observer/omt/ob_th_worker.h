@@ -105,6 +105,7 @@ public:
   OB_INLINE bool is_doing_ddl() const { return OB_NOT_NULL(is_doing_ddl_) ? (*is_doing_ddl_) : false; }
 
   static thread_local uint64_t serving_tenant_id_;
+  int acquire_diagnostic_info(ObDiagnosticInfo *&di, rpc::ObRequest *req);
 private:
   void set_th_worker_thread_name();
   void update_ru_cputime();
