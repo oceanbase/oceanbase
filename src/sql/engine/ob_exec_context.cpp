@@ -694,7 +694,7 @@ int ObExecContext::get_gi_task_map(GIPrepareTaskMap *&gi_task_map)
   return ret;
 }
 
-int ObExecContext::get_convert_charset_allocator(ObArenaAllocator *&allocator)
+int ObExecContext::get_convert_charset_allocator(ObIAllocator *&allocator)
 {
   int ret = OB_SUCCESS;
   allocator = NULL;

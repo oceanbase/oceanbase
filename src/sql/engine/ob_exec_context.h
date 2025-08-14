@@ -219,7 +219,7 @@ public:
   int init_expr_op(const uint64_t expr_op_size, ObIAllocator *allocator = NULL);
   void reset_expr_op();
   inline bool is_expr_op_ctx_inited() { return expr_op_size_ > 0 && NULL != expr_op_ctx_store_; }
-  int get_convert_charset_allocator(common::ObArenaAllocator *&allocator);
+  int get_convert_charset_allocator(common::ObIAllocator *&allocator);
   int get_malloc_allocator(ObIAllocator *&allocator);
   void try_reset_convert_charset_allocator();
 

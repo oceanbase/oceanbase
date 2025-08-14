@@ -781,7 +781,7 @@ int ObMPStmtExecute::parse_request_type(const char* &pos,
               case MYSQL_TYPE_VARCHAR:
               case MYSQL_TYPE_STRING:
               case MYSQL_TYPE_VAR_STRING: {
-                type_name_info.elem_type_.set_collation_type(cs_type);
+                type_name_info.elem_type_.set_collation_type(ncs_type);
                 ObLengthSemantics ls = ctx_.session_info_->get_actual_nls_length_semantics();
                 if (LS_INVALIED == ls) {
                   type_name_info.elem_type_.set_length_semantics(lib::is_oracle_mode() ? LS_BYTE : LS_CHAR);
