@@ -2832,10 +2832,6 @@ int ObSchemaGetterGuard::check_user_access(
           LOG_WARN("check_ssl_access failed", "tenant_name", login_info.tenant_name_,
                    "user_name", login_info.user_name_,
                    "client_ip_", login_info.client_ip_, KR(ret));
-        } else if (OB_FAIL(check_ssl_invited_cn(user_info->get_tenant_id(), ssl_st))) {
-          LOG_WARN("check_ssl_invited_cn failed", "tenant_name", login_info.tenant_name_,
-                   "user_name", login_info.user_name_,
-                   "client_ip_", login_info.client_ip_, KR(ret));
         }
       }
       const ObUserInfo *proxied_user_info = NULL;
@@ -3095,60 +3091,6 @@ int ObSchemaGetterGuard::check_ssl_access(const ObUserInfo &user_info, SSL *ssl_
   }
   return ret;
 }
-
-
-int ObSchemaGetterGuard::check_ssl_invited_cn(const uint64_t tenant_id, SSL *ssl_st)
-{
-  int ret = OB_SUCCESS;
-  if (NULL == ssl_st) {
-    LOG_TRACE("not use ssl, no need check invited_cn", K(tenant_id));
-  } else {
-    X509 *cert = NULL;
-    X509_name_st *x509Name = NULL;
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-    if (OB_UNLIKELY(!tenant_config.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail get tenant_config", KR(ret));
-    } else {
-      ObString ob_ssl_invited_common_names(tenant_config->ob_ssl_invited_common_names.str());
-      if (ob_ssl_invited_common_names.empty()) {
-        ret = OB_PASSWORD_WRONG;
-        LOG_WARN("ob_ssl_invited_common_names not match", "expect", ob_ssl_invited_common_names, KR(ret));
-      } else if (NULL == (cert = SSL_get_peer_certificate(ssl_st))) {
-        LOG_TRACE("use ssl, but without peer_certificate", K(tenant_id));
-      } else if (OB_ISNULL(x509Name = X509_get_subject_name(cert))) {
-        ret = OB_PASSWORD_WRONG;
-        LOG_WARN("X509 check failed", KR(ret));
-      } else {
-        unsigned int count = X509_NAME_entry_count(x509Name);
-        char name[1024] = {0};
-        char *cn_used = NULL;
-        for (unsigned int i = 0; i < count && NULL == cn_used; i++) {
-          X509_NAME_ENTRY *entry = X509_NAME_get_entry(x509Name, i);
-          OBJ_obj2txt(name, sizeof(name), X509_NAME_ENTRY_get_object(entry), 0);
-          if (strcmp(name, "commonName") == 0) {
-            ASN1_STRING_to_UTF8((unsigned char **)&cn_used, X509_NAME_ENTRY_get_data(entry));
-          }
-        }
-        if (OB_ISNULL(cn_used)) {
-          ret = OB_PASSWORD_WRONG;
-          LOG_WARN("failed to found cn", KR(ret));
-        } else if (NULL == strstr(ob_ssl_invited_common_names.ptr(), cn_used)) {
-          ret = OB_PASSWORD_WRONG;
-          LOG_WARN("ob_ssl_invited_common_names not match", "expect",ob_ssl_invited_common_names, "curr", cn_used,  KR(ret));
-        } else {
-          LOG_TRACE("ob_ssl_invited_common_names match", "expect",ob_ssl_invited_common_names, "curr", cn_used,  KR(ret));
-        }
-      }
-    }
-
-    if (cert != NULL) {
-      X509_free(cert);
-    }
-  }
-  return ret;
-}
-
 
 int ObSchemaGetterGuard::check_db_access(ObSessionPrivInfo &s_priv,
                                          const common::ObIArray<uint64_t> &enable_role_id_array,
