@@ -1698,7 +1698,7 @@ int ObDASHNSWScanIter::process_adaptor_state_pre_filter_with_idx_filter(
         } else if (!is_vectorized) {
           for (int i = 0; OB_SUCC(ret) && i < batch_row_count; ++i) {
             int64_t vid = 0;
-            if (OB_FAIL(check_pre_filter_need_retry())) {
+            if (can_retry_ && OB_FAIL(check_pre_filter_need_retry())) {
               LOG_WARN("ret of check iter filter need retry.", K(ret), K(can_retry_), K(adaptive_ctx_), K(vec_index_type_), K(vec_idx_try_path_));
             } else if (OB_FAIL(get_vid_from_rowkey_vid_table(vid))) {
               if (OB_UNLIKELY(OB_ITER_END != ret)) {
