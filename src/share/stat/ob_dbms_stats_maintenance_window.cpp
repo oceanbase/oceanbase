@@ -438,7 +438,7 @@ int ObDbmsStatsMaintenanceWindow::get_spm_stats_job_sql(const bool is_oracle_mod
     OZ (dml.add_column("credential_name", ObHexEscapeSqlStr(ObString(""))));
     OZ (dml.add_column("destination_name", ObHexEscapeSqlStr(ObString(""))));
     OZ (dml.add_column("interval_ts", interval_ts));
-    OZ (dml.add_column("max_run_duration", 10 * 60)); // 10 min
+    OZ (dml.add_column("max_run_duration", 60 * 60)); // 1 hour
     OZ (dml.splice_values(raw_sql));
   }
   return ret;
