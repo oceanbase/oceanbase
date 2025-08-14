@@ -2067,6 +2067,13 @@ int ObSPIService::spi_get_current_expr_allocator(pl::ObPLExecCtx *ctx, int64_t *
   return ret;
 }
 
+void ObSPIService::spi_reset_allocator(ObIAllocator *allocator)
+{
+  if (OB_NOT_NULL(allocator)) {
+    allocator->reset();
+  }
+}
+
 int ObSPIService::spi_init_composite(ObIAllocator *current_allcator, int64_t addr, bool is_record, bool need_allocator)
 {
   int ret = OB_SUCCESS;

@@ -114,6 +114,7 @@ public:
     jit::ObLLVMFunction spi_reinit_collection_element_;
     jit::ObLLVMFunction spi_adjust_error_trace_;
     jit::ObLLVMFunction spi_convert_anonymous_array_;
+    jit::ObLLVMFunction spi_reset_allocator_;
   };
 
   struct EHStack
@@ -605,6 +606,7 @@ public:
   int extract_status_from_context(jit::ObLLVMValue &p_pl_exex_ctx, jit::ObLLVMValue &result);
   int extract_pl_ctx_from_context(jit::ObLLVMValue &p_pl_exex_ctx, jit::ObLLVMValue &result);
   int extract_pl_function_from_context(jit::ObLLVMValue &p_pl_exex_ctx, jit::ObLLVMValue &result);
+  int extract_tmp_allocator_from_context(jit::ObLLVMValue &p_pl_exex_ctx, jit::ObLLVMValue &result);
   int extract_arg_from_argv(jit::ObLLVMValue &p_argv, int64_t idx, jit::ObLLVMValue &result);
   int extract_objparam_from_argv(jit::ObLLVMValue &p_argv, const int64_t idx, jit::ObLLVMValue &result);
   int extract_datum_from_argv(jit::ObLLVMValue &p_argv, const int64_t idx, common::ObObjType type, jit::ObLLVMValue &result);

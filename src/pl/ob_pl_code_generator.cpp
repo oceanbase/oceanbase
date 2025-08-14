@@ -1861,7 +1861,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLExecuteStmt &s)
             ObLLVMValue dest_datum;
             ObLLVMValue into_accuracy_p, ori_accuracy_p, ori_accuracy;
             int64_t udt_id = GET_USING_EXPR(i)->get_result_type().get_udt_id();
-            OZ (generator_.generate_get_current_expr_allocator(s, allocator));
+            OZ (generator_.extract_tmp_allocator_from_context(generator_.get_vars().at(generator_.CTX_IDX), allocator));
             OZ (out_param_guard.get_objparam_buffer(p_result_obj));
             OZ (generator_.generate_reset_objparam(p_result_obj, udt_id));
             OZ (generator_.add_out_params(p_result_obj));
@@ -1937,6 +1937,11 @@ int ObPLCodeGenerateVisitor::visit(const ObPLExecuteStmt &s)
 
     // out result
     OZ (generator_.generate_out_params(s, s.get_using(), params));
+    ObLLVMValue tmp_allocator;
+    OZ (generator_.extract_tmp_allocator_from_context(generator_.get_vars().at(generator_.CTX_IDX), tmp_allocator));
+
+    OZ (generator_.get_helper().create_call(ObString("spi_reset_allocator"),
+      generator_.get_spi_service().spi_reset_allocator_, tmp_allocator));
 
     OZ (generator_.generate_spi_pl_profiler_after_record(s));
   }
@@ -2912,7 +2917,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
               ObLLVMValue src_datum;
               ObLLVMValue dest_datum;
               int64_t udt_id = s.get_param_expr(i)->get_result_type().get_udt_id();
-              OZ (generator_.generate_get_current_expr_allocator(s, allocator));
+              OZ (generator_.extract_tmp_allocator_from_context(generator_.get_vars().at(generator_.CTX_IDX), allocator));
               OZ (out_param_guard.get_objparam_buffer(p_result_obj));
               OZ (generator_.generate_reset_objparam(p_result_obj, udt_id));
               OZ (generator_.add_out_params(p_result_obj));
@@ -3014,6 +3019,11 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
           OZ (generator_.check_success(
             result, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()));
           OZ (generator_.generate_out_params(s, s.get_params(), params));
+          ObLLVMValue allocator;
+          OZ (generator_.extract_tmp_allocator_from_context(generator_.get_vars().at(generator_.CTX_IDX), allocator));
+          OZ (generator_.get_helper().create_call(ObString("spi_reset_allocator"),
+                                                  generator_.get_spi_service().spi_reset_allocator_,
+                                                  allocator));
 
           OZ (generator_.generate_spi_pl_profiler_after_record(s));
         }
@@ -4642,6 +4652,13 @@ int ObPLCodeGenerator::init_spi_service()
     OZ (arg_types.push_back(int64_type));
     OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
     OZ (helper_.create_function(ObString("spi_convert_anonymous_array"), ft, spi_service_.spi_convert_anonymous_array_));
+  }
+
+  if (OB_SUCC(ret)) {
+    arg_types.reset();
+    OZ (arg_types.push_back(int64_type)); //allocator
+    OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
+    OZ (helper_.create_function(ObString("spi_reset_allocator"), ft, spi_service_.spi_reset_allocator_));
   }
 
   return ret;
@@ -9749,6 +9766,7 @@ DEFINE_EXTRACT_CONTEXT_ELEM(result, IDX_PLEXECCTX_RESULT)
 DEFINE_EXTRACT_CONTEXT_ELEM(status, IDX_PLEXECCTX_STATUS)
 DEFINE_EXTRACT_CONTEXT_ELEM(pl_ctx, IDX_PLEXECCTX_PL_CTX)
 DEFINE_EXTRACT_CONTEXT_ELEM(pl_function, IDX_PLEXECCTX_FUNC)
+DEFINE_EXTRACT_CONTEXT_ELEM(tmp_allocator, IDX_PLEXECCTX_TMP_ALLOCATOR)
 
 int ObPLCodeGenerator::extract_objparam_from_context(ObLLVMValue &p_pl_exex_ctx, int64_t idx, ObLLVMValue &result)
 {
