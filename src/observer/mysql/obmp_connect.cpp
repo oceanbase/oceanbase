@@ -137,7 +137,8 @@ ObMPConnect::ObMPConnect(const ObGlobalContext &gctx)
       client_ip_(),
       tenant_name_(),
       db_name_(),
-      deser_ret_(OB_SUCCESS)
+      deser_ret_(OB_SUCCESS),
+      allocator_(ObModIds::OB_SQL_REQUEST)
 {
   client_ip_buf_[0] = '\0';
   user_name_var_[0] = '\0';
@@ -609,8 +610,8 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
           } else if (OB_FAIL(ObSQLUtils::check_and_convert_db_name(
                       cs_type, perserve_lettercase, db_name))) {
             LOG_WARN("fail to check and convert database name", K(db_name), K(ret));
-          } else if (OB_FAIL(ObSQLUtils::cvt_db_name_to_org(schema_guard, &session, db_name, NULL/*allocator*/))) {
-            LOG_WARN("fail to convert db name to org");
+          } else if (OB_FAIL(ObSQLUtils::cvt_db_name_to_org(schema_guard, &session, db_name, &allocator_))) {
+            LOG_WARN("fail to convert db name to org", K(ret));
           } else {
             login_info.db_ = db_name;
           }

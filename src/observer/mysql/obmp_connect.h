@@ -137,6 +137,7 @@ private:
   char user_name_var_[OB_MAX_USER_NAME_BUF_LENGTH];
   char db_name_var_[OB_MAX_DATABASE_NAME_BUF_LENGTH];
   int deser_ret_;
+  ObArenaAllocator allocator_;
 }; // end of class ObMPConnect
 
 } // end of namespace observer
