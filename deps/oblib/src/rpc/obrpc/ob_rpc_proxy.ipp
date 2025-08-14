@@ -265,7 +265,10 @@ int SSHandle<pcodeStruct>::abort()
       if (NULL != pnio_req) {
         pn_send_free(pnio_req); // if pn_send is not executed or executed failed, release memory allocated in rpc_encode_req
       }
-    } else if (OB_FAIL(cb.wait(proxy_.timeout(), pcode_, pnio_req_sz))) {
+    } else if (FALSE_IT(proxy_.set_detect_session_killed(false))) {
+    } else if (OB_FAIL(cb.wait(proxy_.timeout(),
+                               OB_TEST_PCODE, /* this pcode make it not to trigger pn_terminate_pkt when sending abort request */
+                               pnio_req_sz))) {
       RPC_LOG(WARN, "stream rpc execute fail", K(ret), K(dst_));
     } else if (NULL == (resp = cb.get_resp(resp_sz))) {
       ret = common::OB_ERR_UNEXPECTED;
