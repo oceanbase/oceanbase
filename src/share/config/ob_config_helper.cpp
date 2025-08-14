@@ -1686,5 +1686,11 @@ bool ObHNSWIterFilterScanNumChecker::check(const ObConfigItem &t) const
   return is_valid;
 }
 
+bool ObConfigServerFullSchemaRefreshParallelismChecker::check(const ObConfigItem& t) const
+{
+  return 0 == t.case_compare(SERVER_FULL_SCHEMA_REFRESH_PARALLELISM_REQUEST)
+         || 0 == t.case_compare(SERVER_FULL_SCHEMA_REFRESH_PARALLELISM_OBJECT);
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

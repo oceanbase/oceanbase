@@ -1046,6 +1046,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigDegradationPolicyChecker);
 };
 
+class ObConfigServerFullSchemaRefreshParallelismChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigServerFullSchemaRefreshParallelismChecker() {}
+  virtual ~ObConfigServerFullSchemaRefreshParallelismChecker() {}
+  bool check(const ObConfigItem& t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigServerFullSchemaRefreshParallelismChecker);
+};
+
 typedef __ObConfigContainer<ObConfigStringKey,
                             ObConfigItem, OB_MAX_CONFIG_NUMBER> ObConfigContainer;
 

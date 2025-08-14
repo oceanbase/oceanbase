@@ -2776,3 +2776,9 @@ DEF_BOOL(_update_all_columns_for_trigger, OB_TENANT_PARAMETER, "True",
 DEF_INT(approx_count_distinct_precision, OB_TENANT_PARAMETER, "10", "[4, 16]",
         "specify the result accuracy of approx_count_distinct",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_STR_WITH_CHECKER(_server_full_schema_refresh_parallelism, OB_TENANT_PARAMETER, "REQUEST",
+                     common::ObConfigServerFullSchemaRefreshParallelismChecker,
+                     "specifies whether observer's full schema refresh is request-level parallelism or object-level parallelism."
+                     "values: REQUEST, OBJECT",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
