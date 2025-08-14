@@ -3131,7 +3131,7 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
         //为了支持触发器/UDF支持异常捕获，要求含有trigger的涉及修改表数据的dml串行执行
         cg_.phy_plan_->set_need_serial_exec(true);
         cg_.phy_plan_->set_contain_pl_udf_or_trigger(true);
-        cg_.phy_plan_->set_udf_has_dml_stmt(true);
+        cg_.phy_plan_->set_has_instead_of_trigger(is_instead_of);
       }
     }
   }

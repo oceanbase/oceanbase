@@ -1272,8 +1272,10 @@ void ObPhysicalPlan::calc_whether_need_trans()
     }
   }
   // mysql允许select udf中有dml，需要保证select 整体原子性
-  // If there is a trigger in Oracle mode, `contain_pl_udf_or_trigger() && udf_has_dml_stmt()` is true
-  if (!bool_ret && contain_pl_udf_or_trigger() && udf_has_dml_stmt() && stmt::T_EXPLAIN != stmt_type_) {
+  if (!bool_ret && contain_pl_udf_or_trigger() && udf_has_dml_stmt() && lib::is_mysql_mode() && stmt::T_EXPLAIN != stmt_type_) {
+    bool_ret = true;
+  }
+  if (!bool_ret && has_instead_of_trigger() && is_dml_write_stmt()) {
     bool_ret = true;
   }
   is_need_trans_ = bool_ret;
