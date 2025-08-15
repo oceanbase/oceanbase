@@ -238,6 +238,11 @@ int ObDMLRunningCtx::check_need_old_row_legitimacy()
     if (ObDmlFlag::DF_LOCK == dml_flag_) {
       is_need_check_old_row_ = false;
     }
+    // skip old row check in foreign key check path
+    if (dml_param_.write_flag_.is_check_row_locked()) {
+      // SQL marks FK-check by setting check_row_locked in ObDMLService::init_dml_write_flag()
+      is_need_check_old_row_ = false;
+    }
   }
   return ret;
 }
