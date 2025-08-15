@@ -4049,6 +4049,16 @@ int ObDDLService::check_alter_column_is_offline(
     }
     add_pk = orig_table_schema.is_table_without_pk() && alter_column_schema.is_primary_key_;
     is_offline = is_change_column_order || need_rewrite_data || add_pk;
+
+    bool has_vector_index = false;
+    if (OB_FAIL(ret) || is_offline) {
+    } else if (OB_FAIL(orig_table_schema.check_has_vec_domain_index(schema_guard, has_vector_index))) {
+      LOG_WARN("fail to check has vec_index", K(ret));
+    } else if (has_vector_index &&
+               OB_FAIL(ObVecIndexBuilderUtil::check_alter_column_is_offline(
+                   orig_table_schema, &orig_column_schema, &alter_column_schema, schema_guard, is_offline))) {
+      LOG_WARN("fail to check vec index alter column is_offline", K(ret));
+    }
   }
   return ret;
 }
