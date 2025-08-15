@@ -2994,6 +2994,15 @@ int ObPLAssocIndexRawExpr::assign(const ObRawExpr &other)
   return ret;
 }
 
+void ObPLAssocIndexRawExpr::inner_calc_hash()
+{
+  expr_hash_ = common::do_hash(get_expr_type(), expr_hash_);
+  expr_hash_ = common::do_hash(for_write_, expr_hash_);
+  expr_hash_ = common::do_hash(out_of_range_set_err_, expr_hash_);
+  expr_hash_ = common::do_hash(parent_type_, expr_hash_);
+  expr_hash_ = common::do_hash(is_index_by_varchar_, expr_hash_);
+}
+
 bool ObPLAssocIndexRawExpr::inner_same_as(const ObRawExpr &expr,
                                           ObExprEqualCheckContext *check_context) const
 {
@@ -3007,15 +3016,6 @@ bool ObPLAssocIndexRawExpr::inner_same_as(const ObRawExpr &expr,
               && c_expr->is_index_by_varchar_ == is_index_by_varchar_;
   }
   return result;
-}
-
-void ObPLAssocIndexRawExpr::inner_calc_hash()
-{
-  expr_hash_ = common::do_hash(get_expr_type(), expr_hash_);
-  expr_hash_ = common::do_hash(parent_type_, expr_hash_);
-  expr_hash_ = common::do_hash(for_write_, expr_hash_);
-  expr_hash_ = common::do_hash(out_of_range_set_err_, expr_hash_);
-  expr_hash_ = common::do_hash(is_index_by_varchar_, expr_hash_);
 }
 
 int ObObjAccessRawExpr::assign(const ObRawExpr &other)
