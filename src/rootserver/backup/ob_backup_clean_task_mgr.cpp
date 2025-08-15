@@ -731,17 +731,11 @@ int ObBackupCleanTaskMgr::delete_meta_info_dir_()
 int ObBackupCleanTaskMgr::delete_major_data_info_dir_()
 {
   int ret = OB_SUCCESS;
-  ObBackupPath path;
-  ObBackupSetDesc desc;
-  desc.backup_set_id_ = backup_set_info_.backup_set_id_;
-  desc.backup_type_ = backup_set_info_.backup_type_;
   share::ObBackupDataType backup_data_type;
   backup_data_type.set_major_data_backup();
-  if (OB_FAIL(ObBackupPathUtil::get_ls_info_data_info_dir_path(backup_dest_, desc, backup_data_type,
-      backup_set_info_.major_turn_id_, path))) {
-    LOG_WARN("failed to get ls info data info", K(ret));
-  } else if (OB_FAIL(share::ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
-    LOG_WARN("failed to delete backup file", K(ret), K(task_attr_), K(path));
+  int64_t max_turn_id = backup_set_info_.major_turn_id_;
+  if (OB_FAIL(delete_data_info_dir_(backup_data_type, max_turn_id))) {
+    LOG_WARN("failed to delete major data info dirs", K(ret), K(max_turn_id));
   }
   return ret;
 }
@@ -750,17 +744,11 @@ int ObBackupCleanTaskMgr::delete_major_data_info_dir_()
 int ObBackupCleanTaskMgr::delete_minor_data_info_dir_()
 {
   int ret = OB_SUCCESS;
-  ObBackupPath path;
-  ObBackupSetDesc desc;
-  desc.backup_set_id_ = backup_set_info_.backup_set_id_;
-  desc.backup_type_ = backup_set_info_.backup_type_;
   share::ObBackupDataType backup_data_type;
   backup_data_type.set_minor_data_backup();
-  if (OB_FAIL(ObBackupPathUtil::get_ls_info_data_info_dir_path(backup_dest_, desc,
-      backup_data_type, backup_set_info_.minor_turn_id_, path))) {
-    LOG_WARN("failed to get ls info data info path", K(ret));
-  } else if (OB_FAIL(share::ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
-    LOG_WARN("failed to delete backup file", K(ret), K(task_attr_), K(path));
+  int64_t max_turn_id = backup_set_info_.minor_turn_id_;
+  if (OB_FAIL(delete_data_info_dir_(backup_data_type, max_turn_id))) {
+    LOG_WARN("failed to delete minor data info dirs", K(ret), K(max_turn_id));
   }
   return ret;
 }
@@ -769,17 +757,32 @@ int ObBackupCleanTaskMgr::delete_minor_data_info_dir_()
 int ObBackupCleanTaskMgr::delete_user_data_info_dir_()
 {
   int ret = OB_SUCCESS;
+  share::ObBackupDataType backup_data_type;
+  backup_data_type.set_user_data_backup();
+  int64_t max_turn_id = backup_set_info_.major_turn_id_;
+  if (OB_FAIL(delete_data_info_dir_(backup_data_type, max_turn_id))) {
+    LOG_WARN("failed to delete user data info dirs", K(ret), K(max_turn_id));
+  }
+  return ret;
+}
+
+int ObBackupCleanTaskMgr::delete_data_info_dir_(const ObBackupDataType &backup_data_type, int64_t max_turn_id)
+{
+  int ret = OB_SUCCESS;
   ObBackupPath path;
   ObBackupSetDesc desc;
   desc.backup_set_id_ = backup_set_info_.backup_set_id_;
   desc.backup_type_ = backup_set_info_.backup_type_;
-  share::ObBackupDataType backup_data_type;
-  backup_data_type.set_user_data_backup();
-  if (OB_FAIL(ObBackupPathUtil::get_ls_info_data_info_dir_path(backup_dest_, desc,
-      backup_data_type, backup_set_info_.minor_turn_id_, path))) {
-    LOG_WARN("failed to get ls info data info path", K(ret));
-  } else if (OB_FAIL(share::ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
-    LOG_WARN("failed to delete backup file", K(ret), K(task_attr_), K(path));
+  int64_t turn_id_to_delete = max_turn_id;
+  while (OB_SUCC(ret) && turn_id_to_delete >= 1) {
+    if (OB_FAIL(ObBackupPathUtil::get_ls_info_data_info_dir_path(backup_dest_, desc, backup_data_type,
+        turn_id_to_delete, path))) {
+      LOG_WARN("failed to get ls info data info dir path", K(ret), K(turn_id_to_delete), K(backup_data_type));
+    } else if (OB_FAIL(ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
+      LOG_WARN("failed to delete backup file", K(ret), K(task_attr_), K(path));
+    } else {
+      --turn_id_to_delete;
+    }
   }
   return ret;
 }
