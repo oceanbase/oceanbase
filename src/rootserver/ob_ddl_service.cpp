@@ -17637,18 +17637,6 @@ int ObDDLService::recover_restore_table_ddl_task(
       } else if (OB_ISNULL(src_table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("orig table schema is nullptr", K(ret), K(session_id), K(arg));
-      } else if (OB_FAIL(src_table_schema->check_has_fts_index_aux(*src_tenant_schema_guard, has_fts_index))) {
-        LOG_WARN("failed to check if data table has fulltext index", K(ret));
-      } else if (has_fts_index) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("failed to import table when table has fulltext index", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "import table with fulltext index");
-      } else if (OB_FAIL(src_table_schema->check_has_multivalue_index_aux(*src_tenant_schema_guard, has_mv_index))) {
-        LOG_WARN("failed to check if data table has multivalue index", K(ret));
-      } else if (has_mv_index) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("failed to import table when table has fulltext index", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "import table with multivalue index");
       } else if (OB_FAIL(src_tenant_schema_guard->get_database_schema(src_tenant_id, src_table_schema->get_database_id(), src_db_schema))) {
         LOG_WARN("fail to get orig database schema", K(ret));
       } else if (OB_ISNULL(src_db_schema)) {
