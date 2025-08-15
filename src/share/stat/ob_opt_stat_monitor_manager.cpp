@@ -747,9 +747,7 @@ int ObOptStatMonitorManager::update_dml_stat_info(const ObIArray<ObOptDmlStat *>
                (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_3_0) ||
                no_check) {
       //do nothing
-    } else if (OB_FAIL(check_opt_stats_expired(tmp_dml_stats, true/*is_from_direct_load*/))) {
-      LOG_WARN("failed to check opt stats expired", K(ret));
-    } else {/*do nohting*/}
+    }
   }
   return ret;
 }
