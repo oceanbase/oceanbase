@@ -426,6 +426,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   failover_mode_ = false;
   service_name_.reset();
   unit_gc_min_sup_proxy_version_ = 0;
+  got_tenant_conn_res_ = false;
 }
 
 void ObSQLSessionInfo::clean_status()
