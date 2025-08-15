@@ -355,8 +355,7 @@ int ObRestoreCommonUtil::set_tde_parameters(common::ObMySQLProxy *sql_proxy,
     // do nothing
   } else if (FALSE_IT(sql.reset())) {
   } else if (OB_UNLIKELY(kms_info.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("kms_info should not be empty", KR(ret));
+    // allow to be empty. since source tenant may not set kms_info
   } else if (OB_FAIL(sql.assign_fmt("ALTER SYSTEM SET external_kms_info= '%.*s'",
                                                     kms_info.length(), kms_info.ptr()))) {
     LOG_WARN("failed to assign fmt", KR(ret));
