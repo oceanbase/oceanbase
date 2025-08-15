@@ -3087,11 +3087,12 @@ int ObTenantMetaMemMgr::get_oldest_ss_change_version(
     const ObTabletMapKey key(ls_id, tablet_id);
     ObBucketHashRLockGuard lock_guard(bucket_lock_, key.hash()); // lock old_version_chain
     ObTablet *tablet = tablet_ptr->get_old_version_chain_();
+    if (OB_NOT_NULL(tablet)) {
+      min_ss_change_version.set_max();
+    }
     while (OB_NOT_NULL(tablet)) {
       ObTablet *next = tablet->get_next_tablet();
-      if (OB_ISNULL(next)) {
-        min_ss_change_version = tablet->get_min_ss_tablet_version();
-      }
+      min_ss_change_version = SCN::min(min_ss_change_version, tablet->get_min_ss_tablet_version());
       tablet = next;
     }
   }

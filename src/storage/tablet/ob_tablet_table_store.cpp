@@ -286,6 +286,16 @@ int ObTabletTableStore::process_minor_sstables_for_ss_(
   int ret = OB_SUCCESS;
   const ObIArray<UpdateUpperTransParam::SCNAndVersion> *new_upper_trans = upper_trans_param.ss_new_upper_trans_;
   if (inc_pos < 0 || OB_ISNULL(new_upper_trans) || new_upper_trans->empty() || sstables.empty()) {
+  } else if (new_upper_trans->count() == 1 && new_upper_trans->at(0).upper_trans_version_ == 0) {
+    // use scn to recycle minor
+    share::SCN recycle_scn = new_upper_trans->at(0).scn_;
+    for (int i = inc_pos; i < sstables.count(); i++) {
+      if (sstables.at(i)->is_sstable()
+          && sstables.at(i)->get_end_scn() <= recycle_scn) {
+        inc_pos = i + 1;
+        FLOG_INFO("recycle minor by shared-min-scn", KPC(sstables.at(i)), K(i), K(recycle_scn));
+      }
+    }
   } else {
     int j = 0;
     bool found_first = false;
