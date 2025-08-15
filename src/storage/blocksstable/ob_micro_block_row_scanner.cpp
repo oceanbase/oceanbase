@@ -362,8 +362,8 @@ int ObIMicroBlockRowScanner::apply_filter(const bool can_blockscan)
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("Failed to judge end of block or not", K(ret), K_(macro_id), K_(start), K_(last), K_(current));
     } else {
-      can_blockscan_ = true;
-      is_filter_applied_ = block_row_store_->filter_pushdown() && (param_->is_delete_insert_ || can_ignore_multi_version_);
+      // can_blockscan_ = true;
+      // is_filter_applied_ = block_row_store_->filter_pushdown() && (param_->is_delete_insert_ || can_ignore_multi_version_);
     }
   } else if (!block_row_store_->filter_pushdown() || (!param_->is_delete_insert_ && !can_ignore_multi_version_)) {
     can_blockscan_ = true;
