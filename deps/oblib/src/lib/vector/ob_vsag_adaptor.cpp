@@ -811,7 +811,7 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
       int64_t index_number = hnsw->get_index_number();
       topk = topk < index_number ? topk : index_number;
       int64_t ef_search_threshold = AMPLIFICATION_FACTOR * topk > EF_SEARCH_LIMIT ? AMPLIFICATION_FACTOR * topk : EF_SEARCH_LIMIT;
-      ef_search = ef_search > ef_search_threshold ? ef_search : ef_search_threshold;
+      ef_search = ef_search < ef_search_threshold ? ef_search : ef_search_threshold;
     }
     if (OB_FAIL(construct_vsag_search_param(uint8_t(index_type), ef_search, use_extra_info_filter, result_param_str))) {
       LOG_WARN("[OBVSAG] construct_vsag_search_param fail", K(ret), K(index_type), K(ef_search), K(use_extra_info_filter));
@@ -851,7 +851,7 @@ int knn_search(VectorIndexPtr &index_handler, float *query_vector,
       int64_t index_number = hnsw->get_index_number();
       topk = topk < index_number ? topk : index_number;
       int64_t ef_search_threshold = AMPLIFICATION_FACTOR * topk > EF_SEARCH_LIMIT ? AMPLIFICATION_FACTOR * topk : EF_SEARCH_LIMIT;
-      ef_search = ef_search > ef_search_threshold ? ef_search : ef_search_threshold;
+      ef_search = ef_search < ef_search_threshold ? ef_search : ef_search_threshold;
     }
     if (OB_FAIL(construct_vsag_search_param(uint8_t(index_type), ef_search, use_extra_info_filter, result_param_str))) {
       LOG_WARN("[OBVSAG] construct_vsag_search_param fail", K(ret), K(index_type), K(ef_search), K(use_extra_info_filter));
