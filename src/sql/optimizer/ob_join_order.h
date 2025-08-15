@@ -1778,6 +1778,9 @@ struct NullAwareAntiJoinInfo {
                                         const ObTableSchema *index_schema,
                                         int64_t &out_index_prefix);
 
+    int pre_filter_not_in_expr(const ObIArray<ObRawExpr*> &predicates,
+                               ObIArray<ObRawExpr*> &filtered_exprs);
+
     int check_enable_better_inlist(int64_t table_id,
                                    bool &enable_better_inlist,
                                    bool &enable_index_prefix_cost);

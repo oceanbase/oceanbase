@@ -3440,6 +3440,7 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
   ObSQLSessionInfo *session_info = NULL;
   bool enable_better_inlist = false;
   bool enable_index_prefix_cost = false;
+  ObSEArray<ObRawExpr*, 4> filtered_predicates;
   ObSEArray<ObRawExpr*, 4> range_predicates;
   ObSEArray<uint64_t, 4> total_range_counts;
   const LogTableHint *log_table_hint = NULL;
@@ -3453,15 +3454,17 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx),
         K(allocator_), K(params), K(ret));
+  } else if (OB_FAIL(pre_filter_not_in_expr(predicates, filtered_predicates))) {
+    LOG_WARN("failed to pre filter not in expr", K(ret));
   } else if (OB_FAIL(check_enable_better_inlist(table_id, enable_better_inlist, enable_index_prefix_cost))) {
     LOG_WARN("failed to check better inlist enabled", K(ret));
   } else if (enable_better_inlist &&
              OB_FAIL(get_candi_range_expr(range_columns,
-                                          predicates,
+                                          filtered_predicates,
                                           range_predicates))) {
     LOG_WARN("failed to get candi range expr", K(ret));
   } else if (!enable_better_inlist &&
-             OB_FAIL(range_predicates.assign(predicates))) {
+             OB_FAIL(range_predicates.assign(filtered_predicates))) {
     LOG_WARN("failed to assign exprs", K(ret));
   } else if (OB_FAIL(get_plan()->get_log_plan_hint().get_index_prefix(table_id,
                                                       index_id,
@@ -3551,6 +3554,69 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
       if (NULL != tmp_qr) {
         tmp_qr->~ObQueryRange();
         tmp_qr = NULL;
+      }
+    }
+  }
+  return ret;
+}
+
+/**
+ * dima-2025052600109195948
+ *
+ * Determine whether to extract query range for 'not in'.
+ *
+ * If extracting too many query ranges for a 'not in' expression, the storage
+ * layer's row estimation may become inaccurate, which could lead to suboptimal
+ * execution plans. Therefore, it is necessary to restrict range extraction for
+ * 'not in' expressions.
+ *
+ * Restriction strategy: only extract the range when the selectivity is low.
+ */
+int ObJoinOrder::pre_filter_not_in_expr(const ObIArray<ObRawExpr*> &predicates,
+                                        ObIArray<ObRawExpr*> &filtered_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < predicates.count(); ++i) {
+    ObRawExpr *expr = predicates.at(i);
+    ObRawExpr *l_expr = NULL;
+    ObRawExpr *r_expr = NULL;
+    bool filtered = false;
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr should not be NULL", K(expr), K(i), K(ret));
+    } else if (T_OP_NOT_IN != expr->get_expr_type()) {
+      // do nothing
+    } else if (expr->get_param_count() < 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected expr param count", K(expr), K(i), K(ret));
+    } else if (OB_ISNULL(l_expr = expr->get_param_expr(0)) ||
+               OB_ISNULL(r_expr = expr->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null expr", K(expr), K(l_expr), K(r_expr), K(i), K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(l_expr, l_expr))) {
+      LOG_WARN("failed to get expr without lossless cast", K(ret));
+    } else if (l_expr->get_expr_type() == T_OP_ROW || r_expr->get_param_count() > NEW_MAX_NOT_IN_SIZE) {
+      // Range extraction won't be performed anyway, so there's no need to filter them out in advance
+      // do nothing
+    } else if (l_expr->is_column_ref_expr()) {
+      ObSEArray<ObRawExpr*, 1> not_in_expr;
+      double selectivity = 1.0;
+      if (OB_FAIL(not_in_expr.push_back(expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
+                                                                 get_plan()->get_selectivity_ctx(),
+                                                                 not_in_expr,
+                                                                 selectivity,
+                                                                 get_plan()->get_predicate_selectivities()))) {
+        LOG_WARN("failed to calculate selectivity", K(ret));
+      } else if (selectivity > MAX_NOT_IN_SELECTIVITY_TO_CONVERT) {
+        LOG_TRACE("selectivity is too high, filter out the not in expr", K(selectivity), K(expr));
+        filtered = true;
+      }
+    }
+    if (OB_SUCC(ret) && !filtered) {
+      if (OB_FAIL(filtered_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
       }
     }
   }
