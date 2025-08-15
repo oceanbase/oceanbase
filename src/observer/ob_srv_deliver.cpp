@@ -37,6 +37,7 @@ namespace oceanbase
 {
 namespace observer
 {
+#define RPC_DI_LIMIT_NUM 1000
 ObString extract_user_name(const ObString &in);
 int extract_user_tenant(const ObString &in, ObString &user_name, ObString &tenant_name);
 int extract_tenant_id(const ObString &tenant_name, uint64_t &tenant_id);
@@ -497,7 +498,7 @@ int ObSrvDeliver::acquire_diagnostic_info_object(int64_t tenant_id, int64_t grou
       ret = OB_ERROR;
     } else {
       MTL_SWITCH(tenant_id) {
-        if (check_throttle && OB_NOT_NULL(tenant) && tenant->get_req_queue().size() > 500) {
+        if (check_throttle && MTL(common::ObDiagnosticInfoContainer *)->get_rpc_size() > RPC_DI_LIMIT_NUM) {
           ret = OB_EAGAIN;
         } else if (OB_FAIL(MTL(common::ObDiagnosticInfoContainer *)
                                ->acquire_diagnostic_info(tenant_id, group_id, session_id, di, using_cache))) {
