@@ -45,6 +45,11 @@
           "name": "log_transport_compress_all",
           "value": 0,
           "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        },
+        {
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
         }
       ]
     }
@@ -95,6 +100,11 @@
           "name": "log_storage_compress_all",
           "value": 1,
           "comment": "specifies whether to compress logs before storing"
+        },
+        {
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
         }
       ]
     }
@@ -145,6 +155,11 @@
           "name": "log_transport_compress_all",
           "value": 0,
           "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        },
+        {
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
         }
       ]
     }
@@ -195,6 +210,11 @@
           "name": "log_storage_compress_all",
           "value": 1,
           "comment": "specifies whether to compress logs before storing"
+        },
+        {
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
         }
       ]
     }
@@ -245,6 +265,11 @@
           "name": "log_storage_compress_all",
           "value": 1,
           "comment": "specifies whether to compress logs before storing"
+        },
+        {
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
         }
       ]
     }
@@ -295,6 +320,11 @@
           "name": "log_transport_compress_all",
           "value": 0,
           "comment": "In scenarios with limited bandwidth, network bandwidth can be saved with a small amount of CPU overhead through RPC compression"
+        },
+        {
+          "name": "_object_storage_io_timeout",
+          "value": "120s",
+          "comment": "default value of object storage io timeout"
         }
       ]
     }
