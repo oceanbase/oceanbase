@@ -1241,7 +1241,7 @@ int ObPartitionMergePolicy::generate_parallel_minor_interval(
   ObSEArray<ObGetMergeTablesResult, 2> input_result_array;
   int64_t fixed_input_table_cnt = 0;
 
-  if (!storage::is_minor_merge(merge_type)) {
+  if (!storage::is_minor_merge_type(merge_type)) {
     ret = OB_NO_NEED_MERGE;
   } else if (input_result.handle_.get_count() < minor_compact_trigger) {
     ret = OB_NO_NEED_MERGE;
