@@ -2971,9 +2971,9 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
         // value_ in the result is used to record the mvcc_row on success and
         // mvcc_undo the insert on failure
         mvcc_results[i].value_ = stored_kvs[i].value_;
-
-        pos += aligned_data_size;
       }
+
+      pos += aligned_data_size;
     }
 
     // Step5: failure handler for mvcc write. we need ensure the atomicity of
