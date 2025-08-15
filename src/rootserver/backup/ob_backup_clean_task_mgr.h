@@ -80,6 +80,7 @@ private:
   int delete_user_data_info_dir_();
   int delete_minor_data_info_dir_();
   int delete_major_data_info_dir_();
+  int delete_data_info_dir_(const share::ObBackupDataType &backup_data_type, int64_t max_turn_id);
   int delete_table_list_dir_();
   int get_set_ls_ids_(common::ObIArray<share::ObLSID> &ls_ids);
   int get_piece_ls_ids_(common::ObIArray<share::ObLSID> &ls_ids);
