@@ -687,6 +687,7 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
   }
   // generate dh map info
   if (OB_SUCC(ret)) {
+    lib::ob_sort(addrs.begin(), addrs.end());
     if (OB_FAIL(generate_dh_map_info(dfo))) {
       LOG_WARN("fail to generate dh map info", K(ret));
     }
