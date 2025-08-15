@@ -7779,9 +7779,11 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
   bool is_single = true;
   bool has_order_by = false;
   ObRawExpr* partition_expr = NULL;
-  if (OB_ISNULL(top) || OB_ISNULL(get_stmt())) {
+  ObQueryCtx *query_ctx = NULL;
+  if (OB_ISNULL(top) || OB_ISNULL(get_stmt())
+      || OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
+    LOG_WARN("get unexpected null", K(ret), K(top), K(get_stmt()), K(query_ctx));
   } else if (OB_FAIL(check_select_into(has_select_into, is_single, has_order_by, partition_expr))) {
     LOG_WARN("failed to check select into", K(ret));
   } else if (exch_info.is_pq_local() && NULL == topn_expr && has_select_into && !is_single
@@ -7822,7 +7824,7 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
     bool need_further_sort = true;
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_SUCC(ret) && NULL != topn_expr && need_sort &&
+    } else if (NULL != topn_expr && need_sort &&
                OB_FAIL(try_push_topn_into_domain_scan(top,
                                                       topn_expr,
                                                       get_stmt()->get_limit_expr(),
@@ -7834,8 +7836,9 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
       LOG_WARN("failed to push topn into text retrieval scan", K(ret));
     } else if (!need_further_sort) {
       // do nothing
-    } else if ((exch_info.is_pq_local() || !exch_info.need_exchange()) && !sort_keys.empty() &&
-        (need_sort || is_local_order)) {
+    } else if ((exch_info.is_pq_local() || !exch_info.need_exchange()
+                || (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_4_1) && NULL != topn_expr))
+               && !sort_keys.empty() && (need_sort || is_local_order)) {
       int64_t real_prefix_pos = need_sort && !is_local_order ? prefix_pos : 0;
       bool real_local_order = need_sort ? false : is_local_order;
       if (OB_FAIL(allocate_sort_as_top(top,
