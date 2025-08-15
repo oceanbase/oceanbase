@@ -1897,11 +1897,17 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_info(const ObIArray<ObStoreRan
               : total_macro_block_count;
 
     // TODO(menglan): adapt now sql implement
-    constexpr int64_t ONE_TASK_ROW_COUNT = 65536;
+    constexpr int64_t ONE_TASK_ROW_COUNT = 32768;
     total_size
         = max(total_size,
               max(total_macro_block_count * OB_DEFAULT_MACRO_BLOCK_SIZE + memtable_total_size,
                   (total_row_count / ONE_TASK_ROW_COUNT + 1) * OB_DEFAULT_MACRO_BLOCK_SIZE));
+
+    LOG_TRACE("Finish estimate ranges info",
+              K(total_size),
+              K(total_row_count),
+              K(total_macro_block_count),
+              K(memtable_total_size));
   }
 
   return ret;
