@@ -3519,6 +3519,10 @@ int ObDASIterUtils::create_vec_ivf_lookup_tree(ObTableScanParam &scan_param,
                                          true))) {
         LOG_WARN("failed to create gis lookup tree", K(ret));
       }
+    } else if (scan_param.table_param_->is_multivalue_index()) {
+      if (OB_FAIL(create_mvi_lookup_tree(scan_param, alloc, inv_idx_ctdef, inv_idx_rtdef, related_tablet_ids, trans_desc, snapshot, inv_idx_iter, true))) {
+        LOG_WARN("failed to create multivalue lookup tree", K(ret));
+      }
     } else {
       ObDASScanIter *inv_idx_scan_iter = nullptr;
       const ObDASScanCtDef *inv_idx_scan_ctdef = static_cast<const ObDASScanCtDef *>(inv_idx_ctdef);
