@@ -489,7 +489,7 @@ int ObSrvDeliver::init_queue_threads()
 }
 
 int ObSrvDeliver::acquire_diagnostic_info_object(int64_t tenant_id, int64_t group_id,
-    int64_t session_id, ObDiagnosticInfo *&di, bool using_cache)
+    int64_t session_id, ObDiagnosticInfo *&di, bool using_cache, bool check_throttle, omt::ObTenant *tenant)
 {
   int ret = OB_SUCCESS;
   if (oceanbase::lib::is_diagnose_info_enabled()) {
@@ -497,9 +497,10 @@ int ObSrvDeliver::acquire_diagnostic_info_object(int64_t tenant_id, int64_t grou
       ret = OB_ERROR;
     } else {
       MTL_SWITCH(tenant_id) {
-        if (OB_FAIL(
-                MTL(common::ObDiagnosticInfoContainer *)
-                    ->acquire_diagnostic_info(tenant_id, group_id, session_id, di, using_cache))) {
+        if (check_throttle && OB_NOT_NULL(tenant) && tenant->get_req_queue().size() > 500) {
+          ret = OB_EAGAIN;
+        } else if (OB_FAIL(MTL(common::ObDiagnosticInfoContainer *)
+                               ->acquire_diagnostic_info(tenant_id, group_id, session_id, di, using_cache))) {
           OB_ASSERT(di == nullptr);
           LOG_WARN("failed to acquire diagnostic info", K(ret), K(tenant_id), K(group_id),
               K(session_id));
@@ -619,8 +620,9 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
       if (!using_cache) {
         session_id = ObBackgroundSessionIdGenerator::get_instance().get_next_rpc_session_id();
       }
+      const bool using_rpc_throttle = ObDiagnosticInfoContainer::get_di_experimental_feature_flag().rpc_throttle();
       if (OB_SUCCESS != acquire_diagnostic_info_object(tenant_id, group_id, session_id, di,
-                            using_cache)) {
+                            using_cache, using_rpc_throttle, tenant)) {
         // ignore diagnostic info error
       } else {
         di->get_ash_stat().pcode_ = pkt.get_pcode();
@@ -637,7 +639,7 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
         di->inner_begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, pkt.get_pcode(), pkt.get_request_level(), 0);
       }
     }
-    ObTenantDiagnosticInfoSummaryGuard g(nullptr == di ? nullptr : di->get_summary_slot());
+    ObTenantDiagnosticInfoSummaryGuard guard(tenant_id, group_id);
     if (need_update_stat) {
       EVENT_INC(RPC_PACKET_IN);
       EVENT_ADD(RPC_PACKET_IN_BYTES,

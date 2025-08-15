@@ -1999,7 +1999,7 @@ DEF_BOOL(_ob_sqlstat_enable, OB_TENANT_PARAMETER, "True", "enable/disable sql st
 
 DEF_BOOL(_enable_inner_session_mgr, OB_TENANT_PARAMETER, "True", "enable/disable inner session mgr",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_enable_di_experimental_feature_flags, OB_CLUSTER_PARAMETER, "0", "[0, +∞)"
+DEF_INT(_enable_di_experimental_feature_flags, OB_CLUSTER_PARAMETER, "7", "[0, +∞)"
          "enable diagnostic info experimental feature",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 

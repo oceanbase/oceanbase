@@ -105,6 +105,7 @@ public:
   OB_INLINE const char *get_module_name() const { return module_name_; }
 
   static thread_local uint64_t serving_tenant_id_;
+  int acquire_diagnostic_info(ObDiagnosticInfo *&di, rpc::ObRequest *req);
 private:
   void set_th_worker_thread_name();
   void update_ru_cputime();
