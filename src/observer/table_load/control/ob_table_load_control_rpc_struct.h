@@ -180,7 +180,8 @@ public:
                "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
                "load_mode", storage::ObDirectLoadMode::get_type_string(load_mode_),
                K_(compressor_type),
-               K_(online_sample_percent));
+               K_(online_sample_percent),
+               K_(enable_inc_major));
 
   int set_exec_ctx_serialized_str(const sql::ObExecContext &exec_ctx);
 
@@ -207,6 +208,7 @@ public:
   double online_sample_percent_;
   common::ObArenaAllocator allocator_;
   common::ObString exec_ctx_serialized_str_;
+  bool enable_inc_major_;
 };
 
 class ObDirectLoadControlConfirmBeginArg final
