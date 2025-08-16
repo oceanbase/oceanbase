@@ -17452,13 +17452,10 @@ int ObTransformUtils::check_nlj_opportunity(ObTransformerCtx &ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("root stmt or stmt is null", K(ret), K(root_stmt), K(stmt));
   } else {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.session_info_->get_effective_tenant_id()));
-    bool nested_loop_join_enabled = tenant_config.is_valid() && tenant_config->_nested_loop_join_enabled;
+    bool nested_loop_join_enabled = ctx.nested_loop_join_enabled_;
     bool push_join_pred_into_view_enabled = true;
     const ObOptParamHint &opt_params = stmt->get_query_ctx()->get_global_hint().opt_params_;
-    if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::NESTED_LOOP_JOIN_ENABLED, nested_loop_join_enabled))) {
-      LOG_WARN("failed to check nested loop join enabled", K(ret));
-    } else if (!nested_loop_join_enabled) {
+    if (!nested_loop_join_enabled) {
       nlj_enabled = false;
       // nested loop join disabled, need not to check nlj opportunity
     } else if (OB_FAIL(ctx.session_info_->is_push_join_predicate_enabled(push_join_pred_into_view_enabled))) {

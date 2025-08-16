@@ -475,6 +475,7 @@ _force_hash_groupby_dump
 _force_hash_join_spill
 _force_malloc_for_absent_tenant
 _force_skip_encoding_partition_id
+_force_subquery_unnest
 _global_enable_rich_vector_format
 _hash_area_size
 _hash_join_enabled

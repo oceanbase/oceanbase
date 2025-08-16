@@ -591,8 +591,8 @@ int ObTransformAggrSubquery::check_aggr_first_validity(ObDMLStmt &stmt,
     // 6. check correlated subquery conditions
   } else if (OB_FALSE_IT(hint_allowed_transform = (subquery->get_stmt_hint().has_enable_hint(T_UNNEST) ||
                                         subquery->get_stmt_hint().has_enable_hint(T_AGGR_FIRST_UNNEST)))) {
-  } else if (OB_FALSE_IT(check_match_index = hint_allowed_transform ? false :
-                                             is_select_item_expr || limit_to_aggr)) {
+  } else if (OB_FALSE_IT(check_match_index = (hint_allowed_transform || ctx_->force_subquery_unnest_)
+                                              ? false : is_select_item_expr || limit_to_aggr)) {
   } else if (OB_FAIL(check_subquery_conditions(query_ref,
                                                *subquery,
                                                nested_conditions,
@@ -762,7 +762,7 @@ int ObTransformAggrSubquery::check_join_first_condition_for_limit_1(ObQueryRefRa
     }
 
     // correlation condition should not match index
-    if (OB_SUCC(ret) && IS_COMMON_COMPARISON_OP(cond->get_expr_type())) {
+    if (OB_SUCC(ret) && IS_COMMON_COMPARISON_OP(cond->get_expr_type()) && !ctx_->force_subquery_unnest_) {
       ObColumnRefRawExpr *column_expr = NULL;
       ObRawExpr *const_expr = NULL;
       bool is_match = false;
@@ -2553,6 +2553,8 @@ int ObTransformAggrSubquery::extract_no_rewrite_expr(ObRawExpr *expr)
     } else if (subquery->get_stmt_hint().has_enable_hint(T_UNNEST) ||
                subquery->get_stmt_hint().has_enable_hint(T_AGGR_FIRST_UNNEST) ||
                subquery->get_stmt_hint().has_enable_hint(T_JOIN_FIRST_UNNEST)) {
+      //do nothing
+    } else if (ctx_->force_subquery_unnest_) {
       //do nothing
     } else if (OB_FAIL(ObTransformUtils::check_subquery_match_index(ctx_,
                                                                     static_cast<ObQueryRefRawExpr *>(expr),

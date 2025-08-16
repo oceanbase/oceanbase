@@ -1151,7 +1151,7 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
   ObSEArray<ObRawExpr *, 4> post_join_exprs;
   ObSEArray<ObRawExpr *, 4> select_exprs;
   ObSEArray<ObQueryRefRawExpr*, 4> transformed_subqueries;
-  if (OB_ISNULL(stmt)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
   } else if (0 == stmt->get_from_item_size() || !stmt->has_subquery()) {
@@ -1185,7 +1185,7 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
       } else if (OB_FAIL(ObTransformUtils::check_subquery_match_index(ctx_, query_expr, subquery, subq_match_idx))) {
         LOG_WARN("fail to check subquery match index", K(ret));
       } else if (queries.at(j).use_outer_join_ && subq_match_idx && subquery->get_table_items().count() > 1 &&
-                 !subquery->get_stmt_hint().has_enable_hint(T_UNNEST)) {
+                 !subquery->get_stmt_hint().has_enable_hint(T_UNNEST) && !ctx_->force_subquery_unnest_) {
         // do nothing
       } else if (subquery->get_select_item_size() >= 2) {
         // do nothing
@@ -1229,7 +1229,7 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
       } else if (OB_FAIL(ObTransformUtils::check_subquery_match_index(ctx_, query_expr, subquery, subq_match_idx))) {
         LOG_WARN("fail to check subquery match index", K(ret));
       } else if (queries.at(j).use_outer_join_ && subq_match_idx && subquery->get_table_items().count() > 1 &&
-                 !subquery->get_stmt_hint().has_enable_hint(T_UNNEST)) {
+                 !subquery->get_stmt_hint().has_enable_hint(T_UNNEST) && !ctx_->force_subquery_unnest_) {
         // do nothing
       } else if (is_select_expr && !subquery->get_stmt_hint().has_enable_hint(T_UNNEST)) {
         //do nothing

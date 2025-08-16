@@ -66,6 +66,11 @@ void ObTransformerCtx::reset()
   cbqt_policy_ = TransPolicy::DISABLE_TRANS;
   complex_cbqt_table_num_ = 0;
   max_table_num_ = 0;
+  inline_blacklist_.reset();
+  materialize_blacklist_.reset();
+  disable_gtt_session_isolation_ = false;
+  force_subquery_unnest_ = false;
+  nested_loop_join_enabled_ = true;
 }
 
 int ObTransformerCtx::add_src_hash_val(const ObString &src_str)
