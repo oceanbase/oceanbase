@@ -2772,6 +2772,12 @@ DEF_BOOL(_enable_sql_ccl_rule, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_update_all_columns_for_trigger, OB_TENANT_PARAMETER, "True",
          "control the switch determining whether the UPDATE statement always updates all columns when the table contains a row-level BEFORE UPDATE trigger.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_mlog_auto_maintenance, OB_TENANT_PARAMETER, "False",
+         "Switch of MLOG automated maintenance",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(mlog_trim_interval, OB_TENANT_PARAMETER, "1d", "[5s, 30d]",
+         "Control the scheduling interval of MLOG background trimming tasks. Range: [5s, 30d]",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(approx_count_distinct_precision, OB_TENANT_PARAMETER, "10", "[4, 16]",
         "specify the result accuracy of approx_count_distinct",

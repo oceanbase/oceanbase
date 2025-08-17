@@ -538,6 +538,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_makedate.cpp
   engine/expr/ob_expr_maketime.cpp
   engine/expr/ob_expr_md5.cpp
+  engine/expr/ob_expr_md5_concat_ws.cpp
   engine/expr/ob_expr_merging_frozen_time.cpp
   engine/expr/ob_expr_mid.cpp
   engine/expr/ob_expr_mod.cpp
@@ -1444,6 +1445,7 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_drop_ccl_rule_stmt.cpp
   resolver/ddl/ob_sensitive_rule_resolver.cpp
   resolver/ddl/ob_sensitive_rule_stmt.cpp
+  resolver/ddl/ob_mview_resolver_helper.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dml

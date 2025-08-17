@@ -17,6 +17,7 @@
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "src/share/vector_index/ob_vector_index_util.h"
 #include "share/storage_cache_policy/ob_storage_cache_partition_sql_helper.h"
+#include "share/ob_mview_args.h"
 
 namespace oceanbase
 {
@@ -3106,11 +3107,15 @@ int ObTableSqlService::gen_mview_dml(
     LOG_WARN("mview is not support before 4.3", KR(ret), K(table));
   } else {
     const ObViewSchema &view_schema = table.get_view_schema();
-    const ObMVRefreshInfo *mv_refresh_info = view_schema.get_mv_refresh_info();
+    const obrpc::ObMVAdditionalInfo *mv_additional_info = view_schema.get_mv_additional_info();
+    const obrpc::ObMVRefreshInfo *mv_refresh_info = nullptr;
 
-    if (mv_refresh_info == nullptr) {
+    if (OB_ISNULL(mv_additional_info)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("mv_refresh_info should not be null", KR(ret));
+      LOG_WARN("mv_additional_info is null", KR(ret));
+    } else if (OB_ISNULL(mv_refresh_info = &(mv_additional_info->mv_refresh_info_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mv_refresh_info is null", KR(ret));
     } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                                exec_tenant_id, table.get_tenant_id())))
         || OB_FAIL(dml.add_pk_column("mview_id", ObSchemaUtils::get_extract_schema_id(

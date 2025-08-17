@@ -509,7 +509,7 @@
 #include "sql/engine/expr/ob_expr_map_keys.h"
 #include "sql/engine/expr/ob_expr_current_catalog.h"
 #include "sql/engine/expr/ob_expr_check_catalog_access.h"
-
+#include "sql/engine/expr/ob_expr_md5_concat_ws.h"
 
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
@@ -774,6 +774,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprAggMinus);
     REG_OP(ObExprMod);
     REG_OP(ObExprMd5);
+    REG_OP(ObExprMd5ConcatWs);
     REG_OP(ObExprTime);
     REG_OP(ObExprHour);
     REG_OP(ObExprRpad);

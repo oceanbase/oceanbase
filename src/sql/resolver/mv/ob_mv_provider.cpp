@@ -34,7 +34,8 @@ namespace sql
 int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
                                    ObSchemaGetterGuard *schema_guard,
                                    ObMVPrinterRefreshInfo *refresh_info,
-                                   const bool check_refreshable_only)
+                                   const bool check_refreshable_only,
+                                   ObTableReferencedColumnsInfo *table_referenced_columns_info)
 {
   int ret = OB_SUCCESS;
   dependency_infos_.reuse();
@@ -47,7 +48,8 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
     LOG_WARN("unexpected null", K(ret), K(session_info));
   } else {
     lib::ContextParam param;
-    param.set_mem_attr(session_info->get_effective_tenant_id(), "MVProvider", ObCtxIds::DEFAULT_CTX_ID)
+    const uint64_t tenant_id = session_info->get_effective_tenant_id();
+    param.set_mem_attr(tenant_id, "MVProvider", ObCtxIds::DEFAULT_CTX_ID)
          .set_properties(lib::USE_TL_PAGE_OPTIONAL)
          .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
     CREATE_WITH_TEMP_CONTEXT(param) {
@@ -131,7 +133,8 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
                               session_info,
                               *mv_container_schema,
                               mv_printer_ctx.for_rt_expand(),
-                              fast_refreshable_note_);
+                              fast_refreshable_note_,
+                              table_referenced_columns_info);
           if (OB_FAIL(pre_process_view_stmt(*view_stmt))) {
             LOG_WARN("failed to pre process view stmt", K(ret));
           } else if (OB_FAIL(checker.check_mv_refresh_type())) {
@@ -358,7 +361,7 @@ int ObMVProvider::get_real_time_mv_expand_view(const uint64_t tenant_id,
   if (OB_FAIL(mv_provider.init_mv_provider(session_info, schema_guard, NULL, false))) {
     LOG_WARN("failed to init mv provider", K(ret));
   } else if (OB_UNLIKELY(ObMVRefreshableType::OB_MV_COMPLETE_REFRESH >= mv_provider.refreshable_type_)) {
-    ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
+    ret = OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE;
     LOG_WARN("mview can not on query computation", K(ret), K(mview_id));
   } else if (OB_UNLIKELY(1 != mv_provider.operators_.count() || mv_provider.operators_.at(0).empty())) {
     ret = OB_ERR_UNEXPECTED;
@@ -522,6 +525,7 @@ int ObMVProvider::generate_mv_stmt(ObIAllocator &alloc,
     view_stmt = sel_stmt;
     LOG_DEBUG("generate mv stmt", KPC(view_stmt));
   }
+
   return ret;
 }
 
@@ -730,6 +734,27 @@ int ObMVProvider::get_trans_rule_set(const ObDMLStmt *mv_def_stmt,
   if (OB_SUCC(ret) && need_eliminate_oj) {
     rule_set |= 1L << ELIMINATE_OJ;
   }
+  return ret;
+}
+
+int ObMVProvider::get_columns_referenced_by_mv(const uint64_t tenant_id,
+                                               const uint64_t mview_id,
+                                               const uint64_t table_id,
+                                               ObSQLSessionInfo *session_info,
+                                               ObSchemaGetterGuard *schema_guard,
+                                               common::hash::ObHashSet<uint64_t> &table_referenced_columns)
+{
+  int ret = OB_SUCCESS;
+  ObTableReferencedColumnsInfo table_referenced_columns_info;
+
+  if (OB_FAIL(table_referenced_columns_info.init())) {
+    LOG_WARN("failed to init table referenced columns info", KR(ret));
+  } else if (OB_FAIL(init_mv_provider(session_info, schema_guard, NULL, true, &table_referenced_columns_info))) {
+    LOG_WARN("failed to init mv provider", KR(ret));
+  } else if (OB_FAIL(table_referenced_columns_info.append_to_table_referenced_columns(table_id, table_referenced_columns))) {
+    LOG_WARN("failed to append to table referenced columns", KR(ret));
+  }
+
   return ret;
 }
 

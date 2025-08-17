@@ -51,6 +51,7 @@ void ObMViewCompleteRefreshArg::reset()
     nls_formats_[i].reset();
   }
   parent_task_id_ = 0;
+  required_columns_infos_.reset();
   allocator_.reset();
   ObDDLArg::reset();
 }
@@ -81,6 +82,10 @@ int ObMViewCompleteRefreshArg::assign(const ObMViewCompleteRefreshArg &other)
           LOG_WARN("fail to deep copy nls format", KR(ret), K(i), "nls_format", other.nls_formats_[i]);
         }
       }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(required_columns_infos_.assign(other.required_columns_infos_))) {
+        LOG_WARN("fail to assign required columns infos", KR(ret), K(other.required_columns_infos_));
+      }
     }
   }
   return ret;
@@ -108,6 +113,7 @@ OB_DEF_SERIALIZE(ObMViewCompleteRefreshArg)
     LST_DO_CODE(OB_UNIS_ENCODE, parent_task_id_);
     LST_DO_CODE(OB_UNIS_ENCODE, target_data_sync_scn_);
     LST_DO_CODE(OB_UNIS_ENCODE, select_sql_);
+    LST_DO_CODE(OB_UNIS_ENCODE, required_columns_infos_);
   }
   return ret;
 }
@@ -144,6 +150,7 @@ OB_DEF_DESERIALIZE(ObMViewCompleteRefreshArg)
     LST_DO_CODE(OB_UNIS_DECODE, parent_task_id_);
     LST_DO_CODE(OB_UNIS_DECODE, target_data_sync_scn_);
     LST_DO_CODE(OB_UNIS_DECODE, select_sql_);
+    LST_DO_CODE(OB_UNIS_DECODE, required_columns_infos_);
   }
   return ret;
 }
@@ -171,6 +178,7 @@ OB_DEF_SERIALIZE_SIZE(ObMViewCompleteRefreshArg)
     LST_DO_CODE(OB_UNIS_ADD_LEN, parent_task_id_);
     LST_DO_CODE(OB_UNIS_ADD_LEN, target_data_sync_scn_);
     LST_DO_CODE(OB_UNIS_ADD_LEN, select_sql_);
+    LST_DO_CODE(OB_UNIS_ADD_LEN, required_columns_infos_);
   }
   if (OB_FAIL(ret)) {
     len = -1;
@@ -224,6 +232,40 @@ OB_SERIALIZE_MEMBER(ObMViewRefreshInfo,
                     is_mview_complete_refresh_,
                     mview_target_data_sync_scn_,
                     select_sql_);
+
+OB_SERIALIZE_MEMBER(ObMVRefreshInfo,
+    refresh_method_,
+    refresh_mode_,
+    start_time_,
+    next_time_expr_,
+    exec_env_,
+    parallel_,
+    refresh_dop_,
+    nested_refresh_mode_);
+
+OB_SERIALIZE_MEMBER(ObMVRequiredColumnsInfo,
+                    base_table_id_,
+                    required_columns_);
+
+int ObMVRequiredColumnsInfo::assign(const ObMVRequiredColumnsInfo &other)
+{
+  int ret = common::OB_SUCCESS;
+  OX(base_table_id_ = other.base_table_id_);
+  OZ(required_columns_.assign(other.required_columns_));
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObMVAdditionalInfo, container_table_schema_, mv_refresh_info_,
+                    required_columns_infos_);
+
+int ObMVAdditionalInfo::assign(const ObMVAdditionalInfo &other)
+{
+  int ret = common::OB_SUCCESS;
+  OZ(container_table_schema_.assign(other.container_table_schema_));
+  OX(mv_refresh_info_ = other.mv_refresh_info_);
+  OZ(required_columns_infos_.assign(other.required_columns_infos_));
+  return ret;
+}
 
 bool ObAlterMViewArg::is_valid() const
 {

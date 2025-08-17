@@ -22,6 +22,96 @@ namespace oceanbase
 {
 namespace obrpc
 {
+
+struct ObMVRefreshInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  share::schema::ObMVRefreshMethod refresh_method_;
+  share::schema::ObMVRefreshMode refresh_mode_;
+  common::ObObj start_time_;
+  ObString next_time_expr_;
+  ObString exec_env_;
+  int64_t parallel_;
+  int64_t refresh_dop_;
+  share::schema::ObMVNestedRefreshMode nested_refresh_mode_;
+
+  ObMVRefreshInfo() :
+  refresh_method_(share::schema::ObMVRefreshMethod::NEVER),
+  refresh_mode_(share::schema::ObMVRefreshMode::DEMAND),
+  start_time_(),
+  next_time_expr_(),
+  exec_env_(),
+  parallel_(OB_INVALID_COUNT),
+  refresh_dop_(0),
+  nested_refresh_mode_(share::schema::ObMVNestedRefreshMode::INDIVIDUAL) {}
+
+  void reset() {
+    refresh_method_ = share::schema::ObMVRefreshMethod::NEVER;
+    refresh_mode_ = share::schema::ObMVRefreshMode::DEMAND;
+    start_time_.reset();
+    next_time_expr_.reset();
+    exec_env_.reset();
+    parallel_ = OB_INVALID_COUNT;
+    refresh_dop_ = 0;
+    nested_refresh_mode_ = share::schema::ObMVNestedRefreshMode::INDIVIDUAL;
+  }
+
+  bool operator == (const ObMVRefreshInfo &other) const {
+    return refresh_method_ == other.refresh_method_
+      && refresh_mode_ == other.refresh_mode_
+      && start_time_ == other.start_time_
+      && next_time_expr_ == other.next_time_expr_
+      && exec_env_ == other.exec_env_
+      && parallel_ == other.parallel_
+      && refresh_dop_ == other.refresh_dop_
+      && nested_refresh_mode_ == other.nested_refresh_mode_;
+  }
+
+  TO_STRING_KV(K_(refresh_mode),
+      K_(refresh_method),
+      K_(start_time),
+      K_(next_time_expr),
+      K_(exec_env),
+      K_(parallel),
+      K_(refresh_dop),
+      K_(nested_refresh_mode));
+};
+
+struct ObMVRequiredColumnsInfo {
+  OB_UNIS_VERSION(1);
+
+public:
+  ObMVRequiredColumnsInfo()
+  : base_table_id_(OB_INVALID_ID)
+  {
+  }
+  ObMVRequiredColumnsInfo(const uint64_t base_table_id, const ObSEArray<uint64_t, 16> &required_columns)
+  {
+    base_table_id_ = base_table_id;
+    required_columns_.assign(required_columns);
+  }
+  int assign(const ObMVRequiredColumnsInfo &other);
+  TO_STRING_KV(K_(base_table_id), K_(required_columns));
+
+public:
+  uint64_t base_table_id_;
+  ObSEArray<uint64_t, 16> required_columns_;
+};
+
+struct ObMVAdditionalInfo {
+  OB_UNIS_VERSION(1);
+
+public:
+  share::schema::ObTableSchema container_table_schema_;
+  ObMVRefreshInfo mv_refresh_info_;
+  ObSEArray<ObMVRequiredColumnsInfo, 8> required_columns_infos_;
+
+  int assign(const ObMVAdditionalInfo &other);
+
+  TO_STRING_KV(K_(container_table_schema), K_(mv_refresh_info));
+};
+
 struct ObMViewCompleteRefreshArg final : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
@@ -39,7 +129,8 @@ public:
       nls_formats_(),
       parent_task_id_(0),
       target_data_sync_scn_(),
-      select_sql_()
+      select_sql_(),
+      required_columns_infos_()
   {
   }
   ~ObMViewCompleteRefreshArg() = default;
@@ -71,6 +162,7 @@ public:
   int64_t parent_task_id_;
   share::SCN target_data_sync_scn_;
   ObString select_sql_;
+  ObSEArray<ObMVRequiredColumnsInfo, 8> required_columns_infos_;
 };
 
 struct ObMViewCompleteRefreshRes final

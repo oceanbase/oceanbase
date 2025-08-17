@@ -560,7 +560,7 @@ int ObRebuildIndexTask::purge_old_mlog(const ObDDLTaskStatus new_status)
   const uint64_t old_mlog_tid = target_object_id_;
   const uint64_t new_mlog_tid = new_index_id_;
   bool oracle_mode = false;
-  const ObSysVariableSchema *sys_variable_schema = NULL;
+  const ObSysVariableSchema *sys_variable_schema = nullptr;
   ObMLogInfo old_mlog_info;
   ObMLogInfo new_mlog_info;
   uint64_t data_version = 0;
@@ -604,7 +604,7 @@ int ObRebuildIndexTask::purge_old_mlog(const ObDDLTaskStatus new_status)
     LOG_WARN("database not exist", KR(ret), K(tenant_id_), K(new_mlog_schema->get_database_id()));
   } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id_, sys_variable_schema))) {
     LOG_WARN("get sys variable schema failed", K(ret), K(tenant_id_));
-  } else if (NULL == sys_variable_schema) {
+  } else if (nullptr == sys_variable_schema) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sys variable schema is NULL", K(ret));
   } else if (OB_FAIL(sys_variable_schema->get_oracle_mode(oracle_mode))) {
@@ -618,6 +618,7 @@ int ObRebuildIndexTask::purge_old_mlog(const ObDDLTaskStatus new_status)
   } else if (old_mlog_info.get_last_purge_scn() >= new_mlog_info.get_last_purge_scn()) {
     // when the old_mlog_info's last_purge_scn is greater than the new_mlog_info's last_purge_scn,
     // the data in new mlog is a superset of the old mlog. we can directly return.
+    LOG_INFO("the old mlog is already satisfied to be replaced", K(old_mlog_info), K(new_mlog_info));
     state_finished = true;
   } else {
     ObSEArray<uint64_t, 4> relevent_mv_tables;
@@ -653,6 +654,8 @@ int ObRebuildIndexTask::purge_old_mlog(const ObDDLTaskStatus new_status)
         } else if (OB_ISNULL(mv_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("mv schema is null", K(ret), K(tenant_id_), K(mv_id));
+        } else if (!mv_schema->mv_available()) {
+          // ignore
         } else if (OB_FAIL(ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_, tenant_id_, mv_id,
                                                          mview_info, false))) {
           LOG_WARN("failed to get mview info", KR(ret), K(tenant_id_), K(mv_id));
@@ -727,7 +730,7 @@ int ObRebuildIndexTask::purge_old_mlog(const ObDDLTaskStatus new_status)
   if (state_finished || OB_FAIL(ret)) {
     DEBUG_SYNC(REBUILD_INDEX_WAIT_PURGE_OLD_MLOG);
     (void)switch_status(new_status, true, ret);
-    LOG_INFO("purge_old_mlog finished", KR(ret), K(*this));
+    LOG_INFO("purge_old_mlog finished", KR(ret), K(*this), K(old_mlog_info), K(new_mlog_info));
   }
 
   return ret;

@@ -330,11 +330,13 @@ int ObMViewRefresher::prepare_for_refresh()
           OB_LIKELY(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret || OB_ERR_MLOG_IS_YOUNGER == ret)) {
         refresh_type = ObMVRefreshType::COMPLETE;
         ret = OB_SUCCESS;
-      } else if (ObMVRefreshMethod::FAST == refresh_method &&
+      } else if ((ObMVRefreshMethod::FAST == refresh_method ||
+                  ObMVRefreshMethod::FORCE == refresh_method)&&
                  OB_ERR_MVIEW_MISSING_DEPENDENCE == ret) {
         refresh_type = ObMVRefreshType::COMPLETE;
         ret = OB_SUCCESS;
-        LOG_INFO("try complete refresh when dependents changed", K(ret));
+        LOG_INFO("try complete refresh when dependents changed", K(ret),
+                 K(refresh_method), K(refresh_type), K(mview_info));
       } else {
         refresh_type = ObMVRefreshType::FAST; // for refresh_stats record
         LOG_WARN("fail to check check fast refreshable", KR(ret));

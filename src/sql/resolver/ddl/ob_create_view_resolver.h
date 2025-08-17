@@ -33,6 +33,7 @@ namespace sql
 {
 class ObCreateViewResolver : public ObCreateTableResolverBase
 {
+  friend class ObMViewResolverHelper;
   static const int64_t MATERIALIZED_NODE = 0;
   static const int64_t VIEW_NODE = 1;
   static const int64_t VIEW_COLUMNS_NODE = 2;
@@ -98,14 +99,6 @@ private:
   int resolve_column_list(ParseNode *view_columns_node,
                           common::ObIArray<common::ObString> &column_list,
                           ParseNode *&mv_primary_key_node);
-  int resolve_mv_options(const ObSelectStmt *stmt,
-                         ParseNode *options_node,
-                         ObMVRefreshInfo &refresh_info,
-                         ObTableSchema &table_schema,
-                         ObTableSchema &container_table_schema);
-  int resolve_mv_refresh_info(ParseNode *refresh_info_node,
-                              ObMVRefreshInfo &refresh_info);
-
   int check_view_stmt_col_name(ObSelectStmt &select_stmt,
                                ObArray<int64_t> &index_array,
                                common::hash::ObHashSet<ObString> &view_col_names);
@@ -142,18 +135,6 @@ private:
                            hash::ObHashMap<int64_t, const TableItem *> &select_tables,
                            hash::ObHashMap<int64_t, const TableItem *> &any_tables);
   int add_hidden_tablet_seq_col(ObTableSchema &table_schema);
-  int resolve_materialized_view_container_table(ParseNode *partition_node,
-                                                ParseNode *mv_primary_key_node,
-                                                ObTableSchema &container_table_schema,
-                                                ObSEArray<ObConstraint,4>& csts);
-  int resolve_primary_key_node(ParseNode &pk_node, ObTableSchema &table_schema);
-  int check_on_query_computation_supported(const ObSelectStmt *stmt);
-  int load_mview_dep_session_vars(ObSQLSessionInfo &session_info,
-                                  ObSelectStmt *stmt,
-                                  ObLocalSessionVar &dep_vars);
-  int get_dep_session_vars_from_stmt(ObSQLSessionInfo &session_info,
-                                     ObSelectStmt *stmt,
-                                     ObLocalSessionVar &dep_vars);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateViewResolver);
 };

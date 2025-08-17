@@ -81,6 +81,8 @@ int ObMViewMaintenanceService::init()
       LOG_WARN("fail to init mview mds task", KR(ret));
     } else if (OB_FAIL(mview_update_deps_task_.init())) {
       LOG_WARN("fail to init mview update deps task");
+    } else if (OB_FAIL(trim_mlog_task_.init())) {
+      LOG_WARN("fail to init trim mlog task", KR(ret));
     } else if (OB_FAIL(mview_refresh_info_cache_.create(bucket_num, attr))) {
       LOG_WARN("fail to create mview refresh info cache", KR(ret));
     } else if (OB_FAIL(mview_mds_map_.create(bucket_num, attr))) {
@@ -126,6 +128,7 @@ void ObMViewMaintenanceService::sys_ls_task_stop_()
   collect_mv_merge_info_task_.stop();
   mview_clean_snapshot_task_.stop();
   mview_mds_task_.stop();
+  trim_mlog_task_.stop();
 }
 
 void ObMViewMaintenanceService::wait()
@@ -141,6 +144,7 @@ void ObMViewMaintenanceService::wait()
   mview_update_cache_task_.wait();
   mview_mds_task_.wait();
   mview_update_deps_task_.wait();
+  trim_mlog_task_.wait();
 }
 
 void ObMViewMaintenanceService::destroy()
@@ -159,6 +163,7 @@ void ObMViewMaintenanceService::destroy()
   mview_mds_task_.destroy();
   mview_mds_map_.destroy();
   mview_deps_.destroy();
+  trim_mlog_task_.destroy();
 }
 
 int ObMViewMaintenanceService::inner_switch_to_leader()
@@ -194,6 +199,8 @@ int ObMViewMaintenanceService::inner_switch_to_leader()
       LOG_WARN("fail to start mview update deps task", KR(ret));
     } else if (OB_FAIL(mview_mds_task_.update_mview_mds_op())) {
       LOG_WARN("fail to update mview mds op", KR(ret));
+    } else if (OB_FAIL(trim_mlog_task_.start())) {
+      LOG_WARN("fail to start trim mlog task", KR(ret));
     } else if (OB_FAIL(MTL(logservice::ObLogService *)->
                        get_palf_role(share::SYS_LS, role, proposal_id))) {
       LOG_WARN("fail to get palf role", KR(ret), K(role), K(proposal_id));

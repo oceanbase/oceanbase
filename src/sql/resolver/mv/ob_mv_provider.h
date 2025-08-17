@@ -91,11 +91,18 @@ public:
                                    ObSQLSessionInfo *session_info,
                                    ObRawExprFactory *expr_factory,
                                    ObStmtFactory *stmt_factory);
+  int get_columns_referenced_by_mv(const uint64_t tenant_id,
+                                   const uint64_t mview_id,
+                                   const uint64_t table_id,
+                                   ObSQLSessionInfo *session_info,
+                                   ObSchemaGetterGuard *schema_guard,
+                                   common::hash::ObHashSet<uint64_t> &table_referenced_columns);
 private:
   int init_mv_provider(ObSQLSessionInfo *session_info,
                        ObSchemaGetterGuard *schema_guard,
                        ObMVPrinterRefreshInfo *refresh_info,
-                       const bool check_refreshable_only);
+                       const bool check_refreshable_only,
+                       ObTableReferencedColumnsInfo *table_referenced_columns_info = nullptr);
   int check_mv_column_type(const ObTableSchema *mv_schema, const ObSelectStmt *view_stmt,
                            ObSQLSessionInfo &session);
   int check_mv_column_type(const ObColumnSchemaV2 &org_column, const ObColumnSchemaV2 &cur_column);

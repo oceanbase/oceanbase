@@ -17,6 +17,7 @@
 #include "share/scn.h"
 #include "share/schema/ob_mview_info.h"
 #include "share/schema/ob_mlog_info.h"
+#include "share/ob_mview_args.h"
 
 namespace oceanbase
 {
@@ -24,7 +25,6 @@ namespace share
 {
 namespace schema
 {
-class ObMVRefreshInfo;
 class ObSchemaGetterGuard;
 class ObUserInfo;
 class ObMViewInfo;
@@ -100,7 +100,7 @@ public:
                                             const uint64_t mview_id,
                                             const common::ObString &db_name,
                                             const common::ObString &table_name,
-                                            const share::schema::ObMVRefreshInfo *refresh_info,
+                                            const obrpc::ObMVRefreshInfo *refresh_info,
                                             const int64_t schema_version,
                                             share::schema::ObMViewInfo &mview_info);
 

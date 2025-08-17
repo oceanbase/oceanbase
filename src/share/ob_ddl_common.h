@@ -218,7 +218,7 @@ enum ObDDLTaskStatus { // FARM COMPAT WHITELIST
   PURGE_OLD_MLOG = 47,
   DROP_VID_ROWKEY_INDEX_TABLE = 50,
   DROP_ROWKEY_VID_INDEX_TABLE = 51,
-
+  BUILD_MLOG = 52,
   FAIL = 99,
   SUCCESS = 100
 };
@@ -400,6 +400,9 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::DROP_ROWKEY_VID_INDEX_TABLE:
       str = "DROP_ROWKEY_VID_INDEX_TABLE";
+      break;
+    case ObDDLTaskStatus::BUILD_MLOG:
+      str = "BUILD_MLOG";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";

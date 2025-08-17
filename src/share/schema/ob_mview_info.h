@@ -120,9 +120,10 @@ public:
   static int check_satisfy_target_data_sync_scn(const ObMViewInfo &mview_info,
                                                 const uint64_t target_data_sync_ts,
                                                 bool &satisfy);
-  static int get_mview_id_from_container_id(ObISQLClient &sql_client,
-                                                         uint64_t tenant_id, uint64_t container_id,
-                                                         uint64_t &mview_id);
+  static int get_mview_id_from_container_id(ObISQLClient &sql_client, const uint64_t tenant_id,
+                                            const uint64_t container_id, uint64_t &mview_id);
+  static int set_mview_purge_barrier(ObISQLClient &sql_client, const uint64_t tenant_id,
+                                     const uint64_t mview_id, const uint64_t refresh_scn);
   TO_STRING_KV(K_(tenant_id),
                K_(mview_id),
                K_(build_mode),

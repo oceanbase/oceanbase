@@ -20,6 +20,7 @@
 #include "share/schema/ob_mview_info.h"
 #include "share/schema/ob_mlog_info.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "share/ob_mview_args.h"
 
 namespace oceanbase
 {
@@ -268,14 +269,13 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
                                                          const uint64_t mview_id,
                                                          const ObString &db_name,
                                                          const ObString &table_name,
-                                                         const ObMVRefreshInfo *refresh_info,
+                                                         const obrpc::ObMVRefreshInfo *refresh_info,
                                                          const int64_t schema_version,
                                                          ObMViewInfo &mview_info)
 {
   int ret = OB_SUCCESS;
   ObString refresh_job;
   ObArenaAllocator allocator("CreateMVTmp");
-  SCN curr_ts;
   mview_info.reset();
   share::ObGlobalStatProxy stat_proxy(sql_client, tenant_id);
   share::SCN major_refresh_mv_merge_scn;
@@ -309,17 +309,6 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id,
-                                      GCONF.rpc_timeout,
-                                      curr_ts))) {
-      LOG_WARN("fail to get gts sync", K(ret), K(tenant_id));
-    } else if (OB_UNLIKELY(!curr_ts.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected curr_scn", KR(ret), K(tenant_id), K(curr_ts));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
     mview_info.set_tenant_id(tenant_id);
     mview_info.set_mview_id(mview_id);
     mview_info.set_build_mode(ObMViewBuildMode::IMMEDIATE);
@@ -328,13 +317,7 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
     mview_info.set_refresh_job(refresh_job);
     mview_info.set_refresh_dop(refresh_info->refresh_dop_);
     mview_info.set_nested_refresh_mode(refresh_info->nested_refresh_mode_);
-    // TODO: we should set last_refresh_scn to 0 for all kind of mview, and fix the mlog recycle
-    // problem later.
-    if (ObMVRefreshMode::MAJOR_COMPACTION == refresh_info->refresh_mode_) {
-      mview_info.set_last_refresh_scn(0);
-    } else {
-      mview_info.set_last_refresh_scn(curr_ts.get_val_for_inner_table_field());
-    }
+    mview_info.set_last_refresh_scn(0);
     mview_info.set_schema_version(schema_version);
     if (refresh_info->start_time_.is_timestamp()) {
       mview_info.set_refresh_start(refresh_info->start_time_.get_timestamp());

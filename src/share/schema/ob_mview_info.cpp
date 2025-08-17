@@ -1019,8 +1019,9 @@ int ObMViewInfo::check_satisfy_target_data_sync_scn(
   return ret;
 }
 
-int ObMViewInfo::get_mview_id_from_container_id(ObISQLClient &sql_client, uint64_t tenant_id,
-                                                uint64_t container_id, uint64_t &mview_id)
+int ObMViewInfo::get_mview_id_from_container_id(ObISQLClient & sql_client,
+                                                uint64_t tenant_id, uint64_t container_id,
+                                                uint64_t & mview_id)
 {
   int ret = OB_SUCCESS;
   uint64_t compat_version = 0;
@@ -1028,9 +1029,9 @@ int ObMViewInfo::get_mview_id_from_container_id(ObISQLClient &sql_client, uint64
     LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_3_0_0)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("version lower than 4.3 does not support this operation", KR(ret), K(tenant_id),
-             K(compat_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.0.0, fetch mview info is");
+    LOG_WARN("version lower than 4.3 does not support this operation", KR(ret), K(tenant_id), K(compat_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                    "tenant's data version is below 4.3.0.0, fetch mview info is");
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res)
     {
@@ -1038,7 +1039,8 @@ int ObMViewInfo::get_mview_id_from_container_id(ObISQLClient &sql_client, uint64
       ObSqlString sql;
       if (OB_FAIL(sql.assign_fmt(
               "SELECT table_id FROM %s WHERE table_type = %d and data_table_id = %ld",
-              OB_ALL_TABLE_TNAME, share::schema::ObTableType::MATERIALIZED_VIEW, container_id))) {
+              OB_ALL_TABLE_TNAME, share::schema::ObTableType::MATERIALIZED_VIEW,
+              container_id))) {
         LOG_WARN("fail to assign sql", KR(ret));
       } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
         LOG_WARN("execute sql failed", KR(ret), K(sql));
@@ -1060,6 +1062,38 @@ int ObMViewInfo::get_mview_id_from_container_id(ObISQLClient &sql_client, uint64
 
   return ret;
 }
+
+int ObMViewInfo::set_mview_purge_barrier(ObISQLClient & sql_client,
+                                          const uint64_t tenant_id, const uint64_t mview_id,
+                                          const uint64_t refresh_scn)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_3_0_0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version lower than 4.3 does not support this operation", KR(ret),
+              K(tenant_id), K(compat_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                    "tenant's data version is below 4.3.0.0, fetch mview info is");
+  } else {
+    ObSqlString sql;
+    int64_t affected_rows = 0;
+    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET last_refresh_scn = %lu WHERE mview_id = %lu",
+                                OB_ALL_MVIEW_TNAME, refresh_scn, mview_id))) {
+      LOG_WARN("fail to assign sql", KR(ret));
+    } else if (OB_FAIL(sql_client.write(tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("execute sql failed", KR(ret), K(sql));
+    } else if (OB_UNLIKELY(affected_rows != 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected affected_rows", K(ret), K(affected_rows));
+    }
+  }
+
+  return ret;
+}
+
 } // namespace schema
 } // namespace share
 } // namespace oceanbase

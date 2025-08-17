@@ -1783,19 +1783,6 @@ DEF_TO_STRING(ObCreateVertialPartitionArg)
 OB_SERIALIZE_MEMBER((ObCreateVertialPartitionArg, ObDDLArg),
                     vertical_partition_columns_);
 
-OB_SERIALIZE_MEMBER(ObMVAdditionalInfo,
-                    container_table_schema_,
-                    mv_refresh_info_);
-
-int ObMVAdditionalInfo::assign(const ObMVAdditionalInfo &other)
-{
-  int ret = common::OB_SUCCESS;
-  OZ(container_table_schema_.assign(other.container_table_schema_));
-  OX(mv_refresh_info_ = other.mv_refresh_info_);
-  return ret;
-}
-
-
 bool ObCreateTableArg::is_valid() const
 {
   // index_arg_list can be empty

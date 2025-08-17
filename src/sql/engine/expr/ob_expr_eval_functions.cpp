@@ -448,6 +448,7 @@
 #include "ob_expr_map_keys.h"
 #include "ob_expr_current_catalog.h"
 #include "ob_expr_check_catalog_access.h"
+#include "ob_expr_md5_concat_ws.h"
 
 namespace oceanbase
 {
@@ -1402,6 +1403,21 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprUDF::eval_external_udf,                               /* 850 */
   NULL, // ObExprStartUpMode::eval_startup_mode,                       /* 851 */
   ObExprVectorL2Squared::calc_l2_squared,                              /* 852 */
+  #if defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)                      // add placeholder from master
+    NULL, // ObExprTmpFileOpen::eval_tmp_file_open,                     /* 853 */
+    NULL, // ObExprTmpFileClose::eval_tmp_file_close,                   /* 854 */
+    NULL, // ObExprTmpFileWrite::eval_tmp_file_write,                   /* 855 */
+    NULL, // ObExprTmpFileRead::eval_tmp_file_read,                     /* 856 */
+  #else
+    NULL,// ObExprTmpFileOpen::eval_tmp_file_open,                      /* 853 */
+    NULL,// ObExprTmpFileClose::eval_tmp_file_close,                    /* 854 */
+    NULL,// ObExprTmpFileWrite::eval_tmp_file_write,                    /* 855 */
+    NULL,// ObExprTmpFileRead::eval_tmp_file_read,                      /* 856 */
+  #endif
+  NULL,//ObExprAIComplete::eval_ai_complete,                          /* 857 */
+  NULL,//ObExprAIEmbed::eval_ai_embed,                                /* 858 */
+  NULL,//ObExprAIRerank::eval_ai_rerank,                              /* 859 */
+  ObExprMd5ConcatWs::calc_md5_concat_ws_expr,                          /* 860 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1819,7 +1835,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprAIComplete::eval_ai_complete_vector,                           /* 229 */
   NULL, // ObExprAIEmbed::eval_ai_embed_vector,                                 /* 230 */
   NULL, // ObExprAIRerank::eval_ai_rerank_vector,                               /* 231 */
-  NULL, // ObExprMd5ConcatWs::calc_md5_concat_ws_vector                         /* 232 */
+  ObExprMd5ConcatWs::calc_md5_concat_ws_vector,                                  /* 232 */
   NULL, // ObExprHiddenClusteringKey::eval_vector_hidden_clustering_key,         /* 233 */
   NULL, // ObExprToPinyin::eval_to_pinyin_vector,                        /* 234 */
 };

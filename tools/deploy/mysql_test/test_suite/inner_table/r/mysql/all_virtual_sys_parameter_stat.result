@@ -110,6 +110,7 @@ enable_kv_ttl
 enable_lock_priority
 enable_major_freeze
 enable_manual_storage_cache_policy
+enable_mlog_auto_maintenance
 enable_monotonic_weak_read
 enable_ob_error_msg_style
 enable_ob_ratelimit
@@ -195,6 +196,7 @@ micro_block_merge_verify_level
 migration_disable_time
 minor_compact_trigger
 min_observer_version
+mlog_trim_interval
 mysql_port
 net_thread_count
 obconfig_url

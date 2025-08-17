@@ -364,11 +364,11 @@ int ObMViewRefreshExecutor::do_nested_refresh_()
     nested_consistent_refresh = arg_->nested_consistent_refresh_;
   }
   // for test
-  if (nested_consistent_refresh) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("sync refresh not supported now", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "nested sync refresh");
-  }
+  // if (nested_consistent_refresh) {
+  //   ret = OB_NOT_SUPPORTED;
+  //   LOG_WARN("sync refresh not supported now", K(ret));
+  //   LOG_USER_ERROR(OB_NOT_SUPPORTED, "nested sync refresh");
+  // }
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(mview_maintenance_service)) {
     ret = OB_ERR_UNEXPECTED;

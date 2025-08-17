@@ -51,6 +51,27 @@ struct FastRefreshableNotes
 };
 
 typedef common::ObIArray<std::pair<const TableItem*, const share::schema::ObTableSchema*>> MlogSchemaPairIArray;
+typedef common::hash::ObHashMap<uint64_t, common::hash::ObHashSet<uint64_t> *> TableReferencedColumnsMap;
+
+class ObTableReferencedColumnsInfo
+{
+public:
+  ObTableReferencedColumnsInfo() : is_inited_(false), inner_alloc_("TableRefCol", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID) {}
+  ~ObTableReferencedColumnsInfo() { destroy(); }
+
+  int init();
+  void destroy();
+  int record_table_referenced_columns(const TableItem *table_item,
+                                      const ObIArray<ColumnItem> &columns);
+  int convert_to_required_columns_infos(ObIArray<obrpc::ObMVRequiredColumnsInfo> &required_columns_infos);
+  int append_to_table_referenced_columns(const uint64_t table_id,
+                                         common::hash::ObHashSet<uint64_t> &table_referenced_columns);
+
+private:
+  bool is_inited_;
+  common::ObArenaAllocator inner_alloc_;
+  TableReferencedColumnsMap table_referenced_columns_map_;
+};
 
 class ObMVChecker
 {
@@ -59,8 +80,11 @@ class ObMVChecker
                        ObRawExprFactory &expr_factory,
                        ObSQLSessionInfo *session_info,
                        const ObTableSchema &mv_container_table_schema,
+
                        const bool need_on_query_computation,
-                       FastRefreshableNotes &note)
+                       FastRefreshableNotes &note,
+                       ObTableReferencedColumnsInfo *table_referenced_columns_info = nullptr)
+
     : stmt_(stmt),
       refresh_type_(OB_MV_REFRESH_INVALID),
       expr_factory_(expr_factory),
@@ -68,8 +92,10 @@ class ObMVChecker
       mv_container_table_schema_(mv_container_table_schema),
       need_on_query_computation_(need_on_query_computation),
       fast_refreshable_error_(note.error_),
-      marker_idx_(OB_INVALID_INDEX)
-    {}
+      marker_idx_(OB_INVALID_INDEX),
+      table_referenced_columns_info_(table_referenced_columns_info)
+    {
+    }
   ~ObMVChecker() {}
   void reset();
   static int check_mv_fast_refresh_type(const ObSelectStmt *view_stmt,
@@ -81,7 +107,8 @@ class ObMVChecker
                                         ObTableSchema &container_table_schema,
                                         const bool need_on_query_computation,
                                         ObMVRefreshableType &refresh_type,
-                                        FastRefreshableNotes &note);
+                                        FastRefreshableNotes &note,
+                                        ObIArray<obrpc::ObMVRequiredColumnsInfo> &required_columns_infos);
   int check_mv_refresh_type();
   int check_mv_stmt_refresh_type(const ObSelectStmt &stmt, ObMVRefreshableType &refresh_type);
   ObMVRefreshableType get_refersh_type() const { return refresh_type_; };
@@ -167,7 +194,7 @@ private:
   static bool is_child_refresh_type_supported(const ObMVRefreshableType refresh_type);
   int check_union_all_refresh_type(const ObSelectStmt &stmt, ObMVRefreshableType &refresh_type);
   int check_union_all_mv_marker_column_valid(const ObSelectStmt &stmt, bool &is_valid);
-
+private:
   const ObSelectStmt &stmt_;
   ObMVRefreshableType refresh_type_;
   // map the table in mv to mlog, use physical table id
@@ -181,6 +208,7 @@ private:
   int64_t marker_idx_;  // union all mv marker column index in select list
   // union all mv child refreshable type
   common::ObSEArray<ObMVRefreshableType, 4, common::ModulePageAllocator, true> child_refresh_types_;
+  ObTableReferencedColumnsInfo *table_referenced_columns_info_;
   DISALLOW_COPY_AND_ASSIGN(ObMVChecker);
 };
 

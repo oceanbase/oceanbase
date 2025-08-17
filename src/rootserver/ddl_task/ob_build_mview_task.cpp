@@ -15,7 +15,10 @@
 #include "rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "rootserver/ddl_task/ob_build_mview_task.h"
 #include "rootserver/ob_root_service.h"
+#include "rootserver/mview/ob_mview_utils.h"
 #include "share/ob_ddl_error_message_table_operator.h"
+#include "share/schema/ob_mview_info.h"
+#include "storage/tx/ob_ts_mgr.h"
 
 namespace oceanbase
 {
@@ -28,7 +31,8 @@ ObBuildMViewTask::ObBuildMViewTask()
     : ObDDLTask(ObDDLType::DDL_CREATE_MVIEW),
       mview_table_id_(target_object_id_),
       root_service_(nullptr),
-      mview_complete_refresh_task_id_(0)
+      mview_complete_refresh_task_id_(0),
+      has_build_mlog_(false)
 {
 }
 ObBuildMViewTask::~ObBuildMViewTask()
@@ -179,6 +183,11 @@ int ObBuildMViewTask::process()
   } else {
     ddl_tracing_.restore_span_hierarchy();
     switch (task_status_) {
+      case ObDDLTaskStatus::BUILD_MLOG:
+        if (OB_FAIL(build_mlog())) {
+          LOG_WARN("build mlog failed", KR(ret), K(*this));
+        }
+        break;
       case ObDDLTaskStatus::START_REFRESH_MVIEW_TASK:
         if (OB_FAIL(start_refresh_mview_task())) {
           LOG_WARN("start refresh mview task failed", KR(ret), K(*this));
@@ -303,6 +312,227 @@ int ObBuildMViewTask::cleanup_impl()
   return ret;
 }
 
+// when creating a fast-refresh mview, automatically build mlogs for base tables
+int ObBuildMViewTask::build_mlog()
+{
+  int ret = OB_SUCCESS;
+  bool is_build_mlog_finished = false;
+  const ObIArray<obrpc::ObMVRequiredColumnsInfo> &required_columns_infos = arg_.required_columns_infos_;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  uint64_t data_version = 0;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (ObDDLTaskStatus::BUILD_MLOG != task_status_) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("task status does not match", KR(ret), K(task_status_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
+  } else if (data_version < DATA_VERSION_4_3_5_4) {
+    is_build_mlog_finished = true;
+  } else if (!tenant_config.is_valid() || !tenant_config->enable_mlog_auto_maintenance) {
+    // the auto maintenance switch is off, no need to build mlog
+    is_build_mlog_finished = true;
+  } else {
+    if (!has_build_mlog_) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < required_columns_infos.count(); ++i) {
+        const obrpc::ObMVRequiredColumnsInfo &required_columns_info = required_columns_infos.at(i);
+        if (OB_FAIL(build_mlog_impl(required_columns_info))) {
+          LOG_WARN("failed to build mlog", KR(ret), K(required_columns_info));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        has_build_mlog_ = true;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(check_build_mlog_finished(is_build_mlog_finished))) {
+      LOG_WARN("failed to check build mlog status", KR(ret));
+    } else if (!is_build_mlog_finished) {
+      // by pass
+    } else if (OB_FAIL(update_based_schema_obj_info())) {
+      LOG_WARN("failed to update based schema object info", KR(ret));
+    }
+  }
+  if (OB_FAIL(ret) || is_build_mlog_finished) {
+    DEBUG_SYNC(BUILD_MVIEW_AFTER_BUILD_MLOG);
+    if (OB_FAIL(switch_status(ObDDLTaskStatus::START_REFRESH_MVIEW_TASK, true, ret))) {
+      LOG_WARN("fail to switch status", K(ret));
+    }
+  }
+  LOG_INFO("build_mlog finished", KR(ret), K(is_build_mlog_finished), K(required_columns_infos));
+
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_BUILD_MLOG_ERROR);
+int ObBuildMViewTask::build_mlog_impl(const obrpc::ObMVRequiredColumnsInfo &required_columns_info)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t base_table_id = required_columns_info.base_table_id_;
+  const ObIArray<uint64_t> &required_columns = required_columns_info.required_columns_;
+  ObSEArray<ObString, 16> missing_columns;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *base_table_schema = nullptr;
+  const ObTableSchema *mlog_schema = nullptr;
+
+  if (root_service_ == nullptr) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root_service_ is null", KR(ret));
+  } else if (OB_FAIL(root_service_->get_ddl_service()
+                         .get_tenant_schema_guard_with_version_in_inner_table(tenant_id_,
+                                                                              schema_guard))) {
+    LOG_WARN("failed to get tenant schema guard", KR(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, base_table_id, base_table_schema))) {
+    LOG_WARN("failed to get base table schema", KR(ret), K(base_table_id));
+  } else if (OB_ISNULL(base_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("base table schema is null", KR(ret));
+  } else if (base_table_schema->has_mlog_table()) {
+    if ((OB_FAIL(schema_guard.get_table_schema(tenant_id_, base_table_schema->get_mlog_tid(), mlog_schema)))) {
+      LOG_WARN("failed to get mlog schema", KR(ret), K(base_table_schema->get_mlog_tid()));
+    } else if (OB_ISNULL(mlog_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mlog schema is null", KR(ret), K(base_table_schema->get_mlog_tid()));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < required_columns.count(); ++i) {
+      const uint64_t column_id = required_columns.at(i);
+      const ObColumnSchemaV2 *column_schema = base_table_schema->get_column_schema(column_id);
+      const uint64_t mlog_column_id = ObTableSchema::gen_mlog_col_id_from_ref_col_id(column_id);
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column schema is null", KR(ret), K(column_id));
+      } else if (OB_ISNULL(mlog_schema) || OB_ISNULL(mlog_schema->get_column_schema(mlog_column_id))) {
+        // if the base table does not have a mlog, or the mlog does not have the required column
+        missing_columns.push_back(column_schema->get_column_name());
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !missing_columns.empty()) {
+    ObSEArray<ObString, 16> final_missing_columns;
+    if (OB_NOT_NULL(mlog_schema)) {
+      // if the base table already has a mlog, we should add all of its existing columns to the new mlog
+      ObSEArray<uint64_t, 16> orig_column_ids;
+      if (OB_FAIL(mlog_schema->get_column_ids(orig_column_ids))) {
+        LOG_WARN("failed to get column ids", KR(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < orig_column_ids.count(); ++i) {
+        uint64_t column_id = orig_column_ids.at(i);
+        if (column_id < OB_MLOG_SEQ_NO_COLUMN_ID) {
+          ObString column_name;
+          bool is_column_exist;
+          mlog_schema->get_column_name_by_column_id(column_id, column_name, is_column_exist);
+          if (!is_column_exist) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column doesn't exist", KR(ret), K(column_id));
+          } else if (OB_FAIL(missing_columns.push_back(column_name))) {
+            LOG_WARN("failed to add missing column", KR(ret), K(column_name));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < missing_columns.count(); ++i) {
+        ObString column_name = missing_columns.at(i);
+        const ObColumnSchemaV2 *column_schema = base_table_schema->get_column_schema(column_name);
+        if (OB_ISNULL(column_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column schema is null", KR(ret), K(column_name));
+        } else if (column_schema->is_rowkey_column()) {
+          // rowkey columns will be added automatically, ignore
+        } else if (column_schema->is_generated_column()) {
+          // mlog can not be built for generated columns, ignore
+        } else if (OB_FAIL(final_missing_columns.push_back(column_name))) {
+          LOG_WARN("failed to add missing column", KR(ret), K(column_name));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      int64_t task_id = OB_INVALID_ID;
+      DEBUG_SYNC(BUILD_MVIEW_BEFORE_BUILD_MLOG);
+      if (OB_UNLIKELY(ERRSIM_BUILD_MLOG_ERROR)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("errsim ERRSIM_BUILD_MLOG_ERROR", KR(ret));
+      } else if (OB_FAIL(ObMViewUtils::submit_build_mlog_task(tenant_id_, final_missing_columns,
+                                                       schema_guard, base_table_schema, task_id))) {
+        LOG_WARN("failed to submit replace mlog task");
+      } else if (OB_FAIL(build_mlog_task_ids_.push_back(task_id))) {
+        LOG_WARN("failed to push task_id", KR(ret), K(task_id));
+      }
+    }
+  }
+  LOG_INFO("build mlog impl finish", KR(ret), K(required_columns_info), K(missing_columns));
+
+  return ret;
+}
+
+int ObBuildMViewTask::check_build_mlog_finished(bool &finished)
+{
+  int ret = OB_SUCCESS;
+  const int64_t total_task_count = build_mlog_task_ids_.count();
+  int64_t finished_task_count = 0;
+  finished = false;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < total_task_count; ++i) {
+    int64_t task_id = build_mlog_task_ids_.at(i);
+    ObAddr unused_addr;
+    int64_t unused_user_msg_len = 0;
+    ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage error_message;
+    if (OB_SUCCESS == ObDDLErrorMessageTableOperator::get_ddl_error_message(
+                          tenant_id_, task_id, -1 /* target_object_id */, unused_addr,
+                          false /* is_ddl_retry_task */, *GCTX.sql_proxy_, error_message,
+                          unused_user_msg_len)) {
+      ret = error_message.ret_code_;
+      if (OB_SUCCESS != ret) {
+        FORWARD_USER_ERROR(ret, error_message.user_message_);
+      } else {
+        finished_task_count++;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    finished = (total_task_count == finished_task_count);
+  }
+
+  return ret;
+}
+
+int ObBuildMViewTask::update_based_schema_obj_info()
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+
+  if (OB_UNLIKELY(OB_ISNULL(root_service_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root service is null", KR(ret));
+  } else if (OB_FAIL(root_service_->get_ddl_service()
+                         .get_tenant_schema_guard_with_version_in_inner_table(tenant_id_,
+                                                                              schema_guard))) {
+    LOG_WARN("failed to get tenant schema guard", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg_.based_schema_object_infos_.count(); i++) {
+      ObBasedSchemaObjectInfo &based_info = arg_.based_schema_object_infos_.at(i);
+      const ObTableSchema *base_table_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, based_info.schema_id_, base_table_schema))) {
+        LOG_WARN("failed to get base table schema", KR(ret), K(based_info.schema_id_));
+      } else if (OB_ISNULL(base_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("base table schema is null", KR(ret));
+      } else {
+        LOG_INFO("update based info schema version", K(based_info), K(base_table_schema->get_schema_version()));
+        based_info.schema_version_ = base_table_schema->get_schema_version();
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObBuildMViewTask::mview_complete_refresh(obrpc::ObMViewCompleteRefreshRes &res)
 {
   int ret = OB_SUCCESS;
@@ -322,10 +552,11 @@ int ObBuildMViewTask::mview_complete_refresh(obrpc::ObMViewCompleteRefreshRes &r
   return ret;
 }
 
-
+ERRSIM_POINT_DEF(ERRSIM_START_REFRESH_MVIEW_TASK_ERROR);
 int ObBuildMViewTask::start_refresh_mview_task()
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BUILD_MVIEW_BEFORE_COMPLETE_REFRESH);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -334,7 +565,12 @@ int ObBuildMViewTask::start_refresh_mview_task()
     LOG_WARN("task status not match", KR(ret), K(task_status_));
   } else if (ATOMIC_LOAD(&mview_complete_refresh_task_id_) == 0) {
     ObMViewCompleteRefreshRes res;
-    if (OB_FAIL(mview_complete_refresh(res))) {
+    if (OB_FAIL(set_mview_purge_barrier())) {
+      LOG_WARN("failed to set mview purge barrier", KR(ret));
+    } else if (OB_UNLIKELY(ERRSIM_START_REFRESH_MVIEW_TASK_ERROR)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("errsim ERRSIM_START_REFRESH_MVIEW_TASK_ERROR", KR(ret));
+    } else if (OB_FAIL(mview_complete_refresh(res))) {
       LOG_WARN("failed to do mview complete refresh", KR(ret));
     } else {
       LOG_INFO("start mview complete refresh", K(mview_complete_refresh_task_id_));
@@ -352,6 +588,51 @@ int ObBuildMViewTask::start_refresh_mview_task()
 
   (void)switch_status(ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH, true, ret);
   LOG_INFO("start refresh mview task finished", KR(ret), K(*this));
+  return ret;
+}
+
+// We initialize the mview info with last_refresh_scn set to 0, so this mview will not be considered
+// in the mlog purge task. This is necessary for the replace mlog task to complete successfully,
+// since the replace mlog task needs to purge the old mlog. Now that the replace mlog task has
+// finished, and we are about to start a complete refresh task, we should set a barrier
+// last_refresh_scn that is smaller than the complete refresh scn. This ensures that the
+// incremental data generated after the complete refresh scn will not be purged by the mlog
+// purge task.
+int ObBuildMViewTask::set_mview_purge_barrier()
+{
+  int ret = OB_SUCCESS;
+  SCN curr_ts;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *mview_table_schema = nullptr;
+
+  if (OB_UNLIKELY(OB_ISNULL(root_service_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root service is null", KR(ret));
+  } else if (OB_FAIL(root_service_->get_ddl_service()
+                         .get_tenant_schema_guard_with_version_in_inner_table(tenant_id_,
+                                                                              schema_guard))) {
+    LOG_WARN("failed to get tenant schema guard", KR(ret));
+  } else if (OB_FAIL(
+                 schema_guard.get_table_schema(tenant_id_, mview_table_id_, mview_table_schema))) {
+    LOG_WARN("failed to get base table schema", KR(ret), K(mview_table_id_));
+  } else if (OB_ISNULL(mview_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("base table schema is null", KR(ret));
+  } else if (mview_table_schema->mv_major_refresh()) {
+    // bypass
+  } else if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id_, GCONF.rpc_timeout, curr_ts))) {
+    LOG_WARN("fail to get gts sync", K(ret), K(tenant_id_));
+  } else if (OB_UNLIKELY(!curr_ts.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected curr_scn", KR(ret), K(tenant_id_), K(curr_ts));
+  } else if (OB_FAIL(
+                 ObMViewInfo::set_mview_purge_barrier(*GCTX.sql_proxy_, tenant_id_, mview_table_id_,
+                                                      curr_ts.get_val_for_inner_table_field()))) {
+    LOG_WARN("failed to update last_refresh_info", KR(ret), K(mview_table_id_));
+  } else {
+    arg_.last_refresh_scn_ = curr_ts;
+  }
+
   return ret;
 }
 
@@ -483,6 +764,7 @@ int ObBuildMViewTask::enable_mview()
     const ObTableSchema *mview_schema = nullptr;
     bool mview_table_exist = false;
     bool is_primary = false;
+    bool is_mlog_valid = false;
     if (OB_FAIL(ObShareUtil::table_check_if_tenant_role_is_primary(tenant_id_, is_primary))) {
       LOG_WARN("fail to execute table_check_if_tenant_role_is_primary", KR(ret), K(tenant_id_));
     } else if (!is_primary) {
@@ -501,6 +783,12 @@ int ObBuildMViewTask::enable_mview()
     } else if (OB_ISNULL(mview_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("mview schema is null", KR(ret), K(mview_table_id_));
+    } else if (OB_FAIL(check_mlog_valid(is_mlog_valid))) {
+      LOG_WARN("failed to check if mlog is valid", KR(ret));
+    } else if (!is_mlog_valid) {
+      // mlog may be dropped/replaced by concurrent ddl, we should try again
+      ret = OB_EAGAIN;
+      LOG_WARN("mlog is not valid", KR(ret));
     } else if (mview_schema->mv_available()) {
       state_finished = true;
       LOG_INFO("build_mview_task enable_mview mview status is already valid",
@@ -531,10 +819,76 @@ int ObBuildMViewTask::enable_mview()
     state_finished = true;
     next_status = ObDDLTaskStatus::TAKE_EFFECT;
   }
-  if (state_finished) {
+  if (OB_FAIL(ret) || state_finished) {
     (void)switch_status(next_status, true, ret);
     LOG_INFO("build_mview_task enable_mview finished", KR(ret), K(*this));
   }
+  return ret;
+}
+
+int ObBuildMViewTask::check_mlog_valid(bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  uint64_t data_version = 0;
+  is_valid = true;
+
+  const ObSEArray<obrpc::ObMVRequiredColumnsInfo, 8> &required_columns_infos = arg_.required_columns_infos_;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
+  } else if (data_version < DATA_VERSION_4_3_5_4) {
+    // no need to check
+  } else if (!tenant_config.is_valid() || !tenant_config->enable_mlog_auto_maintenance) {
+    // no need to check
+  } else if (required_columns_infos.empty()) {
+    // no need to check
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < required_columns_infos.count(); ++i) {
+      const obrpc::ObMVRequiredColumnsInfo &required_columns_info = required_columns_infos.at(i);
+      const uint64_t base_table_id = required_columns_info.base_table_id_;
+      const ObSEArray<uint64_t, 16> &required_columns = required_columns_info.required_columns_;
+      ObSchemaGetterGuard schema_guard;
+      const ObTableSchema *base_table_schema = nullptr;
+      const ObTableSchema *mlog_schema = nullptr;
+      if (root_service_ == nullptr) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("root_service_ is null", KR(ret));
+      } else if (OB_FAIL(root_service_->get_ddl_service()
+                             .get_tenant_schema_guard_with_version_in_inner_table(tenant_id_,
+                                                                                  schema_guard))) {
+        LOG_WARN("failed to get tenant schema guard", KR(ret));
+      } else if (OB_FAIL(
+                     schema_guard.get_table_schema(tenant_id_, base_table_id, base_table_schema))) {
+        LOG_WARN("failed to get base table schema", KR(ret), K(base_table_id));
+      } else if (OB_ISNULL(base_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("base table schema is null", KR(ret));
+      } else if (!base_table_schema->has_mlog_table()) {
+        // mlog is not valid, exit
+        is_valid = false;
+      } else if ((OB_FAIL(schema_guard.get_table_schema(
+                     tenant_id_, base_table_schema->get_mlog_tid(), mlog_schema)))) {
+        LOG_WARN("failed to get mlog schema", KR(ret), K(base_table_schema->get_mlog_tid()));
+      } else if (OB_ISNULL(mlog_schema)) {
+        // mlog is not valid, exit
+        is_valid = false;
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < required_columns.count(); ++i) {
+        const uint64_t column_id = required_columns.at(i);
+        const ObColumnSchemaV2 *column_schema = base_table_schema->get_column_schema(column_id);
+        const uint64_t mlog_column_id = ObTableSchema::gen_mlog_col_id_from_ref_col_id(column_id);
+        if (OB_ISNULL(column_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column schema is null", KR(ret), K(column_id));
+        } else if (column_schema->is_generated_column()) {
+          // ignore generated columns
+        } else if (OB_ISNULL(mlog_schema->get_column_schema(mlog_column_id))) {
+          is_valid = false;
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

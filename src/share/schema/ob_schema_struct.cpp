@@ -8202,16 +8202,6 @@ OB_SERIALIZE_MEMBER(ObVectorIndexRefreshInfo,
                     exec_env_,
                     index_params_);
 
-OB_SERIALIZE_MEMBER(ObMVRefreshInfo,
-    refresh_method_,
-    refresh_mode_,
-    start_time_,
-    next_time_expr_,
-    exec_env_,
-    parallel_,
-    refresh_dop_,
-    nested_refresh_mode_);
-
 /*-------------------------------------------------------------------------------------------------
  * ------------------------------ObViewSchema-------------------------------------------
  ----------------------------------------------------------------------------------------------------*/
@@ -8252,7 +8242,7 @@ ObViewSchema::ObViewSchema(const ObViewSchema &src_schema)
       character_set_client_(CHARSET_INVALID),
       collation_connection_(CS_TYPE_INVALID),
       container_table_id_(OB_INVALID_ID),
-      mv_refresh_info_(nullptr)
+      mv_additional_info_(nullptr)
 {
   *this = src_schema;
 }
@@ -8269,7 +8259,7 @@ ObViewSchema &ObViewSchema::operator =(const ObViewSchema &src_schema)
     character_set_client_ = src_schema.character_set_client_;
     collation_connection_ = src_schema.collation_connection_;
     container_table_id_ = src_schema.container_table_id_;
-    mv_refresh_info_ = src_schema.mv_refresh_info_;
+    mv_additional_info_ = src_schema.mv_additional_info_;
 
     if (OB_FAIL(deep_copy_str(src_schema.view_definition_, view_definition_))) {
       LOG_WARN("Fail to deep copy view definition, ", K(ret));
@@ -8292,7 +8282,7 @@ bool ObViewSchema::operator==(const ObViewSchema &other) const
       && character_set_client_ == other.character_set_client_
       && collation_connection_ == other.collation_connection_
       && container_table_id_ == other.container_table_id_
-      && mv_refresh_info_ == other.mv_refresh_info_;
+      && mv_additional_info_ == other.mv_additional_info_;
 }
 
 bool ObViewSchema::operator!=(const ObViewSchema &other) const
@@ -8324,7 +8314,7 @@ void ObViewSchema::reset()
   character_set_client_ = CHARSET_INVALID;
   collation_connection_ = CS_TYPE_INVALID;
   container_table_id_ = OB_INVALID_ID;
-  mv_refresh_info_ = nullptr;
+  mv_additional_info_ = nullptr;
   ObSchema::reset();
 }
 

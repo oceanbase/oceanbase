@@ -109,19 +109,19 @@ int ObAlterMviewUtils::resolve_mv_options(const ParseNode &node,
             alter_mview_arg.set_alter_nested_refresh_mode(share::schema::ObMVNestedRefreshMode::INCONSISTENT);
             break;
           case 2:
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("sync refresh not supported now", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "nested sync refresh");
+            // ret = OB_NOT_SUPPORTED;
+            // LOG_WARN("sync refresh not supported now", K(ret));
+            // LOG_USER_ERROR(OB_NOT_SUPPORTED, "nested sync refresh");
             alter_mview_arg.set_alter_nested_refresh_mode(share::schema::ObMVNestedRefreshMode::CONSISTENT);
             break;
           default:
             break;
         }
-        if (alter_mview_arg.get_nested_refresh_mode() == share::schema::ObMVNestedRefreshMode::CONSISTENT) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("nested sync refresh not supported now", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "nested sync refresh");
-        }
+        // if (alter_mview_arg.get_nested_refresh_mode() == share::schema::ObMVNestedRefreshMode::CONSISTENT) {
+        //   ret = OB_NOT_SUPPORTED;
+        //   LOG_WARN("nested sync refresh not supported now", K(ret));
+        //   LOG_USER_ERROR(OB_NOT_SUPPORTED, "nested sync refresh");
+        // }
       }
     } else {
       ParseNode *refresh_info_node = node.children_[0];

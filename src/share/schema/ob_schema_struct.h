@@ -71,6 +71,10 @@ namespace rootserver
 class ObRandomZoneSelector;
 class ObReplicaAddr;
 }
+namespace obrpc
+{
+struct ObMVAdditionalInfo;
+}
 namespace share
 {
 namespace schema
@@ -3985,62 +3989,6 @@ public:
   TO_STRING_KV(K_(exec_env), K_(index_params));
 };
 
-struct ObMVRefreshInfo
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObMVRefreshMethod refresh_method_;
-  ObMVRefreshMode refresh_mode_;
-  common::ObObj start_time_;
-  ObString next_time_expr_;
-  ObString exec_env_;
-  int64_t parallel_;
-  int64_t refresh_dop_;
-  ObMVNestedRefreshMode nested_refresh_mode_;
-
-  ObMVRefreshInfo() :
-  refresh_method_(ObMVRefreshMethod::NEVER),
-  refresh_mode_(ObMVRefreshMode::DEMAND),
-  start_time_(),
-  next_time_expr_(),
-  exec_env_(),
-  parallel_(OB_INVALID_COUNT),
-  refresh_dop_(0),
-  nested_refresh_mode_(ObMVNestedRefreshMode::INDIVIDUAL) {}
-
-  void reset() {
-    refresh_method_ = ObMVRefreshMethod::NEVER;
-    refresh_mode_ = ObMVRefreshMode::DEMAND;
-    start_time_.reset();
-    next_time_expr_.reset();
-    exec_env_.reset();
-    parallel_ = OB_INVALID_COUNT;
-    refresh_dop_ = 0;
-    nested_refresh_mode_ = ObMVNestedRefreshMode::INDIVIDUAL;
-  }
-
-  bool operator == (const ObMVRefreshInfo &other) const {
-    return refresh_method_ == other.refresh_method_
-      && refresh_mode_ == other.refresh_mode_
-      && start_time_ == other.start_time_
-      && next_time_expr_ == other.next_time_expr_
-      && exec_env_ == other.exec_env_
-      && parallel_ == other.parallel_
-      && refresh_dop_ == other.refresh_dop_
-      && nested_refresh_mode_ == other.nested_refresh_mode_;
-  }
-
-
-  TO_STRING_KV(K_(refresh_mode),
-      K_(refresh_method),
-      K_(start_time),
-      K_(next_time_expr),
-      K_(exec_env),
-      K_(parallel),
-      K_(refresh_dop),
-      K_(nested_refresh_mode));
-};
-
 class ObViewSchema : public ObSchema
 {
   OB_UNIS_VERSION(1);
@@ -4075,10 +4023,10 @@ public:
   inline bool get_materialized() const { return materialized_; }
   inline common::ObCharsetType get_character_set_client() const { return character_set_client_; }
   inline common::ObCollationType get_collation_connection() const { return collation_connection_; }
-  inline const ObMVRefreshInfo *get_mv_refresh_info() const { return mv_refresh_info_; }
-  inline void set_mv_refresh_info(const ObMVRefreshInfo *mv_refresh_info) { mv_refresh_info_ = mv_refresh_info; }
   inline void set_container_table_id(uint64_t container_table_id) { container_table_id_ = container_table_id; }
   inline uint64_t get_container_table_id() const { return container_table_id_; }
+  inline const obrpc::ObMVAdditionalInfo *get_mv_additional_info() const { return mv_additional_info_; }
+  inline void set_mv_additional_info(const obrpc::ObMVAdditionalInfo *mv_additional_info) { mv_additional_info_ = mv_additional_info; }
 
   int64_t get_convert_size() const;
   virtual bool is_valid() const;
@@ -4097,7 +4045,7 @@ private:
   common::ObCharsetType character_set_client_;
   common::ObCollationType collation_connection_;
   uint64_t container_table_id_;
-  const ObMVRefreshInfo *mv_refresh_info_; //only for pass write param, don't need serialize and memory is hold by caller
+  const obrpc::ObMVAdditionalInfo *mv_additional_info_; //only for pass write param, don't need serialize and memory is hold by caller
 };
 
 class ObColumnSchemaHashWrapper

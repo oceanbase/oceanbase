@@ -25,6 +25,7 @@
 #include "rootserver/mview/ob_mview_update_cache_task.h"
 #include "rootserver/mview/ob_mview_mds_op_task.h"
 #include "rootserver/mview/ob_mview_update_deps_task.h"
+#include "rootserver/mview/ob_mview_trim_mlog_task.h"
 
 namespace oceanbase
 {
@@ -193,6 +194,7 @@ private:
   ObMviewUpdateCacheTask mview_update_cache_task_;
   ObMViewMdsOpTask mview_mds_task_;
   ObMViewUpdateDepsTask mview_update_deps_task_;
+  ObMViewTrimMLogTask trim_mlog_task_;
   MViewRefreshInfoCache mview_refresh_info_cache_;
   int64_t mview_refresh_info_timestamp_;
   int64_t mview_mds_timestamp_;

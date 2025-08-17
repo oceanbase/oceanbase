@@ -1270,4 +1270,5 @@
 #define N_INNER_INFO_COLS_DATA_TYPE_PRINTER "inner_info_cols_data_type_printer"
 #define N_INNER_INFO_COLS_COLUMN_TYPE_PRINTER "inner_info_cols_column_type_printer"
 #define N_INNER_INFO_COLS_COLUMN_KEY_PRINTER "inner_info_cols_column_key_printer"
+#define N_MD5_CONCAT_WS "md5_concat_ws"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

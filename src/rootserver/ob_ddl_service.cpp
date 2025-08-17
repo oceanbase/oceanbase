@@ -84,6 +84,7 @@
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
 #include "rootserver/ob_alter_table_constraint_checker.h"
 #include "share/ob_license_utils.h"
+#include "share/ob_mview_args.h"
 
 namespace oceanbase
 {
@@ -1479,7 +1480,7 @@ int ObDDLService::generate_schema(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("there should be mv ainfo", KR(ret), K(arg.mv_ainfo_.count()));
       } else {
-        schema.get_view_schema().set_mv_refresh_info(&(arg.mv_ainfo_.at(0).mv_refresh_info_));
+        schema.get_view_schema().set_mv_additional_info(&(arg.mv_ainfo_.at(0)));
       }
     }
   }
@@ -2635,17 +2636,21 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
         if (OB_SUCC(ret) && (0 == i) && table_schema.is_materialized_view()) {
           const uint64_t db_id = table_schema.get_database_id();
           const ObSimpleDatabaseSchema *db_schema = NULL;
+          const obrpc::ObMVAdditionalInfo *mv_additional_info = table_schema.get_view_schema().get_mv_additional_info();
           if (OB_FAIL(schema_guard.get_database_schema(tenant_id, db_id, db_schema))) {
             LOG_WARN("failed to get database schema", KR(ret), K(db_id));
           } else if (OB_ISNULL(db_schema)) {
             ret = OB_ERR_BAD_DATABASE;
             LOG_WARN("db schema is NULL", KR(ret), K(tenant_id), K(db_id));
+          } else if (OB_ISNULL(mv_additional_info)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("mv additional info is NULL", KR(ret));
           } else if (OB_FAIL(ObMViewSchedJobUtils::add_mview_info_and_refresh_job(trans,
                                   tenant_id,
                                   table_schema.get_table_id(),
                                   db_schema->get_database_name_str(),
                                   table_schema.get_table_name_str(),
-                                  table_schema.get_view_schema().get_mv_refresh_info(),
+                                  &(mv_additional_info->mv_refresh_info_),
                                   table_schema.get_schema_version(),
                                   mview_info))) {
             LOG_WARN("fail to start mview refresh job", KR(ret));
@@ -2765,7 +2770,9 @@ int ObDDLService::start_mview_complete_refresh_task(
   int64_t max_dependency_version = 0;
   uint64_t tenant_id = mview_schema.get_tenant_id();
   uint64_t compat_version = 0;
-  const ObMVRefreshInfo *mv_refresh_info = mview_schema.get_view_schema().get_mv_refresh_info();
+  const obrpc::ObMVAdditionalInfo *mv_additional_info = mview_schema.get_view_schema().get_mv_additional_info();
+  const obrpc::ObMVRefreshInfo *mv_refresh_info = nullptr;
+  const ObSEArray<obrpc::ObMVRequiredColumnsInfo, 8> *required_columns_infos = nullptr;
   ObFixedLengthString<common::OB_MAX_TIMESTAMP_TZ_LENGTH> time_zone;
   const ObSysVarSchema *data_format_schema = nullptr;
   const ObSysVarSchema *nls_timestamp_format = nullptr;
@@ -2776,7 +2783,18 @@ int ObDDLService::start_mview_complete_refresh_task(
   arg.consumer_group_id_ = THIS_WORKER.get_group_id();
   arg.session_id_ = 100;// FIXME
   arg.exec_tenant_id_ = tenant_id;
-  if (OB_UNLIKELY(nullptr == dep_infos || nullptr == mv_refresh_info)) {
+  if (OB_UNLIKELY(OB_ISNULL(mv_additional_info))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mv_additional_info is null", KR(ret));
+  } else if (OB_ISNULL(mv_refresh_info = &(mv_additional_info->mv_refresh_info_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mv_refresh_info is null", KR(ret));
+  } else if (OB_ISNULL(required_columns_infos = &(mv_additional_info->required_columns_infos_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("required_columns_infos is null", KR(ret));
+  } else if (OB_FAIL(arg.required_columns_infos_.assign(*required_columns_infos))) {
+    LOG_INFO("failed to assign missing mlog infos", KR(ret));
+  } else if (OB_UNLIKELY(nullptr == dep_infos)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("dep_infos is nullptr", KR(ret) , KP(dep_infos), KP(mv_refresh_info));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {

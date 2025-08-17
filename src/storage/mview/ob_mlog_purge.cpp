@@ -193,7 +193,7 @@ int ObMLogPurger::prepare_for_purge()
             } else {
               ret = OB_SUCCESS;
             }
-          } else if (OB_INVALID_SCN_VAL == mview_info.get_last_refresh_scn()) {
+          } else if (OB_INVALID_SCN_VAL == mview_info.get_last_refresh_scn() || 0 == mview_info.get_last_refresh_scn()) {
             // do nothing
           } else if (mview_info.get_refresh_method()== ObMVRefreshMethod::FAST
               || mview_info.get_refresh_method()== ObMVRefreshMethod::FORCE
