@@ -1376,6 +1376,61 @@ TEST_F(TestTmpFile, test_multiple_small_files)
   STORAGE_LOG(INFO, "=======================test_multiple_small_files end=======================");
 }
 
+TEST_F(TestTmpFile, test_tmp_file_disk_fragmentation)
+{
+  STORAGE_LOG(INFO, "=======================test_tmp_file_disk_fragmentation begin=======================");
+  int ret = OB_SUCCESS;
+  const int64_t file_cnt = 1024;
+  const int64_t write_size = 12 * 1024; // 12KB
+  char *write_buf = new char[write_size];
+  for (int64_t i = 0; i < write_size; ++i) {
+    write_buf[i] = i % 256;
+  }
+  ObArray<int64_t> fds;
+  int64_t dir = -1;
+  ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  for (int64_t i = 0; i < file_cnt; ++i) {
+    int64_t fd = -1;
+    ret = MTL(ObTenantTmpFileManager *)->open(fd, dir, "");
+    fds.push_back(fd);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    tmp_file::ObITmpFileHandle file_handle;
+    ret = MTL(ObTenantTmpFileManager *)->get_tmp_file(fd, file_handle);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ObTmpFileIOInfo io_info;
+    io_info.fd_ = fd;
+    io_info.io_desc_.set_wait_event(2);
+    io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+    io_info.buf_ = write_buf;
+    io_info.size_ = write_size;
+    ret = MTL(ObTenantTmpFileManager *)->write(MTL_ID(), io_info);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+  flush_all_page();
+
+  ObSNTenantTmpFileManager &file_mgr = MTL(ObTenantTmpFileManager *)->get_sn_file_manager();
+  ObTmpFileBlockManager &block_mgr = file_mgr.tmp_file_block_manager_;
+  block_mgr.print_block_usage();
+
+  int64_t flushed_page_num = 0;
+  int64_t macro_block_count = 0;
+  block_mgr.get_block_usage_stat(flushed_page_num, macro_block_count);
+  // we pre-allocate 4 pages for each 12KB file
+  // therefore block count should be no more than actual_block_count * 2
+  ASSERT_LE(macro_block_count, 32);
+  ASSERT_LE(block_mgr.block_map_.count(), 32);
+
+  delete[] write_buf;
+  for (int64_t i = 0; i < fds.count(); ++i) {
+    ret = MTL(ObTenantTmpFileManager *)->remove(fds.at(i));
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
+  STORAGE_LOG(INFO, "=======================test_tmp_file_disk_fragmentation end=======================");
+}
+
 void test_big_file(const int64_t write_size, const int64_t wbp_mem_limit, ObTmpFileIOInfo io_info)
 {
   int ret = OB_SUCCESS;
@@ -1575,7 +1630,7 @@ int main(int argc, char **argv)
   system("rm -f ./test_sn_tmp_file.log*");
   system("rm -rf ./run*");
   OB_LOGGER.set_file_name("test_sn_tmp_file.log", true);
-  OB_LOGGER.set_log_level("DEBUG");
+  OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
