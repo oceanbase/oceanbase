@@ -205,16 +205,18 @@ int ObTrafficControl::ObSharedDeviceControlV2::set_storage_key(const ObTrafficCo
 {
   return storage_key_.assign(key);
 }
-int ObTrafficControl::ObSharedDeviceControlV2::add_shared_device_limits()
+int ObTrafficControl::ObSharedDeviceControlV2::add_shared_device_limits(uint64_t storage_key)
 {
   int ret = OB_SUCCESS;
-  limit_ids_[static_cast<int>(ResourceType::ips)] = tclimit_create(TCLIMIT_COUNT, get_resource_type_str(ResourceType::ips));
-  limit_ids_[static_cast<int>(ResourceType::ibw)] = tclimit_create(TCLIMIT_BYTES, get_resource_type_str(ResourceType::ibw));
-  limit_ids_[static_cast<int>(ResourceType::ops)] = tclimit_create(TCLIMIT_COUNT, get_resource_type_str(ResourceType::ops));
-  limit_ids_[static_cast<int>(ResourceType::obw)] = tclimit_create(TCLIMIT_BYTES, get_resource_type_str(ResourceType::obw));
+  limit_ids_[static_cast<int>(ResourceType::ips)] = tclimit_create(TCLIMIT_COUNT, get_resource_type_str(ResourceType::ips), storage_key);
+  limit_ids_[static_cast<int>(ResourceType::ibw)] = tclimit_create(TCLIMIT_BYTES, get_resource_type_str(ResourceType::ibw), storage_key);
+  limit_ids_[static_cast<int>(ResourceType::ops)] = tclimit_create(TCLIMIT_COUNT, get_resource_type_str(ResourceType::ops), storage_key);
+  limit_ids_[static_cast<int>(ResourceType::obw)] = tclimit_create(TCLIMIT_BYTES, get_resource_type_str(ResourceType::obw), storage_key);
   LOG_INFO("add shared device limit success",
       "storage_key",
       storage_key_,
+      "storage_key_hash",
+      storage_key,
       "ips_limit_id",
       limit_ids_[static_cast<int>(ResourceType::ips)],
       "ibw_limit_id",
@@ -262,7 +264,7 @@ int ObTrafficControl::ObSharedDeviceControlV2::ObSDGroupList::add_group(const Ob
       LOG_ERROR("qdisc add limit fail" , K(ret),K(grp_key), K(qid), K(ResourceType::obw), K(limit_ids[static_cast<int>(ResourceType::obw)]));
     }
   }
-  LOG_INFO("add group limit of shared device success", K(grp_key), K(qid), K(ret));
+  LOG_INFO("add group limit of shared device success", K(grp_key), K(qid), K(limit_ids[static_cast<int>(ResourceType::ips)]), K(limit_ids[static_cast<int>(ResourceType::ibw)]), K(limit_ids[static_cast<int>(ResourceType::ops)]), K(limit_ids[static_cast<int>(ResourceType::obw)]), K(ret));
   return ret;
 }
 
@@ -617,7 +619,7 @@ int ObTrafficControl::register_bucket(ObIORequest &req, const int qid) {
       } else if (OB_ISNULL(tc = OB_NEW(ObSharedDeviceControlV2, SET_IGNORE_MEM_VERSION("SDCtrlV2")))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else if (OB_FAIL(tc->set_storage_key(key))) {
-      } else if (OB_FAIL(tc->add_shared_device_limits())) {
+      } else if (OB_FAIL(tc->add_shared_device_limits(key.hash()))) {
         LOG_WARN("add shared device limits failed", K(ret), K(req), K(grp_key), K(qid));
       } else if (OB_FAIL(shared_device_map_v2_.set_refactored(key, tc))) {
         LOG_WARN("set map failed", K(ret));

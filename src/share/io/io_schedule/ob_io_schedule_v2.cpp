@@ -308,7 +308,7 @@ int64_t ObTenantIOSchedulerV2::get_qindex(ObIORequest& req)
 int ObTenantIOSchedulerV2::get_qid(int64_t index, ObIORequest& req, bool& is_default_q)
 {
   int qid = -1;
-  if (req.is_local_clog_not_isolated()) {
+  if (req.is_local_clog_io() && req.is_local_clog_not_isolated()) {
     qid = OB_IO_MANAGER_V2.get_root_qid();
   }  else if (index >= 0 && index < qid_.count()) {
     qid = qid_.at(index);

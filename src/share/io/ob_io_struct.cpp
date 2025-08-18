@@ -1814,7 +1814,7 @@ int ObIOScheduler::schedule_request_(ObIORequest &req, const int64_t sender_idx)
   ObIOSender *sender = senders_.at(sender_idx);
   if (req.is_canceled()) {
     ret = OB_CANCELED;
-  } else if (is_server_tenant(req.tenant_id_) || req.is_local_clog_not_isolated()) {
+  } else if (is_server_tenant(req.tenant_id_) || (req.is_local_clog_io() && req.is_local_clog_not_isolated())) {
     // direct submit
     if (OB_FAIL(sender->submit(req))) {
       LOG_WARN("direct submit request failed", K(ret));

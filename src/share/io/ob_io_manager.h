@@ -264,7 +264,7 @@ public:
     int init();
     void destroy();
     int set_storage_key(const ObTrafficControl::ObStorageKey &key);
-    int add_shared_device_limits();
+    int add_shared_device_limits(uint64_t storage_key);
     int fill_qsched_req_storage_key(ObIORequest& req);
     int add_group(const ObIOSSGrpKey &grp_key, const int qid);
     int is_group_key_exist(const ObIOSSGrpKey &grp_key);

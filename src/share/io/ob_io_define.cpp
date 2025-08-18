@@ -1301,32 +1301,31 @@ oceanbase::share::ObFunctionType ObIORequest::get_func_type() const
   return func_type;
 }
 
+bool ObIORequest::is_local_clog_io() const {
+  const oceanbase::share::ObFunctionType func_type = get_func_type();
+  const ObIOGroupKey group_key = get_group_key();
+  bool is_clog_io = group_key.mode_ == ObIOMode::MAX_MODE &&
+                    (func_type == ObFunctionType::PRIO_CLOG_HIGH ||
+                     func_type == ObFunctionType::PRIO_CLOG_MID ||
+                     func_type == ObFunctionType::PRIO_CLOG_LOW);
+  return is_clog_io;
+}
+
 bool ObIORequest::is_local_clog_not_isolated()
 {
   bool clog_not_isolated = false;
   const int64_t clog_io_isolation_mode = GCONF.clog_io_isolation_mode;
-  const ObIOGroupKey group_key = get_group_key();
-  const oceanbase::share::ObFunctionType func_type = get_func_type();
   if (OB_UNLIKELY(OBSERVER.is_arbitration_mode())) {
-  } else if (GCONF.enable_logservice) { // in oblogservice mode, clog io is surely isolated
+  } else if (GCONF.enable_logservice) {
     clog_not_isolated = true;
-  } else if (group_key.mode_ != ObIOMode::MAX_MODE) {
   } else if (clog_io_isolation_mode == 0 || clog_io_isolation_mode > 2) {
-    if ((func_type == ObFunctionType::PRIO_CLOG_HIGH ||
-         func_type == ObFunctionType::PRIO_CLOG_MID ||
-         func_type == ObFunctionType::PRIO_CLOG_LOW)) {
-      clog_not_isolated = !DiskChecker::get_instance().is_clog_data_in_same_disk();
-    }
+    clog_not_isolated = !DiskChecker::get_instance().is_clog_data_in_same_disk();
   } else if (clog_io_isolation_mode == 1) {
-    if ((func_type == ObFunctionType::PRIO_CLOG_HIGH ||
-         func_type == ObFunctionType::PRIO_CLOG_MID ||
-         func_type == ObFunctionType::PRIO_CLOG_LOW)) {
-      clog_not_isolated = true;
-    }
+    clog_not_isolated = true;
   } else if (clog_io_isolation_mode == 2) {
   }
   if (REACH_TIME_INTERVAL(60 * 1000L * 1000L)) { // 60s
-    LOG_INFO("clog_not_isolated", K(clog_not_isolated), K(clog_io_isolation_mode), K(group_key), K(func_type));
+    LOG_INFO("clog_not_isolated", K(clog_not_isolated), K(clog_io_isolation_mode));
   }
   return clog_not_isolated;
 }

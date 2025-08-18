@@ -595,6 +595,7 @@ public:
   uint64_t get_sys_module_id() const;
   bool is_sys_module() const;
   oceanbase::share::ObFunctionType get_func_type() const;
+  bool is_local_clog_io() const;
   bool is_local_clog_not_isolated();
   bool is_limit_net_bandwidth_req() const;
   char *calc_io_buf();  // calc the aligned io_buf of raw_buf_, which interact with the operating system
