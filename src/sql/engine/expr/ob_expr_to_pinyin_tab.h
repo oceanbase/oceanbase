@@ -27,6 +27,18 @@ struct PinyinPair{
   ObString pinyin;
 };
 extern PinyinPair PINYIN_TABLE[PINYIN_COUNT];
+const uint64_t OptionCnt = 7;
+const char* const OptionStr[OptionCnt] = {"Full", "Cap", "First_Cap", "All_Cap",
+                                          "Initial", "Cap_Initial", "All_Cap_Initial"};
+enum ModeOption {
+  Full = 0,
+  Cap,
+  First_Cap,
+  All_Cap,
+  Initial,
+  Cap_Initial,
+  All_Cap_Initial,
+};
 } // end namespace sql
 } // end namespace oceanbase
 #endif /* OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_TO_PINYIN_ */
