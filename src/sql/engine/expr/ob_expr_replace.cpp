@@ -98,7 +98,12 @@ int ObExprReplace::calc_result_typeN(ObExprResType &type,
       if (param_num == 2 || types_array[2].is_null() || types_array[2].get_calc_length() == 0) {
         // do nothing
       } else {
-        OX(result_len *= types_array[2].get_calc_length());
+        if (OB_SUCC(ret)) {
+          result_len *= types_array[2].get_calc_length();
+          if (result_len > OB_MAX_LONGTEXT_LENGTH) {
+            result_len = OB_MAX_LONGTEXT_LENGTH;
+          }
+        }
         if (OB_SUCC(ret) && (type.is_nchar() || type.is_nvarchar2())) {
           const ObCharsetInfo *cs = ObCharset::get_charset(type.get_collation_type());
           result_len = result_len * cs->mbmaxlen;
