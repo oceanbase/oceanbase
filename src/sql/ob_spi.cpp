@@ -1125,6 +1125,11 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
     }
     result->set_param_meta();
   }
+  ObExprResType result_type;
+  OZ (get_result_type(*ctx, *expr, result_type));
+  if (OB_SUCC(ret) && result_type.is_ext()) {
+    OX (result->set_udt_id(result_type.get_udt_id()));
+  }
   if (OB_SUCC(ret)) {
     result->set_is_pl_mock_default_param(expr->get_is_pl_mock_default_expr());
   } else if (lib::is_mysql_mode()) {
@@ -1302,6 +1307,40 @@ int ObSPIService::check_and_deep_copy_result(ObIAllocator &alloc,
     OZ (deep_copy_obj(alloc, src, dst));
   }
 
+  return ret;
+}
+
+int ObSPIService::spi_get_package_var_type(ObExecContext *exec_ctx,
+                                           uint64_t package_id,
+                                           int64_t var_idx,
+                                           pl::ObPLDataType &type)
+{
+  int ret = OB_SUCCESS;
+  ObPL *pl_engine = NULL;
+  ObMySQLProxy *sql_proxy = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  CK (OB_NOT_NULL(GCTX.schema_service_));
+  CK (OB_NOT_NULL(exec_ctx));
+  CK (OB_NOT_NULL(session_info = exec_ctx->get_my_session()));
+  CK (OB_NOT_NULL(sql_proxy = exec_ctx->get_sql_proxy()));
+  CK (OB_NOT_NULL(pl_engine = session_info->get_pl_engine()));
+  if (OB_SUCC(ret)) {
+    const ObPLVar *var = NULL;
+    ObPLPackageManager &pl_manager = pl_engine->get_package_manager();
+    share::schema::ObSchemaGetterGuard schema_guard;
+    ObPLPackageGuard package_guard(session_info->get_effective_tenant_id());
+    ObPLResolveCtx resolve_ctx(exec_ctx->get_allocator(),
+                               *session_info,
+                               schema_guard,
+                               package_guard,
+                               *sql_proxy,
+                               false); // is_prepare_protocol
+    OZ (GCTX.schema_service_->get_tenant_schema_guard(
+        session_info->get_effective_tenant_id(), schema_guard));
+    OZ (package_guard.init());
+    OZ (pl_manager.get_package_var(resolve_ctx, package_id, var_idx, var));
+    OX (type = var->get_type());
+  }
   return ret;
 }
 
@@ -3709,7 +3748,8 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
                                             int64_t cursor_param_count)
 {
   int ret = OB_SUCCESS;
-
+  ObPLDataType formal_param_type;
+  bool convert = false;
   ObObjParam dummy_result;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < cursor_param_count; ++i) {
@@ -3732,12 +3772,35 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
       }
     }
 
+    CK (OB_NOT_NULL(ctx));
+    CK (OB_NOT_NULL(ctx->exec_ctx_));
+    CK (OB_NOT_NULL(ctx->allocator_));
+    OX (convert = false);
+    if (OB_FAIL(ret)) {
+    } else if (DECL_PKG == loc) {
+      OZ (spi_get_package_var_type(ctx->exec_ctx_, package_id, formal_param_idxs[i], formal_param_type));
+    } else {
+      OZ (ObPLContext::get_subprogram_var_type(ctx->exec_ctx_, package_id, routine_id, formal_param_idxs[i], formal_param_type));
+    }
+    if (OB_SUCC(ret) && formal_param_type.is_composite_type() && !formal_param_type.is_generic_type() && !formal_param_type.is_opaque_type()
+       && dummy_result.is_ext() && dummy_result.get_ext() != 0 && (formal_param_type.get_user_type_id() != dummy_result.get_udt_id())) {
+      OZ (ObPLExecState::convert_composite(*ctx, dummy_result, formal_param_type));
+      OX (convert = true);
+    }
+
     if (OB_FAIL(ret)) {
     } else if (DECL_PKG == loc) {
       OZ (spi_set_package_variable(ctx, package_id, formal_param_idxs[i], dummy_result));
     } else {
       OZ (ObPLContext::set_subprogram_var_from_local(
         session_info, package_id, routine_id, formal_param_idxs[i], dummy_result));
+    }
+    if (convert) {
+      int tmp_ret = ObUserDefinedType::destruct_objparam(*ctx->allocator_, dummy_result, &session_info);
+      if (tmp_ret != OB_SUCCESS) {
+        LOG_WARN("failed to destruct obj", K(tmp_ret));
+      }
+      ret = ret == OB_SUCCESS ? tmp_ret : ret;
     }
   }
 

@@ -587,6 +587,7 @@ public:
                                         const ObPLINS &ns,
                                         jit::ObLLVMValue &allocator,
                                         jit::ObLLVMValue &dest) const;
+  virtual int convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const;
 };
 #endif
 //---------- for ObCollectionType ----------
