@@ -61,7 +61,7 @@ public:
 
   int init();
   void destroy();
-  int record_table_referenced_columns(const TableItem *table_item,
+  int record_table_referenced_columns(const uint64_t table_ref_id,
                                       const ObIArray<ColumnItem> &columns);
   int convert_to_required_columns_infos(ObIArray<obrpc::ObMVRequiredColumnsInfo> &required_columns_infos);
   int append_to_table_referenced_columns(const uint64_t table_id,
@@ -120,6 +120,11 @@ class ObMVChecker
   const ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &get_expand_aggrs() const {  return expand_aggrs_;  }
   int64_t get_union_all_marker_idx() const {  return marker_idx_;  }
   const ObIArray<ObMVRefreshableType> &get_child_refresh_types() const {  return child_refresh_types_;  }
+  static int get_valid_index_for_min_max_aggr(ObSqlSchemaGuard &sql_schema_guard,
+                                              const uint64_t phy_table_id,
+                                              const uint64_t param_col_id,
+                                              const ObIArray<ObRawExpr*> &group_by_exprs,
+                                              const ObTableSchema *&index_schema);
 private:
   int check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool &is_valid);
   int check_mv_join_type(const ObSelectStmt &stmt, bool &is_valid_join, bool &has_outer_join);
@@ -138,10 +143,11 @@ private:
   int check_select_all_single_column(const ObSelectStmt &stmt, bool &contain_all_single_columns);
   int check_mv_stmt_use_special_expr(const ObSelectStmt &stmt, bool &has_special_expr);
   int check_mv_table_type_valid(const ObSelectStmt &stmt, bool &is_valid);
+  int check_mv_has_non_proctime_table(const ObSelectStmt &stmt, bool &has_non_proctime_table);
   int check_has_rowid_exprs(const ObDMLStmt *stmt, bool &has_rowid);
   int check_mv_dependency_mlog_tables(const ObSelectStmt &stmt, bool &is_valid);
-  int check_mv_duplicated_exprs(const ObSelectStmt &stmt, bool &has_dup_exprs);
   bool check_mlog_table_valid(const share::schema::ObTableSchema *table_schema,
+                              const TableItem *table_item,
                               const ObIArray<ColumnItem> &columns,
                               const share::schema::ObTableSchema &mlog_schema,
                               ObSchemaGetterGuard *schema_guard,
@@ -160,6 +166,9 @@ private:
                                 ObIArray<ObAggFunRawExpr*> &all_aggrs,
                                 ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs,
                                 bool &is_valid);
+  int check_min_max_aggr_fast_refresh_valid(const ObSelectStmt &stmt,
+                                            ObAggFunRawExpr &aggr,
+                                            bool &is_valid);
   int try_replace_equivalent_count_aggr(const ObSelectStmt &stmt,
                                         const int64_t orig_aggr_count,
                                         ObIArray<ObAggFunRawExpr*> &all_aggrs,
@@ -194,6 +203,8 @@ private:
   static bool is_child_refresh_type_supported(const ObMVRefreshableType refresh_type);
   int check_union_all_refresh_type(const ObSelectStmt &stmt, ObMVRefreshableType &refresh_type);
   int check_union_all_mv_marker_column_valid(const ObSelectStmt &stmt, bool &is_valid);
+  inline bool is_child_stmt(const ObSelectStmt *stmt) const { return &stmt_ != stmt; }
+
 private:
   const ObSelectStmt &stmt_;
   ObMVRefreshableType refresh_type_;

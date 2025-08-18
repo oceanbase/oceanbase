@@ -905,7 +905,8 @@ int ObOptimizerUtil::compute_const_exprs(ObRawExpr *cur_expr,
   if (OB_ISNULL(cur_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr passed in should not be NULL", K(ret));
-  } else if (T_OP_EQ == cur_expr->get_expr_type() || T_OP_IS == cur_expr->get_expr_type()) {
+  } else if (T_OP_EQ == cur_expr->get_expr_type() || T_OP_IS == cur_expr->get_expr_type()
+             || T_OP_NSEQ == cur_expr->get_expr_type()) {
     ObRawExpr *param_1 = cur_expr->get_param_expr(0);
     ObRawExpr *param_2 = cur_expr->get_param_expr(1);
     if (OB_ISNULL(param_1) || OB_ISNULL(param_2)) {
@@ -924,7 +925,7 @@ int ObOptimizerUtil::compute_const_exprs(ObRawExpr *cur_expr,
         ObRawExpr *orig_const_expr = left_const ?
                                      cur_expr->get_param_expr(0) :
                                      cur_expr->get_param_expr(1);
-        if (T_OP_EQ == cur_expr->get_expr_type()) {
+        if (T_OP_EQ == cur_expr->get_expr_type() || T_OP_NSEQ == cur_expr->get_expr_type()) {
           bool is_const = true;
           if (!ob_is_valid_obj_tc(const_expr->get_type_class()) ||
               !ob_is_valid_obj_tc(common_expr->get_type_class())) {

@@ -213,7 +213,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
       ObViewTableResolver view_table_resolver(params_, stmt->get_database_name(),
                                               table_schema.get_table_name());
       view_table_resolver.params_.is_from_create_view_ = true;
-      view_table_resolver.params_.is_from_create_mview_ = is_materialized_view;
+      view_table_resolver.params_.is_mview_definition_sql_ = is_materialized_view;
       view_table_resolver.params_.is_specified_col_name_ = parse_tree.children_[VIEW_COLUMNS_NODE] != NULL;
       view_table_resolver.set_current_view_level(1);
       view_table_resolver.set_is_top_stmt(true);
@@ -326,7 +326,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
                                              *session_info_,
                                              column_list,
                                              comment_list,
-                                             params_.is_from_create_mview_))) {
+                                             params_.is_mview_definition_sql_))) {
         LOG_WARN("failed to add column infos", K(ret));
       } else if ((!resolve_succ || add_undefined_columns)
                   && is_force_view && lib::is_oracle_mode()
@@ -400,9 +400,13 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
     }
 
     if (OB_SUCC(ret) && is_materialized_view) {
-      if (OB_FAIL(ObMViewResolverHelper::resolve_materialized_view(
-              parse_tree, stmt, mv_primary_key_node, table_schema, select_stmt, create_arg,
-              *this))) {
+      if (OB_FAIL(ObMViewResolverHelper::resolve_materialized_view(parse_tree,
+                                                                   stmt,
+                                                                   mv_primary_key_node,
+                                                                   table_schema,
+                                                                   select_stmt,
+                                                                   create_arg,
+                                                                   *this))) {
         LOG_WARN("fail to resolve materialized view", K(ret));
       }
     }
@@ -1172,7 +1176,6 @@ int ObCreateViewResolver::create_alias_names_auto(
 
   return ret;
 }
-
 
 int ObCreateViewResolver::resolve_column_list(ParseNode *view_columns_node,
                                               ObIArray<ObString> &column_list,

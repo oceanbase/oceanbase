@@ -61,45 +61,16 @@ int ObOuterJoinMJVPrinter::gen_delta_pre_table_views()
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < mv_def_stmt_.get_table_size(); ++i) {
     const TableItem *ori_table = mv_def_stmt_.get_table_item(i);
-    if (OB_FAIL(gen_one_delta_pre_table_view(ori_table, all_delta_table_views_.at(i), true))) {
-      LOG_WARN("failed to generate delta table view", K(ret), K(i));
-    } else if (OB_FAIL(gen_one_delta_pre_table_view(ori_table, all_pre_table_views_.at(i), false))) {
+    if (OB_ISNULL(ori_table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("source table is null", K(ret), K(i));
+    } else if (OB_FAIL(gen_delta_pre_table_view(ori_table, all_pre_table_views_.at(i), false))) {
       LOG_WARN("failed to generate pre table view", K(ret), K(i));
+    } else if (is_table_skip_refresh(*ori_table)) {
+      // do nothing, no need to gen delta table view
+    } else if (OB_FAIL(gen_delta_pre_table_view(ori_table, all_delta_table_views_.at(i), true))) {
+      LOG_WARN("failed to generate delta table view", K(ret), K(i));
     }
-  }
-  return ret;
-}
-
-int ObOuterJoinMJVPrinter::gen_one_delta_pre_table_view(const TableItem *ori_table,
-                                                        ObSelectStmt *&view_stmt,
-                                                        const bool is_delta_view)
-{
-  int ret = OB_SUCCESS;
-  TableItem *new_table = NULL;
-  ObRawExpr *cond_expr = NULL;
-  view_stmt = NULL;
-  if (OB_ISNULL(ori_table)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table is null", K(ret));
-  } else if (OB_FAIL(create_simple_stmt(view_stmt))) {
-    LOG_WARN("failed to create simple stmt", K(ret));
-  } else if (OB_FAIL(create_simple_table_item(view_stmt,
-                                              ori_table->table_name_,
-                                              new_table))) {
-  } else if (OB_ISNULL(view_stmt) || OB_ISNULL(new_table)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(view_stmt), K(new_table));
-  } else if (OB_FALSE_IT(set_info_for_simple_table_item(*new_table, *ori_table))) {
-  } else if (OB_FAIL(add_normal_column_to_select_list(*new_table,
-                                                      *ori_table,
-                                                      view_stmt->get_select_items()))) {
-    LOG_WARN("failed to generate delta table view select lists", K(ret));
-  } else if (OB_FAIL(gen_exists_cond_for_table(ori_table, new_table, is_delta_view, false, cond_expr))) {
-    LOG_WARN("failed to create simple column exprs", K(ret));
-  } else if (OB_FAIL(view_stmt->get_condition_exprs().push_back(cond_expr))) {
-    LOG_WARN("failed to push back semi filter", K(ret));
-  } else if (OB_FAIL(add_semi_to_inner_hint(view_stmt))) {
-    LOG_WARN("failed to add semi to inner hint", K(ret));
   }
   return ret;
 }
@@ -139,6 +110,8 @@ int ObOuterJoinMJVPrinter::gen_refresh_dmls_for_table(const TableItem *table,
     int64_t delta_table_idx = -1;
     if (OB_FAIL(mv_def_stmt_.get_table_item_idx(table, delta_table_idx))) {
       LOG_WARN("failed to get delta table idx", K(ret));
+    } else if (is_table_skip_refresh(*table)) {
+      // do nothing, no need to refresh
     } else if (NULL == upper_table || INNER_JOIN == upper_table->joined_type_) {
       if (OB_FAIL(gen_refresh_dmls_for_inner_join(table,
                                                   delta_table_idx,
@@ -502,7 +475,7 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
     LOG_WARN("failed to create simple stmt", K(ret));
   } else if (OB_FAIL(create_simple_table_item(mv_stat_stmt, mv_schema_.get_table_name(), mv_table, NULL, false))) {
     LOG_WARN("failed to create simple table item", K(ret));
-  } else if (OB_FAIL(gen_delta_table_view(*delta_table, dlt_t_mlog_stmt, MLOG_EXT_COL_ROWKEY_ONLY))) {
+  } else if (OB_FAIL(gen_delta_mlog_table_view(*delta_table, dlt_t_mlog_stmt, MLOG_EXT_COL_ROWKEY_ONLY))) {
     LOG_WARN("failed to generate dlt_t_mlog view", K(ret), KPC(delta_table));
   } else if (OB_ISNULL(mv_stat_stmt) || OB_ISNULL(mv_table) || OB_ISNULL(dlt_t_mlog_stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -821,6 +794,8 @@ int ObOuterJoinMJVPrinter::add_set_null_to_upd_stmt(const ObRelIds &set_null_tab
     } else if (!sel_item.expr_->is_column_ref_expr()) {
       // do nothing
     } else if (OB_FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr*>(sel_item.expr_))) {
+    } else if (copier.is_existed(col_expr)) {
+      // do nothing
     } else if (set_null_tables.is_superset(col_expr->get_relation_ids())) {
       // replace as NULL
       if (OB_FAIL(copier.add_replaced_expr(col_expr, exprs_.null_expr_))) {

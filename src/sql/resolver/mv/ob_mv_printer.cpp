@@ -107,7 +107,9 @@ int ObMVPrinter::gen_mv_operator_stmts(ObIArray<ObDMLStmt*> &dml_stmts)
   return ret;
 }
 
-int ObMVPrinter::get_mv_select_item_name(const ObRawExpr *expr, ObString &select_name)
+int ObMVPrinter::get_mv_select_item_name(const ObRawExpr *expr,
+                                         ObString &select_name,
+                                         const bool ignore_empty_res  /*default false*/)
 {
   int ret = OB_SUCCESS;
   select_name = ObString::make_empty_string();
@@ -123,7 +125,7 @@ int ObMVPrinter::get_mv_select_item_name(const ObRawExpr *expr, ObString &select
       select_name = select_item.alias_name_;
     }
   }
-  if (OB_SUCC(ret) && OB_UNLIKELY(select_name.empty())) {
+  if (OB_SUCC(ret) && OB_UNLIKELY(select_name.empty() && !ignore_empty_res)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get select item name", K(ret), KPC(expr));
   }
@@ -206,22 +208,78 @@ int ObMVPrinter::get_mlog_table_schema(const TableItem *table,
   return ret;
 }
 
+/**
+ * @brief ObMVPrinter::gen_delta_pre_table_view
+ *
+ * SELECT xxx FROM ori_table
+ * WHERE exists / not exists  #is_delta_view: true -> exists; false -> not exists
+ *       (SELECT 1 FROM mlog_table
+ *        WHERE ori_table.pk = mlog_table.pk
+ *              and ora_rowscn > last_refresh_scn(mv_id));
+ *
+ * @param is_delta_view: decide the filter type of exists or not exists
+ * @param need_hint: whether need to add semi to inner hint, default true
+ */
+int ObMVPrinter::gen_delta_pre_table_view(const TableItem *ori_table,
+                                          ObSelectStmt *&view_stmt,
+                                          const bool is_delta_view,
+                                          const bool need_hint /* = true */)
+{
+  int ret = OB_SUCCESS;
+  TableItem *new_table = NULL;
+  ObRawExpr *cond_expr = NULL;
+  view_stmt = NULL;
+  if (OB_ISNULL(ori_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table is null", K(ret));
+  } else if (OB_FAIL(create_simple_stmt(view_stmt))) {
+    LOG_WARN("failed to create simple stmt", K(ret));
+  } else if (OB_FAIL(create_simple_table_item(view_stmt,
+                                              ori_table->table_name_,
+                                              new_table))) {
+  } else if (OB_ISNULL(view_stmt) || OB_ISNULL(new_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(view_stmt), K(new_table));
+  } else if (OB_FALSE_IT(set_info_for_simple_table_item(*new_table, *ori_table))) {
+  } else if (OB_FAIL(add_normal_column_to_select_list(*new_table,
+                                                      *ori_table,
+                                                      view_stmt->get_select_items()))) {
+    LOG_WARN("failed to generate delta table view select lists", K(ret));
+  } else if (is_table_skip_refresh(*ori_table)) {
+    if (OB_UNLIKELY(is_delta_view)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("should not gen delta view for skip refresh table", K(ret), K(is_delta_view), KPC(ori_table));
+    } else {
+      // do nothing, no need to add exists cond for pre table view
+    }
+  } else if (OB_FAIL(gen_exists_cond_for_table(ori_table, new_table, is_delta_view, false, cond_expr))) {
+    LOG_WARN("failed to create simple column exprs", K(ret));
+  } else if (OB_FAIL(view_stmt->get_condition_exprs().push_back(cond_expr))) {
+    LOG_WARN("failed to push back semi filter", K(ret));
+  } else if (need_hint && OB_FAIL(add_semi_to_inner_hint(view_stmt))) {
+    LOG_WARN("failed to add semi to inner hint", K(ret));
+  }
+  return ret;
+}
+
 //  select  t.*,
 //          min(sequence) over (...),
 //          max(sequence) over (...),
 //          (case when "OLD_NEW$$" = 'N' then 1 else -1 end) dml_factor
 //  from mlog_tbale
 //  where scn > xxx and scn <= scn;
-int ObMVPrinter::gen_delta_table_view(const TableItem &source_table,
-                                      ObSelectStmt *&view_stmt,
-                                      const uint64_t ext_sel_flags)
+int ObMVPrinter::gen_delta_mlog_table_view(const TableItem &source_table,
+                                           ObSelectStmt *&view_stmt,
+                                           const uint64_t ext_sel_flags)
 {
   int ret = OB_SUCCESS;
   view_stmt = NULL;
   const ObTableSchema *mlog_schema = NULL;
   TableItem *table_item = NULL;
-  ObSelectStmt *select_stmt = NULL;
-  if (OB_FAIL(create_simple_stmt(view_stmt))) {
+  if (OB_UNLIKELY(source_table.is_mv_proctime_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("can not gen delta mlog table view for proctime table", K(ret), K(source_table));
+  } else if (OB_FAIL(create_simple_stmt(view_stmt))) {
     LOG_WARN("failed to create simple stmt", K(ret));
   } else if (OB_FAIL(get_mlog_table_schema(&source_table, mlog_schema))) {
     LOG_WARN("failed to get mlog schema", K(ret), K(source_table));
@@ -699,6 +757,9 @@ int ObMVPrinter::gen_exists_cond_for_table(const TableItem *source_table,
   if (OB_ISNULL(outer_table) || OB_ISNULL(source_table) || OB_ISNULL(ctx_.stmt_factory_.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(outer_table), K(source_table), K(ctx_.stmt_factory_.get_query_ctx()));
+  } else if (OB_UNLIKELY(source_table->is_mv_proctime_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("can not gen exists cond for proctime table", K(ret), KPC(source_table));
   } else if (OB_FAIL(get_mlog_table_schema(source_table, mlog_schema))) {
     LOG_WARN("failed to get mlog schema", K(ret), KPC(source_table));
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_REF_QUERY, query_ref_expr))
@@ -1223,6 +1284,12 @@ int ObMVPrinter::add_dynamic_sampling_hint(ObDMLStmt *stmt,
     LOG_WARN("failed to merge hint", K(ret));
   }
   return ret;
+}
+
+bool ObMVPrinter::is_table_skip_refresh(const TableItem &table) const
+{
+  // TODO we can skip refresh for tables that do not contain delta data
+  return table.is_mv_proctime_table_;
 }
 
 int ObMVPrinter::print_complete_refresh_mview_operator(ObRawExprFactory &expr_factory,

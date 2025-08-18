@@ -738,6 +738,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"procedure", PROCEDURE},
   {"process", PROCESS},
   {"processlist", PROCESSLIST},
+  {"proctime", PROCTIME},
   {"profile", PROFILE},
   {"profiles", PROFILES},
   {"progressive_merge_num", PROGRESSIVE_MERGE_NUM},

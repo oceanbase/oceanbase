@@ -21,6 +21,7 @@
 #include "sql/resolver/mv/ob_outer_join_mjv_printer.h"
 #include "sql/resolver/mv/ob_union_all_mv_printer.h"
 #include "sql/rewrite/ob_transformer_impl.h"
+#include "sql/rewrite/ob_transform_utils.h"
 
 namespace oceanbase
 {
@@ -495,6 +496,7 @@ int ObMVProvider::generate_mv_stmt(ObIAllocator &alloc,
   resolver_ctx.stmt_factory_ = &stmt_factory;
   resolver_ctx.sql_proxy_ = GCTX.sql_proxy_;
   resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx();
+  resolver_ctx.is_mview_definition_sql_ = true;
   ObSelectStmt *sel_stmt = NULL;
   ObSelectResolver select_resolver(resolver_ctx);
   if (OB_FAIL(ObSQLUtils::generate_view_definition_for_resolve(alloc,
@@ -693,7 +695,9 @@ int ObMVProvider::transform_mv_def_stmt(ObDMLStmt *&mv_def_stmt,
     trans_ctx.exec_ctx_ = session_info->get_cur_exec_ctx();
     trans_ctx.expr_factory_ = expr_factory;
     trans_ctx.stmt_factory_ = stmt_factory;
-    if (OB_FAIL(transformer.transform_rule_set(mv_def_stmt, rule_set, 1, trans_happened))) {
+    if (OB_FAIL(ObTransformUtils::right_join_to_left(mv_def_stmt))) {
+      LOG_WARN("failed to transform right join to left", K(ret));
+    } else if (OB_FAIL(transformer.transform_rule_set(mv_def_stmt, rule_set, 1, trans_happened))) {
       LOG_WARN("failed to transform mv def stmt", K(ret));
     }
   }

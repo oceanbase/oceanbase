@@ -3683,7 +3683,7 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
       } else if (params_.is_from_create_view_ && table_schema->is_mysql_tmp_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "View/Table's column refers to a temporary table");
-      } else if (params_.is_from_create_mview_
+      } else if (params_.is_mview_definition_sql_
                  && OB_FAIL(check_is_table_supported_for_mview(*table_item, *table_schema))) {
         LOG_WARN("failed to check is table supported for mview", K(ret));
       } else if (OB_FAIL(resolve_table_partition_expr(*table_item, *table_schema))) {
@@ -3932,6 +3932,14 @@ int ObDMLResolver::resolve_flashback_query_node(const ParseNode *time_node, Tabl
           expr = dst_expr;
         }
       }
+    }
+  } else if (T_TABLE_FLASHBACK_PROCTIME == time_node->type_) {
+    if (OB_UNLIKELY(!(params_.is_mview_definition_sql_
+                      || session_info_->get_ddl_info().is_refreshing_mview()))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using PROCTIME() out of CREATE MATERIALIZED VIEW is");
+    } else {
+      table_item->is_mv_proctime_table_ = true;
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -5447,7 +5455,7 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
     if (!stmt->is_select_stmt() && OB_NOT_NULL(time_node)) {
       ret = OB_ERR_FLASHBACK_QUERY_WITH_UPDATE;
       LOG_WARN("snapshot expression not allowed here", K(ret));
-    } else if (params_.is_from_create_mview_ &&
+    } else if (params_.is_mview_definition_sql_ &&
               OB_FAIL(check_is_table_supported_for_mview(table_node->type_))) {
       LOG_WARN("failed to check is table supported for mview", K(ret));
     } else {
@@ -7574,7 +7582,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_dblink(uint64_t dblink_id,
   } else if (OB_FAIL(schema_checker_->get_link_table_schema(dblink_id, database_name,
                                                             table_name, table_schema, session_info_, dblink_name, is_reverse_link))) {
     LOG_WARN("get link table info failed", K(ret));
-  } else if (OB_UNLIKELY(params_.is_from_create_mview_)) {
+  } else if (OB_UNLIKELY(params_.is_mview_definition_sql_)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported link table in materialized view", K(ret), K(dblink_name), K(table_name));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "unsupported link table in materialized view");

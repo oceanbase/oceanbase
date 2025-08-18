@@ -2727,7 +2727,7 @@ int ObSelectResolver::resolve_sensitive_rule(SelectItem &select_item)
   } else if (is_oracle_mode()
        || !((0 == current_level_ && get_parent_namespace_resolver() == NULL)
             || (1 == current_level_ && is_dml_child))
-       || (params_.is_from_create_view_ && !params_.is_from_create_mview_)
+       || (params_.is_from_create_view_ && !params_.is_mview_definition_sql_)
        || params_.is_returning_) {
     // only resolve sensitive rule in mysql mode
     // only resolve sensitive rule for top-level select or the first-level child of dml
@@ -2754,7 +2754,7 @@ int ObSelectResolver::resolve_sensitive_rule(SelectItem &select_item)
       if (OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE != ret) {
         LOG_WARN("failed to check sensitive rule priv", K(ret));
       } else if (params_.is_from_create_table_
-                 || params_.is_from_create_mview_
+                 || params_.is_mview_definition_sql_
                  || NULL != upper_insert_resolver_
                  || is_dml_child) {
         ret = OB_ERR_NO_SENSITIVE_RULE_PRIVILEGE;

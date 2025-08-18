@@ -342,7 +342,7 @@ struct ObResolverParams
        is_from_show_resolver_(false),
        is_restore_(false),
        is_from_create_view_(false),
-       is_from_create_mview_(false),
+       is_mview_definition_sql_(false),
        is_from_create_table_(false),
        is_prepare_protocol_(false),
        is_pre_execute_(false),
@@ -411,7 +411,7 @@ public:
   //查询建表、创建视图不能包含临时表;
   //前者是实现起来问题, 后者是兼容MySQL;
   bool is_from_create_view_;
-  bool is_from_create_mview_;
+  bool is_mview_definition_sql_;
   bool is_from_create_table_;
   bool is_prepare_protocol_;
   bool is_pre_execute_;

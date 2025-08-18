@@ -43,6 +43,8 @@ private:
   int gen_child_refresh_dmls(const ObMVRefreshableType refresh_type,
                              const ObSelectStmt &child_sel_stmt,
                              ObIArray<ObDMLStmt*> &dml_stmts);
+  int get_child_expand_aggrs(const ObSelectStmt &child_sel_stmt,
+                             ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &child_expand_aggrs);
 private:
   int64_t marker_idx_;
   const ObIArray<ObMVRefreshableType> &child_refresh_types_;

@@ -36,9 +36,6 @@ private:
   virtual int gen_refresh_dmls(ObIArray<ObDMLStmt*> &dml_stmts) override;
   virtual int gen_real_time_view(ObSelectStmt *&sel_stmt) override;
   int gen_delta_pre_table_views();
-  int gen_one_delta_pre_table_view(const TableItem *ori_table,
-                                   ObSelectStmt *&view_stmt,
-                                   const bool is_delta_view);
   int gen_refresh_dmls_for_table(const TableItem *table,
                                  const JoinedTable *upper_table,
                                  ObSqlBitSet<> &refreshed_table_idxs,

@@ -1788,6 +1788,7 @@ class SqlKeywords:
          PRIMARY_ZONE
          PRIVILEGES
          PROCESSLIST
+         PROCTIME
          PROFILE
          PROFILES
          PROXY

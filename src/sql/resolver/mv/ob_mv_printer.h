@@ -190,14 +190,20 @@ protected:
                                  ObRawExprCopier &copier);
   int construct_from_items_for_simple_mjv_delta_data(ObRawExprCopier &copier,
                                                      ObSelectStmt &target_stmt);
-                            int get_mv_select_item_name(const ObRawExpr *expr, ObString &select_name);
+  int get_mv_select_item_name(const ObRawExpr *expr,
+                              ObString &select_name,
+                              const bool ignore_empty_res = false);
   int append_old_new_row_filter(const TableItem &table_item,
                                 ObIArray<ObRawExpr*> &filters,
                                 const bool get_old_row = true,
                                 const bool get_new_row = true);
-  int gen_delta_table_view(const TableItem &source_table,
-                           ObSelectStmt *&view_stmt,
-                           const uint64_t ext_sel_flags = UINT64_MAX);
+  int gen_delta_pre_table_view(const TableItem *ori_table,
+                               ObSelectStmt *&view_stmt,
+                               const bool is_delta_view,
+                               const bool need_hint = true);
+  int gen_delta_mlog_table_view(const TableItem &source_table,
+                                ObSelectStmt *&view_stmt,
+                                const uint64_t ext_sel_flags = UINT64_MAX);
   int gen_mlog_table_scn_filters(const TableItem &mlog_source_table,
                                  const TableItem &mlog_table,
                                  ObIArray<ObRawExpr*> &conds);
@@ -254,6 +260,7 @@ protected:
   int get_mv_rowkey_column_ids(ObIArray<uint64_t> &rowkey_column_ids);
   int add_semi_to_inner_hint(ObDMLStmt *stmt);
   int add_dynamic_sampling_hint(ObDMLStmt *stmt, const TableItem *table);
+  bool is_table_skip_refresh(const TableItem &table) const;
   template <typename StmtType>
   inline int create_simple_stmt(StmtType *&stmt)
   {

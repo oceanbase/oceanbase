@@ -38,7 +38,6 @@ private:
   virtual int gen_inner_delta_mav_for_mav(ObIArray<ObSelectStmt*> &inner_delta_mavs) override;
   int gen_update_insert_delete_for_simple_join_mav(ObIArray<ObDMLStmt*> &dml_stmts);
   int gen_merge_for_simple_join_mav(ObIArray<ObDMLStmt *> &dml_stmts);
-  int gen_inner_delta_mav_for_simple_join_mav(ObIArray<ObSelectStmt*> &inner_delta_mavs);
   int gen_inner_delta_mav_for_simple_join_mav(const int64_t inner_delta_no,
                                               const ObIArray<ObSelectStmt*> &all_delta_datas,
                                               const ObIArray<ObSelectStmt*> &all_pre_datas,

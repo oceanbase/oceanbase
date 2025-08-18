@@ -117,7 +117,10 @@ int ObMViewResolverHelper::resolve_mv_options(const ObSelectStmt *stmt,
   int ret = OB_SUCCESS;
   refresh_info.refresh_method_ = ObMVRefreshMethod::FORCE; //default method is force
   refresh_info.refresh_mode_ = ObMVRefreshMode::DEMAND; //default mode is demand
-  if (NULL == options_node) {
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else if (NULL == options_node) {
     /* do nothing */
   } else if (OB_UNLIKELY(T_MV_OPTIONS != options_node->type_ || 1 != options_node->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -168,6 +171,15 @@ int ObMViewResolverHelper::resolve_mv_options(const ObSelectStmt *stmt,
           OB_FAIL(check_on_query_computation_supported(stmt))) {
         LOG_WARN("fail to check on query computation mv column type", KR(ret));
       }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    bool cnt_proctime_table = false;
+    if (OB_FAIL(stmt->is_contains_mv_proctime_table(cnt_proctime_table))) {
+      LOG_WARN("failed to check contains mv proctime table", KR(ret));
+    } else if (cnt_proctime_table) {
+      table_schema.set_mv_cnt_proctime_table(MV_CNT_PROCTIME_TABLE);
+      container_table_schema.set_mv_cnt_proctime_table(MV_CNT_PROCTIME_TABLE);
     }
   }
   return ret;
@@ -460,11 +472,18 @@ int ObMViewResolverHelper::resolve_materialized_view(const ParseNode &parse_tree
                    parse_tree.children_[ObCreateViewResolver::COLUMN_GROUP_NODE],
                    mv_ainfo->container_table_schema_))) {
       LOG_WARN("fail to resolve column group", KR(ret));
-    } else if (OB_FAIL(resolve_mv_options(
-                   select_stmt, parse_tree.children_[ObCreateViewResolver::MVIEW_NODE],
-                   mv_ainfo->mv_refresh_info_, table_schema, mv_ainfo->container_table_schema_,
-                   mv_ainfo->required_columns_infos_, resolver))) {
+    } else if (OB_FAIL(resolve_mv_options(select_stmt,
+                                          parse_tree.children_[ObCreateViewResolver::MVIEW_NODE],
+                                          mv_ainfo->mv_refresh_info_,
+                                          table_schema,
+                                          mv_ainfo->container_table_schema_,
+                                          mv_ainfo->required_columns_infos_,
+                                          resolver))) {
       LOG_WARN("fail to resolve mv options", K(ret));
+    } else if (OB_UNLIKELY(tenant_data_version < DATA_VERSION_4_3_5_4
+                           && table_schema.is_mv_cnt_proctime_table())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version is less than 4.3.5 BP4, create materialized view with table AS OF PROCTIME() is");
     }
 
     if (OB_SUCC(ret)) {

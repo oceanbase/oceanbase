@@ -38,29 +38,20 @@ protected:
   virtual int gen_refresh_dmls(ObIArray<ObDMLStmt*> &dml_stmts) override;
   virtual int gen_real_time_view(ObSelectStmt *&sel_stmt) override;
   virtual int gen_inner_delta_mav_for_mav(ObIArray<ObSelectStmt*> &inner_delta_mavs);
-
-  int get_equivalent_null_check_param(const ObRawExpr *param_expr,
-                                      const ObRawExpr *&check_param);
-  int get_mav_default_count(const ObIArray<ObAggFunRawExpr*> &aggrs,
-                            const ObAggFunRawExpr *&count_aggr);
   int gen_update_insert_delete_for_simple_mav(ObIArray<ObDMLStmt*> &dml_stmts);
   int gen_insert_for_mav(ObSelectStmt *delta_mv_stmt,
-                         ObIArray<ObRawExpr*> &values,
                          ObInsertStmt *&insert_stmt);
   int gen_select_for_insert_subquery(const ObIArray<ObRawExpr*> &values,
                                      ObIArray<SelectItem> &select_items);
   int gen_exists_cond_for_insert(const ObIArray<ObRawExpr*> &values,
                                  ObIArray<ObRawExpr*> &conds);
   int gen_update_for_mav(ObSelectStmt *delta_mv_stmt,
-                         const ObIArray<ObColumnRefRawExpr*> &mv_columns,
-                         const ObIArray<ObRawExpr*> &values,
                          ObUpdateStmt *&update_stmt);
-  int gen_update_conds(const ObIArray<ObColumnRefRawExpr*> &mv_columns,
-                       const ObIArray<ObRawExpr*> &values,
+  int gen_update_conds(const TableItem &target_table,
+                       const TableItem &source_table,
                        ObIArray<ObRawExpr*> &conds);
-  int gen_delete_for_mav(const ObIArray<ObColumnRefRawExpr*> &mv_columns,
-                         ObDeleteStmt *&delete_stmt);
-  int gen_delete_conds(const ObIArray<ObColumnRefRawExpr*> &mv_columns,
+  int gen_delete_for_mav(ObDeleteStmt *&delete_stmt);
+  int gen_delete_conds(const TableItem &target_table,
                        ObIArray<ObRawExpr*> &conds);
   int gen_real_time_view_filter_for_mav(ObSelectStmt &sel_stmt);
   int gen_inner_real_time_view_for_mav(ObSelectStmt *&inner_rt_view);
@@ -70,25 +61,21 @@ protected:
                                  const TableItem *source_table,
                                  ObIArray<ObColumnRefRawExpr*> &target_columns,
                                  ObIArray<ObRawExpr*> &values_exprs);
-  int gen_select_items_for_mav(const ObString &table_name,
-                               const uint64_t table_id,
+  int gen_select_items_for_mav(const TableItem &target,
                                ObIArray<SelectItem> &select_items);
   int gen_calc_expr_for_insert_clause_sum(ObRawExpr *source_count,
                                           ObRawExpr *source_sum,
                                           ObRawExpr *&calc_sum);
-  int gen_calc_expr_for_update_clause_sum(ObRawExpr *target_count,
-                                          ObRawExpr *source_count,
+  int gen_calc_expr_for_update_clause_sum(ObRawExpr *sum_count,
                                           ObRawExpr *target_sum,
                                           ObRawExpr *source_sum,
                                           ObRawExpr *&calc_sum);
   int get_dependent_aggr_of_fun_sum(const ObRawExpr *expr,
                                     const ObIArray<SelectItem> &select_items,
                                     int64_t &idx);
-  int gen_update_assignments(const ObIArray<ObColumnRefRawExpr*> &target_columns,
-                             const ObIArray<ObRawExpr*> &values_exprs,
-                             const TableItem *source_table,
-                             ObIArray<ObAssignment> &assignments,
-                             const bool for_mysql_update = false);
+  int gen_update_assignments(const TableItem &target_table,
+                             const TableItem &source_table,
+                             ObIArray<ObAssignment> &assignments);
   int gen_merge_conds(ObMergeStmt &merge_stmt);
   int gen_simple_mav_delta_mv_view(ObSelectStmt *&view_stmt);
   int gen_simple_mav_delta_mv_select_list(ObRawExprCopier &copier,
@@ -103,6 +90,11 @@ protected:
                           ObAggFunRawExpr &aggr_expr,
                           ObRawExpr *&aggr_print_expr);
   int add_nvl_above_exprs(ObRawExpr *expr, ObRawExpr *default_expr, ObRawExpr *&res_expr);
+  int add_replaced_expr_for_min_max_aggr(const TableItem &source_table, ObRawExprCopier &copier);
+  int get_inner_sel_name_for_aggr(const ObAggFunRawExpr &aggr, ObString &sel_name);
+  int gen_min_max_aggr_print_expr(const TableItem &outer_table,
+                                  ObAggFunRawExpr &aggr_expr,
+                                  ObRawExpr *&aggr_print_expr);
   inline const ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &get_expand_aggrs() const {  return expand_aggrs_;  }
 protected:
   const ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs_;

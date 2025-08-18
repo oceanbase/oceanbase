@@ -213,6 +213,7 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   need_expand_rt_mv_ = other.need_expand_rt_mv_;
   mview_id_ = other.mview_id_;
   mr_mv_flags_ = other.mr_mv_flags_;
+  is_mv_proctime_table_ = other.is_mv_proctime_table_;
   node_ = other.node_; // should deep copy ? seems to be unnecessary
   flashback_query_type_ = other.flashback_query_type_;
   // dblink

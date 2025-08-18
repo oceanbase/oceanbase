@@ -2012,6 +2012,8 @@ int ObDMLStmtPrinter::print_base_table(const TableItem *table_item)
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected type", K(ret), K(table_item->flashback_query_type_));
           }
+        } else if (table_item->is_mv_proctime_table_) {
+          DATA_PRINTF(" as of proctime()");
         }
       }
     }

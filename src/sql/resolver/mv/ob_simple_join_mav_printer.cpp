@@ -20,11 +20,6 @@ using namespace common;
 namespace sql
 {
 
-int ObSimpleJoinMAVPrinter::gen_inner_delta_mav_for_mav(ObIArray<ObSelectStmt*> &inner_delta_mavs)
-{
-  return gen_inner_delta_mav_for_simple_join_mav(inner_delta_mavs);
-}
-
 int ObSimpleJoinMAVPrinter::gen_refresh_dmls(ObIArray<ObDMLStmt*> &dml_stmts)
 {
   int ret = OB_SUCCESS;
@@ -38,25 +33,68 @@ int ObSimpleJoinMAVPrinter::gen_refresh_dmls(ObIArray<ObDMLStmt*> &dml_stmts)
   return ret;
 }
 
+int ObSimpleJoinMAVPrinter::gen_inner_delta_mav_for_mav(ObIArray<ObSelectStmt*> &inner_delta_mavs)
+{
+  int ret = OB_SUCCESS;
+  inner_delta_mavs.reuse();
+  ObSEArray<ObSelectStmt*, 4> delta_datas;
+  ObSEArray<ObSelectStmt*, 4> pre_datas;
+  const ObIArray<TableItem*> &source_tables = mv_def_stmt_.get_table_items();
+  const TableItem *source_table = NULL;
+  if (OB_FAIL(pre_datas.prepare_allocate(source_tables.count()))
+      || OB_FAIL(delta_datas.prepare_allocate(source_tables.count()))) {
+    LOG_WARN("failed to prepare allocate ObSelectStmt pointer arrays", K(ret), K(source_tables.count()));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < source_tables.count(); ++i) {
+    pre_datas.at(i) = NULL;
+    delta_datas.at(i) = NULL;
+    if (OB_ISNULL(source_table = source_tables.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(i), K(source_table));
+    } else if (0 < i && OB_FAIL(gen_pre_data_access_stmt(*source_table, pre_datas.at(i)))) {
+      LOG_WARN("failed to gen pre data access stmt", K(ret));
+    } else if (is_table_skip_refresh(*source_table)) {
+      // do nothing, no need to gen delta data access stmt
+    } else if (OB_FAIL(gen_delta_data_access_stmt(*source_table, delta_datas.at(i)))) {
+      LOG_WARN("failed to gen delta data access stmt", K(ret));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < source_tables.count(); ++i) {
+    ObSelectStmt *inner_delta_mav = NULL;
+    if (OB_ISNULL(source_table = source_tables.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null table", K(ret), K(i));
+    } else if (is_table_skip_refresh(*source_table)) {
+      // do nothing, no need to gen inner delta mav
+    } else if (OB_FAIL(gen_inner_delta_mav_for_simple_join_mav(i,
+                                                               delta_datas,
+                                                               pre_datas,
+                                                               inner_delta_mav))) {
+      LOG_WARN("failed to gen inner delta mav for simple join mav", K(ret));
+    } else if (OB_FAIL(inner_delta_mavs.push_back(inner_delta_mav))) {
+      LOG_WARN("failed to push back inner delta mav", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObSimpleJoinMAVPrinter::gen_update_insert_delete_for_simple_join_mav(ObIArray<ObDMLStmt*> &dml_stmts)
 {
   int ret = OB_SUCCESS;
   dml_stmts.reuse();
   ObSEArray<ObSelectStmt*, 4> inner_delta_mavs;
-  if (OB_FAIL(gen_inner_delta_mav_for_simple_join_mav(inner_delta_mavs))) {
+  if (OB_FAIL(gen_inner_delta_mav_for_mav(inner_delta_mavs))) {
     LOG_WARN("failed to gen inner delta mav for simple join mav", K(ret));
   } else {
-    // zhanyue todo: call gen_merge_for_simple_mav once, and assign stmt, adjust inner_delta_mavs
     ObUpdateStmt *update_stmt = NULL;
     ObInsertStmt *insert_stmt = NULL;
-    ObSEArray<ObRawExpr*, 16> values;
     for (int64_t i = 0; OB_SUCC(ret) && i < inner_delta_mavs.count(); ++i) {
       // zhanyue todo: call gen_merge_for_simple_mav once, and assign stmt, adjust inner_delta_mavs
-      values.reuse();
-      if (OB_FAIL(gen_insert_for_mav(inner_delta_mavs.at(i), values, insert_stmt))) {
+      if (OB_FAIL(gen_insert_for_mav(inner_delta_mavs.at(i), insert_stmt))) {
         LOG_WARN("failed to gen insert for mav", K(ret));
-      } else if (OB_FAIL(gen_update_for_mav(inner_delta_mavs.at(i), insert_stmt->get_values_desc(),
-                                            values, update_stmt))) {
+      } else if (OB_FAIL(gen_update_for_mav(inner_delta_mavs.at(i), update_stmt))) {
         LOG_WARN("failed to gen update for mav", K(ret));
       } else if (OB_FAIL(dml_stmts.push_back(update_stmt))  // pushback and execute in this ordering
                  || OB_FAIL(dml_stmts.push_back(insert_stmt))) {
@@ -66,10 +104,7 @@ int ObSimpleJoinMAVPrinter::gen_update_insert_delete_for_simple_join_mav(ObIArra
 
     if (OB_SUCC(ret) && !mv_def_stmt_.is_scala_group_by()) {
       ObDeleteStmt *delete_stmt = NULL;
-      if (OB_ISNULL(insert_stmt)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret), K(insert_stmt));
-      } else if (OB_FAIL(gen_delete_for_mav(insert_stmt->get_values_desc(), delete_stmt))) {
+      if (OB_FAIL(gen_delete_for_mav(delete_stmt))) {
         LOG_WARN("failed gen delete for mav", K(ret));
       } else if (OB_FAIL(dml_stmts.push_back(delete_stmt))) { // pushback and execute in this ordering
         LOG_WARN("failed to push back", K(ret));
@@ -84,7 +119,7 @@ int ObSimpleJoinMAVPrinter::gen_merge_for_simple_join_mav(ObIArray<ObDMLStmt *> 
   int ret = OB_SUCCESS;
   dml_stmts.reuse();
   ObSEArray<ObSelectStmt *, 4> inner_delta_mavs;
-  if (OB_FAIL(gen_inner_delta_mav_for_simple_join_mav(inner_delta_mavs))) {
+  if (OB_FAIL(gen_inner_delta_mav_for_mav(inner_delta_mavs))) {
     LOG_WARN("failed to gen inner delta mav for simple join mav", K(ret));
   } else {
     ObMergeStmt *merge_stmt = NULL;
@@ -100,45 +135,10 @@ int ObSimpleJoinMAVPrinter::gen_merge_for_simple_join_mav(ObIArray<ObDMLStmt *> 
   return ret;
 }
 
-int ObSimpleJoinMAVPrinter::gen_inner_delta_mav_for_simple_join_mav(ObIArray<ObSelectStmt*> &inner_delta_mavs)
-{
-  int ret = OB_SUCCESS;
-  inner_delta_mavs.reuse();
-  ObSEArray<ObSelectStmt*, 4> delta_datas;
-  ObSEArray<ObSelectStmt*, 4> pre_datas;
-  const ObIArray<TableItem*> &source_tables = mv_def_stmt_.get_table_items();
-  const TableItem *source_table = NULL;
-  if (OB_FAIL(inner_delta_mavs.prepare_allocate(source_tables.count()))
-      || OB_FAIL(pre_datas.prepare_allocate(source_tables.count()))
-      || OB_FAIL(delta_datas.prepare_allocate(source_tables.count()))) {
-    LOG_WARN("failed to prepare allocate ObSelectStmt pointer arrays", K(ret), K(source_tables.count()));
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < source_tables.count(); ++i) {
-    pre_datas.at(i) = NULL;
-    delta_datas.at(i) = NULL;
-    if (OB_ISNULL(source_table = source_tables.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret), K(i), K(source_table));
-    } else if (OB_FAIL(gen_delta_data_access_stmt(*source_tables.at(i), delta_datas.at(i)))) {
-      LOG_WARN("failed to gen delta data access stmt", K(ret));
-    } else if (0 < i && OB_FAIL(gen_pre_data_access_stmt(*source_tables.at(i), pre_datas.at(i)))) {
-      LOG_WARN("failed to gen pre data access stmt", K(ret));
-    }
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < source_tables.count(); ++i) {
-    if (OB_FAIL(gen_inner_delta_mav_for_simple_join_mav(i, delta_datas, pre_datas, inner_delta_mavs.at(i)))) {
-      LOG_WARN("failed to gen inner delta mav for simple join mav", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObSimpleJoinMAVPrinter::gen_inner_delta_mav_for_simple_join_mav(const int64_t inner_delta_no,
-                                                         const ObIArray<ObSelectStmt*> &all_delta_datas,
-                                                         const ObIArray<ObSelectStmt*> &all_pre_datas,
-                                                         ObSelectStmt *&inner_delta_mav)
+                                                                    const ObIArray<ObSelectStmt*> &all_delta_datas,
+                                                                    const ObIArray<ObSelectStmt*> &all_pre_datas,
+                                                                    ObSelectStmt *&inner_delta_mav)
 {
   int ret = OB_SUCCESS;
   inner_delta_mav = NULL;
@@ -223,12 +223,12 @@ int ObSimpleJoinMAVPrinter::construct_table_items_for_simple_join_mav_delta_data
 
 // todo: for multi dml operators on the same rowkey, we need access at most two rows actually.
 int ObSimpleJoinMAVPrinter::gen_delta_data_access_stmt(const TableItem &source_table,
-                                            ObSelectStmt *&access_sel)
+                                                       ObSelectStmt *&access_sel)
 {
   int ret = OB_SUCCESS;
   access_sel = NULL;
   const uint64_t mlog_sel_flags = MLOG_EXT_COL_DML_FACTOR | MLOG_EXT_COL_ALL_NORMAL_COL;
-  if (OB_FAIL(gen_delta_table_view(source_table, access_sel, mlog_sel_flags))) {
+  if (OB_FAIL(gen_delta_mlog_table_view(source_table, access_sel, mlog_sel_flags))) {
     LOG_WARN("failed to gen delta table view", K(ret));
   }
   return ret;
@@ -248,12 +248,20 @@ int ObSimpleJoinMAVPrinter::gen_pre_data_access_stmt(const TableItem &source_tab
   ObSelectStmt *union_stmt = NULL;
   ObSelectStmt *unchanged_data_stmt = NULL;
   ObSelectStmt *deleted_data_stmt = NULL;
-  if (OB_FAIL(create_simple_stmt(union_stmt))) {
-    LOG_WARN("failed to create simple stmt", K(ret));
-  } else if (OB_FAIL(gen_unchanged_data_access_stmt(source_table, unchanged_data_stmt))) {
+  access_sel = NULL;
+  if (OB_FAIL(gen_delta_pre_table_view(&source_table, unchanged_data_stmt, false, false))) {
     LOG_WARN("failed to unchanged deleted data access stmt ", K(ret));
+  } else if (is_table_skip_refresh(source_table)) {
+    // only unchanged data for skip refresh table
+    // access_sel: SELECT * FROM source_table;
+    access_sel = unchanged_data_stmt;
   } else if (OB_FAIL(gen_deleted_data_access_stmt(source_table, deleted_data_stmt))) {
     LOG_WARN("failed to generate deleted data access stmt ", K(ret));
+  } else if (OB_FAIL(create_simple_stmt(union_stmt))) {
+    LOG_WARN("failed to create simple stmt", K(ret));
+  } else if (OB_ISNULL(union_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null union stmt", K(ret), K(union_stmt));
   } else if (OB_FAIL(union_stmt->get_set_query().push_back(unchanged_data_stmt) ||
                      OB_FAIL(union_stmt->get_set_query().push_back(deleted_data_stmt)))) {
     LOG_WARN("failed to set set query", K(ret));
@@ -261,29 +269,6 @@ int ObSimpleJoinMAVPrinter::gen_pre_data_access_stmt(const TableItem &source_tab
     union_stmt->assign_set_all();
     union_stmt->assign_set_op(ObSelectStmt::UNION);
     access_sel = union_stmt;
-  }
-  return ret;
-}
-
-int ObSimpleJoinMAVPrinter::gen_unchanged_data_access_stmt(const TableItem &source_table,
-                                                ObSelectStmt *&access_sel)
-{
-  int ret = OB_SUCCESS;
-  access_sel = NULL;
-  TableItem *table = NULL;
-  ObRawExpr *anti_filter = NULL;
-  const uint64_t access_sel_flags = MLOG_EXT_COL_ALL_NORMAL_COL;
-  if (OB_FAIL(create_simple_stmt(access_sel))) {
-    LOG_WARN("failed to create simple stmt", K(ret));
-  } else if (OB_FAIL(create_simple_table_item(access_sel, source_table.table_name_, table))) {
-    LOG_WARN("failed to create simple table item", K(ret));
-  } else if (OB_FALSE_IT(set_info_for_simple_table_item(*table, source_table))) {
-  } else if (OB_FAIL(gen_delta_table_view_select_list(*table, source_table, *access_sel, access_sel_flags))) {
-    LOG_WARN("failed to generate delta table view select lists", K(ret));
-  } else if (OB_FAIL(gen_exists_cond_for_table(&source_table, table, false, false, anti_filter))) {
-    LOG_WARN("failed to create simple column exprs", K(ret));
-  } else if (OB_FAIL(access_sel->get_condition_exprs().push_back(anti_filter))) {
-    LOG_WARN("failed to push back anti filter", K(ret));
   }
   return ret;
 }
@@ -297,7 +282,7 @@ int ObSimpleJoinMAVPrinter::gen_deleted_data_access_stmt(const TableItem &source
   const uint64_t access_sel_flags = MLOG_EXT_COL_ALL_NORMAL_COL;
   ObSelectStmt *mlog_delta_sel = NULL;
   TableItem *cur_table = NULL;
-  if (OB_FAIL(gen_delta_table_view(source_table, mlog_delta_sel, mlog_sel_flags))) {
+  if (OB_FAIL(gen_delta_mlog_table_view(source_table, mlog_delta_sel, mlog_sel_flags))) {
     LOG_WARN("failed to gen delta table view", K(ret));
   } else if (OB_FAIL(create_simple_stmt(access_sel))) {
     LOG_WARN("failed to create simple stmt", K(ret));

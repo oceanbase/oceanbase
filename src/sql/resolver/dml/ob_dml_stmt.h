@@ -163,6 +163,7 @@ struct TableItem
     need_expand_rt_mv_ = false;
     mview_id_ = common::OB_INVALID_ID;
     mr_mv_flags_ = 0;
+    is_mv_proctime_table_ = false;
     node_ = NULL;
     view_base_item_ = NULL;
     flashback_query_expr_ = nullptr;
@@ -202,7 +203,7 @@ struct TableItem
                KPC_(function_table_expr),
                K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
                K_(exec_params), KPC_(sample_info), K_(mview_id), K_(need_expand_rt_mv),
-               K_(external_table_partition), K_(catalog_name));
+               K_(external_table_partition), K_(catalog_name), K_(is_mv_proctime_table));
 
   enum TableType
   {
@@ -331,6 +332,7 @@ struct TableItem
   bool need_expand_rt_mv_; // for real-time materialized view
   uint64_t mview_id_; // for materialized view, ref_id_ is mv container table id, mview_id_ is the view id
   uint64_t mr_mv_flags_; // for major refresh mview
+  bool is_mv_proctime_table_; // only for materialized view definition stmt, will not refresh the proctime table when fast refreshing mv
   const ParseNode* node_;
   // base table item for updatable view, can not access after the resolve phase
   const TableItem *view_base_item_;

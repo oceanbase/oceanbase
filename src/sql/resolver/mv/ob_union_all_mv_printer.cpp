@@ -57,15 +57,19 @@ int ObUnionAllMVPrinter::gen_child_refresh_dmls(const ObMVRefreshableType refres
                                                 ObIArray<ObDMLStmt*> &dml_stmts)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>, 8> child_expand_aggrs;
   dml_stmts.reuse();
   if (OB_ISNULL(mlog_tables_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(mlog_tables_));
+  } else if (child_sel_stmt.has_group_by()
+             && OB_FAIL(get_child_expand_aggrs(child_sel_stmt, child_expand_aggrs))) {
+    LOG_WARN("failed to get child expand aggrs", K(ret));
   } else {
     ctx_.marker_idx_ = marker_idx_;
     switch (refresh_type) {
       case OB_MV_FAST_REFRESH_SIMPLE_MAV: {
-        ObSimpleMAVPrinter printer(ctx_, mv_schema_, mv_container_schema_, child_sel_stmt, *mlog_tables_, expand_aggrs_);
+        ObSimpleMAVPrinter printer(ctx_, mv_schema_, mv_container_schema_, child_sel_stmt, *mlog_tables_, child_expand_aggrs);
         if (OB_FAIL(printer.gen_child_refresh_dmls_for_union_all(marker_idx_, dml_stmts))) {
           LOG_WARN("failed to gen child refresh dmls for union all", K(ret));
         }
@@ -79,7 +83,7 @@ int ObUnionAllMVPrinter::gen_child_refresh_dmls(const ObMVRefreshableType refres
         break;
       }
       case OB_MV_FAST_REFRESH_SIMPLE_JOIN_MAV: {
-        ObSimpleJoinMAVPrinter printer(ctx_, mv_schema_, mv_container_schema_, child_sel_stmt, *mlog_tables_, expand_aggrs_);
+        ObSimpleJoinMAVPrinter printer(ctx_, mv_schema_, mv_container_schema_, child_sel_stmt, *mlog_tables_, child_expand_aggrs);
         if (OB_FAIL(printer.gen_child_refresh_dmls_for_union_all(marker_idx_, dml_stmts))) {
           LOG_WARN("failed to gen child refresh dmls for union all", K(ret));
         }
@@ -92,6 +96,20 @@ int ObUnionAllMVPrinter::gen_child_refresh_dmls(const ObMVRefreshableType refres
       }
     }
     ctx_.marker_idx_ = OB_INVALID_INDEX;
+  }
+  return ret;
+}
+
+int ObUnionAllMVPrinter::get_child_expand_aggrs(const ObSelectStmt &child_sel_stmt,
+                                                ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &child_expand_aggrs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < expand_aggrs_.count(); ++i) {
+    if (ObOptimizerUtil::find_item(child_sel_stmt.get_aggr_items(), expand_aggrs_.at(i).first)) {
+      if (OB_FAIL(child_expand_aggrs.push_back(expand_aggrs_.at(i)))) {
+        LOG_WARN("failed to push back expand aggr", K(ret));
+      }
+    }
   }
   return ret;
 }
