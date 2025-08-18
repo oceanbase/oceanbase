@@ -189,6 +189,14 @@ src/share/parameter/standalone_default_parameter.json
 src/share/parameter/shared_storage_default_parameter.json
 src/share/system_variable/standalone_default_system_variable.json
 src/share/system_variable/shared_storage_default_system_variable.json
+src/observer/dbms_scheduler/parser/_gen_parser.output
+src/observer/dbms_scheduler/parser/_gen_parser.error
+src/observer/dbms_scheduler/parser/_MD5
+src/observer/dbms_scheduler/parser/dbms_sched_parser_calendar_lex.c
+src/observer/dbms_scheduler/parser/dbms_sched_parser_calendar_lex.h
+src/observer/dbms_scheduler/parser/dbms_sched_parser_calendar_tab.c
+src/observer/dbms_scheduler/parser/dbms_sched_parser_calendar_tab.h
+src/observer/dbms_scheduler/parser/dbms_sched_parser_calendar.output
 
 ############# close_modules #############
 close_modules/oracle_pl/pl/parser/*.output
