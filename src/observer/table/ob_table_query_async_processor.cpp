@@ -1113,7 +1113,7 @@ int ObTableQueryAsyncP::old_try_process()
              K_(retry_count), K_(result_row_count));
   #else
     // release mode
-    FLOG_INFO("[TABLE] execute query", K(ret), K_(arg), K_(timeout_ts), K_(retry_count), K(result_.is_end_),
+    LOG_TRACE("[TABLE] execute query", K(ret), K_(arg), K_(timeout_ts), K_(retry_count), K(result_.is_end_),
               "receive_ts", get_receive_timestamp(), K_(result_row_count));
   #endif
   return ret;
