@@ -1184,13 +1184,13 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
               SQL_RESV_LOG(WARN, "failed to resolve trigger option!", K(ret));
             }
             break;
-        }
+          }
         case T_SET_INTERVAL: {
             if (OB_FAIL(resolve_set_interval(alter_table_stmt, *action_node))) {
               SQL_RESV_LOG(WARN, "failed to resolve foreign key options in mysql mode!", K(ret));
             }
             break;
-        }
+          }
         case T_REMOVE_TTL: {
           uint64_t tenant_data_version = 0;
           if (OB_ISNULL(session_info_)) {
@@ -1760,10 +1760,13 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
           sort_item.column_name_.assign_ptr(sort_column_node->children_[0]->str_value_,
               static_cast<int32_t>(sort_column_node->children_[0]->str_len_));
           bool is_multi_value_index = false;
-          if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_index_type(sort_item.column_name_,
-                                                                    is_multi_value_index,
-                                                                    reinterpret_cast<int*>(&index_keyname_)))) {
-            LOG_WARN("failed to resolve index type", K(ret));
+          if (sort_column_node->children_[0]->type_ != T_IDENT) {
+            ParseNode *expr_node = sort_column_node->children_[0];
+            if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_index_type(expr_node,
+                                                                      is_multi_value_index,
+                                                                      reinterpret_cast<int*>(&index_keyname_)))) {
+              LOG_WARN("failed to resolve index type by parse node", K(ret));
+            }
           }
         }
         if (OB_FAIL(ret)) {
@@ -1881,6 +1884,28 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("tenant version is less than 4.2, functional index is not supported in mysql mode", K(ret), K(tenant_data_version));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.2, functional index in mysql mode not supported");
+      }
+    }
+    if (OB_SUCC(ret) && index_arg.index_columns_.count() > 1) {
+      bool has_multivalue_index = false;
+      bool has_functional_index = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_arg.index_columns_.count(); ++i) {
+        const ObColumnSortItem &si = index_arg.index_columns_.at(i);
+        if (si.is_func_index_) {
+          bool is_multi_value = false;
+          ParseNode *expr_node = node.children_[i]->children_[0];
+          if (OB_FAIL(ObMulValueIndexBuilderUtil::is_multivalue_index_type(expr_node, is_multi_value))) {
+            LOG_WARN("check multivalue type by parse node failed", K(ret), K(i));
+          } else if (is_multi_value) {
+            has_multivalue_index = true;
+          } else {
+            has_functional_index = true;
+          }
+        }
+      }
+      if (OB_SUCC(ret) && has_multivalue_index && has_functional_index) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "multivalue index combined with functional index in composite index is");
       }
     }
   }

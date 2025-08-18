@@ -152,9 +152,9 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
         LOG_WARN("index table id is invalid", KR(ret));
       }
     } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(create_index_arg.tenant_id_, res.task_id_, res.ddl_need_retry_at_executor_, my_session, common_rpc_proxy))) {
-      LOG_WARN("failed to wait ddl finish", K(ret));
+       LOG_WARN("failed to wait ddl finish", K(ret));
+       }
     }
-  }
   SERVER_EVENT_ADD("ddl", "create index execute finish",
     "tenant_id", MTL_ID(),
     "ret", ret,

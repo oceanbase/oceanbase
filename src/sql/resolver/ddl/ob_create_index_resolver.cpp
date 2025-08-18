@@ -177,11 +177,15 @@ int ObCreateIndexResolver::resolve_index_column_node(
         sort_item.column_name_.assign_ptr(const_cast<char *>(col_node->children_[0]->str_value_),
                                           static_cast<int32_t>(col_node->children_[0]->str_len_));
         bool is_multi_value_index = false;
-        if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_index_type(sort_item.column_name_,
-                                                                  is_multi_value_index,
-                                                                  reinterpret_cast<int*>(&index_keyname_)))) {
-          LOG_WARN("failed to adjust index type", K(ret));
-        } else if (is_multi_value_index) {
+        if (col_node->children_[0]->type_ != T_IDENT) {
+          ParseNode *expr_node = col_node->children_[0];
+          if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_index_type(expr_node,
+                                                                    is_multi_value_index,
+                                                                    reinterpret_cast<int*>(&index_keyname_)))) {
+            LOG_WARN("failed to adjust index type by parse node", K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && is_multi_value_index) {
           ObCreateIndexArg &index_arg =crt_idx_stmt->get_create_index_arg();
           if (index_keyname_ == MULTI_KEY) {
             index_arg.index_type_ = INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL;
@@ -394,6 +398,31 @@ int ObCreateIndexResolver::resolve_index_column_node(
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "use functional index on materialized view");
       }
     }
+
+    if (OB_SUCC(ret) && index_arg.index_columns_.count() > 1) {
+      bool has_multivalue_index = false;
+      bool has_functional_index = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_arg.index_columns_.count(); ++i) {
+        const ObColumnSortItem &sort_item = index_arg.index_columns_.at(i);
+        if (sort_item.is_func_index_) {
+          bool is_multi_value = false;
+          ParseNode *expr_node = index_column_node->children_[i]->children_[0];
+          if (OB_FAIL(ObMulValueIndexBuilderUtil::is_multivalue_index_type(expr_node, is_multi_value))) {
+            LOG_WARN("check multivalue type by parse node failed", K(ret), K(i));
+          } else if (is_multi_value) {
+            has_multivalue_index = true;
+            LOG_INFO("gwy::has_multivalue_index", K(ret), K(i));
+          } else {
+            has_functional_index = true;
+            LOG_INFO("gwy::has_functional_index", K(ret), K(i));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && has_multivalue_index && has_functional_index) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "multivalue index combined with functional index in composite index is");
+      }
+  }
 
     // In oracle mode, we need to check if the new index is on the same cols with old indexes.
     CHECK_COMPATIBILITY_MODE(session_info_);
@@ -865,7 +894,7 @@ int ObCreateIndexResolver::add_sort_column(const ObColumnSortItem &sort_column)
     ret = OB_ERR_COLUMN_DUPLICATE;
     LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, sort_column.column_name_.length(), sort_column.column_name_.ptr());
     LOG_WARN("Duplicate sort column name", K(sort_column), K(ret));
-   } else if (OB_FAIL(sort_column_array_.push_back(column_key))) {
+  } else if (OB_FAIL(sort_column_array_.push_back(column_key))) {
     LOG_WARN("failed to push back column key", K(sort_column), K(ret));
   } else if (OB_FAIL(create_index_stmt->add_sort_column(sort_column))) {
     LOG_WARN("add sort column to create index stmt failed", K(sort_column), K(ret));

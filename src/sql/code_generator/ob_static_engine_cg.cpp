@@ -5799,8 +5799,11 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
           } else if (expr->get_expr_type() == T_FUN_SYS_JSON_QUERY && expr->is_multivalue_index_column_expr()) {
             // TODO: @yunyi, remove me later after support post-building multivalue index vectorization.
             spec.max_batch_size_ = 0;
-            spec.set_multivalue_ddl(true);
-
+            if (op.get_multivalue_type() != -1 && op.get_multivalue_col_idx() != static_cast<uint64_t>(-1)) {
+              spec.set_multivalue_ddl(true);
+            } else {
+              LOG_WARN("CG skip is_multivalue_ddl, multivalue meta missing", K(expr->get_expr_type()), K(op.get_multivalue_type()), K(op.get_multivalue_col_idx()));
+            }
           }
         }
       } else if (OB_FAIL(generate_rt_expr(*expr, rt_expr))) {

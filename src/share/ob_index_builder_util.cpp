@@ -421,7 +421,7 @@ int ObIndexBuilderUtil::set_index_table_columns(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fts arg index type not expected", K(ret));
     }
-  } else { // not fts index
+  } else { // not fts index or multivalue index
     HEAP_VAR(ObRowDesc, row_desc) {
       bool is_index_column = false;
       // index columns

@@ -2993,10 +2993,13 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               column_name.assign_ptr(
                   const_cast<char *>(index_column_node->children_[0]->str_value_),
                   static_cast<int32_t>(index_column_node->children_[0]->str_len_));
-              if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_index_type(column_name,
-                                                                        is_multi_value_index,
-                                                                        reinterpret_cast<int*>(&index_keyname_)))) {
-                LOG_WARN("failed to resolve index type", K(ret));
+              if (index_column_node->children_[0]->type_ != T_IDENT) {
+                ParseNode *expr_node = index_column_node->children_[0];
+                if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_index_type(expr_node,
+                                                                          is_multi_value_index,
+                                                                          reinterpret_cast<int*>(&index_keyname_)))) {
+                  LOG_WARN("failed to resolve index type by parse node", K(ret));
+                }
 #ifdef OB_BUILD_SHARED_STORAGE
               } else if (GCTX.is_shared_storage_mode()
                          && (MULTI_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_)
@@ -3446,7 +3449,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                                                               resolve_results,
                                                               index_arg_list,
                                                               allocator_))) {
-              LOG_WARN("failed to append fts args", K(ret));
+              LOG_WARN("failed to append multivalue args", K(ret));
             } else {
               has_multivalue_index_ = true;
             }

@@ -3871,7 +3871,7 @@ int ObTableScanOp::inner_get_next_multivalue_index_row()
   bool need_ignore_null = false;
   if (OB_ISNULL(domain_index_.dom_rows_)) {
     if (OB_FAIL(init_multivalue_index_rows())) {
-      LOG_WARN("init spatial row store failed", K(ret));
+      LOG_WARN("init multivalue row store failed", K(ret));
     }
   }
   if (OB_SUCC(ret)) {

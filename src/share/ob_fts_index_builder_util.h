@@ -257,12 +257,12 @@ public:
    ObIAllocator *allocator,
    ObIArray<obrpc::ObCreateIndexArg> &index_arg_list);
  static int is_multivalue_index_type(
-   const ObString& column_string,
-   bool& is_multi_value_index);
+   const ParseNode *expr_node,
+   bool &is_multi_value_index);
  static int adjust_index_type(
-   const ObString& column_string,
-   bool& is_multi_value_index,
-   int* index_keyname);
+   const ParseNode *expr_node,
+   bool &is_multi_value_index,
+   int *index_keyname);
  static int get_mulvalue_col(
    const ObTableSchema &data_schema,
    const obrpc::ObCreateIndexArg *index_arg,
