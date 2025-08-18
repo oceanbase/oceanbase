@@ -680,6 +680,18 @@ int ObLSMigrationHandler::do_init_status_()
     start_ts_ = ObTimeUtil::current_time();
     if (OB_FAIL(ls_->get_migration_status(migration_status))) {
       LOG_WARN("failed to get migration status", K(ret), KPC(ls_));
+    } else if (ls_->get_persistent_state().is_need_gc()) {
+      // ls persistent state is not ha state, which means ls hasn't been completely created / failed to create
+      // do nothing
+      FLOG_INFO("ls persistent state is not ha state", K(migration_status), KPC(ls_));
+#ifdef ERRSIM
+      if (migration_status == ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE) {
+        SERVER_EVENT_ADD("storage_ha", "migration_when_ls_is_initializing",
+            "tenant_id", ls_->get_tenant_id(),
+            "ls_id", ls_->get_ls_id().id(),
+            "migration_status", migration_status);
+      }
+#endif
     } else if (OB_FAIL(check_task_list_empty_(is_empty))) {
       LOG_WARN("failed to check task list empty", K(ret), KPC(ls_));
     } else if (is_empty) {
@@ -690,7 +702,7 @@ int ObLSMigrationHandler::do_init_status_()
           && ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_FAIL != migration_status
           && ObMigrationStatus::OB_MIGRATION_STATUS_GC != migration_status) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ls migration handler in init status but ls migration status is in failed status",
+        LOG_WARN("ls migration handler in init status but ls migration status is not in failed status",
             K(ret), K(is_empty), K(migration_status), KPC(ls_));
       }
     } else {
@@ -721,13 +733,13 @@ int ObLSMigrationHandler::do_init_status_()
             ObMigrationOpType::get_str(task.arg_.type_));
         wakeup_();
       }
-    }
-  }
 
-  // INIT -> COMPLETE_LS
-  if (OB_FAIL(ret)) {
-    if (OB_TMP_FAIL(switch_next_stage(ret))) {
-      LOG_WARN("failed to report result at init status", K(tmp_ret), K(ret));
+      // INIT -> COMPLETE_LS
+      if (OB_FAIL(ret)) {
+        if (OB_TMP_FAIL(switch_next_stage(ret))) {
+          LOG_WARN("failed to report result at init status", K(tmp_ret), K(ret));
+        }
+      }
     }
   }
 

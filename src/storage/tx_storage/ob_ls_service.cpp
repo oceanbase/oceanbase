@@ -29,6 +29,8 @@ using namespace lib;
 using namespace logservice;
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_CREATE_LS_FAILED_BEFORE_ADD_MIGRATION_TASK);
+
 #define OB_BREAK_FAIL(statement) (OB_UNLIKELY(((++process_point) && break_point == process_point && OB_FAIL(OB_BREAK_BY_TEST)) || OB_FAIL(statement)))
 
 static inline void prepare_palf_base_info(const obrpc::ObCreateLSArg &arg,
@@ -558,6 +560,7 @@ int ObLSService::post_create_ls_(const int64_t create_type,
       break;
     }
     case ObLSCreateType::MIGRATE: {
+      // ATTENTION! when migration, set_start_ha_state must be the last step in this function that can fail
       if (OB_FAIL(ls->set_start_ha_state())) {
         LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
       }
@@ -1309,15 +1312,20 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg,
       } else if (OB_BREAK_FAIL(ls->finish_create_ls())) {
         LOG_WARN("finish create ls failed", KR(ret));
       } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_FINISH)) {
-      } else if (OB_BREAK_FAIL(post_create_ls_(arg.create_type_, ls))) {
-        LOG_WARN("post create ls failed", K(ret), K(ls_meta));
+#ifdef ERRSIM
+      } else if (OB_FAIL(EN_CREATE_LS_FAILED_BEFORE_ADD_MIGRATION_TASK)) {
+        LOG_INFO("[ERRSIM] create ls failed before add migration task", K(ret));
+#endif
       } else if (ObLSCreateType::MIGRATE == arg.create_type_ &&
                  OB_BREAK_FAIL(ls->get_ls_migration_handler()->add_ls_migration_task(arg.task_id_,
                                                                                      mig_arg))) {
         LOG_WARN("failed to add ls migration task", K(ret), K(mig_arg));
+      } else if (OB_BREAK_FAIL(post_create_ls_(arg.create_type_, ls))) {
+        LOG_WARN("post create ls failed", K(ret), K(ls_meta));
       }
     }
     if (OB_BREAK_FAIL(ret)) {
+      DEBUG_SYNC(BEFORE_DEL_LS_AFTER_CREATE_LS_FAILED);
       del_ls_after_create_ls_failed_(state, ls);
     }
   }
