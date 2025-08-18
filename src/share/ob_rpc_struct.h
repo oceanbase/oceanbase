@@ -2358,6 +2358,16 @@ public:
   {
     return part_storage_cache_policy_;
   }
+  inline bool is_only_alter_index() const
+  {
+    return is_alter_indexs_
+       && !is_alter_columns_
+       && !is_alter_options_
+       && !is_alter_partitions_
+       && !is_convert_to_character_
+       && alter_constraint_type_ ==  CONSTRAINT_NO_OPERATION;
+  }
+
   TO_STRING_KV(K_(session_id),
                K_(alter_part_type),
                K_(index_arg_list),

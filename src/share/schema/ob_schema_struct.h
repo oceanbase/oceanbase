@@ -1129,6 +1129,16 @@ inline bool is_index_local_storage(ObIndexType index_type)
            || is_local_multivalue_index(index_type);
 }
 
+inline bool is_index_support_empty_table_opt(ObIndexType index_type)
+{
+  return INDEX_TYPE_NORMAL_LOCAL == index_type
+          || INDEX_TYPE_UNIQUE_LOCAL == index_type
+          || INDEX_TYPE_NORMAL_GLOBAL == index_type
+          || INDEX_TYPE_UNIQUE_GLOBAL == index_type
+          || INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type
+          || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type;
+}
+
 // Note: When adding new related table, you need to modify OB_MAX_TRANSFER_BINDING_TABLET_CNT
 inline bool is_related_table(
     const ObTableType &table_type,

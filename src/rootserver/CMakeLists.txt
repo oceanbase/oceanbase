@@ -121,6 +121,7 @@ ob_set_subtarget(ob_rootserver common
   ob_objpriv_mysql_ddl_operator.cpp
   ob_objpriv_mysql_ddl_service.cpp
   ob_objpriv_mysql_schema_history_recycler.cpp
+  ob_create_index_on_empty_table_helper.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance

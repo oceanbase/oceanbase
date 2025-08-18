@@ -3580,72 +3580,86 @@ int ObDDLUtil::check_tablet_checksum_error(
   return ret;
 }
 
-int ObDDLUtil::check_table_empty_in_oracle_mode(
-    const uint64_t tenant_id,
-    const uint64_t table_id,
-    ObSchemaGetterGuard &schema_guard,
+int ObDDLUtil::check_table_empty(
+    const ObString &database_name,
+    const share::schema::ObTableSchema &table_schema,
+    const ObSQLMode sql_mode,
     bool &is_table_empty)
 {
   int ret = OB_SUCCESS;
   is_table_empty = false;
-  const ObSimpleTableSchemaV2 *table_schema = nullptr;
-  const ObSimpleDatabaseSchema *database_schema = nullptr;
   bool is_oracle_mode = false;
-  if (OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == table_id) {
+  uint64_t table_id = OB_INVALID_ID;
+  if (!table_schema.is_valid() || database_name.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id));
-  } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, table_id, table_schema))) {
-    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table schema not exist", K(ret), K(table_id));
-  } else if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("invalid argument", K(ret), K(database_name), K(table_schema));
+  } else if (FALSE_IT(table_id = table_schema.get_table_id())) {
+  } else if (OB_INVALID_ID == table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(table_id));
+  } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check is oracle mode", K(ret), K(table_schema));
-  } else if (!is_oracle_mode) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("check table empty in mysql mode support later", K(ret), K(is_oracle_mode));
-  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, table_schema->get_database_id(), database_schema))) {
-    LOG_WARN("get database schema failed", K(ret), K(tenant_id));
-  } else if (OB_ISNULL(database_schema)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("get database schema failed", K(ret), K(table_id));
   } else {
     const ObString &check_expr_str = "1 != 1";
-    const ObString &database_name = database_schema->get_database_name_str();
-    const ObString &table_name = table_schema->get_table_name_str();
+    const ObString &table_name = table_schema.get_table_name_str();
     ObSqlString sql_string;
     ObSessionParam session_param;
-    session_param.sql_mode_ = nullptr;
+    int64_t new_sql_mode = static_cast<int64_t>(sql_mode);
+    session_param.sql_mode_ = &new_sql_mode;
     session_param.tz_info_wrap_ = nullptr;
     session_param.ddl_info_.set_is_ddl(true);
-    session_param.ddl_info_.set_source_table_hidden(table_schema->is_user_hidden_table());
+    session_param.ddl_info_.set_source_table_hidden(table_schema.is_user_hidden_table());
     session_param.ddl_info_.set_dest_table_hidden(false);
     ObTimeoutCtx timeout_ctx;
     ObCommonSqlProxy *sql_proxy = nullptr;
+    const char* format_str = nullptr;
+    if (is_oracle_mode) {
+      format_str = "SELECT /*+ %.*s */ 1 FROM \"%.*s\".\"%.*s\" WHERE NOT 1 != 1 AND ROWNUM = 1";
+      sql_proxy = GCTX.ddl_oracle_sql_proxy_;
+    } else {
+      format_str = "SELECT /*+ %.*s */ 1 FROM `%.*s`.`%.*s` WHERE NOT 1 != 1 LIMIT 1";
+      sql_proxy = GCTX.ddl_sql_proxy_;
+    }
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = nullptr;
       ObSqlString ddl_schema_hint_str;
-      if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, GCONF.internal_sql_execute_timeout))) {
+      ObArenaAllocator allocator("ObDDLTmp");
+      ObString new_table_name;
+      ObString new_database_name;
+      if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+                  allocator,
+                  database_name,
+                  new_database_name,
+                  is_oracle_mode))) {
+        LOG_WARN("fail to generate new name with escape character",
+                  K(ret), K(database_name));
+      } else if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
+                         allocator,
+                         table_name,
+                         new_table_name,
+                         is_oracle_mode))) {
+        LOG_WARN("fail to generate new name with escape character",
+                  K(ret), K(table_name));
+      } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, GCONF.internal_sql_execute_timeout))) {
         LOG_WARN("failed to set default timeout ctx", K(ret), K(timeout_ctx));
-      } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(table_name, table_schema->get_schema_version(), true, ddl_schema_hint_str))) {
+      } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(table_name, table_schema.get_schema_version(), true, ddl_schema_hint_str))) {
         LOG_WARN("failed to generate ddl schema hint str", K(ret));
       } else if (OB_FAIL(sql_string.assign_fmt(
-        "SELECT /*+ %.*s */ 1 FROM \"%.*s\".\"%.*s\" WHERE NOT (%.*s) AND ROWNUM = 1",
-          static_cast<int>(ddl_schema_hint_str.length()), ddl_schema_hint_str.ptr(),
-          static_cast<int>(database_name.length()), database_name.ptr(),
-          static_cast<int>(table_name.length()), table_name.ptr(),
-          static_cast<int>(check_expr_str.length()), check_expr_str.ptr()))) {
+                         format_str,
+                         static_cast<int>(ddl_schema_hint_str.length()), ddl_schema_hint_str.ptr(),
+                         static_cast<int>(new_database_name.length()), new_database_name.ptr(),
+                         static_cast<int>(new_table_name.length()), new_table_name.ptr()))) {
         LOG_WARN("fail to assign format", K(ret));
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(sql_proxy = GCTX.ddl_oracle_sql_proxy_)) {
+      } else if (OB_ISNULL(sql_proxy)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sql proxy is null", K(ret));
-      } else if (OB_FAIL(GCTX.ddl_oracle_sql_proxy_->read(res, table_schema->get_tenant_id(), sql_string.ptr(), &session_param))) {
+      } else if (OB_FAIL(sql_proxy->read(res, table_schema.get_tenant_id(), sql_string.ptr(), &session_param))) {
         LOG_WARN("execute sql failed", K(ret), K(sql_string.ptr()));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("execute sql failed", K(ret), K(table_schema->get_tenant_id()), K(sql_string));
+        LOG_WARN("execute sql failed", K(ret), K(table_schema.get_tenant_id()), K(sql_string));
       } else if (OB_FAIL(result->next())) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
