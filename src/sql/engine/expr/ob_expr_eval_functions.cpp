@@ -1430,6 +1430,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprLocalDynamicFilter::eval_local_dynamic_filter,                /* 864 */
   NULL, // ObExprVecChunk::generate_vec_chunk,                        /* 865 */
   NULL, // ObExprEmbeddedVec::generate_embedded_vec,                  /* 866 */
+  NULL, // ObExprSemanticDistance::calc_semantic_distance,            /* 867 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

@@ -914,6 +914,7 @@ typedef enum ObItemType
   T_FUN_SYS_MAP_KEYS = 1784,
   T_FUN_SYS_MAP_VALUES = 1785,
   T_FUN_SYS_L2_SQUARED = 1786,
+  T_FUN_SYS_SEMANTIC_DISTANCE = 1787,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table

@@ -90,6 +90,7 @@ enum ObAdapterCreateType
   CreateTypeSnap,
   CreateTypeFullPartial,
   CreateTypeComplete,
+  CreateTypeEmbedded,
   CreateTypeMax
 };
 
