@@ -2617,7 +2617,9 @@ int ObCreateTableResolver::generate_index_arg(const bool process_heap_table_prim
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support global vec index now", K(ret));
         } else if (!is_user_tenant(tenant_id)) {
-          if (tenant_data_version < DATA_VERSION_4_4_1_0) {
+          if (!((tenant_data_version >= MOCK_CLUSTER_VERSION_4_3_5_3 &&
+                 tenant_data_version < CLUSTER_VERSION_4_4_0_0) ||
+                tenant_data_version >= CLUSTER_VERSION_4_4_1_0)) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("tenant is not user tenant vector index not supported ", K(ret), K(tenant_id));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.3, not user tenant create vector index is");

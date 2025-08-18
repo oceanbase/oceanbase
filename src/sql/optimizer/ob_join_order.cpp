@@ -4658,7 +4658,10 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     } else if (valid_hint_index_list.count() > 0
               && stmt->has_vec_approx()
               && helper.vec_index_type_ == ObVecIndexType::VEC_INDEX_INVALID) {
-      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+      uint64_t tenant_cluster_version = GET_MIN_CLUSTER_VERSION();
+      if (!((tenant_cluster_version >= MOCK_CLUSTER_VERSION_4_3_5_3 &&
+             tenant_cluster_version < CLUSTER_VERSION_4_4_0_0) ||
+            tenant_cluster_version >= CLUSTER_VERSION_4_4_1_0)) {
         // hint choose vec index pre-filter
         helper.vec_index_type_ = ObVecIndexType::VEC_INDEX_PRE;
       } else {
@@ -20004,7 +20007,10 @@ int ObJoinOrder::add_valid_vec_index_ids(const ObDMLStmt &stmt,
                                                     index_type))) {
       LOG_WARN("failed to get vector index tid", K(ret));
   } else if ((vec_index_tid != OB_INVALID_ID)) {
-    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0
+    uint64_t tenant_cluster_version = GET_MIN_CLUSTER_VERSION();
+    if (((tenant_cluster_version >= MOCK_CLUSTER_VERSION_4_3_5_3 &&
+          tenant_cluster_version < CLUSTER_VERSION_4_4_0_0) ||
+         tenant_cluster_version >= CLUSTER_VERSION_4_4_1_0)
     && index_type >= ObIndexType::INDEX_TYPE_VEC_ROWKEY_VID_LOCAL
     && index_type <= INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL
     && helper.vec_index_type_ != ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN) {
@@ -20916,7 +20922,11 @@ int ObJoinOrder::get_valid_hint_index_list(const ObDMLStmt &stmt,
       } else if (!is_valid) {
       } else {
         ObVecIndexType vec_with_filter_index_type = ObVecIndexType::VEC_INDEX_INVALID;
-        if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0 && index_hint_table_schema->is_vec_hnsw_index()) {
+        uint64_t tenant_cluster_version = GET_MIN_CLUSTER_VERSION();
+        if (((tenant_cluster_version >= MOCK_CLUSTER_VERSION_4_3_5_3 &&
+              tenant_cluster_version < CLUSTER_VERSION_4_4_0_0) ||
+             tenant_cluster_version >= CLUSTER_VERSION_4_4_1_0)
+            && index_hint_table_schema->is_vec_hnsw_index()) {
           // hint choose vec index post-with-filter
           vec_with_filter_index_type = ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN;
         } else {

@@ -3309,7 +3309,12 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
     ObDASScanIter *rowkey_vid_table_iter = nullptr;
     ObDASScanIter *data_filter_iter = nullptr;
     ObDASHNSWScanIterParam hnsw_scan_param;
-    bool can_use_adaptive_path = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0 && vec_aux_ctdef->is_vec_adaptive_scan();
+
+    uint64_t tenant_cluster_version = GET_MIN_CLUSTER_VERSION();
+    bool can_use_adaptive_path = ((tenant_cluster_version >= MOCK_CLUSTER_VERSION_4_3_5_3 &&
+                                   tenant_cluster_version < CLUSTER_VERSION_4_4_0_0) ||
+                                  tenant_cluster_version >= CLUSTER_VERSION_4_4_1_0) &&
+                                 vec_aux_ctdef->is_vec_adaptive_scan();
     bool with_other_idx_scan = (vec_aux_ctdef->is_pre_filter() || can_use_adaptive_path)
                             && OB_NOT_NULL(rowkey_vid_ctdef) && OB_NOT_NULL(rowkey_vid_rtdef);
 

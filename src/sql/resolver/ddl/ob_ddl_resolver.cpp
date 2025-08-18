@@ -8016,7 +8016,9 @@ int ObDDLResolver::resolve_vec_index_constraint(
       LOG_WARN("tenant data version is less than 4.3.3, vector index not supported", K(ret), K(tenant_data_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, vector index");
     } else if (!is_sparse_vec_col && !is_user_tenant(tenant_id)) {
-      if (tenant_data_version < DATA_VERSION_4_4_1_0) {
+      if (!((tenant_data_version >= MOCK_CLUSTER_VERSION_4_3_5_3 &&
+             tenant_data_version < CLUSTER_VERSION_4_4_0_0) ||
+            tenant_data_version >= CLUSTER_VERSION_4_4_1_0)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("tenant is not user tenant vector index not supported ", K(ret), K(tenant_id));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.3, not user tenant create vector index is");
