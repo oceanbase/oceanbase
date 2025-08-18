@@ -36,6 +36,7 @@ class ObDDLTransController;
 namespace rootserver
 {
 class ObDDLService;
+class ObDDLSQLTransaction;
 struct ObSysStat
 {
   struct Item;
@@ -200,6 +201,12 @@ public:
   static int replace_sys_stat(const uint64_t tenant_id,
       ObSysStat &sys_stat,
       common::ObISQLClient &trans);
+
+  int batch_create_system_table(
+      ObSchemaGetterGuard &schema_guard,
+      ObDDLSQLTransaction &trans,
+      const uint64_t &tenant_id,
+      const ObIArray<uint64_t> &table_ids);
 
 private:
   int insert_tenant_merge_info_(const share::schema::ObSchemaOperationType op,
@@ -472,6 +479,13 @@ private:
   int broadcast_sys_table_schemas(const uint64_t tenant_id);
 
   int create_tenant_sys_tablets(const uint64_t tenant_id, common::ObIArray<ObTableSchema> &tables);
+
+  int create_tenant_sys_tablets_in_trans_(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      ObMySQLTransaction &trans,
+      const uint64_t tenant_id,
+      common::ObIArray<share::schema::ObTableSchema> &tables,
+      const share::SCN &frozen_scn);
 
   int update_sys_variables(const common::ObIArray<obrpc::ObSysVarIdValue> &sys_var_list,
                            const share::schema::ObSysVariableSchema &old_sys_variable,

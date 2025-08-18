@@ -5831,6 +5831,45 @@ int ObUpgradeTableSchemaArg::assign(const ObUpgradeTableSchemaArg &other)
 
 OB_SERIALIZE_MEMBER((ObUpgradeTableSchemaArg, ObDDLArg), tenant_id_, table_id_, upgrade_virtual_schema_);
 
+int ObBatchUpgradeTableSchemaArg::init(const uint64_t tenant_id, const ObIArray<uint64_t> &table_ids)
+{
+  int ret = OB_SUCCESS;
+  ObDDLArg::reset();
+  if (OB_FAIL(table_ids_.assign(table_ids))) {
+    LOG_WARN("failed to assign table_ids", KR(ret), K(table_ids));
+  } else {
+    exec_tenant_id_ = tenant_id;
+    tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+
+bool ObBatchUpgradeTableSchemaArg::is_valid() const
+{
+  bool valid = is_valid_tenant_id(exec_tenant_id_) && is_valid_tenant_id(tenant_id_);
+  FOREACH_X(it, table_ids_, valid) {
+    if (!is_system_table(*it)) {
+      valid = false;
+    }
+  }
+  return valid;
+}
+
+int ObBatchUpgradeTableSchemaArg::assign(const ObBatchUpgradeTableSchemaArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else if (OB_FAIL(table_ids_.assign(other.table_ids_))) {
+    LOG_WARN("failed to assign table_ids", KR(ret), K(table_ids_), K(other.table_ids_));
+  } else {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObBatchUpgradeTableSchemaArg, ObDDLArg), tenant_id_, table_ids_);
+
 int ObAdminFlushCacheArg::assign(const ObAdminFlushCacheArg &other)
 {
   int ret = OB_SUCCESS;

@@ -350,9 +350,9 @@ int ObUpgradeUtils::upgrade_sys_variable(
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
   } else if (OB_FAIL(calc_diff_sys_var_(sql_client, tenant_id, update_list, add_list))) {
     LOG_WARN("fail to calc diff sys var", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(update_sys_var_(rpc_proxy, tenant_id, true, update_list))) {
+  } else if (OB_FAIL(batch_update_sys_var_(rpc_proxy, tenant_id, true, update_list))) {
     LOG_WARN("fail to update sys var", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(update_sys_var_(rpc_proxy, tenant_id, false, add_list))) {
+  } else if (OB_FAIL(batch_update_sys_var_(rpc_proxy, tenant_id, false, add_list))) {
     LOG_WARN("fail to add sys var", KR(ret), K(tenant_id));
   }
   return ret;
@@ -474,6 +474,80 @@ int ObUpgradeUtils::calc_diff_sys_var_(
   return ret;
 }
 
+int ObUpgradeUtils::get_sys_param_(const uint64_t &tenant_id, const int64_t &var_store_idx,
+    share::schema::ObSysVarSchema &sys_var)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (var_store_idx < 0 || var_store_idx >= ObSysVariables::get_all_sys_var_count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("var_store_idx out of range", KR(ret), K(var_store_idx),
+        "count", ObSysVariables::get_all_sys_var_count());
+  } else {
+    ObSysParam sys_param;
+    const ObString &name = ObSysVariables::get_name(var_store_idx);
+    const ObObjType &type = ObSysVariables::get_type(var_store_idx);
+    const ObString &value = ObSysVariables::get_value(var_store_idx);
+    const ObString &min = ObSysVariables::get_min(var_store_idx);
+    const ObString &max = ObSysVariables::get_max(var_store_idx);
+    const ObString &info = ObSysVariables::get_info(var_store_idx);
+    const int64_t flag = ObSysVariables::get_flags(var_store_idx);
+    const ObString zone("");
+    sys_var.set_tenant_id(tenant_id);
+    if (OB_FAIL(sys_param.init(tenant_id, zone, name.ptr(), type,
+            value.ptr(), min.ptr(), max.ptr(), info.ptr(), flag))) {
+      LOG_WARN("sys_param init failed", KR(ret), K(tenant_id), K(name),
+          K(type), K(value), K(min), K(max), K(info), K(flag));
+    } else if (!sys_param.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("sys param is invalid", KR(ret), K(tenant_id), K(sys_param));
+    } else if (OB_FAIL(ObSchemaUtils::convert_sys_param_to_sysvar_schema(sys_param, sys_var))) {
+      LOG_WARN("convert sys param to sysvar schema failed", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObUpgradeUtils::batch_update_sys_var_(
+    obrpc::ObCommonRpcProxy &rpc_proxy,
+    const uint64_t tenant_id,
+    const bool is_update,
+    common::ObArray<int64_t> &update_list)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else {
+    int64_t start_ts = ObTimeUtility::current_time();
+    const int64_t timeout = GCONF._ob_ddl_timeout;
+    ObArray<share::schema::ObSysVarSchema> sysvars;
+    ObAddSysVarArg args;
+    bool if_not_exist = true; // not used
+    if (OB_FAIL(sysvars.prepare_allocate(update_list.count()))) {
+      LOG_WARN("failed to prepare_allocate sysvars", KR(ret), "count", update_list.count());
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < update_list.count(); i++) {
+        int64_t var_store_idx = update_list.at(i);
+        if (OB_FAIL(get_sys_param_(tenant_id, var_store_idx, sysvars.at(i)))) {
+          LOG_WARN("failed to get sys param", KR(ret), K(tenant_id), K(var_store_idx));
+        }
+      }
+    }
+    if (FAILEDx(args.init(is_update, if_not_exist, tenant_id, sysvars))) {
+      LOG_WARN("failed to init args", KR(ret), K(sysvars), K(if_not_exist), K(is_update),
+          K(tenant_id));
+    } else if (OB_FAIL(rpc_proxy.timeout(timeout).add_system_variable(args))) {
+      LOG_WARN("add system variable failed", KR(ret), K(timeout), K(args));
+    }
+    LOG_INFO("[UPGRADE] finish batch upgrade system variables",
+             KR(ret), K(tenant_id), K(args), "cost", ObTimeUtility::current_time() - start_ts);
+  }
+  return ret;
+}
+
 // modify & add sys var according by hard code schema
 int ObUpgradeUtils::update_sys_var_(
     obrpc::ObCommonRpcProxy &rpc_proxy,
@@ -488,35 +562,21 @@ int ObUpgradeUtils::update_sys_var_(
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
   } else {
     const int64_t timeout = GCONF.internal_sql_execute_timeout;
+    ObAddSysVarArg arg;
     for (int64_t i = 0; OB_SUCC(ret) && i < update_list.count(); i++) {
       int64_t start_ts = ObTimeUtility::current_time();
       int64_t var_store_idx = update_list.at(i);
-      const ObString &name = ObSysVariables::get_name(var_store_idx);
-      const ObObjType &type = ObSysVariables::get_type(var_store_idx);
-      const ObString &value = ObSysVariables::get_value(var_store_idx);
-      const ObString &min = ObSysVariables::get_min(var_store_idx);
-      const ObString &max = ObSysVariables::get_max(var_store_idx);
-      const ObString &info = ObSysVariables::get_info(var_store_idx);
-      const int64_t flag = ObSysVariables::get_flags(var_store_idx);
-      const ObString zone("");
-      ObSysParam sys_param;
-      obrpc::ObAddSysVarArg arg;
       ObSysVarSchema sysvar;
-      if (OB_FAIL(sys_param.init(tenant_id, zone, name.ptr(), type,
-          value.ptr(), min.ptr(), max.ptr(), info.ptr(), flag))) {
-        LOG_WARN("sys_param init failed", KR(ret), K(tenant_id), K(name),
-                 K(type), K(value), K(min), K(max), K(info), K(flag));
-      } else if (!sys_param.is_valid()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("sys param is invalid", KR(ret), K(tenant_id), K(sys_param));
-      } else if (OB_FAIL(ObSchemaUtils::convert_sys_param_to_sysvar_schema(sys_param, sysvar))) {
-        LOG_WARN("convert sys param to sysvar schema failed", KR(ret));
-      } else if (OB_FAIL(arg.init(is_update, true /* if_not_exist_ */, tenant_id, sysvar))) {
+      if (OB_FAIL(get_sys_param_(tenant_id, var_store_idx, sysvar))) {
+        LOG_WARN("failed to get sys param", KR(ret), K(var_store_idx));
+      } else if (OB_FAIL(arg.init(is_update, true /* if_not_exist */, tenant_id, sysvar))) {
+        LOG_WARN("failed to init args", KR(ret), K(sysvar), K(is_update),
+            K(tenant_id));
       } else if (OB_FAIL(rpc_proxy.timeout(timeout).add_system_variable(arg))) {
         LOG_WARN("add system variable failed", KR(ret), K(timeout), K(arg));
       }
       LOG_INFO("[UPGRADE] finish upgrade system variable",
-               KR(ret), K(tenant_id), K(name), "cost", ObTimeUtility::current_time() - start_ts);
+               KR(ret), K(tenant_id), K(sysvar), "cost", ObTimeUtility::current_time() - start_ts);
     }
   }
   return ret;

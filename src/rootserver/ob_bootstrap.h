@@ -153,9 +153,7 @@ private:
   int load_all_schema(
       ObDDLService &ddl_service,
       common::ObIArray<share::schema::ObTableSchema> &table_schemas);
-  int construct_all_schema(
-      common::ObSArray<share::schema::ObTableSchema> &table_schemas,
-      ObIAllocator &allocator);
+  int construct_all_schema(common::ObSArray<share::schema::ObTableSchema> &table_schemas);
   int sort_schema(const common::ObIArray<share::schema::ObTableSchema> &table_schemas,
                   common::ObIArray<share::schema::ObTableSchema> &sort_table_schemas);
 private:

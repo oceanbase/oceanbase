@@ -809,6 +809,7 @@ public:
   int run_job(const obrpc::ObRunJobArg &arg);
   int run_upgrade_job(const obrpc::ObUpgradeJobArg &arg);
   int upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &arg);
+  int batch_upgrade_table_schema(const obrpc::ObBatchUpgradeTableSchemaArg &arg);
   int admin_flush_cache(const obrpc::ObAdminFlushCacheArg &arg);
   int admin_upgrade_cmd(const obrpc::Bool &arg);
   int admin_rolling_upgrade_cmd(const obrpc::ObAdminRollingUpgradeArg &arg);
@@ -882,6 +883,7 @@ public:
   int log_nop_operation(const obrpc::ObDDLNopOpreatorArg &arg);
   int broadcast_schema(const obrpc::ObBroadcastSchemaArg &arg);
   ObDDLService &get_ddl_service() { return ddl_service_; }
+  ObTenantDDLService &get_tenant_ddl_service() { return tenant_ddl_service_; }
   ObZoneStorageManager &get_zone_storage_manager() { return zone_storage_manager_; }
   int get_recycle_schema_versions(
       const obrpc::ObGetRecycleSchemaVersionsArg &arg,

@@ -9633,6 +9633,25 @@ int ObRootService::upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &ar
   return ret;
 }
 
+int ObRootService::batch_upgrade_table_schema(const obrpc::ObBatchUpgradeTableSchemaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start = ObTimeUtility::current_time();
+  FLOG_INFO("[UPGRADE] start to upgrade tables", K(arg));
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invalid", KR(ret), K(arg));
+  } else if (OB_FAIL(ddl_service_.batch_upgrade_table_schema(arg))) {
+    LOG_WARN("fail to batch upgrade table schema", KR(ret), K(arg));
+  }
+  FLOG_INFO("[UPGRADE] finish upgrade tables", KR(ret), K(arg),
+            "cost_us", ObTimeUtility::current_time() - start, "ddl_event_info", ObDDLEventInfo());
+  return ret;
+}
+
 int ObRootService::broadcast_ds_action(const obrpc::ObDebugSyncActionArg &arg)
 {
   LOG_INFO("receive broadcast debug sync actions", K(arg));

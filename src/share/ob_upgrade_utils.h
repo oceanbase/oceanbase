@@ -58,11 +58,18 @@ private:
       const uint64_t tenant_id,
       common::ObArray<int64_t> &update_list,
       common::ObArray<int64_t> &add_list);
+  static int batch_update_sys_var_(
+             obrpc::ObCommonRpcProxy &rpc_proxy,
+             const uint64_t tenant_id,
+             const bool is_update,
+             common::ObArray<int64_t> &update_list);
   static int update_sys_var_(
              obrpc::ObCommonRpcProxy &rpc_proxy,
              const uint64_t tenant_id,
              const bool is_update,
              common::ObArray<int64_t> &update_list);
+  static int get_sys_param_(const uint64_t &tenant_id, const int64_t &var_store_idx,
+      share::schema::ObSysVarSchema &sys_var);
   /* upgrade sys variable end */
   static int filter_sys_stat(
       common::ObISQLClient &sql_client,

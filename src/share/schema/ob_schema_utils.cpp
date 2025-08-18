@@ -615,64 +615,122 @@ int ObSchemaUtils::add_sys_table_lob_aux_table(
 
 // construct inner table schemas in tenant space
 int ObSchemaUtils::construct_inner_table_schemas(
-    const uint64_t tenant_id,
-    ObSArray<ObTableSchema> &tables,
-    ObIAllocator &allocator,
-    bool construct_all)
+      const uint64_t tenant_id,
+      const ObIArray<uint64_t> &table_ids,
+      const bool include_index_and_lob_aux_schemas,
+      ObIArray<ObTableSchema> &tables,
+      const bool ignore_tenant_id)
 {
   int ret = OB_SUCCESS;
-  const schema_create_func *creator_ptr_arrays[] = {
-    all_core_table_schema_creator,
-    core_table_schema_creators,
-    sys_table_schema_creators,
-    virtual_table_schema_creators,
-    sys_view_schema_creators
-  };
-  int64_t capacity = 0;
-  for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays); ++i) {
-    for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
-        OB_SUCC(ret) && OB_NOT_NULL(*creator_ptr); ++creator_ptr) {
-      ++capacity;
-    }
-  }
-  if (FAILEDx(tables.prepare_allocate_and_keep_count(capacity, &allocator))) {
-    LOG_WARN("fail to prepare allocate table schemas", KR(ret), K(tenant_id), K(capacity));
-  }
-  HEAP_VARS_2((ObTableSchema, table_schema), (ObTableSchema, data_schema)) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays); ++i) {
-      for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
-          OB_SUCC(ret) && OB_NOT_NULL(*creator_ptr); ++creator_ptr) {
-        table_schema.reset();
-        bool exist = false;
-        if (OB_FAIL((*creator_ptr)(table_schema))) {
-          LOG_WARN("fail to gen sys table schema", KR(ret));
-        } else if (!construct_all && is_sys_tenant(tenant_id)
-            && table_schema.get_table_id() == OB_ALL_CORE_TABLE_TID) {
-          // sys tenant's __all_core_table's schema is built separately in bootstrap
-        } else if (OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(
-                tenant_id, table_schema))) {
-          LOG_WARN("fail to construct tenant space table", KR(ret), K(tenant_id));
-        } else if (OB_FAIL(ObSysTableChecker::is_inner_table_exist(
-                tenant_id, table_schema, exist))) {
-          LOG_WARN("fail to check inner table exist",
-              KR(ret), K(tenant_id), K(table_schema));
-        } else if (!construct_all && !exist) {
-          // skip
-        } else if (OB_FAIL(tables.push_back(table_schema))) {
-          LOG_WARN("fail to push back table schema", KR(ret), K(table_schema));
-        } else if (OB_FAIL(ObSysTableChecker::append_sys_table_index_schemas(
-                tenant_id, table_schema.get_table_id(), tables))) {
-          LOG_WARN("fail to append sys table index schemas",
-              KR(ret), K(tenant_id), "table_id", table_schema.get_table_id());
+  const bool construct_all = table_ids.empty();
+  hash::ObHashSet<uint64_t> table_ids_set;
+  if (!construct_all) {
+    if (OB_FAIL(table_ids_set.create(hash::cal_next_prime(table_ids.count())))) {
+      LOG_WARN("failed to create table_ids_set", KR(ret), K(table_ids));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); i++) {
+        if (OB_FAIL(table_ids_set.set_refactored(table_ids.at(i)))) {
+          LOG_WARN("failed to add table_id to table_ids_set", KR(ret), K(table_ids.at(i)));
         }
-        const int64_t data_table_id = table_schema.get_table_id();
-        if (OB_SUCC(ret) && exist) {
-          if (OB_FAIL(add_sys_table_lob_aux_table(tenant_id, data_table_id, tables))) {
-            LOG_WARN("fail to add lob table to sys table", KR(ret), K(data_table_id));
-          }
-        } // end lob aux table
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    const schema_create_func *creator_ptr_arrays[] = {
+      all_core_table_schema_creator,
+      core_table_schema_creators,
+      sys_table_schema_creators,
+      virtual_table_schema_creators,
+      virtual_table_index_schema_creators,
+      sys_view_schema_creators
+    };
+    bool finish = false;
+    int64_t capacity = 0;
+    if (construct_all) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays); ++i) {
+        for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
+            OB_SUCC(ret) && OB_NOT_NULL(*creator_ptr); ++creator_ptr) {
+          capacity++;
+        }
+      }
+    } else {
+      // we assume one table has no more than 3 index table
+      // table schema + 3 * index + lob_meta + lob_piece
+      const int CAPACITY_UPGRADE_RATE = 6;
+      if (include_index_and_lob_aux_schemas) {
+        capacity = table_ids.count() * CAPACITY_UPGRADE_RATE;
+      } else {
+        capacity = table_ids.count();
+      }
+    }
+    if (FAILEDx(tables.reserve(capacity))) {
+      LOG_WARN("failed to prepare_allocate_and_keep_count", KR(ret), K(capacity));
+    }
+    HEAP_VARS_2((ObTableSchema, table_schema), (ObTableSchema, data_schema)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays) && !finish; ++i) {
+        for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
+             OB_SUCC(ret) && OB_NOT_NULL(*creator_ptr) && !finish; ++creator_ptr) {
+          table_schema.reset();
+          bool exist = false;
+          bool push = false;
+          uint64_t table_id = 0;
+          if (OB_FAIL((*creator_ptr)(table_schema))) {
+            LOG_WARN("fail to gen sys table schema", KR(ret));
+          } else if (!ignore_tenant_id && is_sys_tenant(tenant_id) && table_schema.get_table_id() == OB_ALL_CORE_TABLE_TID) {
+            // sys tenant's __all_core_table's schema is built separately in bootstrap
+          } else if (OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(tenant_id, table_schema))) {
+            LOG_WARN("failed to construct_tenant_space_full_table", KR(ret), K(tenant_id), K(table_schema));
+          } else if (OB_FAIL(ObSysTableChecker::is_inner_table_exist(
+                  tenant_id, table_schema, exist))) {
+            LOG_WARN("fail to check inner table exist",
+                KR(ret), K(tenant_id), K(table_schema));
+          } else if (!ignore_tenant_id && !exist) {
+            push = false;
+          } else if (construct_all) {
+            push = true;
+          } else if (FALSE_IT(table_id = table_schema.get_table_id())) {
+          } else if (OB_HASH_EXIST == table_ids_set.exist_refactored(table_id)) {
+            push = true;
+            if (OB_FAIL(table_ids_set.erase_refactored(table_id))) {
+              LOG_WARN("failed to erase table_id from set", KR(ret), K(table_id));
+            } else if (table_ids_set.empty()) {
+              finish = true;
+            }
+          }
+          if (OB_FAIL(ret) || !push) {
+          } else if (OB_FAIL(push_inner_table_schema_(tenant_id, include_index_and_lob_aux_schemas, table_schema, tables))) {
+            LOG_WARN("failed to construct inner table schema", KR(ret), K(tenant_id),
+                K(include_index_and_lob_aux_schemas), K(table_schema));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !table_ids_set.empty()) {
+      // table_id is from upgrade executor, which should exist in hard code schemas
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table_id in table_ids_set not in hard code schemas", KR(ret), K(table_ids_set));
+    }
+  }
+  return ret;
+}
+int ObSchemaUtils::push_inner_table_schema_(
+    const uint64_t tenant_id,
+    const bool include_index_and_lob_aux_schemas,
+    const ObTableSchema &tmp_table_schema,
+    ObIArray<ObTableSchema> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  const int64_t data_table_id = tmp_table_schema.get_table_id();
+  const int64_t table_id = tmp_table_schema.get_table_id();
+  if (OB_FAIL(table_schemas.push_back(tmp_table_schema))) {
+    LOG_WARN("fail to push back table schema", KR(ret), K(tmp_table_schema));
+  } else if (!include_index_and_lob_aux_schemas) {
+    // not push index and lob aux table
+  } else if (OB_FAIL(ObSysTableChecker::append_sys_table_index_schemas(
+          tenant_id, table_id, table_schemas))) {
+    LOG_WARN("fail to append sys table index schemas", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(add_sys_table_lob_aux_table(tenant_id, data_table_id, table_schemas))) {
+    LOG_WARN("fail to add lob table to sys table", KR(ret), K(data_table_id));
   }
   return ret;
 }

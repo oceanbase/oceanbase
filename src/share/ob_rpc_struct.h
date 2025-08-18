@@ -6776,6 +6776,29 @@ private:
   bool upgrade_virtual_schema_;
 };
 
+struct ObBatchUpgradeTableSchemaArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBatchUpgradeTableSchemaArg()
+    : ObDDLArg(),
+      tenant_id_(common::OB_INVALID_TENANT_ID),
+      table_ids_() {}
+  ~ObBatchUpgradeTableSchemaArg() {}
+  int init(const uint64_t tenant_id,
+           const ObIArray<uint64_t> &table_ids);
+  bool is_allow_when_disable_ddl() { return true; }
+  bool is_allow_when_upgrade() { return true; }
+  bool is_valid() const;
+  int assign(const ObBatchUpgradeTableSchemaArg &other);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  const ObIArray<uint64_t>& get_table_ids() const { return table_ids_; }
+  TO_STRING_KV(K_(tenant_id), K_(table_ids));
+private:
+  uint64_t tenant_id_;
+  common::ObSArray<uint64_t> table_ids_;
+};
+
 struct ObAdminMergeArg
 {
   OB_UNIS_VERSION(1);
