@@ -30,6 +30,12 @@ int ObVectorL2Distance<float>::l2_square_func(const float *a, const float *b, co
     } else {
       ret = common::specific::normal::l2_square(a, b, len, square);
     }
+#elif defined(__aarch64__)
+    if (common::is_arch_supported(ObTargetArch::NEON)) {
+      ret = l2_square_neon(a, b, len, square);
+    } else {
+      ret = common::specific::normal::l2_square(a, b, len, square);
+    }
 #else
     ret = common::specific::normal::l2_square(a, b, len, square);
 #endif

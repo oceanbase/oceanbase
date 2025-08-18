@@ -33,6 +33,12 @@ int ObVectorIpDistance<float>::ip_distance_func(const float *a, const float *b, 
   } else {
     ret = common::specific::normal::ip_distance(a, b, len, distance);
   }
+#elif defined(__aarch64__)
+  if (common::is_arch_supported(ObTargetArch::NEON)) {
+    ret = ip_distance_neon(a, b, len, distance);
+  } else {
+    ret = common::specific::normal::ip_distance(a, b, len, distance);
+  }
 #else
   ret = common::specific::normal::ip_distance(a, b, len, distance);
 #endif

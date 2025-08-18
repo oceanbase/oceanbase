@@ -24,6 +24,10 @@
 #include <nmmintrin.h>
 #endif
 
+#if defined (__aarch64__)
+#include <arm_neon.h>
+#endif
+
 namespace oceanbase
 {
 namespace common
