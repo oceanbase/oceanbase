@@ -379,11 +379,12 @@ int MutatorRow::add_column_(
     common::ObArrayHelper<common::ObString> extended_type_info;
     common::ObAccuracy accuracy;
     common::ObCollationType collation_type = ObCollationType::CS_TYPE_BINARY;
-
+    const common::ObSqlCollectionInfo *collection_info = nullptr;
     // Set meta information and scale information if column schema is valid
     if (NULL != column_schema_info) {
       column_cast(cv_node->value_, *column_schema_info);
       column_schema_info->get_extended_type_info(extended_type_info);
+      collection_info = column_schema_info->get_collection_info();
       accuracy = column_schema_info->get_accuracy();
       collation_type = column_schema_info->get_collation_type();
     }
@@ -437,6 +438,7 @@ int MutatorRow::add_column_(
         allocator_,
         false,
         extended_type_info,
+        collection_info,
         accuracy,
         collation_type,
         tz_info_wrap))) {
@@ -1465,7 +1467,7 @@ int DmlStmtTask::parse_col(
   common::ObArrayHelper<common::ObString> extended_type_info;
   common::ObAccuracy accuracy;
   common::ObCollationType collation_type = ObCollationType::CS_TYPE_BINARY;
-
+  const common::ObSqlCollectionInfo *collection_info = column_schema_info.get_collection_info();
   column_schema_info.get_extended_type_info(extended_type_info);
   accuracy = column_schema_info.get_accuracy();
   collation_type = column_schema_info.get_collation_type();
@@ -1478,6 +1480,7 @@ int DmlStmtTask::parse_col(
       row_.get_allocator(),
       false,
       extended_type_info,
+      collection_info,
       accuracy,
       collation_type,
       tz_info_wrap))) {

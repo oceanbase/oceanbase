@@ -124,6 +124,7 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
     common::ObIAllocator &allocator,
     const bool string_deep_copy,
     const common::ObIArray<common::ObString> &extended_type_info,
+    const common::ObSqlCollectionInfo *collection_info,
     const common::ObAccuracy &accuracy,
     const common::ObCollationType &collation_type,
     const ObTimeZoneInfoWrap *tz_info_wrap) const
@@ -175,7 +176,7 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
           K(obj), K(obj_type), K(str));
     }
   } else if (ObCollectionSQLType == obj_type) {
-    if (OB_FAIL(convert_collection_to_text_(obj, str, extended_type_info, allocator))) {
+    if (OB_FAIL(convert_collection_to_text_(obj, str, extended_type_info, collection_info, allocator))) {
       OBLOG_LOG(ERROR, "convert_collection_to_text_ fail", KR(ret), K(table_id), K(column_id),
           K(obj), K(obj_type), K(str));
     }
@@ -473,10 +474,12 @@ int ObObj2strHelper::convert_collection_to_text_(
     const common::ObObj &obj,
     common::ObString &str,
     const common::ObIArray<common::ObString> &extended_type_info,
+    const common::ObSqlCollectionInfo *collection_info,
     common::ObIAllocator &allocator) const
 {
   const ObString &data = obj.get_string();
-  return ObArrayUtil::convert_collection_bin_to_string(data, extended_type_info, allocator, str);
+  const ObCollectionTypeBase *collection_meta = collection_info ? collection_info->collection_meta_ : nullptr;
+  return ObArrayUtil::convert_collection_bin_to_string(data, extended_type_info, collection_meta, allocator, str);
 }
 
 bool ObObj2strHelper::need_padding_(const lib::Worker::CompatMode &compat_mode,

@@ -43,6 +43,7 @@ ColumnSchemaInfo::ColumnSchemaInfo()
       orig_default_value_str_(NULL),
       extended_type_info_size_(0),
       extended_type_info_(NULL),
+      collection_info_(NULL),
       is_rowkey_(false),
       udt_set_id_(0),
       sub_type_(0)
@@ -73,21 +74,21 @@ int ColumnSchemaInfo::init(
 
   if (OB_UNLIKELY(column_stored_idx < 0 || column_stored_idx > OB_USER_ROW_MAX_COLUMNS_COUNT + OB_APP_MIN_COLUMN_ID)
       || OB_UNLIKELY(is_usr_column && (usr_column_idx < 0 || usr_column_idx > OB_USER_ROW_MAX_COLUMNS_COUNT))) {
-    LOG_ERROR("invalid argument", K(column_stored_idx), K(is_usr_column), K(usr_column_idx));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(get_column_ori_default_value_(table_schema, column_table_schema, column_stored_idx, tz_info_wrap,
-            obj2str_helper, allocator, orig_default_value_str))) {
-      LOG_ERROR("get_column_ori_default_value_ fail", KR(ret), K(table_schema), K(column_table_schema),
-          K(column_stored_idx));
-  } else if (OB_ISNULL(orig_default_value_str)) {
-    LOG_ERROR("orig_default_value_str is null", K(orig_default_value_str));
-    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid argument", K(column_stored_idx), K(is_usr_column), K(usr_column_idx));
   } else if (OB_FAIL(init_extended_type_info_(table_schema, column_table_schema, column_stored_idx, allocator))) {
     LOG_ERROR("init_extended_type_info_ fail", KR(ret),
         "table_id", table_schema.get_table_id(),
         "table_name", table_schema.get_table_name(),
         "column_name", column_table_schema.get_column_name(),
         K(column_stored_idx));
+  } else if (OB_FAIL(get_column_ori_default_value_(table_schema, column_table_schema, column_stored_idx, tz_info_wrap,
+      obj2str_helper, allocator, orig_default_value_str))) {
+    LOG_ERROR("get_column_ori_default_value_ fail", KR(ret), K(table_schema), K(column_table_schema),
+        K(column_stored_idx));
+  } else if (OB_ISNULL(orig_default_value_str)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("orig_default_value_str is null", K(orig_default_value_str));
   } else {
     const ObObjMeta &meta_type = column_table_schema.get_meta_type();
     const ObAccuracy &accuracy = column_table_schema.get_accuracy();
@@ -183,6 +184,7 @@ int ColumnSchemaInfo::get_column_ori_default_value_(
             column_table_schema.get_column_id(),
             orig_default_obj, *str, allocator, true,
             column_table_schema.get_extended_type_info(),
+            collection_info_,
             column_table_schema.get_accuracy(),
             column_table_schema.get_collation_type(),
             tz_info_wrap))) {
@@ -267,6 +269,41 @@ int ColumnSchemaInfo::init_extended_type_info_(
         }
         allocator.free(buf);
         extended_type_info_ = NULL;
+      }
+
+      if (OB_SUCC(ret) && column_table_schema.is_collection()) {
+        const int64_t collection_info_size = static_cast<int64_t>(sizeof(ObSqlCollectionInfo));
+        if (OB_ISNULL(collection_info_ = static_cast<ObSqlCollectionInfo *>(allocator.alloc(collection_info_size)))) {
+          LOG_WARN("alloc memory failed", K(collection_info_size));
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else {
+          new (collection_info_) ObSqlCollectionInfo(allocator);
+          ObString collection_type_name = column_table_schema.get_extended_type_info().at(0);
+          collection_info_->set_name(collection_type_name);
+          if (OB_FAIL(collection_info_->parse_type_info())) {
+            LOG_WARN("parse_type_info failed", KR(ret), K(collection_type_name), K(table_schema),
+                "column_name", column_table_schema.get_column_name(), K(column_idx));
+          } else if (OB_ISNULL(collection_info_->collection_meta_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("collection_meta_ is null", KR(ret), K(collection_type_name), K(table_schema),
+                "column_name", column_table_schema.get_column_name(), K(column_idx));
+          } else {
+            LOG_INFO("parse_type_info succ", K(collection_type_name),
+                "table_id", table_schema.get_table_id(),
+                "table_name", table_schema.get_table_name(),
+                "column_id", column_table_schema.get_column_id(),
+                "column_name", column_table_schema.get_column_name(),
+                K(column_idx));
+          }
+        }
+        if (OB_FAIL(ret)) {
+          LOG_WARN("init_extended_type_info_ failed, will parse extended_type_info while format data", KR(ret), K(table_schema));
+          if (OB_NOT_NULL(collection_info_)) {
+            collection_info_->~ObSqlCollectionInfo();
+            allocator.free(collection_info_);
+            collection_info_ = NULL;
+          }
+        }
       }
     }
   }
