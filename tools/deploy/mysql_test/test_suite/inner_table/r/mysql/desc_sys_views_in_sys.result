@@ -5972,7 +5972,7 @@ PARTITION_POSITION	decimal(10,0)	NO
 SUBPARTITION_NAME	varchar(128)	NO			
 SUBPARTITION_POSITION	decimal(10,0)	NO			
 OBJECT_TYPE	varchar(12)	NO			
-NUM_ROWS	decimal(10,0)	NO		NULL	
+NUM_ROWS	decimal(20,0)	NO		NULL	
 BLOCKS	decimal(10,0)	NO			
 EMPTY_BLOCKS	decimal(10,0)	NO			
 AVG_SPACE	decimal(10,0)	NO			
@@ -6008,14 +6008,14 @@ Field	Type	Null	Key	Default	Extra
 OWNER	varchar(128)	NO			
 TABLE_NAME	varchar(128)	NO			
 COLUMN_NAME	varchar(128)	NO			
-NUM_DISTINCT	decimal(10,0)	NO		NULL	
+NUM_DISTINCT	decimal(20,0)	NO		NULL	
 LOW_VALUE	varchar(128)	NO		NULL	
 HIGH_VALUE	varchar(128)	NO		NULL	
-DENSITY	decimal(10,0)	NO		NULL	
-NUM_NULLS	decimal(10,0)	NO		NULL	
-NUM_BUCKETS	decimal(10,0)	NO		NULL	
+DENSITY	decimal(30,10)	NO		NULL	
+NUM_NULLS	decimal(20,0)	NO		NULL	
+NUM_BUCKETS	decimal(20,0)	NO		NULL	
 LAST_ANALYZED	datetime(6)	NO		NULL	
-SAMPLE_SIZE	decimal(10,0)	NO		NULL	
+SAMPLE_SIZE	decimal(20,0)	NO		NULL	
 GLOBAL_STATS	varchar(3)	NO			
 USER_STATS	varchar(3)	NO			
 NOTES	varchar(80)	NO			
@@ -6038,12 +6038,12 @@ OWNER	varchar(128)	NO
 TABLE_NAME	varchar(128)	NO			
 PARTITION_NAME	varchar(128)	NO			
 COLUMN_NAME	varchar(128)	NO			
-NUM_DISTINCT	decimal(10,0)	NO		NULL	
+NUM_DISTINCT	decimal(20,0)	NO		NULL	
 LOW_VALUE	varchar(128)	NO		NULL	
 HIGH_VALUE	varchar(128)	NO		NULL	
-DENSITY	decimal(10,0)	NO		NULL	
-NUM_NULLS	decimal(10,0)	NO		NULL	
-NUM_BUCKETS	decimal(10,0)	NO		NULL	
+DENSITY	decimal(30,10)	NO		NULL	
+NUM_NULLS	decimal(20,0)	NO		NULL	
+NUM_BUCKETS	decimal(20,0)	NO		NULL	
 LAST_ANALYZED	datetime(6)	NO		NULL	
 SAMPLE_SIZE	decimal(10,0)	NO		NULL	
 GLOBAL_STATS	varchar(3)	NO			
@@ -6067,14 +6067,14 @@ OWNER	varchar(128)	NO
 TABLE_NAME	varchar(128)	NO			
 SUBPARTITION_NAME	varchar(128)	NO			
 COLUMN_NAME	varchar(128)	NO			
-NUM_DISTINCT	decimal(10,0)	NO		NULL	
+NUM_DISTINCT	decimal(20,0)	NO		NULL	
 LOW_VALUE	varchar(128)	NO		NULL	
 HIGH_VALUE	varchar(128)	NO		NULL	
-DENSITY	decimal(10,0)	NO		NULL	
-NUM_NULLS	decimal(10,0)	NO		NULL	
-NUM_BUCKETS	decimal(10,0)	NO		NULL	
+DENSITY	decimal(30,10)	NO		NULL	
+NUM_NULLS	decimal(20,0)	NO		NULL	
+NUM_BUCKETS	decimal(20,0)	NO		NULL	
 LAST_ANALYZED	datetime(6)	NO		NULL	
-SAMPLE_SIZE	decimal(10,0)	NO		NULL	
+SAMPLE_SIZE	decimal(20,0)	NO		NULL	
 GLOBAL_STATS	varchar(3)	NO			
 USER_STATS	varchar(3)	NO			
 NOTES	varchar(80)	NO			
@@ -6187,10 +6187,10 @@ DISTINCT_KEYS	decimal(10,0)	NO
 AVG_LEAF_BLOCKS_PER_KEY	decimal(10,0)	NO			
 AVG_DATA_BLOCKS_PER_KEY	decimal(10,0)	NO			
 CLUSTERING_FACTOR	decimal(10,0)	NO			
-NUM_ROWS	decimal(10,0)	NO		NULL	
+NUM_ROWS	decimal(20,0)	NO		NULL	
 AVG_CACHED_BLOCKS	decimal(10,0)	NO			
 AVG_CACHE_HIT_RATIO	decimal(10,0)	NO			
-SAMPLE_SIZE	decimal(10,0)	NO			
+SAMPLE_SIZE	decimal(20,0)	NO			
 LAST_ANALYZED	datetime(6)	NO		NULL	
 GLOBAL_STATS	varchar(3)	NO			
 USER_STATS	varchar(3)	NO			
