@@ -20,7 +20,7 @@ config:
   # datafile_disk_percentage: '50'
   datafile_size: '20G'
   # log_disk_percentage: '10'
-  log_disk_size: '24G'
+  log_disk_size: '42G'
   memory_limit: '16G'
   system_memory: '1G'
   cpu_count: '24'
