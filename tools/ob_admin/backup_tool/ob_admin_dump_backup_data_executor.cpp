@@ -570,6 +570,8 @@ int ObAdminDumpBackupDataExecutor::execute(int argc, char *argv[])
     STORAGE_LOG(WARN, "failed to init io manager", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     STORAGE_LOG(WARN, "failed to start io manager", K(ret));
+  } else if (OB_FAIL(ObObjectStorageInfo::register_cluster_state_mgr(&ObClusterStateBaseMgr::get_instance()))) {
+    STORAGE_LOG(WARN, "fail to register cluster state mgr", KR(ret));
   } else if (check_exist_) {
     // ob_admin dump_backup -d'xxxxx' -c
     if (OB_FAIL(do_check_exist_())) {

@@ -48,6 +48,7 @@ public:
   virtual ~ObClusterStateMgr() {}
   virtual int is_supported_assume_version() const override;
   virtual int is_supported_enable_worm_version() const override;
+  virtual int is_supported_azblob_version() const override;
   virtual bool is_shared_storage_mode() const override;
   virtual bool is_write_with_if_match() const override;
   static ObClusterStateMgr &get_instance()

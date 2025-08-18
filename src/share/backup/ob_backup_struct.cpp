@@ -17,6 +17,7 @@
 #include "storage/tx/ob_ts_mgr.h"
 #include "src/share/ob_all_server_tracer.h" //SVR_TRACER
 #include "storage/ob_locality_manager.h"
+#include "lib/string/ob_sensitive_string.h"
 
 
 using namespace oceanbase;
@@ -4847,6 +4848,75 @@ int ObBackupDestAttributeParser::parse_(
     OB_LOG(WARN, "the str too long", K(uri_len), K(ret));
   } else if (OB_FAIL(kv_parser.parse(str))) {
     LOG_WARN("fail parse arg", K(extra_args), K(str), K(ret));
+  }
+  return ret;
+}
+
+int ObBackupDestAttributeParser::parse_access_info(const ObString &str, ObBackupDestAttribute &access_info)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(str.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("input str is empty", KR(ret));
+  } else if (OB_UNLIKELY(str.length() >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH)) {
+    ret = OB_SIZE_OVERFLOW;
+    OB_LOG(WARN, "the str too long", "len", str.length(), K(str), KR(ret));
+  } else {
+    char tmp[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
+    char *token = nullptr;
+    char *saved_ptr = nullptr;
+    const int64_t info_len = str.length();
+
+    MEMCPY(tmp, str.ptr(), info_len);
+    tmp[info_len] = '\0';
+    token = tmp;
+    for (char *tmp_str = token; OB_SUCC(ret); tmp_str = NULL) {
+      token = ::strtok_r(tmp_str, "&", &saved_ptr);
+      if (NULL == token) {
+        break;
+      } else if (0 == strncmp(ACCESS_ID, token, strlen(ACCESS_ID))) {
+        if (OB_FAIL(set_access_info_(ACCESS_ID, token, access_info.access_id_, OB_MAX_BACKUP_ACCESSID_LENGTH))) {
+          LOG_WARN("fail to set access id", KR(ret), K(token));
+        }
+      } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
+        if (OB_FAIL(set_access_info_(ACCESS_KEY, token, access_info.access_key_, OB_MAX_BACKUP_ACCESSKEY_LENGTH))) {
+          LOG_WARN("fail to set access key", KR(ret), KS(token));
+        }
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "input access");
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupDestAttributeParser::set_access_info_(const char *prefix, const char *token, char *output, int64_t output_len)
+{
+  int ret = OB_SUCCESS;
+  int64_t prefix_len = 0;
+  int64_t token_len = 0;
+  if (OB_ISNULL(prefix) || OB_ISNULL(token) || OB_ISNULL(output)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("prefix or token or output is nullptr", KR(ret), KP(prefix), KP(token), KP(output));
+  } else if (FALSE_IT(prefix_len = STRLEN(prefix))) {
+  } else if (FALSE_IT(token_len = STRLEN(token))) {
+  } else if (OB_UNLIKELY(prefix_len <= 0 || token_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("prefix or token is empty", KR(ret), K(prefix), K(token));
+  } else if (0 != strncmp(prefix, token, prefix_len)) { // prefix not matches
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("prefix does not match", KR(ret), K(prefix), K(token));
+  } else {
+    const int64_t require_len = token_len - prefix_len + 1;
+    if (OB_UNLIKELY(require_len > output_len)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("input token is too long", KR(ret), K(require_len), K(output_len));
+    } else {
+      MEMCPY(output, token + prefix_len, require_len);
+      output[require_len] = '\0';
+    }
   }
   return ret;
 }

@@ -795,6 +795,7 @@ const char *const OB_FILE_PREFIX = "file://";
 const char *const OB_COS_PREFIX = "cos://";
 const char *const OB_S3_PREFIX = "s3://";
 const char *const OB_HDFS_PREFIX= "hdfs://";
+const char *const OB_AZBLOB_PREFIX = "azblob://";
 const char *const OB_ADAPTIVELY_APPENDABLE_FORMAT_META = "FORMAT_META";
 const char *const OB_ADAPTIVELY_APPENDABLE_SEAL_META = "SEAL_META";
 const char *const OB_ADAPTIVELY_APPENDABLE_FRAGMENT_PREFIX = "@APD_PART@";

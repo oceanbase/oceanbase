@@ -38,6 +38,7 @@
 #include "share/ob_timezone_importer.h"
 #include "share/ob_srs_importer.h"
 #include "share/ob_license_utils.h"
+#include "lib/string/ob_sensitive_string.h"
 
 namespace oceanbase
 {
@@ -1390,11 +1391,17 @@ int ObChangeExternalStorageDestExecutor::execute(ObExecContext &ctx, ObChangeExt
   } else if (OB_ISNULL(svr_rpc = task_exec_ctx->get_srv_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get svr rpc proxy failed", K(task_exec_ctx));
-  } else if (OB_FAIL(svr_rpc->change_external_storage_dest(stmt.get_rpc_arg()))) {
-    LOG_WARN("set config rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
   } else {
-    LOG_INFO("change external storage dest rpc", K(stmt.get_rpc_arg()));
+    const ObAdminSetConfigArg &rpc_arg = stmt.get_rpc_arg();
+    ObCStringHelper helper;
+    const char *rpc_arg_cstr = helper.convert(rpc_arg);
+    if (OB_FAIL(svr_rpc->change_external_storage_dest(rpc_arg))) {
+      LOG_WARN("change external storage dest rpc failed", K(ret), KS(rpc_arg_cstr));
+    } else {
+      LOG_INFO("change external storage dest rpc", KS(rpc_arg_cstr));
+    }
   }
+
   return ret;
 }
 

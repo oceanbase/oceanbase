@@ -4105,7 +4105,7 @@ int ObService::change_external_storage_dest(obrpc::ObAdminSetConfigArg &arg)
     }
 
     if (OB_SUCC(ret) && has_access_info) {
-      if (OB_FAIL(ObBackupDestAttributeParser::parse(access_info.str(), access_info_option))) {
+      if (OB_FAIL(ObBackupDestAttributeParser::parse_access_info(access_info.str(), access_info_option))) {
         LOG_WARN("failed to parse attribute", K(ret), K(access_info));
       } else if (OB_FAIL(change_mgr.update_and_validate_authorization(
                             access_info_option.access_id_, access_info_option.access_key_))) {

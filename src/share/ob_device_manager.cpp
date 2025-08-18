@@ -14,7 +14,9 @@
 #include <unistd.h>
 #include "lib/restore/ob_object_device.h"
 #include "ob_device_manager.h"
+#include "ob_version_def.h"
 #include "share/config/ob_server_config.h"
+#include "share/ob_server_struct.h"
 #include "share/ob_server_struct.h"
 #include "share/io/ob_io_manager.h"
 #include "share/ob_local_device.h"
@@ -206,6 +208,34 @@ int ObClusterStateMgr::is_supported_enable_worm_version() const
   return ret;
 }
 
+int ObClusterStateMgr::is_supported_azblob_version() const
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  uint64_t min_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, min_data_version))) {
+    OB_LOG(WARN, "fail to get min data version, use cluster version", KR(ret), K(tenant_id));
+  }
+  if (OB_SUCC(ret)) {
+    if ((min_data_version < MOCK_DATA_VERSION_4_2_5_6)
+        || (min_data_version >= DATA_VERSION_4_3_0_0 && min_data_version < MOCK_DATA_VERSION_4_3_5_3)
+        || (min_data_version >= DATA_VERSION_4_4_0_0 && min_data_version < DATA_VERSION_4_4_1_0)) {
+      ret = OB_NOT_SUPPORTED;
+      OB_LOG(WARN, "data version is too low for azblob", KR(ret), K(min_data_version));
+    }
+  } else {
+    ret = OB_SUCCESS;
+    const uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+    if ((min_cluster_version < MOCK_CLUSTER_VERSION_4_2_5_6)
+        || (min_cluster_version >= CLUSTER_VERSION_4_3_0_0 && min_cluster_version < MOCK_CLUSTER_VERSION_4_3_5_3)
+        || (min_cluster_version >= CLUSTER_VERSION_4_4_0_0 && min_cluster_version < CLUSTER_VERSION_4_4_1_0)) {
+      ret = OB_NOT_SUPPORTED;
+      OB_LOG(WARN, "cluster version is too low for azblob", KR(ret), K(min_cluster_version));
+    }
+  }
+  return ret;
+}
+
 const int ObDeviceManager::MAX_DEVICE_INSTANCE;
 ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), is_init_(false)
 {
@@ -351,6 +381,10 @@ int parse_storage_info(common::ObString uri, ObIODevice*& device_handle, common:
     if (NULL != mem) {new(mem)ObObjectDevice;}
   } else if (uri.prefix_match(OB_S3_PREFIX)) {
     device_type = OB_STORAGE_S3;
+    mem = allocator.alloc(sizeof(ObObjectDevice));
+    if (NULL != mem) {new(mem)ObObjectDevice;}
+  } else if (uri.prefix_match(OB_AZBLOB_PREFIX)) {
+    device_type = OB_STORAGE_AZBLOB;
     mem = allocator.alloc(sizeof(ObObjectDevice));
     if (NULL != mem) {new(mem)ObObjectDevice;}
   } else if (uri.prefix_match(OB_HDFS_PREFIX)) {
@@ -728,7 +762,8 @@ int ObDeviceManager::get_device_key_(
   } else if (uri.prefix_match(OB_OSS_PREFIX)
              || uri.prefix_match(OB_COS_PREFIX)
              || uri.prefix_match(OB_S3_PREFIX)
-             || uri.prefix_match(OB_HDFS_PREFIX)) {
+             || uri.prefix_match(OB_HDFS_PREFIX)
+             || uri.prefix_match(OB_AZBLOB_PREFIX)) {
     const int64_t storage_info_key_len = storage_info.get_device_map_key_len();
     char storage_info_key_str[storage_info_key_len];
     storage_info_key_str[0] = '\0';

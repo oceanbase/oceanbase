@@ -977,6 +977,7 @@ public:
   bool is_storage_type_file() const { return OB_ISNULL(storage_info_) ?
       false : ObStorageType::OB_STORAGE_FILE == storage_info_->get_type(); }
   bool is_storage_type_s3() const { return OB_ISNULL(storage_info_) ? false : ObStorageType::OB_STORAGE_S3 == storage_info_->get_type(); }
+  ObStorageType get_storage_type() const { return OB_ISNULL(storage_info_) ? ObStorageType::OB_STORAGE_MAX_TYPE : storage_info_->get_type(); }
   int get_backup_dest_str(char *buf, const int64_t buf_size) const;
   int get_backup_dest_str_with_primary_attr(char *buf, const int64_t buf_size) const;
   int get_backup_path_str(char *buf, const int64_t buf_size) const;
@@ -1860,9 +1861,10 @@ class ObBackupDestAttributeParser
 {
 public:
   static int parse(const common::ObString &str, ObBackupDestAttribute &option);
-
+  static int parse_access_info(const ObString &str, ObBackupDestAttribute &access_info);
 private:
   static int parse_(const char *str, ObBackupDestAttribute &option);
+  static int set_access_info_(const char *prefix, const char *token, char *output, const int64_t output_len);
 public:
   class ExtraArgsCb : public share::ObKVMatchCb
   {

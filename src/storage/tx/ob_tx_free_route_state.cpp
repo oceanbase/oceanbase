@@ -26,7 +26,6 @@ namespace transaction {
 
 // only serialize isolation_ when Repeatable Read or SERIALIZABLE
 #define PRE_ENCODE_EXTRA_FOR_VERIFY                             \
-  uint64_t op_sn_ = 0;                                          \
   ObTxIsolationLevel isolation_ = ObTxIsolationLevel::INVALID;  \
   if (this->isolation_ == ObTxIsolationLevel::RR                \
       || this->isolation_ == ObTxIsolationLevel::SERIAL) {      \

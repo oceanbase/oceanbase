@@ -291,6 +291,8 @@ int ObBackupWrapperIODevice::parse_storage_device_type_(
     device_type = OB_STORAGE_OSS;
   } else if (storage_type_prefix.prefix_match(OB_S3_PREFIX)) {
     device_type = OB_STORAGE_S3;
+  } else if (storage_type_prefix.prefix_match(OB_AZBLOB_PREFIX)) {
+    device_type = OB_STORAGE_AZBLOB;
   } else {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("invaild device name info!", K(storage_type_prefix));

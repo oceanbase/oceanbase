@@ -446,6 +446,8 @@ int ObSelectIntoOp::calc_url_and_set_access_info()
     file_location_ = IntoFileLocation::REMOTE_S3;
   } else if (path.prefix_match_ci(OB_HDFS_PREFIX)) {
     file_location_ = IntoFileLocation::REMOTE_HDFS;
+  } else if (path.prefix_match_ci(OB_AZBLOB_PREFIX)) {
+    file_location_ = IntoFileLocation::REMOTE_AZBLOB;
   } else {
     file_location_ = IntoFileLocation::SERVER_DISK;
   }

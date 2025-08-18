@@ -336,7 +336,7 @@ int set_obdal_options_with_account(
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "access_key_id", obdal_account.access_id_))) {
         OB_LOG(WARN, "failed to set access id", K(ret), K(obdal_account.access_id_));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "secret_access_key", obdal_account.access_key_))) {
-        OB_LOG(WARN, "failed to set access key", K(ret), K(obdal_account.access_key_));
+        OB_LOG(WARN, "failed to set access key", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "disable_config_load", "true"))) {
         OB_LOG(WARN, "failed to set disable config load", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "disable_ec2_metadata", "true"))) {
@@ -356,8 +356,20 @@ int set_obdal_options_with_account(
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "access_key_id", obdal_account.access_id_))) {
         OB_LOG(WARN, "failed to set access id", K(ret), K(obdal_account.access_id_));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "access_key_secret", obdal_account.access_key_))) {
-        OB_LOG(WARN, "failed to set access key", K(ret), K(obdal_account.access_key_));
+        OB_LOG(WARN, "failed to set access key", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "timeout", "60"))) {
+        OB_LOG(WARN, "failed to set timeout", K(ret));
+      }
+    } else if (storage_type == ObStorageType::OB_STORAGE_AZBLOB) {
+      if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "container", bucket.ptr()))) {
+        OB_LOG(WARN, "failed to set bucket", K(ret), K(bucket));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "endpoint", obdal_account.endpoint_))) {
+        OB_LOG(WARN, "failed to set endpoint", K(ret), K(obdal_account.endpoint_));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "account_name", obdal_account.access_id_))) {
+        OB_LOG(WARN, "failed to set access id", K(ret), K(obdal_account.access_id_));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "account_key", obdal_account.access_key_))) {
+        OB_LOG(WARN, "failed to set access key", K(ret));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "timeout", "120"))) {
         OB_LOG(WARN, "failed to set timeout", K(ret));
       }
     }
@@ -366,14 +378,15 @@ int set_obdal_options_with_account(
 }
 
 int set_options_checksum_algorithm(
-  opendal_operator_options *options,
-  const ObStorageChecksumType checksum_type)
+    const ObStorageType storage_type,
+    const ObStorageChecksumType checksum_type,
+    opendal_operator_options *options)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(options)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), KP(options), K(checksum_type));
-  } else if (OB_UNLIKELY(!is_obdal_supported_checksum(checksum_type))) {
+  } else if (OB_UNLIKELY(!is_obdal_supported_checksum(storage_type, checksum_type))) {
     ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
     OB_LOG(WARN, "that checksum algorithm is not supported for obdal", K(ret), K(checksum_type));
   } else {
@@ -415,7 +428,7 @@ int ObStorageObDalBase::inner_open(const ObString &uri, ObObjectStorageInfo *sto
       OB_LOG(ERROR, "errsim backup io with checksum type", "checksum_type", storage_info->get_checksum_type_str());
     }
 #endif
-    if (OB_UNLIKELY(!is_obdal_supported_checksum(checksum_type_))) {
+    if (OB_UNLIKELY(!is_obdal_supported_checksum(storage_type_, checksum_type_))) {
       ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
       OB_LOG(WARN, "that checksum algorithm is not supported for obdal", K(ret), K_(checksum_type));
     } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_new(options_))) {
@@ -423,7 +436,7 @@ int ObStorageObDalBase::inner_open(const ObString &uri, ObObjectStorageInfo *sto
     } else if (OB_FAIL(set_obdal_options_with_account(options_, storage_type_, obdal_account_, bucket_))) {
       OB_LOG(WARN, "fail set opendal operator options", K(ret),
           K(obdal_account_), K(bucket_), K(uri), KPC(storage_info));
-    } else if (OB_FAIL(set_options_checksum_algorithm(options_, checksum_type_))) {
+    } else if (OB_FAIL(set_options_checksum_algorithm(storage_type_, checksum_type_, options_))) {
       OB_LOG(WARN, "fail set options with checksum algorithm", K(ret), K(checksum_type_),
           K(obdal_account_), K(bucket_), K(uri), KPC(storage_info));
     } else {
@@ -432,8 +445,13 @@ int ObStorageObDalBase::inner_open(const ObString &uri, ObObjectStorageInfo *sto
           OB_LOG(WARN, "fail get opendal operator with options", K(ret),
               K(obdal_account_), K(bucket_), K(uri), KPC(storage_info));
         }
-      } else {
+      } else if (storage_type_ == OB_STORAGE_S3) {
         if (OB_FAIL(ObDalAccessor::obdal_operator_new("s3", options_, op_))) {
+          OB_LOG(WARN, "fail get opendal operator with options", K(ret),
+              K(obdal_account_), K(bucket_), K(uri), KPC(storage_info));
+        }
+      } else if (storage_type_ == OB_STORAGE_AZBLOB) {
+        if (OB_FAIL(ObDalAccessor::obdal_operator_new("azblob", options_, op_))) {
           OB_LOG(WARN, "fail get opendal operator with options", K(ret),
               K(obdal_account_), K(bucket_), K(uri), KPC(storage_info));
         }
@@ -1384,7 +1402,7 @@ int ObStorageObDalAppendWriter::open(const ObString &uri, ObObjectStorageInfo *s
   } else if (OB_FAIL(ObStorageObDalBase::open(uri, storage_info))) {
     OB_LOG(WARN, "failed to open in obdal base", K(ret), K(uri), KPC(storage_info));
   } else {
-    if (storage_type_ == OB_STORAGE_OSS) {
+    if (storage_type_ == OB_STORAGE_OSS || storage_type_ == OB_STORAGE_AZBLOB) {
       if (OB_FAIL(ObDalAccessor::obdal_operator_append_writer(op_, object_.ptr(), writer_))) {
         OB_LOG(WARN, "failed to get obdal operator append writer", K(ret), K(uri));
       }
@@ -1418,7 +1436,7 @@ int ObStorageObDalAppendWriter::pwrite(const char *buf, const int64_t size, cons
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), KP(buf), K(size), K(offset));
   } else {
-    if (storage_type_ == OB_STORAGE_OSS) {
+    if (storage_type_ == OB_STORAGE_OSS || storage_type_ == OB_STORAGE_AZBLOB) {
       if (OB_FAIL(ObDalAccessor::obdal_writer_write_with_offset(writer_, offset, buf, size))) {
         OB_LOG(WARN, "failed to write with offset in obdal append writer", K(ret), K(offset), K(size));
       }

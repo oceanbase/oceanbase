@@ -317,7 +317,7 @@ int ObStorageInfoOperator::parse_storage_path(const char *storage_path, char *ro
     LOG_WARN("invalid args", KR(ret), KP(storage_path));
   } else if (OB_FAIL(get_storage_type_from_path(storage_path_str, type))) {
     LOG_WARN("failed to get storage type", KR(ret));
-  } else if (OB_STORAGE_OSS != type && OB_STORAGE_S3 != type) {
+  } else if (OB_STORAGE_OSS != type && OB_STORAGE_S3 != type && OB_STORAGE_AZBLOB != type) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("cannot support this storage type", KR(ret), K(type));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "cannot support this storage type, it is");
