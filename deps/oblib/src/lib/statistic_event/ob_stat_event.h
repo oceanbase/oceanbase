@@ -837,6 +837,13 @@ STAT_EVENT_ADD_DEF(SS_UPLOAD_TASK_TOTAL_COUNT, "The total count of all upload ta
 STAT_EVENT_ADD_DEF(SS_UPLOAD_TASK_TOTAL_MACRO_BLOCK_COUNT, "The total macro block count of all upload tasks", ObStatClassIds::STORAGE, 240106, false, true, true)
 STAT_EVENT_ADD_DEF(SS_UPLOAD_TASK_TOTAL_EXEC_TIME, "The total execution time taken for all upload tasks", ObStatClassIds::STORAGE, 240107, false, true, true)
 STAT_EVENT_ADD_DEF(SS_UPLOAD_TASK_TOTAL_WAIT_SCHEDULE_TIME, "The total wait schedule time taken for all upload tasks", ObStatClassIds::STORAGE, 240108, false, true, true)
+
+// external table cache(2402xx)
+STAT_EVENT_ADD_DEF(OPT_EXTERNAL_TABLE_STAT_CACHE_HIT, "opt external table stat cache hit", ObStatClassIds::CACHE, 240201, false, true, true)
+STAT_EVENT_ADD_DEF(OPT_EXTERNAL_TABLE_STAT_CACHE_MISS, "opt external table stat cache miss", ObStatClassIds::CACHE, 240202, false, true, true)
+STAT_EVENT_ADD_DEF(OPT_EXTERNAL_COLUMN_STAT_CACHE_HIT, "opt external column stat cache hit", ObStatClassIds::CACHE, 240203, false, true, true)
+STAT_EVENT_ADD_DEF(OPT_EXTERNAL_COLUMN_STAT_CACHE_MISS, "opt external column stat cache miss", ObStatClassIds::CACHE, 240204, false, true, true)
+
 //end
 STAT_EVENT_ADD_DEF(STAT_EVENT_ADD_END, "event add end", ObStatClassIds::DEBUG, 1, false, false, true)
 
