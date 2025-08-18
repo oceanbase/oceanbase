@@ -763,7 +763,6 @@ int ObPartTransCtx::commit(const ObTxCommitParts &parts,
   if (OB_FAIL(submit_parallel_redo_before_commit_())) {
     TRANS_LOG(WARN, "submit redo before commit fail", KR(ret), K(*this));
   }
-  int tmp_ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
   if (OB_FAIL(ret)) {
   } else if (IS_NOT_INIT) {
@@ -3324,6 +3323,12 @@ int ObPartTransCtx::submit_parallel_redo_before_commit_() {
       break;
     }
   } while (ret == OB_EAGAIN);
+
+  if (OB_FAIL(ret) && OB_EAGAIN != ret) {
+    // ignore other errors and rely on the following log submission processings
+    ret = OB_SUCCESS;
+  }
+
   return ret;
 }
 
