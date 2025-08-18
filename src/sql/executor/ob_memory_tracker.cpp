@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX LIB
 #include "sql/executor/ob_memory_tracker.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "lib/rc/context.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/rc/ob_tenant_base.h"
@@ -58,6 +59,14 @@ int ObMemTrackerGuard::check_status()
   int ret = common::OB_SUCCESS;
   if (nullptr != mem_tracker_.mem_context_) {
     int64_t tree_mem_hold = mem_tracker_.mem_context_->tree_mem_hold();
+    mem_tracker_.cur_mem_used_ = tree_mem_hold;
+    mem_tracker_.peek_mem_used_ = max(mem_tracker_.peek_mem_used_, mem_tracker_.cur_mem_used_);
+    // update session info mem used
+    sql::ObSQLSessionInfo *session = THIS_WORKER.get_session();
+    if (nullptr != session) {
+      session->set_sql_mem_used(mem_tracker_.cur_mem_used_);
+    }
+
     ++mem_tracker_.check_status_times_;
     if (0 == mem_tracker_.cache_mem_limit_
       || (mem_tracker_.check_status_times_ % UPDATE_MEM_LIMIT_THRESHOLD == 0)) {

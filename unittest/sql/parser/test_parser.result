@@ -25281,3 +25281,181 @@ question_mask_size: 0
     }
   ]
 }
+**************   Case 220   ***************
+alter system create ls unit_group 1001, primary_zone 'z1';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_ALTER_LS",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_INT",
+          "int_val":1,
+          "str_len":0,
+          "str_val":""
+        },
+         {
+          "type":"T_LS_ATTR_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_UNIT_GROUP",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":1001,
+                  "str_len":4,
+                  "str_val":"1001"
+                }
+              ]
+            },
+             {
+              "type":"T_PRIMARY_ZONE",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_VARCHAR",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"z1"
+                }
+              ]
+            }
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 221   ***************
+alter system modify ls 1001 unit_group 1001, primary_zone  'z1';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_ALTER_LS",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_INT",
+          "int_val":2,
+          "str_len":0,
+          "str_val":""
+        },
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":1001,
+              "str_len":4,
+              "str_val":"1001"
+            }
+          ]
+        },
+         {
+          "type":"T_LS_ATTR_LIST",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_UNIT_GROUP",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":1001,
+                  "str_len":4,
+                  "str_val":"1001"
+                }
+              ]
+            },
+             {
+              "type":"T_PRIMARY_ZONE",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_VARCHAR",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"z1"
+                }
+              ]
+            }
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 222   ***************
+alter system drop ls 1001;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_ALTER_LS",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_INT",
+          "int_val":3,
+          "str_len":0,
+          "str_val":""
+        },
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":1001,
+              "str_len":4,
+              "str_val":"1001"
+            }
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}

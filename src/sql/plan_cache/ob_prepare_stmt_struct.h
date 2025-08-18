@@ -256,6 +256,8 @@ public:
   bool is_expired() { return ATOMIC_LOAD(&is_expired_); }
   bool *get_is_expired_evicted_ptr() { return &is_expired_evicted_; }
   bool try_erase() { return 1 == ATOMIC_VCAS(&ref_count_, 1, 0); }
+  void set_ps_need_parameterization(bool ps_need_parameterization) { ps_need_parameterization_ = ps_need_parameterization; }
+  bool is_ps_need_parameterization() const { return ps_need_parameterization_; }
 
   DECLARE_VIRTUAL_TO_STRING;
 
@@ -298,6 +300,7 @@ private:
   ObFixedArray<ObPCParam *, common::ObIAllocator> raw_params_;
   ObFixedArray<int64_t, common::ObIAllocator> raw_params_idx_;
   stmt::StmtType literal_stmt_type_;
+  bool ps_need_parameterization_;
 };
 
 struct TypeInfo {
@@ -459,7 +462,8 @@ struct PsCacheInfoCtx
     no_param_sql_(),
     raw_params_(NULL),
     fixed_param_idx_(NULL),
-    stmt_type_(stmt::T_NONE) {}
+    stmt_type_(stmt::T_NONE),
+    ps_need_parameterization_(true) {}
 
 
   TO_STRING_KV(K_(param_cnt),
@@ -469,7 +473,8 @@ struct PsCacheInfoCtx
                K_(normalized_sql),
                K_(raw_sql),
                K_(no_param_sql),
-               K_(stmt_type));
+               K_(stmt_type),
+               K_(ps_need_parameterization));
 
   int64_t param_cnt_;
   int32_t num_of_returning_into_;
@@ -481,6 +486,7 @@ struct PsCacheInfoCtx
   common::ObIArray<ObPCParam*> *raw_params_;
   common::ObIArray<int64_t> *fixed_param_idx_;
   stmt::StmtType stmt_type_;
+  bool ps_need_parameterization_;
 };
 
 } //end of namespace sql

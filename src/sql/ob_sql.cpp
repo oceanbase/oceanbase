@@ -1262,6 +1262,7 @@ int ObSql::do_real_prepare(const ObString &sql,
                  && context.is_pre_execute_)) {
     param_cnt = parse_result.question_mark_ctx_.count_;
     info_ctx.normalized_sql_ = sql;
+    info_ctx.no_param_sql_ = sql;
     if (stmt::T_ANONYMOUS_BLOCK == stmt_type
         && context.is_prepare_protocol_
         && context.is_prepare_stage_
@@ -1273,7 +1274,9 @@ int ObSql::do_real_prepare(const ObString &sql,
                                                                      pc_ctx))) {
         LOG_INFO("parameterize anonymous syntax tree failed", K(ret));
       }
-
+      if (!pc_ctx.ps_need_parameterized_) {
+        info_ctx.ps_need_parameterization_ = false;
+      }
       OZ (result.reserve_param_columns(param_cnt));
       for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
         ObField param_field;
@@ -1338,14 +1341,6 @@ int ObSql::do_real_prepare(const ObString &sql,
         pc_ctx.ps_need_parameterized_ = false;
         ret = OB_SUCCESS;
       }
-      if (OB_SUCC(ret)) {
-        if (!pc_ctx.ps_need_parameterized_) {
-          pc_ctx.fixed_param_idx_.reset();
-          pc_ctx.fp_result_.raw_params_.reset();
-        } else {
-          info_ctx.no_param_sql_ = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
-        }
-      }
     } else if (!is_inner_sql && stmt::T_ANONYMOUS_BLOCK == stmt_type) {
       if (OB_FAIL(ectx.get_pl_engine()->parameter_ps_anonymous_block(ectx,
                                                                      allocator,
@@ -1376,7 +1371,6 @@ int ObSql::do_real_prepare(const ObString &sql,
         }
       }
     }
-
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(basic_stmt)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1407,6 +1401,20 @@ int ObSql::do_real_prepare(const ObString &sql,
       } else {
         info_ctx.normalized_sql_ = sql;
       }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (result.is_returning() && ObStmt::is_dml_write_stmt(stmt_type)) {
+      info_ctx.ps_need_parameterization_ = true;
+    } else if (session.is_enable_ps_parameterize() && pc_ctx.ps_need_parameterized_) {
+      info_ctx.ps_need_parameterization_ = true;
+      info_ctx.no_param_sql_ = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+    } else {
+      info_ctx.ps_need_parameterization_ = false;
+      pc_ctx.fixed_param_idx_.reset();
+      pc_ctx.fp_result_.raw_params_.reset();
+      info_ctx.no_param_sql_ = pc_ctx.ps_need_parameterized_
+                                ? pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_
+                                : info_ctx.normalized_sql_;
     }
     if (OB_SUCC(ret)) {
       if (basic_stmt->is_insert_stmt() || basic_stmt->is_update_stmt() || basic_stmt->is_delete_stmt()) {
@@ -2434,7 +2442,9 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
     } else if (OB_FAIL(construct_param_store(ps_params, pctx->get_param_store_for_update()))) {
       LOG_WARN("construct param store failed", K(ret));
     } else {
-      const ObString &sql = !ps_info->get_no_param_sql().empty() ? ps_info->get_no_param_sql() : ps_info->get_ps_sql();
+      const ObString &sql = ps_info->is_ps_need_parameterization()
+                                ? ps_info->get_no_param_sql()
+                                : ps_info->get_ps_sql();
       context.cur_sql_ = sql;
       context.raw_sql_ = ps_info->get_ps_sql();
 #ifndef NDEBUG
@@ -2447,7 +2457,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
       }
       if (OB_FAIL(session.store_query_string(sql))) {
         LOG_WARN("store query string fail", K(ret));
-      } else if (FALSE_IT(generate_ps_sql_id(sql, context))) {
+      } else if (FALSE_IT(generate_ps_sql_id(ps_info->get_no_param_sql(), context))) {
       } else if (OB_LIKELY(ObStmt::is_dml_stmt(stmt_type))) {
         //if plan not exist, generate plan
         ObPlanCacheCtx pc_ctx(sql, PC_PS_MODE, allocator, context, ectx,
@@ -2459,6 +2469,10 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
         pc_ctx.set_is_inner_sql(is_inner_sql);
         pc_ctx.ab_params_ = ps_ab_params;
         pc_ctx.is_arraybinding_ = (ps_info->get_num_of_returning_into() > 0);
+        pc_ctx.parameterized_ps_sql_.assign_ptr(
+            ps_info->get_no_param_sql().ptr(),
+            ps_info->get_no_param_sql().length());
+        pc_ctx.ps_need_parameterized_ = ps_info->is_ps_need_parameterization();
         if (OB_FAIL(construct_parameterized_params(ps_params, pc_ctx))) {
           LOG_WARN("construct parameterized params failed", K(ret));
         } else {
@@ -5276,7 +5290,9 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   bool use_plan_cache = session.get_local_ob_enable_plan_cache();
   // record whether needs to do parameterization at this time,
   // if exact mode is on, not do parameterizaiton
-  bool is_enable_transform_tree = !session.get_enable_exact_mode();
+  bool is_enable_transform_tree = mode == PC_PS_MODE
+                                      ? pc_ctx.ps_need_parameterized_
+                                      : !session.get_enable_exact_mode();
   //重新解析前将这两个标记reset掉，避免前面查plan cache的操作导致这两个参数在重新生成plan后会出现不幂等的问题
   pc_ctx.not_param_index_.reset();
   pc_ctx.neg_param_index_.reset();
@@ -5773,7 +5789,7 @@ void ObSql::generate_sql_id(ObPlanCacheCtx &pc_ctx,
             || PC_PS_MODE == pc_ctx.mode_
             || PC_PL_MODE == pc_ctx.mode_
             || OB_SUCCESS != err_code) {
-    signature_sql = pc_ctx.raw_sql_;
+    signature_sql = PC_PS_MODE == pc_ctx.mode_ ? pc_ctx.parameterized_ps_sql_ : pc_ctx.raw_sql_ ;
    // if err happens in parameterization, not generate format_sql;
     signature_format_sql.reset();
   } else {

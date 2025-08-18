@@ -115,6 +115,7 @@ enable_monotonic_weak_read
 enable_ob_error_msg_style
 enable_ob_ratelimit
 enable_perf_event
+enable_ps_parameterize
 enable_rebalance
 enable_record_trace_id
 enable_record_trace_log
@@ -432,6 +433,7 @@ _enable_resource_limit_spec
 _enable_routine_call_param_defend
 _enable_skip_index
 _enable_spf_batch_rescan
+_enable_sql_audit_query_sql
 _enable_sql_ccl_rule
 _enable_ss_migration_prewarm
 _enable_ss_replica_prewarm

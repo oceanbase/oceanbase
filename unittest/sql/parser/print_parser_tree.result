@@ -3912,3 +3912,44 @@ question_mask_size: 0
 	|--[0],[T_CANCEL_LS_REPLICA_TASK], str_value_=[], value=[0]
 		|--[0],[T_VARCHAR], str_value_=[xxx], value=[9223372036854775807]
 
+<<<<<<< HEAD
+=======
+**************   Case 220   ***************
+alter system create ls unit_group 1001, primary_zone 'z1';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_ALTER_LS], str_value_=[], value=[0]
+		|--[0],[T_INT], str_value_=[], value=[1]
+		|--[1],[T_LS_ATTR_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_UNIT_GROUP], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_INT], str_value_=[1001], value=[1001]
+			|--[1],[T_PRIMARY_ZONE], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_VARCHAR], str_value_=[z1], value=[9223372036854775807]
+
+**************   Case 221   ***************
+alter system modify ls 1001 unit_group 1001, primary_zone  'z1';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_ALTER_LS], str_value_=[], value=[0]
+		|--[0],[T_INT], str_value_=[], value=[2]
+		|--[1],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[1001], value=[1001]
+		|--[2],[T_LS_ATTR_LIST], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_UNIT_GROUP], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_INT], str_value_=[1001], value=[1001]
+			|--[1],[T_PRIMARY_ZONE], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_VARCHAR], str_value_=[z1], value=[9223372036854775807]
+
+**************   Case 222   ***************
+alter system drop ls 1001;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_ALTER_LS], str_value_=[], value=[0]
+		|--[0],[T_INT], str_value_=[], value=[3]
+		|--[1],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[1001], value=[1001]
+
+>>>>>>> 44e4230e5ac0... [FEAT MERGE] (CP from 425) Query Interface Enhancement

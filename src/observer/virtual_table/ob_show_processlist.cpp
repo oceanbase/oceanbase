@@ -515,7 +515,11 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             break;
           }
           case MEMORY_USAGE: {
-            cur_row_->cells_[cell_idx].set_null();
+            if (ObSQLSessionState::QUERY_ACTIVE == sess_info->get_session_state()) {
+              cur_row_->cells_[cell_idx].set_int(sess_info->get_sql_mem_used());
+            } else {
+              cur_row_->cells_[cell_idx].set_int(0);
+            }
             break;
           }
           default: {

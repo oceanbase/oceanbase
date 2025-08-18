@@ -189,6 +189,14 @@ enum ExecType {
   CursorFetch
 };
 
+enum ObTransStatus
+{
+  INVALID_STATUS = 0,
+  TRANS_NOT_OPENED = 1,
+  IMPLICIT_TRANS = 2,
+  COMMIT_TRANS = 3,
+};
+
 struct ObReqTimestamp
 {
   ObReqTimestamp()
@@ -326,6 +334,7 @@ struct ObAuditRecordData {
     sql_memory_used_ = nullptr;
     ccl_rule_id_ = 0;
     ccl_match_time_ = 0;
+    trans_status_ = INVALID_STATUS;
   }
 
   int64_t get_elapsed_time() const
@@ -450,6 +459,7 @@ struct ObAuditRecordData {
   uint64_t total_ssstore_read_row_count_;
   int64_t *sql_memory_used_;
   int64_t plsql_compile_time_;
+  ObTransStatus trans_status_;
   int64_t insert_update_or_replace_duplicate_row_count_;
   int64_t ccl_rule_id_;
   int64_t ccl_match_time_;

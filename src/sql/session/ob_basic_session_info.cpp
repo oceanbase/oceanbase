@@ -152,7 +152,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       force_rich_vector_format_(ForceRichFormatStatus::Disable),
       config_use_rich_format_(true),
       sys_var_config_hash_val_(0),
-      is_real_inner_session_(false)
+      is_real_inner_session_(false),
+      sql_mem_used_(0)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -533,6 +534,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   config_use_rich_format_ = true;
   sys_var_config_hash_val_ = 0;
   is_real_inner_session_ = false;
+  sql_mem_used_ = 0;
 }
 
 int ObBasicSessionInfo::reset_timezone()

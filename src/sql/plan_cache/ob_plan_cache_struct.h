@@ -408,7 +408,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       compare_plan_(nullptr),
       flag_(0),
       regenerating_expired_plan_(false),
-      params_constraint_(allocator)
+      params_constraint_(allocator),
+      parameterized_ps_sql_()
   {
     fp_result_.pc_key_.mode_ = mode_;
   }
@@ -488,7 +489,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(exist_local_plan_),
     K(flag_),
     K(regenerating_expired_plan_),
-    K(params_constraint_)
+    K(params_constraint_),
+    K(parameterized_ps_sql_)
     );
   PlanCacheMode mode_; //control use which variables to do match
 
@@ -572,6 +574,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
   };
   bool regenerating_expired_plan_;
   common::ObFixedArray<ObPCParamConstraint *, common::ObIAllocator> params_constraint_;
+  common::ObString parameterized_ps_sql_;
 };
 
 struct ObPlanCacheStat

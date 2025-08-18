@@ -2224,6 +2224,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_name_enable_mlog_auto_maintenance("enable_mlog_auto_maintenance");
   ObString config_value_enable_mlog_auto_maintenance("true");
 
+  ObString config_name_enable_ps_paramterize("enable_ps_parameterize");
+  ObString config_value_enable_ps_paramterize("false");
   if (OB_FAIL(ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(config_value))) {
     LOG_WARN("fail to generate parallel ddl control config value", KR(ret));
   }
@@ -2247,6 +2249,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_server_full_schema_refresh_parallelism), K(config_value_server_full_schema_refresh_parallelism));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_enable_mlog_auto_maintenance, config_value_enable_mlog_auto_maintenance))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_enable_mlog_auto_maintenance), K(config_value_enable_mlog_auto_maintenance));
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_enable_ps_paramterize, config_value_enable_ps_paramterize))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_enable_ps_paramterize), K(config_value_enable_ps_paramterize));
       }
     }
   }

@@ -2509,6 +2509,10 @@ DEF_INT(ob_vector_memory_limit_percentage, OB_TENANT_PARAMETER, "0",
         "The system will adjust automatically if ob_vector_memory_limit_percentage set to 0(by default).",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(enable_ps_parameterize, OB_TENANT_PARAMETER, "True",
+         "Used to control enable or disable parameterization in PS statement parsing",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_STR_WITH_CHECKER(ob_storage_s3_url_encode_type, OB_CLUSTER_PARAMETER, "default",
                      common::ObConfigS3URLEncodeTypeChecker,
                      "Determines the URL encoding method for S3 requests."
@@ -2522,6 +2526,9 @@ DEF_BOOL(_enable_drop_and_add_index, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_system_trig_enabled, OB_TENANT_PARAMETER, "True",
          "Enable or disable system trigger feature.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_sql_audit_query_sql, OB_TENANT_PARAMETER, "False",
+         "Control whether to use sql_audit_query_sql.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_dop_of_collect_external_table_statistics, OB_TENANT_PARAMETER, "0", "[0,)",
         "parallelism of pull statistics of external table",

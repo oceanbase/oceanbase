@@ -220,6 +220,8 @@ private:
   int64_t tenant_id_array_idx_;
 
   share::ObTenantSpaceFetcher *with_tenant_ctx_;
+  bool is_sys_tenant_;
+  bool enable_sql_audit_query_sql_;
 };
 }
 }
