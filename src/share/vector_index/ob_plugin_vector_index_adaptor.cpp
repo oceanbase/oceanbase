@@ -1377,7 +1377,7 @@ int ObPluginVectorIndexAdaptor::add_snap_index(float *vectors, int64_t *vids, Ob
             if (OB_FAIL(obvectorutil::add_index(snap_data_->index_, vectors, vids, dim, extra_info_buf, num))) {
               LOG_WARN("failed to add index.", K(ret), K(dim), K(num));
             } else {
-              LOG_INFO("HgraphIndex add into hnswsq index success", K(ret), K(dim), K(num), K(vids[0]), K(vids[num - 1]));
+              LOG_DEBUG("HgraphIndex add into hnswsq index success", K(ret), K(dim), K(num), K(vids[0]), K(vids[num - 1]));
             }
           } else {
             TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
