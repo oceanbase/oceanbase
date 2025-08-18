@@ -31,7 +31,8 @@ using namespace oceanbase::transaction;
 ObResultSet::~ObResultSet()
 {
   bool is_remote_sql = false;
-  if (OB_NOT_NULL(get_exec_context().get_sql_ctx())) {
+  sql::ObSqlCtx *sql_ctx = NULL;
+  if (OB_NOT_NULL(sql_ctx = get_exec_context().get_sql_ctx())) {
     is_remote_sql = get_exec_context().get_sql_ctx()->is_remote_sql_;
   }
   ObPhysicalPlan* physical_plan = get_physical_plan();
@@ -59,15 +60,24 @@ ObResultSet::~ObResultSet()
     inner_exec_ctx_->~ObExecContext();
     inner_exec_ctx_ = NULL;
   }
-  ObPlanCache *pc = my_session_.get_plan_cache_directly();
-  if (OB_NOT_NULL(pc)) {
-    cache_obj_guard_.force_early_release(pc);
+#ifdef OB_BUILD_SPM
+  if (OB_NOT_NULL(sql_ctx) && sql_ctx->spm_ctx_.evo_plan_added_
+      && OB_NOT_NULL(cache_obj_guard_.get_cache_obj())) {
+    sql_ctx->spm_ctx_.evo_plan_guard_.swap(cache_obj_guard_);
+    sql_ctx->spm_ctx_.evo_plan_added_ = false;
+  } else
+#endif
+  {
+    ObPlanCache *pc = my_session_.get_plan_cache_directly();
+    if (OB_NOT_NULL(pc)) {
+      cache_obj_guard_.force_early_release(pc);
+    }
+    if (OB_NOT_NULL(pc)) {
+      temp_cache_obj_guard_.force_early_release(pc);
+    }
+    // Always called at the end of the ObResultSet destructor
+    update_end_time();
   }
-  if (OB_NOT_NULL(pc)) {
-    temp_cache_obj_guard_.force_early_release(pc);
-  }
-  // Always called at the end of the ObResultSet destructor
-  update_end_time();
   is_init_ = false;
 }
 

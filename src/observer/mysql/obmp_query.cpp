@@ -958,13 +958,7 @@ int ObMPQuery::process_trans_ctrl_cmd(ObSQLSessionInfo &session,
       need_end_trans_callback = true;
     }
 
-#ifndef OB_BUILD_SPM
     bool need_trans_cb  = need_end_trans_callback && (!force_sync_resp);
-#else
-    bool need_trans_cb  = need_end_trans_callback &&
-                          (!force_sync_resp) &&
-                          (!ctx_.spm_ctx_.check_execute_status_);
-#endif
     if (need_trans_cb) {
       is_async_end_trans = true;
       ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
@@ -1119,13 +1113,16 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       } else {
         //监控项统计开始
         exec_start_timestamp_ = ObTimeUtility::current_time();
+        plan = result.get_physical_plan();
+        if (OB_NOT_NULL(plan)) {
+          plan->stat_.set_executing_record(exec_start_timestamp_);
+        }
         result.get_exec_context().set_plan_start_time(exec_start_timestamp_);
         // 本分支内如果出错，全部会在response_result内部处理妥当
         // 无需再额外处理回复错误包
         need_response_error = false;
         is_diagnostics_stmt = ObStmt::is_diagnostic_stmt(result.get_literal_stmt_type());
         ctx_.is_show_trace_stmt_ = ObStmt::is_show_trace_stmt(result.get_literal_stmt_type());
-        plan = result.get_physical_plan();
 
         if (get_is_com_filed_list()) {
           result.set_is_com_filed_list();
@@ -1173,6 +1170,9 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
 
       //监控项统计结束
       exec_end_timestamp_ = ObTimeUtility::current_time();
+      if (OB_NOT_NULL(plan)) {
+        plan->stat_.erase_executing_record(exec_start_timestamp_);
+      }
 
       // some statistics must be recorded for plan stat, even though sql audit disabled
       bool first_record = (1 == audit_record.try_cnt_);
@@ -1379,11 +1379,6 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
     }
     bool is_need_retry = THIS_THWORKER.need_retry() ||
         RETRY_TYPE_NONE != retry_ctrl_.get_retry_type();
-#ifdef OB_BUILD_SPM
-    if (!is_need_retry) {
-      (void)ObSQLUtils::handle_plan_baseline(audit_record, plan, ret, ctx_);
-    }
-#endif
     (void)ObSQLUtils::handle_audit_record(is_need_retry, EXECUTE_LOCAL, session,
         ctx_.is_sensitive_);
 #ifdef OB_BUILD_AUDIT_SECURITY
@@ -1650,13 +1645,7 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
   ObSQLSessionInfo &session = result.get_session();
   CHECK_COMPATIBILITY_MODE(&session);
 
-#ifndef OB_BUILD_SPM
   bool need_trans_cb  = result.need_end_trans_callback() && (!force_sync_resp);
-#else
-  bool need_trans_cb  = result.need_end_trans_callback() &&
-                        (!force_sync_resp) &&
-                        (!ctx_.spm_ctx_.check_execute_status_);
-#endif
 
   // 通过判断 plan 是否为 null 来确定是 plan 还是 cmd
   // 针对 plan 和 cmd 分开处理，逻辑会较为清晰。

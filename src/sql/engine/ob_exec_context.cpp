@@ -897,7 +897,7 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
       if (sql_ctx_ != NULL && sql_ctx_->spm_ctx_.need_spm_timeout_) {
         phy_plan_ctx_->set_spm_timeout_timestamp(
             ObSpmController::calc_spm_timeout_us(start_time + plan_timeout,
-                                                 sql_ctx_->spm_ctx_.baseline_exec_time_));
+                                                 sql_ctx_->spm_ctx_.spm_plan_timeout_));
       }
 #endif
     }

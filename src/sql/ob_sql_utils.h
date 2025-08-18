@@ -711,12 +711,6 @@ public:
                                                 ObPCResourceMapRule &resource_map_rule,
                                                 uint64_t &group_id);
 
-#ifdef OB_BUILD_SPM
-  static int handle_plan_baseline(const ObAuditRecordData &audit_record,
-                                  ObPhysicalPlan *plan,
-                                  const int ret_code,
-                                  ObSqlCtx &sql_ctx);
-#endif
   static int async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
                                   ObSelectStmt *select_stmt,
                                   bool reset_column_infos,

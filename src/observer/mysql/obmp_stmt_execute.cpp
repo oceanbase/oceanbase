@@ -1227,6 +1227,9 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
     OZ (gctx_.sql_engine_->init_result_set(ctx_, result));
     if (OB_SUCCESS != ret || enable_perf_event) {
       exec_start_timestamp_ = ObTimeUtility::current_time();
+      if (OB_NOT_NULL(result.get_physical_plan())) {
+        result.get_physical_plan()->stat_.set_executing_record(exec_start_timestamp_);
+      }
       session.reset_plsql_exec_time();
     }
     if (OB_SUCC(ret)) {
@@ -1278,6 +1281,9 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
                                                       ctx_, result,
                                                       false /* is_inner_sql */))) {
     exec_start_timestamp_ = ObTimeUtility::current_time();
+    if (OB_NOT_NULL(result.get_physical_plan())) {
+      result.get_physical_plan()->stat_.set_executing_record(exec_start_timestamp_);
+    }
     if (!THIS_WORKER.need_retry()) {
       int cli_ret = OB_SUCCESS;
       retry_ctrl_.test_and_save_retry_state(
@@ -1297,6 +1303,9 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
   } else {
     //监控项统计开始
     exec_start_timestamp_ = ObTimeUtility::current_time();
+    if (OB_NOT_NULL(result.get_physical_plan())) {
+      result.get_physical_plan()->stat_.set_executing_record(exec_start_timestamp_);
+    }
     result.get_exec_context().set_plan_start_time(exec_start_timestamp_);
     session.reset_plsql_exec_time();
     // 本分支内如果出错，全部会在response_result内部处理妥当
@@ -1434,6 +1443,9 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       }
       //监控项统计结束
       exec_end_timestamp_ = ObTimeUtility::current_time();
+      if (OB_NOT_NULL(result.get_physical_plan())) {
+        result.get_physical_plan()->stat_.erase_executing_record(exec_start_timestamp_);
+      }
 
       // some statistics must be recorded for plan stat, even though sql audit disabled
       bool first_record = (1 == audit_record.try_cnt_);
@@ -1592,11 +1604,6 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
     bool need_retry = (THIS_THWORKER.need_retry()
                        || RETRY_TYPE_NONE != retry_ctrl_.get_retry_type());
     if (!is_ps_cursor()) {
-#ifdef OB_BUILD_SPM
-      if (!need_retry) {
-        (void)ObSQLUtils::handle_plan_baseline(audit_record, result.get_physical_plan(), ret, ctx_);
-      }
-#endif
       // ps cursor has already record after inner_open in spi
       ObSQLUtils::handle_audit_record(need_retry, EXECUTE_PS_EXECUTE, session, ctx_.is_sensitive_);
     }
@@ -1612,13 +1619,7 @@ int ObMPStmtExecute::response_result(
     bool &async_resp_used)
 {
   int ret = OB_SUCCESS;
-#ifndef OB_BUILD_SPM
   bool need_trans_cb  = result.need_end_trans_callback() && (!force_sync_resp);
-#else
-  bool need_trans_cb  = result.need_end_trans_callback() &&
-                        (!force_sync_resp) &&
-                        (!ctx_.spm_ctx_.check_execute_status_);
-#endif
 
   // NG_TRACE_EXT(exec_begin, ID(arg1), force_sync_resp, ID(end_trans_cb), need_trans_cb);
 
@@ -3406,6 +3407,7 @@ int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObDbms
     if (OB_FAIL(send_ok_packet(session, ok_param))) {
       LOG_WARN("fail to send ok packt", K(ok_param), K(ret));
     }
+
   } else {
     if (OB_FAIL(drv.response_query_header(cursor.get_field_columns(),
                                           false,

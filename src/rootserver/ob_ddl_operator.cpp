@@ -35,6 +35,9 @@
 #include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
 #include "share/ob_scheduled_manage_dynamic_partition.h"
 #include "share/schema/ob_ccl_rule_sql_service.h"
+#ifdef OB_BUILD_SPM
+#include "sql/spm/ob_spm_controller.h"
+#endif
 
 namespace oceanbase
 {
@@ -6445,30 +6448,13 @@ int ObDDLOperator::init_tenant_spm_configure(uint64_t tenant_id,
   const uint64_t extract_tenant_id = ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id);
   int64_t affected_rows = 0;
   ObSqlString sql;
-  if (OB_FAIL(sql.assign_fmt("INSERT INTO %s (tenant_id, name, value) VALUES ",
-                             OB_ALL_SPM_CONFIG_TNAME))) {
-    RS_LOG(WARN, "sql assign failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", NULL),", extract_tenant_id, "AUTO_CAPTURE_ACTION"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", NULL),", extract_tenant_id, "AUTO_CAPTURE_MODULE"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", NULL),", extract_tenant_id, "AUTO_CAPTURE_PARSING_SCHEMA_NAME"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", NULL),", extract_tenant_id, "AUTO_CAPTURE_SQL_TEXT"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", \"%s\"),", extract_tenant_id, "AUTO_SPM_EVOLVE_TASK", "OFF"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", \"%s\"),", extract_tenant_id, "AUTO_SPM_EVOLVE_TASK_INTERVAL", "3600"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", \"%s\"),", extract_tenant_id, "AUTO_SPM_EVOLVE_TASK_MAX_RUNTIME", "1800"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", \"%s\"),", extract_tenant_id, "SPACE_BUDGET_PERCENT", "10"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("(%lu, \"%s\", \"%s\");", extract_tenant_id, "PLAN_RETENTION_WEEKS", "53"))) {
-    RS_LOG(WARN, "sql append failed", K(ret));
+#ifdef OB_BUILD_SPM
+  if (OB_FAIL(ObSpmController::gen_spm_configure_insert(extract_tenant_id, sql))) {
+    RS_LOG(WARN, "gen spm configure insert failed", K(ret));
   } else if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
     RS_LOG(WARN, "execute sql failed", K(ret), K(sql));
   } else {/*do nothing*/}
+#endif
   return ret;
 }
 

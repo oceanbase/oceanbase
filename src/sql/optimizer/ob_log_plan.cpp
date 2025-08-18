@@ -11195,11 +11195,6 @@ int ObLogPlan::check_enable_plan_expiration(bool &enable) const
 #endif
             ) {
     // do nothing
-#ifdef OB_BUILD_SPM
-  } else if (SPM_MODE_BASELINE_FIRST == sql_ctx->spm_ctx_.spm_mode_
-             && sql_ctx->spm_ctx_.is_retry_for_spm_) {
-    // do nothing
-#endif
   } else {
     enable = true;
   }

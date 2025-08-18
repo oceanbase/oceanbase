@@ -11056,7 +11056,6 @@ BASELINE_EXEC_COUNT	bigint(20)	YES		NULL
 BASELINE_CPU_TIME	bigint(20)	YES		NULL	
 EVO_PLAN_HASH	bigint(20) unsigned	YES		NULL	
 BASELINE_PLAN_HASH	bigint(20) unsigned	YES		NULL	
-EVO_EXEC_INFO	varbinary(2048)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SPM_EVO_RESULT limit 1);
 cnt
 1
@@ -11079,7 +11078,6 @@ BASELINE_EXEC_COUNT	bigint(20)	YES		NULL
 BASELINE_CPU_TIME	bigint(20)	YES		NULL	
 EVO_PLAN_HASH	bigint(20) unsigned	YES		NULL	
 BASELINE_PLAN_HASH	bigint(20) unsigned	YES		NULL	
-EVO_EXEC_INFO	varbinary(2048)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_SPM_EVO_RESULT limit 1);
 cnt
 1

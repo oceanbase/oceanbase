@@ -1713,33 +1713,6 @@ int ObPlanCache::batch_load_plan_baseline(const obrpc::ObLoadPlanBaselineArg &ar
   return ret;
 }
 
-int ObPlanCache::check_baseline_finish()
-{
-  int ret = OB_SUCCESS;
-  LCKeyValueArray hold_keys;
-  EvolutionPlanList evo_task_list;
-  ObGetEvolutionTaskPcvSetOp get_evo_op(&evo_task_list, &hold_keys, CHECK_EVOLUTION_PLAN_HANDLE);
-  ObGlobalReqTimeService::check_req_timeinfo();
-  if (OB_FAIL(cache_key_node_map_.foreach_refactored(get_evo_op))) {
-    LOG_WARN("traversing cache_key_node_map failed");
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < evo_task_list.count(); ++i) {
-      ObEvolutionPlan *evo_plan = evo_task_list.at(i);
-      if (OB_NOT_NULL(evo_plan) && evo_plan->get_is_evolving_flag()) {
-        evo_plan->check_task_need_finish();
-      }
-    }
-  }
-  //decrement reference count anyway
-  int64_t N = hold_keys.count();
-  for (int64_t i = 0; i < N; i++) {
-    if (NULL != hold_keys.at(i).node_) {
-      hold_keys.at(i).node_->dec_ref_count(get_evo_op.get_ref_handle());
-    }
-  }
-  return ret;
-}
-
 #endif
 
 // 计算plan_cache需要淘汰的pcv_set个数

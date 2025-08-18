@@ -5991,27 +5991,6 @@ int ObSQLUtils::check_column_with_res_mapping_rule(const ObResolverParams *resol
   return ret;
 }
 
-#ifdef OB_BUILD_SPM
-int ObSQLUtils::handle_plan_baseline(const ObAuditRecordData &audit_record,
-                                     ObPhysicalPlan *plan,
-                                     const int ret_code,
-                                     ObSqlCtx &sql_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(plan) && OB_UNLIKELY(OB_SUCCESS != ret_code && plan->get_evolution())) {
-    plan->update_plan_error_cnt();
-  }
-  if (OB_LIKELY(!sql_ctx.spm_ctx_.check_execute_status_)) {
-    /*do nothing*/
-  } else if (OB_SUCCESS == ret_code) {
-    if (OB_FAIL(ObSpmController::accept_new_plan_as_baseline(sql_ctx.spm_ctx_, audit_record))) {
-      LOG_WARN("failed to accept new plan as baseline", K(ret));
-    }
-  }
-  return ret;
-}
-#endif
-
 int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
                                      ObSelectStmt *select_stmt,
                                      bool reset_column_infos,

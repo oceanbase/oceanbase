@@ -917,7 +917,6 @@ void ObQueryRetryCtrl::timeout_proc(ObRetryParam &v)
 {
 #ifdef OB_BUILD_SPM
   if (OB_UNLIKELY(v.err_ == OB_TIMEOUT &&
-                  ObSpmCacheCtx::STAT_FIRST_EXECUTE_PLAN == v.ctx_.spm_ctx_.spm_stat_ &&
                   v.ctx_.spm_ctx_.need_spm_timeout_)) {
     const_cast<ObSqlCtx &>(v.ctx_).spm_ctx_.spm_stat_ = ObSpmCacheCtx::STAT_FALLBACK_EXECUTE_PLAN;
     const_cast<ObSqlCtx &>(v.ctx_).spm_ctx_.need_spm_timeout_ = false;

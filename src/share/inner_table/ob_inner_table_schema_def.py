@@ -41455,6 +41455,8 @@ def_table_schema(
                    WHEN TYPE = 1 THEN 'FirstBaseline'
                    WHEN TYPE = 2 THEN 'UnReproducible'
                    WHEN TYPE = 3 THEN 'BaselineFirst'
+                   WHEN TYPE = 4 THEN 'BestBaseline'
+                   WHEN TYPE = 5 THEN 'FixedBaseline'
                    ELSE NULL END AS CHAR(32)) AS TYPE,
          START_TIME,
          END_TIME,
@@ -41465,8 +41467,7 @@ def_table_schema(
          BASELINE_EXEC_COUNT,
          BASELINE_CPU_TIME,
          EVO_PLAN_HASH,
-         BASELINE_PLAN_HASH,
-         EVO_EXEC_INFO
+         BASELINE_PLAN_HASH
   FROM OCEANBASE.__ALL_VIRTUAL_SPM_EVO_RESULT R,
        OCEANBASE.__ALL_DATABASE D
   WHERE R.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -41494,6 +41495,8 @@ def_table_schema(
                    WHEN TYPE = 1 THEN 'FirstBaseline'
                    WHEN TYPE = 2 THEN 'UnReproducible'
                    WHEN TYPE = 3 THEN 'BaselineFirst'
+                   WHEN TYPE = 4 THEN 'BestBaseline'
+                   WHEN TYPE = 5 THEN 'FixedBaseline'
                    ELSE NULL END AS CHAR(32)) AS TYPE,
          START_TIME,
          END_TIME,
@@ -41504,8 +41507,7 @@ def_table_schema(
          BASELINE_EXEC_COUNT,
          BASELINE_CPU_TIME,
          EVO_PLAN_HASH,
-         BASELINE_PLAN_HASH,
-         EVO_EXEC_INFO
+         BASELINE_PLAN_HASH
   FROM OCEANBASE.__ALL_VIRTUAL_SPM_EVO_RESULT R,
        OCEANBASE.__ALL_VIRTUAL_DATABASE D
   WHERE R.TENANT_ID = D.TENANT_ID
@@ -76058,6 +76060,8 @@ def_table_schema(
                    WHEN TYPE = 1 THEN 'FirstBaseline'
                    WHEN TYPE = 2 THEN 'UnReproducible'
                    WHEN TYPE = 3 THEN 'BaselineFirst'
+                   WHEN TYPE = 4 THEN 'BestBaseline'
+                   WHEN TYPE = 5 THEN 'FixedBaseline'
                    ELSE NULL END AS VARCHAR(32)) AS TYPE,
          START_TIME,
          END_TIME,
@@ -76068,8 +76072,7 @@ def_table_schema(
          BASELINE_EXEC_COUNT,
          BASELINE_CPU_TIME,
          EVO_PLAN_HASH,
-         BASELINE_PLAN_HASH,
-         EVO_EXEC_INFO
+         BASELINE_PLAN_HASH
   FROM SYS.ALL_VIRTUAL_SPM_EVO_RESULT R,
        SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
   WHERE R.TENANT_ID = EFFECTIVE_TENANT_ID()
