@@ -481,6 +481,33 @@ int JVMFunctionHelper::open_hdfs_lib(ObHdfsEnvContext &hdfs_env_ctx)
         // LOG_USER_ERROR(OB_JNI_ENV_ERROR, user_error_len, hdfs_lib_buf);
         LOG_WARN("failed to open hdfs lib handle", K(ret));
       }
+      getJNIEnv = nullptr;
+      detachCurrentThread = nullptr;
+      destroyJNIEnv = nullptr;
+      obHdfsGetPathInfo = nullptr;
+      obHdfsFreeFileInfo = nullptr;
+      obHdfsDelete = nullptr;
+      obHdfsGetLastExceptionRootCause = nullptr;
+      obHdfsCreateDirectory = nullptr;
+      obHdfsListDirectory = nullptr;
+      obHdfsCloseFile = nullptr;
+      obHdfsOpenFile = nullptr;
+      obHdfsFileIsOpenForRead = nullptr;
+      obHdfsFileIsOpenForWrite = nullptr;
+      obHdfsPread = nullptr;
+      obHdfsWrite = nullptr;
+      obHdfsFlush = nullptr;
+      obHdfsNewBuilder = nullptr;
+      obHdfsBuilderSetNameNode = nullptr;
+      obHdfsBuilderSetUserName = nullptr;
+      obHdfsBuilderSetForceNewInstance = nullptr;
+      obHdfsBuilderConnect = nullptr;
+      obHdfsFreeBuilder = nullptr;
+      obHdfsDisconnect = nullptr;
+      obHdfsBuilderSetPrincipal = nullptr;
+      obHdfsBuilderSetKerb5Conf = nullptr;
+      obHdfsBuilderSetKeyTabFile = nullptr;
+
       LIB_CLOSE(hdfs_lib_handle_);
       hdfs_lib_handle_ = nullptr;
       // Because hdfs lib depends on jvm lib, and hdfs lis closes then jvm lib close too.
