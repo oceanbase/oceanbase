@@ -45,6 +45,7 @@
 #include "share/ob_zone_merge_info.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_zone_merge_table_operator.h"
+#include "share/ob_license_utils.h"
 
 #define MODIFY_LOCALITY_NOT_ALLOWED() \
         do { \
@@ -983,11 +984,15 @@ int ObTenantDDLService::create_tenant_schema(
       FLOG_INFO("[CREATE_TENANT] STEP 1.1. start create tenant schema", K(arg));
       const int64_t tmp_start_time = ObTimeUtility::fast_current_time();
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-      if (OB_FAIL(ddl_operator.create_tenant(meta_tenant_schema,
-                 OB_DDL_ADD_TENANT_START, trans))) {
+      int64_t user_tenant_count = 0;
+      if (OB_FAIL(schema_guard.get_user_tenant_count(user_tenant_count))) {
+        LOG_WARN("fail to get tenant ids", KR(ret));
+      } else if (OB_FAIL(ObLicenseUtils::check_for_create_tenant(user_tenant_count, arg.is_standby_tenant(), user_tenant_schema.get_tenant_name_str()))) {
+        LOG_WARN("create more tenant is not allowd", KR(ret), K(user_tenant_count));
+      } else if (OB_FAIL(ddl_operator.create_tenant(meta_tenant_schema, OB_DDL_ADD_TENANT_START, trans))) {
         LOG_WARN("create tenant failed", KR(ret), K(meta_tenant_schema));
-      } else if (OB_FAIL(ddl_operator.create_tenant(user_tenant_schema,
-                 OB_DDL_ADD_TENANT_START, trans, &arg.ddl_stmt_str_))) {
+      } else if (OB_FAIL(ddl_operator.create_tenant(
+                     user_tenant_schema, OB_DDL_ADD_TENANT_START, trans, &arg.ddl_stmt_str_))) {
         LOG_WARN("create tenant failed", KR(ret), K(user_tenant_schema));
       }
       FLOG_INFO("[CREATE_TENANT] STEP 1.1. finish create tenant schema", KR(ret), K(arg),

@@ -265,6 +265,11 @@ int ObDeleteResolver::resolve_table_list(const ParseNode &table_list, bool &is_m
          */
         LOG_DEBUG("succ to add from item", KPC(table_item));
       }
+      if (OB_ISNULL(table_item) || session_info_->is_inner()) {
+      } else if (OB_UNLIKELY(table_item->is_system_table_ && table_item->table_name_.case_compare(OB_ALL_LICENSE_TNAME) == 0)) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("modify license table is not allowed", KR(ret), K(table_item->table_name_), K(table_item->is_system_table_));
+      }
     }
   }
 

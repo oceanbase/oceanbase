@@ -20,6 +20,7 @@
 #include "share/ob_global_stat_proxy.h"//ObGlobalStatProxy
 #include "share/backup/ob_backup_config.h" // ObBackupConfigParserMgr
 #include "storage/high_availability/ob_transfer_lock_utils.h" // ObMemberListLockUtils
+#include "share/ob_license_utils.h"
 
 namespace oceanbase
 {
@@ -327,7 +328,10 @@ int ObStandbyService::recover_tenant(const obrpc::ObRecoverTenantArg &arg)
   const char *alter_cluster_event = "recover_tenant";
   uint64_t compat_version = 0;
   CLUSTER_EVENT_ADD_CONTROL_START(ret, alter_cluster_event, "stmt_str", arg.get_stmt_str());
-  if (OB_FAIL(check_inner_stat_())) {
+
+  if (OB_FAIL(ObLicenseUtils::check_standby_allowed())) {
+    LOG_WARN("check standby allowed failed", KR(ret));
+  } else if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(inited));
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;

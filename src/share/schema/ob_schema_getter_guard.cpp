@@ -5056,6 +5056,29 @@ int ObSchemaGetterGuard::get_tenant_ids(ObIArray<uint64_t> &tenant_ids) const
   return ret;
 }
 
+int ObSchemaGetterGuard::get_user_tenant_count(int64_t &count) const
+{
+  int ret = OB_SUCCESS;
+  count = 0;
+  const ObSchemaMgr *mgr = NULL;
+  ObSEArray<uint64_t, 5> tenant_ids;
+
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_FAIL(check_lazy_guard(OB_SYS_TENANT_ID, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret));
+  } else {
+    ret = mgr->get_tenant_ids(tenant_ids);
+    for (int64_t i = 0; i < tenant_ids.count(); i ++) {
+      if (is_user_tenant(tenant_ids[i])) {
+        count ++;
+      }
+    }
+  }
+  return ret;
+}
+
 // For liboblog only, this function only return tenants in normal status.
 int ObSchemaGetterGuard::get_available_tenant_ids(ObIArray<uint64_t> &tenant_ids) const
 {

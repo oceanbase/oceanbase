@@ -14987,6 +14987,29 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_TENANT_FLASHBACK_LOG_SCN limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_LICENSE;
+Field	Type	Null	Key	Default	Extra
+END_USER	varchar(512)	NO		NULL	
+LICENSE_ID	varchar(128)	NO		NULL	
+LICENSE_CODE	varchar(128)	NO		NULL	
+LICENSE_TYPE	varchar(128)	NO		NULL	
+PRODUCT_TYPE	varchar(128)	NO		NULL	
+ISSUANCE_DATE	timestamp(6)	NO			
+ACTIVATION_TIME	timestamp(6)	NO			
+EXPIRED_TIME	timestamp(6)	NO			
+OPTIONS	varchar(1024)	NO		NULL	
+NODE_NUM	bigint(20)	NO		NULL	
+CLUSTER_ULID	varchar(30)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_LICENSE|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_LICENSE|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_LICENSE|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_LICENSE limit 1);
+cnt
+1
 desc oceanbase.DBA_OB_VECTOR_INDEX_TASKS;
 Field	Type	Null	Key	Default	Extra
 TABLE_ID	bigint(20)	NO		NULL	

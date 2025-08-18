@@ -1570,6 +1570,19 @@ private:
   table::ObModuleDataArg arg_;
 };
 
+class ObLoadLicenseStmt : public ObSystemCmdStmt
+{
+public:
+  ObLoadLicenseStmt() : ObSystemCmdStmt(stmt::T_LOAD_LICENSE), path_() {}
+  OB_INLINE ObString &get_path() { return path_; }
+  OB_INLINE const ObString &get_path() const { return path_; }
+
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(path));
+
+private:
+  ObString path_;
+};
+
 } // end namespace sql
 } // end namespace oceanbase
 

@@ -37,6 +37,7 @@
 #include "share/table/ob_redis_importer.h"
 #include "share/ob_timezone_importer.h"
 #include "share/ob_srs_importer.h"
+#include "share/ob_license_utils.h"
 
 namespace oceanbase
 {
@@ -739,7 +740,9 @@ int ObAdminServerExecutor::execute(ObExecContext &ctx, ObAdminServerStmt &stmt)
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   ObCommonRpcProxy *common_proxy = NULL;
 
-  if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+  if (OB_FAIL(ObLicenseUtils::check_add_server_allowed(stmt.get_server_list().count(), stmt.get_op()))) {
+    LOG_WARN("failed to check add server allowed", KR(ret));
+  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor failed", K(ret));
   } else if (OB_ISNULL(common_proxy = task_exec_ctx->get_common_rpc())) {
@@ -3244,5 +3247,23 @@ int ObModuleDataExecutor::execute(ObExecContext &ctx, ObModuleDataStmt &stmt)
       K(ret), K(arg), "cost_time", ObTimeUtility::current_time() - start_time);
   return ret;
 }
+
+int ObLoadLicenseExecutor::execute(ObExecContext &ctx, ObLoadLicenseStmt &stmt) {
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+
+  if (OB_ISNULL(ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("session is null", KR(ret));
+  } else if (ctx.get_my_session()->get_priv_tenant_id() != OB_SYS_TENANT_ID) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("session is not sys tenant in load license command", KR(ret));
+  } else if (OB_FAIL(ObLicenseUtils::load_license(stmt.get_path()))) {
+    LOG_WARN("fail to load license", KR(ret), K(stmt));
+  }
+
+  return ret;
+}
+
 } // end namespace sql
 } // end namespace oceanbase

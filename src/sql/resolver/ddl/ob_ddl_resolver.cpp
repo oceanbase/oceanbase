@@ -25,6 +25,7 @@
 #include "share/external_table/ob_hdfs_storage_info.h"
 #include "sql/resolver/ddl/ob_fts_parser_resolver.h"
 #include "share/ob_dynamic_partition_manager.h"
+#include "share/ob_license_utils.h"
 #include "plugin/interface/ob_plugin_external_intf.h"
 #include "plugin/external_table/ob_external_struct.h"
 #include "plugin/sys/ob_plugin_helper.h"
@@ -13657,6 +13658,10 @@ int ObDDLResolver::parse_column_group(const ParseNode *column_group_node,
   } else if (!ObSchemaUtils::can_add_column_group(table_schema)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported table type to add column group", K(ret));
+  } else if (OB_FAIL(ObLicenseUtils::check_olap_allowed(session_info_->get_effective_tenant_id()))) {
+    ret = OB_LICENSE_SCOPE_EXCEEDED;
+    LOG_WARN("column group is not allowed", KR(ret));
+    LOG_USER_ERROR(OB_LICENSE_SCOPE_EXCEEDED, "column group is not supported due to the absence of the OLAP module");
   } else {
     dst_table_schema.set_max_used_column_group_id(table_schema.get_max_used_column_group_id());
   }
@@ -13731,6 +13736,10 @@ int ObDDLResolver::parse_cg_node(const ParseNode &cg_node, obrpc::ObCreateIndexA
   if (OB_UNLIKELY(T_COLUMN_GROUP != cg_node.type_ || cg_node.num_child_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_RESV_LOG(WARN, "invalid argument", KR(ret), K(cg_node.type_), K(cg_node.num_child_));
+  } else if (OB_FAIL(ObLicenseUtils::check_olap_allowed(session_info_->get_effective_tenant_id()))) {
+    ret = OB_LICENSE_SCOPE_EXCEEDED;
+    LOG_WARN("column group is not allowed", KR(ret));
+    LOG_USER_ERROR(OB_LICENSE_SCOPE_EXCEEDED, "column group is not supported due to the absence of the OLAP module");
   } else {
     const int64_t num_child = cg_node.num_child_;
     // handle all_type column_group & single_type column_group

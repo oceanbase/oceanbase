@@ -196,6 +196,8 @@ DEF_SIMPLE_CMD_RESOLVER(ObAddRestoreSourceResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObClearRestoreSourceResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObCheckpointSlogResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObServiceNameResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObLoadLicenseResolver);
+
 int resolve_restore_until(const ParseNode &time_node,
                           const ObSQLSessionInfo *session_info,
                           share::SCN &recovery_until_scn,

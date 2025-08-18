@@ -12845,6 +12845,9 @@ int ObLogPlan::add_parallel_explain_note()
   ObOptimizerContext &opt_ctx = get_optimizer_context();
   bool has_valid_table_parallel_hint = false;
   switch (opt_ctx.get_parallel_rule()) {
+    case PXParallelRule::LICENSE_NOT_ALLOW_OLAP:
+      parallel_str = PARALLEL_DISABLED_BY_LICENSE;
+      break;
     case PXParallelRule::PL_UDF_DAS_FORCE_SERIALIZE:
       parallel_str = PARALLEL_DISABLED_BY_PL_UDF_DAS;
       break;

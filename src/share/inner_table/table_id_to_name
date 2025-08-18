@@ -389,6 +389,7 @@
 # 540: __all_catalog_privilege_history
 # 540: __all_catalog_privilege  # BASE_TABLE_NAME
 # 541: __all_tenant_flashback_log_scn
+# 543: __all_license
 # 544: __all_pl_recompile_objinfo
 # 545: __all_vector_index_task
 # 546: __all_vector_index_task_history
@@ -2536,6 +2537,7 @@
 # 21636: V$OB_PLUGINS
 # 21637: DBA_OB_TENANT_FLASHBACK_LOG_SCN
 # 21638: CDB_OB_TENANT_FLASHBACK_LOG_SCN
+# 21639: DBA_OB_LICENSE
 # 21640: DBA_OB_VECTOR_INDEX_TASKS
 # 21641: CDB_OB_VECTOR_INDEX_TASKS
 # 21642: DBA_OB_VECTOR_INDEX_TASK_HISTORY

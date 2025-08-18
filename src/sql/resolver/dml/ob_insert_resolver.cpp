@@ -552,6 +552,12 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
 
   OZ(remove_dup_dep_cols_for_heap_table(insert_stmt->get_insert_table_info().part_generated_col_dep_cols_,
                                         insert_stmt->get_values_desc()));
+
+  if (OB_ISNULL(table_item) || session_info_->is_inner() ) {
+  } else if (OB_UNLIKELY(table_item->is_system_table_ && table_item->table_name_.case_compare(OB_ALL_LICENSE_TNAME) == 0)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("modify license table is not allowed", KR(ret), K(table_item->table_name_), K(table_item->is_system_table_));
+  }
   return ret;
 }
 

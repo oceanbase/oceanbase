@@ -153,6 +153,7 @@ DEF_SIMPLE_EXECUTOR(ObCancelClone);
 DEF_SIMPLE_EXECUTOR(ObTransferPartition);
 DEF_SIMPLE_EXECUTOR(ObServiceName);
 DEF_SIMPLE_EXECUTOR(ObRebuildTablet);
+DEF_SIMPLE_EXECUTOR(ObLoadLicense);
 class ObCancelTaskExecutor
 {
 public:

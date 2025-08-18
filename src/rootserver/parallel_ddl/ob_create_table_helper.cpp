@@ -29,6 +29,7 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "rootserver/ob_location_ddl_service.h"
+#include "share/ob_license_utils.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -83,7 +84,9 @@ int ObCreateTableHelper::init_()
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFOR_EXECUTE_CREATE_TABLE_WITH_FTS_INDEX);
   const int64_t BUCKET_NUM = 100;
-  if (OB_FAIL(new_mock_fk_parent_table_map_.create(BUCKET_NUM, "MockFkPMap", "MockFkPMap"))) {
+  if (OB_FAIL(ObLicenseUtils::check_create_table_allowed(tenant_id_))) {
+    LOG_WARN("check create table allowed failed", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(new_mock_fk_parent_table_map_.create(BUCKET_NUM, "MockFkPMap", "MockFkPMap"))) {
     LOG_WARN("fail to init mock fk parent table map", KR(ret));
   }
   return ret;

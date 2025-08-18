@@ -29,6 +29,7 @@
 #include "observer/mysql/ob_query_response_time.h"
 #include "share/restore/ob_import_util.h"
 #include "share/table/ob_table_config_util.h"
+#include "share/ob_license_utils.h"
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
 #include "close_modules/shared_log_service/logservice/libpalf/libpalf_env_ffi_instance.h"
 #endif
@@ -1699,6 +1700,37 @@ int ObReportReplicaResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
+int ObLoadLicenseResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(T_LOAD_LICENSE != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_LOAD_LICENSE", "type", get_type_name(parse_tree.type_), KR(ret));
+  } else {
+    ObLoadLicenseStmt *stmt = create_stmt<ObLoadLicenseStmt>();
+    if (NULL == stmt) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObReportReplicaStmt failed", KR(ret));
+    } else {
+      stmt_ = stmt;
+      if (OB_ISNULL(parse_tree.children_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("children should not be null", KR(ret));
+      } else if (OB_UNLIKELY(parse_tree.children_[0]->str_len_ == 0)) {
+        ret = OB_FILE_NOT_EXIST;
+        LOG_WARN("license path is empty", K(ret));
+      } else if (OB_ISNULL(parse_tree.children_[0]->str_value_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("children string value should not be null", KR(ret));
+      } else {
+        stmt->get_path().assign_ptr(parse_tree.children_[0]->str_value_, parse_tree.children_[0]->str_len_);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRecycleReplicaResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -2559,7 +2591,7 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                             }
                           }
                         }
-                      } else if (0 == config_name.case_compare(DEFAULT_TABLE_ORAGNIZATION)) {
+                      } else if (0 == config_name.case_compare(DEFAULT_TABLE_ORGANIZATION)) {
                         ObSArray<uint64_t> tenant_ids;
                         bool affect_all = false;
                         bool affect_all_user = false;
@@ -2573,10 +2605,10 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                           LOG_WARN("fail to get reslove tenant", K(ret), "exec_tenant_id", tenant_id);
                         } else if (affect_all_meta) {
                           ret = OB_NOT_SUPPORTED;
-                          LOG_WARN("all_meta is not supported by ALTER SYSTEM SET DEFAULT_TABLE_ORAGNIZATION",
+                          LOG_WARN("all_meta is not supported by ALTER SYSTEM SET DEFAULT_TABLE_ORGANIZATION",
                                   KR(ret), K(affect_all), K(affect_all_user), K(affect_all_meta));
                           LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                                        "use all_meta in 'ALTER SYSTEM SET DEFAULT_TABLE_ORAGNIZATION' syntax is");
+                                        "use all_meta in 'ALTER SYSTEM SET DEFAULT_TABLE_ORGANIZATION' syntax is");
                         } else if (tenant_ids.empty()) {
                           if (!affect_all && !affect_all_user) {
                             ret = OB_ERR_UNEXPECTED;
@@ -2602,7 +2634,7 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                               LOG_WARN("can not set default_table_organization in oracle and sys tenants",
                                        "item", item, K(i), K(tenant_id), K(compat_mode));
                               LOG_USER_NOTE(OB_NOT_SUPPORTED,
-                                            "'ALTER SYSTEM SET DEFAULT_TABLE_ORAGNIZATION' syntax in oracle or sys tenant is");
+                                            "'ALTER SYSTEM SET DEFAULT_TABLE_ORGANIZATION' syntax in oracle or sys tenant is");
                             }
                           }
                         }
@@ -2619,7 +2651,7 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                     ret = OB_OP_NOT_ALLOW;
                     LOG_WARN("can not set archive_lag_target", "item", item, K(ret), "tenant_id", item.exec_tenant_id_);
                   }
-                } else if (OB_SUCC(ret) && (0 == STRCASECMP(item.name_.ptr(), DEFAULT_TABLE_ORAGNIZATION))) {
+                } else if (OB_SUCC(ret) && (0 == STRCASECMP(item.name_.ptr(), DEFAULT_TABLE_ORGANIZATION))) {
                   bool valid = ObConfigDefaultTableOrganizationChecker::check(item);
                   if (!valid) {
                     ret = OB_OP_NOT_ALLOW;
@@ -2628,7 +2660,7 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                     LOG_WARN("can not set default_table_organization in the sys tenant",
                               "item", item,"tenant_id", item.exec_tenant_id_);
                     LOG_USER_NOTE(OB_NOT_SUPPORTED,
-                                  "'ALTER SYSTEM SET DEFAULT_TABLE_ORAGNIZATION' syntax in the sys tenant is");
+                                  "'ALTER SYSTEM SET DEFAULT_TABLE_ORGANIZATION' syntax in the sys tenant is");
                   }
                 }
 
@@ -5096,9 +5128,9 @@ int ObAlterSystemSetResolver::resolve(const ParseNode &parse_tree)
                       ret = OB_OP_NOT_ALLOW;
                       LOG_WARN("can not set archive_lag_target", "item", item, K(ret), "tenant_id", item.exec_tenant_id_);
                     }
-                  } else if (OB_SUCC(ret) && (0 == STRCASECMP(item.name_.ptr(), DEFAULT_TABLE_ORAGNIZATION))) {
+                  } else if (OB_SUCC(ret) && (0 == STRCASECMP(item.name_.ptr(), DEFAULT_TABLE_ORGANIZATION))) {
                     LOG_WARN("can not set default_table_organization", "item", item, "tenant_id", item.exec_tenant_id_);
-                    LOG_USER_NOTE(OB_NOT_SUPPORTED, "'ALTER SYSTEM SET DEFAULT_TABLE_ORAGNIZATION' syntax in the oracle tenant is");
+                    LOG_USER_NOTE(OB_NOT_SUPPORTED, "'ALTER SYSTEM SET DEFAULT_TABLE_ORGANIZATION' syntax in the oracle tenant is");
                   }
                 }
               }

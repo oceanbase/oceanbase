@@ -273,6 +273,7 @@ public:
   int get_simple_tenant_schemas(common::ObIArray<const ObSimpleTenantSchema *> &tenant_schemas) const;
 
   int get_tenant_ids(common::ObIArray<uint64_t> &tenant_ids) const;
+  int get_user_tenant_count(int64_t &count) const;
   int get_available_tenant_ids(common::ObIArray<uint64_t> &tenant_ids) const;
   int get_tablegroup_ids_in_tenant(const uint64_t tenant_id,
                                    common::ObIArray<uint64_t> &tablegroup_id_array);

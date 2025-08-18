@@ -330,6 +330,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 539	__all_catalog_privilege	0	201001	1
 540	__all_catalog_privilege_history	0	201001	1
 541	__all_tenant_flashback_log_scn	0	201001	1
+543	__all_license	0	201001	1
 544	__all_pl_recompile_objinfo	0	201001	1
 545	__all_vector_index_task	0	201001	1
 546	__all_vector_index_task_history	0	201001	1
@@ -1398,6 +1399,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21636	V$OB_PLUGINS	1	201001	1
 21637	DBA_OB_TENANT_FLASHBACK_LOG_SCN	1	201001	1
 21638	CDB_OB_TENANT_FLASHBACK_LOG_SCN	1	201001	1
+21639	DBA_OB_LICENSE	1	201001	1
 21640	DBA_OB_VECTOR_INDEX_TASKS	1	201001	1
 21641	CDB_OB_VECTOR_INDEX_TASKS	1	201001	1
 21642	DBA_OB_VECTOR_INDEX_TASK_HISTORY	1	201001	1

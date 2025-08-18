@@ -188,6 +188,14 @@ if(OB_BUILD_TDE_SECURITY)
   add_definitions(-DOB_BUILD_TDE_SECURITY)
 endif()
 
+if(OB_BUILD_STANDALONE)
+  add_definitions(-DOB_BUILD_STANDALONE)
+endif()
+
+if (OB_USE_TEST_PUBKEY)
+  add_definitions(-DOB_USE_TEST_PUBKEY)
+endif()
+
 if(OB_BUILD_AUDIT_SECURITY)
   add_definitions(-DOB_BUILD_AUDIT_SECURITY)
 endif()

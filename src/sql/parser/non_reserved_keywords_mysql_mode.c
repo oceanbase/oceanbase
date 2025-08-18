@@ -481,6 +481,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"left", LEFT},
   {"less", LESS},
   {"level", LEVEL},
+  {"license", LICENSE},
   {"link", LINK},
   {"lib", LIB},
   {"like", LIKE},

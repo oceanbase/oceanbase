@@ -535,6 +535,7 @@ enum PXParallelRule
   // force disable parallel below
   PL_UDF_DAS_FORCE_SERIALIZE, //stmt has_pl_udf will use das, force serialize;
   DBLINK_FORCE_SERIALIZE, //stmt has dblink will use das, force seialize;
+  LICENSE_NOT_ALLOW_OLAP, // current license does not support olap
   MAX_OPTION
 };
 
@@ -550,6 +551,7 @@ inline const char *ob_px_parallel_rule_str(PXParallelRule px_parallel_ruel)
     "AUTO_DOP",
     "PL_UDF_DAS_FORCE_SERIALIZE",
     "DBLINK_FORCE_SERIALIZE",
+    "LICENSE_NOT_ALLOW_OLAP",
     "MAX_OPTION",
   };
   if (OB_LIKELY(px_parallel_ruel >= USE_PX_DEFAULT)

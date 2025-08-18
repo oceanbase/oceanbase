@@ -72,6 +72,7 @@
 #include "parallel_ddl/ob_update_index_status_helper.h" // ObUpdateIndexStatusHelper
 #include "pl_ddl/ob_pl_ddl_service.h"
 #include "storage/ddl/ob_tablet_split_util.h"
+#include "share/ob_license_utils.h"
 #include "parallel_ddl/ob_drop_table_helper.h" // ObDropTableHelper
 
 namespace oceanbase
@@ -10243,6 +10244,10 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
       ret = check_write_throttle_trigger_percentage(*item);
     } else if (0 == STRCMP(item->name_.ptr(), _NO_LOGGING)) {
       ret = check_no_logging(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), DEFAULT_TABLE_ORGANIZATION)) {
+      ret = check_default_table_organization_(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), DEFAULT_TABLE_STORE_FORMAT)){
+      ret = check_default_table_store_format_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), WEAK_READ_VERSION_REFRESH_INTERVAL)) {
       int64_t refresh_interval = ObConfigTimeParser::get(item->value_.ptr(), valid);
       if (valid && OB_FAIL(check_weak_read_version_refresh_interval(refresh_interval, valid))) {
@@ -10435,6 +10440,59 @@ int ObRootService::check_write_throttle_trigger_percentage(obrpc::ObAdminSetConf
   const char *warn_log = "tenant writing_throttling_trigger_percentage "
                          "which should greater than freeze_trigger_percentage";
   CHECK_TENANTS_CONFIG_WITH_FUNC(ObConfigWriteThrottleTriggerIntChecker, warn_log);
+  return ret;
+}
+
+static void check_olap_module(obrpc::ObAdminSetConfigItem &item, bool &no_olap_module)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLicenseUtils::check_olap_allowed(item.exec_tenant_id_))) {
+    no_olap_module = true;
+  } else {
+    for (int64_t i = 0; i < item.tenant_ids_.count(); i++) {
+      if (OB_FAIL(ObLicenseUtils::check_olap_allowed(item.tenant_ids_.at(i)))) {
+        no_olap_module = true;
+        break;
+      }
+    }
+  }
+}
+
+int ObRootService::check_default_table_organization_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  const ObString new_value(item.value_.size(), item.value_.ptr());
+  if (0 != new_value.case_compare("INDEX")) {
+    bool no_olap_module = false;
+    (void)check_olap_module(item, no_olap_module);
+
+    if (no_olap_module) {
+      ret = OB_LICENSE_SCOPE_EXCEEDED;
+      LOG_WARN("cannot set 'default_table_organization' to non-INDEX value", KR(ret));
+      LOG_USER_ERROR(OB_LICENSE_SCOPE_EXCEEDED,
+                     "Only index organization is supported due to the absence of the OLAP module.");
+    }
+  }
+  FLOG_INFO("finish check default table organization", K(item.exec_tenant_id_), K(item.tenant_ids_));
+  return ret;
+}
+
+int ObRootService::check_default_table_store_format_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  const ObString new_value(item.value_.size(), item.value_.ptr());
+  if (0 != new_value.case_compare("row")) {
+    bool no_olap_module = false;
+    (void)check_olap_module(item, no_olap_module);
+
+    if (no_olap_module) {
+      ret = OB_LICENSE_SCOPE_EXCEEDED;
+      LOG_WARN("cannot set 'default_table_store_format' to non-row value", KR(ret));
+      LOG_USER_ERROR(OB_LICENSE_SCOPE_EXCEEDED,
+                     "Only row-store format is supported due to the absence of the OLAP module.");
+    }
+  }
+  FLOG_INFO("finish check default table store format", K(item.exec_tenant_id_), K(item.tenant_ids_));
   return ret;
 }
 

@@ -85,6 +85,7 @@
 #include "share/ob_domain_index_builder_util.h"
 #include "rootserver/ob_objpriv_mysql_ddl_service.h"
 #include "storage/ob_micro_block_format_version_helper.h"
+#include "share/ob_license_utils.h"
 
 namespace oceanbase
 {
@@ -16629,6 +16630,22 @@ int ObDDLService::reorder_column_after_add_column_instant_(const ObTableSchema &
   return ret;
 }
 
+static int check_column_store_for_standalone(const ObTableSchema &orig_table_schema)
+{
+  int ret = OB_SUCCESS;
+  bool is_column_store = false;
+  if (OB_FAIL(orig_table_schema.get_is_column_store(is_column_store))) {
+    LOG_WARN("failed to get is column store", K(ret));
+  } else if (is_column_store) {
+    if (OB_FAIL(ObLicenseUtils::check_olap_allowed(orig_table_schema.get_tenant_id()))) {
+      ret = OB_LICENSE_SCOPE_EXCEEDED;
+      LOG_WARN("column store is not allowed", KR(ret));
+      LOG_USER_ERROR(OB_LICENSE_SCOPE_EXCEEDED, "column store is not supported due to the absence of the OLAP module");
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                           const uint64_t tenant_data_version,
                                           obrpc::ObAlterTableRes &res)
@@ -16662,6 +16679,8 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                            alter_table_schema,
                                            orig_table_schema))) {
       LOG_WARN("fail to get and check table schema", K(ret));
+    } else if (OB_FAIL(check_column_store_for_standalone(*orig_table_schema))) {
+      LOG_WARN("fail to check column store for standalone", K(ret));
     } else if (FAILEDx(new_table_schema.assign(*orig_table_schema))) {
       LOG_WARN("fail to assign schema", K(ret));
     } else if (OB_FAIL(ObSchemaUtils::mock_default_cg(orig_table_schema->get_tenant_id(), new_table_schema))) {

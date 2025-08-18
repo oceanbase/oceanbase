@@ -103,6 +103,13 @@ if(OB_BUILD_AUDIT_SECURITY)
   )
 endif()
 
+if(OB_BUILD_STANDALONE)
+  target_include_directories(
+    oblib_base_without_pass INTERFACE
+    ${CMAKE_SOURCE_DIR}/close_modules/license
+  )
+endif()
+
 if(OB_USE_BABASSL)
   target_include_directories(
     oblib_base_without_pass INTERFACE

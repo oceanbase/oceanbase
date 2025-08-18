@@ -672,6 +672,7 @@ public:
   static int all_catalog_privilege_schema(share::schema::ObTableSchema &table_schema);
   static int all_catalog_privilege_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_tenant_flashback_log_scn_schema(share::schema::ObTableSchema &table_schema);
+  static int all_license_schema(share::schema::ObTableSchema &table_schema);
   static int all_pl_recompile_objinfo_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_history_schema(share::schema::ObTableSchema &table_schema);
@@ -2066,6 +2067,7 @@ public:
   static int v_ob_plugins_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_tenant_flashback_log_scn_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_tenant_flashback_log_scn_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_license_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_vector_index_tasks_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_vector_index_tasks_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_vector_index_task_history_schema(share::schema::ObTableSchema &table_schema);
@@ -2942,6 +2944,7 @@ public:
   static int all_catalog_privilege_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_catalog_privilege_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_tenant_flashback_log_scn_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_license_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_pl_recompile_objinfo_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -3281,6 +3284,7 @@ public:
   static int all_catalog_privilege_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_catalog_privilege_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_tenant_flashback_log_scn_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_license_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_pl_recompile_objinfo_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_vector_index_task_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -3865,6 +3869,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_catalog_privilege_schema,
   ObInnerTableSchema::all_catalog_privilege_history_schema,
   ObInnerTableSchema::all_tenant_flashback_log_scn_schema,
+  ObInnerTableSchema::all_license_schema,
   ObInnerTableSchema::all_pl_recompile_objinfo_schema,
   ObInnerTableSchema::all_vector_index_task_schema,
   ObInnerTableSchema::all_vector_index_task_history_schema,
@@ -5371,6 +5376,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_plugins_schema,
   ObInnerTableSchema::dba_ob_tenant_flashback_log_scn_schema,
   ObInnerTableSchema::cdb_ob_tenant_flashback_log_scn_schema,
+  ObInnerTableSchema::dba_ob_license_schema,
   ObInnerTableSchema::dba_ob_vector_index_tasks_schema,
   ObInnerTableSchema::cdb_ob_vector_index_tasks_schema,
   ObInnerTableSchema::dba_ob_vector_index_task_history_schema,
@@ -15040,6 +15046,14 @@ LOBMapping const lob_aux_table_mappings [] = {
   },
 
   {
+    OB_ALL_LICENSE_TID,
+    OB_ALL_LICENSE_AUX_LOB_META_TID,
+    OB_ALL_LICENSE_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_license_aux_lob_meta_schema,
+    ObInnerTableSchema::all_license_aux_lob_piece_schema
+  },
+
+  {
     OB_ALL_PL_RECOMPILE_OBJINFO_TID,
     OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_META_TID,
     OB_ALL_PL_RECOMPILE_OBJINFO_AUX_LOB_PIECE_TID,
@@ -15148,12 +15162,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 336;
+const int64_t OB_SYS_TABLE_COUNT = 337;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 962;
-const int64_t OB_SYS_VIEW_COUNT = 1075;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2378;
+const int64_t OB_SYS_VIEW_COUNT = 1076;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2380;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2381;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2383;
 
 } // end namespace share
 } // end namespace oceanbase

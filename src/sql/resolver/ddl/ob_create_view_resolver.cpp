@@ -19,6 +19,7 @@
 #include "observer/virtual_table/ob_table_columns.h"
 #include "sql/rewrite/ob_transformer_impl.h"
 #include "storage/mview/ob_mview_refresh.h"
+#include "share/ob_license_utils.h"
 
 namespace oceanbase
 {
@@ -139,6 +140,11 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("tenant version is less than 4.3, materialized view is not supported", KR(ret), K(tenant_data_version));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.3, materialized view is not supported");
+      } else if (OB_FAIL(ObLicenseUtils::check_olap_allowed(session_info_->get_effective_tenant_id()))) {
+        ret = OB_LICENSE_SCOPE_EXCEEDED;
+        LOG_WARN("materialized view is not allowed", KR(ret));
+        LOG_USER_ERROR(OB_LICENSE_SCOPE_EXCEEDED,
+                       "materialized view is not supported due to the absence of the OLAP module");
       }
     }
     bool add_undefined_columns = false;

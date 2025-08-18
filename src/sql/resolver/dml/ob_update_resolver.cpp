@@ -457,6 +457,11 @@ int ObUpdateResolver::resolve_table_list(const ParseNode &parse_tree)
         LOG_DEBUG("succ to add from item", KPC(table_item));
       }
     }
+    if (OB_ISNULL(table_item) || session_info_->is_inner()) {
+    } else if (OB_UNLIKELY(table_item->is_system_table_ && table_item->table_name_.case_compare(OB_ALL_LICENSE_TNAME) == 0)) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("modify license table is not allowed", KR(ret), K(table_item->table_name_), K(table_item->is_system_table_));
+    }
   }
   if (OB_SUCC(ret) && is_mysql_mode() && 1 == update_stmt->get_from_item_size()) {
     const TableItem *table_item = update_stmt->get_table_item(update_stmt->get_from_item(0));

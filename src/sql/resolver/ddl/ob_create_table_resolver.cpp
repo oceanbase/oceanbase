@@ -21,6 +21,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "share/ob_vec_index_builder_util.h"
+#include "share/ob_license_utils.h"
 
 
 namespace oceanbase
@@ -542,6 +543,11 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               } else if (tenant_version < DATA_VERSION_4_2_0_0) {
                 ret = OB_NOT_SUPPORTED;
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2, external table");
+              } else if (OB_FAIL(ObLicenseUtils::check_olap_allowed(session_info_->get_effective_tenant_id()))) {
+                ret = OB_LICENSE_SCOPE_EXCEEDED;
+                LOG_WARN("external table is not allowed", KR(ret));
+                LOG_USER_ERROR(OB_LICENSE_SCOPE_EXCEEDED,
+                               "external table is not supported due to the absence of the OLAP module");
               } else {
                 create_table_stmt->get_create_table_arg().schema_.set_table_type(EXTERNAL_TABLE);
                 is_external_table_ = true;
@@ -671,9 +677,16 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
         } else if (!is_inner_table(table_id_) && !lib::is_oracle_mode() &&
                     OB_FAIL(resolve_table_organization(tenant_config, create_table_node->children_[4]))) {
           SQL_RESV_LOG(WARN, "resolve table organization failed", K(ret));
-        } else if (data_version < DATA_VERSION_4_3_5_1 && is_organization_set_to_heap()) {
-          ret = OB_NOT_SUPPORTED;
-          SQL_RESV_LOG(WARN, "heap table is not supported under data version 4.3.5.1", K(ret));
+        } else if (is_organization_set_to_heap()) {
+          if (data_version < DATA_VERSION_4_3_5_1) {
+            ret = OB_NOT_SUPPORTED;
+            SQL_RESV_LOG(WARN, "heap table is not supported under data version 4.3.5.1", K(ret));
+          } else if (OB_FAIL(ObLicenseUtils::check_olap_allowed(session_info_->get_effective_tenant_id()))) {
+            ret = OB_LICENSE_SCOPE_EXCEEDED;
+            LOG_WARN("heap organization table is not allowed", KR(ret));
+            LOG_USER_ERROR(OB_LICENSE_SCOPE_EXCEEDED,
+                           "heap organization table is not supported due to the absence of the OLAP module");
+          }
         }
 
         //consider index can be defined before column, so column should be
