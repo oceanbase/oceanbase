@@ -3390,7 +3390,8 @@ int ObLogPlan::allocate_join_path(JoinPath *join_path,
                                                          join_path->right_prefix_pos_,
                                                          join_path->is_right_local_order()))) {
       LOG_WARN("failed to allocate operator for child", K(ret));
-    } else if (join_path->need_mat_ && OB_FAIL(allocate_material_as_top(right_child))) {
+    } else if (join_path->need_mat_ && LOG_MATERIAL != right_child->get_type()
+               && OB_FAIL(allocate_material_as_top(right_child))) {
       LOG_WARN("failed to allocate material as top", K(ret));
     } else if (OB_ISNULL(left_child) || OB_ISNULL(right_child)) {
       ret = OB_ERR_UNEXPECTED;
@@ -4345,7 +4346,8 @@ int ObLogPlan::allocate_subquery_path(SubQueryPath *subpath,
   ObLogSubPlanScan *subplan_scan = NULL;
   const TableItem *table_item = NULL;
   if (OB_ISNULL(subpath) || OB_ISNULL(root = subpath->root_) || OB_ISNULL(get_stmt()) ||
-      OB_ISNULL(table_item = get_stmt()->get_table_item_by_id(subpath->subquery_id_))) {
+      OB_ISNULL(table_item = get_stmt()->get_table_item_by_id(subpath->subquery_id_)) ||
+      OB_ISNULL(table_item->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(subpath), K(root), K(get_stmt()), K(table_item), K(ret));
   } else if (OB_ISNULL(subplan_scan = static_cast<ObLogSubPlanScan*>
@@ -4368,6 +4370,16 @@ int ObLogPlan::allocate_subquery_path(SubQueryPath *subpath,
       LOG_WARN("failed to pick out startup filters", K(ret));
     } else {
       out_subquery_path_op = subplan_scan;
+    }
+    if (OB_SUCC(ret)) {
+      bool contains_assignment = false;
+      if (OB_FAIL(ObOptimizerUtil::check_contains_assignment(table_item->ref_query_,
+                                                             contains_assignment))) {
+        LOG_WARN("failed to check contains assignment", K(ret));
+      } else if (contains_assignment &&
+                 OB_FAIL(allocate_material_as_top(out_subquery_path_op))) {
+        LOG_WARN("failed to allocate meterail as top", K(ret));
+      }
     }
   }
   return ret;

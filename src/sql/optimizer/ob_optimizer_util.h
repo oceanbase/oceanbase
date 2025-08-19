@@ -1641,6 +1641,8 @@ public:
                                    ObIArray<T> &output_array,
                                    ObSqlBitSet<> *priority_indices = NULL);
 
+  static int check_contains_assignment(const ObDMLStmt* stmt,
+                                       bool &contains_assignment);
 private:
   //disallow construct
   ObOptimizerUtil();

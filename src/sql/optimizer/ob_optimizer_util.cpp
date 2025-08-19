@@ -10185,7 +10185,32 @@ int ObOptimizerUtil::get_has_global_index_filters(const ObIArray<ObRawExpr*> &fi
   return ret;
 }
 
-// check batch rescan for nlj / subplan filter
+int ObOptimizerUtil::check_contains_assignment(const ObDMLStmt* stmt,
+                                              bool &contains_assignment)
+{
+  int ret = OB_SUCCESS;
+  contains_assignment = false;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (stmt->is_contains_assignment()) {
+    contains_assignment = true;
+  } else if (stmt->is_set_stmt()) {
+    const ObSelectStmt *set_stmt = static_cast<const ObSelectStmt*>(stmt);
+    for (int64_t i = 0; OB_SUCC(ret) && !contains_assignment && i < set_stmt->get_set_query().count(); ++i) {
+      if (OB_ISNULL(set_stmt->get_set_query(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(check_contains_assignment(set_stmt->get_set_query(i),
+                                                              contains_assignment)))) {
+        LOG_WARN("failed to check contains assignment", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+//  check batch rescan for nlj / subplan filter
 int ObOptimizerUtil::check_can_batch_rescan(const ObLogicalOperator *op,
                                             const ObIArray<ObExecParamRawExpr*> &rescan_params,
                                             bool for_nlj,
