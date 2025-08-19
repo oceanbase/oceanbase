@@ -107,6 +107,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObAdminDRTaskP, gctx_);
     RPC_PROCESSOR(ObRpcLSReplaceReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcCreateTenantUserLSP, gctx_);
+    RPC_PROCESSOR(ObRpcLoadTenantTableSchemaP, gctx_);
     RPC_PROCESSOR(ObRpcGenUniqueIDP, gctx_);
     RPC_PROCESSOR(ObRpcStartTransferTaskP, gctx_);
     RPC_PROCESSOR(ObRpcFinishTransferTaskP, gctx_);

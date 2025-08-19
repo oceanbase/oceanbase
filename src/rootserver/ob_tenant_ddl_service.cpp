@@ -45,6 +45,7 @@
 #include "share/ob_zone_merge_info.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_zone_merge_table_operator.h"
+#include "rootserver/ob_load_inner_table_schema_executor.h"
 #include "share/ob_license_utils.h"
 
 #define MODIFY_LOCALITY_NOT_ALLOWED() \
@@ -2066,8 +2067,12 @@ int ObTenantDDLService::init_tenant_schema(
       if (OB_ISNULL(schema_service_impl)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("pointer is null", KR(ret), KP(schema_service_impl));
-      } else if (CLICK_FAIL(create_sys_table_schemas(ddl_operator, trans, tables))) {
+      } else if (!GCONF._enable_parallel_tenant_creation &&
+          CLICK_FAIL(create_sys_table_schemas(ddl_operator, trans, tables))) {
         LOG_WARN("fail to create sys tables", KR(ret), K(tenant_id));
+      } else if (GCONF._enable_parallel_tenant_creation &&
+          CLICK_FAIL(load_sys_table_schemas(tenant_schema, tables))) {
+        LOG_WARN("fail to load sys tables", KR(ret), K(tenant_id));
       } else if (OB_FAIL(schema_service_impl->gen_new_schema_version(
               tenant_id, init_schema_version, new_schema_version))) {
         LOG_WARN("failed to gen_new_schema_version", KR(ret), K(tenant_id));
@@ -2078,6 +2083,9 @@ int ObTenantDDLService::init_tenant_schema(
         LOG_WARN("fail to replace sys variable", KR(ret), K(sys_variable));
       } else if (CLICK_FAIL(ddl_operator.init_tenant_schemas(tenant_schema, sys_variable, trans))) {
         LOG_WARN("init tenant env failed", KR(ret), K(tenant_schema), K(sys_variable));
+      } else if (GCONF._enable_parallel_tenant_creation &&
+          CLICK_FAIL(ObLoadInnerTableSchemaExecutor::load_core_schema_version(tenant_id, trans))) {
+        LOG_WARN("failed to load core schema version", KR(ret), K(tenant_id));
       }
     }
   }
@@ -2095,6 +2103,37 @@ int ObTenantDDLService::init_tenant_schema(
 
   FLOG_INFO("[CREATE_TENANT] STEP 2.5. finish init tenant schemas", KR(ret), K(tenant_id),
            "cost", ObTimeUtility::fast_current_time() - start_time);
+  return ret;
+}
+
+int ObTenantDDLService::load_sys_table_schemas(
+    const ObTenantSchema &tenant_schema,
+    common::ObIArray<ObTableSchema> &tables)
+{
+  int ret = OB_SUCCESS;
+  const int64_t begin_time = ObTimeUtility::current_time();
+  FLOG_INFO("[CREATE_TENANT] start load all schemas", "table count", tables.count());
+  const uint64_t tenant_id = tenant_schema.get_tenant_id();
+  ObLoadInnerTableSchemaExecutor executor;
+  ObUnitTableOperator table;
+  common::ObArray<ObUnitConfig> configs;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("failed to check_inner_stat", KR(ret));
+  } else if (OB_FAIL(table.init(*sql_proxy_))) {
+    LOG_WARN("failed to init unit table operator", KR(ret));
+  } else if (OB_FAIL(table.get_unit_configs_by_tenant(gen_user_tenant_id(tenant_id), configs))) {
+    LOG_WARN("failed to get unit configs by tenant", KR(ret), K(tenant_id));
+  } else if (configs.count() <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("config is empty", KR(ret), K(configs));
+  } else if (OB_FAIL(executor.init(tables, tenant_schema.get_tenant_id(), configs.at(0).max_cpu(),
+          rpc_proxy_))) {
+    LOG_WARN("failed to init executor", KR(ret));
+  } else if (OB_FAIL(executor.execute())) {
+    LOG_WARN("failed to execute load all schema", KR(ret));
+  }
+  FLOG_INFO("[CREATE_TENANT] finish load all schemas", KR(ret), K(configs),
+      "cost", ObTimeUtility::current_time() - begin_time);
   return ret;
 }
 

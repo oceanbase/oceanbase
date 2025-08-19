@@ -154,6 +154,9 @@ private:
   static int create_all_schema(
       ObDDLService &ddl_service,
       common::ObIArray<share::schema::ObTableSchema> &table_schemas);
+  int load_all_schema(
+      ObDDLService &ddl_service,
+      common::ObIArray<share::schema::ObTableSchema> &table_schemas);
   int construct_all_schema(
       common::ObSArray<share::schema::ObTableSchema> &table_schemas,
       ObIAllocator &allocator);

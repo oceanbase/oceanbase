@@ -1196,6 +1196,51 @@ int ObCreateTenantSchemaResult::init_with_tenant_exist()
   return ret;
 }
 
+int ObLoadTenantTableSchemaArg::init(const uint64_t tenant_id, const uint64_t table_id,
+    const ObIArray<int64_t> &insert_idx, const uint64_t data_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(insert_idx_.assign(insert_idx))) {
+    LOG_WARN("failed to assign insert_idx_", KR(ret), K(insert_idx));
+  } else {
+    tenant_id_ = tenant_id;
+    table_id_ = table_id;
+    data_version_ = data_version;
+  }
+  return ret;
+}
+
+int ObLoadTenantTableSchemaArg::assign(const ObLoadTenantTableSchemaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (this == &arg) {
+  } else if (OB_FAIL(insert_idx_.assign(arg.insert_idx_))) {
+    LOG_WARN("failed to assign insert_idx_", KR(ret), K(arg.insert_idx_));
+  } else {
+    tenant_id_ = arg.tenant_id_;
+    table_id_ = arg.table_id_;
+    data_version_ = arg.data_version_;
+  }
+  return ret;
+}
+
+bool ObLoadTenantTableSchemaArg::is_valid() const
+{
+  bool valid = true;
+  if (!is_valid_tenant_id(tenant_id_)) {
+    valid = false;
+  } else if (table_id_ > OB_MAX_INNER_TABLE_ID) {
+    valid = false;
+  } else if (insert_idx_.count() <= 0) {
+    valid = false;
+  } else if (data_version_ != DATA_CURRENT_VERSION) {
+    valid = false;
+  }
+  return valid;
+}
+
+OB_SERIALIZE_MEMBER(ObLoadTenantTableSchemaArg, tenant_id_, table_id_, data_version_, insert_idx_);
+
 OB_SERIALIZE_MEMBER((ObParallelCreateNormalTenantArg, ObDDLArg), create_tenant_arg_, tenant_id_);
 
 int ObParallelCreateNormalTenantArg::init(

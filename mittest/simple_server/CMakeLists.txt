@@ -166,6 +166,8 @@ ob_unittest_observer(test_ob_parallel_migration_mode rootservice/test_ob_paralle
 ob_unittest_observer(test_ls_status_operator rootservice/test_ls_status_operator.cpp)
 ob_unittest_observer(test_external_resource_schema rootservice/test_external_resource_schema.cpp)
 ob_unittest_observer(test_location_schema_refresh rootservice/test_location_schema_refresh.cpp)
+ob_unittest_observer(test_create_tenant_compare rootservice/test_create_tenant_compare.cpp)
+ob_unittest_observer(test_bootstrap_hang rootservice/test_bootstrap_hang.cpp)
 ####### rootservice case #########
 
 

@@ -8,6 +8,7 @@
 #
 
 import copy
+from collections import OrderedDict
 from ob_inner_table_init_data import *
 import StringIO
 import re
@@ -20,6 +21,7 @@ max_core_table_id        = int(100)
 max_sys_table_id         = int(10000)
 max_ob_virtual_table_id  = int(15000)
 max_ora_virtual_table_id = int(20000)
+max_mysql_sys_view_id    = int(25000)
 max_sys_view_id          = int(30000)
 base_lob_meta_table_id   = int(50000)
 base_lob_piece_table_id  = int(60000)
@@ -45,6 +47,10 @@ def is_mysql_virtual_table(table_id):
 def is_ora_virtual_table(table_id):
   table_id = int(table_id)
   return table_id > max_ob_virtual_table_id and table_id < max_ora_virtual_table_id
+
+def is_ora_sys_view(table_id):
+  table_id = int(table_id)
+  return table_id > max_mysql_sys_view_id and table_id < max_sys_view_id
 
 def is_virtual_table(table_id):
   table_id = int(table_id)
@@ -83,7 +89,7 @@ only_rs_vtables = []
 cluster_distributed_vtables = []
 tenant_distributed_vtables = []
 column_def_enum_array = []
-all_def_keywords =  {}
+all_def_keywords = OrderedDict()
 all_agent_virtual_tables = []
 all_iterate_virtual_tables = []
 all_iterate_private_virtual_tables = []
@@ -1680,6 +1686,14 @@ struct %s {
 ''' % (table_name.replace('$', '_').upper().strip('_') + "_CDE", ",\n    ".join(t))
     column_def_enum_array.append(content)
 
+def kw2schema_version(kw):
+  tid = kw['table_id']
+  name_postfix = "_ORACLE" if (is_ora_sys_view(tid) or is_ora_virtual_table(tid)) else ""
+  if kw.has_key('index_columns'):
+    return "OB_IDX_" + str(kw['table_id']) + '_' + kw['index_name'].upper() + name_postfix + "_SCHEMA_VERSION"
+  else:
+    return "OB_" + kw['table_name'].replace('$', '_').upper().strip('_') + name_postfix + "_SCHEMA_VERSION"
+
 def table_name2tid(name):
   return "OB_" + name.replace('$', '_').upper().strip('_') + "_TID"
 
@@ -1694,6 +1708,13 @@ def table_name2tname_ora(name):
 
 def table_name2index_tname(table_name, idx_name):
   return "OB_" + table_name.replace('$', '_').upper().strip('_') + '_' + str(idx_name).upper() + "_TNAME";
+
+def kw2tid(kw):
+  name_postfix = kw['name_postfix'] if 'name_postfix' in kw else ""
+  if kw.has_key('index_columns'):
+    return table_name2index_tid(kw['table_name']+ name_postfix, kw['index_name'])
+  else:
+    return table_name2tid(kw['table_name']+ name_postfix)
 
 __current_range_idx = -1 
 __def_cnt = 0 
@@ -2725,6 +2746,48 @@ def start_generate_misc_data(fname):
   f.write(copyright)
   return f
 
+def generate_inner_table_hard_code_schema_mapping(f):
+  cases = ""
+  for kw in all_def_keywords.values():
+    cases += "    case {} : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::{}); break;\n".format(
+            kw2tid(kw), kw2schema_version(kw))
+  f.write("""
+#ifdef INNER_TABLE_HARD_CODE_SCHEMA_MAPPING_SWITCH
+""" + cases + """
+#endif // INNER_TABLE_HARD_CODE_SCHEMA_MAPPING_SWITCH
+  """)
+
+def run_command(command, raise_error = True):
+  import os
+  print "run command '{}'".format(command)
+  ret = os.system(command)
+  if ret != 0 and raise_error:
+    raise BaseException("failed to run command '{}'".format(command))
+  return ret
+
+def generate_load_inner_table_schema():
+  import os
+  current_path = os.path.abspath(__file__)
+  # /src/share/inner_table
+  current_dir = os.path.dirname(current_path)
+  # /src/share
+  top_dir = os.path.dirname(current_dir)
+  # /src
+  top_dir = os.path.dirname(top_dir)
+  # /
+  top_dir = os.path.dirname(top_dir)
+  # /build.sh
+  build_sh_path = os.path.join(top_dir, 'build.sh')
+  build_type = 'debug'
+  unittest_path = os.path.join(top_dir, 'build_{}/unittest/rootserver/'.format(build_type))
+  test_name = 'test_dump_inner_table_schema'
+  make_type = 'make'
+  make_type = 'ob-make' if run_command('which ob-make', raise_error=False) == 0 else 'make'
+  run_command('{} {} -DOB_BUILD_WITH_EMPTY_LOAD_SCHEMA=ON --init'.format(build_sh_path, build_type))
+  run_command('cd {} && {} {} && ./{}'.format(unittest_path, make_type, test_name, test_name))
+  run_command('cp -f {}/ob_load_inner_table_schema.cpp {}'.format(unittest_path, current_dir))
+
+
 if __name__ == "__main__":
   global ob_virtual_index_table_id
   ob_virtual_index_table_id = max_ob_virtual_table_id - 1
@@ -2752,7 +2815,10 @@ if __name__ == "__main__":
   generate_iterate_virtual_table_misc_data(f)
   generate_cluster_private_table(f)
   generate_sys_index_table_misc_data(f)
+  generate_inner_table_hard_code_schema_mapping(f)
 
   f.close()
+
+  generate_load_inner_table_schema()
 
   print "\nSuccess\n"

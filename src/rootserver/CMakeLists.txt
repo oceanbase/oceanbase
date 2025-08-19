@@ -113,6 +113,7 @@ ob_set_subtarget(ob_rootserver common
   ob_catalog_ddl_service.cpp
   ob_tenant_ddl_service.cpp
   ob_tenant_parallel_create_executor.cpp
+  ob_load_inner_table_schema_executor.cpp
   ob_load_sys_package_task.cpp
   ob_root_rebuild_tablet.cpp
   ob_alter_table_constraint_checker.cpp

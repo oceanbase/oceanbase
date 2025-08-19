@@ -494,8 +494,12 @@ int ObPrimaryLSService::create_ls_for_create_tenant()
   } else if (!tenant_schema.is_creating()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only creating tenant can create user ls", KR(ret), K(tenant_schema));
+#ifndef OB_ENABLE_STANDALONE_LAUNCH
+    // in standalone deployment, there's only one user ls.
+    // memory is enough to create ls, so it's no need to check mini mode
   } else if (OB_FAIL(check_mini_mode_create_ls())) {
     LOG_WARN("failed to check mini mode create ls", KR(ret));
+#endif
   } else if (OB_FAIL(ObLSServiceHelper::get_primary_zone_unit_array(&tenant_schema,
           primary_zone, unit_group_array))) {
     LOG_WARN("failed to get primary zone unit array", KR(ret), K(tenant_schema));

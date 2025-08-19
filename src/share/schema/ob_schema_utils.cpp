@@ -617,7 +617,8 @@ int ObSchemaUtils::add_sys_table_lob_aux_table(
 int ObSchemaUtils::construct_inner_table_schemas(
     const uint64_t tenant_id,
     ObSArray<ObTableSchema> &tables,
-    ObIAllocator &allocator)
+    ObIAllocator &allocator,
+    bool construct_all)
 {
   int ret = OB_SUCCESS;
   const schema_create_func *creator_ptr_arrays[] = {
@@ -645,7 +646,8 @@ int ObSchemaUtils::construct_inner_table_schemas(
         bool exist = false;
         if (OB_FAIL((*creator_ptr)(table_schema))) {
           LOG_WARN("fail to gen sys table schema", KR(ret));
-        } else if (is_sys_tenant(tenant_id) && table_schema.get_table_id() == OB_ALL_CORE_TABLE_TID) {
+        } else if (!construct_all && is_sys_tenant(tenant_id)
+            && table_schema.get_table_id() == OB_ALL_CORE_TABLE_TID) {
           // sys tenant's __all_core_table's schema is built separately in bootstrap
         } else if (OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(
                 tenant_id, table_schema))) {
@@ -654,7 +656,7 @@ int ObSchemaUtils::construct_inner_table_schemas(
                 tenant_id, table_schema, exist))) {
           LOG_WARN("fail to check inner table exist",
               KR(ret), K(tenant_id), K(table_schema));
-        } else if (!exist) {
+        } else if (!construct_all && !exist) {
           // skip
         } else if (OB_FAIL(tables.push_back(table_schema))) {
           LOG_WARN("fail to push back table schema", KR(ret), K(table_schema));
@@ -670,6 +672,74 @@ int ObSchemaUtils::construct_inner_table_schemas(
           }
         } // end lob aux table
       }
+    }
+  }
+  return ret;
+}
+
+// used for generating hard code schema version when add table in development
+// for virtual table with index, we should make index schema version less than virtual table schema version
+// otherwise, schema service cannot bind index schema to virtual table schema
+// system table index is no need to do this because system table indexes are hard code
+// see also:
+// the algorithm:
+// 1. For the input array, construct a map from table_id to table pointer.
+// 2. Traverse the array in reverse order. For virtual table index, first insert the corresponding virtual table into the table_id array, then insert its own table_id; for other system tables, insert them directly into table_id array. Ensure that the virtual table appears in the array before its index. At this point, the schema_version in the table_id array that ranks higher is larger.
+// 3. Traverse the table_id array in order, if a table does not have a valid schema_version, assign it a schema_version from largest to smallest.
+
+int ObSchemaUtils::generate_hard_code_schema_version(ObIArray<ObTableSchema> &tables)
+{
+  int ret = OB_SUCCESS;
+  hash::ObHashMap<uint64_t, ObTableSchema *> tid2table;
+  if (OB_FAIL(tid2table.create(tables.count(), "Tid2Table"))) {
+    LOG_WARN("failed to create tid2table", KR(ret), K(tables.count()));
+  } else {
+    int64_t current_schema_version = (HARD_CODE_SCHEMA_VERSION_BEGIN + tables.count()) * ObSchemaVersionGenerator::SCHEMA_VERSION_INC_STEP;
+    ObArray<uint64_t> table_id_in_schema_version_order;
+    FOREACH_CNT_X(table, tables, OB_SUCC(ret)) {
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pointer is null", KR(ret), KP(table));
+      } else if (OB_FAIL(tid2table.set_refactored(table->get_table_id(), table))) {
+        LOG_WARN("failed to add tid to table", KR(ret), K(table));
+      }
+    }
+    for (int64_t i = tables.count() - 1; i >= 0 && OB_SUCC(ret); i--) {
+      ObTableSchema &table = tables.at(i);
+      table.set_schema_version(OB_INVALID_VERSION);
+      if (table.is_index_table() && is_virtual_table(table.get_data_table_id())) {
+        if (OB_FAIL(table_id_in_schema_version_order.push_back(table.get_data_table_id()))) {
+          LOG_WARN("failed to push data_table_id", KR(ret), K(table));
+        }
+      }
+      if (FAILEDx(table_id_in_schema_version_order.push_back(table.get_table_id()))) {
+        LOG_WARN("failed to push table_id", KR(ret), K(table));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_id_in_schema_version_order.count(); i++) {
+      const uint64_t table_id = table_id_in_schema_version_order.at(i);
+      ObTableSchema **table_ptr = nullptr;
+      ObTableSchema *table = nullptr;
+      if (OB_ISNULL(table_ptr = tid2table.get(table_id)) || OB_ISNULL(table = *table_ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pointer is null", KR(ret), KP(table_ptr), K(table));
+      } else if (table->get_schema_version() != OB_INVALID_VERSION) {
+        // table schema version is set, ignore
+      } else {
+        table->set_schema_version(current_schema_version);
+        for (ObTableSchema::const_column_iterator iter = table->column_begin();
+            OB_SUCC(ret) && iter != table->column_end(); ++iter) {
+          (*iter)->set_schema_version(current_schema_version);
+          (*iter)->set_tenant_id(OB_INVALID_TENANT_ID);
+          (*iter)->set_table_id(table->get_table_id());
+        }
+        current_schema_version -= ObSchemaVersionGenerator::SCHEMA_VERSION_INC_STEP;
+      }
+    }
+    if (OB_SUCC(ret) && current_schema_version != HARD_CODE_SCHEMA_VERSION_BEGIN *
+        ObSchemaVersionGenerator::SCHEMA_VERSION_INC_STEP) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema count not match", KR(ret), K(current_schema_version), K(HARD_CODE_SCHEMA_VERSION_BEGIN));
     }
   }
   return ret;

@@ -2068,6 +2068,9 @@ const int16_t DEFUALT_PRECISION_FOR_INTERVAL = 2;
 
 const int64_t OB_ORACLE_SCALE_FOR_NUMBER = -127;
 
+// load inner table schema
+const int64_t HARD_CODE_SCHEMA_VERSION_BEGIN = 1 << 17;
+
 #define NUMBER_SCALE_UNKNOWN_YET (lib::is_oracle_mode() ? ORA_NUMBER_SCALE_UNKNOWN_YET: SCALE_UNKNOWN_YET)
 //TDE相关参数
 const int64_t MAX_ENCRYPTION_SECRET_LENGTH = 256;

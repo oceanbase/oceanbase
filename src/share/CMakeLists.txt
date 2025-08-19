@@ -90,6 +90,16 @@ ob_set_subtarget(ob_share SCHEMA_CPPS
   ${SCHEMA_CPPS}
 )
 
+if(OB_BUILD_WITH_EMPTY_LOAD_SCHEMA)
+  ob_set_subtarget(ob_share LOAD_SCHEMA inner_table/ob_load_inner_table_schema_empty.cpp)
+else()
+  ob_set_subtarget(ob_share LOAD_SCHEMA inner_table/ob_load_inner_table_schema.cpp)
+endif()
+
+ob_set_subtarget(ob_share DUMP_SCHEMA
+  inner_table/ob_dump_inner_table_schema.cpp
+)
+
 ob_set_subtarget(ob_share aggregates
   aggregate/grouping.cpp
   aggregate/agg_reuse_cell.cpp

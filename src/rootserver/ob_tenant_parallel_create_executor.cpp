@@ -141,8 +141,8 @@ int ObParallelCreateTenantExecutor::wait_all_(
       // To avoid load_sys_package and tenant DDL operations competing for DDL threads
       // wait for all load_sys_package tasks to complete before returning to the user.
       // ObCompatibilityMode::OCEANBASE_MODE means wait both mysql and oracle sys package
-    } else if (OB_FAIL(ObLoadSysPackageTask::wait_sys_package_ready(*sql_proxy_, ctx_,
-            ObCompatibilityMode::OCEANBASE_MODE))) {
+    } else if (!GCONF._enable_async_load_sys_package &&
+        OB_FAIL(ObLoadSysPackageTask::wait_sys_package_ready(*sql_proxy_, ctx_, ObCompatibilityMode::OCEANBASE_MODE))) {
       LOG_WARN("failed to wait sys package ready", KR(ret), K(ctx_));
     }
   }

@@ -275,6 +275,9 @@ private:
       ObDDLOperator &ddl_operator,
       ObMySQLTransaction &trans,
       common::ObIArray<share::schema::ObTableSchema> &tables);
+  int load_sys_table_schemas(
+      const ObTenantSchema &tenant_schema,
+      common::ObIArray<share::schema::ObTableSchema> &tables);
   template <typename SCHEMA>
   int extract_first_primary_zone_array(
       const SCHEMA &schema,

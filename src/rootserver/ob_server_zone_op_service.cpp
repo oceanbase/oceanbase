@@ -852,7 +852,11 @@ int ObServerZoneOpService::add_server_(
       server_id,
       zone,
       sql_port,
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+      true, /* with_rootserver */
+#else
       false, /* with_rootserver */
+#endif
       ObServerStatus::OB_SERVER_ACTIVE,
       build_version,
       0, /* stop_time */

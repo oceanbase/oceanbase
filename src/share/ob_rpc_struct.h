@@ -550,6 +550,28 @@ public:
   uint64_t user_tenant_id_;
 };
 
+class ObLoadTenantTableSchemaArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  int init(const uint64_t tenant_id, const uint64_t table_id, const ObIArray<int64_t> &insert_idx,
+      const uint64_t data_version);
+  int assign(const ObLoadTenantTableSchemaArg &arg);
+  bool is_valid() const;
+  ObLoadTenantTableSchemaArg() : tenant_id_(OB_INVALID_TENANT_ID), table_id_(OB_INVALID_ID),
+    data_version_(OB_INVALID_VERSION), insert_idx_() {}
+  TO_STRING_KV(K_(tenant_id), K_(table_id), KDV_(data_version), K_(insert_idx));
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  uint64_t get_table_id() const { return table_id_; }
+  const ObIArray<int64_t>& get_insert_idx() const { return insert_idx_; }
+  uint64_t get_data_version() const { return data_version_; }
+private:
+  uint64_t tenant_id_;
+  uint64_t table_id_;
+  uint64_t data_version_;
+  ObSArray<int64_t> insert_idx_;
+};
+
 struct ObParallelCreateNormalTenantArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);

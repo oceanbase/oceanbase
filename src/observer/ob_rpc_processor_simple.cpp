@@ -76,6 +76,7 @@
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/ob_inner_tablet_access_service.h"
 #include "rootserver/standby/ob_flashback_standby_log_command.h"
+#include "rootserver/ob_load_inner_table_schema_executor.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "close_modules/arbitration/rootserver/ob_arbitration_service.h" // for ObArbitrationService
 #include "close_modules/arbitration/share/arbitration_service/ob_arbitration_service_utils.h" // for ObArbitrationServiceUtils
@@ -948,6 +949,19 @@ int ObRpcCreateTenantUserLSP::process()
         LOG_WARN("ERRSIM_CREATE_USER_LS_ERROR", KR(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObRpcLoadTenantTableSchemaP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_.get_tenant_id();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(ret), K_(arg));
+  } else if (OB_FAIL(rootserver::ObLoadInnerTableSchemaExecutor::load_inner_table_schema(arg_))) {
+    LOG_WARN("failed to load inner table schema", KR(ret), K_(arg));
   }
   return ret;
 }

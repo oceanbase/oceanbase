@@ -621,7 +621,9 @@ ObRootService::ObRootService()
     purge_recyclebin_task_(*this),
     snapshot_manager_(),
     core_meta_table_version_(0),
+#ifndef OB_ENABLE_STANDALONE_LAUNCH
     update_rs_list_timer_task_(*this),
+#endif
     update_all_server_config_task_(*this),
     baseline_schema_version_(0),
     start_service_time_(0),
@@ -985,10 +987,29 @@ void ObRootService::destroy()
   }
 }
 
+int ObRootService::update_inmemory_ls_table_()
+{
+  int ret = OB_SUCCESS;
+  ObLSReplica replica;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    FLOG_WARN("rootservice not inited", KR(ret));
+  } else if (OB_ISNULL(GCTX.ob_service_) || OB_ISNULL(lst_operator_->get_inmemory_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pointer is null", KR(ret), KP(GCTX.ob_service_), KP(lst_operator_->get_inmemory_ls()));
+  } else if (OB_FAIL(GCTX.ob_service_->fill_ls_replica(OB_SYS_TENANT_ID, SYS_LS, replica))) {
+    LOG_WARN("failed to fill ls replica", KR(ret));
+  } else if (OB_FAIL(lst_operator_->get_inmemory_ls()->update(replica, false/*inner_table_only*/))) {
+    LOG_WARN("failed to update inmemory ls", KR(ret), K(replica));
+  }
+  return ret;
+}
+
 ERRSIM_POINT_DEF(ERRSIM_RS_START_SERVICE_ERROR);
 int ObRootService::start_service()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   start_service_time_ = ObTimeUtility::current_time();
   ROOTSERVICE_EVENT_ADD("root_service", "start_rootservice", K_(self_addr));
   FLOG_INFO("[ROOTSERVICE_NOTICE] start to start rootservice", K_(start_service_time));
@@ -1027,7 +1048,11 @@ int ObRootService::start_service()
       FLOG_WARN("failed to schedule global ctx task", KR(ret));
     } else if (OB_FAIL(lst_operator_->set_callback_for_rs(rs_list_change_cb_))) {
       FLOG_WARN("lst_operator set as rs leader failed", KR(ret));
-    } else if (OB_FAIL(rs_status_.set_rs_status(status::IN_SERVICE))) {
+    } else if (OB_TMP_FAIL(update_inmemory_ls_table_())) {
+      // to speed up the startup of observer, we update ls replica here
+      LOG_WARN("failed to update in memory ls table, ignore error", KR(tmp_ret));
+    }
+    if (FAILEDx(rs_status_.set_rs_status(status::IN_SERVICE))) {
       FLOG_WARN("fail to set rs status", KR(ret));
     } else if (OB_FAIL(schedule_refresh_server_timer_task(0))) {
       FLOG_WARN("failed to schedule refresh_server task", KR(ret));
@@ -1505,6 +1530,9 @@ int ObRootService::schedule_self_check_task()
 int ObRootService::schedule_update_rs_list_task()
 {
   int ret = OB_SUCCESS;
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  LOG_INFO("in standalone deployment, no need to update rs_list");
+#else
   const bool did_repeat = true;
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -1519,6 +1547,7 @@ int ObRootService::schedule_update_rs_list_task()
   } else {
     LOG_INFO("add update rs list task success");
   }
+#endif
   return ret;
 }
 ERRSIM_POINT_DEF(ALL_SERVER_SCHEDULE_ERROR);
@@ -1631,7 +1660,8 @@ int ObRootService::schedule_load_all_sys_package_task()
 {
   int ret = OB_SUCCESS;
   const bool did_repeat = false;
-  const int64_t delay = 0;
+  // sleep 3s to avoid ddl in sys package using ddl thread which will block create tenant
+  const int64_t delay = GCONF._enable_async_load_sys_package ? 3_s : 0;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -1649,6 +1679,9 @@ int ObRootService::schedule_load_all_sys_package_task()
 int ObRootService::submit_update_rslist_task(const bool force_update)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  LOG_INFO("in standalone deployment, no need to update rs_list");
+#else
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -1673,6 +1706,7 @@ int ObRootService::submit_update_rslist_task(const bool force_update)
       LOG_WARN("fail to submit update rslist task, need retry", K(force_update));
     }
   }
+#endif
   return ret;
 }
 
@@ -2055,10 +2089,11 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
                       "bootstrap wait sys package begin.");
       if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF._ob_ddl_timeout))) {
         LOG_WARN("failed to set default timeout", KR(ret));
-      } else if (OB_FAIL(ObLoadSysPackageTask::wait_sys_package_ready(sql_proxy_, ctx, ObCompatibilityMode::MYSQL_MODE))) {
+      } else if (!GCONF._enable_async_load_sys_package &&
+          OB_FAIL(ObLoadSysPackageTask::wait_sys_package_ready(sql_proxy_, ctx, ObCompatibilityMode::MYSQL_MODE))) {
         LOG_WARN("failed to wait mysql sys package ready", KR(ret), K(ctx));
       } else {
-        LOG_DBA_INFO_V2(OB_BOOTSTRAP_WAIT_SYS_PACKAGE_BEGIN,
+        LOG_DBA_INFO_V2(OB_BOOTSTRAP_WAIT_SYS_PACKAGE_SUCCESS,
                         DBA_STEP_INC_INFO(bootstrap),
                         "bootstrap wait sys package success.");
       }
@@ -6431,6 +6466,7 @@ int ObRootService::start_timer_tasks()
     }
   }
 
+#ifndef OB_ENABLE_STANDALONE_LAUNCH
   if (OB_SUCC(ret) && !task_queue_.exist_timer_task(update_rs_list_timer_task_)) {
     if (OB_FAIL(schedule_update_rs_list_task())) {
       LOG_WARN("failed to schedule update rs list task", K(ret));
@@ -6438,6 +6474,7 @@ int ObRootService::start_timer_tasks()
       LOG_INFO("add update rs list timer task");
     }
   }
+#endif
 
   if (OB_SUCC(ret) && !task_queue_.exist_timer_task(update_all_server_config_task_)) {
     if (OB_FAIL(schedule_update_all_server_config_task())) {
@@ -6504,7 +6541,9 @@ int ObRootService::stop_timer_tasks()
     task_queue_.cancel_timer_task(check_server_task_);
     task_queue_.cancel_timer_task(event_table_clear_task_);
     task_queue_.cancel_timer_task(self_check_task_);
+#ifndef OB_ENABLE_STANDALONE_LAUNCH
     task_queue_.cancel_timer_task(update_rs_list_timer_task_);
+#endif
     task_queue_.cancel_timer_task(update_all_server_config_task_);
     task_queue_.cancel_timer_task(load_all_sys_package_task_);
     if (GCTX.is_shared_storage_mode()) {
@@ -7760,6 +7799,12 @@ int ObRootService::add_server(const obrpc::ObAdminServerArg &arg)
     LOG_WARN("invalid arg", KR(ret), K(arg));
   } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
       LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  } else {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("in standalone mode, add server is not allowed", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add server in standalone mode");
+#endif
   }
   if (OB_SUCC(ret)) {
     if (!ObHeartbeatService::is_service_enabled()) { // the old logic
@@ -8146,6 +8191,14 @@ int ObRootService::add_zone(const obrpc::ObAdminZoneArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  } else {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("in standalone mode, add zone is not allowed", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add zone in standalone mode");
+#endif
+  }
+  if (OB_FAIL(ret)) {
 #ifdef OB_BUILD_TDE_SECURITY
   } else if (OB_FAIL(try_check_encryption_zone_cond(arg))) {
     LOG_WARN("fail to check encryption zone", KR(ret), K(arg));
@@ -11730,6 +11783,7 @@ int ObRootService::wait_all_rs_in_service_after_bootstrap_(const obrpc::ObServer
     }
 
     bool all_in_service = true;
+#ifndef OB_ENABLE_STANDALONE_LAUNCH
     FOREACH_CNT_X(rs, rs_list, all_in_service && OB_SUCCESS == ret) {
       bool in_service = false;
       if (INT64_MAX != THIS_WORKER.get_timeout_ts()) {
@@ -11747,6 +11801,7 @@ int ObRootService::wait_all_rs_in_service_after_bootstrap_(const obrpc::ObServer
         all_in_service = false;
       }
     }
+#endif
 
     if (OB_FAIL(ret)) {
     } else if (all_in_service) {

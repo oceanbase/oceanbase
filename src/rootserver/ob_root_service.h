@@ -962,6 +962,7 @@ private:
       const obrpc::ObCreateTableArg &arg,
       share::schema::ObTableSchema &table_schema);
   int clear_special_cluster_schema_status();
+  int update_inmemory_ls_table_();
   int check_tenant_gts_config(const int64_t tenant_id, bool &tenant_gts_config_ok,
                               share::schema::ObSchemaGetterGuard &schema_guard);
   int check_database_config(const int64_t tenant_id, bool &db_config_ok,
@@ -1139,7 +1140,9 @@ private:
 
   ObSnapshotInfoManager snapshot_manager_;
   int64_t core_meta_table_version_;
+#ifndef OB_ENABLE_STANDALONE_LAUNCH
   ObUpdateRsListTimerTask update_rs_list_timer_task_;
+#endif
   ObUpdateAllServerConfigTask update_all_server_config_task_;
   int64_t baseline_schema_version_;
 

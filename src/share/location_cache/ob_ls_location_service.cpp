@@ -983,7 +983,7 @@ int ObLSLocationService::get_from_cache_(
   } else if(OB_UNLIKELY(!cache_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
-  } else  if (OB_FAIL(inner_cache_.get(cache_key, location))) {
+  } else if (OB_FAIL(inner_cache_.get(cache_key, location))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_CACHE_NOT_HIT;
       LOG_TRACE("location is not hit in inner cache", KR(ret), K(cache_key));

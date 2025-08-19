@@ -31,6 +31,8 @@ ob_define(NEED_PARSER_CACHE ON)
 # get compiler from build.sh
 ob_define(OB_CC "")
 ob_define(OB_CXX "")
+ob_define(OB_BUILD_STANDALONE OFF)
+ob_define(OB_BUILD_DESKTOP OFF)
 
 # 'ENABLE_PERF_MODE' use for offline system insight performance test
 # PERF_MODE macro controls many special code path in system
@@ -54,6 +56,7 @@ ob_define(USE_LTO_CACHE OFF)
 # odps jni
 ob_define(OB_BUILD_JNI_ODPS ON)
 
+ob_define(OB_BUILD_WITH_EMPTY_LOAD_SCHEMA OFF)
 ob_define(ASAN_DISABLE_STACK ON)
 
 # 开源模式默认支持系统租户使用向量索引
@@ -208,6 +211,16 @@ if(OB_BUILD_SHARED_STORAGE)
   add_definitions(-DOB_BUILD_SHARED_STORAGE)
 endif()
 
+if(OB_BUILD_STANDALONE)
+  add_definitions(-DOB_BUILD_STANDALONE)
+  add_definitions(-DOB_ENABLE_STANDALONE_LAUNCH)
+endif()
+
+if(OB_BUILD_DESKTOP)
+  add_definitions(-DOB_BUILD_DESKTOP)
+  add_definitions(-DOB_ENABLE_STANDALONE_LAUNCH)
+endif()
+
 if(OB_BUILD_SPM)
   add_definitions(-DOB_BUILD_SPM)
 endif()
@@ -242,6 +255,10 @@ endif()
 
 if(OB_BUILD_SHARED_LOG_SERVICE)
   add_definitions(-DOB_BUILD_SHARED_LOG_SERVICE)
+endif()
+
+if(OB_BUILD_WITH_EMPTY_LOAD_SCHEMA)
+  add_definitions(-DOB_BUILD_WITH_EMPTY_LOAD_SCHEMA)
 endif()
 
 if (OB_BUILD_SYS_VEC_IDX)
