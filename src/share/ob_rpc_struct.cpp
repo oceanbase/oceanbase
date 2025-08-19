@@ -12629,6 +12629,65 @@ int ObCatalogDDLArg::assign(const ObCatalogDDLArg &other)
   return ret;
 }
 
+DEF_TO_STRING(ObCreateCCLRuleArg)
+{
+  int64_t pos = 0;
+  J_KV(K_(if_not_exist),
+       K_(affect_databases_name),
+       K_(affect_tables_name),
+       K_(ccl_rule_schema));
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER((ObCreateCCLRuleArg, ObDDLArg),
+                    if_not_exist_,
+                    affect_databases_name_,
+                    affect_tables_name_,
+                    ccl_rule_schema_);
+
+int ObCreateCCLRuleArg::assign(const ObCreateCCLRuleArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else if (OB_FAIL(affect_databases_name_.assign(other.affect_databases_name_))) {
+    LOG_WARN("fail to assign rls context schema", KR(ret));
+  } else if (OB_FAIL(affect_tables_name_.assign(other.affect_tables_name_))) {
+    LOG_WARN("fail to assign rls context schema", KR(ret));
+  } else if (OB_FAIL(ccl_rule_schema_.assign(other.ccl_rule_schema_))) {
+    LOG_WARN("fail to assign rls context schema", KR(ret));
+  } else {
+    if_not_exist_ = other.if_not_exist_;
+  }
+  return ret;
+}
+
+DEF_TO_STRING(ObDropCCLRuleArg)
+{
+  int64_t pos = 0;
+  J_KV(K_(if_exist),
+       K_(ccl_rule_name));
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER((ObDropCCLRuleArg, ObDDLArg),
+                    if_exist_,
+                    tenant_id_,
+                    ccl_rule_name_);
+
+int ObDropCCLRuleArg::assign(const ObDropCCLRuleArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else {
+    if_exist_ = other.if_exist_;
+    tenant_id_ = other.tenant_id_;
+    ccl_rule_name_ = other.ccl_rule_name_;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObStartTransferTaskArg, tenant_id_, task_id_, src_ls_);
 
 int ObStartTransferTaskArg::init(

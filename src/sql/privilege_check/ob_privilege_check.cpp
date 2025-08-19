@@ -49,6 +49,7 @@
 #include "sql/resolver/ddl/ob_trigger_stmt.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/resolver/dml/ob_insert_all_stmt.h"
+#include "sql/resolver/ddl/ob_create_ccl_rule_stmt.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "sql/resolver/dcl/ob_alter_user_profile_stmt.h"
 #include "sql/optimizer/ob_optimizer_util.h"
@@ -3544,6 +3545,50 @@ int get_lock_table_priv(
         }
       }
     }
+  }
+  return ret;
+}
+
+int get_create_ccl_priv(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(session_priv);
+  ObNeedPriv need_priv;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (stmt::T_CREATE_CCL_RULE != basic_stmt->get_stmt_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected stmt type", K(basic_stmt->get_stmt_type()), K(ret));
+  } else {
+    need_priv.priv_set_ = OB_PRIV_CREATE;
+    need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+    ADD_NEED_PRIV(need_priv);
+  }
+  return ret;
+}
+
+int get_drop_ccl_priv(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(session_priv);
+  ObNeedPriv need_priv;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (stmt::T_DROP_CCL_RULE != basic_stmt->get_stmt_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected stmt type", K(basic_stmt->get_stmt_type()), K(ret));
+  } else {
+    need_priv.priv_set_ = OB_PRIV_DROP;
+    need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+    ADD_NEED_PRIV(need_priv);
   }
   return ret;
 }

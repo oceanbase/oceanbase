@@ -19,6 +19,7 @@
 #include "src/rootserver/ob_root_service.h" // for ObRootService
 #include "observer/ob_sql_client_decorator.h"
 #include "share/inner_table/ob_sslog_table_schema.h"
+#include "sql/engine/expr/ob_expr_like.h"
 
 #define COMMON_SQL              "SELECT * FROM %s"
 #define COMMON_SQL_WITH_TENANT  "SELECT * FROM %s WHERE tenant_id = %lu"
@@ -113,6 +114,7 @@
 #define FETCH_ALL_PROXY_INFO_HISTORY_SQL                  COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_PROXY_ROLE_INFO_HISTORY_SQL             COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_CATALOG_HISTORY_SQL                     COMMON_SQL_WITH_TENANT
+#define FETCH_ALL_CCL_RULE_HISTORY_SQL                    COMMON_SQL_WITH_TENANT
 #define FETCH_ALL_CASCADE_OBJECT_ID_HISTORY_SQL "SELECT %s object_id, is_deleted FROM %s " \
     "WHERE tenant_id = %lu AND %s = %lu AND schema_version <= %lu " \
     "ORDER BY object_id desc, schema_version desc"
@@ -255,6 +257,7 @@ ObSchemaServiceSQLImpl::ObSchemaServiceSQLImpl()
       rls_service_(*this),
       catalog_service_(*this),
       external_resource_service_(*this),
+      ccl_rule_service_(*this),
       cluster_schema_status_(ObClusterSchemaStatus::NORMAL_STATUS),
       gen_schema_version_map_(),
       schema_service_(NULL),
@@ -1363,6 +1366,7 @@ GET_ALL_SCHEMA_FUNC_DEFINE(catalog, ObCatalogSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(catalog_priv, ObCatalogPriv);
 GET_ALL_SCHEMA_FUNC_DEFINE(external_resource, ObSimpleExternalResourceSchema);
 GET_ALL_SCHEMA_FUNC_DEFINE(location, ObLocationSchema);
+GET_ALL_SCHEMA_FUNC_DEFINE(ccl_rule, ObSimpleCCLRuleSchema);
 
 int ObSchemaServiceSQLImpl::get_all_db_privs(ObISQLClient &client,
     const ObRefreshSchemaStatus &schema_status,
@@ -3244,6 +3248,7 @@ FETCH_NEW_SCHEMA_ID(RLS_CONTEXT, rls_context);
 FETCH_NEW_SCHEMA_ID(CATALOG, catalog);
 FETCH_NEW_SCHEMA_ID(EXTERNAL_RESOURCE, external_resource);
 FETCH_NEW_SCHEMA_ID(LOCATION, location);
+FETCH_NEW_SCHEMA_ID(CCL_RULE, ccl_rule);
 
 #undef FETCH_NEW_SCHEMA_ID
 
@@ -3658,6 +3663,7 @@ GET_BATCH_SCHEMAS_FUNC_DEFINE(catalog, ObCatalogSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(external_resource, ObSimpleExternalResourceSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(location, ObLocationSchema);
 GET_BATCH_SCHEMAS_FUNC_DEFINE(obj_mysql_priv, ObObjMysqlPriv);
+GET_BATCH_SCHEMAS_FUNC_DEFINE(ccl_rule, ObSimpleCCLRuleSchema);
 
 int ObSchemaServiceSQLImpl::sql_append_pure_ids(
     const ObRefreshSchemaStatus &schema_status,
@@ -5540,6 +5546,7 @@ FETCH_SCHEMAS_FUNC_DEFINE(rls_group, ObRlsGroupSchema, OB_ALL_RLS_GROUP_HISTORY_
 FETCH_SCHEMAS_FUNC_DEFINE(rls_context, ObRlsContextSchema, OB_ALL_RLS_CONTEXT_HISTORY_TNAME);
 FETCH_SCHEMAS_FUNC_DEFINE(catalog, ObCatalogSchema, OB_ALL_CATALOG_HISTORY_TNAME);
 FETCH_SCHEMAS_FUNC_DEFINE(location, ObLocationSchema, OB_ALL_TENANT_LOCATION_HISTORY_TNAME);
+FETCH_SCHEMAS_FUNC_DEFINE(ccl_rule, ObSimpleCCLRuleSchema, OB_ALL_CCL_RULE_HISTORY_TNAME);
 
 int ObSchemaServiceSQLImpl::fetch_all_mock_fk_parent_table_info(
       const ObRefreshSchemaStatus &schema_status,
@@ -6331,6 +6338,7 @@ int ObSchemaServiceSQLImpl::fetch_rls_columns(const ObRefreshSchemaStatus &schem
   }
   return ret;
 }
+
 /*
   new schema_cache related
 */
@@ -8797,6 +8805,111 @@ int ObSchemaServiceSQLImpl::fetch_all_audit_info(
   return ret;
 }
 
+int ObSchemaServiceSQLImpl::get_batch_ccl_rules(
+    const ObRefreshSchemaStatus &schema_status, const int64_t schema_version,
+    common::ObArray<uint64_t> &tenant_ccl_ids,
+    common::ObISQLClient &sql_client,
+    common::ObIArray<ObCCLRuleSchema> &ccl_rule_info_array) {
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = schema_status.tenant_id_;
+  ccl_rule_info_array.reserve(tenant_ccl_ids.count());
+  LOG_DEBUG("fetch batch ccl_rule begin.", K(lbt()), K(tenant_ccl_ids));
+  if (OB_UNLIKELY(schema_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(schema_version), K(ret));
+  } else if (OB_UNLIKELY(!check_inner_stat())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("check inner stat fail");
+  }
+  lib::ob_sort(tenant_ccl_ids.begin(), tenant_ccl_ids.end());
+  // split query to tenant space && split big query
+  int64_t begin = 0;
+  int64_t end = 0;
+  while (OB_SUCCESS == ret && end < tenant_ccl_ids.count()) {
+    while (OB_SUCCESS == ret && end < tenant_ccl_ids.count() &&
+           end - begin < MAX_IN_QUERY_PER_TIME) {
+      end++;
+    }
+    if (OB_FAIL(fetch_all_ccl_rule_info(
+            schema_status, schema_version, tenant_id, sql_client,
+            ccl_rule_info_array, &tenant_ccl_ids.at(begin), end - begin))) {
+      LOG_WARN("fetch all ccl_rule info failed", K(schema_version), K(ret));
+    }
+    begin = end;
+  }
+  LOG_INFO("get batch ccl_rule info finish", K(schema_version), K(ret));
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::fetch_all_ccl_rule_info(
+    const ObRefreshSchemaStatus &schema_status, const int64_t schema_version,
+    const uint64_t tenant_id, ObISQLClient &sql_client,
+    ObIArray<ObCCLRuleSchema> &ccl_array,
+    const uint64_t *ccl_rule_keys /* = NULL */,
+    const int64_t ccls_size /* = 0 */) {
+  int ret = OB_SUCCESS;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    ObSqlString sql;
+    const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+    const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+    DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+    if (OB_FAIL(
+            sql.append_fmt(FETCH_ALL_CCL_RULE_HISTORY_SQL,
+                           OB_ALL_CCL_RULE_HISTORY_TNAME,
+                           fill_extract_tenant_id(schema_status, tenant_id)))) {
+      LOG_WARN("append sql failed", K(ret));
+    } else if (NULL != ccl_rule_keys && ccls_size > 0) {
+      if (OB_FAIL(sql.append_fmt(" AND ccl_rule_id IN ("))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < ccls_size; ++i) {
+          const uint64_t ccl_rule_id =
+              fill_extract_schema_id(schema_status, ccl_rule_keys[i]);
+          if (OB_FAIL(sql.append_fmt("%s%lu", 0 == i ? "" : ", ", ccl_rule_id))) {
+            LOG_WARN("append sql failed", K(ret), K(i));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(sql.append(")"))) {
+            LOG_WARN("append sql failed", K(ret));
+          }
+        }
+      }
+    } else {
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(
+              sql.append_fmt(" AND SCHEMA_VERSION <= %ld", schema_version))) {
+        LOG_WARN("append failed", K(ret));
+      } else if (OB_FAIL(sql.append(" ORDER BY TENANT_ID DESC, CCL_RULE_ID DESC, "
+                                    "SCHEMA_VERSION DESC"))) {
+        LOG_WARN("sql append failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(sql));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Fail to get result", K(ret));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_ccl_rule_schema(
+                     tenant_id, *result, ccl_array))) {
+        LOG_WARN("Failed to retrieve ccl_rule infos", K(ret));
+      }
+
+      ARRAY_FOREACH(ccl_array, idx) {
+        ObCCLRuleSchema &schema = ccl_array.at(idx);
+        if (OB_FAIL(schema.split_strings_with_escape(';', '\\'))) {
+          LOG_WARN("fail to split strings with escape", K(ret));
+        }
+        LOG_TRACE("[CCL] after retrieve: ", K(schema));
+      }
+
+    }
+  }
+  return ret;
+}
 
 #define CONSTRUCT_SCHEMA_VERSION_HISTORY_SQL1(SCHEMA_ID) \
   "select schema_version, is_deleted, min(schema_version) over () as min_version from %s "\

@@ -5954,6 +5954,41 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_tablet_local_cache runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_ccl_rule;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+ccl_rule_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+ccl_rule_name	varchar(128)	NO		NULL	
+affect_user_name	varchar(64)	NO		NULL	
+affect_host	varchar(128)	NO		NULL	
+affect_for_all_databases	tinyint(4)	NO		1	
+affect_for_all_tables	tinyint(4)	NO		1	
+affect_database	varchar(128)	YES		NULL	
+affect_table	varchar(256)	YES		NULL	
+affect_dml	bigint(20)	NO		0	
+affect_scope	bigint(20)	NO		0	
+ccl_keywords	varchar(1048576)	NO		NULL	
+max_concurrency	bigint(20)	NO		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ccl_rule;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_ccl_status;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO	PRI	NULL	
+svr_port	bigint(20)	NO	PRI	NULL	
+tenant_id	bigint(20)	NO	PRI	NULL	
+ccl_rule_id	bigint(20)	NO	PRI	NULL	
+format_sqlid	varchar(32)	NO	PRI	NULL	
+current_concurrency	bigint(20)	NO		NULL	
+max_concurrency	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ccl_status;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_ccl_status runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_mview_running_job;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	

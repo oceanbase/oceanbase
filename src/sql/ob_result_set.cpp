@@ -19,6 +19,7 @@
 #include "sql/dblink/ob_tm_service.h"
 #include "storage/tx/ob_xa_ctx.h"
 #include "src/rootserver/mview/ob_mview_maintenance_service.h"
+#include "src/sql/ob_sql_ccl_rule_manager.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -38,6 +39,20 @@ ObResultSet::~ObResultSet()
       && OB_UNLIKELY(physical_plan->is_limited_concurrent_num())) {
     physical_plan->dec_concurrent_num();
   }
+
+  if (my_session_.has_ccl_rule_checked() && my_session_.is_enable_sql_ccl_rule()) {
+    sql::ObSQLCCLRuleManager *sql_ccl_rule_mgr = MTL(sql::ObSQLCCLRuleManager *);
+    if (!is_inner_result_set_ && sql_ccl_rule_mgr->is_inited() && OB_NOT_NULL(sql_ccl_rule_mgr) && OB_NOT_NULL(get_exec_context().get_sql_ctx())) {
+      FOREACH(p_value_wrapper, get_exec_context().get_sql_ctx()->matched_ccl_rule_level_values_) {
+        sql_ccl_rule_mgr->dec_rule_level_concurrency(*p_value_wrapper);
+      }
+      FOREACH(p_value_wrapper,
+              get_exec_context().get_sql_ctx()->matched_ccl_format_sqlid_level_values_) {
+        sql_ccl_rule_mgr->dec_format_sqlid_level_concurrency(*p_value_wrapper);
+      }
+    }
+  }
+
   // when ObExecContext is destroyed, it also depends on the physical plan, so need to ensure
   // that inner_exec_ctx_ is destroyed before cache_obj_guard_
   if (NULL != inner_exec_ctx_) {

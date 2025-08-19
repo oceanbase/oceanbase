@@ -334,6 +334,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 544	__all_pl_recompile_objinfo	0	201001	1
 545	__all_vector_index_task	0	201001	1
 546	__all_vector_index_task_history	0	201001	1
+547	__all_ccl_rule	0	201001	1
+548	__all_ccl_rule_history	0	201001	1
 550	__all_tenant_location	0	201001	1
 551	__all_tenant_location_history	0	201001	1
 552	__all_tenant_objauth_mysql	0	201001	1
@@ -852,6 +854,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12527	__tenant_virtual_show_catalog_databases	2	201001	1
 12529	__all_virtual_storage_cache_task	2	201001	1
 12530	__all_virtual_tablet_local_cache	2	201001	1
+12533	__all_virtual_ccl_rule	2	201001	1
+12534	__all_virtual_ccl_status	2	201001	1
 12535	__all_virtual_mview_running_job	2	201001	1
 12536	__all_virtual_dynamic_partition_table	2	201001	1
 12537	__all_virtual_ls_migration_task	2	201001	1
@@ -865,6 +869,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12546	__tenant_virtual_list_file	2	201001	1
 12547	__all_virtual_external_resource	2	201001	1
 12548	__all_virtual_external_resource_history	2	201001	1
+12549	__all_virtual_ccl_rule_history	2	201001	1
 12550	__all_virtual_tenant_vector_mem_info	2	201001	1
 12551	__all_virtual_logservice_cluster_info	2	201001	1
 12552	__all_virtual_ss_gc_status	2	201001	1
@@ -1408,6 +1413,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21645	V$OB_STORAGE_CACHE_TASKS	1	201001	1
 21646	GV$OB_TABLET_LOCAL_CACHE	1	201001	1
 21647	V$OB_TABLET_LOCAL_CACHE	1	201001	1
+21648	DBA_OB_CCL_RULES	1	201001	1
+21649	CDB_OB_CCL_RULES	1	201001	1
+21650	GV$OB_SQL_CCL_STATUS	1	201001	1
+21651	V$OB_SQL_CCL_STATUS	1	201001	1
 21652	DBA_MVIEW_RUNNING_JOBS	1	201001	1
 21653	CDB_MVIEW_RUNNING_JOBS	1	201001	1
 21654	DBA_MVIEW_DEPS	1	201001	1

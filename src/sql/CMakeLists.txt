@@ -24,6 +24,7 @@ ob_set_subtarget(ob_sql common
   ob_sql_utils.cpp
   ob_optimizer_trace_impl.cpp
   ob_sql_mock_schema_utils.cpp
+  ob_sql_ccl_rule_manager.cpp
 )
 
 ob_set_subtarget(ob_sql common_mixed
@@ -314,6 +315,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_trigger_storage_cache_executor.cpp
   engine/cmd/ob_sys_dispatch_call_executor.cpp
   engine/cmd/ob_flashback_standby_log_executor.cpp
+  engine/cmd/ob_ccl_rule_executor.cpp
 )
 
 ob_set_subtarget(ob_sql engine_connector
@@ -1465,6 +1467,10 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_storage_cache_ddl_util.cpp
   resolver/ddl/ob_catalog_resolver.cpp
   resolver/ddl/ob_catalog_stmt.cpp
+  resolver/ddl/ob_create_ccl_rule_resolver.cpp
+  resolver/ddl/ob_create_ccl_rule_stmt.cpp
+  resolver/ddl/ob_drop_ccl_rule_resolver.cpp
+  resolver/ddl/ob_drop_ccl_rule_stmt.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dml

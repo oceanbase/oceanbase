@@ -6483,3 +6483,375 @@ int ObSQLUtils::get_strong_partition_replica_addr(const ObCandiTabletLoc &phy_pa
   }
   return ret;
 }
+
+//call in non plan cache ccl-check
+int ObSQLUtils::match_ccl_rule(ObIAllocator &alloc, ObSQLSessionInfo &session, ObSqlCtx &context,
+                               const ObString &sql, bool is_ps_mode,
+                               const ObIArray<const common::ObObjParam *> &param_store,
+                               const ObString &format_sqlid, CclRuleContainsInfo contians_info, ParseResult *parse_result,
+                               ObStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (!session.is_enable_sql_ccl_rule()) {
+    //no need to do ccl match
+  } else if (!session.is_inner() && !context.is_remote_sql_ &&
+             !(context.is_prepare_protocol_ && context.is_prepare_stage_) &&
+             !(context.multi_stmt_item_.is_part_of_multi_stmt())) {
+
+    uint64_t tenant_id = MTL_ID();
+    ObNameCaseMode mode = OB_NAME_CASE_INVALID;
+    if (OB_FAIL(session.get_name_case_mode(mode))) {
+      LOG_WARN("fail to get name case mode", K(mode), K(ret));
+    } else {
+      // 1.default
+      bool need_do_match = true;
+      sql::ObSQLCCLRuleManager *sql_ccl_rule_mgr =
+          MTL(sql::ObSQLCCLRuleManager *);
+
+      uint64_t ccl_match_start_time = ObTimeUtility::current_time();
+      // 2.have dml info
+      ObCCLAffectDMLType ccl_affect_dml_type = ObCCLAffectDMLType::ALL;
+      if (OB_NOT_NULL(parse_result) &&
+          OB_NOT_NULL(parse_result->result_tree_) &&
+          OB_NOT_NULL(parse_result->result_tree_->children_[0])) {
+        switch (parse_result->result_tree_->children_[0]->type_) {
+        case T_SELECT: {
+          ccl_affect_dml_type = ObCCLAffectDMLType::SELECT;
+          break;
+        }
+        case T_INSERT: {
+          ccl_affect_dml_type = ObCCLAffectDMLType::INSERT;
+          break;
+        }
+        case T_DELETE: {
+          ccl_affect_dml_type = ObCCLAffectDMLType::DELETE;
+          break;
+        }
+        case T_UPDATE: {
+          ccl_affect_dml_type = ObCCLAffectDMLType::UPDATE;
+          break;
+        }
+        default: {
+          // If after parse and find it's not a dml tree, we don't need to da
+          // the match
+          need_do_match = false;
+          LOG_TRACE("do not do ccl match because current parse tree is ",
+                    K(parse_result->result_tree_->type_));
+          break;
+        }
+        }
+      }
+
+      // 3. have table & database info
+      common::hash::ObHashSet<ObCCLDatabaseTableHashWrapper>
+          sql_relate_databases;
+      common::hash::ObHashSet<ObCCLDatabaseTableHashWrapper> sql_relate_tables;
+      ObSEArray<uint64_t, 1> sql_relate_table_ids;
+      if (need_do_match && OB_NOT_NULL(stmt) && stmt->is_dml_stmt()) {
+        // get sql relate tables
+        ObDMLStmt *dml_stmt = static_cast<ObDMLStmt *>(stmt);
+        uint64_t ref_id = OB_INVALID_ID;
+        if (OB_FAIL(sql_relate_databases.create(256)) ||
+            OB_FAIL(sql_relate_tables.create(32))) {
+          LOG_WARN("fail to init hashset", K(ret),
+                   K(sql_relate_databases.created()),
+                   K(sql_relate_tables.created()));
+        } else if (dml_stmt->is_select_stmt()) {
+          ObSelectStmt *select_stmt = static_cast<ObSelectStmt *>(dml_stmt);
+          ARRAY_FOREACH(select_stmt->get_table_items(), idx) {
+            // ref_id would be OB_INVALID_ID if table is not a "base" table
+            ref_id = select_stmt->get_table_items().at(idx)->ref_id_;
+            if (ref_id != OB_INVALID_ID) {
+              if (OB_FAIL(sql_relate_tables.set_refactored(
+                      ObCCLDatabaseTableHashWrapper(
+                          tenant_id, mode,
+                          select_stmt->get_table_items()
+                              .at(idx)
+                              ->get_table_name())))) {
+                LOG_WARN("fail to push data into sql_relate_tables", K(ret));
+              } else if (OB_FAIL(sql_relate_table_ids.push_back(ref_id))) {
+                LOG_WARN("fail to push data into sql_relate_table_ids", K(ret));
+              }
+            }
+          }
+        } else if (dml_stmt->is_insert_stmt() || dml_stmt->is_delete_stmt() ||
+                   dml_stmt->is_update_stmt()) {
+          ObDelUpdStmt *delupd_stmt = static_cast<ObDelUpdStmt *>(dml_stmt);
+          ObSEArray<const ObDmlTableInfo *, 1> dml_table_infos;
+          if (OB_FAIL(delupd_stmt->get_dml_table_infos(dml_table_infos))) {
+            LOG_WARN("fail to get dml_table_infos", K(ret), K(dml_stmt));
+          } else {
+            ARRAY_FOREACH(dml_table_infos, idx) {
+              // ref_id would be OB_INVALID_ID if table is not a "base" table
+              ref_id = dml_table_infos.at(idx)->ref_table_id_;
+              if (ref_id != OB_INVALID_ID) {
+                if (OB_FAIL(sql_relate_tables.set_refactored(
+                        ObCCLDatabaseTableHashWrapper(
+                            tenant_id, mode,
+                            dml_table_infos.at(idx)->table_name_)))) {
+                  LOG_WARN("fail to push data into sql_relate_tables", K(ret));
+                } else if (OB_FAIL(sql_relate_table_ids.push_back(ref_id))) {
+                  LOG_WARN("fail to push data into sql_relate_table_ids",
+                           K(ret));
+                }
+              }
+            }
+          }
+        }
+        // get the databases to which the above table belongs
+        const ObTableSchema *table_schema = NULL;
+        const ObSimpleDatabaseSchema *simple_database_schema = NULL;
+        ARRAY_FOREACH(sql_relate_table_ids, idx) {
+          if (OB_FAIL(context.schema_guard_->get_table_schema(
+                  MTL_ID(), sql_relate_table_ids.at(idx), table_schema))) {
+            LOG_WARN("fail to get table schema", K(ret));
+          } else if (OB_NOT_NULL(table_schema) &&
+                     OB_FAIL(context.schema_guard_->get_database_schema(
+                         MTL_ID(), table_schema->get_database_id(),
+                         simple_database_schema))) {
+            // fake table will return table_schema == NULL
+            LOG_WARN("fail to get simple database schema", K(ret));
+          } else if (OB_NOT_NULL(simple_database_schema) &&
+                     OB_FAIL(sql_relate_databases.set_refactored(
+                         ObCCLDatabaseTableHashWrapper(
+                             tenant_id, mode,
+                             simple_database_schema->get_database_name())))) {
+            LOG_WARN("fail to push data into sql_relate_databases", K(ret));
+          }
+        }
+      }
+      // 4. do the match
+      uint64_t limited_by_ccl_rule_id = 0;
+      if (OB_SUCC(ret) && need_do_match &&
+          OB_FAIL(sql_ccl_rule_mgr->match_ccl_rule_with_sql(
+              alloc, session.get_user_name(), context, sql, is_ps_mode,
+              param_store, format_sqlid, contians_info, ccl_affect_dml_type,
+              sql_relate_databases, sql_relate_tables, limited_by_ccl_rule_id))) {
+        if (ret == OB_REACH_MAX_CCL_CONCURRENT_NUM) {
+          // record into sql_ctx then write into sql audit
+          context.ccl_rule_id_ = limited_by_ccl_rule_id;
+        } else {
+          LOG_WARN("fail to match ccl rule at very start of sql engine",
+                   K(ret));
+        }
+      }
+      context.ccl_match_time_ =
+          ObTimeUtility::current_time() - ccl_match_start_time;
+    }
+  }
+
+  return ret;
+}
+
+//call in plan cache ccl-check
+int ObSQLUtils::match_ccl_rule(const ObPlanCacheCtx *pc_ctx, ObSQLSessionInfo &session,
+                                     bool is_ps_mode,
+                                     const DependenyTableStore & dependency_table_store)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(pc_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(pc_ctx));
+  } else {
+    ObIAllocator &alloc = pc_ctx->allocator_;
+    ObSqlCtx &context = pc_ctx->sql_ctx_;
+    const ObString &sql = pc_ctx->raw_sql_;
+    const ObIArray<const common::ObObjParam *> &param_store =
+      pc_ctx->fp_result_.parameterized_params_;
+    stmt::StmtType stmt_type = pc_ctx->sql_ctx_.stmt_type_;
+    ObString format_sqlid = pc_ctx->sql_ctx_.format_sql_id_;
+    if (!session.is_enable_sql_ccl_rule()) {
+      //no need to do ccl match
+    } else if (!session.is_inner() && !context.is_remote_sql_ &&
+               !(context.is_prepare_protocol_ && context.is_prepare_stage_) &&
+               !(context.multi_stmt_item_.is_part_of_multi_stmt())) {
+
+      uint64_t tenant_id = MTL_ID();
+      ObNameCaseMode mode = OB_NAME_CASE_INVALID;
+      if (OB_FAIL(session.get_name_case_mode(mode))) {
+        LOG_WARN("fail to get name case mode", K(mode), K(ret));
+      } else {
+        // 1.default
+        bool need_do_match = true;
+        sql::ObSQLCCLRuleManager *sql_ccl_rule_mgr =
+            MTL(sql::ObSQLCCLRuleManager *);
+
+        uint64_t ccl_match_start_time = ObTimeUtility::current_time();
+        // 2.have dml info
+        ObCCLAffectDMLType ccl_affect_dml_type = ObCCLAffectDMLType::ALL;
+        switch (stmt_type) {
+        case stmt::T_SELECT: {
+          ccl_affect_dml_type = ObCCLAffectDMLType::SELECT;
+          break;
+        }
+        case stmt::T_INSERT: {
+          ccl_affect_dml_type = ObCCLAffectDMLType::INSERT;
+          break;
+        }
+        case stmt::T_DELETE: {
+          ccl_affect_dml_type = ObCCLAffectDMLType::DELETE;
+          break;
+        }
+        case stmt::T_UPDATE: {
+          ccl_affect_dml_type = ObCCLAffectDMLType::UPDATE;
+          break;
+        }
+        default: {
+          // If after parse and find it's not a dml tree, we don't need to da
+          // the match
+          need_do_match = false;
+          LOG_TRACE("do not do ccl match because current parse tree is ",
+                    K(stmt_type));
+          break;
+        }
+        }
+
+        // 3. have table & database info
+        common::hash::ObHashSet<ObCCLDatabaseTableHashWrapper> sql_relate_databases;
+        common::hash::ObHashSet<ObCCLDatabaseTableHashWrapper> sql_relate_tables;
+        if (need_do_match) {
+          if (OB_FAIL(sql_relate_databases.create(32)) ||
+              OB_FAIL(sql_relate_tables.create(32))) {
+            LOG_WARN("fail to init hashset", K(ret),
+                     K(sql_relate_databases.created()),
+                     K(sql_relate_tables.created()));
+          }
+          const ObTableSchema *table_schema = NULL;
+          const ObSimpleDatabaseSchema *simple_database_schema = NULL;
+          ARRAY_FOREACH(dependency_table_store, idx) {
+            if (dependency_table_store.at(idx).get_schema_type() ==
+                TABLE_SCHEMA) {
+              uint64_t table_id =
+                  dependency_table_store.at(idx).get_object_id();
+              if (OB_FAIL(context.schema_guard_->get_table_schema(
+                      MTL_ID(), table_id, table_schema))) {
+                LOG_WARN("fail to get table schema", K(ret));
+              } else if (OB_NOT_NULL(table_schema) &&
+                         OB_FAIL(sql_relate_tables.set_refactored(
+                             ObCCLDatabaseTableHashWrapper(
+                                 tenant_id, mode,
+                                 table_schema->get_table_name())))) {
+                LOG_WARN("fail to push data into sql_relate_tables", K(ret));
+              } else if (OB_NOT_NULL(table_schema) &&
+                         OB_FAIL(context.schema_guard_->get_database_schema(
+                             MTL_ID(), table_schema->get_database_id(),
+                             simple_database_schema))) {
+                // fake table will return table_schema == NULL
+                LOG_WARN("fail to get simple database schema", K(ret));
+              } else if (OB_NOT_NULL(simple_database_schema) &&
+                         OB_FAIL(sql_relate_databases.set_refactored(
+                             ObCCLDatabaseTableHashWrapper(
+                                 tenant_id, mode,
+                                 simple_database_schema
+                                     ->get_database_name())))) {
+                LOG_WARN("fail to push data into sql_relate_databases", K(ret));
+              }
+            }
+          }
+        }
+
+        // 4. do the match
+        // ccl match in plan cache should check 2 situation
+        uint64_t limited_by_ccl_rule_id = 0;
+        if (OB_SUCC(ret) && need_do_match &&
+            OB_FAIL(sql_ccl_rule_mgr->match_ccl_rule_with_sql(
+                alloc, session.get_user_name(), context, sql, is_ps_mode,
+                param_store, format_sqlid, CclRuleContainsInfo::DML,
+                ccl_affect_dml_type, sql_relate_databases, sql_relate_tables,
+                limited_by_ccl_rule_id))) {
+          if (ret == OB_REACH_MAX_CCL_CONCURRENT_NUM) {
+            // record into sql_ctx then write into sql audit
+            context.ccl_rule_id_ = limited_by_ccl_rule_id;
+          } else {
+            LOG_WARN("fail to match ccl rule at very start of sql engine",
+                     K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && need_do_match &&
+            OB_FAIL(sql_ccl_rule_mgr->match_ccl_rule_with_sql(
+                alloc, session.get_user_name(), context, sql, is_ps_mode,
+                param_store, format_sqlid,
+                CclRuleContainsInfo::DATABASE_AND_TABLE, ccl_affect_dml_type,
+                sql_relate_databases, sql_relate_tables,
+                limited_by_ccl_rule_id))) {
+          if (ret == OB_REACH_MAX_CCL_CONCURRENT_NUM) {
+            // record into sql_ctx then write into sql audit
+            context.ccl_rule_id_ = limited_by_ccl_rule_id;
+          }
+        }
+
+        context.ccl_match_time_ =
+            ObTimeUtility::current_time() - ccl_match_start_time;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObSQLUtils::reconstruct_ps_sql(ObSqlString & reconstruct_sql, const ObString &ps_sql,
+                                   const ObIArray<const common::ObObjParam *> &const_tokens)
+{
+  int ret = OB_SUCCESS;
+  ObString tmp_ps_sql = ps_sql;
+  int64_t target_ori_sql_pos = 0;
+  for (int64_t const_token_index = 0; OB_SUCC(ret) && const_token_index < const_tokens.count();
+       const_token_index++) {
+    if (OB_FAIL(reconstruct_sql.append(tmp_ps_sql.split_on('?')))) {
+      LOG_WARN("fail to append before part of ps sql", K(ret),
+               K(const_token_index), K(reconstruct_sql), K(tmp_ps_sql));
+    } else if (OB_FAIL(append_obj_param(reconstruct_sql, *const_tokens.at(const_token_index)))) {
+      LOG_WARN("fail to append 's const param ", K(ret), K(const_token_index), K(reconstruct_sql),
+               K(*const_tokens.at(const_token_index)));
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(reconstruct_sql.append(tmp_ps_sql))) {
+    LOG_WARN("fail to append last part of ps sql", K(ret));
+  }
+  return ret;
+}
+
+int ObSQLUtils::append_obj_param(ObSqlString & reconstruct_sql, const common::ObObjParam & obj_param) {
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  do {
+    //logic copy from src/sql/printer/ob_raw_expr_printer.cpp: ObRawExprPrinter::print(ObConstRawExpr *expr)
+    len = reconstruct_sql.length();
+    if (obj_param.is_datetime()) {
+      int32_t tmp_date = 0;
+      if (OB_FAIL(databuff_printf(reconstruct_sql.ptr(), reconstruct_sql.capacity(), len, "%s '", LITERAL_PREFIX_DATE))) {
+        LOG_WARN("fail to print literal prefix", K(ret));
+      } else if (FALSE_IT(reconstruct_sql.set_length(len))) {
+      } else if (OB_FAIL(
+                   ObTimeConverter::datetime_to_date(obj_param.get_datetime(), NULL, tmp_date))) {
+        LOG_WARN("fail to datetime_to_date", "datetime", obj_param.get_datetime(), K(ret));
+      } else if (OB_FAIL(ObTimeConverter::date_to_str(tmp_date, reconstruct_sql.ptr(), reconstruct_sql.capacity(), len))) {
+        LOG_WARN("fail to date_to_str", K(tmp_date), K(ret));
+      } else if (FALSE_IT(reconstruct_sql.set_length(len))) {
+      } else if (OB_FAIL(databuff_printf(reconstruct_sql.ptr(), reconstruct_sql.capacity(), len, "'"))) {
+        LOG_WARN("fail to print single date time quote", K(ret));
+      } else if (FALSE_IT(reconstruct_sql.set_length(len))) {
+      }
+    } else {
+      if (obj_param.is_timestamp_tz()
+          && OB_FAIL(databuff_printf(reconstruct_sql.ptr(), reconstruct_sql.capacity(), len, " timestamp "))) {
+        LOG_WARN("fail to print single timestamp quote", K(ret));
+      } else if (FALSE_IT(reconstruct_sql.set_length(len))) {
+      } else if (OB_FAIL(obj_param.print_sql_literal(reconstruct_sql.ptr(), reconstruct_sql.capacity(), len))) {
+        LOG_WARN("fail to print sql literal", K(ret), K(reconstruct_sql), K(obj_param));
+      } else if (FALSE_IT(reconstruct_sql.set_length(len))) {
+      }
+    }
+
+    if (ret == OB_SIZE_OVERFLOW) {
+      const int64_t need_len = reconstruct_sql.length() + 100;
+      if (OB_FAIL(reconstruct_sql.reserve(need_len))) {
+        LOG_WARN("reserve data failed", K(ret), K(need_len));
+      } else {
+        ret = OB_SIZE_OVERFLOW;
+      }
+    }
+  } while (ret == OB_SIZE_OVERFLOW);
+
+  return ret;
+}

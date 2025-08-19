@@ -465,6 +465,7 @@ public:
   //RETRIEVE_SCHEMA_FUNC_DECLARE(proxy);
   //RETRIEVE_SCHEMA_FUNC_DECLARE(proxy_role);
   RETRIEVE_SCHEMA_FUNC_DECLARE(catalog);
+  RETRIEVE_SCHEMA_FUNC_DECLARE(ccl_rule);
 
   template <typename T>
   static int retrieve_external_resource_schema(const uint64_t tenant_id, T &result, ObIArray<ObSimpleExternalResourceSchema> &schema_array);
@@ -541,6 +542,7 @@ public:
   FILL_SCHEMA_FUNC_DECLARE(rls_context, ObRlsContextSchema);
   FILL_SCHEMA_FUNC_DECLARE(rls_column, ObRlsSecColumnSchema);
   FILL_SCHEMA_FUNC_DECLARE(catalog, ObCatalogSchema);
+  FILL_SCHEMA_FUNC_DECLARE(ccl_rule, ObSimpleCCLRuleSchema);
 
   //for full schema
   template<typename T>
@@ -575,7 +577,8 @@ public:
 
   // external resource
   FILL_SCHEMA_FUNC_DECLARE(external_resource, ObSimpleExternalResourceSchema);
-
+  // ccl
+  FILL_SCHEMA_FUNC_DECLARE(ccl_rule, ObCCLRuleSchema);
   template<typename T>
   static int fill_mock_fk_parent_table_column_info(
       const uint64_t tenant_id, T &result, uint64_t &parent_column_id, ObString &parent_column_name,

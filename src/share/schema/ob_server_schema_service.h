@@ -43,6 +43,7 @@
 #include "share/schema/ob_context_mgr.h"
 #include "share/schema/ob_mock_fk_parent_table_mgr.h"
 #include "share/schema/ob_catalog_mgr.h"
+#include "share/schema/ob_ccl_rule_mgr.h"
 
 namespace oceanbase
 {
@@ -112,6 +113,7 @@ struct SchemaKey
     uint64_t external_resource_id_;
     uint64_t location_id_;
     uint64_t ai_model_id_;
+    uint64_t ccl_rule_id_;
   };
   union {
     common::ObString table_name_;
@@ -177,7 +179,8 @@ struct SchemaKey
                K_(proxy_user_id),
                K_(catalog_id),
                K_(catalog_name),
-               K_(external_resource_id));
+               K_(external_resource_id),
+               K_(ccl_rule_id));
 
   SchemaKey()
     : tenant_id_(common::OB_INVALID_ID),
@@ -360,6 +363,10 @@ struct SchemaKey
   {
     return ObTenantExternalResourceId(tenant_id_, external_resource_id_);
   }
+  ObTenantCCLRuleId get_ccl_rule_key() const
+  {
+    return ObTenantCCLRuleId(tenant_id_, ccl_rule_id_);
+  }
 };
 
 struct VersionHisKey
@@ -507,6 +514,7 @@ public:
   SCHEMA_KEY_FUNC(rls_context);
   SCHEMA_KEY_FUNC(catalog);
   SCHEMA_KEY_FUNC(external_resource);
+  SCHEMA_KEY_FUNC(ccl_rule);
   #undef SCHEMA_KEY_FUNC
 
   struct udf_key_hash_func {
@@ -854,6 +862,7 @@ public:
   SCHEMA_KEYS_DEF(catalog, CatalogKeys);
   SCHEMA_KEYS_DEF(catalog_priv, CatalogPrivKeys);
   SCHEMA_KEYS_DEF(external_resource, ExternalResourceKeys);
+  SCHEMA_KEYS_DEF(ccl_rule, CCLRuleKeys);
 
   #undef SCHEMA_KEYS_DEF
   typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
@@ -1005,6 +1014,10 @@ public:
     ExternalResourceKeys new_external_resource_keys_;
     ExternalResourceKeys del_external_resource_keys_;
 
+    //ccl_rule
+    CCLRuleKeys new_ccl_rule_keys_;
+    CCLRuleKeys del_ccl_rule_keys_;
+
     void reset();
     int create(int64_t bucket_size);
 
@@ -1058,6 +1071,7 @@ public:
     common::ObArray<ObRlsGroupSchema> simple_rls_group_schemas_;
     common::ObArray<ObRlsContextSchema> simple_rls_context_schemas_;
     common::ObArray<ObCatalogSchema> simple_catalog_schemas_;
+    common::ObArray<ObSimpleCCLRuleSchema> simple_ccl_rule_schemas_;
     common::ObArray<ObTableSchema *> non_sys_tables_;
     common::ObArray<ObSimpleExternalResourceSchema> simple_external_resource_schemas_;
     common::ObArenaAllocator allocator_;
@@ -1227,6 +1241,7 @@ private:
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(rls_context);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(catalog);
   GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(external_resource);
+  GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE(ccl_rule);
 #undef GET_INCREMENT_SCHEMA_KEY_FUNC_DECLARE
 
 
@@ -1276,6 +1291,7 @@ private:
   APPLY_SCHEMA_TO_CACHE(rls_context, ObRlsContextMgr);
   APPLY_SCHEMA_TO_CACHE(catalog, ObSchemaMgr);
   APPLY_SCHEMA_TO_CACHE(external_resource, ObExternalResourceMgr);
+  APPLY_SCHEMA_TO_CACHE(ccl_rule, ObSchemaMgr);
 #undef APPLY_SCHEMA_TO_CACHE
 
   // replay log

@@ -185,7 +185,9 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       service_name_(),
       executing_sql_stat_record_(),
       unit_gc_min_sup_proxy_version_(0),
-      external_resource_schema_cache_(nullptr)
+      external_resource_schema_cache_(nullptr),
+      has_ccl_rule_(false),
+      last_update_ccl_cnt_time_(-1)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -3245,6 +3247,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&enable_adaptive_plan_cache_, tenant_config->enable_adaptive_plan_cache);
       // 13. enable_ps_parameterize
       ATOMIC_STORE(&enable_ps_parameterize_, tenant_config->enable_ps_parameterize);
+      ATOMIC_STORE(&enable_sql_ccl_rule_, tenant_config->_enable_sql_ccl_rule);
     }
     ATOMIC_STORE(&last_check_ec_ts_, cur_ts);
     session_->update_tenant_config_version(

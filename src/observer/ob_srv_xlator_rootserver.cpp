@@ -288,6 +288,8 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcHandleRlsPolicyDDLP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcHandleRlsGroupDDLP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcHandleRlsContextDDLP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCreateCCLRuleDDLP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcDropCCLRuleDDLP, *gctx_.root_service_);
 #ifdef OB_BUILD_TDE_SECURITY
     RPC_PROCESSOR(rootserver::ObGetRootKeyP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObReloadMasterKeyP, *gctx_.root_service_);

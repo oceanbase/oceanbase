@@ -96,6 +96,7 @@
 #include "storage/mview/ob_major_mv_merge_info.h"       //ObMajorMVMergeInfo
 #include "share/sequence/ob_sequence_cache.h" // ObSeqCleanCacheRes
 #include "share/schema/ob_catalog_schema_struct.h"
+#include "share/schema/ob_ccl_schema_struct.h"
 #include "ob_ddl_args.h"
 #include "ob_mview_args.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
@@ -12982,6 +12983,44 @@ public:
 
   uint64_t tenant_id_;
   ObSArray<uint64_t> synonym_ids_;
+};
+
+struct ObCreateCCLRuleArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObCreateCCLRuleArg():
+    ObDDLArg(),
+    if_not_exist_(false)
+  {}
+  bool is_valid() const { return ccl_rule_schema_.is_valid(); }
+  int assign(const ObCreateCCLRuleArg& other);
+  virtual bool is_allow_when_upgrade() const { return true; }
+  DECLARE_TO_STRING;
+  bool if_not_exist_;
+  ObSEArray<ObString, 1> affect_databases_name_;
+  ObSEArray<ObString, 1> affect_tables_name_;
+  share::schema::ObCCLRuleSchema ccl_rule_schema_;
+};
+
+struct ObDropCCLRuleArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObDropCCLRuleArg():
+    ObDDLArg(),
+    if_exist_(false),
+    tenant_id_(OB_INVALID_ID)
+  {}
+  bool is_valid() const { return !ccl_rule_name_.empty(); }
+  int assign(const ObDropCCLRuleArg& other);
+  virtual bool is_allow_when_upgrade() const { return true; }
+  DECLARE_TO_STRING;
+  bool if_exist_;
+  uint64_t tenant_id_;
+  common::ObString ccl_rule_name_;
 };
 
 // session info self-verification arg

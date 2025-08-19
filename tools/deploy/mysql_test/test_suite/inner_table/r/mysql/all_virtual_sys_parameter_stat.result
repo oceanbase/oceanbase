@@ -449,6 +449,7 @@ _enable_runtime_filter_adaptive_apply
 _enable_skip_index
 _enable_spf_batch_rescan
 _enable_sql_audit_query_sql
+_enable_sql_ccl_rule
 _enable_ss_migration_prewarm
 _enable_ss_replica_prewarm
 _enable_system_tenant_memory_limit

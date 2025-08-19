@@ -280,7 +280,7 @@ END_P SET_VAR DELIMITER
         CACHE CALIBRATION CALIBRATION_INFO CANCEL CASCADED CAST CATALOG CATALOGS CATALOG_NAME CHAIN CHANGED CHARSET CHECKSUM CHECKPOINT CHUNK CIPHER
         CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_BLOOM_FILTER COLUMN_STAT
         CODE COLLATION COLLECT_STATISTICS_ON_CREATE COLUMN_FORMAT COLUMN_INDEX_TYPE COLUMN_NAME COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPLETION COMPLETE
-        COMPRESSED COMPRESSION COMPRESSION_BLOCK_SIZE COMPRESSION_CODE COMPUTATION COMPUTE CONCURRENT CONDENSED CONDITIONAL CONFIGS CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
+        COMPRESSED COMPRESSION COMPRESSION_BLOCK_SIZE COMPRESSION_CODE COMPUTATION COMPUTE CONCURRENT CONCURRENT_LIMITING_RULE CONDENSED CONDITIONAL CONFIGS CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
         CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COSINE COUNT CPU CREATE_TIMESTAMP CREDENTIAL
         CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT
 
@@ -294,7 +294,7 @@ END_P SET_VAR DELIMITER
         EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED ENCODING EMPTY_FIELD_AS_NULL EUCLIDEAN EXTERNAL EXTERNAL_STORAGE_DEST EXPIRE_TIME EXCLUSIVE
 
         FAILOVER FAST FAULTS FILE_BLOCK_SIZE FIELDS FILEX FINAL_COUNT FIRST FIRST_VALUE FIXED FLUSH FOLLOWER FORMAT
-        FOUND FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FRAGMENTATION FROZEN FILE_ID
+        FOUND FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FRAGMENTATION FROZEN FILE_ID FILTER
         FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER FIELD_ENCLOSED_BY FILE_EXTENSION
 
         GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GRANULARITY GROUP_CONCAT GROUPING GROUPING_ID GTS
@@ -308,7 +308,7 @@ END_P SET_VAR DELIMITER
 
         JOB JSON JSON_ARRAYAGG JSON_OBJECTAGG JSON_QUERY JSON_VALUE JSON_TABLE
 
-        KEY_BLOCK_SIZE KEY_VERSION KEYTAB KRB5CONF KVCACHE KV_ATTRIBUTES
+        KEYWORD KEY_BLOCK_SIZE KEY_VERSION KEYTAB KRB5CONF KVCACHE KV_ATTRIBUTES
 
         LAG LANGUAGE LAST LAST_REFRESH_SCN LAST_VALUE LATERAL LEAD LEADER LEAVES LESS LEAK LEAK_MOD LEAK_RATE LIB LINESTRING LIST_
         LISTAGG LOB_INROW_THRESHOLD LOCAL LOCALITY LOCATION LOCKED LOCKS LOGFILE LOGONLY_REPLICA_NUM LOGS LOCK_ LOGICAL_READS
@@ -317,7 +317,7 @@ END_P SET_VAR DELIMITER
         MAJOR MAP MANHATTAN MANUAL MASTER MASTER_AUTO_POSITION MASTER_CONNECT_RETRY MASTER_DELAY MASTER_HEARTBEAT_PERIOD
         MASTER_HOST MASTER_LOG_FILE MASTER_LOG_POS MASTER_PASSWORD MASTER_PORT MASTER_RETRY_COUNT
         MASTER_SERVER_ID MASTER_SSL MASTER_SSL_CA MASTER_SSL_CAPATH MASTER_SSL_CERT MASTER_SSL_CIPHER
-        MASTER_SSL_CRL MASTER_SSL_CRLPATH MASTER_SSL_KEY MASTER_USER MAX MAX_CONNECTIONS_PER_HOUR MAX_CPU
+        MASTER_SSL_CRL MASTER_SSL_CRLPATH MASTER_SSL_KEY MASTER_USER MAX MAX_CONNECTIONS_PER_HOUR MAX_CPU MAX_CONCURRENCY
         MAX_FILE_SIZE MAX_TOKEN_SIZE MAX_NGRAM_SIZE LOG_DISK_SIZE MAX_NET_BANDWIDTH MAX_IOPS MEMORY_SIZE MAX_QUERIES_PER_HOUR MAX_ROWS MAX_SIZE
         MAX_UPDATES_PER_HOUR MAX_USER_CONNECTIONS MEDIUM MEMORY MEMTABLE MESSAGE_TEXT META MICROSECOND MICRO_BLOCK_FORMAT_VERSION
         MIGRATE MIN MIN_CPU MIN_IOPS MIN_MAX MIN_NGRAM_SIZE MIN_TOKEN_SIZE MINOR MIN_ROWS MINUS MINUTE MISMATCH MODE MODIFY MODULE MONTH MOVE
@@ -333,7 +333,7 @@ END_P SET_VAR DELIMITER
         OBJECT_ID
         LOGSERVICE_ACCESS_POINT
 
-        PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARSER_PROPERTIES PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PATH PAUSE PAXOS_REPLICA_NUM PERCENTAGE
+        PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARSER_PROPERTIES PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PATH PAUSE PAXOS_REPLICA_NUM PER PERCENTAGE
         PERCENT_RANK PERCENTILE_CONT PHASE PHRASE PLAN PHYSICAL PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
         PRINCIPAL PROTECTION PROJECT_NAME PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
         PROCESSLIST PROFILE PROFILES PROPERTIES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
@@ -568,7 +568,7 @@ END_P SET_VAR DELIMITER
 %type <node> alter_logfile_group_stmt alter_logfile_group_info alter_logfile_group_option_list alter_logfile_group_options alter_logfile_group_option drop_logfile_group_stmt drop_ts_options_list drop_ts_options drop_ts_option opt_ts_nodegroup logfile_group_option logfile_group_option_list
 %type <node> service_name_stmt service_op
 %type <node> rebuild_tablet_id_list_expr rebuild_tablet_destination rebuild_tablet_source
-
+%type <node> create_ccl_rule_stmt drop_ccl_rule_stmt ccl_database_table_optition ccl_for_effect_dml ccl_filter_options ccl_keyword_list ccl_with_options ccl_per_sql
 %type <node> ttl_definition ttl_expr ttl_unit
 %type <node> id_dot_id id_dot_id_dot_id
 %type <node> vector_distance_expr vector_distance_metric
@@ -767,6 +767,8 @@ stmt:
   | drop_location_stmt    { $$ = $1; check_question_mark($$, result); }
   | location_utils_stmt   { $$ = $1; check_question_mark($$, result); }
   | flashback_standby_log_stmt { $$ = $1; check_question_mark($$, result); }
+  | create_ccl_rule_stmt       { $$ = $1; check_question_mark($$, result); }
+  | drop_ccl_rule_stmt       { $$ = $1; check_question_mark($$, result); }
   ;
 
 /*****************************************************************************
@@ -25723,6 +25725,115 @@ UNNEST '(' simple_expr_list ')'
 }
 ;
 
+create_ccl_rule_stmt:
+CREATE CONCURRENT_LIMITING_RULE opt_if_not_exists relation_name
+ON ccl_database_table_optition
+TO user_with_host_name
+FOR ccl_for_effect_dml
+ccl_filter_options
+ccl_with_options ccl_per_sql
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_CCL_RULE, 8, $3, $4, $6, $8, $10, $11, $12, $13);
+}
+;
+
+ccl_database_table_optition:
+'*' '.' '*'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 2, NULL, NULL);
+}
+| relation_name '.' '*'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 2, $1, NULL);
+}
+| id_dot_id
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 2, db_node, tb_node);
+}
+;
+
+ccl_for_effect_dml:
+ALL
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 0;
+}
+| SELECT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+}
+| UPDATE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 2;
+}
+| INSERT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 3;
+}
+| DELETE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 4;
+}
+;
+
+ccl_filter_options:
+FILTER BY KEYWORD '(' ccl_keyword_list ')'
+{
+  merge_nodes($$, result, T_FILTER_KEYWORDS_LIST, $5);
+}
+//| FILTER BY QUERY '(' explainable_stmt ')'
+//{
+//  merge_nodes($$, result, T_FILTER_QUERY, $5);
+//}
+| /*empty*/
+{
+  $$ = NULL;
+}
+;
+
+ccl_keyword_list:
+ccl_keyword_list ',' STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+| STRING_VALUE
+{
+  $$ = $1;
+}
+;
+
+ccl_with_options:
+WITH MAX_CONCURRENCY opt_equal_mark INTNUM
+{
+  (void)($3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CCL_WITH_OPTION, 1, $4);
+}
+;
+
+ccl_per_sql:
+PER SQL
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+}
+| /*empty*/
+{
+  $$ = NULL;
+}
+;
+
+drop_ccl_rule_stmt:
+DROP CONCURRENT_LIMITING_RULE opt_if_exists relation_factor
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_CCL_RULE, 2, $3, $4);
+}
+;
+
 unreserved_keyword:
 unreserved_keyword_for_role_name { $$=$1;}
 | unreserved_keyword_ambiguous_roles { $$=$1;}
@@ -25870,6 +25981,7 @@ ACCESS_INFO
 |       COMPUTATION
 |       COMPUTE
 |       CONCURRENT
+|       CONCURRENT_LIMITING_RULE
 |       CONDENSED
 |       CONDITIONAL
 |       CONFIGS
@@ -25996,6 +26108,7 @@ ACCESS_INFO
 |       FILE_EXTENSION
 |       FILE_ID
 |       FILES
+|       FILTER
 |       FINAL_COUNT
 |       FIRST
 |       FIRST_VALUE
@@ -26075,6 +26188,7 @@ ACCESS_INFO
 |       JSON_OBJECTAGG
 |       JSON_QUERY
 |       JSON_TABLE
+|       KEYWORD
 |       KEY_BLOCK_SIZE
 |       KEY_VERSION
 |       KEYTAB
@@ -26139,6 +26253,7 @@ ACCESS_INFO
 |       MAX
 |       MAX_CONNECTIONS_PER_HOUR
 |       MAX_CPU
+|       MAX_CONCURRENCY
 |       MAX_FILE_SIZE
 |       LOG_DISK_SIZE
 |       MAX_IOPS
@@ -26263,6 +26378,7 @@ ACCESS_INFO
 |       PERCENT_RANK
 |       PERCENTILE_CONT
 |       PAUSE
+|       PER
 |       PERCENTAGE
 |       PHASE
 |       PHRASE

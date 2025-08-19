@@ -65,6 +65,7 @@
 #include "share/ob_create_hidden_tablev2_rpc_struct.h"
 #include "rootserver/ob_location_ddl_service.h"
 #include "rootserver/ob_objpriv_mysql_ddl_service.h"
+#include "rootserver/ob_ccl_ddl_service.h"
 
 namespace oceanbase
 {
@@ -748,6 +749,11 @@ public:
   int create_external_resource(const obrpc::ObCreateExternalResourceArg &arg, obrpc::ObCreateExternalResourceRes &result);
   int drop_external_resource(const obrpc::ObDropExternalResourceArg &arg, obrpc::ObDropExternalResourceRes &result);
   //----End of functions for managing external resource----
+
+  //----Functions for managing CCL rules----
+  int create_ccl_rule_ddl(const obrpc::ObCreateCCLRuleArg &arg);
+  int drop_ccl_rule_ddl(const obrpc::ObDropCCLRuleArg &arg);
+  //----End of functions for managing CCL rules----
 
   // server related
   int load_server_manager();

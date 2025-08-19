@@ -12053,5 +12053,31 @@ int ObRootService::drop_external_resource(const obrpc::ObDropExternalResourceArg
   return ret;
 }
 
+int ObRootService::create_ccl_rule_ddl(const obrpc::ObCreateCCLRuleArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObCclDDLService ccl_ddl_service(&ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(ccl_ddl_service.create_ccl_ddl(arg))) {
+    LOG_WARN("handle ddl failed", K(arg), K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::drop_ccl_rule_ddl(const obrpc::ObDropCCLRuleArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObCclDDLService ccl_ddl_service(&ddl_service_);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(ccl_ddl_service.drop_ccl_ddl(arg))) {
+    LOG_WARN("handle ddl failed", K(arg), K(ret));
+  }
+  return ret;
+}
+
 } // end namespace rootserver
 } // end namespace oceanbase

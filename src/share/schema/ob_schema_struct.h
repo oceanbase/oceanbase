@@ -39,6 +39,7 @@
 #include "sql/session/ob_local_session_var.h"
 #include "share/schema/ob_list_row_values.h" // ObListRowValues
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
+#include "sql/engine/expr/ob_expr_like.h"
 
 #ifdef __cplusplus
 extern "C" {

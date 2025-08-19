@@ -145,6 +145,9 @@
 #include "storage/ob_inner_tablet_access_service.h"
 #include "storage/reorganization_info_table/ob_tablet_reorg_info_service.h"
 
+#include "observer/table/ob_table_query_async_processor.h"
+#include "observer/table/ob_htable_rowkey_mgr.h"
+#include "sql/ob_sql_ccl_rule_manager.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -624,6 +627,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, rootserver::ObDDLScheduler::mtl_init, nullptr, rootserver::ObDDLScheduler::mtl_stop, rootserver::ObDDLScheduler::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, storage::ObInnerTabletAccessService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTabletReorgInfoTableService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(ObSQLCCLRuleManager::mtl_new, ObSQLCCLRuleManager::mtl_init, nullptr, nullptr, nullptr, ObSQLCCLRuleManager::mtl_destroy);
   }
 
   if (OB_SUCC(ret)) {

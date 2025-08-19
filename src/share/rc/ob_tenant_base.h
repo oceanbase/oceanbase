@@ -69,6 +69,7 @@ namespace sql {
   class ObAuditLogUpdater;
   class ObPCachedExternalFileService;
   class ObExternalDataAccessMgr;
+  class ObSQLCCLRuleManager;
 }
 namespace blocksstable {
   class ObSharedMacroBlockMgr;
@@ -512,7 +513,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       rootserver::ObDDLServiceLauncher*,             \
       rootserver::ObDDLScheduler*,                   \
       storage::ObInnerTabletAccessService*,          \
-      storage::ObTabletReorgInfoTableService*        \
+      storage::ObTabletReorgInfoTableService*,        \
+      sql::ObSQLCCLRuleManager*                      \
   )
 
 

@@ -8767,6 +8767,10 @@ int ObSchemaGetterGuard::deep_copy_index_name_map(
   return ret;
 }
 
+template int ObSchemaGetterGuard::get_schema<ObCCLRuleSchema>(
+    const ObSchemaType, const uint64_t, const uint64_t,
+    const ObCCLRuleSchema *&, int64_t specified_version);
+
 #define GET_SIMPLE_SCHEMAS_IN_DATABASE_FUNC_DEFINE(SCHEMA, SIMPLE_SCHEMA_TYPE)                       \
   int ObSchemaGetterGuard::get_simple_##SCHEMA##_schemas_in_database(                                \
       const uint64_t tenant_id,                                                                      \

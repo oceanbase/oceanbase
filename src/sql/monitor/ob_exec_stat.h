@@ -339,6 +339,8 @@ struct ObAuditRecordData {
     stmt_type_ = sql::stmt::T_NONE;
     sql_memory_used_ = nullptr;
     trans_status_ = INVALID_STATUS;
+    ccl_rule_id_ = 0;
+    ccl_match_time_ = 0;
   }
 
   int64_t get_elapsed_time() const
@@ -465,6 +467,8 @@ struct ObAuditRecordData {
   int64_t plsql_compile_time_;
   ObTransStatus trans_status_;
   int64_t insert_update_or_replace_duplicate_row_count_;
+  int64_t ccl_rule_id_;
+  int64_t ccl_match_time_;
 };
 
 } //namespace sql

@@ -975,6 +975,8 @@ PLSQL_COMPILE_TIME	bigint(20)	NO		NULL
 INSERT_DUPLICATE_ROW_COUNT	bigint(20)	YES		NULL	
 USER_CLIENT_PORT	bigint(20)	NO		NULL	
 TRANS_STATUS	varchar(256)	NO		NULL	
+CCL_RULE_ID	bigint(20)	YES		NULL	
+CCL_MATCH_TIME	bigint(20)	YES		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SQL_AUDIT|%') then 2
@@ -1390,6 +1392,8 @@ PLSQL_COMPILE_TIME	bigint(20)	NO
 INSERT_DUPLICATE_ROW_COUNT	bigint(20)	NO			
 USER_CLIENT_PORT	bigint(20)	NO			
 TRANS_STATUS	varchar(256)	NO			
+CCL_RULE_ID	bigint(20)	NO			
+CCL_MATCH_TIME	bigint(20)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SQL_AUDIT|%') then 2
@@ -10860,6 +10864,69 @@ when ('|V$OB_SS_SSTABLES|' like '%|V$OB_TABLET_LOCAL_CACHE|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TABLET_LOCAL_CACHE limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_CCL_RULES;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+CCL_RULE_ID	bigint(20)	NO		NULL	
+CCL_RULE_NAME	varchar(128)	NO		NULL	
+AFFECT_USER_NAME	varchar(64)	NO		NULL	
+AFFECT_HOST	varchar(128)	NO		NULL	
+AFFECT_FOR_ALL_DATABASES	tinyint(4)	NO			
+AFFECT_FOR_ALL_TABLES	tinyint(4)	NO			
+AFFECT_DATABASE	varchar(128)	YES		NULL	
+AFFECT_TABLE	varchar(256)	YES		NULL	
+AFFECT_DML	bigint(20)	NO			
+AFFECT_SCOPE	bigint(20)	NO			
+CCL_KEYWORDS	varchar(1048576)	NO		NULL	
+MAX_CONCURRENCY	bigint(20)	NO			
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_CCL_RULES|%') then 2
+when ('' like '%|DBA_OB_CCL_RULES|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_CCL_RULES|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_CCL_RULES limit 1);
+cnt
+1
+desc oceanbase.GV$OB_SQL_CCL_STATUS;
+Field	Type	Null	Key	Default	Extra
+CON_ID	bigint(20)	NO		NULL	
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+CCL_RULE_ID	bigint(20)	NO		NULL	
+FORMAT_SQLID	varchar(32)	NO		NULL	
+CURRENT_CONCURRENCY	bigint(20)	NO		NULL	
+MAX_CONCURRENCY	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_SQL_CCL_STATUS|%') then 2
+when ('' like '%|GV$OB_SQL_CCL_STATUS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|GV$OB_SQL_CCL_STATUS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_SQL_CCL_STATUS limit 1);
+cnt
+1
+desc oceanbase.V$OB_SQL_CCL_STATUS;
+Field	Type	Null	Key	Default	Extra
+CON_ID	bigint(20)	NO		NULL	
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+CCL_RULE_ID	bigint(20)	NO		NULL	
+FORMAT_SQLID	varchar(32)	NO		NULL	
+CURRENT_CONCURRENCY	bigint(20)	NO		NULL	
+MAX_CONCURRENCY	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|V$OB_SQL_CCL_STATUS|%') then 2
+when ('' like '%|V$OB_SQL_CCL_STATUS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|V$OB_SQL_CCL_STATUS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_SQL_CCL_STATUS limit 1);
 cnt
 1
 desc oceanbase.DBA_MVIEW_RUNNING_JOBS;

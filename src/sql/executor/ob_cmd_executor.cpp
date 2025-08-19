@@ -91,6 +91,9 @@
 #include "sql/resolver/ddl/ob_drop_directory_stmt.h"
 #include "sql/resolver/ddl/ob_create_location_stmt.h"
 #include "sql/resolver/ddl/ob_drop_location_stmt.h"
+#include "sql/resolver/ddl/ob_create_ccl_rule_stmt.h"
+#include "sql/resolver/ddl/ob_drop_ccl_rule_stmt.h"
+#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/cmd/ob_empty_query_executor.h"
 #include "sql/engine/cmd/ob_dcl_executor.h"
 #include "sql/engine/cmd/ob_tcl_executor.h"
@@ -144,6 +147,7 @@
 #include "sql/engine/cmd/ob_event_executor.h"
 #include "sql/resolver/cmd/ob_flashback_standby_log_stmt.h"
 #include "sql/engine/cmd/ob_flashback_standby_log_executor.h"
+#include "sql/engine/cmd/ob_ccl_rule_executor.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_keystore_stmt.h"
 #include "sql/resolver/ddl/ob_alter_keystore_stmt.h"
@@ -1184,6 +1188,14 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_LOAD_LICENSE: {
         DEFINE_EXECUTE_CMD(ObLoadLicenseStmt, ObLoadLicenseExecutor);
+        break;
+      }
+      case stmt::T_CREATE_CCL_RULE: {
+        DEFINE_EXECUTE_CMD(ObCreateCCLRuleStmt, ObCreateCCLRuleExecutor);
+        break;
+      }
+      case stmt::T_DROP_CCL_RULE: {
+        DEFINE_EXECUTE_CMD(ObDropCCLRuleStmt, ObDropCCLRuleExecutor);
         break;
       }
       case stmt::T_CS_DISKMAINTAIN:

@@ -402,6 +402,9 @@ public:
             || stmt_type == stmt::T_CREATE_CATALOG
             || stmt_type == stmt::T_ALTER_CATALOG
             || stmt_type == stmt::T_DROP_CATALOG
+            // ccl
+            || stmt_type == stmt::T_CREATE_CCL_RULE
+            || stmt_type == stmt::T_DROP_CCL_RULE
             );
   }
 

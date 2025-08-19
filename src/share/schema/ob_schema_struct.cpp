@@ -10316,6 +10316,7 @@ bool is_normal_schema(const ObSchemaType schema_type)
       schema_type == PROFILE_SCHEMA ||
       schema_type == DBLINK_SCHEMA ||
       schema_type == MOCK_FK_PARENT_TABLE_SCHEMA ||
+      schema_type == CCL_RULE_SCHEMA ||
       false;
 }
 
@@ -14520,7 +14521,6 @@ ObRlsContextSchema &ObRlsContextSchema::operator=(const ObRlsContextSchema &othe
     rls_context_id_ = other.rls_context_id_;
     schema_version_ = other.schema_version_;
     table_id_ = other.table_id_;
-
     if (OB_FAIL(set_context_name(other.context_name_))) {
       LOG_WARN("Fail to deep copy context name", K(ret));
     } else if (OB_FAIL(set_attribute(other.attribute_))) {

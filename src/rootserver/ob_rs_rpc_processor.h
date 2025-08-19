@@ -746,6 +746,9 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_SYNC_REWRITE_RULES, ObRpcAdminSyncRewrit
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_RLS_POLICY_DDL, ObRpcHandleRlsPolicyDDLP, handle_rls_policy_ddl(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_RLS_GROUP_DDL, ObRpcHandleRlsGroupDDLP, handle_rls_group_ddl(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_RLS_CONTEXT_DDL, ObRpcHandleRlsContextDDLP, handle_rls_context_ddl(arg_));
+// row level security ddl
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_CCL_RULE, ObRpcCreateCCLRuleDDLP, create_ccl_rule_ddl(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_CCL_RULE, ObRpcDropCCLRuleDDLP, drop_ccl_rule_ddl(arg_));
 #ifdef OB_BUILD_TDE_SECURITY
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_GET_ROOT_KEY, ObGetRootKeyP, handle_get_root_key(arg_, result_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_RELOAD_MASTER_KEY, ObReloadMasterKeyP, reload_master_key(arg_, result_));

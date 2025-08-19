@@ -2907,29 +2907,34 @@ DEF_INT_WITH_CHECKER(default_micro_block_format_version, OB_TENANT_PARAMETER, "1
 DEF_BOOL(_prexec_prepare_with_params, OB_TENANT_PARAMETER, "False",
          "Control the prexec protocol prepare with or without parameters during the prepare phase.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_disable_record_outrow_lob_in_clog, OB_TENANT_PARAMETER, "False",
-         "Whether to force outrow lob data to be written to CLOG for OBCDC synchronization when lob columns are not updated",
-         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        "Whether to force outrow lob data to be written to CLOG for OBCDC synchronization when lob columns are not updated",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(_external_table_mem_cache_page_size, OB_TENANT_PARAMETER, "512KB", "[0,)",
-        "page size of the external table memory cache. Range: [0,+∞)",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+       "page size of the external table memory cache. Range: [0,+∞)",
+       ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_session_temp_table_clean_interval, OB_TENANT_PARAMETER, "10m", "[0s,)",
-         "schedule interval for session temporary table clean task. "
-         "Range: [0s, +∞). Default: 10m",
-         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        "schedule interval for session temporary table clean task. "
+        "Range: [0s, +∞). Default: 10m",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_data_based_sqc_dop, OB_TENANT_PARAMETER, "False",
-         "Assign sqc dop based on data size.",
-          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        "Assign sqc dop based on data size.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_more_aggressive_dynamic_worker, OB_TENANT_PARAMETER, "True",
-         "specifies whether worker count increases more aggressive.",
-         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        "specifies whether worker count increases more aggressive.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_extend_sql_plan_monitor_metrics, OB_TENANT_PARAMETER, "False",
-         "Extend sql plan monitor metrics.",
-         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        "Extend sql plan monitor metrics.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_enable_insertup_column_store_opt, OB_TENANT_PARAMETER, "True",
-         "Enable or disable insert up optimization path for column store.",
-         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+        "Enable or disable insert up optimization path for column store.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_sql_ccl_rule, OB_TENANT_PARAMETER, "True",
+         "Enable or disable sql ccl rule.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

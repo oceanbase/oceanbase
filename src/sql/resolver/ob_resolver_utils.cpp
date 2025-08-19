@@ -2440,6 +2440,9 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       SET_STMT_TYPE(T_CREATE_CATALOG);
       SET_STMT_TYPE(T_ALTER_CATALOG);
       SET_STMT_TYPE(T_DROP_CATALOG);
+      // ccl
+      SET_STMT_TYPE(T_CREATE_CCL_RULE);
+      SET_STMT_TYPE(T_DROP_CCL_RULE);
       // read only
       SET_STMT_TYPE(T_EXPLAIN);
       SET_STMT_TYPE(T_SHOW_COLUMNS);

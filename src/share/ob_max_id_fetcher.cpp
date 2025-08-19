@@ -162,7 +162,8 @@ int ObMaxIdFetcher::convert_id_type(
     case OB_MAX_USED_RLS_CONTEXT_ID_TYPE:
     case OB_MAX_USED_CATALOG_ID_TYPE:
     case OB_MAX_USED_EXTERNAL_RESOURCE_ID_TYPE:
-    case OB_MAX_USED_LOCATION_ID_TYPE: {
+    case OB_MAX_USED_LOCATION_ID_TYPE:
+    case OB_MAX_USED_CCL_RULE_ID_TYPE: {
       dst = OB_MAX_USED_OBJECT_ID_TYPE;
       break;
     }
