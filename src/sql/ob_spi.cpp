@@ -3776,7 +3776,7 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
     CK (OB_NOT_NULL(ctx->exec_ctx_));
     CK (OB_NOT_NULL(ctx->allocator_));
     OX (convert = false);
-    if (OB_FAIL(ret)) {
+    if (OB_SUCCESS != ret) {
     } else if (DECL_PKG == loc) {
       OZ (spi_get_package_var_type(ctx->exec_ctx_, package_id, formal_param_idxs[i], formal_param_type));
     } else {
@@ -3784,11 +3784,11 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
     }
     if (OB_SUCC(ret) && formal_param_type.is_composite_type() && !formal_param_type.is_generic_type() && !formal_param_type.is_opaque_type()
        && dummy_result.is_ext() && dummy_result.get_ext() != 0 && (formal_param_type.get_user_type_id() != dummy_result.get_udt_id())) {
-      OZ (ObPLExecState::convert_composite(*ctx, dummy_result, formal_param_type));
+      OZ (ObPLExecState::convert_composite(*ctx, dummy_result, formal_param_type.get_user_type_id()));
       OX (convert = true);
     }
 
-    if (OB_FAIL(ret)) {
+    if (OB_SUCCESS != ret) {
     } else if (DECL_PKG == loc) {
       OZ (spi_set_package_variable(ctx, package_id, formal_param_idxs[i], dummy_result));
     } else {
@@ -5094,6 +5094,9 @@ int ObSPIService::spi_extend_collection(pl::ObPLExecCtx *ctx,
       LOG_WARN("element already deleted!", K(ret), K(i), K(is_deleted));
     } else if (n > 0) {
       if (OB_SUCC(ret)) {
+        if (OB_INVALID_ID == table->get_id()) {
+          table->set_id(result.get_udt_id());
+        }
         if (OB_FAIL(spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
                                                 ctx, *table, n, true))) {
           LOG_WARN("failed to spi_set_collection_data", K(ctx), K(column_count), K(n), K(i), K(package_id), K(ret));
@@ -6399,7 +6402,27 @@ int ObSPIService::spi_copy_datum(ObPLExecCtx *ctx,
         || PL_REF_CURSOR_TYPE == src->get_meta().get_extend_type()) {
       OZ (spi_copy_ref_cursor(ctx, allocator, src, dest));
     } else if (src->is_ext() && OB_NOT_NULL(dest_type) && dest_type->get_meta_type().is_ext()) {
-      OZ (ObPLComposite::copy_element(*src, *dest, *copy_allocator, ctx, ctx->exec_ctx_->get_my_session()));
+      ObObjParam& src_ref = static_cast<ObObjParam&>(*src);
+      ObPLComposite *src_composite = reinterpret_cast<ObPLComposite*>(src->get_ext());
+      bool need_convert = OB_NOT_NULL(src_composite)
+                          && ((is_mocked_anonymous_array_id(src_ref.get_udt_id())
+                            && src_ref.get_udt_id() != OB_INVALID_ID
+                            && src_ref.get_udt_id() != dest_type->get_udt_id())
+                          || (is_mocked_anonymous_array_id(src_composite->get_id())
+                            && src_composite->get_id() != OB_INVALID_ID
+                            && src_composite->get_id() != dest_type->get_udt_id()));
+      if (need_convert) {
+        OX (src_tmp = src_ref);
+        OZ (ObPLExecState::convert_composite(*ctx, src_tmp, dest_type->get_udt_id()));
+        OZ (ObPLComposite::copy_element(src_tmp, *dest, *copy_allocator, ctx, ctx->exec_ctx_->get_my_session()));
+        int tmp_ret = ObUserDefinedType::destruct_objparam(*ctx->allocator_, src_tmp, ctx->exec_ctx_->get_my_session());
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("failed to destruct obj", K(tmp_ret));
+        }
+        ret = ret == OB_SUCCESS ? tmp_ret : ret;
+      } else {
+        OZ (ObPLComposite::copy_element(src_ref, *dest, *copy_allocator, ctx, ctx->exec_ctx_->get_my_session()));
+      }
     } else if (OB_NOT_NULL(dest_type) && dest_type->get_meta_type().is_ext()) {
       ret = OB_ERR_EXPRESSION_WRONG_TYPE;
       LOG_WARN("src type and dest type is not match", K(ret));

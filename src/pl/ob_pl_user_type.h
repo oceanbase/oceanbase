@@ -1124,7 +1124,9 @@ public:
   static uint32_t last_offset_bits() { return offsetof(ObPLCollection, last_) * 8; }
   static uint32_t data_offset_bits() { return offsetof(ObPLCollection, data_) * 8; }
   void print() const;
-  int deep_copy(ObPLCollection *src, common::ObIAllocator *allocator, bool ignore_del_element = false);
+  int deep_copy(ObPLCollection *src,
+                common::ObIAllocator *allocator,
+                bool ignore_del_element = false);
   int assign(ObPLCollection *src, ObIAllocator *allocator);
   int64_t get_init_size() const
   {
