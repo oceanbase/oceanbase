@@ -128,7 +128,7 @@ public:
 
   static OB_INLINE ObString truncate_sql_string(const ObString &input_str)
   {
-    int64_t length = input_str.length() > OB_MAX_SQL_LENGTH ? OB_MAX_SQL_LENGTH : input_str.length();
+    int64_t length = input_str.length() > OB_SHORT_SQL_LENGTH ? OB_SHORT_SQL_LENGTH : input_str.length();
     return ObString(length, input_str.ptr());
   }
 
