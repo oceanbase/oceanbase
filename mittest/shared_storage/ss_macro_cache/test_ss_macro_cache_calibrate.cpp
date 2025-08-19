@@ -258,7 +258,7 @@ public:
     }
     if (if_write) {
       ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
-      ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->alloc_file_size(cache_type, WRITE_IO_SIZE, false/*is_for_dir*/));
+      ASSERT_EQ(OB_SUCCESS, macro_cache_mgr->alloc_file_size(cache_type, WRITE_IO_SIZE, ObDiskSpaceType::FILE));
       ASSERT_EQ(OB_SUCCESS, my_local_cache_writer.aio_write_with_create_parent_dir(write_info_, write_object_handle));
       ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
       write_object_handle.reset();

@@ -186,7 +186,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_space_occupy)
 
   // 6. test whether occupy space happens when hot tablet macro block space is not enough
   const int64_t macro_free_size = tnt_disk_space_mgr->get_macro_cache_free_size();
-  OK(tnt_disk_space_mgr->alloc_file_size((macro_free_size), ObSSMacroCacheType::MACRO_BLOCK, false/*is_for_dir*/));
+  OK(tnt_disk_space_mgr->alloc_file_size((macro_free_size), ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
 
 
   ObSSMacroCacheStat macro_cache_stat1;
@@ -213,7 +213,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_space_occupy)
   ASSERT_TRUE(macro_cache_stat1.used_ >  macro_cache_stat2.used_);
 
   ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(macro_free_size, ObSSMacroCacheType::MACRO_BLOCK,
-                                                           false/*is_for_dir*/));
+                                                           ObDiskSpaceType::FILE));
   FLOG_INFO("[TEST] test_macro_cache_space_occupy end", K(tnt_disk_space_mgr->get_macro_cache_free_size()));
 }
 
@@ -242,7 +242,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
 
   // 7. Test if the space of hot tablet macro cache is full
   int64_t max_hot_tablet_size = tnt_disk_space_mgr->get_macro_cache_free_size();
-  OK(tnt_disk_space_mgr->alloc_file_size(max_hot_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, false/*is_for_dir*/));
+  OK(tnt_disk_space_mgr->alloc_file_size(max_hot_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
   int64_t after_alloc_hot_tablet_size = tnt_disk_space_mgr->get_macro_cache_free_size();
   ASSERT_EQ(0, after_alloc_hot_tablet_size);
   OK(exe_sql("insert into test_macro_cache_full values (7)"));
@@ -294,7 +294,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_macro_cache_full)
   ASSERT_NE(nullptr, strstr(task2->get_comment().ptr(), size_comment));
   ASSERT_TRUE(data_block_ids.count() + meta_block_ids.count() > second_stat.macro_data_block_num_ + second_stat.macro_block_hit_cnt_);
   ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(max_hot_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK,
-                                                           false/*is_for_dir*/));
+                                                           ObDiskSpaceType::FILE));
   FLOG_INFO("[TEST] test_prewarm_macro_block end", K(tnt_disk_space_mgr->get_macro_cache_free_size()));
 }
 

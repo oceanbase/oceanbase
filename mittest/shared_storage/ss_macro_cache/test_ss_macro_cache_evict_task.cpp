@@ -157,7 +157,7 @@ TEST_F(TestSSMacroCacheEvictTask, evict_read_cache)
   ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_mgr);
   const int64_t macro_cache_free_size = disk_space_mgr->get_macro_cache_free_size();
-  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::MACRO_BLOCK, false/*is_for_dir*/));
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
 
   // 5. sleep 10s to wait macro cache evict
   sleep(10);
@@ -195,7 +195,7 @@ TEST_F(TestSSMacroCacheEvictTask, evict_read_cache)
 
   // 8. release local cache disk size
   ASSERT_EQ(OB_SUCCESS, disk_space_mgr->free_file_size(macro_cache_free_size, ObSSMacroCacheType::MACRO_BLOCK,
-                                                       false/*is_for_dir*/));
+                                                       ObDiskSpaceType::FILE));
   write_info_.set_is_write_cache(true); // resume default value of is_write_cache flag
 }
 
@@ -241,7 +241,7 @@ TEST_F(TestSSMacroCacheEvictTask, evict_tmp_file_write_cache)
 
   // 3. simulate local cache disk space insufficient, so as to trigger macro cache evict
   macro_cache_free_size = disk_space_mgr->get_macro_cache_free_size();
-  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::TMP_FILE, false/*is_for_dir*/));
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::TMP_FILE, ObDiskSpaceType::FILE));
 
   // 4. sleep 10s to wait macro cache evict
   sleep(10);
@@ -270,7 +270,7 @@ TEST_F(TestSSMacroCacheEvictTask, evict_tmp_file_write_cache)
 
   // 7. release local cache disk size
   ASSERT_EQ(OB_SUCCESS, disk_space_mgr->free_file_size(macro_cache_free_size, ObSSMacroCacheType::TMP_FILE,
-                                                       false/*is_for_dir*/));
+                                                       ObDiskSpaceType::FILE));
 }
 
 TEST_F(TestSSMacroCacheEvictTask, evict_other_write_cache)
@@ -311,7 +311,7 @@ TEST_F(TestSSMacroCacheEvictTask, evict_other_write_cache)
   ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_mgr);
   const int64_t macro_cache_free_size = disk_space_mgr->get_macro_cache_free_size();
-  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::MACRO_BLOCK, false/*is_for_dir*/));
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
 
   // 4. sleep 10s to wait macro cache evict
   sleep(10);
@@ -340,7 +340,7 @@ TEST_F(TestSSMacroCacheEvictTask, evict_other_write_cache)
 
   // 7. release local cache disk size
   ASSERT_EQ(OB_SUCCESS, disk_space_mgr->free_file_size(macro_cache_free_size, ObSSMacroCacheType::MACRO_BLOCK,
-                                                       false/*is_for_dir*/));
+                                                       ObDiskSpaceType::FILE));
 }
 
 TEST_F(TestSSMacroCacheEvictTask, fg_trigger_evict)
@@ -388,9 +388,9 @@ TEST_F(TestSSMacroCacheEvictTask, fg_trigger_evict)
   ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
   ASSERT_NE(nullptr, disk_space_mgr);
   const int64_t macro_cache_free_size = disk_space_mgr->get_macro_cache_free_size();
-  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::MACRO_BLOCK, false/*is_for_dir*/));
+  ASSERT_EQ(OB_SUCCESS, disk_space_mgr->alloc_file_size(macro_cache_free_size, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
   ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, macro_cache_mgr->alloc_file_size(ObSSMacroCacheType::MACRO_BLOCK,
-                                                                         4096, false/*is_for_dir*/));
+                                                                         4096, ObDiskSpaceType::FILE));
 
   // 5. sleep 10s to wait macro cache evict
   sleep(10);

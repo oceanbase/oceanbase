@@ -420,7 +420,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
   // Case 1
   // 1. Simulate hot tablet macro cache is full to get a skipped tablet task
   int64_t max_tablet_size = tnt_disk_space_mgr->get_macro_cache_free_size();
-  OK(tnt_disk_space_mgr->alloc_file_size(max_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, false/*is_for_dir*/));
+  OK(tnt_disk_space_mgr->alloc_file_size(max_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
   int64_t after_alloc_tablet_size1 = tnt_disk_space_mgr->get_macro_cache_free_size();
   ASSERT_EQ(0, after_alloc_tablet_size1);
 
@@ -437,11 +437,11 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
   ASSERT_EQ(true, tablet_task_handle1()->is_skipped_macro_cache());
   ASSERT_EQ(true, policy_service->tablet_scheduler_.get_exist_skipped_tablet());
   ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(max_tablet_size, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK,
-                                                           false/*is_for_dir*/));
+                                                           ObDiskSpaceType::FILE));
 
   // 2. The total macro cache is full, but HOT_TABLET_MACRO_BLOCK is below min value
   int64_t max_tablet_size2 = tnt_disk_space_mgr->get_macro_cache_free_size();
-  OK(tnt_disk_space_mgr->alloc_file_size(max_tablet_size2, ObSSMacroCacheType::MACRO_BLOCK, false/*is_for_dir*/));
+  OK(tnt_disk_space_mgr->alloc_file_size(max_tablet_size2, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
   int64_t after_alloc_tablet_size2 = tnt_disk_space_mgr->get_macro_cache_free_size();
   ASSERT_EQ(0, after_alloc_tablet_size2);
 
@@ -452,13 +452,13 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
   ASSERT_EQ(false, after_trigger_tablet_task_handle1()->is_skipped_macro_cache());
   ASSERT_EQ(false, policy_service->tablet_scheduler_.get_exist_skipped_tablet());
   ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(max_tablet_size2, ObSSMacroCacheType::MACRO_BLOCK,
-                                                           false/*is_for_dir*/));
+                                                           ObDiskSpaceType::FILE));
 
   // Case 2
   // 1. Simulate hot tablet macro cache is full to get a skipped tablet task
   FLOG_INFO("[TEST] start case2 in test_incremental_trigger");
   int64_t max_tablet_size3 = tnt_disk_space_mgr->get_macro_cache_free_size();
-  OK(tnt_disk_space_mgr->alloc_file_size(max_tablet_size3, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, false/*is_for_dir*/));
+  OK(tnt_disk_space_mgr->alloc_file_size(max_tablet_size3, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
   int64_t after_alloc_tablet_size3 = tnt_disk_space_mgr->get_macro_cache_free_size();
   ASSERT_EQ(0, after_alloc_tablet_size3);
 
@@ -479,21 +479,21 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
   ASSERT_EQ(true, tablet_task_handle2()->is_skipped_macro_cache());
   ASSERT_EQ(true, policy_service->tablet_scheduler_.get_exist_skipped_tablet());
   ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(max_tablet_size3, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK,
-                                                           false/*is_for_dir*/));
+                                                           ObDiskSpaceType::FILE));
 
   // 2. Free space is below free threshold while hot tablet space is exceed min value
   int64_t max_tablet_size4 = tnt_disk_space_mgr->get_macro_cache_size();
   // hot tablet macro cache: 75%
   const int64_t alloc_hot_tablet_perc = (hot_tablet_macro_cache_min_threshold + 5);
   int64_t alloc_size1 = (max_tablet_size4 * alloc_hot_tablet_perc) / 100;
-  OK(tnt_disk_space_mgr->alloc_file_size(alloc_size1, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, false/*is_for_dir*/));
+  OK(tnt_disk_space_mgr->alloc_file_size(alloc_size1, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, ObDiskSpaceType::FILE));
   ObSSMacroCacheStat macro_cache_stat1;
   ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK, macro_cache_stat1));
   ASSERT_GT(macro_cache_stat1.used_, (max_tablet_size4 * hot_tablet_macro_cache_min_threshold) / 100);
   int64_t alloc_size2 = tnt_disk_space_mgr->get_macro_cache_free_size();
   alloc_size2 -= (max_tablet_size4 * (ObStorageCachePolicyService::MACRO_CACHE_FREE_SPACE_THRESHOLD + 2)) / 100;
 
-  OK(tnt_disk_space_mgr->alloc_file_size(alloc_size2, ObSSMacroCacheType::MACRO_BLOCK, false/*is_for_dir*/));
+  OK(tnt_disk_space_mgr->alloc_file_size(alloc_size2, ObSSMacroCacheType::MACRO_BLOCK, ObDiskSpaceType::FILE));
   for (int i=0; i<SS_MACRO_CACHE_MAX_TYPE_VAL; i++) {
     FLOG_INFO("[TEST] print macro cache all stats444", K(tnt_disk_space_mgr->macro_cache_stats_[i]));
   }
@@ -510,7 +510,7 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_incremental_trigger)
   ASSERT_EQ(false, policy_service->tablet_scheduler_.get_exist_skipped_tablet());
 
   ASSERT_EQ(OB_SUCCESS, tnt_disk_space_mgr->free_file_size(alloc_size1, ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK,
-                                                           false/*is_for_dir*/));
+                                                           ObDiskSpaceType::FILE));
   FLOG_INFO("[TEST] finished test_incremental_trigger");
 }
 }

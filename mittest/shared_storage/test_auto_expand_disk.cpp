@@ -96,7 +96,7 @@ TEST_F(TestAutoExpandDisk, test_auto_expand_disk_task)
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::TMP_FILE, cache_stat));
   int64_t disk_size = macro_cache_size * 91 / 100;
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->alloc_file_size(disk_size, ObSSMacroCacheType::TMP_FILE,
-                                                               false/*is_for_dir*/));
+                                                               ObDiskSpaceType::FILE));
   bool is_expand = false;
   ASSERT_EQ(OB_SUCCESS, tenant_disk_space_mgr->need_expand_disk_size(is_expand));
   ASSERT_TRUE(is_expand);
