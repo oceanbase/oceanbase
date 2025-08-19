@@ -518,6 +518,21 @@ int ObDbmsStats::fast_gather_index_stats(ObExecContext &ctx,
         index_param.part_stat_param_ = data_param.part_stat_param_;
         index_param.subpart_stat_param_ = data_param.subpart_stat_param_;
       }
+      if (OB_SUCC(ret)) {  // remove no gather columns
+        ObSEArray<ObColumnStatParam, 4> new_column_params;
+        for (int64_t i = 0; OB_SUCC(ret) && i < index_param.column_params_.count(); ++i) {
+          if (index_param.column_params_.at(i).need_col_stat()) {
+            if (OB_FAIL(new_column_params.push_back(index_param.column_params_.at(i)))) {
+              LOG_WARN("failed to push back", K(ret));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(index_param.column_params_.assign(new_column_params))) {
+            LOG_WARN("failed to assign", K(ret));
+          }
+        }
+      }
       if (OB_SUCC(ret) && is_fast_gather) {
         if (OB_FAIL(ObIndexStatsEstimator::fast_gather_index_stats(ctx, data_param,
                                                                    index_param, is_fast_gather))) {
@@ -3703,8 +3718,9 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
       col_param.column_attribute_ = 0;
       col_param.column_usage_flag_ = 0;
       col_param.column_type_ = col->get_data_type();
-      if (lib::is_oracle_mode() && col->get_meta_type().is_varbinary_or_binary()) {
-        //oracle don't have this type. but agent table will have this type, such as "SYS"."ALL_VIRTUAL_COLUMN_REAL_AGENT"
+      if ((lib::is_oracle_mode() && col->get_meta_type().is_varbinary_or_binary())) {
+        // oracle don't have this type. but agent table will have this type, such as
+        // "SYS"."ALL_VIRTUAL_COLUMN_REAL_AGENT"
       } else {
         //check basic column type
         if (ObColumnStatParam::is_valid_opt_col_type(col->get_meta_type().get_type())) {
@@ -3714,6 +3730,15 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
         if (ObColumnStatParam::is_valid_avglen_type(col->get_meta_type().get_type())) {
           col_param.set_need_avg_len();
         }
+        if (is_column_store) {
+          if (ObColumnStatParam::is_valid_refine_min_max_type(col->get_meta_type().get_type())) {
+            col_param.set_need_cs_refine_min_max();
+          }
+        }
+      }
+      if (col->is_virtual_generated_column() && !col->is_column_stored_in_sstable() && !col->is_tbl_part_key_column() &&
+          !col->is_part_key_column() && !col->is_subpart_key_column()) {
+        col_param.set_is_virtual_col();
       }
       if (col->is_rowkey_column() && table_schema.is_table_with_pk()) {
         col_param.set_is_index_column();
@@ -3734,11 +3759,6 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
       if (lib::is_mysql_mode() &&
           col->get_meta_type().get_type_class() == ColumnTypeClass::ObTextTC) {
         col_param.set_is_text_column();
-      }
-      if (is_column_store) {
-        if (ObColumnStatParam::is_valid_refine_min_max_type(col->get_meta_type().get_type())) {
-          col_param.set_need_cs_refine_min_max();
-        }
       }
       if (OB_SUCC(ret) && OB_FAIL(column_params.push_back(col_param))) {
         LOG_WARN("failed to push back column param", K(ret));
@@ -3796,6 +3816,13 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
     }
   }
   } // smart var
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_params.count(); ++i) {
+    ObColumnStatParam &param = column_params.at(i);
+    if (param.is_virtual_column() && !param.is_index_column()) {
+      param.gather_flag_ = ColumnGatherFlag::NO_NEED_STAT;
+    }
+  }
   return ret;
 }
 

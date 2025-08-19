@@ -788,8 +788,11 @@ int ObDbmsStatsExecutor::do_gather_stats_with_retry(ObExecContext &ctx,
                                        opt_stats,
                                        all_tstats,
                                        all_cstats))) {
-      if (gather_param.sepcify_scn_ > 0 && (ret == OB_TABLE_DEFINITION_CHANGED || ret == OB_SNAPSHOT_DISCARDED)) {
-        LOG_WARN("failed to specify snapshot to gather stats, try no specify snapshot to gather stats", K(ret));
+      if (gather_param.sepcify_scn_ > 0 &&
+          (ret == OB_TABLE_DEFINITION_CHANGED || ret == OB_SNAPSHOT_DISCARDED ||
+           ret == OB_INVALID_QUERY_TIMESTAMP)) {
+        LOG_WARN("failed to specify snapshot to gather stats, try no specify snapshot to gather stats",
+                 K(ret));
         gather_param.sepcify_scn_ = 0;
         gather_param.allocator_->reuse();
         opt_stats.reset();
@@ -806,7 +809,8 @@ int ObDbmsStatsExecutor::do_gather_stats_with_retry(ObExecContext &ctx,
                                     all_cstats))) {
           LOG_WARN("failed to do gather stats", K(ret));
         } else {
-          gather_param.allocator_->reuse();  // Phased memory release for split gather, in order to reuse memory
+          // Phased memory release for split gather, in order to reuse memory
+          gather_param.allocator_->reuse();
         }
       } else {
         LOG_WARN("failed to do gather stats", K(ret));
