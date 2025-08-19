@@ -750,7 +750,8 @@ int ObTransformUdtUtils::transform_query_udt_columns_exprs(ObTransformerCtx *ctx
   } else {
     FastUdtExprChecker expr_checker(replace_exprs);
     if (OB_FAIL(scopes.push_back(SCOPE_DML_COLUMN)) ||
-        (stmt->get_stmt_type() != stmt::T_MERGE && OB_FAIL(scopes.push_back(SCOPE_DML_VALUE))) ||
+        (stmt->get_stmt_type() != stmt::T_MERGE && stmt->get_stmt_type() != stmt::T_UPDATE &&
+         OB_FAIL(scopes.push_back(SCOPE_DML_VALUE))) ||
         OB_FAIL(scopes.push_back(SCOPE_DML_CONSTRAINT)) ||
         OB_FAIL(scopes.push_back(SCOPE_INSERT_DESC)) ||
         OB_FAIL(scopes.push_back(SCOPE_BASIC_TABLE)) ||
