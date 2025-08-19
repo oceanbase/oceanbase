@@ -1214,7 +1214,7 @@ int64_t ObTenant::min_active_worker_cnt() const
   bool enable_more_aggressive_dynamic_worker = tenant_config.is_valid() ? tenant_config->_enable_more_aggressive_dynamic_worker : false;
   int64_t cnt = 3;
   if (is_user_tenant(id()) && enable_more_aggressive_dynamic_worker) {
-    cnt = min_worker_cnt();
+    cnt = std::max(3L, 2 + static_cast<int64_t>(unit_max_cpu()));
   }
   return cnt;
 }
