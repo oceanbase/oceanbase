@@ -112,13 +112,20 @@ int ObOutlineExecutor::generate_outline_info1(ObExecContext &ctx,
     LOG_USER_ERROR(OB_INVALID_OUTLINE, "sql text should have no ? when there is no concurrent limit");
     LOG_WARN("outline should have no ? when there is no concurrent limit",
              K(outline_sql), K(ret));
+  } else if (max_concurrent > ObGlobalHint::UNSET_MAX_CONCURRENT
+            && query_hint->has_hint_exclude_concurrent()) {
+    ret = OB_INVALID_OUTLINE;
+    LOG_USER_ERROR(OB_INVALID_OUTLINE, "outline and sql concurrent limit can not be mixed");
+    LOG_WARN("outline and sql concurrent limit can not be mixed",
+    "outline_sql_text", outline_info.get_sql_text_str(), K(ret));
   } else if (OB_UNLIKELY(max_concurrent > ObGlobalHint::UNSET_MAX_CONCURRENT && has_in_expr
                          && concurrent_param.fixed_param_store_.count() > 0 && outline_info.is_format())) {
     ret = OB_INVALID_OUTLINE;
     LOG_USER_ERROR(OB_INVALID_OUTLINE, "format outline with in expr not support concurrent limit, recommend to use normal outline");
     LOG_WARN("format outline with in expr can not have const param",
              "outline_format_sql_text", outline_info.get_format_sql_text_str(), K(ret));
-  } else if (OB_FAIL(get_outline(ctx, outline_stmt, outline))) {
+  } else if (ObGlobalHint::UNSET_MAX_CONCURRENT == max_concurrent
+            && OB_FAIL(get_outline(ctx, outline_stmt, outline))) {
     LOG_WARN("fail to get outline", K(ret));
   } else {
     //to check whether ok
