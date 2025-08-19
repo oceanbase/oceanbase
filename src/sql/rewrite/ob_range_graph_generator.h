@@ -19,6 +19,7 @@
 
 namespace oceanbase
 {
+
 namespace sql
 {
 
@@ -126,11 +127,11 @@ private:
   static int get_and_tails(ObRangeNode *range_node, ObIArray<ObRangeNode*> &and_tails);
 
   int formalize_final_range_node(ObRangeNode *&range_node);
-  int collect_graph_infos(ObRangeNode *range_node,
-                          uint64_t *total_range_sizes,
-                          uint64_t *range_sizes,
-                          bool &start_from_zero,
-                          int64_t &min_offset);
+  int collect_graph_infos_dp(ObRangeNode *range_node,
+                             uint64_t *total_range_sizes,
+                             uint64_t *range_sizes,
+                             bool &start_from_zero,
+                             int64_t &min_offset);
   int check_skip_scan_valid(ObRangeNode *range_node,
                             ObRangeNode *&ss_head);
   static int generate_node_id(ObRangeNode *range_node, uint64_t &node_count);
@@ -170,7 +171,8 @@ private:
   static int crop_final_range_node(ObRangeNode *&range_node, int64_t crop_offset,
                                    RangeNodeConnectInfo &connect_info,
                                    common::hash::ObHashMap<uint64_t, ObRangeNode*> &refined_ranges,
-                                   common::hash::ObHashSet<uint64_t> &shared_ranges);
+                                   common::hash::ObHashSet<uint64_t> &shared_ranges,
+                                   uint64_t &proc_count);
   static int check_crop_range_node_valid(ObRangeNode *range_node,
                                          ObRangeNode *next_range_node,
                                          RangeNodeConnectInfo &connect_info);
