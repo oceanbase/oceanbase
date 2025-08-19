@@ -70,6 +70,7 @@ int ObExprPassword::eval_password(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
     expr_datum.set_string("", 0);
   } else {
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+    ObExprStrResAlloc expr_res_alloc(expr, ctx);
     char *enc_buf = static_cast<char *>(alloc_guard.get_allocator().alloc(SHA_PASSWORD_CHAR_LENGTH));
     if (enc_buf == NULL) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -93,7 +94,7 @@ int ObExprPassword::eval_password(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
                                                               expr.datum_meta_.cs_type_,
                                                               alloc_guard.get_allocator()))) {
         LOG_WARN("convert string collation failed", K(ret), K(upp_str));
-      } else if (OB_FAIL(ObExprUtil::deep_copy_str(res_str, str_in_ctx, ctx.get_expr_res_alloc()))) {
+      } else if (OB_FAIL(ObExprUtil::deep_copy_str(res_str, str_in_ctx, expr_res_alloc))) {
         LOG_WARN("failed to cpoy str to context", K(ret));
       } else {
         expr_datum.set_string(str_in_ctx);

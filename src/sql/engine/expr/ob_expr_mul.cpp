@@ -1593,7 +1593,7 @@ int ObExprMul::mul_vec_vec(EVAL_FUNC_ARG_DECL)
 int ObExprMul::mul_vec_vec_batch(BATCH_EVAL_FUNC_ARG_DECL)
 {
   ObVectorArithFunc::ArithType op_type = ObVectorArithFunc::ArithType::MUL;
-  return def_batch_arith_op_by_datum_func<ObVectorVectorArithFunc>(BATCH_EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
+  return def_batch_arith_op_by_datum_func_with_mem_alloc<ObVectorVectorArithFunc>(BATCH_EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
 }
 
 }

@@ -74,7 +74,7 @@ int ObExprGetMySQLRoutineParameterTypeStr::get_mysql_routine_parameter_type_str(
       if (OB_SUCC(ret)) {
         int64_t type_pos = 0;
         char * type_str = NULL;
-        type_str = static_cast<char *>(ctx.get_expr_res_alloc().alloc(OB_MAX_SYS_PARAM_NAME_LENGTH));
+        type_str = static_cast<char *>(expr.get_str_res_mem(ctx, OB_MAX_SYS_PARAM_NAME_LENGTH));
         if (OB_ISNULL(type_str)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate memory for type str failed", K(ret));

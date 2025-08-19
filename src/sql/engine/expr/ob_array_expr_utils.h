@@ -100,7 +100,6 @@ public:
   static int get_coll_info_by_subschema_id(ObExecContext*exec_ctx, uint16_t subid, const ObSqlCollectionInfo *&coll_info);
   static int get_array_element_type(ObExecContext *exec_ctx, uint16_t subid, ObObjType &obj_type, uint32_t &depth, bool &is_vec);
   static int get_array_element_type(ObExecContext *exec_ctx, uint16_t subid, ObDataType &elem_type, uint32_t &depth, bool &is_vec);
-  static int dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, ObString &array_data, const int64_t row_idx, bool is_shallow = true);
   static int dispatch_array_attrs_inner(ObEvalCtx &ctx, ObIArrayType *arr_obj, ObExpr **attrs, uint32_t attr_count, const int64_t row_idx, bool is_shallow = true);
   static int batch_dispatch_array_attrs(ObEvalCtx &ctx, ObExpr &expr, int64_t begin, int64_t batch_size, const uint16_t *selector = NULL);
   static int transform_coll_to_uniform(ObEvalCtx &ctx, const ObExpr &expr, const int64_t batch_size, const ObBitVector *skip);
@@ -111,8 +110,6 @@ public:
   static int get_array_obj(ObIAllocator &alloc, ObEvalCtx &ctx, const uint16_t subschema_id, const ObString &raw_data, ObIArrayType *&res);
   static int dispatch_array_attrs_rows(ObEvalCtx &ctx, ObIArrayType *arr_obj, const int64_t row_idx,
                                        ObExpr **attrs, uint32_t attr_count, bool is_shallow = true);
-  static int nested_expr_from_rows(const ObExpr &expr, ObEvalCtx &ctx, const sql::RowMeta &row_meta, const sql::ObCompactRow **stored_rows,
-                                   const int64_t size, const int64_t col_idx, const int64_t *selector = NULL);
   static int nested_expr_to_rows(const ObExpr &expr, ObEvalCtx &ctx, const sql::RowMeta &row_meta, sql::ObCompactRow **stored_rows,
                                  const uint16_t selector[], const int64_t size, const int64_t col_idx);
   static int nested_expr_to_row(const ObExpr &expr, ObEvalCtx &ctx, char *row_buf,

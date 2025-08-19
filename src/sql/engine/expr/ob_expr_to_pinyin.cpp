@@ -249,7 +249,7 @@ int ObExprToPinyin::eval_to_pinyin(const ObExpr &expr, ObEvalCtx &ctx,
   ObString input_str;
   ObEvalCtx::TempAllocGuard alloc_guard(ctx);
   ObIAllocator &calc_alloc = alloc_guard.get_allocator();
-  ObIAllocator &res_alloc = ctx.get_expr_res_alloc();
+  ObExprStrResAlloc expr_res_alloc(expr, ctx);
   const sql::ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
 
   // text to convert
@@ -295,7 +295,7 @@ int ObExprToPinyin::eval_to_pinyin(const ObExpr &expr, ObEvalCtx &ctx,
                                         calc_alloc));
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(ObExprUtil::deep_copy_str(converted_result, converted_result, res_alloc))) {
+    } else if (OB_FAIL(ObExprUtil::deep_copy_str(converted_result, converted_result, expr_res_alloc))) {
       LOG_WARN("deep copy str failed", K(ret), K(converted_result));
     } else {
       expr_datum.set_string(converted_result);
@@ -323,7 +323,7 @@ int ObExprToPinyin::eval_to_pinyin_batch(
       ObDatum *datum_array = expr.args_[0]->locate_batch_datums(ctx);
       ObEvalCtx::TempAllocGuard alloc_guard(ctx);
       ObIAllocator &calc_alloc = alloc_guard.get_allocator();
-      ObIAllocator &res_alloc = ctx.get_expr_res_alloc();
+      ObExprStrResAlloc expr_res_alloc(expr, ctx);
       const ObCharsetInfo *cs = ObCharset::get_charset(CS_TYPE_UTF8MB4_ZH_0900_AS_CS);
       ModeOption convert_mode = ModeOption::Full;
       if (has_option_param) {
@@ -336,6 +336,8 @@ int ObExprToPinyin::eval_to_pinyin_batch(
           LOG_WARN("calc convert mode failed", K(ret), K(mode_datum->get_string()));
         }
       }
+      // 使用BatchInfoScopeGuard来设置当前处理的datum索引
+      ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
       for(int64_t j = 0; OB_SUCC(ret) && j < batch_size; ++j) {
         if (skip.at(j) || eval_flags.at(j)) {
           continue;
@@ -359,6 +361,7 @@ int ObExprToPinyin::eval_to_pinyin_batch(
             ObCharsetType charset_type = ObCharset::charset_type_by_coll(CS_TYPE_UTF8MB4_ZH_0900_AS_CS);
             ObFastStringScanner::foreach_char(input_str, charset_type, temp_handler);
             ObString converted_result;
+            batch_info_guard.set_batch_idx(j);
             OZ(ObExprUtil::convert_string_collation(ObString(off, buf),
                                                 CS_TYPE_UTF8MB4_ZH_0900_AS_CS,
                                                 converted_result,
@@ -366,7 +369,7 @@ int ObExprToPinyin::eval_to_pinyin_batch(
                                                 calc_alloc));
             if (OB_FAIL(ret)) {
               // do nothing
-            } else if (OB_FAIL(ObExprUtil::deep_copy_str(converted_result, converted_result, res_alloc))) {
+            } else if (OB_FAIL(ObExprUtil::deep_copy_str(converted_result, converted_result, expr_res_alloc))) {
               LOG_WARN("deep copy str failed", K(ret), K(converted_result));
             } else {
               results[j].set_string(converted_result);
@@ -387,7 +390,7 @@ int ObExprToPinyin::to_pinyin_vector(VECTOR_EVAL_FUNC_ARG_DECL)
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   ObIAllocator &calc_alloc = tmp_alloc_g.get_allocator();
-  ObIAllocator &res_alloc = ctx.get_expr_res_alloc();
+  ObExprStrResAlloc expr_res_alloc(expr, ctx);
   const bool has_option_param = (expr.arg_cnt_ == 2);
   const ArgVec *arg0_vec = static_cast<const ArgVec *>(expr.args_[0]->get_vector(ctx));
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
@@ -410,6 +413,7 @@ int ObExprToPinyin::to_pinyin_vector(VECTOR_EVAL_FUNC_ARG_DECL)
   if (OB_FAIL(ret)) {
     // do nothing
   } else {
+    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
       if (skip.at(idx) || eval_flags.at(idx)) {
         continue;
@@ -433,6 +437,7 @@ int ObExprToPinyin::to_pinyin_vector(VECTOR_EVAL_FUNC_ARG_DECL)
           ObCharsetType charset_type = ObCharset::charset_type_by_coll(CS_TYPE_UTF8MB4_ZH_0900_AS_CS);
           ObFastStringScanner::foreach_char(input_str, charset_type, temp_handler);
           ObString converted_result;
+          batch_info_guard.set_batch_idx(idx);
           OZ(ObExprUtil::convert_string_collation(ObString(off, buf),
                                               CS_TYPE_UTF8MB4_ZH_0900_AS_CS,
                                               converted_result,
@@ -440,7 +445,7 @@ int ObExprToPinyin::to_pinyin_vector(VECTOR_EVAL_FUNC_ARG_DECL)
                                               calc_alloc));
           if (OB_FAIL(ret)) {
             // do nothing
-          } else if (OB_FAIL(ObExprUtil::deep_copy_str(converted_result, converted_result, res_alloc))) {
+          } else if (OB_FAIL(ObExprUtil::deep_copy_str(converted_result, converted_result, expr_res_alloc))) {
             LOG_WARN("deep copy str failed", K(ret), K(converted_result));
           } else {
             res_vec->set_string(idx, converted_result);

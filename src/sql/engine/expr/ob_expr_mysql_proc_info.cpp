@@ -608,8 +608,9 @@ int ObExprMysqlProcInfo::get_info_by_field_id(const ObExpr &expr,
       case SQL_MODE: {
         ObObj int_value;
         ObObj str_value;
+        ObExprStrResAlloc expr_res_alloc(expr, ctx);
         int_value.set_int(exec_env.get_sql_mode());
-        if (OB_FAIL(ob_sql_mode_to_str(int_value, str_value, &ctx.get_expr_res_alloc()))) {
+        if (OB_FAIL(common::ob_sql_mode_to_str(int_value, str_value, &expr_res_alloc))) {
           LOG_WARN("fail to convert sqlmode to string", K(int_value), K(ret));
         } else {
           value_str = str_value.get_string();
@@ -686,8 +687,9 @@ int ObExprMysqlProcInfo::get_info_by_field_id(const ObExpr &expr,
       case SQL_MODE: {
         ObObj int_value;
         ObObj str_value;
+        ObExprStrResAlloc expr_res_alloc(expr, ctx);
         int_value.set_int(exec_env.get_sql_mode());
-        if (OB_FAIL(ob_sql_mode_to_str(int_value, str_value, &ctx.get_expr_res_alloc()))) {
+        if (OB_FAIL(common::ob_sql_mode_to_str(int_value, str_value, &expr_res_alloc))) {
           LOG_WARN("fail to convert sqlmode to string", K(int_value), K(ret));
         } else {
           value_str = str_value.get_string();

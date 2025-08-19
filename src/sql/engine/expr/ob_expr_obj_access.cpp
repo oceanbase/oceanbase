@@ -489,8 +489,10 @@ int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
       if (OB_FAIL(ret)) {
       } else if (for_write_) {
         pl::ObPlCompiteWrite *composite_write = nullptr;
+        // alloc is ctx->get_top_expr_allocator() in ObSPIService::calc_obj_access_expr
+        // is alloc_guard(ctx).allocator in ObExprSqlModeConvert::sql_mode_convert
         if (OB_ISNULL(composite_write =
-            static_cast<pl::ObPlCompiteWrite *>(ctx->get_expr_res_alloc().alloc(sizeof(pl::ObPlCompiteWrite))))) {
+            static_cast<pl::ObPlCompiteWrite *>(alloc.alloc(sizeof(pl::ObPlCompiteWrite))))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to alloca memory", K(ret));
         } else {

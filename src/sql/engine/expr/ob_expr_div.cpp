@@ -743,7 +743,7 @@ int ObExprDiv::div_vec(EVAL_FUNC_ARG_DECL)
 int ObExprDiv::div_vec_batch(BATCH_EVAL_FUNC_ARG_DECL)
 {
   ObVectorArithFunc::ArithType op_type = ObVectorArithFunc::ArithType::DIV;
-  return def_batch_arith_op_by_datum_func<ObVectorElemArithFunc>(BATCH_EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
+  return def_batch_arith_op_by_datum_func_with_mem_alloc<ObVectorElemArithFunc>(BATCH_EVAL_FUNC_ARG_LIST, expr, ctx, op_type);
 }
 
 struct ObNumberDivFunc
@@ -1097,6 +1097,7 @@ template <typename Base, bool is_oracle_mode>
 struct ObDecintDivWrap : public ObArithOpWrap<Base>
 {
   constexpr static bool is_raw_op_supported() { return false; }
+  constexpr static bool is_need_alloc_mem() { return false; }
   static int datum_op(ObDatum &res, const ObDatum &l, const ObDatum &r,
                       const bool is_error_div_by_zero)
   {

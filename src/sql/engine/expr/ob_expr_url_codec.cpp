@@ -186,8 +186,18 @@ int convert_string(const ObExpr &expr, ObEvalCtx &ctx, ObString &input_str, ObSt
           expr.datum_meta_.cs_type_, alloc_guard.get_allocator()))) {
       LOG_WARN("fail to convert string", K(ret), K(input_str), K(input_str.length()), K(is_encode));
     } else {
-      if (OB_FAIL(ob_write_string(ctx.get_expr_res_alloc(), converted_result, output_str, true))) {
-        LOG_WARN("Copy string failed", K(ret), K(res_len));
+      const ObString::obstr_size_t src_len = converted_result.length();
+      char *ptr = NULL;
+      if (OB_ISNULL(converted_result.ptr()) || OB_UNLIKELY(0 >= src_len)) {
+        output_str.assign(NULL, 0);
+      } else if (NULL == (ptr = static_cast<char *>(expr.get_str_res_mem(ctx, src_len + 1)))) {
+        output_str.assign(NULL, 0);
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LIB_LOG(ERROR, "allocate memory failed", K(ret), "size", src_len);
+      } else {
+        MEMCPY(ptr, converted_result.ptr(), src_len);
+        ptr[src_len] = 0;
+        output_str.assign_ptr(ptr, src_len);
       }
     }
   }

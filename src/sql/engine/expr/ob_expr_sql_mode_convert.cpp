@@ -59,8 +59,9 @@ int ObExprSqlModeConvert::sql_mode_convert(const ObExpr &expr,
   } else {
     ObObj int_value;
     ObObj str_value;
+    ObExprStrResAlloc expr_res_alloc(expr, ctx);
     int_value.set_uint64(arg->get_uint64());
-    if (OB_FAIL(common::ob_sql_mode_to_str(int_value, str_value, &ctx.get_expr_res_alloc()))) {
+    if (OB_FAIL(common::ob_sql_mode_to_str(int_value, str_value, &expr_res_alloc))) {
       LOG_WARN("convert sql mode failed", K(ret));
     } else {
       expr_datum.set_string(str_value.get_string());

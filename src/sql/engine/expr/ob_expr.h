@@ -224,7 +224,6 @@ private:
   OB_INLINE int64_t get_batch_idx() { return batch_idx_; }
   OB_INLINE int64_t get_batch_size() { return batch_size_; }
   OB_INLINE bool is_vectorized() const { return 0 != max_batch_size_; }
-  OB_INLINE ObArenaAllocator &get_expr_res_alloc() { return expr_res_alloc_; }
   OB_INLINE void reuse(const int64_t batch_size)
   {
     batch_idx_ = 0;
@@ -239,6 +238,7 @@ private:
 
   TO_STRING_KV(K_(batch_idx), K_(batch_size), K_(max_batch_size), KP(frames_));
 private:
+  OB_INLINE ObArenaAllocator &get_expr_res_alloc() { return expr_res_alloc_; }
   // Allocate expression result memory.
   void *alloc_expr_res(const int64_t size) { return expr_res_alloc_.alloc(size); }
 
