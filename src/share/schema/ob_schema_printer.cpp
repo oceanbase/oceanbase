@@ -6479,10 +6479,15 @@ int ObSchemaPrinter::print_location_definiton(const uint64_t tenant_id,
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  KRB5CONF = "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print krb5conf", K(ret), K(*location_schema));
         }
-      } else if (0 == strncmp(CONFIGS, token, strlen(CONFIGS))) {
-        length = strlen(CONFIGS);
+      } else if (0 == strncmp(HDFS_CONFIGS, token, strlen(HDFS_CONFIGS))) {
+        length = strlen(HDFS_CONFIGS);
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  CONFIGS = "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print configs", K(ret), K(*location_schema));
+        }
+      } else if (0 == strncmp(HADOOP_USERNAME, token, strlen(HADOOP_USERNAME))) {
+        length = strlen(HADOOP_USERNAME);
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  USERNAME = "))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print user_name", K(ret), K(*location_schema));
         }
       }
 

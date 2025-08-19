@@ -1805,5 +1805,35 @@ int ObExternalTableUtils::remove_external_file_list(const uint64_t tenant_id,
   return ret;
 }
 
+int ObExternalTableUtils::get_credential_field_name(ObSqlString &str, int64_t opt)
+{
+  int ret = OB_SUCCESS;
+  if (opt == 1) {
+    OZ (str.append(common::ACCESS_ID));
+  } else if (opt == 2) {
+    OZ (str.append(common::ACCESS_KEY));
+  } else if (opt == 3) {
+    OZ (str.append(common::HOST));
+  } else if (opt == 4) {
+    OZ (str.append(common::APPID));
+  } else if (opt == 5) {
+    OZ (str.append(common::REGION));
+  } else if (opt == 6) {
+    OZ (str.append(share::PRINCIPAL));
+  } else if (opt == 7) {
+    OZ (str.append(share::KEYTAB));
+  } else if (opt == 8) {
+    OZ (str.append(share::KRB5CONF));
+  } else if (opt == 9) {
+    OZ (str.append(share::HDFS_CONFIGS));
+  } else if (opt == 10) {
+    OZ (str.append(share::HADOOP_USERNAME));
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid opt", K(ret), K(opt));
+  }
+  return ret;
+}
+
 }  // namespace share
 }  // namespace oceanbase

@@ -1073,6 +1073,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"use_bloom_filter", USE_BLOOM_FILTER},
   {"use_frm", USE_FRM},
   {"user", USER},
+  {"username", USERNAME},
   {"user_resources", USER_RESOURCES},
   {"user_specified", USER_SPECIFIED},
   {"utc_date", UTC_DATE},

@@ -192,6 +192,7 @@ class ObExternalTableUtils {
                                        const ObString &pattern,
                                        const sql::ObExprRegexpSessionVariables &regexp_vars,
                                        ObIAllocator &allocator);
+  static int get_credential_field_name(ObSqlString &str, int64_t opt);
  private:
   static bool is_left_edge(const common::ObObj &value);
   static bool is_right_edge(const common::ObObj &value);
