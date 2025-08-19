@@ -284,7 +284,6 @@ int ObLogPlan::generate_join_orders()
                                           get_optimizer_context().get_expr_factory(),
                                           get_optimizer_context().get_session_info(),
                                           onetime_copier_,
-                                          true, /* should_deduce_conds */
                                           true, /* should_pushdown_const_filters */
                                           table_depend_infos_,
                                           push_subq_exprs_,
@@ -892,7 +891,7 @@ int ObLogPlan::mock_base_rel_detectors(ObJoinOrder *&base_rel)
   } else if (base_rel->get_restrict_infos().empty() ||
              !base_rel->get_conflict_detectors().empty()) {
     // do nothing
-  } else if (OB_FAIL(ObConflictDetector::build_confict(get_allocator(), detector))) {
+  } else if (OB_FAIL(ObConflictDetector::build_detector(get_allocator(), detector))) {
     LOG_WARN("failed to build conflict detector", K(ret));
   } else if (OB_ISNULL(detector)) {
     ret = OB_ERR_UNEXPECTED;
