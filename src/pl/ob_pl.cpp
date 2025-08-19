@@ -226,6 +226,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 WRAP_SPI_CALL(sql::ObSPIService::spi_adjust_error_trace));
   jit::ObLLVMHelper::add_symbol(ObString("spi_convert_anonymous_array"),
                                 WRAP_SPI_CALL(sql::ObSPIService::spi_convert_anonymous_array));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_reset_allocator"),
+                                (void*)(sql::ObSPIService::spi_reset_allocator));
 #undef WRAP_SPI_CALL
 
   sql_proxy_ = &sql_proxy;

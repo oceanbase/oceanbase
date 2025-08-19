@@ -497,6 +497,7 @@ public:
                        bool for_update = false);
   static int spi_check_autonomous_trans(pl::ObPLExecCtx *ctx);
   static int spi_get_current_expr_allocator(pl::ObPLExecCtx *ctx, int64_t *addr);
+  static void spi_reset_allocator(ObIAllocator *allocator);
   static int spi_init_composite(ObIAllocator *current_allcator, int64_t addr, bool is_record, bool need_allocator);
   static int spi_get_parent_allocator(ObIAllocator *current_allcator, int64_t *parent_allocator_addr);
   static int spi_prepare(common::ObIAllocator &allocator,
