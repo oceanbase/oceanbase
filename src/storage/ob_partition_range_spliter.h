@@ -43,6 +43,53 @@ class ObSSTableSecMetaIterator;
 namespace storage
 {
 
+struct ObRangePrecision
+{
+  static constexpr int64_t DEFAULT_DYNAMIC_RANGE_PRECISION_HINT = 0;
+
+  ObRangePrecision() : range_precision_(DEFAULT_DYNAMIC_RANGE_PRECISION_HINT) {}
+  ObRangePrecision(const int64_t range_precision) : range_precision_(range_precision) {}
+
+  OB_INLINE bool is_valid() const
+  {
+    return (range_precision_ > 0 && range_precision_ <= 10000)
+           || range_precision_ == DEFAULT_DYNAMIC_RANGE_PRECISION_HINT;
+  }
+
+  OB_INLINE int recalc_range_precision(const int64_t range_count)
+  {
+    int ret = OB_SUCCESS;
+
+    if (OB_UNLIKELY(!is_valid() || range_count <= 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "Invalid range precision", KR(ret), K(range_precision_), K(range_count));
+    } else {
+      if (range_precision_ == DEFAULT_DYNAMIC_RANGE_PRECISION_HINT) {
+        const int64_t need_sample_range_limit = 20;
+        range_precision_ = range_count > need_sample_range_limit
+                               ? need_sample_range_limit * 10000 / range_count
+                               : 10000;
+      }
+
+      if (range_precision_ <= 0) {
+        range_precision_ = 1;
+      }
+
+      if (range_precision_ > 10000) {
+        range_precision_ = 10000;
+      }
+    }
+
+    return ret;
+  }
+
+  OB_INLINE int64_t get_sample_step() const { return max(1, 10000 / max(1, range_precision_)); }
+
+  TO_STRING_KV(K_(range_precision));
+
+  int64_t range_precision_;
+};
+
 class ObIMultiRangeEstimateContext
 {
 public:
@@ -324,7 +371,7 @@ public:
   int init(const ObIArray<ObPairStoreAndDatumRange> &ranges,
            const ObITableReadInfo &read_info,
            const bool need_sort = true,
-           const int64_t range_precision = 100);
+           const ObRangePrecision &range_precision = ObRangePrecision(10000));
 
   bool is_valid() const override { return is_inited_; }
 
@@ -360,7 +407,7 @@ public:
 protected:
   ObSEArray<ObRangeInfo, 4> ranges_;
   uint64_t curr_range_idx_;
-  int64_t range_precision_;
+  ObRangePrecision range_precision_;
   int64_t sample_step_;
   bool is_inited_;
 };
@@ -398,7 +445,7 @@ public:
            const ObIArray<ObRangeInfo> &range_infos,
            ObIArray<ObSplitRangeInfo> &split_ranges,
            const bool need_sort = true,
-           const int64_t range_precision = 100);
+           const ObRangePrecision &range_precision = ObRangePrecision(10000));
 
   virtual ~ObMultiRangeSplitContext() = default;
 
@@ -601,7 +648,6 @@ public:
   static constexpr int64_t TOO_MARY_RANGES_THRESHOLD = 20;
   static constexpr int64_t SPLIT_RANGE_FACTOR = 2;
   static constexpr int64_t DEFAULT_MAX_SPLIT_TIME_COST = 20; // ms
-  static constexpr int64_t DEFAULT_DYNAMIC_RANGE_PRECISION_HINT = 0;
   static constexpr int64_t INDEX_BLOCK_PER_TIME = 3; // access 3 index block / ms
 
   /**
@@ -623,21 +669,21 @@ public:
                                  int64_t &row_count,
                                  int64_t &macro_block_count,
                                  const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
-                                 int64_t range_precision = DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
+                                 const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
 
   int get_multi_range_size(const ObIArray<ObStoreRange> &ranges,
                            const ObITableReadInfo &index_read_info,
                            ObTableStoreIterator &table_iter,
                            int64_t &total_size,
                            const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
-                           int64_t range_precision = DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
+                           const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
 
   int get_multi_range_size(const ObIArray<ObStoreRange> &ranges,
                            const ObITableReadInfo &index_read_info,
                            const ObIArray<ObITable *> &tables,
                            int64_t &total_size,
                            const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
-                           int64_t range_precision = DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
+                           const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
 
   template <typename ObRange>
   int get_split_multi_ranges(const ObIArray<ObStoreRange> &ranges,
@@ -648,7 +694,7 @@ public:
                              ObArrayArray<ObRange> &multi_range_split_array,
                              const bool for_compaction = false,
                              const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
-                             int64_t range_precision = DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
+                             const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
 
   template <typename ObRange>
   int get_split_multi_ranges(const ObIArray<ObStoreRange> &ranges,
@@ -659,11 +705,9 @@ public:
                              ObArrayArray<ObRange> &multi_range_split_array,
                              const bool for_compaction = false,
                              const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
-                             int64_t range_precision = DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
+                             const int64_t range_precision = ObRangePrecision::DEFAULT_DYNAMIC_RANGE_PRECISION_HINT);
 
 private:
-  void recalc_range_precision(const ObIArray<ObStoreRange> &ranges, int64_t &range_precision);
-
   int estimate_ranges_info(const ObIArray<ObStoreRange> &ranges,
                            const ObITableReadInfo &read_info,
                            const ObIArray<ObITable *> &tables,
@@ -671,7 +715,7 @@ private:
                            int64_t &total_row_count,
                            int64_t &total_macro_block_count,
                            const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
-                           const int64_t range_precision = 100);
+                           const ObRangePrecision &range_precision = ObRangePrecision());
 
   bool all_range_is_single_rowkey(const ObIArray<ObStoreRange> &ranges);
 
@@ -690,7 +734,7 @@ private:
                         ObArrayArray<ObRange> &multi_range_split_array,
                         const bool for_compaction = false,
                         const int64_t max_time = DEFAULT_MAX_SPLIT_TIME_COST,
-                        const int64_t range_precision = 100);
+                        const ObRangePrecision &range_precision = ObRangePrecision());
 
   int get_tables(ObTableStoreIterator &table_iter, ObIArray<ObITable *> &tables);
 
@@ -713,7 +757,7 @@ private:
                                     ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
                                     int64_t &estimate_rows_sum,
                                     const int64_t max_time,
-                                    const int64_t range_precision);
+                                    const ObRangePrecision &range_precision);
 
   int split_ranges_for_memtable(const ObIArray<ObPairStoreAndDatumRange> &ranges,
                                 const int64_t expected_task_count,
@@ -721,7 +765,7 @@ private:
                                 ObIAllocator &allocator,
                                 ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
                                 int64_t &estimate_rows_sum,
-                                const int64_t range_precision);
+                                const ObRangePrecision &range_precision);
 
   int split_ranges_for_sstable(const ObIArray<ObPairStoreAndDatumRange> &sorted_ranges,
                                const ObITableReadInfo &read_info,
@@ -731,7 +775,7 @@ private:
                                ObIAllocator &allocator,
                                ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
                                int64_t &estimate_rows_sum,
-                               const int64_t range_precision);
+                               const ObRangePrecision &range_precision);
 
   int build_heap(ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
                  ObBinaryHeap<ObSplitRangeHeapElement, ObSplitRangeHeapElementCompator> &heap);

@@ -558,7 +558,7 @@ int ObIndexBlockTreeTraverser::TreeNodeContext::get_next_index_row(ObMicroIndexI
 int ObMultiRangeRowEstimateContext::init(const ObIArray<ObPairStoreAndDatumRange> &ranges,
                                          const ObITableReadInfo &read_info,
                                          const bool need_sort,
-                                         const int64_t range_precision)
+                                         const ObRangePrecision &range_precision)
 {
   int ret = OB_SUCCESS;
 
@@ -566,15 +566,17 @@ int ObMultiRangeRowEstimateContext::init(const ObIArray<ObPairStoreAndDatumRange
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("Init estimate context twice", KR(ret));
-  } else if (OB_UNLIKELY(ranges.empty() || range_precision > 100 || range_precision <= 0)) {
+  } else if (OB_UNLIKELY(ranges.empty() || !range_precision.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument for context", KR(ret), K(ranges), K(range_precision));
   } else if (OB_FAIL(ranges_.reserve(ranges.count()))) {
     LOG_WARN("Fail to reserve range info array", KR(ret), K(ranges));
+  } else if (FALSE_IT(range_precision_ = range_precision)) {
+  } else if (OB_FAIL(range_precision_.recalc_range_precision(ranges.count()))) {
+    LOG_WARN("Fail to recalc range precision", KR(ret));
   } else {
     curr_range_idx_ = 0;
-    range_precision_ = range_precision;
-    sample_step_ = max(1.0, 1.0 * 100 / range_precision);
+    sample_step_ = range_precision_.get_sample_step();
     for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); i++) {
       if (OB_FAIL(ranges_.push_back(ObRangeInfo(&ranges.at(i).datum_range_)))) {
         LOG_WARN("Fail to push back to range array", KR(ret), K(ranges), K(i));
@@ -741,7 +743,7 @@ int ObMultiRangeSplitContext::init(const ObIArray<ObPairStoreAndDatumRange> &ran
                                    const ObIArray<ObRangeInfo> &range_infos,
                                    ObIArray<ObSplitRangeInfo> &split_ranges,
                                    const bool need_sort,
-                                   const int64_t range_precision)
+                                   const ObRangePrecision &range_precision)
 {
   int ret = OB_SUCCESS;
 
@@ -1251,7 +1253,7 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_row_and_split(
     ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
     int64_t &estimate_rows_sum,
     const int64_t max_time,
-    const int64_t range_precision)
+    const ObRangePrecision &range_precision)
 {
   int ret = OB_SUCCESS;
 
@@ -1277,7 +1279,7 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_row_and_split(
       int64_t open_index_block_limit
           = max(1,
                 INDEX_BLOCK_PER_TIME * max_time * sstable->get_data_macro_block_count()
-                    / total_macro_block_cnt);
+                    / max(1, total_macro_block_cnt));
       if (OB_FAIL(split_ranges_for_sstable(sorted_ranges,
                                            read_info,
                                            expected_task_count,
@@ -1315,7 +1317,7 @@ int ObPartitionMultiRangeSpliter::split_ranges_for_sstable(
     ObIAllocator &allocator,
     ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
     int64_t &estimate_rows_sum,
-    const int64_t range_precision)
+    const ObRangePrecision &range_precision)
 {
   int ret = OB_SUCCESS;
 
@@ -1362,7 +1364,7 @@ int ObPartitionMultiRangeSpliter::split_ranges_for_memtable(
     ObIAllocator &allocator,
     ObIArray<ObSplitRangeHeapElementIter> &heap_element_iters,
     int64_t &estimate_rows_sum,
-    const int64_t range_precision)
+    const ObRangePrecision &range_precision)
 {
   int ret = OB_SUCCESS;
 
@@ -1376,7 +1378,7 @@ int ObPartitionMultiRangeSpliter::split_ranges_for_memtable(
   }
 
   // step 1. estimate rows
-  int64_t sample_step = max(1, 100 / range_precision);
+  int64_t sample_step = range_precision.get_sample_step();
   int64_t next_sample_point = 0;
   int64_t last_estimate_rows = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); i++) {
@@ -1613,7 +1615,7 @@ int ObPartitionMultiRangeSpliter::build_range_array(const ObIArray<ObStoreRange>
                                                     ObArrayArray<ObRange> &multi_range_split_array,
                                                     const bool for_compaction,
                                                     const int64_t max_time,
-                                                    const int64_t range_precision)
+                                                    const ObRangePrecision &range_precision)
 {
   int ret = OB_SUCCESS;
 
@@ -1667,32 +1669,21 @@ bool ObPartitionMultiRangeSpliter::all_range_is_single_rowkey(const ObIArray<ObS
   return all_single_rowkey;
 }
 
-void ObPartitionMultiRangeSpliter::recalc_range_precision(const ObIArray<ObStoreRange> &ranges,
-                                                          int64_t &range_precision)
-{
-  if (range_precision == DEFAULT_DYNAMIC_RANGE_PRECISION_HINT) {
-    const int64_t need_sample_range_limit = 20;
-    range_precision = ranges.count() > need_sample_range_limit
-                          ? need_sample_range_limit * 100 / ranges.count()
-                          : 100;
-  }
-}
-
 int ObPartitionMultiRangeSpliter::get_multi_range_size(const ObIArray<ObStoreRange> &ranges,
                                                        const ObITableReadInfo &index_read_info,
                                                        const ObIArray<ObITable *> &tables,
                                                        int64_t &total_size,
                                                        const int64_t max_time,
-                                                       int64_t range_precision)
+                                                       const int64_t range_precision)
 {
   int ret = OB_SUCCESS;
 
   total_size = 0;
   int64_t unused_total_row_count = 0;
   int64_t unused_total_macro_block_count = 0;
+  ObRangePrecision recalc_range_precision(range_precision);
 
-  if (OB_UNLIKELY(!index_read_info.is_valid() || range_precision < 0 || range_precision > 100
-                  || max_time <= 0)) {
+  if (OB_UNLIKELY(!index_read_info.is_valid() || !recalc_range_precision.is_valid() || max_time <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to get multi range size",
              KR(ret),
@@ -1703,7 +1694,8 @@ int ObPartitionMultiRangeSpliter::get_multi_range_size(const ObIArray<ObStoreRan
     // do nothing
   } else if (tables.empty()) {
     // only small tables
-  } else if (FALSE_IT(recalc_range_precision(ranges, range_precision))) {
+  } else if (OB_FAIL(recalc_range_precision.recalc_range_precision(ranges.count()))) {
+    LOG_WARN("Fail to recalc range precision", KR(ret));
   } else if (OB_FAIL(estimate_ranges_info(ranges,
                                           index_read_info,
                                           tables,
@@ -1711,7 +1703,7 @@ int ObPartitionMultiRangeSpliter::get_multi_range_size(const ObIArray<ObStoreRan
                                           unused_total_row_count,
                                           unused_total_macro_block_count,
                                           max_time,
-                                          range_precision))) {
+                                          recalc_range_precision))) {
     LOG_WARN("Fail to build range array", KR(ret));
   }
 
@@ -1724,25 +1716,26 @@ int ObPartitionMultiRangeSpliter::get_multi_ranges_row_count(const ObIArray<ObSt
                                                             int64_t &row_count,
                                                             int64_t &macro_block_count,
                                                             const int64_t max_time,
-                                                            int64_t range_precision)
+                                                            const int64_t range_precision)
 {
   int ret = OB_SUCCESS;
 
+  ObRangePrecision recalc_range_precision(range_precision);
   int64_t unused_total_size = 0;
   row_count = 0;
   macro_block_count = 0;
 
   ObSEArray<ObITable *, 8> tables;
 
-  if (OB_UNLIKELY(!index_read_info.is_valid() || range_precision < 0 || range_precision > 100
-                  || max_time <= 0)) {
+  if (OB_UNLIKELY(!index_read_info.is_valid() || !recalc_range_precision.is_valid() || max_time <= 0
+                  || !table_iter.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to get multi ranges row count",
              KR(ret),
              K(index_read_info),
              K(range_precision),
-             K(max_time));
-  } else if (FALSE_IT(recalc_range_precision(ranges, range_precision))) {
+             K(max_time),
+             K(table_iter));
   } else if (OB_FAIL(get_tables(table_iter, tables))) {
     LOG_WARN("Fail to get split tables", KR(ret), K(table_iter));
   } else if (ranges.empty()) {
@@ -1751,6 +1744,8 @@ int ObPartitionMultiRangeSpliter::get_multi_ranges_row_count(const ObIArray<ObSt
     // only small tables
     row_count = ranges.count();
     macro_block_count = 1;
+  } else if (OB_FAIL(recalc_range_precision.recalc_range_precision(ranges.count()))) {
+    LOG_WARN("Fail to recalc range precision", KR(ret));
   } else if (OB_FAIL(estimate_ranges_info(ranges,
                                           index_read_info,
                                           tables,
@@ -1758,7 +1753,7 @@ int ObPartitionMultiRangeSpliter::get_multi_ranges_row_count(const ObIArray<ObSt
                                           row_count,
                                           macro_block_count,
                                           max_time,
-                                          range_precision))) {
+                                          recalc_range_precision))) {
     LOG_WARN("Fail to estimate ranges size", KR(ret));
   }
 
@@ -1770,7 +1765,7 @@ int ObPartitionMultiRangeSpliter::get_multi_range_size(const ObIArray<ObStoreRan
                                                        ObTableStoreIterator &table_iter,
                                                        int64_t &total_size,
                                                        const int64_t max_time,
-                                                       int64_t range_precision)
+                                                       const int64_t range_precision)
 {
   int ret = OB_SUCCESS;
 
@@ -1778,12 +1773,20 @@ int ObPartitionMultiRangeSpliter::get_multi_range_size(const ObIArray<ObStoreRan
 
   ObSEArray<ObITable *, 8> tables;
 
-  if (OB_UNLIKELY(0 == table_iter.count())) {
+  if (OB_UNLIKELY(!index_read_info.is_valid() || max_time <= 0 || !table_iter.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument to get split multi ranges", KR(ret), K(table_iter));
-  } else if (FALSE_IT(recalc_range_precision(ranges, range_precision))) {
+    LOG_WARN("Invalid argument to get multi ranges size",
+             KR(ret),
+             K(index_read_info),
+             K(range_precision),
+             K(max_time),
+             K(table_iter));
   } else if (OB_FAIL(get_tables(table_iter, tables))) {
     LOG_WARN("Fail to get split tables", KR(ret), K(table_iter));
+  } else if (ranges.empty()) {
+    // do nothing
+  } else if (tables.empty()) {
+    // only small tables
   } else if (OB_FAIL(get_multi_range_size(
                  ranges, index_read_info, tables, total_size, max_time, range_precision))) {
     LOG_WARN("Fail to get multi range size", KR(ret));
@@ -1799,7 +1802,7 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_info(const ObIArray<ObStoreRan
                                                        int64_t &total_row_count,
                                                        int64_t &total_macro_block_count,
                                                        const int64_t max_time,
-                                                       const int64_t range_precision)
+                                                       const ObRangePrecision &range_precision)
 {
   int ret = OB_SUCCESS;
 
@@ -1811,11 +1814,12 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_info(const ObIArray<ObStoreRan
   total_row_count = 0;
   total_macro_block_count = 0;
   int64_t memtable_total_size = 0;
+  int64_t sstable_total_macro_block_count = 0;
 
   if (OB_FAIL(sampled_ranges.reserve(ranges.count()))) {
     LOG_WARN("Fail to reserve sampled ranges", KR(ret));
   } else {
-    int64_t sample_step = max(1, 100 / range_precision);
+    int64_t sample_step = range_precision.get_sample_step();
     for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); i += sample_step) {
       if (OB_FAIL(sampled_ranges.push_back(ranges.at(i)))) {
         LOG_WARN("Fail to push back sampled range", KR(ret));
@@ -1828,12 +1832,11 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_info(const ObIArray<ObStoreRan
                  sampled_ranges, read_info, allocator, sorted_ranges))) {
     LOG_WARN("Fail to transform store range array to datum range array", KR(ret));
   } else {
-    int64_t total_macro_block_cnt = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
       ObITable *table = tables.at(i);
       if (table->is_sstable()) {
         ObSSTable *sstable = static_cast<ObSSTable *>(table);
-        total_macro_block_cnt += sstable->get_data_macro_block_count();
+        sstable_total_macro_block_count += sstable->get_data_macro_block_count();
       }
     }
 
@@ -1844,7 +1847,7 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_info(const ObIArray<ObStoreRan
         ObIndexBlockTreeTraverser traverser;
         ObMultiRangeInfoEstimateContext info_estimate_context;
 
-        if (sstable->is_empty() || total_macro_block_cnt == 0) {
+        if (sstable->is_empty() || sstable_total_macro_block_count == 0) {
           // empty sstable, skip
         } else if (OB_FAIL(info_estimate_context.init(sorted_ranges, read_info, false))) {
           LOG_WARN("Fail to init info estimate context", KR(ret));
@@ -1854,7 +1857,7 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_info(const ObIArray<ObStoreRan
                        info_estimate_context,
                        max(1,
                            INDEX_BLOCK_PER_TIME * max_time * sstable->get_data_macro_block_count()
-                               / total_macro_block_cnt)))) {
+                               / sstable_total_macro_block_count)))) {
           LOG_WARN("Fail to traverse sstable index block tree", KR(ret));
         } else {
           total_size += info_estimate_context.get_total_size();
@@ -1892,9 +1895,10 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_info(const ObIArray<ObStoreRan
     total_size = total_size * ranges.count() / sampled_ranges.count();
     total_row_count = total_row_count * ranges.count() / sampled_ranges.count();
     total_macro_block_count
-        = total_macro_block_count >= sampled_ranges.count()
-              ? total_macro_block_count * ranges.count() / sampled_ranges.count()
-              : total_macro_block_count;
+        = min(total_macro_block_count >= sampled_ranges.count()
+                  ? total_macro_block_count * ranges.count() / sampled_ranges.count()
+                  : total_macro_block_count,
+              sstable_total_macro_block_count);
 
     // TODO(menglan): adapt now sql implement
     constexpr int64_t ONE_TASK_ROW_COUNT = 32768;
@@ -1923,7 +1927,7 @@ int ObPartitionMultiRangeSpliter::get_split_multi_ranges(
     ObArrayArray<ObRange> &multi_range_split_array,
     const bool for_compaction,
     const int64_t max_time,
-    int64_t range_precision)
+    const int64_t range_precision)
 {
   int ret = OB_SUCCESS;
   int64_t start_time_ms = ObTimeUtility::current_time_ms();
@@ -1931,18 +1935,19 @@ int ObPartitionMultiRangeSpliter::get_split_multi_ranges(
   multi_range_split_array.reset();
 
   int64_t fast_split_range_task_count = 0;
+  ObRangePrecision recalc_range_precision(range_precision);
 
-  if (OB_UNLIKELY(expected_task_count <= 0 || max_time <= 0 || range_precision < 0
-                  || range_precision > 100)) {
+  if (OB_UNLIKELY(!index_read_info.is_valid() || !recalc_range_precision.is_valid() || max_time <= 0 || expected_task_count <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to get split multi ranges",
              KR(ret),
              K(expected_task_count),
              K(range_precision),
              K(max_time));
-  } else if (FALSE_IT(recalc_range_precision(ranges, range_precision))) {
   } else if (ranges.empty()) {
     // do nothing
+  } else if (OB_FAIL(recalc_range_precision.recalc_range_precision(ranges.count()))) {
+    LOG_WARN("Fail to recalc range precision", KR(ret));
   } else if (tables.empty()) {
     // only small tables
     fast_split_range_task_count = 1;
@@ -1968,7 +1973,7 @@ int ObPartitionMultiRangeSpliter::get_split_multi_ranges(
                                        multi_range_split_array,
                                        for_compaction,
                                        max_time,
-                                       range_precision))) {
+                                       recalc_range_precision))) {
     LOG_WARN("Fail to build range array", KR(ret));
   }
 
@@ -1991,16 +1996,19 @@ int ObPartitionMultiRangeSpliter::get_split_multi_ranges(
     ObArrayArray<ObRange> &multi_range_split_array,
     const bool for_compaction,
     const int64_t max_time,
-    int64_t range_precision)
+    const int64_t range_precision)
 {
   int ret = OB_SUCCESS;
 
   ObSEArray<ObITable *, 8> tables;
 
-  if (OB_UNLIKELY(0 == table_iter.count())) {
+  multi_range_split_array.reset();
+
+  if (OB_UNLIKELY(!table_iter.is_valid() || !index_read_info.is_valid() || max_time <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to get split multi ranges", KR(ret), K(table_iter));
-  } else if (FALSE_IT(recalc_range_precision(ranges, range_precision))) {
+  } else if (ranges.empty()) {
+    // do nothing
   } else if (OB_FAIL(get_tables(table_iter, tables))) {
     LOG_WARN("Fail to get split tables", KR(ret), K(table_iter));
   } else if (OB_FAIL(get_split_multi_ranges(ranges,
