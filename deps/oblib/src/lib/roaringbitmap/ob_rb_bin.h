@@ -14,7 +14,6 @@
 #define OCEANBASE_LIB_ROARINGBITMAP_OB_RB_BIN_
 
 #include "ob_roaringbitmap.h"
-// #include "roaring/containers/containers.h"
 
 namespace oceanbase {
 namespace common {

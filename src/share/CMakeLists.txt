@@ -21,7 +21,7 @@ ob_set_subtarget(ob_share_extra ALONE
   aggregate/sum.cpp
   aggregate/sys_bit.cpp
   aggregate/aggr_extra.cpp
-  aggregate/rb_build_agg.cpp
+  aggregate/rb_agg.cpp
   aggregate/single_row_max.cpp
   aggregate/single_row_min.cpp
   aggregate/single_row_count_sum.cpp

@@ -6421,6 +6421,8 @@ int ObLogPlan::check_three_stage_groupby_pushdown(const ObIArray<ObRawExpr *> &r
                aggr_expr->get_expr_type() != T_FUN_SYS_BIT_OR &&
                aggr_expr->get_expr_type() != T_FUN_SYS_BIT_XOR &&
                aggr_expr->get_expr_type() != T_FUN_SYS_RB_BUILD_AGG &&
+               aggr_expr->get_expr_type() != T_FUN_SYS_RB_AND_AGG &&
+               aggr_expr->get_expr_type() != T_FUN_SYS_RB_OR_AGG &&
                aggr_expr->get_expr_type() != T_FUN_GROUPING_ID) {
       // three stage with rollup, only hash rollup is allowed
       // grouping_id can be safely pushdown
@@ -6428,6 +6430,10 @@ int ObLogPlan::check_three_stage_groupby_pushdown(const ObIArray<ObRawExpr *> &r
     } else if (aggr_expr->get_expr_type() == T_FUN_SYS_RB_BUILD_AGG &&
               (! session->use_rich_format() || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0)) {
       // if vector 2.0 is not enable  can not pushdown for rb_build_agg
+      can_push = false;
+    } else if ((aggr_expr->get_expr_type() == T_FUN_SYS_RB_AND_AGG || aggr_expr->get_expr_type() == T_FUN_SYS_RB_OR_AGG) &&
+               (! session->use_rich_format() || GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_3_5_3)) {
+      // if vector 2.0 is not enable  can not pushdown for rb_and_agg / rb_or_agg
       can_push = false;
     } else if (aggr_expr->is_param_distinct()) {
       if (OB_FAIL(distinct_aggrs.push_back(aggr_expr))) {
@@ -6502,11 +6508,17 @@ int ObLogPlan::check_basic_groupby_pushdown(omt::ObTenantConfigGuard &tenant_con
                T_FUN_SYS_BIT_OR != aggr_expr->get_expr_type() &&
                T_FUN_SYS_BIT_XOR != aggr_expr->get_expr_type() &&
                T_FUN_SUM_OPNSIZE != aggr_expr->get_expr_type() &&
-               T_FUN_SYS_RB_BUILD_AGG != aggr_expr->get_expr_type()) {
+               T_FUN_SYS_RB_BUILD_AGG != aggr_expr->get_expr_type() &&
+               T_FUN_SYS_RB_OR_AGG != aggr_expr->get_expr_type() &&
+               T_FUN_SYS_RB_AND_AGG != aggr_expr->get_expr_type()) {
       can_push = false;
     } else if (T_FUN_SYS_RB_BUILD_AGG == aggr_expr->get_expr_type() &&
               (! enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0)) {
       // if vector 2.0 is not enable  can not pushdown for rb_build_agg
+      can_push = false;
+    } else if ((T_FUN_SYS_RB_OR_AGG == aggr_expr->get_expr_type() || T_FUN_SYS_RB_AND_AGG == aggr_expr->get_expr_type()) &&
+               (! enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_2)) {
+      // if vector 2.0 is not enable  can not pushdown for rb aggr exprs
       can_push = false;
     } else if (aggr_expr->is_param_distinct()) {
       can_push = false;
@@ -15281,12 +15293,18 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(omt::ObTenantConfigGuard &
                 && T_FUN_SUM != cur_aggr->get_expr_type()
                 && T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS != cur_aggr->get_expr_type()
                 && T_FUN_SUM_OPNSIZE != cur_aggr->get_expr_type()
+                && T_FUN_SYS_RB_AND_AGG != cur_aggr->get_expr_type()
+                && T_FUN_SYS_RB_OR_AGG != cur_aggr->get_expr_type()
                 && T_FUN_SYS_RB_BUILD_AGG != cur_aggr->get_expr_type()
                 && T_FUN_COUNT_SUM != cur_aggr->get_expr_type()) {
       can_push = false;
     } else if ((T_FUN_SYS_RB_BUILD_AGG == cur_aggr->get_expr_type() && (!enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0))
       || (T_FUN_COUNT_SUM == cur_aggr->get_expr_type() && (!enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0))) {
       // if vector 2.0 is not enable  can not storage pushdown for rb_build_agg
+      can_push = false;
+    } else if ((T_FUN_SYS_RB_AND_AGG == cur_aggr->get_expr_type() || T_FUN_SYS_RB_AND_AGG == cur_aggr->get_expr_type()) &&
+                (! enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_3_5_3)) {
+      // if vector 2.0 is not enable  can not storage pushdown for rb agg
       can_push = false;
     } else if (1 < cur_aggr->get_real_param_count()) {
       can_push = false;

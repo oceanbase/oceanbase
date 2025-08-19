@@ -374,13 +374,14 @@ private:
   bool exclude_null_;
 };
 
-class ObRbBuildAggCellVec final : public ObAggCellVec
+class ObRbAggCellVec final : public ObAggCellVec
 {
 public:
-  ObRbBuildAggCellVec(const int64_t agg_idx,
+  ObRbAggCellVec(const int64_t agg_idx,
                   const ObAggCellVecBasicInfo &basic_info,
                   const share::ObAggrParamProperty &param_prop,
-                  common::ObIAllocator &allocator);
+                  common::ObIAllocator &allocator,
+                  ObPDAggType agg_type);
 protected:
   OB_INLINE bool can_use_index_info() const override { return false; }
 };

@@ -945,7 +945,8 @@ ObRbAggCell::ObRbAggCell(ObRoaringBitmap *rb, const uint64_t tenant_id):
     max_cache_count_(0),
     cached_value_(),
     rb_bin_(),
-    is_serialized_(false)
+    is_serialized_(false),
+    is_new_(true)
 {
   max_cache_count_ = MAX_CACHED_COUNT;
   cached_value_.set_attr(lib::ObMemAttr(tenant_id, "RbAggArray"));
@@ -962,6 +963,7 @@ int ObRbAggCell::destroy()
   rb_bin_.reset();
   allocator_.reset();
   is_serialized_ = false;
+  is_new_ = true;
   return ret;
 }
 
@@ -998,8 +1000,85 @@ int ObRbAggCell::value_add(const uint64_t val)
   }
   return ret;
 }
+int ObRbAggCell::value_calc(const ObString rb_bin, ObItemType func_type, bool need_validate)
+{
+  int ret = OB_SUCCESS;
+  ObRoaringBitmap *value_rb = NULL;
+  if (OB_UNLIKELY(cached_value_.count() > 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cached_value_ is not empty", K(ret), K(cached_value_.count()));
+  } else if (need_validate && OB_FAIL(ObRbUtils::check_binary(rb_bin))) {
+    LOG_WARN("invalid roaringbitmap binary string", K(ret));
+  } else if (func_type == T_FUN_SYS_RB_OR_AGG) {
+    is_new_ = false;
+    if (OB_FAIL(ObRbUtils::rb_deserialize(allocator_, rb_bin, value_rb, need_validate))) {
+      LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+    } else if (OB_FAIL(rb_->value_or(value_rb))) {
+      LOG_WARN("failed to calculate value or", K(ret));
+    }
+  } else if (func_type == T_FUN_SYS_RB_AND_AGG) {
+    ObRbBinType bin_type;
+    if (is_new_) {
+      // for the first roaringbitmap, use "OR" to insert
+      is_new_ = false;
+      if (OB_FAIL(ObRbUtils::rb_deserialize(allocator_, rb_bin, value_rb, need_validate))) {
+        LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+      } else if (OB_FAIL(rb_->value_or(value_rb))) {
+        LOG_WARN("failed to calculate value or", K(ret));
+      }
+    } else if (OB_FAIL(rb_->optimize())) {
+      LOG_WARN("failed to optimize", K(ret));
+    } else if (rb_->is_empty_type()) {
+      // do nothing
+    } else if (OB_FAIL(ObRbUtils::get_bin_type(rb_bin, bin_type))) {
+      LOG_WARN("invalid value roaringbitmap binary string", K(ret));
+    } else if (rb_->is_bitmap_type() || !ObRbUtils::is_bitmap_bin(bin_type)) {
+      // deserialize the value binary to execute "AND"
+      if (OB_FAIL(ObRbUtils::rb_deserialize(allocator_, rb_bin, value_rb, need_validate))) {
+        LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+      } else if (OB_FAIL(rb_->value_and(value_rb))) {
+        LOG_WARN("failed to calculate value and", K(ret));
+      }
+    } else {
+      // no deserializing the value binary, check the existen of each value from the rb_ in the value binary
+      uint32_t offset = RB_VERSION_SIZE + RB_BIN_TYPE_SIZE;
+      bool is_contains = false;
+      ObString binary_str = ObString(rb_bin.length() - offset, rb_bin.ptr() + offset);
+      if (bin_type == ObRbBinType::BITMAP_32) {
+        ObRoaringBin *roaring_bin = NULL;
+        if (OB_ISNULL(roaring_bin = OB_NEWx(ObRoaringBin, &allocator_, &allocator_, binary_str))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory for ObRoaringBin", K(ret));
+        } else if (OB_FAIL(roaring_bin->init())) {
+          LOG_WARN("failed to init ObRoaringBin", K(ret), K(binary_str));
+        } else if (OB_FAIL(rb_->value_and(roaring_bin))) {
+          LOG_WARN("failed to calculate value and", K(ret));
+        }
+      } else if (bin_type == ObRbBinType::BITMAP_64) {
+        ObRoaring64Bin *roaring64_bin = NULL;
+        if (OB_ISNULL(roaring64_bin = OB_NEWx(ObRoaring64Bin, &allocator_, &allocator_, binary_str))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory for ObRoaring64Bin", K(ret));
+        } else if (OB_FAIL(roaring64_bin->init())) {
+          LOG_WARN("failed to init ObRoaring64Bin", K(ret), K(binary_str));
+        } else if (OB_FAIL(rb_->value_and(roaring64_bin))) {
+          LOG_WARN("failed to calculate value and", K(ret));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid rb type", K(ret), K(bin_type));
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid function type", K(ret), K(func_type));
+  }
 
-int ObRbAggCell::value_or(const ObRbAggCell *other)
+  ObRbUtils::rb_destroy(value_rb);
+  return ret;
+}
+
+int ObRbAggCell::rollup(const ObRbAggCell *other, ObItemType func_type)
 {
   int ret = OB_SUCCESS;
   if (is_serialized_) {
@@ -1011,16 +1090,35 @@ int ObRbAggCell::value_or(const ObRbAggCell *other)
   } else if (OB_ISNULL(other)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("other rb is null", K(ret));
-  } else if (OB_FAIL(add_values(cached_value_))) {
-    LOG_WARN("add value fail", K(ret));
-  } else if (OB_FAIL(add_values(other->cached_value_))) {
-    LOG_WARN("add value fail", K(ret));
-  } else if (OB_NOT_NULL(other->rb_) && OB_FAIL(rb_->value_or(other->rb_))) {
-    LOG_WARN("or value fail", K(ret));
+  } else if (func_type == T_FUN_SYS_RB_BUILD_AGG) {
+    if (OB_FAIL(add_values(cached_value_))) {
+      LOG_WARN("add value fail", K(ret));
+    } else if (OB_FAIL(add_values(other->cached_value_))) {
+      LOG_WARN("add value fail", K(ret));
+    } else if (OB_NOT_NULL(other->rb_) && OB_FAIL(rb_->value_or(other->rb_))) {
+      LOG_WARN("or value fail", K(ret));
+    } else {
+      // reset for save memory
+      cached_value_.reset();
+    }
+  } else if (func_type == T_FUN_SYS_RB_AND_AGG) {
+    if (is_new_) {
+      is_new_ = false;
+      if (OB_NOT_NULL(other->rb_) && OB_FAIL(rb_->value_or(other->rb_))) {
+        LOG_WARN("or value fail", K(ret));
+      }
+    } else if (OB_NOT_NULL(other->rb_) && OB_FAIL(rb_->value_and(other->rb_))) {
+      LOG_WARN("and value fail", K(ret));
+    }
+  } else if (func_type == T_FUN_SYS_RB_OR_AGG) {
+    if (OB_NOT_NULL(other->rb_) && OB_FAIL(rb_->value_or(other->rb_))) {
+      LOG_WARN("or value fail", K(ret));
+    }
   } else {
-    // reset for save memory
-    cached_value_.reset();
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid func_type", K(ret), K(func_type));
   }
+
   return ret;
 }
 
@@ -1056,6 +1154,7 @@ int ObRbAggCell::serialize()
     ObRbUtils::rb_destroy(rb_);
     rb_ = nullptr;
     is_serialized_ = true;
+    is_new_ = true;
   }
   return ret;
 }

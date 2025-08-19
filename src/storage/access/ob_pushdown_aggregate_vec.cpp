@@ -37,6 +37,10 @@ int init_sum_opnsize_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id
                                ObIAllocator &allocator, IAggregate *&agg);
 int init_rb_build_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                             ObIAllocator &allocator, IAggregate *&agg);
+int init_rb_or_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                         ObIAllocator &allocator, IAggregate *&agg);
+int init_rb_and_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                          ObIAllocator &allocator, IAggregate *&agg);
 int init_count_sum_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                              ObIAllocator &allocator, IAggregate *&agg);
 }
@@ -137,6 +141,8 @@ int ObAggCellVec::init_aggregate()
     INIT_AGGREGATE_CASE(PD_SUM, sum)
     INIT_AGGREGATE_CASE(PD_COUNT_SUM, count_sum)
     INIT_AGGREGATE_CASE(PD_RB_BUILD, rb_build)
+    INIT_AGGREGATE_CASE(PD_RB_OR, rb_or)
+    INIT_AGGREGATE_CASE(PD_RB_AND, rb_and)
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected aggregate type", K(ret), K_(agg_type));
@@ -1444,14 +1450,15 @@ int ObSumOpNSizeAggCellVec::can_use_index_info(
   return ret;
 }
 
-ObRbBuildAggCellVec::ObRbBuildAggCellVec(
+ObRbAggCellVec::ObRbAggCellVec(
     const int64_t agg_idx,
     const ObAggCellVecBasicInfo &basic_info,
     const share::ObAggrParamProperty &param_prop,
-    common::ObIAllocator &allocator)
+    common::ObIAllocator &allocator,
+    ObPDAggType agg_type)
       : ObAggCellVec(agg_idx, basic_info, param_prop, allocator)
 {
-  agg_type_ = PD_RB_BUILD;
+  agg_type_ = agg_type;
 }
 
 #define INIT_AGG_CELL(agg_type, cell_type, ...)                                                                                   \
@@ -1493,7 +1500,9 @@ int ObPDAggVecFactory::alloc_cell(
       INIT_AGG_CELL(T_FUN_COUNT_SUM, CountSum)
       INIT_AGG_CELL(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS, HyperLogLog)
       INIT_AGG_CELL(T_FUN_SUM_OPNSIZE, SumOpNSize, exclude_null)
-      INIT_AGG_CELL(T_FUN_SYS_RB_BUILD_AGG, RbBuild)
+      INIT_AGG_CELL(T_FUN_SYS_RB_BUILD_AGG, Rb, PD_RB_BUILD)
+      INIT_AGG_CELL(T_FUN_SYS_RB_AND_AGG, Rb, PD_RB_AND)
+      INIT_AGG_CELL(T_FUN_SYS_RB_OR_AGG, Rb, PD_RB_OR)
       default: {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("Not supported aggregate type", K(ret), K(type));

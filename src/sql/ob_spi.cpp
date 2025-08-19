@@ -30,6 +30,7 @@
 #include "pl/dblink/ob_pl_dblink_util.h"
 #include "pl/ob_pl_profiler.h"
 #include "pl/ob_pl_call_stack_trace.h"
+#include "pl/sys_package/ob_json_pl_utils.h"
 #endif
 
 namespace oceanbase
@@ -3185,6 +3186,11 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
         OZ (ObObjCaster::to_type(ObUserDefinedSQLType, cast_ctx, *params[i], new_param));
         OX (new_param.set_udt_id(udt_id));
         OX (new_param.set_param_meta()); // param meta also changed
+#ifdef OB_BUILD_ORACLE_PL
+      } else if (params[i]->is_pl_extend() && pl::ObPlJsonUtil::is_pl_jsontype(params[i]->get_udt_id())) {
+        ret = OB_ERR_PL_JSONTYPE_USAGE;
+        LOG_WARN("Invalid use of PL/SQL JSON type.", K(ret));
+#endif
       }
       OZ (param_store.push_back(new_param));
     }

@@ -235,6 +235,8 @@ OB_INLINE int ObAggGroupVec::set_agg_type_flag(const ObPDAggType agg_type)
     SET_AGG_FLAG(PD_SUM, sum)
     SET_AGG_FLAG(PD_HLL, hll)
     SET_AGG_FLAG(PD_SUM_OP_SIZE, sum_op_nsize)
+    SET_AGG_FLAG(PD_RB_AND, rb_build)
+    SET_AGG_FLAG(PD_RB_OR, rb_build)
     SET_AGG_FLAG(PD_RB_BUILD, rb_build)
     SET_AGG_FLAG(PD_COUNT_SUM, count_sum)
     default : {
