@@ -117,6 +117,7 @@ public :
   }
   static int convert_collection_bin_to_string(const ObString &collection_bin,
                                               const common::ObIArray<common::ObString> &extended_type_info,
+                                              const ObCollectionTypeBase *collection_meta,
                                               common::ObIAllocator &allocator,
                                               ObString &res_str);
   static int get_mysql_type(const common::ObIArray<common::ObString> &extended_type_info,
