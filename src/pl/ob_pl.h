@@ -654,6 +654,7 @@ class ObPLPackageGuard;
 #define IDX_PLEXECCTX_FUNC 6
 #define IDX_PLEXECCTX_IN 7
 #define IDX_PLEXECCTX_PL_CTX 8
+#define IDX_PLEXECCTX_TMP_ALLOCATOR 9
 
 struct ObPLExecCtx : public ObPLINS
 {
@@ -668,11 +669,14 @@ struct ObPLExecCtx : public ObPLINS
               ObPLPackageGuard *guard = NULL) :
       allocator_(allocator), exec_ctx_(exec_ctx), params_(params),
       result_(result), status_(status), func_(func),
-      in_function_(in_function), pl_ctx_(NULL), nocopy_params_(nocopy_params), guard_(guard),
-      local_expr_alloc_("PLBlockExpr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+      in_function_(in_function), pl_ctx_(NULL), tmp_allocator_(NULL),
+      nocopy_params_(nocopy_params), guard_(guard),
+      local_expr_alloc_("PLBlockExpr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      tmp_alloc_for_copy_param_("PLTmpAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {
     if (NULL != exec_ctx && NULL != exec_ctx_->get_my_session()) {
       pl_ctx_ = exec_ctx_->get_my_session()->get_pl_context();
+      tmp_allocator_ = &tmp_alloc_for_copy_param_;
     }
   }
 
@@ -699,9 +703,11 @@ struct ObPLExecCtx : public ObPLINS
   ObPLFunction *func_; // 对应该执行上下文的func_
   bool in_function_; //记录当前是否在function中
   ObPLContext *pl_ctx_; // for error stack
+  common::ObIAllocator *tmp_allocator_; // tmp allocator for copy param
   const common::ObIArray<int64_t> *nocopy_params_; //用于描述nocopy参数
   ObPLPackageGuard *guard_; //对应该次执行的package_guard
   ObArenaAllocator local_expr_alloc_;
+  ObArenaAllocator tmp_alloc_for_copy_param_;
 };
 
 // backup and restore ObExecContext attributes
