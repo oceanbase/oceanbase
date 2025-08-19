@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "lib/utility/ob_print_utils.h"
-#include "share/ob_cluster_version.h"
 #include "lib/time/Time.h"
 
 #define private public
@@ -32,6 +31,7 @@ namespace share
 using namespace oceanbase::common;
 using namespace obutil;
 
+const char *fake_tenant_name = "mysql";
 const char *UNITTEST_LICENSE_PUB_KEY = "-----BEGIN PUBLIC KEY-----\n"
 "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyuMQuAUAq1z3li7STl8I\n"
 "2ki8FzCYOswX2P+yFxKN5gEbY4kZCNgcY+nSbhhEr1kxFZG9EtwDzLng2VRT/ceD\n"
@@ -147,11 +147,11 @@ public:
     LOG_INFO("set up");
     license_mgr_ = OB_NEW(ObLicenseMgr, "TestLicense");
     ASSERT_TRUE(OB_NOT_NULL(license_mgr_));
-    license_mgr_->initialized_ = true;
+    license_mgr_->is_start_ = true;
     license_mgr_->is_unittest_ = true;
     license_mgr_->PUBLIC_KEY_PEM = UNITTEST_LICENSE_PUB_KEY;
-    license_mgr_->license_timestamp_service_.UPDATE_TIME_DURATION = INT64_MAX;
-    license_mgr_->license_timestamp_service_.is_unittest_ = true;
+    license_mgr_->timestamp_service_.UPDATE_TIME_DURATION = INT64_MAX;
+    license_mgr_->timestamp_service_.is_unittest_ = true;
   }
 
   virtual void TearDown() override
@@ -183,7 +183,7 @@ TEST_F(TestLicense, DecryptLicense)
 TEST_F(TestLicense, ParseAndValidateLicense)
 {
   ObLicense *license = nullptr;
-  ASSERT_EQ(license_mgr_->license_timestamp_service_.init_with_time(1739894401000000), OB_SUCCESS);
+  ASSERT_EQ(license_mgr_->timestamp_service_.start_with_time(1739894401000000), OB_SUCCESS);
 
   ASSERT_EQ(license_mgr_->parse_license(LICENSE_INVALID_FORMAT_1, license), OB_INVALID_LICENSE);
   ASSERT_EQ(license_mgr_->parse_license(LICENSE_INVALID_FORMAT_2, license), OB_INVALID_LICENSE);
@@ -223,7 +223,7 @@ TEST_F(TestLicense, ParseAndValidateLicense)
 }
 
 TEST_F(TestLicense, LicenseTimestampService) {
-  license_mgr_->license_timestamp_service_.UPDATE_TIME_DURATION = 0;
+  license_mgr_->timestamp_service_.UPDATE_TIME_DURATION = 0;
   int64_t time = 0;
   int64_t last_time = 0;
   const int64_t single_us = 1;
@@ -233,33 +233,33 @@ TEST_F(TestLicense, LicenseTimestampService) {
   const int64_t single_day = (int64_t) 24 * 60 * 60 * 1000 * 1000;
   int64_t current_sys_time = ObSysTime::now().toMicroSeconds();
 
-  ASSERT_EQ(license_mgr_->license_timestamp_service_.init_with_time(current_sys_time), OB_SUCCESS);
+  ASSERT_EQ(license_mgr_->timestamp_service_.start_with_time(current_sys_time), OB_SUCCESS);
 
-  ASSERT_EQ(license_mgr_->license_timestamp_service_.get_time(last_time), OB_SUCCESS);
+  ASSERT_EQ(license_mgr_->timestamp_service_.get_time(last_time), OB_SUCCESS);
   for (int i = 0; i < 3; i ++) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-    ASSERT_EQ(license_mgr_->license_timestamp_service_.get_time(time), OB_SUCCESS);
+    ASSERT_EQ(license_mgr_->timestamp_service_.get_time(time), OB_SUCCESS);
     ASSERT_LT(time, last_time + 20 * single_ms);
     ASSERT_GT(time, last_time + 5 * single_ms);
     last_time = time;
   }
 
-  license_mgr_->license_timestamp_service_.modified_sys_time_ = current_sys_time - single_day;
-  license_mgr_->license_timestamp_service_.get_time(time);
+  license_mgr_->timestamp_service_.modified_sys_time_ = current_sys_time - single_day;
+  license_mgr_->timestamp_service_.get_time(time);
   ASSERT_GT(time, current_sys_time);
   ASSERT_LT(time, current_sys_time + single_minute);
 
-  license_mgr_->license_timestamp_service_.modified_sys_time_ = current_sys_time + single_day;
-  license_mgr_->license_timestamp_service_.get_time(time);
+  license_mgr_->timestamp_service_.modified_sys_time_ = current_sys_time + single_day;
+  license_mgr_->timestamp_service_.get_time(time);
   ASSERT_GT(time, current_sys_time);
   ASSERT_LT(time, current_sys_time + single_minute);
 
-  ASSERT_EQ(license_mgr_->license_timestamp_service_.get_time(last_time), OB_SUCCESS);
+  ASSERT_EQ(license_mgr_->timestamp_service_.get_time(last_time), OB_SUCCESS);
   for (int i = 0; i < 3; i ++) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-    ASSERT_EQ(license_mgr_->license_timestamp_service_.get_time(time), OB_SUCCESS);
+    ASSERT_EQ(license_mgr_->timestamp_service_.get_time(time), OB_SUCCESS);
     ASSERT_LT(time, last_time + 20 * single_ms);
     ASSERT_GT(time, last_time + 5 * single_ms);
     last_time = time;
@@ -271,10 +271,10 @@ TEST_F(TestLicense, LicenseTimestampService) {
     threads.emplace_back(std::thread([this]() {
       int64_t time = 0;
       int64_t last_time = 0;
-      ASSERT_EQ(license_mgr_->license_timestamp_service_.get_time(last_time), OB_SUCCESS);
+      ASSERT_EQ(license_mgr_->timestamp_service_.get_time(last_time), OB_SUCCESS);
 
       for (int j = 0; j < 1000; j ++) {
-        ASSERT_EQ(license_mgr_->license_timestamp_service_.get_time(time), OB_SUCCESS);
+        ASSERT_EQ(license_mgr_->timestamp_service_.get_time(time), OB_SUCCESS);
         ASSERT_LT(time, last_time + single_second);
         ASSERT_GE(time, last_time);
         last_time = time;
@@ -289,16 +289,17 @@ TEST_F(TestLicense, LicenseTimestampService) {
 
 TEST_F(TestLicense, TestLicenseUtils) {
   ObLicenseMgr& g_license_mgr = ObLicenseMgr::instance;
-  ObLicenseTimestampService& g_time_service = g_license_mgr.license_timestamp_service_;
+  ObLicenseTimestampService& g_time_service = g_license_mgr.timestamp_service_;
   ObLicense *current_license = nullptr;
   char login_msg[50] = "Im a Invalid Login in message!      QwQ    =)   !";
+  const int64_t tenant_id = 1002;
 
-  g_license_mgr.initialized_ = true;
+  g_license_mgr.is_start_ = true;
   g_license_mgr.is_unittest_ = true;
   g_time_service.is_unittest_ = true;
   g_time_service.UPDATE_TIME_DURATION = INT64_MAX;
 
-  ASSERT_EQ(OB_SUCCESS, g_time_service.init_with_time(1739894401000000));
+  ASSERT_EQ(OB_SUCCESS, g_time_service.start_with_time(1739894401000000));
 
   ASSERT_EQ(OB_SUCCESS, g_license_mgr.gen_trail_license(current_license));
   ASSERT_TRUE(OB_NOT_NULL(current_license));
@@ -306,35 +307,35 @@ TEST_F(TestLicense, TestLicenseUtils) {
   current_license->node_num_ = 1;
 
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_dml_allowed());
-  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_olap_allowed());
-  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(0));
-  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(1));
+  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_olap_allowed(tenant_id));
+  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(0, fake_tenant_name));
+  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(1, fake_tenant_name));
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_standby_allowed());
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_create_table_allowed(1000));
 
   current_license->license_trail_ = false;
   current_license->expiration_time_ = 1739894401000000 - 1000000;
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_dml_allowed());
-  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_olap_allowed());
-  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(0));
-  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(1));
+  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_olap_allowed(tenant_id));
+  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(0, fake_tenant_name));
+  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(1, fake_tenant_name));
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_standby_allowed());
   ASSERT_EQ(OB_LICENSE_EXPIRED, ObLicenseUtils::check_create_table_allowed(1000));
 
   g_license_mgr.boot_with_expired_ = true;
   ASSERT_EQ(OB_LICENSE_EXPIRED, ObLicenseUtils::check_dml_allowed());
-  ASSERT_EQ(OB_LICENSE_EXPIRED, ObLicenseUtils::check_olap_allowed());
-  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(0));
-  ASSERT_EQ(OB_LICENSE_EXPIRED, ObLicenseUtils::check_add_tenant_allowed(1));
+  ASSERT_EQ(OB_LICENSE_EXPIRED, ObLicenseUtils::check_olap_allowed(tenant_id));
+  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(0, fake_tenant_name));
+  ASSERT_EQ(OB_LICENSE_EXPIRED, ObLicenseUtils::check_add_tenant_allowed(1, fake_tenant_name));
   ASSERT_EQ(OB_LICENSE_EXPIRED, ObLicenseUtils::check_standby_allowed());
   ASSERT_EQ(OB_LICENSE_EXPIRED, ObLicenseUtils::check_create_table_allowed(1000));
 
   current_license->license_trail_ = true;
   g_license_mgr.boot_with_expired_ = false;
   ASSERT_EQ(OB_LICENSE_EXPIRED, ObLicenseUtils::check_dml_allowed());
-  ASSERT_EQ(OB_LICENSE_EXPIRED, ObLicenseUtils::check_olap_allowed());
-  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(0));
-  ASSERT_EQ(OB_LICENSE_EXPIRED, ObLicenseUtils::check_add_tenant_allowed(1));
+  ASSERT_EQ(OB_LICENSE_EXPIRED, ObLicenseUtils::check_olap_allowed(tenant_id));
+  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(0, fake_tenant_name));
+  ASSERT_EQ(OB_LICENSE_EXPIRED, ObLicenseUtils::check_add_tenant_allowed(1, fake_tenant_name));
   ASSERT_EQ(OB_LICENSE_EXPIRED, ObLicenseUtils::check_standby_allowed());
   ASSERT_EQ(OB_LICENSE_EXPIRED, ObLicenseUtils::check_create_table_allowed(1000));
 
@@ -348,13 +349,16 @@ TEST_F(TestLicense, TestLicenseUtils) {
   ASSERT_EQ(0, strcmp(login_msg, "License will be expired in 1 days"));
 
 
+  const char *auxiliary_tenant_name = "mysql_$aux";
   current_license->allow_multi_tenant_ = false;
   current_license->allow_olap_ = false;
   current_license->allow_stand_by_ = false;
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_dml_allowed());
-  ASSERT_EQ(OB_LICENSE_SCOPE_EXCEEDED, ObLicenseUtils::check_olap_allowed());
-  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(0));
-  ASSERT_EQ(OB_LICENSE_SCOPE_EXCEEDED, ObLicenseUtils::check_add_tenant_allowed(1));
+  ASSERT_EQ(OB_LICENSE_SCOPE_EXCEEDED, ObLicenseUtils::check_olap_allowed(tenant_id));
+  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(0, fake_tenant_name));
+  ASSERT_EQ(OB_LICENSE_SCOPE_EXCEEDED, ObLicenseUtils::check_add_tenant_allowed(1, fake_tenant_name));
+  ASSERT_EQ(OB_LICENSE_SCOPE_EXCEEDED, ObLicenseUtils::check_add_tenant_allowed(1, fake_tenant_name));
+  ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_add_tenant_allowed(1, auxiliary_tenant_name));
   ASSERT_EQ(OB_LICENSE_SCOPE_EXCEEDED, ObLicenseUtils::check_standby_allowed());
   ASSERT_EQ(OB_SUCCESS, ObLicenseUtils::check_create_table_allowed(1000));
 }
@@ -366,7 +370,6 @@ int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");
-  oceanbase::share::ObClusterVersion::get_instance().init(CLUSTER_VERSION_4_2_5_3);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

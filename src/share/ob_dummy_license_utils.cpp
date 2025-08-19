@@ -45,7 +45,7 @@ int ObLicenseUtils::check_olap_allowed(const int64_t tenant_id)
 {
   return OB_SUCCESS;
 }
-int ObLicenseUtils::check_add_tenant_allowed(int user_tenant_num)
+int ObLicenseUtils::check_add_tenant_allowed(int user_tenant_num, const ObString &tenant_name)
 {
   return OB_SUCCESS;
 }
@@ -55,7 +55,7 @@ int ObLicenseUtils::check_standby_allowed()
   return OB_SUCCESS;
 }
 
-int ObLicenseUtils::check_for_create_tenant(int current_user_tenant_num, bool is_create_standby) {
+int ObLicenseUtils::check_for_create_tenant(int current_user_tenant_num, bool is_create_standby, const ObString &tenant_name) {
   return OB_SUCCESS;
 }
 

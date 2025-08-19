@@ -989,7 +989,7 @@ int ObTenantDDLService::create_tenant_schema(
       int64_t user_tenant_count = 0;
       if (OB_FAIL(schema_guard.get_user_tenant_count(user_tenant_count))) {
         LOG_WARN("fail to get tenant ids", KR(ret));
-      } else if (OB_FAIL(ObLicenseUtils::check_for_create_tenant(user_tenant_count, arg.is_standby_tenant()))) {
+      } else if (OB_FAIL(ObLicenseUtils::check_for_create_tenant(user_tenant_count, arg.is_standby_tenant(), user_tenant_schema.get_tenant_name_str()))) {
         LOG_WARN("create more tenant is not allowd", KR(ret), K(user_tenant_count));
       } else if (OB_FAIL(ddl_operator.create_tenant(meta_tenant_schema, OB_DDL_ADD_TENANT_START, trans))) {
         LOG_WARN("create tenant failed", KR(ret), K(meta_tenant_schema));
