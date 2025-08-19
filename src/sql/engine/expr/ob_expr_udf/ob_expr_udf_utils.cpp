@@ -872,7 +872,12 @@ int ObExprUDFUtils::process_out_params(const ObObj *objs_stack,
           }
         }
       }
-      OX (result.copy_value_or_obj(*modify, true));
+      if (result.is_pl_extend()
+          && (result.get_meta().get_extend_type() == pl::PL_REF_CURSOR_TYPE || result.get_meta().get_extend_type() == pl::PL_CURSOR_TYPE)) {
+        OZ (ObSPIService::spi_copy_ref_cursor(ctx, NULL, &result, modify));
+      } else {
+        OX (result.copy_value_or_obj(*modify, true));
+      }
       OX (modify->set_param_meta());
       if (OB_SUCC(ret) && iparams.at(i).is_ref_cursor_type()) {
         modify->set_is_ref_cursor_type(true);
@@ -947,7 +952,12 @@ int ObExprUDFUtils::process_singal_out_param(int64_t i,
           LOG_WARN("process function out param failed, type mismatch", K(ret),
                                                                  K(iparams.at(i)), K(*modify));
         } else {
-          OX (iparams.at(i).copy_value_or_obj(*modify, true));
+          if (iparams.at(i).is_pl_extend()
+              && (iparams.at(i).get_meta().get_extend_type() == pl::PL_REF_CURSOR_TYPE || iparams.at(i).get_meta().get_extend_type() == pl::PL_CURSOR_TYPE)) {
+            OZ (ObSPIService::spi_copy_ref_cursor(ctx, NULL, &iparams.at(i), modify));
+          } else {
+            OX (iparams.at(i).copy_value_or_obj(*modify, true));
+          }
           OX (modify->set_param_meta());
           if (OB_SUCC(ret) && iparams.at(i).is_ref_cursor_type()) {
             modify->set_is_ref_cursor_type(true);

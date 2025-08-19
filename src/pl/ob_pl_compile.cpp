@@ -102,6 +102,7 @@ int ObPLCompiler::init_anonymous_ast(
         pl_type.reset();
         pl_type.set_type(pl::PL_REF_CURSOR_TYPE);
         pl_type.set_type_from(pl::PL_TYPE_SYS_REFCURSOR);
+        pl_type.set_user_type_id(pl::PL_REF_CURSOR_TYPE, func_ast.get_user_type_table().get_sys_refcursor_type().get_user_type_id());
       } else
 #endif
       if (!is_mocked_anonymous_array_id(param.get_udt_id())) {

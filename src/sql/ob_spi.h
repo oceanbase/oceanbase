@@ -943,7 +943,8 @@ public:
                          bool &is_iter_end,
                          int64_t orc_max_ret_rows = INT64_MAX);
 
-  static int cursor_release(ObSQLSessionInfo *session,
+  static int cursor_release(pl::ObPLExecCtx *ctx,
+                            ObSQLSessionInfo *session,
                             pl::ObPLCursorInfo *cursor,
                             bool is_refcursor,
                             uint64_t package_id,
