@@ -1021,6 +1021,13 @@ public:
   void clear_transfer_blocking()
   { flag_ &= ~TRANSFER_BLOCKING_BIT; }
 
+  bool is_commit_submitting_redo() const
+  { return flag_ & COMMIT_SUBMITTING_REDO_BIT; }
+  void set_commit_submitting_redo()
+  { flag_ |= COMMIT_SUBMITTING_REDO_BIT; }
+  void clear_commit_submitting_redo()
+  { flag_ &= ~COMMIT_SUBMITTING_REDO_BIT; }
+
   // bool is_prepare_log_submitted() const
   // { return flag_ & PREPARE_LOG_SUBMITTED_BIT; }
   // void set_prepare_log_submitted()
@@ -1056,6 +1063,7 @@ private:
   static const int64_t PREPARE_NOTIFY_BIT = 1UL << 5;
   static const int64_t FORCE_ABORT_BIT = 1UL << 6;
   static const int64_t TRANSFER_BLOCKING_BIT = 1UL << 7;
+  static const int64_t COMMIT_SUBMITTING_REDO_BIT = 1UL << 8;
 private:
   int64_t flag_;
 };
