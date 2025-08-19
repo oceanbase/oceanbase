@@ -2144,7 +2144,8 @@ private:
       bool is_same_properties_names_ : 1;
       bool return_one_result_ : 1;
       bool need_all_prop_bitmap_ : 1;
-      uint64_t reserved : 60;
+      bool server_can_retry_ : 1;
+      uint64_t reserved : 59;
     };
   };
 
