@@ -1394,6 +1394,7 @@ int ObPluginVectorIndexLoadScheduler::safe_to_destroy(bool &is_safe)
 
   int64_t async_task_ref = 0;
   if (OB_NOT_NULL(vector_index_service_)) {
+    vector_index_service_->get_vec_async_task_handle().set_stop();
     async_task_ref = vector_index_service_->get_vec_async_task_handle().get_async_task_ref();
   }
 

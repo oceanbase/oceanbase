@@ -881,7 +881,7 @@ int ObVecIndexAsyncTaskUtil::fetch_new_trace_id(
 
 /**************************** ObVecIndexAsyncTaskHandler ******************************/
 ObVecIndexAsyncTaskHandler::ObVecIndexAsyncTaskHandler()
-  : is_inited_(false), tg_id_(INVALID_TG_ID), async_task_ref_cnt_(0)
+  : is_inited_(false), tg_id_(INVALID_TG_ID), async_task_ref_cnt_(0), stopped_(false)
 {
 }
 
@@ -922,6 +922,7 @@ int ObVecIndexAsyncTaskHandler::start()
 void ObVecIndexAsyncTaskHandler::stop()
 {
   LOG_INFO("vector index async task handler start to stop", K_(tg_id));
+  set_stop();
   if (OB_LIKELY(INVALID_TG_ID != tg_id_)) {
     TG_STOP(tg_id_);
   }

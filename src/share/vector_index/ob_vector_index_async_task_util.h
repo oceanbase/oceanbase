@@ -38,10 +38,11 @@ class ObPluginVectorIndexMgr;
 #define CHECK_TASK_CANCELLED_IN_PROCESS(ret, loop_cnt, ctx_)  \
   if (OB_FAIL(ret)) { \
   } else if (++loop_cnt > 20) { \
+    ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *); \
     bool is_cancel = false; \
     if (OB_FAIL(ObVecIndexAsyncTaskUtil::check_task_is_cancel(ctx_, is_cancel))) { \
       LOG_WARN("fail to check task is cancel", KPC(ctx_));  \
-    } else if (is_cancel) { \
+    } else if (is_cancel || (OB_NOT_NULL(vector_index_service) && vector_index_service->get_vec_async_task_handle().is_stopped())) { \
       ret = OB_CANCELED;  \
       LOG_INFO("async task is cancel", KPC(ctx_));  \
     } else {  \
@@ -233,6 +234,8 @@ public:
   void dec_async_task_ref() { ATOMIC_DEC(&async_task_ref_cnt_); }
   int64_t get_async_task_ref() const { return ATOMIC_LOAD(&async_task_ref_cnt_); }
   void handle_ls_process_task_cnt(const ObLSID &ls_id, const bool is_inc);
+  bool is_stopped() { return stopped_; }
+  void set_stop() { stopped_ = true; }
 
   virtual void handle(void *task) override;
   virtual void handle_drop(void *task) override;
@@ -247,6 +250,7 @@ private:
   bool is_inited_;
   int tg_id_;
   volatile int64_t async_task_ref_cnt_;
+  bool stopped_;
 };
 
 class ObPluginVectorIndexAdaptor;
