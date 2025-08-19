@@ -1431,6 +1431,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprVecChunk::generate_vec_chunk,                        /* 865 */
   NULL, // ObExprEmbeddedVec::generate_embedded_vec,                  /* 866 */
   NULL, // ObExprSemanticDistance::calc_semantic_distance,            /* 867 */
+  NULL, // ObExprBucket::calc_bucket_expr,                            /* 868 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
