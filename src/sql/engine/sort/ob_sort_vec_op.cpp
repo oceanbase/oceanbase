@@ -219,8 +219,8 @@ int ObSortVecOp::init_temp_row_store(const common::ObIArray<ObExpr *> &exprs,
   if (row_store.is_inited()) {
     // do nothing
   } else if (OB_FAIL(row_store.init(exprs, batch_size, mem_attr, 16 * 1024, true,
-                             sort_op_provider_.get_extra_size(is_sort_key) /* row_extra_size */,
-                             compress_type, reorder_fixed_expr, enable_trunc))) {
+              sort_op_provider_.get_extra_size(is_sort_key) /* row_extra_size */,
+              compress_type, reorder_fixed_expr, enable_trunc, tempstore_read_alignment_size_))) {
     LOG_WARN("init row store failed", K(ret));
   } else if (OB_FAIL(row_store.alloc_dir_id())) {
     LOG_WARN("failed to alloc dir id", K(ret));
@@ -407,6 +407,7 @@ int ObSortVecOp::init_sort(int64_t tenant_id, int64_t row_count, int64_t topn_cn
   context.enable_pd_topn_filter_ = MY_SPEC.enable_pd_topn_filter();
   context.pd_topn_filter_info_ = &MY_SPEC.pd_topn_filter_info_;
   context.op_ = this;
+  tempstore_read_alignment_size_ = ObTempBlockStore::get_read_alignment_size_config(tenant_id);
   if (MY_SPEC.prefix_pos_ > 0) {
     context.prefix_pos_ = MY_SPEC.prefix_pos_;
     context.sort_row_cnt_ = &sort_row_count_;

@@ -113,6 +113,7 @@ private:
   ObTempRowStore addon_row_store_;
   ObTempRowStore::Iterator sk_row_iter_;
   ObTempRowStore::Iterator addon_row_iter_;
+  int64_t tempstore_read_alignment_size_;
 };
 
 } // end namespace sql
