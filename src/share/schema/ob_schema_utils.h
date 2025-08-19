@@ -442,6 +442,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObParallelDDLControlMode);
 };
 
+class ObTenantDDLCountGuard
+{
+public:
+  ObTenantDDLCountGuard (const uint64_t tenant_id) : tenant_id_(tenant_id), had_inc_ddl_(false) {}
+  int try_inc_ddl_count();
+  ~ObTenantDDLCountGuard();
+private:
+  const int64_t tenant_id_;
+  bool had_inc_ddl_;
+  DISALLOW_COPY_AND_ASSIGN(ObTenantDDLCountGuard);
+};
 
 } // end schema
 } // end share

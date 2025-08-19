@@ -21,6 +21,7 @@
 #include "lib/xml/ob_xml_util.h"
 #include "sql/resolver/mv/ob_alter_mview_utils.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "share/table/ob_ttl_util.h"
 
 namespace oceanbase
 {
@@ -396,6 +397,18 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
       }
     }
 
+
+    if (OB_SUCC(ret)) {
+      const ObTableSchema *tbl_schema = nullptr;
+      if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
+        LOG_WARN("failed to get table schema", KR(ret));
+      } else if (OB_ISNULL(tbl_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is NULL", K(ret));
+      } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*tbl_schema, params_.is_htable_))) {
+        LOG_WARN("failed to check htable ddl supported", K(ret));
+      }
+    }
   }
   DEBUG_SYNC(HANG_BEFORE_RESOLVER_FINISH);
   return ret;
@@ -1472,28 +1485,30 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "SET/REMOVE TTL together with other Alter Column DDL");
       } else if (has_alter_column_option) {
-        HEAP_VAR(ObTableSchema, tbl_schema) {
-          ObSEArray<ObString, 8> ttl_columns;
-          if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
-            LOG_WARN("fail to get table schema", KR(ret));
-          } else if (OB_FAIL(common::ObTTLUtil::get_ttl_columns(tbl_schema.get_ttl_definition(), ttl_columns))) {
-            LOG_WARN("fail to get ttl column", KR(ret));
-          } else if (ttl_columns.empty()) {
-            // do nothing
-          } else {
-            AlterTableSchema &alter_table_schema = get_alter_table_stmt()->get_alter_table_arg().alter_table_schema_;
-            ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
-            ObTableSchema::const_column_iterator end = alter_table_schema.column_end();
-            for (; OB_SUCC(ret) && iter != end; ++iter) {
-              const AlterColumnSchema *column = static_cast<AlterColumnSchema *>(*iter);
-              if (OB_ISNULL(column)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected null alter column", KR(ret));
-              } else if (common::ObTTLUtil::is_ttl_column(column->get_origin_column_name(), ttl_columns)) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("Modify/Change TTL column is not allowed", KR(ret));
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify/Change TTL column");
-              }
+        const ObTableSchema *tbl_schema = nullptr;
+        ObSEArray<ObString, 8> ttl_columns;
+        if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
+          LOG_WARN("fail to get table schema", KR(ret));
+        } else if (OB_ISNULL(tbl_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table schema is NULL", K(ret));
+        } else if (OB_FAIL(common::ObTTLUtil::get_ttl_columns(tbl_schema->get_ttl_definition(), ttl_columns))) {
+          LOG_WARN("fail to get ttl column", KR(ret));
+        } else if (ttl_columns.empty()) {
+          // do nothing
+        } else {
+          AlterTableSchema &alter_table_schema = get_alter_table_stmt()->get_alter_table_arg().alter_table_schema_;
+          ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
+          ObTableSchema::const_column_iterator end = alter_table_schema.column_end();
+          for (; OB_SUCC(ret) && iter != end; ++iter) {
+            const AlterColumnSchema *column = static_cast<AlterColumnSchema *>(*iter);
+            if (OB_ISNULL(column)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null alter column", KR(ret));
+            } else if (common::ObTTLUtil::is_ttl_column(column->get_origin_column_name(), ttl_columns)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("Modify/Change TTL column is not allowed", KR(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify/Change TTL column");
             }
           }
         }
@@ -1525,15 +1540,17 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     if (OB_SUCC(ret) && has_alter_partition) {
       AlterTableSchema &alter_table_schema = get_alter_table_stmt()->get_alter_table_arg().alter_table_schema_;
       if (PARTITION_LEVEL_TWO == alter_table_schema.get_part_level()) {
-        HEAP_VAR(ObTableSchema, tbl_schema) {
-          if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
-            LOG_WARN("fail to get table schema", KR(ret));
-          } else if (!tbl_schema.get_kv_attributes().empty() &&
-              OB_FAIL(ObTTLUtil::check_kv_attributes(tbl_schema.get_kv_attributes(),
-                                                               tbl_schema,
-                                                               PARTITION_LEVEL_TWO))) {
-            LOG_WARN("fail to check kv attributes", K(ret));
-          }
+        const ObTableSchema *tbl_schema = nullptr;
+        if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
+          LOG_WARN("fail to get table schema", KR(ret));
+        } else if (OB_ISNULL(tbl_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table schema is NULL", K(ret));
+        } else if (!tbl_schema->get_kv_attributes().empty() &&
+            OB_FAIL(ObTTLUtil::check_kv_attributes(tbl_schema->get_kv_attributes(),
+                                                   *tbl_schema,
+                                                   PARTITION_LEVEL_TWO))) {
+          LOG_WARN("fail to check kv attributes", K(ret));
         }
       }
     }
@@ -1931,11 +1948,11 @@ int ObAlterTableResolver::add_sort_column(const obrpc::ObColumnSortItem &sort_co
   return ret;
 }
 
-int ObAlterTableResolver::get_table_schema_for_check(ObTableSchema &table_schema)
+int ObAlterTableResolver::get_table_schema_for_check(const ObTableSchema *&table_schema)
 {
   int ret = OB_SUCCESS;
   ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
-  const ObTableSchema *tbl_schema = NULL;
+  const ObTableSchema *tmp_table_schema = NULL;
   if (OB_ISNULL(alter_table_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "alter table stmt should not be null", K(ret));
@@ -1943,18 +1960,18 @@ int ObAlterTableResolver::get_table_schema_for_check(ObTableSchema &table_schema
                                                 alter_table_stmt->get_org_database_name(),
                                                 alter_table_stmt->get_org_table_name(),
                                                 false/*not index table*/,
-                                                tbl_schema))) {
+                                                tmp_table_schema))) {
     if (OB_TABLE_NOT_EXIST == ret) {
       ObCStringHelper helper;
       LOG_USER_ERROR(OB_TABLE_NOT_EXIST, helper.convert(alter_table_stmt->get_org_database_name()),
                      helper.convert(alter_table_stmt->get_org_table_name()));
     }
     LOG_WARN("fail to get table schema", K(ret));
-  } else if (OB_ISNULL(tbl_schema)) {
+  } else if (OB_ISNULL(tmp_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is NULL", K(ret));
-  } else if (OB_FAIL(table_schema.assign(*tbl_schema))){
-    LOG_WARN("fail to assign schema", K(ret));
+  } else {
+    table_schema = tmp_table_schema;
   }
   return ret;
 }

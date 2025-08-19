@@ -15,7 +15,7 @@
 #include "common/row/ob_row.h"
 #include "lib/string/ob_string.h"
 #include "share/table/ob_table.h"
-#include "ob_htable_lock_mgr.h"
+#include "observer/table/ob_htable_lock_mgr.h"
 #include "share/table/ob_table_rpc_struct.h"
 #include <stdint.h>
 #include "share/schema/ob_table_schema.h"
@@ -508,6 +508,23 @@ public:
                               bool is_tablegroup_req,
                               share::schema::ObSchemaGetterGuard &schema_guard,
                               const share::schema::ObSimpleTableSchemaV2 *&simple_table_schema,
+                              ObKvSchemaCacheGuard &schema_cache_guard);
+  static int init_tablegroup_schema(share::schema::ObSchemaGetterGuard &schema_guard,
+                                  ObTableApiCredential &credential,
+                                  const ObString &arg_tablegroup_name,
+                                  const share::schema::ObTableSchema *&table_schema);
+  static int init_schema_info(const ObString &arg_table_name,
+                              ObTableApiCredential &credential,
+                              bool is_tablegroup_req,
+                              share::schema::ObSchemaGetterGuard &schema_guard,
+                              const share::schema::ObTableSchema *&table_schema,
+                              ObKvSchemaCacheGuard &schema_cache_guard);
+  static int init_schema_info(const ObString &arg_table_name,
+                              uint64_t arg_table_id,
+                              ObTableApiCredential &credential,
+                              bool is_tablegroup_req,
+                              share::schema::ObSchemaGetterGuard &schema_guard,
+                              const share::schema::ObTableSchema *&table_schema,
                               ObKvSchemaCacheGuard &schema_cache_guard);
 private:
   static int build_range_by_entity(const ObITableEntity &entity, ObIAllocator &allocator, ObTableQuery &query);

@@ -212,33 +212,38 @@ int ObTableGroupHelp::check_table_alter_tablegroup(
 //need to check whether the partition type of tablegroup and table are consistent
 int ObTableGroupHelp::check_table_partition_in_tablegroup(const ObTableSchema *first_table_schema,
                                                           ObTableSchema &table,
-                                                          ObSchemaGetterGuard &schema_guard                                                              )
+                                                          ObSchemaGetterGuard &schema_guard,
+                                                          const ObTablegroupSchema *tablegroup)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table.get_tenant_id();
   const uint64_t tablegroup_id = table.get_tablegroup_id();
-  const ObTablegroupSchema *tablegroup = NULL;
+  const ObTablegroupSchema *tablegroup_schema = tablegroup;
   if (OB_UNLIKELY(OB_INVALID_ID == tablegroup_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablegroup_id is invalid", KR(ret), K(tablegroup_id));
   } else if (is_sys_tablegroup_id(tablegroup_id)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("can not handle with sys tablegroup", KR(ret), K(tablegroup_id));
-  } else if (OB_FAIL(schema_guard.get_tablegroup_schema(tenant_id, tablegroup_id, tablegroup))) {
+  } else if (OB_NOT_NULL(tablegroup_schema) && OB_UNLIKELY(tablegroup_id != tablegroup_schema->get_tablegroup_id())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablegroup id is not match with specified tablegroup schema id", KR(ret), K(tablegroup_id), KPC(tablegroup_schema));
+  } else if (OB_ISNULL(tablegroup_schema) && OB_FAIL(schema_guard.get_tablegroup_schema(tenant_id,
+      tablegroup_id, tablegroup_schema))) {
     LOG_WARN("fail to get tablegroup schema", KR(ret), K(tenant_id), KT(tablegroup_id));
-  } else if (OB_ISNULL(tablegroup)) {
+  } else if (OB_ISNULL(tablegroup_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablegroup schema is null", KR(ret), KT(tablegroup_id));
-  } else if (table.is_in_splitting() || tablegroup->is_in_splitting()) {
+  } else if (table.is_in_splitting() || tablegroup_schema->is_in_splitting()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("table or tablegroup is splitting", KR(ret), K(table), K(tablegroup));
+    LOG_WARN("table or tablegroup is splitting", KR(ret), K(table), KPC(tablegroup_schema));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "add table to tablegroup while either object is splitting");
   } else {
     // sort partition info in order, to prevent same value not in order from being misjudged
     if (OB_FAIL(ObSchemaServiceSQLImpl::sort_table_partition_info_v2(table))) {
       LOG_WARN("fail to sort table partition", K(ret));
-    } else if (OB_FAIL(check_partition_option(*tablegroup, first_table_schema, table, schema_guard))) {
-      LOG_WARN("fail to check partition option", KR(ret), KPC(tablegroup), K(table));
+    } else if (OB_FAIL(check_partition_option(*tablegroup_schema, first_table_schema, table, schema_guard))) {
+      LOG_WARN("fail to check partition option", KR(ret), KPC(tablegroup_schema), K(table));
     }
   }
   return ret;

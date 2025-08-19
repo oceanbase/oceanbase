@@ -1673,6 +1673,38 @@ int ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_te
   return ret;
 }
 
+int ObTenantDDLCountGuard::try_inc_ddl_count()
+{
+  int ret = OB_SUCCESS;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  if (OB_INVALID_TENANT_ID == tenant_id_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret));
+  } else if (OB_ISNULL(omt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("omt is null", KR(ret));
+  } else if (OB_FAIL(omt->inc_tenant_ddl_count(tenant_id_))) {
+    LOG_WARN("fail to inc tenant ddl count", KR(ret), K_(tenant_id));
+  } else {
+    had_inc_ddl_ = true;
+  }
+  return ret;
+}
+
+ObTenantDDLCountGuard::~ObTenantDDLCountGuard()
+{
+  int ret = OB_SUCCESS;
+  if (had_inc_ddl_) {
+    omt::ObMultiTenant *omt = GCTX.omt_;
+    if (OB_ISNULL(omt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("omt is null", KR(ret));
+    } else if (OB_FAIL(omt->dec_tenant_ddl_count(tenant_id_))) {
+      LOG_WARN("fail to dec tenant ddl count", KR(ret), K_(tenant_id));
+    }
+  }
+}
+
 } // end schema
 } // end share
 } // end oceanbase

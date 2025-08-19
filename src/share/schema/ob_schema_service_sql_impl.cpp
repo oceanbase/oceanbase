@@ -11284,6 +11284,149 @@ int ObSchemaServiceSQLImpl::get_obj_priv_with_obj_id(
   return ret;
 }
 
+int ObSchemaServiceSQLImpl::get_table_schemas_in_tablegroup(
+    common::ObIAllocator &allocator,
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const uint64_t tablegroup_id,
+    common::ObIArray<const ObTableSchema *> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObMySQLResult *result = NULL;
+  if (OB_FAIL(sql.assign_fmt("select * from %s where tenant_id = 0 AND tablegroup_id = %lu",
+                    OB_ALL_TABLE_TNAME, tablegroup_id))) {
+    LOG_WARN("failed to append sql", K(ret), K(sql));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(sql), K(tenant_id));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result. ", K(ret));
+      } else {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+          ObTableSchema *table_schema = NULL;
+          if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator, table_schema))) {
+            LOG_WARN("failed to alloc schema", K(ret));
+          } else if (OB_ISNULL(table_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table schema is NULL", KR(ret));
+          } else {
+            bool is_deleted = false;
+            if (OB_FAIL(ObSchemaRetrieveUtils::fill_table_schema(
+                          tenant_id, false /*check_deleted*/, *result, *table_schema, is_deleted))) {
+              LOG_WARN("failed to fill table schema", K(ret), K(tenant_id));
+            } else if (OB_FAIL(table_schemas.push_back(table_schema))) {
+              LOG_WARN("failed to push back", K(ret));
+            }
+          }
+          if (OB_FAIL(ret) && OB_NOT_NULL(table_schema)) {
+            OB_DELETEx(ObTableSchema, &allocator, table_schema);
+          }
+        }
+
+        if (ret == OB_ITER_END) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get table schemas in tablegroup", K(ret), K(tenant_id), K(tablegroup_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::check_database_exists_in_tablegroup(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const uint64_t tablegroup_id,
+    bool &exists)
+{
+  int ret = OB_SUCCESS;
+  uint64_t database_id = OB_INVALID_ID;
+  ObSqlString sql;
+  exists = false;
+  ObMySQLResult *result = NULL;
+  if (OB_FAIL(sql.assign_fmt("select database_id from %s where tenant_id = 0 AND default_tablegroup_id = %lu",
+                    OB_ALL_DATABASE_TNAME, tablegroup_id))) {
+    LOG_WARN("failed to append sql", K(ret), K(sql));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(sql), K(tenant_id));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result. ", K(ret));
+      } else {
+        if (OB_FAIL(result->next())) {
+          if (ret != OB_ITER_END) {
+            LOG_WARN("failed to get next result", K(ret));
+          } else {
+            ret = OB_SUCCESS;
+          }
+        } else {
+          EXTRACT_INT_FIELD_MYSQL(*result, "database_id", database_id, uint64_t);
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (database_id != OB_INVALID_ID) {
+      exists = true;
+    }
+  }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::get_table_id_and_table_name_in_tablegroup(
+    common::ObIAllocator &allocator,
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const uint64_t tablegroup_id,
+    common::ObIArray<ObString> &table_names,
+    common::ObIArray<uint64_t> &table_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObMySQLResult *result = NULL;
+  if (OB_FAIL(sql.assign_fmt("select table_id, table_name from %s where tenant_id = 0 AND tablegroup_id = %lu",
+                    OB_ALL_TABLE_TNAME, tablegroup_id))) {
+    LOG_WARN("failed to append sql", K(ret), K(sql));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("failed to execute sql", KR(ret), K(sql), K(tenant_id));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result. ", K(ret));
+      } else {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+          uint64_t tmp_table_id = OB_INVALID_ID;
+          ObString tmp_table_name;
+          ObString table_name;
+          EXTRACT_INT_FIELD_MYSQL(*result, "table_id", tmp_table_id, uint64_t);
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "table_name", tmp_table_name);
+          if (FAILEDx(table_ids.push_back(tmp_table_id))) {
+            LOG_WARN("fail to push back table id", KR(ret), K(tmp_table_id));
+          } else if (OB_FAIL(ob_write_string(allocator, tmp_table_name, table_name, true/*c_style*/))) {
+            LOG_WARN("fail to write string", KR(ret), K(tmp_table_name));
+          } else if (OB_FAIL(table_names.push_back(table_name))) {
+            LOG_WARN("fail to push back table name", KR(ret), K(table_name));
+          }
+        }
+
+        if (ret == OB_ITER_END) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get table ids and names in tablegroup", K(ret), K(tenant_id), K(tablegroup_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 }//namespace schema
 }//namespace share
 }//namespace oceanbase

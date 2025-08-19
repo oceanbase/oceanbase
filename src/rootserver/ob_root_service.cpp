@@ -70,8 +70,12 @@
 #include "parallel_ddl/ob_set_comment_helper.h" //ObCommentHelper
 #include "parallel_ddl/ob_create_index_helper.h" // ObCreateIndexHelper
 #include "parallel_ddl/ob_update_index_status_helper.h" // ObUpdateIndexStatusHelper
+#include "parallel_ddl/ob_htable_ddl_handler.h" // ObUpdateIndexStatusHelper
 #include "pl_ddl/ob_pl_ddl_service.h"
 #include "storage/ddl/ob_tablet_split_util.h"
+#include "parallel_ddl/ob_drop_tablegroup_helper.h" // ObDropTableGroupHelper
+#include "parallel_ddl/ob_create_tablegroup_helper.h" // ObCreateTableGroupHelper
+#include "share/table/ob_ttl_util.h"
 #include "share/ob_license_utils.h"
 #include "parallel_ddl/ob_drop_table_helper.h" // ObDropTableHelper
 
@@ -3188,6 +3192,56 @@ int ObRootService::parallel_create_table(const ObCreateTableArg &arg, ObCreateTa
   return ret;
 }
 
+int ObRootService::parallel_htable_ddl(const ObHTableDDLArg &arg, ObHTableDDLRes &res)
+{
+  int ret = OB_SUCCESS;
+  LOG_TRACE("receive htable ddl arg", K(arg));
+  int64_t begin_time = ObTimeUtility::current_time();
+  const uint64_t tenant_id = arg.exec_tenant_id_;
+  uint64_t data_version = 0;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (!((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
+               || (data_version >= DATA_VERSION_4_4_1_0))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("parallel htable ddl is not supported", KR(ret), K(tenant_id), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "parallel htable ddl");
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(parallel_ddl_pre_check_(tenant_id))) {
+    LOG_WARN("pre check failed before parallel ddl execute", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret));
+  } else {
+    ObArenaAllocator tmp_allocator(lib::ObLabel("paralHtDDL"));
+    ObHTableDDLHandlerGuard guard(tmp_allocator);
+    ObHTableDDLHandler *handler = nullptr;
+    if (OB_FAIL(guard.get_handler(ddl_service_, *schema_service_, arg, res, handler))) {
+      LOG_WARN("fail to get handler", KR(ret), K(arg), K(tenant_id));
+    } else if (OB_ISNULL(handler)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("handler is null", KR(ret));
+    } else if (OB_FAIL(handler->init())) {
+      LOG_WARN("fail to init handle", KR(ret), K(arg), K(tenant_id));
+    } else if (OB_FAIL(handler->handle())) {
+      LOG_WARN("fail to handle", KR(ret), K(arg), K(tenant_id));
+    }
+  }
+  int64_t cost = ObTimeUtility::current_time() - begin_time;
+  LOG_TRACE("finish htable ddl", KR(ret), K(arg), K(cost));
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "parallel htable ddl",
+                        K(tenant_id),
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
+                        K(cost));
+  return ret;
+}
+
 int ObRootService::gen_container_table_schema_(const ObCreateTableArg &arg,
                                                ObSchemaGetterGuard &schema_guard,
                                                ObTableSchema &mv_table_schema,
@@ -3857,6 +3911,12 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
           }
         }
       } // check foreign key info end.
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(schema_guard, table_schema.get_tenant_id(), arg.dep_infos_))) {
+          LOG_WARN("failed to check htable ddl supported", K(ret), "tenant_id", table_schema.get_tenant_id(), K(arg.dep_infos_));
+        }
+      }
     }
     RS_TRACE(generate_schema_finish);
     if (OB_SUCC(ret)) {
@@ -5128,7 +5188,6 @@ int ObRootService::drop_database(const obrpc::ObDropDatabaseArg &arg, ObDropData
   }
   return ret;
 }
-
 
 int ObRootService::drop_tablegroup(const obrpc::ObDropTablegroupArg &arg)
 {

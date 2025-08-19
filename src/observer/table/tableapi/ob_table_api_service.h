@@ -130,7 +130,9 @@ private:
       ctx.set_need_dist_das(true);
       // set all op to ET_DYNAMIC temperally, because if entity_type == ET_HKV, if will modify timestamp
       ctx.set_entity_type(ObTableEntityType::ET_DYNAMIC);
-      if (OB_FAIL(get_spec<SPEC_TYPE>(ctx, cache_guard, spec))) {
+      if (OB_FAIL(ctx.adjust_entity())) {
+        SERVER_LOG(WARN, "fail to adjust entity", K(ret), K(entity));
+      } else if (OB_FAIL(get_spec<SPEC_TYPE>(ctx, cache_guard, spec))) {
         SERVER_LOG(WARN, "fail to get spec", K(ret), K(SPEC_TYPE), K(OP_TYPE));
       } else if (OB_FAIL(spec->create_executor(ctx, executor))) {
         SERVER_LOG(WARN, "fail to create executor", K(ret), K(SPEC_TYPE), K(OP_TYPE));

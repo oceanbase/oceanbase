@@ -169,9 +169,15 @@ int ObTableLoginP::get_ids()
                                              result_.database_id_))) {
       LOG_WARN("failed to get database id", K(ret), "database", arg_.database_name_);
     } else if (OB_INVALID_ID == result_.database_id_) {
-      ret = OB_ERR_BAD_DATABASE;
-      LOG_USER_ERROR(OB_ERR_BAD_DATABASE, arg_.database_name_.length(), arg_.database_name_.ptr());
-      LOG_WARN("failed to get database id", K(ret), "database", arg_.database_name_);
+      if (arg_.client_type_ ==  3) {
+        ret = OB_KV_HBASE_NAMESPACE_NOT_FOUND;
+        LOG_USER_ERROR(OB_KV_HBASE_NAMESPACE_NOT_FOUND, arg_.database_name_.length(), arg_.database_name_.ptr());
+        LOG_WARN("failed to get database id for hbase namespace", K(ret), "namespace", arg_.database_name_);
+      } else {
+        ret = OB_ERR_BAD_DATABASE;
+        LOG_USER_ERROR(OB_ERR_BAD_DATABASE, arg_.database_name_.length(), arg_.database_name_.ptr());
+        LOG_WARN("failed to get database id", K(ret), "database", arg_.database_name_);
+      }
     } else if (OB_FAIL(guard.get_user_id(result_.tenant_id_, arg_.user_name_,
                                          ObString::make_string("%")/*assume there is no specific host*/,
                                          result_.user_id_))) {
@@ -267,6 +273,7 @@ ObTableApiProcessorBase::ObTableApiProcessorBase(const ObGlobalContext &gctx)
       sess_guard_(),
       schema_guard_(),
       simple_table_schema_(nullptr),
+      table_schema_(nullptr),
       req_timeinfo_guard_(),
       schema_cache_guard_(),
       stat_process_type_(-1),
@@ -332,6 +339,56 @@ int ObTableApiProcessorBase::init_schema_info(uint64_t table_id,
   } else if (OB_FAIL(schema_cache_guard_.init(credential_.tenant_id_,
                                               simple_table_schema_->get_table_id(),
                                               simple_table_schema_->get_schema_version(),
+                                              schema_guard_))) {
+    LOG_WARN("fail to init schema cache guard", K(ret));
+  }
+  return ret;
+}
+
+// init member table_schema_ (ObTableSchema)
+int ObTableApiProcessorBase::init_table_schema_info(const ObString &arg_table_name, uint64_t arg_table_id)
+{
+  return ObHTableUtils::init_schema_info(arg_table_name, arg_table_id, credential_, is_tablegroup_req_,
+                                         schema_guard_, table_schema_, schema_cache_guard_);
+}
+
+int ObTableApiProcessorBase::init_table_schema_info(const ObString &arg_table_name)
+{
+  return ObHTableUtils::init_schema_info(arg_table_name, credential_, is_tablegroup_req_, schema_guard_,
+                                         table_schema_, schema_cache_guard_);
+}
+
+
+int ObTableApiProcessorBase::init_table_schema_info(uint64_t table_id,
+                                                    const ObString &arg_table_name,
+                                                    bool check_match/*=true*/)
+{
+  int ret = OB_SUCCESS;
+  if (schema_cache_guard_.is_inited()) {
+    // skip and do nothing
+  } else if (OB_ISNULL(gctx_.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema service", K(ret));
+  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(credential_.tenant_id_, schema_guard_))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(credential_.tenant_id_));
+  } else if (OB_FAIL(schema_guard_.get_table_schema(credential_.tenant_id_, table_id, table_schema_))) {
+    LOG_WARN("fail to get table schema", K(ret), K(credential_.tenant_id_), K(table_id));
+  } else if (OB_ISNULL(table_schema_) || !table_schema_->is_valid()) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", K(ret), K(credential_), K(table_id));
+  } else if (check_match && !arg_table_name.empty()
+      && arg_table_name.case_compare(table_schema_->get_table_name()) != 0) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("arg table name is not match with schema table name", K(ret), K(arg_table_name),
+            K(table_schema_->get_table_name()));
+  } else if (table_schema_->is_in_recyclebin()) {
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_USER_ERROR(OB_ERR_OPERATION_ON_RECYCLE_OBJECT);
+    LOG_WARN("table is in recycle bin, not allow to do operation", K(ret), K(credential_.tenant_id_),
+                K(credential_.database_id_), K(table_id));
+  } else if (OB_FAIL(schema_cache_guard_.init(credential_.tenant_id_,
+                                              table_schema_->get_table_id(),
+                                              table_schema_->get_schema_version(),
                                               schema_guard_))) {
     LOG_WARN("fail to init schema cache guard", K(ret));
   }
@@ -650,6 +707,7 @@ template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<O
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_LS_EXECUTE> >;
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_REDIS_EXECUTE> >;
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_REDIS_EXECUTE_V2> >;
+template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_META_INFO_EXECUTE> >;
 
 
 template<class T>

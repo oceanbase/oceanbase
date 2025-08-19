@@ -22,6 +22,7 @@
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "rootserver/ddl_task/ob_sys_ddl_util.h" // for ObSysDDLSchedulerUtil
 #include "rootserver/ob_split_partition_helper.h"
+#include "share/table/ob_ttl_util.h"
 #include "rootserver/ob_create_index_on_empty_table_helper.h"
 
 namespace oceanbase
@@ -1596,6 +1597,8 @@ int ObIndexBuilder::do_create_index(
              K(index_count), K(OB_MAX_INDEX_PER_TABLE), K(index_aux_count), K(OB_MAX_AUX_TABLE_PER_MAIN_TABLE), K(ret));
   } else if (OB_FAIL(ddl_service_.check_fk_related_table_ddl(*table_schema, ObDDLType::DDL_CREATE_INDEX))) {
     LOG_WARN("check whether the foreign key related table is executing ddl failed", K(ret));
+  } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*table_schema, false/*by_admin*/))) {
+    LOG_WARN("failed to check htable ddl supported", K(ret));
   } else if (INDEX_TYPE_NORMAL_LOCAL == arg.index_type_
              || INDEX_TYPE_UNIQUE_LOCAL == arg.index_type_
              || INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == arg.index_type_

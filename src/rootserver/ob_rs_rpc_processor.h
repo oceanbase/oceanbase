@@ -37,7 +37,8 @@ inline bool is_parallel_ddl(const obrpc::ObRpcPacketCode pcode)
          || obrpc::OB_PARALLEL_CREATE_INDEX == pcode
          || obrpc::OB_PARALLEL_UPDATE_INDEX_STATUS == pcode
          || obrpc::OB_PARALLEL_DROP_TABLE == pcode
-         || obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT == pcode;
+         || obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT == pcode
+         || obrpc::OB_PARALLEL_HTABLE_DDL == pcode;
 }
 
 inline bool need_ddl_lock(const obrpc::ObRpcPacketCode pcode)
@@ -238,6 +239,14 @@ protected:
         ret = OB_OP_NOT_ALLOW;
         RS_LOG(WARN, "ddl operation not allow, can not process this request", K(ret), K(pcode));
       } else {
+        int64_t consumer_group_id = share::OBCG_DEFAULT;
+        if (is_ddl_like_ && OB_NOT_NULL(ddl_arg_)) {
+          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ddl_arg_->exec_tenant_id_));
+          if (tenant_config.is_valid() && tenant_config->_enable_ddl_worker_isolation) {
+            consumer_group_id = share::OBCG_DDL;
+          }
+        }
+        CONSUMER_GROUP_ID_GUARD(consumer_group_id);
         if (is_ddl_like_) {
           if (OB_ISNULL(ddl_arg_)) {
             ret = OB_MISS_ARGUMENT;
@@ -767,6 +776,8 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FORCE_DROP_LONELY_LOB_AUX_TABLE, ObForceDr
 // external resource ddl
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_EXTERNAL_RESOURCE, ObRpcCreateExternalResourceP, create_external_resource(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_EXTERNAL_RESOURCE, ObRpcDropExternalResourceP, drop_external_resource(arg_, result_));
+// htable ddl
+DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_PARALLEL_HTABLE_DDL, ObRpcParallelHTableDDLP, parallel_htable_ddl(arg_, result_));
 
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR

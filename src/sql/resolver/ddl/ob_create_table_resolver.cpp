@@ -989,7 +989,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
     if (OB_SUCC(ret)) {
       ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
       if (!table_schema.get_kv_attributes().empty() &&
-          OB_FAIL(ObTTLUtil::check_kv_attributes(table_schema))) {
+          OB_FAIL(ObTTLUtil::check_kv_attributes(table_schema, params_.is_htable_))) {
         LOG_WARN("fail to check kv attributes", K(ret));
       }
     }
@@ -2541,13 +2541,11 @@ int ObCreateTableResolver::add_sort_column(const ObColumnSortItem &sort_column)
   return ret;
 }
 
-int ObCreateTableResolver::get_table_schema_for_check(ObTableSchema &table_schema)
+int ObCreateTableResolver::get_table_schema_for_check(const ObTableSchema *&table_schema)
 {
   int ret = OB_SUCCESS;
   ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
-  if (OB_FAIL(table_schema.assign(create_table_stmt->get_create_table_arg().schema_))) {
-    SQL_RESV_LOG(WARN, "fail to assign schema", K(ret));
-  }
+  table_schema = &(create_table_stmt->get_create_table_arg().schema_);
   return ret;
 }
 

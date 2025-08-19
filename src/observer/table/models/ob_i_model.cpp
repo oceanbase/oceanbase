@@ -82,7 +82,7 @@ int ObIModel::prepare(ObTableExecCtx &ctx,
                                    ctx.get_sess_guard(),
                                    ctx.get_schema_cache_guard(),
                                    ctx.get_schema_guard(),
-                                   nullptr,/*simple_schema*/
+                                   ctx.get_table_schema(),
                                    clip_type);
 
   if (OB_FAIL(calculator.calc(ctx.get_table_id(), req.query_.get_scan_ranges(), tablet_ids))) {
@@ -184,7 +184,8 @@ int ObIModel::init_tablet_id_ops_map(ObTableExecCtx &ctx,
     ObTablePartCalculator calculator(ctx.get_allocator(),
                                      ctx.get_sess_guard(),
                                      ctx.get_schema_cache_guard(),
-                                     ctx.get_schema_guard());
+                                     ctx.get_schema_guard(),
+                                     ctx.get_table_schema());
     const ObTableTabletOp &tablet_op = req.ls_op_->at(0);
     const int64_t op_count = tablet_op.count();
     for (int64_t i = 0; i < op_count && OB_SUCC(ret); i++) {
@@ -563,7 +564,8 @@ int ObIModel::init_request_result_for_mix_batch(ObTableExecCtx &ctx,
     ObTablePartCalculator calculator(ctx.get_allocator(),
                                   ctx.get_sess_guard(),
                                   ctx.get_schema_cache_guard(),
-                                  ctx.get_schema_guard());
+                                  ctx.get_schema_guard(),
+                                  ctx.get_table_schema());
     ObSEArray<ObString, 8> all_prop_name;
     all_prop_name.set_attr(ObMemAttr(MTL_ID(), "AllPropNames"));
     if (src_req.ls_op_->need_all_prop_bitmap()) {
@@ -822,6 +824,7 @@ int ObIModel::prepare(ObTableExecCtx &arg_ctx,
     LOG_WARN("query type is invalid", K(ret), K(query_type));
   } else if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->get_session_id(real_sessid, arg_sessid, query_type))) {
     LOG_WARN("fail to get query session id", K(ret), K(arg_sessid), K(query_type));
+  } else if (FALSE_IT(res.query_session_id_ = real_sessid)) {
   } else if (OB_FAIL(get_query_session(real_sessid, query_type, query_session_))) {
     LOG_WARN("fail to get query session", K(ret), K(real_sessid), K(query_type));
   } else if (ObQueryOperationType::QUERY_START == query_type) {
@@ -856,7 +859,7 @@ int ObIModel::prepare(ObTableExecCtx &arg_ctx,
                                          ctx->get_sess_guard(),
                                          ctx->get_schema_cache_guard(),
                                          ctx->get_schema_guard(),
-                                         nullptr,/*simple_schema*/
+                                         ctx->get_table_schema(),
                                          clip_type);
         if (OB_FAIL(calculator.calc(table_id, req.query_.get_scan_ranges(), tablet_ids))) {
           LOG_WARN("fail to calc tablet_id", K(ret), K(ctx), K(req.query_.get_scan_ranges()));
@@ -891,7 +894,6 @@ int ObIModel::work(ObTableExecCtx &ctx,
     LOG_WARN("fail to get or create async query iter", K(ret));
   } else {
     int64_t session_id = query_session_->get_session_id();
-    res.query_session_id_ = session_id;
     WITH_CONTEXT(query_session_->get_memory_ctx()) {
       if (ObQueryOperationType::QUERY_START == query_type) {
         lease_timeout_period_ = query_iter->get_lease_timeout_period();

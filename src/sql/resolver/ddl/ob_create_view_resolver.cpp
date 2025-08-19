@@ -19,6 +19,7 @@
 #include "observer/virtual_table/ob_table_columns.h"
 #include "sql/rewrite/ob_transformer_impl.h"
 #include "storage/mview/ob_mview_refresh.h"
+#include "share/table/ob_ttl_util.h"
 #include "share/ob_license_utils.h"
 
 namespace oceanbase
@@ -1618,6 +1619,20 @@ int ObCreateViewResolver::collect_dependency_infos(ObQueryCtx *query_ctx,
       OX (create_arg.schema_.set_max_dependency_version(dep_obj_item->max_ref_obj_schema_version_));
     }
   }
+
+  CK (OB_NOT_NULL(schema_checker_));
+  CK (OB_NOT_NULL(session_info_));
+  if (OB_SUCC(ret)) {
+    ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+    const uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    if (OB_ISNULL(schema_guard)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null", K(ret));
+    } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*schema_guard, tenant_id, create_arg.dep_infos_))) {
+      LOG_WARN("failed to check htable ddl supported", K(ret), K(tenant_id), K(create_arg.dep_infos_));
+    }
+  }
+
   return ret;
 }
 int ObCreateViewResolver::try_add_undefined_column_infos(const uint64_t tenant_id,

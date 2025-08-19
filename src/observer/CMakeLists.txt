@@ -144,7 +144,6 @@ ob_set_subtarget(ob_server table
   table/ob_htable_filter_parser.cpp
   table/ob_htable_filters.cpp
   table/ob_table_filter.cpp
-  table/ob_htable_utils.cpp
   table/ob_table_batch_execute_processor.cpp
   table/ob_table_end_trans_cb.cpp
   table/ob_table_execute_processor.cpp
@@ -186,7 +185,6 @@ ob_set_subtarget(ob_server table
   table/ob_table_connection_mgr.cpp
   table/redis/ob_redis_meta.cpp
   table/ob_table_batch_service.cpp
-  table/ob_table_trans_utils.cpp
   table/group/ob_table_group_common.cpp
   table/group/ob_table_tenant_group.cpp
   table/group/ob_table_group_service.cpp
@@ -256,6 +254,13 @@ ob_set_subtarget(ob_server table
   table/common/ob_table_query_session_mgr.cpp
   table/common/ob_hbase_common_struct.cpp
   table/ob_table_merge_filter.cpp
+  table/ob_table_meta_handler.cpp
+  table/ob_table_meta_processor.cpp
+  table/utils/ob_table_sql_utils.cpp
+  table/utils/ob_htable_utils.cpp
+  table/utils/ob_table_trans_utils.cpp
+  table/utils/ob_table_json_utils.cpp
+  table/utils/ob_table_convert_utils.cpp
 )
 
 ob_set_subtarget(ob_server table_load

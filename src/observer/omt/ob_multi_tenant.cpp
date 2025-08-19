@@ -2975,3 +2975,53 @@ void ObSharedTimer::destroy()
     tg_id_ = -1;
   }
 }
+
+int ObMultiTenant::inc_tenant_ddl_count(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard guard(lock_);
+  ObTenant *tenant = NULL;
+  if (OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret));
+  } else if (OB_FAIL(get_tenant_unsafe(tenant_id, tenant))) {
+    LOG_WARN("fail to get tenant", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant is null", KR(ret));
+  } else {
+    if (tenant->check_ddl_thread_is_limit()) {
+      ret = OB_ERR_DDL_RESOURCE_NOT_ENOUGH;
+      LOG_WARN("tenant ddl task larger than limit, need retry", KR(ret), K(tenant->cur_ddl_thread_count()));
+    } else {
+      lib::Thread::set_doing_ddl(true);
+      tenant->inc_ddl_thread_count();
+    }
+  }
+  return ret;
+}
+
+int ObMultiTenant::dec_tenant_ddl_count(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard guard(lock_);
+  ObTenant *tenant = NULL;
+  if (OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret));
+  } else if (OB_FAIL(get_tenant_unsafe(tenant_id, tenant))) {
+    LOG_WARN("fail to get tenant", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant is null", KR(ret));
+  } else {
+    lib::Thread::set_doing_ddl(false);
+    tenant->dec_ddl_thread_count();
+    if (tenant->cur_ddl_thread_count() < 0) {
+      LOG_ERROR("tenant ddl count is less than 0, please check", K(tenant_id), K(tenant->cur_ddl_thread_count()));
+    } else {
+      LOG_TRACE("tenant ddl count", K(tenant_id), K(tenant->cur_ddl_thread_count()));
+    }
+  }
+  return ret;
+}

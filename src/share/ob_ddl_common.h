@@ -497,6 +497,7 @@ static inline bool is_ddl_stmt_packet_retry_err(const int ret)
       || OB_TRANS_KILLED == ret || OB_TRANS_ROLLBACKED == ret // table lock doesn't support leader switch
       || OB_PARTITION_IS_BLOCKED == ret // when LS is block_tx by a transfer task
       || OB_TRANS_NEED_ROLLBACK == ret // transaction killed by leader switch
+      || OB_ERR_DDL_RESOURCE_NOT_ENOUGH == ret // tenant ddl resource not enough
       ;
 }
 

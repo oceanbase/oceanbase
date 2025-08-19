@@ -274,13 +274,14 @@ public:
     INVALID,
     TABLE
   };
-
   explicit ObKVAttr()
     : type_(ObTTLTableType::INVALID),
       ttl_(0),
       max_version_(0),
+      is_disable_(false),
       is_redis_ttl_(false),
-      redis_model_(table::ObRedisDataModel::MODEL_MAX)
+      redis_model_(table::ObRedisDataModel::MODEL_MAX),
+      created_by_admin_(false)
   {}
   bool is_ttl_table() const;
   OB_INLINE bool is_max_versions_valid() const
@@ -288,21 +289,25 @@ public:
     return type_ == ObTTLTableType::HBASE && max_version_ > 0;
   }
   OB_INLINE bool is_empty() const { return type_ == ObTTLTableType::INVALID; }
-  TO_STRING_KV(K_(type), K_(ttl), K_(max_version), K_(is_redis_ttl), K_(redis_model));
+  OB_INLINE bool is_created_by_admin() const { return type_ == ObTTLTableType::HBASE && created_by_admin_; }
+  TO_STRING_KV(K_(type), K_(ttl), K_(max_version), K_(is_disable), K_(is_redis_ttl), K_(redis_model), K_(created_by_admin));
 
   ObTTLTableType type_;
 
   // for hbase
   int32_t  ttl_;
   int32_t  max_version_;
-
+  bool     is_disable_;
   // for redis
   bool is_redis_ttl_;
   table::ObRedisDataModel redis_model_;
+  bool created_by_admin_;
 };
 
 class ObTTLUtil
 {
+private:
+  static const char* HBASE_KV_ATTR_FORMAT_STR;
 public:
   static int parse(const char* str, ObTTLDutyDuration& duration);
   static bool current_in_duration(ObTTLDutyDuration& duration);
@@ -368,7 +373,7 @@ public:
   static bool check_can_process_tenant_tasks(uint64_t tenant_id);
 
   static int parse_kv_attributes(const ObString &kv_attributes, ObKVAttr &kv_attr);
-
+  static int format_kv_attributes_to_json_str(ObIAllocator &allocator, const ObKVAttr &kv_attr, ObString &json_str);
   static int dispatch_ttl_cmd(const ObTTLParam &param);
   static int get_ttl_info(const ObTTLParam &param, ObIArray<ObSimpleTTLInfo> &ttl_info_array);
 
@@ -386,10 +391,18 @@ public:
 
   static int get_ttl_columns(const ObString &ttl_definition, ObIArray<ObString> &ttl_columns);
   static bool is_ttl_column(const ObString &orig_column_name, const ObIArray<ObString> &ttl_columns);
-  static int check_kv_attributes(const share::schema::ObTableSchema &table_schema);
+  static int check_kv_attributes(const share::schema::ObTableSchema &table_schema, bool by_admin = false);
   static int check_kv_attributes(const ObString &kv_attributes,
                                  const share::schema::ObTableSchema &table_schema,
-                                 ObPartitionLevel part_level);
+                                 ObPartitionLevel part_level,
+                                 bool by_admin = false);
+  static int check_htable_ddl_supported(const share::schema::ObTableSchema &table_schema,
+                                        bool by_admin,
+                                        obrpc::ObHTableDDLType ddl_type = obrpc::ObHTableDDLType::INVALID,
+                                        const ObString &table_name = ObString());
+  static int check_htable_ddl_supported(share::schema::ObSchemaGetterGuard &schema_guard,
+                                        const uint64_t tenant_id,
+                                        const common::ObIArray<share::schema::ObDependencyInfo> &dep_infos);
   const static uint64_t TTL_TENNAT_TASK_TABLET_ID = -1;
   const static uint64_t TTL_TENNAT_TASK_TABLE_ID = -1;
   const static uint64_t TTL_ROWKEY_TASK_TABLET_ID = -2;
@@ -397,6 +410,7 @@ public:
   const static uint64_t TTL_THREAD_MAX_SCORE = 100;
 private:
   static int check_is_htable_ttl_(const ObTableSchema &table_schema, bool allow_timeseries_table, bool &is_ttl_table);
+  static int check_htable_ddl_supported_(const ObKVAttr &attr, bool by_admin);
 private:
   static bool extract_val(const char* ptr, uint64_t len, int& val);
   static bool valid_digit(const char* ptr, uint64_t len);
@@ -405,8 +419,9 @@ private:
                                      const rpc::frame::ObReqTransport &transport,
                                      const ObSimpleTTLInfo &ttl_info);
   static int get_all_user_tenant_ttl(common::ObIArray<ObSimpleTTLInfo> &ttl_info_array);
-  static int parse_kv_attributes_hbase(json::Value *ast, int32_t &max_versions, int32_t &time_to_live);
-  static int parse_kv_attributes_redis(json::Value *ast, bool &is_redis_ttl_, table::ObRedisDataModel &redis_model_);
+  static int parse_kv_attributes_table(json::Value *ast);
+  static int parse_kv_attributes_hbase(json::Value *ast, ObKVAttr &kv_attr);
+  static int parse_kv_attributes_redis(json::Value *ast, ObKVAttr &kv_attr);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTTLUtil);
 };

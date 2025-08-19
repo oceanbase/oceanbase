@@ -657,7 +657,9 @@ public:
                   const common::ObTabletID &arg_tablet_id,
                   const int64_t &timeout_ts);
   int init_common_without_check(ObTableApiCredential &credential,
+                                const ObTabletID &arg_tablet_id,
                                 const int64_t &timeout_ts);
+  int check_tablet_id_valid();
   // 初始化 insert 相关
   int init_insert();
   // init put
@@ -665,7 +667,8 @@ public:
   // 初始化scan相关(不包括表达分类)
   int init_scan(const ObTableQuery &query,
                 const bool &is_wead_read,
-                const uint64_t arg_table_id);
+                const uint64_t arg_table_id,
+                bool skip_get_ls = false);
   // 初始化update相关
   int init_update();
   // 初始化delete相关
@@ -761,7 +764,7 @@ private:
   int add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name, const ObIArray<ObTableAggregation> &aggregations);
 
   int add_auto_inc_param();
-  int check_legality(const common::ObTabletID &arg_tablet_id);
+  int check_legality();
 
 private:
   int init_schema_info_from_cache();

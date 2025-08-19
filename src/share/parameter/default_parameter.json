@@ -250,6 +250,11 @@
           "name": "default_micro_block_format_version",
           "value": 1,
           "comment": "use old micro block format version for kv mode"
+        },
+        {
+          "name": "enable_auto_split",
+          "value": true,
+          "comment": "open auto split for kv mode"
         }
       ]
     }

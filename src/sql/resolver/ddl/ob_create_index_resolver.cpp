@@ -14,6 +14,7 @@
 #include "sql/resolver/ddl/ob_create_index_resolver.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "share/ob_vec_index_builder_util.h"
+#include "share/table/ob_ttl_util.h"
 
 namespace oceanbase
 {
@@ -871,6 +872,16 @@ if (OB_SUCC(ret) &&
       SQL_RESV_LOG(WARN, "failed to add based_schema_object_info to arg", KR(ret));
     }
   }
+
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(data_tbl_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null data table schema", K(ret));
+    } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*data_tbl_schema, false/*by_admin*/))) {
+      LOG_WARN("failed to check htable ddl supported", K(ret));
+    }
+  }
+
   DEBUG_SYNC(HANG_BEFORE_RESOLVER_FINISH);
 
   return ret;

@@ -130,7 +130,8 @@ public:
   {
     ObTableNewQueryAsyncCtx()
       : table_id_(common::OB_INVALID_ID),
-        tablet_id_(common::ObTabletID::INVALID_TABLET_ID)
+        tablet_id_(common::ObTabletID::INVALID_TABLET_ID),
+        table_schema_(nullptr)
     {}
     ObTableTransParam &get_trans_param() { return trans_param_; }
     ObTableApiCredential credential_;
@@ -140,6 +141,7 @@ public:
     ObTableTransParam trans_param_;
     uint64_t table_id_;
     common::ObTabletID tablet_id_;
+    const share::schema::ObTableSchema *table_schema_;
   };
 private:
   table::ObIAsyncQueryIter *query_iter_;
@@ -234,6 +236,7 @@ struct ObTableSingleQueryInfo : public ObTableInfoBase
   int64_t to_string(char *buf, const int64_t len) const {
     return OB_SUCCESS;
   }
+  // session guard 来自 ObTableQueryAsyncCtx
   table::ObTableCtx tb_ctx_;
   table::ObTableApiScanRowIterator row_iter_;
   table::ObTableQueryIterableResult result_;

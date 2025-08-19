@@ -36133,7 +36133,8 @@ int ObDDLService::drop_index_to_recyclebin(const ObTableSchema &table_schema) {
 
 int ObDDLService::try_check_and_set_table_schema_in_tablegroup(
     share::schema::ObSchemaGetterGuard &schema_guard,
-    share::schema::ObTableSchema &schema)
+    share::schema::ObTableSchema &schema,
+    const share::schema::ObTablegroupSchema *tablegroup)
 {
   int ret = OB_SUCCESS;
   const uint64_t tablegroup_id = schema.get_tablegroup_id();
@@ -36153,7 +36154,7 @@ int ObDDLService::try_check_and_set_table_schema_in_tablegroup(
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "inner table add to user tablegroup");
     } else if (!is_sys_tablegroup_id(tablegroup_id)) {
       ObTableGroupHelp helper(*this, *schema_service_, *sql_proxy_);
-      if (OB_FAIL(helper.check_table_partition_in_tablegroup(NULL, schema, schema_guard))) {
+      if (OB_FAIL(helper.check_table_partition_in_tablegroup(NULL, schema, schema_guard, tablegroup))) {
         LOG_WARN("fail to check tablegroup partition", KR(ret), K(schema.get_table_id()));
       }
     }

@@ -2218,25 +2218,30 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_value_enable_ps_paramterize("false");
   ObString config_name_update_trigger("_update_all_columns_for_trigger");
   ObString config_value_update_trigger("false");
+  ObString config_name_ddl_thread_isolution("_enable_ddl_worker_isolation");
+  ObString config_value_ddl_thread_isolution("true");
+
   if (OB_FAIL(ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(config_value))) {
     LOG_WARN("fail to generate parallel ddl control config value", KR(ret));
   }
   for (int index = 0 ; !find && OB_SUCC(ret) && index < init_configs.count(); ++index) {
     if (tenant_id == init_configs.at(index).get_tenant_id()) {
       find = true;
-      common::ObConfigPairs &parallel_table_config = init_configs.at(index);
-      if (OB_FAIL(parallel_table_config.add_config(config_name, config_value.string()))) {
+      common::ObConfigPairs &tenant_init_config = init_configs.at(index);
+      if (OB_FAIL(tenant_init_config.add_config(config_name, config_value.string()))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name), K(config_value));
-      } else if (OB_FAIL(parallel_table_config.add_config(config_name_mysql_compatible_dates, config_value_mysql_compatible_dates))) {
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_mysql_compatible_dates, config_value_mysql_compatible_dates))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_mysql_compatible_dates), K(config_value_mysql_compatible_dates));
-      } else if (OB_FAIL(parallel_table_config.add_config(config_name_immediate_check_unique, config_value_immediate_check))) {
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_immediate_check_unique, config_value_immediate_check))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_immediate_check_unique), K(config_value_immediate_check));
-      } else if (OB_FAIL(parallel_table_config.add_config(config_name_system_trig_enabled, config_value_system_trig_enabled))) {
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_system_trig_enabled, config_value_system_trig_enabled))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_system_trig_enabled), K(config_value_system_trig_enabled));
-      } else if (OB_FAIL(parallel_table_config.add_config(config_name_enable_ps_paramterize, config_value_enable_ps_paramterize))) {
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_enable_ps_paramterize, config_value_enable_ps_paramterize))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_enable_ps_paramterize), K(config_value_enable_ps_paramterize));
-      } else if (OB_FAIL(parallel_table_config.add_config(config_name_update_trigger, config_value_update_trigger))) {
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_update_trigger, config_value_update_trigger))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_update_trigger), K(config_value_update_trigger));
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_ddl_thread_isolution, config_value_ddl_thread_isolution))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_ddl_thread_isolution), K(config_value_ddl_thread_isolution));
       }
     }
   }

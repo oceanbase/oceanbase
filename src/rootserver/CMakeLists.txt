@@ -174,6 +174,10 @@ ob_set_subtarget(ob_rootserver parallel_ddl
   parallel_ddl/ob_create_index_helper.cpp
   parallel_ddl/ob_update_index_status_helper.cpp
   parallel_ddl/ob_drop_table_helper.cpp
+  parallel_ddl/ob_htable_ddl_handler.cpp
+  parallel_ddl/ob_set_kv_attribute_helper.cpp
+  parallel_ddl/ob_create_tablegroup_helper.cpp
+  parallel_ddl/ob_drop_tablegroup_helper.cpp
 )
 
 ob_set_subtarget(ob_rootserver freeze

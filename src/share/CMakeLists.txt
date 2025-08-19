@@ -370,6 +370,7 @@ ob_set_subtarget(ob_share common_mixed
   ob_json_access_utils.cpp
   table/ob_table.cpp
   table/ob_table_rpc_struct.cpp
+  table/ob_table_ddl_struct.cpp
   table/ob_table_load_define.cpp
   table/ob_table_load_dml_stat.cpp
   table/ob_table_load_row.cpp

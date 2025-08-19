@@ -21,7 +21,7 @@ namespace oceanbase
 {
 namespace common
 {
-class ObMySQLProxy;
+class ObISQLClient;
 }
 namespace share
 {
@@ -42,8 +42,11 @@ const static int DEFAULT_RESERVE_SIZE = 32;
 typedef common::ObSEArray<SchemaObj, DEFAULT_RESERVE_SIZE> SchemaObjs;
 public:
   ObLatestSchemaGuard() = delete;
+  // The sql proxy of schema_service is used by default
+  // If you want to get the schema of the current transaction, you can pass in a transaction
   ObLatestSchemaGuard(share::schema::ObMultiVersionSchemaService *schema_service,
-                      const uint64_t tenant_id);
+                      const uint64_t tenant_id,
+                      common::ObISQLClient *sql_client = nullptr);
   ~ObLatestSchemaGuard();
 public:
   /* -------------- interfaces without cache ---------------*/
@@ -339,6 +342,19 @@ public:
 #undef GET_RLS_SCHEMA
 #endif
 
+int get_table_schemas_in_tablegroup(
+    const uint64_t tablegroup_id,
+    common::ObIArray<const ObTableSchema *> &table_schemas);
+
+int check_database_exists_in_tablegroup(
+    const uint64_t tablegroup_id,
+    bool &exists);
+
+int get_table_id_and_table_name_in_tablegroup(
+    const uint64_t tablegroup_id,
+    common::ObIArray<ObString> &table_names,
+    common::ObIArray<uint64_t> &table_ids);
+
   /* -------------- interfaces without cache end ---------------*/
 
   /* -------------- interfaces with cache ---------------*/
@@ -425,7 +441,11 @@ private:
   int check_inner_stat_();
   int check_and_get_service_(
       ObSchemaService *&schema_service_impl,
-      common::ObMySQLProxy *&sql_proxy);
+      common::ObISQLClient *&sql_client);
+  int get_tablegroup_schema_(
+      common::ObISQLClient &sql_client,
+      const uint64_t tablegroup_id,
+      const ObTablegroupSchema *&tablegroup_schema);
 
   // For TENANT_SCHEMA, tenant_id should be OB_SYS_TENANT_ID;
   // For SYS_VARIABLE_SCHEMA, tenant_id should be equal with schema_id;
@@ -454,6 +474,7 @@ private:
   uint64_t tenant_id_;
   common::ObArenaAllocator local_allocator_;
   SchemaObjs schema_objs_;
+  common::ObISQLClient *sql_client_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLatestSchemaGuard);
 };

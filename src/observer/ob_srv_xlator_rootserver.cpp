@@ -303,4 +303,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
 
     RPC_PROCESSOR(rootserver::ObRpcCreateExternalResourceP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropExternalResourceP, *gctx_.root_service_);
+
+    // htable ddl
+    RPC_PROCESSOR(rootserver::ObRpcParallelHTableDDLP, *gctx_.root_service_);
 }

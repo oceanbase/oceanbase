@@ -5422,7 +5422,7 @@ int ObTableSqlService::check_table_options(const ObTableSchema &table)
   return ret;
 }
 
-// this interface have been used by parallel set comment
+// this interface have been used by parallel set comment and set kv_attribute(for hbase)
 // since parallel ddl have to allocate schema version previously
 // any modification of this interface should think the times of generate schema version carefully
 int ObTableSqlService::only_update_table_options(ObISQLClient &sql_client,

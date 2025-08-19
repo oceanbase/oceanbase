@@ -382,7 +382,8 @@ struct ObResolverParams
        is_for_rt_mv_(false),
        is_resolve_fake_cte_table_(false),
        is_returning_(false),
-       is_in_view_(false)
+       is_in_view_(false),
+       is_htable_(false)
   {}
   bool is_force_trace_log() { return force_trace_log_; }
 
@@ -455,6 +456,7 @@ public:
   bool is_resolve_fake_cte_table_;
   bool is_returning_;
   bool is_in_view_;
+  bool is_htable_;
 };
 } // end namespace sql
 } // end namespace oceanbase

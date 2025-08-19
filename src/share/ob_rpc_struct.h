@@ -111,6 +111,12 @@ namespace rootserver
 {
 struct ObGlobalIndexTask;
 }
+
+namespace table
+{
+class ObHTableDDLParam;
+}
+
 namespace obrpc
 {
 typedef common::ObSArray<common::ObAddr> ObServerList;
@@ -14239,7 +14245,6 @@ private:
 };
 #endif
 
-// enum placeholder for hbase ddl rpc
 enum class ObHTableDDLType : uint8_t
 {
   INVALID = 0,
@@ -14287,6 +14292,51 @@ public:
   int64_t dest_type_; // ObBackupDestType::TYPE
   common::ObString backup_dest_str_; // encrpyted
   bool need_format_file_;
+};
+
+struct ObHTableDDLArg : ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObHTableDDLArg()
+      : ObDDLArg(),
+        ddl_type_(),
+        ddl_param_(nullptr),
+        deserialize_allocator_("HTleDDLArg")
+  {}
+  ~ObHTableDDLArg();
+  bool is_valid() const;
+  virtual bool is_allow_when_upgrade() const;
+  int assign(const ObHTableDDLArg &other);
+  DECLARE_TO_STRING;
+public:
+  ObHTableDDLType ddl_type_;
+  table::ObHTableDDLParam *ddl_param_;
+private:
+  common::ObArenaAllocator deserialize_allocator_;
+};
+
+struct ObHTableDDLRes : ObParallelDDLRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObHTableDDLRes()
+  {}
+  ~ObHTableDDLRes() = default;
+  int assign(const ObHTableDDLRes &other);
+};
+
+struct ObCreateTableGroupRes : ObParallelDDLRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCreateTableGroupRes()
+    : ObParallelDDLRes(),
+      tablegroup_id_(OB_INVALID_ID)
+  {}
+  ~ObCreateTableGroupRes() = default;
+  int assign(const ObCreateTableGroupRes &other);
+  uint64_t tablegroup_id_;
 };
 
 }//end namespace obrpc

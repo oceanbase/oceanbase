@@ -726,6 +726,7 @@ ObTenant::ObTenant(const int64_t id,
       tenant_meta_(),
       shrink_(0),
       total_worker_cnt_(0),
+      total_ddl_thread_cnt_(0),
       gc_thread_(nullptr),
       has_created_(false),
       stopped_(0),
@@ -1797,6 +1798,7 @@ void ObTenant::check_worker_count()
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(workers_lock_.trylock())) {
+    int64_t ddl_token = 0;
     int64_t token = min_active_worker_cnt();
     int64_t now = ObTimeUtility::current_time();
     bool enable_dynamic_worker = true;
@@ -1813,15 +1815,20 @@ void ObTenant::check_worker_count()
         workers_.remove(wnode);
         destroy_worker(w);
       } else if (w->has_req_flag()
-                 && 0 != w->blocking_ts()
-                 && now - w->blocking_ts() >= threshold
+                 && ((0 != w->blocking_ts() && now - w->blocking_ts() >= threshold) || w->is_doing_ddl())
                  && w->is_default_worker()
                  && enable_dynamic_worker) {
         ++token;
+        if (w->is_doing_ddl()) {
+          ddl_token++;
+        } else {
+          token++;
+        }
       }
     }
     int64_t succ_num = 0L;
     token = std::max(token, min_worker_cnt());
+    token = token + ddl_token;
     token = std::min(token, max_worker_cnt());
     if (OB_UNLIKELY(workers_.get_size() < min_worker_cnt())) {
       const auto diff = min_worker_cnt() - workers_.get_size();

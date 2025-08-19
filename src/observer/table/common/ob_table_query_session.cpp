@@ -82,7 +82,6 @@ int ObTableNewQueryAsyncSession::init_query_ctx(const uint64_t table_id,
 {
   int ret = OB_SUCCESS;
   async_query_ctx_.credential_ = credential;
-  const ObSimpleTableSchemaV2 * simple_table_schema= nullptr;
   int64_t tenant_id = credential.tenant_id_;
   if (OB_FAIL(TABLEAPI_OBJECT_POOL_MGR->get_sess_info(credential, async_query_ctx_.sess_guard_))) {
     LOG_WARN("fail to get session info", K(ret), K(credential));
@@ -91,7 +90,7 @@ int ObTableNewQueryAsyncSession::init_query_ctx(const uint64_t table_id,
     LOG_WARN("unexpected null sesion info", K(ret), K(credential));
   } else if (OB_FAIL(ObHTableUtils::init_schema_info(table_name, table_id, credential, is_tablegroup_req,
                                                      async_query_ctx_.schema_guard_,
-                                                     simple_table_schema,
+                                                     async_query_ctx_.table_schema_,
                                                      async_query_ctx_.schema_cache_guard_))) {
     LOG_WARN("fail to init schema info", K(ret), K(table_id), K(table_name));
   } else {
@@ -111,6 +110,8 @@ int ObTableNewQueryAsyncSession::get_or_create_exec_ctx(ObTableExecCtx *&async_e
     if (OB_ISNULL(table_exec_ctx_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate table exec ctx", K(ret));
+    } else {
+      table_exec_ctx_->set_table_schema(async_query_ctx_.table_schema_);
     }
   }
 

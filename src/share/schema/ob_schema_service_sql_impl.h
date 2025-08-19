@@ -869,6 +869,27 @@ public:
               const uint64_t obj_id,
               const uint64_t obj_type,
               ObIArray<ObObjPriv> &obj_privs) override;
+
+  virtual int get_table_schemas_in_tablegroup(
+              common::ObIAllocator &allocator,
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t tablegroup_id,
+              common::ObIArray<const ObTableSchema *> &table_schemas);
+
+  virtual int check_database_exists_in_tablegroup(
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t tablegroup_id,
+              bool &exists);
+
+  virtual int get_table_id_and_table_name_in_tablegroup(
+              common::ObIAllocator &allocator,
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t tablegroup_id,
+              common::ObIArray<ObString> &table_names,
+              common::ObIArray<uint64_t> &table_ids);
   /*----------- interfaces for latest schema end -------------*/
 
 private:

@@ -98,7 +98,7 @@ ObThWorker::ObThWorker()
       query_start_time_(0), last_check_time_(0),
       can_retry_(true), need_retry_(false),
       last_wakeup_ts_(0), blocking_ts_(nullptr),
-      idle_us_(0)
+      idle_us_(0), is_doing_ddl_(nullptr)
 {
   module_name_[0] = '\0';
 }
@@ -319,6 +319,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
   procor_.th_created();
   blocking_ts_ = &Thread::blocking_ts_;
   ObDisableDiagnoseGuard disable_guard;
+  is_doing_ddl_ = &Thread::is_doing_ddl_;
 
   ObTLTaGuard ta_guard(tenant_->id());
   ObMemVersionNodeGuard mem_version_node_guard;

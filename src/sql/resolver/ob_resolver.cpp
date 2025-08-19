@@ -1433,6 +1433,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
     }  // end switch
 
+
     // 外表写只放开insert
     if (OB_SUCC(ret) && stmt->is_dml_stmt() && !stmt->is_insert_stmt()) {
       OZ( (static_cast<ObDMLStmt*>(stmt)->disable_writing_external_table()) );

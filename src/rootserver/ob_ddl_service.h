@@ -1110,7 +1110,8 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   int try_add_dep_info_for_all_synonyms_batch(const uint64_t tenant_id, const common::ObIArray<uint64_t> &synonym_ids);
   int try_check_and_set_table_schema_in_tablegroup(
       share::schema::ObSchemaGetterGuard &schema_guard,
-      share::schema::ObTableSchema &schema);
+      share::schema::ObTableSchema &schema,
+      const share::schema::ObTablegroupSchema *tablegroup = nullptr);
 
   int reset_parallel_cache(const uint64_t tenant_id);
   static int set_dbms_job_exec_env(const obrpc::ObCreateIndexArg &create_index_arg,

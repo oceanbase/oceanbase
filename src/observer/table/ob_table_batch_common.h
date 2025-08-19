@@ -15,7 +15,7 @@
 
 #include "ob_table_context.h"
 #include "share/table/ob_table_rpc_struct.h"
-#include "ob_table_trans_utils.h"
+#include "utils/ob_table_trans_utils.h"
 #include "ob_table_executor.h"
 #include "ob_table_audit.h"
 

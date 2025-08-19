@@ -383,6 +383,7 @@ _enable_data_based_sqc_dop
 _enable_dblink_reuse_connection
 _enable_dbms_job_package
 _enable_dbms_lob_partial_update
+_enable_ddl_worker_isolation
 _enable_decimal_int_type
 _enable_defensive_check
 _enable_delete_insert_scan
@@ -410,6 +411,7 @@ _enable_in_range_optimization
 _enable_kvcache_hazard_pointer
 _enable_kv_feature
 _enable_kv_group_commit_ops
+_enable_kv_hbase_admin_ddl
 _enable_log_cache
 _enable_malloc_v2
 _enable_memleak_light_backtrace

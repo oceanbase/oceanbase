@@ -28,7 +28,7 @@ public:
                                  ObTableApiSessGuard &sess_guard,
                                  ObKvSchemaCacheGuard &kv_schema_guard,
                                  share::schema::ObSchemaGetterGuard &schema_guard,
-                                 const share::schema::ObSimpleTableSchemaV2 *simple_schema = nullptr,
+                                 const share::schema::ObSimpleTableSchemaV2 *simple_schema,
                                  ObTablePartClipType clip_type = ObTablePartClipType::NONE)
       : allocator_(allocator),
         sess_guard_(sess_guard),
@@ -36,8 +36,40 @@ public:
         schema_guard_(schema_guard),
         tb_ctx_(nullptr),
         simple_schema_(simple_schema),
+        table_schema_(nullptr),
         clip_type_(clip_type)
   {}
+  explicit ObTablePartCalculator(common::ObIAllocator &allocator,
+                                 ObTableApiSessGuard &sess_guard,
+                                 ObKvSchemaCacheGuard &kv_schema_guard,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                 const share::schema::ObTableSchema *table_schema,
+                                 ObTablePartClipType clip_type = ObTablePartClipType::NONE)
+      : allocator_(allocator),
+        sess_guard_(sess_guard),
+        kv_schema_guard_(kv_schema_guard),
+        schema_guard_(schema_guard),
+        tb_ctx_(nullptr),
+        simple_schema_(nullptr),
+        table_schema_(table_schema),
+        clip_type_(clip_type)
+  {}
+
+  explicit ObTablePartCalculator(common::ObIAllocator &allocator,
+                                ObTableApiSessGuard &sess_guard,
+                                ObKvSchemaCacheGuard &kv_schema_guard,
+                                share::schema::ObSchemaGetterGuard &schema_guard,
+                                ObTablePartClipType clip_type = ObTablePartClipType::NONE)
+      : allocator_(allocator),
+        sess_guard_(sess_guard),
+        kv_schema_guard_(kv_schema_guard),
+        schema_guard_(schema_guard),
+        tb_ctx_(nullptr),
+        simple_schema_(nullptr),
+        table_schema_(nullptr),
+        clip_type_(clip_type)
+  {}
+
   ~ObTablePartCalculator()
   {
     if (OB_NOT_NULL(tb_ctx_)) {
@@ -105,6 +137,12 @@ private:
   int calc(const share::schema::ObSimpleTableSchemaV2 &simple_schema,
            const common::ObIArray<ObITableEntity*> &entities,
            common::ObIArray<common::ObTabletID> &tablet_ids);
+  int calc(const ObTableSchema &table_schema,
+           const ObIArray<ObITableEntity*> &entities,
+           ObIArray<ObTabletID> &tablet_ids);
+  int calc(const share::schema::ObTableSchema &table_schema,
+           const ObITableEntity &entity,
+           ObTabletID &tablet_id);
   int calc(const share::schema::ObTableSchema &table_schema,
            const common::ObNewRange &range,
            common::ObIArray<common::ObTabletID> &tablet_ids);
@@ -134,7 +172,22 @@ private:
   int construct_entity(const common::ObObj *objs,
                        int64_t obj_cnt,
                        ObITableEntity &entity);
- int eval(const common::ObIArray<sql::ObExpr *> &new_row,
+  int construct_part_row(const ObTableSchema &table_schema,
+                         const ObITableEntity &entity,
+                         common::ObNewRow &part_row,
+                         common::ObNewRow &subpart_row);
+  int construct_part_row(const ObTableSchema &table_schema,
+                         const ObITableEntity &entity,
+                         const ObIArray<uint64_t> &col_ids,
+                         ObNewRow &part_row);
+  int calc_partition_id(const ObPartitionLevel part_level,
+                        const ObObjectID part_id,
+                        const common::ObNewRow &row,
+                        sql::ObDASTabletMapper &tablet_mapper,
+                        common::ObTabletID &tablet_id,
+                        ObObjectID &object_id,
+                        const bool is_hash_like);
+  int eval(const common::ObIArray<sql::ObExpr *> &new_row,
           const ObITableEntity &entity,
           sql::ObExpr &expr,
           const ObTableColumnInfo &col_info,
@@ -144,6 +197,11 @@ private:
                          const ObTableColumnInfo &col_info,
                          common::ObObj &start,
                          common::ObObj &end);
+  int calc_generated_col(const ObSimpleTableSchemaV2 &simple_schema,
+                         const ObITableEntity &entity,
+                         const ObTableColumnInfo &col_info,
+                         bool need_das_ctx,
+                         ObObj &gen_col_value);
   int get_ctdef_by_table_id();
   int check_param(const ObTableColumnInfo &col_info,
                   const common::ObIArray<sql::ObExpr *> &new_row,
@@ -165,6 +223,7 @@ private:
   observer::ObReqTimeGuard req_time_guard_; // libcache relies on ObReqTimeGuard for elimination
   ObTableApiCacheGuard cache_guard_;
   const share::schema::ObSimpleTableSchemaV2 *simple_schema_;
+  const share::schema::ObTableSchema *table_schema_;
   ObTablePartClipType clip_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTablePartCalculator);
