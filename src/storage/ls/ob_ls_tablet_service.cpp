@@ -6024,6 +6024,8 @@ int ObLSTabletService::table_refresh_row(
       for (int64_t i = 0; OB_SUCC(ret) && i < new_row->count_; ++i) {
         if (OB_FAIL(datum_row.storage_datums_[i].deep_copy(new_row->storage_datums_[i], lob_allocator))) {
           LOG_WARN("copy storage datum error", K(ret), K(i), K(new_row->storage_datums_[i]));
+        } else if (col_descs.at(i).col_type_.is_lob_storage()) {
+          datum_row.storage_datums_[i].set_has_lob_header();
         }
       }
     }
