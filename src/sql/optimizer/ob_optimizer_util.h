@@ -1290,6 +1290,12 @@ public:
   static bool has_hierarchical_expr(const ObRawExpr &expr);
 
 
+
+  static int get_simple_equal_const_filter_column(const ObDMLStmt *stmt,
+                                                  ObRawExpr *expr,
+                                                  int64_t table_id,
+                                                  ObIArray<ObRawExpr*> &col_exprs);
+
   static int check_pushdown_filter_to_base_table(ObLogPlan &plan,
                                                  const uint64_t table_id,
                                                  const ObIArray<ObRawExpr*> &pushdown_filters,
