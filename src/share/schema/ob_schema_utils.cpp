@@ -614,11 +614,13 @@ int ObSchemaUtils::add_sys_table_lob_aux_table(
 }
 
 // construct inner table schemas in tenant space
+template <typename Array>
 int ObSchemaUtils::construct_inner_table_schemas(
       const uint64_t tenant_id,
       const ObIArray<uint64_t> &table_ids,
       const bool include_index_and_lob_aux_schemas,
-      ObIArray<ObTableSchema> &tables,
+      ObIAllocator &allocator,
+      Array &tables,
       const bool ignore_tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -663,7 +665,7 @@ int ObSchemaUtils::construct_inner_table_schemas(
         capacity = table_ids.count();
       }
     }
-    if (FAILEDx(tables.reserve(capacity))) {
+    if (FAILEDx(tables.prepare_allocate_and_keep_count(capacity, &allocator))) {
       LOG_WARN("failed to prepare_allocate_and_keep_count", KR(ret), K(capacity));
     }
     HEAP_VARS_2((ObTableSchema, table_schema), (ObTableSchema, data_schema)) {
@@ -713,6 +715,24 @@ int ObSchemaUtils::construct_inner_table_schemas(
   }
   return ret;
 }
+
+// Explicit instantiations
+template int ObSchemaUtils::construct_inner_table_schemas<common::ObArray<ObTableSchema>>(
+    const uint64_t tenant_id,
+    const ObIArray<uint64_t> &table_ids,
+    const bool include_index_and_lob_aux_schemas,
+    ObIAllocator &allocator,
+    common::ObArray<ObTableSchema> &tables,
+    const bool ignore_tenant_id);
+
+template int ObSchemaUtils::construct_inner_table_schemas<common::ObSArray<ObTableSchema>>(
+    const uint64_t tenant_id,
+    const ObIArray<uint64_t> &table_ids,
+    const bool include_index_and_lob_aux_schemas,
+    ObIAllocator &allocator,
+    common::ObSArray<ObTableSchema> &tables,
+    const bool ignore_tenant_id);
+
 int ObSchemaUtils::push_inner_table_schema_(
     const uint64_t tenant_id,
     const bool include_index_and_lob_aux_schemas,

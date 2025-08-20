@@ -643,6 +643,7 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
 {
   int ret = OB_SUCCESS;
   bool already_bootstrap = true;
+  ObArenaAllocator arena_allocator("InnerTableSchem", OB_MALLOC_MIDDLE_BLOCK_SIZE);
   ObSArray<ObTableSchema> table_schemas;
   begin_ts_ = ObTimeUtility::current_time();
 
@@ -665,7 +666,7 @@ int ObBootstrap::execute_bootstrap(rootserver::ObServerZoneOpService &server_zon
     LOG_WARN("failed to init_global_stat", K(ret));
   } else if (OB_FAIL(broadcast_sys_schema())) {
     LOG_WARN("broadcast_sys_schemas failed", K(table_schemas), K(ret));
-  } else if (OB_FAIL(construct_all_schema(table_schemas))) {
+  } else if (OB_FAIL(construct_all_schema(table_schemas, arena_allocator))) {
     LOG_WARN("construct all schema fail", K(ret));
   } else if (OB_FAIL(create_all_partitions())) {
     LOG_WARN("create all partitions fail", K(ret));
@@ -986,14 +987,14 @@ int ObBootstrap::add_sys_table_lob_aux_table(
   return ret;
 }
 
-int ObBootstrap::construct_all_schema(ObSArray<ObTableSchema> &table_schemas)
+int ObBootstrap::construct_all_schema(ObSArray<ObTableSchema> &table_schemas, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> table_ids_to_construct; // empty means construct all
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat failed", KR(ret));
   } else if (OB_FAIL(ObSchemaUtils::construct_inner_table_schemas(OB_SYS_TENANT_ID,
-          table_ids_to_construct, true/*include_index_and_lob_aux_schemas*/, table_schemas))) {
+          table_ids_to_construct, true/*include_index_and_lob_aux_schemas*/, allocator, table_schemas))) {
     LOG_WARN("failed to construct inner table schemas", KR(ret));
   }
   BOOTSTRAP_CHECK_SUCCESS();

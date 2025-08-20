@@ -1686,6 +1686,7 @@ int ObTenantDDLService::create_normal_tenant(obrpc::ObParallelCreateNormalTenant
   TIMEGUARD_INIT(create_normal_tenant, 10_s);
   FLOG_INFO("[CREATE_TENANT] STEP 2. start create normal tenant", K(tenant_id));
   ObArray<uint64_t> table_ids_to_construct; // empty means construct all
+  ObArenaAllocator arena_allocator("InnerTableSchem", OB_MALLOC_MIDDLE_BLOCK_SIZE);
   ObSArray<ObTableSchema> tables;
   ObTenantSchema tenant_schema;
   if (OB_FAIL(check_inner_stat())) {
@@ -1707,7 +1708,7 @@ int ObTenantDDLService::create_normal_tenant(obrpc::ObParallelCreateNormalTenant
   // the retries will explod user's work queue .
   // so we create tablet before braodcast schema, make them retrun OB_TABLE_NOT_EXIST which will not be retried
   if (FAILEDx(ObSchemaUtils::construct_inner_table_schemas(tenant_id, table_ids_to_construct,
-          true/*include_index_and_lob_aux_schemas*/, tables))) {
+          true/*include_index_and_lob_aux_schemas*/, arena_allocator, tables))) {
     LOG_WARN("fail to get inner table schemas in tenant space", KR(ret), K(tenant_id));
   } else if (CLICK_FAIL(create_tenant_sys_tablets(tenant_id, tables))) {
     LOG_WARN("fail to create tenant partitions", KR(ret), K(tenant_id));
@@ -1877,6 +1878,7 @@ int ObTenantDDLService::batch_create_system_table(
   int ret = OB_SUCCESS;
   int64_t start_ts = ObTimeUtility::current_time();
   FLOG_INFO("[UPGRADE] start to batch create system tables", KR(ret), K(tenant_id), K(table_ids));
+  ObArenaAllocator arena_allocator("InnerTableSchem", OB_MALLOC_MIDDLE_BLOCK_SIZE);
   ObArray<ObTableSchema> schemas;
   if (OB_FAIL(check_inner_stat())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1884,7 +1886,7 @@ int ObTenantDDLService::batch_create_system_table(
   } else if (table_ids.empty()) {
     // no need to create system tables
   } else if (OB_FAIL(ObSchemaUtils::construct_inner_table_schemas(tenant_id, table_ids,
-          true /*include_index_and_lob_aux_schemas*/, schemas))) {
+          true /*include_index_and_lob_aux_schemas*/, arena_allocator, schemas))) {
     LOG_WARN("failed to get hard code system table schemas", KR(ret), K(tenant_id), K(table_ids));
   } else {
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);

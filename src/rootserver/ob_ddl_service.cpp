@@ -30128,10 +30128,11 @@ int ObDDLService::batch_alter_system_table_column_(
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     int tmp_ret = OB_SUCCESS;
     HEAP_VAR(ObTableSchema, new_table_schema) {
+      ObArenaAllocator arena_allocator("InnerTableSchem", OB_MALLOC_MIDDLE_BLOCK_SIZE);
       ObArray<ObTableSchema> tables;
       // alter system table column do not need to include index and lob aux schemas
       if (OB_FAIL(ObSchemaUtils::construct_inner_table_schemas(tenant_id, table_ids,
-              false /*include_index_and_lob_aux_schemas*/, tables))) {
+              false /*include_index_and_lob_aux_schemas*/, arena_allocator, tables))) {
         LOG_WARN("failed to get hard code system table schemas", KR(ret), K(tenant_id), K(table_ids));
       } else {
         const ObTableSchema *orig_table_schema = NULL;

@@ -146,12 +146,15 @@ public:
   // table_ids is empty --> construct all inner table schemas
   // table_ids is not empty --> construct specific inner tables
   // if table_only, not push its index and lob aux table
+  template <typename Array>
   static int construct_inner_table_schemas(
       const uint64_t tenant_id,
       const ObIArray<uint64_t> &table_ids,
       const bool include_index_and_lob_aux_schemas,
-      common::ObIArray<ObTableSchema> &tables,
+      ObIAllocator &allocator,
+      Array &tables,
       const bool ignore_tenant_id = false);
+
   static int add_sys_table_lob_aux_table(
              uint64_t tenant_id,
              uint64_t data_table_id,
