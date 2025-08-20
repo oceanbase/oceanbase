@@ -5602,7 +5602,7 @@ int ObSelectLogPlan::allocate_plan_top()
     }
     // step. allocate 'order-by' if needed
     if (OB_SUCC(ret) && select_stmt->has_order_by() && !select_stmt->is_order_siblings() &&
-        !get_optimizer_context().is_online_ddl()) {
+        !get_optimizer_context().is_insert_stmt_in_online_ddl()) {
       candidates_.is_final_sort_ = true;
       if (OB_FAIL(candi_allocate_order_by(need_limit, order_items))) {
         LOG_WARN("failed to allocate order by operator", K(ret));
