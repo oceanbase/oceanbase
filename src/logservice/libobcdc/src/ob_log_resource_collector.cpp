@@ -559,8 +559,10 @@ int ObLogResourceCollector::handle(void *data,
           else if (all_participant_revertable) {
             PartTransTask *participants = trans_ctx->get_participant_objs();
 
-            if (OB_FAIL(trans_ctx->revert_participants())) {
-              LOG_ERROR("trans_ctx.revert_participants fail", KR(ret), K(*trans_ctx));
+            if (OB_FAIL(trans_ctx->revert_participants(stop_flag))) {
+              if (OB_IN_STOP_STATE != ret) {
+                LOG_ERROR("trans_ctx.revert_participants fail", KR(ret), K(*trans_ctx));
+	      }
             }
             // recycle all participants
             else if (OB_NOT_NULL(participants) && OB_FAIL(revert_participants_(thread_index, participants))) {

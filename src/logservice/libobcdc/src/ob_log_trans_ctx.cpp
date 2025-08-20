@@ -727,7 +727,7 @@ int TransCtx::inc_revertable_participant_count(bool &all_participant_revertable,
   return ret;
 }
 
-int TransCtx::revert_participants()
+int TransCtx::revert_participants(volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
@@ -746,11 +746,15 @@ int TransCtx::revert_participants()
 
     // wait redo dispatched cause dispatch_redo and sort&commit br is async steps and dispatched
     // sorted state may early than dispatched state.
-    wait_trans_redo_dispatched_();
-    // Note: All participants are recalled by external modules
-    ready_participant_objs_ = NULL;
+    wait_trans_redo_dispatched_(stop_flag);
+    if (OB_UNLIKELY(stop_flag)) {
+      ret = OB_IN_STOP_STATE;
+    } else {
+      // Note: All participants are recalled by external modules
+      ready_participant_objs_ = NULL;
 
-    switch_state_(TRANS_CTX_STATE_PARTICIPANT_REVERTED);
+      switch_state_(TRANS_CTX_STATE_PARTICIPANT_REVERTED);
+    }
   }
 
   return ret;
@@ -895,12 +899,12 @@ int TransCtx::pop_br_for_committer(ObLogBR *&br)
   return ret;
 }
 
-void TransCtx::wait_trans_redo_dispatched_()
+void TransCtx::wait_trans_redo_dispatched_(volatile bool &stop_flag)
 {
   static const int64_t PRINT_INTERVAL = 5 * _SEC_;
   static const int64_t WAIT_SLEEP_TIME = 10 * _MSEC_;
 
-  while (! ATOMIC_LOAD(&is_trans_redo_dispatched_)) {
+  while (! ATOMIC_LOAD(&is_trans_redo_dispatched_) && !stop_flag) {
     usleep(WAIT_SLEEP_TIME);
     if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
       LOG_INFO("waiting redo dispatch finish...", K_(tenant_id), K_(trans_id),
@@ -908,6 +912,9 @@ void TransCtx::wait_trans_redo_dispatched_()
           "revertable_participant_count", get_revertable_participant_count_(revertable_ref_info_),
           K_(total_br_count), K_(committed_br_count), K_(is_trans_sorted));
     }
+  }
+  if (OB_UNLIKELY(stop_flag)) {
+    LOG_INFO("stop wait_trans_redo_dispatched_ cause stop_flag is setted", KPC(this));
   }
 }
 
