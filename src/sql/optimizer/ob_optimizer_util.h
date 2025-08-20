@@ -1068,7 +1068,8 @@ public:
                                const EqualSets &equal_sets,
                                const ObIArray<ObRawExpr *> &const_exprs,
                                int64_t &match_prefix_count,
-                               bool &sort_match);
+                               bool &sort_match,
+                               bool &full_covered);
 
   // fast check, return bool result
   static int is_order_by_match(const ObIArray<OrderItem> &expect_ordering,
