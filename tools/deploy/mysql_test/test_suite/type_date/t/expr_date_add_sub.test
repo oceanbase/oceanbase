@@ -136,4 +136,19 @@ select adddate(a,  1) from t1;
 select adddate(a,  2) from t1;
 select adddate(a,  30) from t1;
 
-drop table t1;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 bigint);
+insert into t1 values(253402300799999999),(253402300800000000),(-62135596800000000),(-62120246743000000),(-9223372036854775807),(9223372036854775807);
+SELECT  DATE_ADD( '1970-01-01', INTERVAL c1 MICROSECOND) from t1;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+create table t1(c1 bigint);
+insert into t1 values(253402300799),(253402300800),(-62135596800),(-62120246743),(-9223372036854775807),(9223372036854775807);
+SELECT  DATE_ADD( '1970-01-01', INTERVAL c1 SECOND) from t1;
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
