@@ -861,14 +861,18 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
   CK (OB_NOT_NULL(expr));
   if (OB_FAIL(ret)) {
     // do nothing ...
-  } else if (!resolve_ctx.params_.is_prepare_with_params_
-             && T_QUESTIONMARK == expr->get_expr_type()
+  } else if (T_QUESTIONMARK == expr->get_expr_type()
              && (resolve_ctx.is_prepare_protocol_ || !resolve_ctx.is_sql_scope_
                  || resolve_ctx.session_info_.get_pl_context() != NULL)
-             && (ObUnknownType == expr->get_result_type().get_type()
+             && ((!resolve_ctx.params_.is_prepare_with_params_
+                  && ObUnknownType == expr->get_result_type().get_type())
                  || ObNullType == expr->get_result_type().get_type()
                  || (is_oracle_mode() ? expr->get_result_type().is_oracle_question_mark_type()
                                       : expr->get_result_type().is_mysql_question_mark_type()))) {
+    // for prepare with params scenario
+    // 1. unknown type expr do not enter this branch
+    // 2. null type and blob type need to keep it compatible with that in prepare without params
+    //    scenario, because there're long-standing unfixed bugs here.
     OX (match_info =
       (ObRoutineMatchInfo::MatchInfo(false,
                                      ObUnknownType,
