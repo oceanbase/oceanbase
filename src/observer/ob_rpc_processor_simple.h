@@ -347,6 +347,7 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_CLEAR_FETCHED_LOG_CACHE, ObClearFetchedLogCacheP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_BACKUP_DEST_RW_CONSISTENCY, ObRpcCheckBackupDestRWConsistencyP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_BACKUP_DEST_VALIDITY, ObRpcCheckBackupDestVaildityP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_WRITE_BACKUP_DEST_FORMAT_FILE, ObRpcWriteBackupDestFormatFileP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_DATA_DICT_TRIGGER_DUMP, ObRPcTriggerDumpDataDictP);
 } // end of namespace observer
 } // end of namespace oceanbase
 

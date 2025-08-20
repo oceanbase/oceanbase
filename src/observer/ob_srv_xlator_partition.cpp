@@ -354,4 +354,6 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   //sql optimizer estimate skip rate
   RPC_PROCESSOR(ObEstimateSkipRateP, gctx_);
 
+  // dump data_dict
+  RPC_PROCESSOR(ObRPcTriggerDumpDataDictP, gctx_);
 }

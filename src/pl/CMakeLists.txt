@@ -70,6 +70,7 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_external_table.cpp
   sys_package/ob_dbms_partition.cpp
   sys_package/ob_dbms_java.cpp
+  sys_package/ob_dbms_data_dict.cpp
 )
 
 ob_set_subtarget(ob_pl pl_recompile
