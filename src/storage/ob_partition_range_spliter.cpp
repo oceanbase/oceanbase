@@ -947,6 +947,7 @@ int ObPartitionMultiRangeSpliter::get_tables(ObTableStoreIterator &table_iter,
 
   ObITable *last_major_sstable = nullptr;
   int64_t major_size = 0;
+  int64_t major_row_count = 0;
 
   tables.reset();
 
@@ -974,9 +975,11 @@ int ObPartitionMultiRangeSpliter::get_tables(ObTableStoreIterator &table_iter,
       } else {
         major_size = static_cast<ObSSTable *>(table)->get_occupy_size();
       }
+      major_row_count = static_cast<ObSSTable *>(table)->get_row_count();
       last_major_sstable = table;
     } else if (table->is_minor_sstable()) {
-      if (static_cast<ObSSTable *>(table)->get_occupy_size() <= MIN_SPLIT_TABLE_SIZE) {
+      if (static_cast<ObSSTable *>(table)->get_occupy_size() <= MIN_SPLIT_TABLE_SIZE
+          && static_cast<ObSSTable *>(table)->get_row_count() <= MIN_SPLIT_TABLE_ROW_COUNT) {
         // very small table, skip
       } else if (OB_FAIL(tables.push_back(table))) {
         LOG_WARN("Fail to add minor sstable", KR(ret), KPC(table));
@@ -987,7 +990,8 @@ int ObPartitionMultiRangeSpliter::get_tables(ObTableStoreIterator &table_iter,
       memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
       if (OB_FAIL(memtable->estimate_phy_size(nullptr, nullptr, mem_size, mem_rows))) {
         STORAGE_LOG(WARN, "Failed to get estimate size from memtable", K(ret));
-      } else if (mem_size <= MIN_SPLIT_TABLE_SIZE) {
+      } else if (mem_size <= MIN_SPLIT_TABLE_SIZE
+                 && mem_rows <= MIN_SPLIT_TABLE_ROW_COUNT) {
         // very small table, skip
       } else if (OB_FAIL(tables.push_back(table))) {
         LOG_WARN("Fail to add minor sstable", KR(ret), KPC(table));
@@ -997,7 +1001,7 @@ int ObPartitionMultiRangeSpliter::get_tables(ObTableStoreIterator &table_iter,
     }
   }
 
-  if (OB_SUCC(ret) && major_size > MIN_SPLIT_TABLE_SIZE) {
+  if (OB_SUCC(ret) && (major_size > MIN_SPLIT_TABLE_SIZE || major_row_count > MIN_SPLIT_TABLE_ROW_COUNT)) {
     if (OB_FAIL(tables.push_back(last_major_sstable))) {
       LOG_WARN("Fail to add last major sstable", KR(ret), KPC(last_major_sstable));
     }

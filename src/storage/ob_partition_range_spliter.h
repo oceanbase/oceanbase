@@ -645,6 +645,7 @@ class ObPartitionMultiRangeSpliter
 {
 public:
   static constexpr int64_t MIN_SPLIT_TABLE_SIZE = 16 << 10; // 16KB
+  static constexpr int64_t MIN_SPLIT_TABLE_ROW_COUNT = 65535; // 64K rows
   static constexpr int64_t TOO_MARY_RANGES_THRESHOLD = 20;
   static constexpr int64_t SPLIT_RANGE_FACTOR = 2;
   static constexpr int64_t DEFAULT_MAX_SPLIT_TIME_COST = 20; // ms
