@@ -491,6 +491,10 @@ DEF_STR_WITH_CHECKER(_non_standard_comparison_level, OB_TENANT_PARAMETER, "NONE"
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
         "none, equal, range");
 
+DEF_BOOL(_enable_seq_wrap_around_flush_cache, OB_TENANT_PARAMETER, "True",
+         "Specifies whether to enable clearing cache when sequence wrap around ",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // tenant memtable consumption related
 DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100)",
         "used in calculating the value of MEMSTORE_LIMIT parameter: "

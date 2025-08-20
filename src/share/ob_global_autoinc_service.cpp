@@ -418,7 +418,8 @@ int ObGlobalAutoIncService::handle_next_sequence_request(
   int ret = OB_SUCCESS;
   ObSequenceCache *sequence_cache = &share::ObSequenceCache::get_instance();
   ObArenaAllocator allocator;
-  return sequence_cache->nextval(request.schema_, allocator ,result.nextval_);
+  // only order mode sequence will use this function, which does not need clean cache in cycle mode
+  return sequence_cache->nextval(request.schema_, allocator ,result.nextval_, nullptr /*session*/);
 }
 
 int ObGlobalAutoIncService::check_leader_(const uint64_t tenant_id, bool &is_leader)

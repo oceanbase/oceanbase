@@ -228,6 +228,31 @@ int ObFlushCacheExecutor::execute(ObExecContext &ctx, ObFlushCacheStmt &stmt)
     int64_t db_num = stmt.flush_cache_arg_.db_ids_.count();
     common::ObString sql_id = stmt.flush_cache_arg_.sql_id_;
     switch (stmt.flush_cache_arg_.cache_type_) {
+      case CACHE_TYPE_SEQUENCE: {
+        if (stmt.flush_cache_arg_.is_fine_grained_) {
+          // we assume tenant_list must not be empty and this will be checked in resolve phase
+          if (0 == tenant_num) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected tenant_list in fine-grained plan evict", K(tenant_num));
+          } else {
+            for (int64_t i = 0; i < tenant_num; i++) {
+              int64_t t_id = stmt.flush_cache_arg_.tenant_ids_.at(i);
+              ObString sequence_name = stmt.flush_cache_arg_.sequence_name_;
+              share::ObSequenceCache &sequence_cache = share::ObSequenceCache::get_instance();
+              MTL_SWITCH(t_id) {
+                for(int64_t j = 0; j < db_num; j++) { // ignore ret
+                  uint64_t db_id = stmt.flush_cache_arg_.db_ids_.at(j);
+                  ret = sequence_cache.flush_sequence_cache(t_id, db_id, sequence_name);
+                }
+              }
+            }
+          }
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("sequence_id is not specified, which is not supported", K(ret));
+        }
+        break;
+      }
       case CACHE_TYPE_LIB_CACHE: {
         if (stmt.flush_cache_arg_.ns_type_ != ObLibCacheNameSpace::NS_INVALID) {
           ObLibCacheNameSpace ns = stmt.flush_cache_arg_.ns_type_;

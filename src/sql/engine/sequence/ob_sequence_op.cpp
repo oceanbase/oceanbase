@@ -146,7 +146,7 @@ int ObLocalSequenceExecutor::get_nextval(ObExecContext &ctx)
           LOG_WARN("fail get nextval from rpc for seq", K(tenant_id), K(seq_id), K(ret));
         }
       } else {
-        if (OB_FAIL(sequence_cache_->nextval(seq_schemas_.at(idx), allocator, seq_value))) {
+        if (OB_FAIL(sequence_cache_->nextval(seq_schemas_.at(idx), allocator, seq_value, my_session))) {
           LOG_WARN("fail get nextval for seq", K(tenant_id), K(seq_id), K(ret));
         }
       }

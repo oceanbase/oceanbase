@@ -359,7 +359,7 @@ END_P SET_VAR DELIMITER
         SYNCHRONIZATION SYNCHRONOUS STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STRING STRIPE_SIZE
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS
-        SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER PARSE_HEADER IGNORE_LAST_EMPTY_COLUMN SKIP_BLANK_LINES STATEMENT SUM_OPNSIZE SS_MICRO_CACHE SPARSEVECTOR SHARED
+        SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER PARSE_HEADER IGNORE_LAST_EMPTY_COLUMN SKIP_BLANK_LINES STATEMENT SUM_OPNSIZE SS_MICRO_CACHE SPARSEVECTOR SHARED SEQUENCE_NAME
 
 
         TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_ID TABLET_MAX_SIZE TASK_ID
@@ -498,7 +498,7 @@ END_P SET_VAR DELIMITER
 %type <node> ls opt_tenant_list_or_ls_or_tablet_id ls_server_or_server_or_zone_or_tenant add_or_alter_zone_option
 %type <node> opt_tenant_list_v2
 %type <node> suspend_or_resume tenant_name opt_tenant_name cache_name opt_cache_name file_id opt_file_id cancel_task_type opt_data_source opt_paxos_replica_num
-%type <node> sql_id_or_schema_id_expr opt_sql_id_or_schema_id outline_type
+%type <node> sql_id_or_schema_id_expr opt_sql_id_or_schema_id outline_type sequence_name_expr opt_sequence_name
 %type <node> namespace_expr opt_namespace
 %type <node> server_action server_list opt_server_list
 %type <node> zone_action upgrade_action
@@ -20254,6 +20254,15 @@ alter_with_opt_hint SYSTEM FLUSH ILOGCACHE opt_file_id
   malloc_non_terminal_node($$, result->malloc_pool_, T_FLUSH_ILOGCACHE, 1, $5);
 }
 |
+alter_with_opt_hint SYSTEM FLUSH SEQUENCE CACHE opt_namespace opt_sequence_name opt_databases opt_tenant_list flush_scope
+{
+  (void)($1);
+  // system tenant use only.
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = CACHE_TYPE_SEQUENCE;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FLUSH_CACHE, 6, $$, $6, $7, $8, $9, $10);
+}
+|
 alter_with_opt_hint SYSTEM SWITCH REPLICA ls_role ls_server_or_server_or_zone_or_tenant
 {
   (void)($1);
@@ -22542,8 +22551,26 @@ SQL_ID opt_equal_mark STRING_VALUE
 }
 ;
 
+sequence_name_expr:
+SEQUENCE_NAME opt_equal_mark relation_name_or_string
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SEQUENCE_NAME, 1, $3);
+}
+
 opt_sql_id_or_schema_id:
 sql_id_or_schema_id_expr
+{
+  $$ = $1;
+}
+| /*EMPTY*/
+{
+  $$ = NULL;
+}
+;
+
+opt_sequence_name:
+sequence_name_expr
 {
   $$ = $1;
 }
@@ -26506,6 +26533,7 @@ ACCESS_INFO
 |       SEMISTRUCT_ENCODING_TYPE
 |       SEQUENCE
 |       SEQUENCES
+|       SEQUENCE_NAME
 |       SERIAL
 |       SERIALIZABLE
 |       SERVER

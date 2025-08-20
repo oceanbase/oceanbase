@@ -1561,6 +1561,20 @@ int ObFlushCacheP::process()
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("cache type not supported flush", "type", arg_.cache_type_, K(ret));
     } break;
+    case CACHE_TYPE_SEQUENCE: {
+      if (arg_.is_fine_grained_) { // fine-grained sequence cache evict
+        share::ObSequenceCache &sequence_cache = share::ObSequenceCache::get_instance();
+        MTL_SWITCH(arg_.tenant_id_) {
+          for (uint64_t i=0; i<arg_.db_ids_.count(); i++) {
+            ret = sequence_cache.flush_sequence_cache(arg_.tenant_id_, arg_.db_ids_.at(i), arg_.sequence_name_);
+          }
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("sequence_id is not specified, which is not supported", K(ret));
+      }
+      break;
+    }
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid cache type", "type", arg_.cache_type_);

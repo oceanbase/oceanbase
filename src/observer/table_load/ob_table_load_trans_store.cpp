@@ -1054,7 +1054,8 @@ int ObTableLoadTransStoreWriter::handle_identity_column(const ObColumnSchemaV2 *
     ObSequenceValue seq_value;
     if (OB_FAIL(ObSequenceCache::get_instance().nextval(trans_ctx_->ctx_->store_ctx_->sequence_schema_,
                                                         cast_allocator,
-                                                        seq_value))) {
+                                                        seq_value,
+                                                        trans_ctx_->ctx_->session_info_))) {
       LOG_WARN("fail get nextval for seq", KR(ret));
     } else if (obj.is_nop_value() || obj.is_null()) {
       ObNumber number;

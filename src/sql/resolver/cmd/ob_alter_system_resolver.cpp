@@ -863,6 +863,28 @@ int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
     } else if (OB_ISNULL(sql_id_node)) {
       // do nothing
     // currently, only support plan cache's fine-grained cache evict
+    } else if (stmt->flush_cache_arg_.cache_type_ == CACHE_TYPE_SEQUENCE) {
+      if (OB_ISNULL(sql_id_node->children_)
+               || OB_ISNULL(sql_id_node->children_[0])) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret));
+      } else if (OB_ISNULL(db_node) && t_node != NULL) {
+        ret = OB_INVALID_ARGUMENT;
+        SERVER_LOG(WARN, "invalid argument, when specify tenant_list, must specify databases", K(ret));
+      } else if (T_SEQUENCE_NAME == sql_id_node->type_) {
+        if (sql_id_node->children_[0]->str_len_ > (OB_MAX_SEQUENCE_NAME_LENGTH+1)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", K(ret));
+        } else {
+          stmt->flush_cache_arg_.sequence_name_.assign_ptr(
+              sql_id_node->children_[0]->str_value_,
+              static_cast<ObString::obstr_size_t>(sql_id_node->children_[0]->str_len_));
+          stmt->flush_cache_arg_.is_fine_grained_ = true;
+        }
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret));
+      }
     } else if (stmt->flush_cache_arg_.cache_type_ != CACHE_TYPE_PLAN &&
                stmt->flush_cache_arg_.cache_type_ != CACHE_TYPE_PL_OBJ) {
       ret = OB_NOT_SUPPORTED;
@@ -907,6 +929,10 @@ int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
       SERVER_LOG(WARN, "get_schema_guard failed", K(ret));
     } else {
       // do nothing
+      if (stmt->flush_cache_arg_.cache_type_ == CACHE_TYPE_SEQUENCE
+          && stmt->flush_cache_arg_.db_ids_.count() == 0) {
+        stmt->flush_cache_arg_.push_database(session_info_->get_database_id());
+      }
     }
 
     // db names
@@ -1047,7 +1073,7 @@ int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
     }
     LOG_INFO("resolve flush command finished!", K(ret), K(sess->get_effective_tenant_id()),
                 K(stmt->is_global_), K(stmt->flush_cache_arg_.cache_type_),
-                K(stmt->flush_cache_arg_.sql_id_), K(stmt->flush_cache_arg_.is_fine_grained_),
+                K(stmt->flush_cache_arg_.sequence_name_), K(stmt->flush_cache_arg_.is_fine_grained_),
                 K(stmt->flush_cache_arg_.tenant_ids_), K(stmt->flush_cache_arg_.db_ids_));
   }
   if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {

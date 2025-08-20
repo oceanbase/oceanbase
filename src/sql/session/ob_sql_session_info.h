@@ -778,6 +778,7 @@ public:
                                  pc_adaptive_effectiveness_ratio_threshold_(0),
                                  enable_adaptive_plan_cache_(false),
                                  enable_ps_parameterize_(true),
+                                 enable_seq_wrap_around_flush_cache_(false),
                                  enable_sql_ccl_rule_(true),
                                  session_(session)
     {
@@ -808,6 +809,7 @@ public:
     bool enable_enhanced_cursor_validation() const { return enable_enhanced_cursor_validation_; }
     bool get_enable_mysql_compatible_dates() const { return enable_mysql_compatible_dates_; }
     bool enable_enum_set_subschema() const { return enable_enum_set_subschema_; }
+    bool enable_seq_wrap_around_flush_cache() const { return enable_seq_wrap_around_flush_cache_; }
     bool get_ob_sqlstat_enable() const { return _ob_sqlstat_enable_; }
     bool enable_immediate_row_conflict_check() const { return ATOMIC_LOAD(&enable_immediate_row_conflict_check_); }
     bool force_enable_plan_tracing() const
@@ -868,6 +870,7 @@ public:
     int64_t pc_adaptive_effectiveness_ratio_threshold_;
     bool enable_adaptive_plan_cache_;
     bool enable_ps_parameterize_;
+    bool enable_seq_wrap_around_flush_cache_;
     bool enable_sql_ccl_rule_;
     ObSQLSessionInfo *session_;
   };
@@ -1602,6 +1605,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_enum_set_subschema();
+  }
+  bool is_enable_seq_wrap_around_flush_cache()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_seq_wrap_around_flush_cache();
   }
   bool get_tenant_ob_sqlstat_enable()
   {

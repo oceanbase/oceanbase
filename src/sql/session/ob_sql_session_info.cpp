@@ -3235,6 +3235,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
         tenant_config->sql_plan_management_mode.get_value_string());
       enable_mysql_compatible_dates_ = tenant_config->_enable_mysql_compatible_dates;
       enable_enum_set_subschema_ = tenant_config->_enable_enum_set_subschema;
+      enable_seq_wrap_around_flush_cache_ = tenant_config->_enable_seq_wrap_around_flush_cache;
       // 7. print_sample_ppm_ for flt
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
       // 8. _enable_enhanced_cursor_validation
