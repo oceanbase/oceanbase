@@ -1236,7 +1236,7 @@ int ObSchemaGetterGuard::check_obj_mysql_priv(const ObSessionPrivInfo &session_p
     LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
   } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
-  } else {
+  } else if (!sql::ObOraSysChecker::is_super_user(session_priv.user_id_)) {
     const ObPrivMgr &priv_mgr = mgr->priv_mgr_;
     //1. fetch obj priv
     const ObObjMysqlPriv *obj_mysql_priv = NULL;
@@ -1640,8 +1640,6 @@ int ObSchemaGetterGuard::check_priv(const ObSessionPrivInfo &session_priv,
           if (OB_ISNULL(this)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("schema guard is null", K(ret));
-          } else if (!sql::ObSchemaChecker::enable_mysql_pl_priv_check(tenant_id, *this)) {
-            //do nothing
           } else if (OB_FAIL(check_obj_mysql_priv(session_priv, enable_role_id_array, need_priv))) {
             LOG_WARN("No privilege", "tenant_id", session_priv.tenant_id_,
                 "user_id", session_priv.user_id_,
