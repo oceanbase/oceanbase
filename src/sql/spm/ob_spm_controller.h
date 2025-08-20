@@ -36,7 +36,8 @@ public:
                                         ObPhysicalPlan* plan);
   static void get_next_baseline_outline(ObSpmCacheCtx& spm_ctx);
 
-  static int update_evolution_task_result(EvolutionTaskResult& result);
+  static int update_evolution_task_result(const ObPhysicalPlan *evo_plan,
+                                          EvolutionTaskResult& result);
 
   static int accept_plan_baseline_by_user(obrpc::ObModifyPlanBaselineArg& arg);
   static int cancel_evolve_task(obrpc::ObModifyPlanBaselineArg& arg);
