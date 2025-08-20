@@ -88,7 +88,8 @@ private:
                       const obrpc::ObCreateMLogArg &create_mlog_arg,
                       const share::schema::ObTableSchema &base_table_schema,
                       share::schema::ObTableSchema &mlog_schema);
-  int set_table_columns(const obrpc::ObCreateMLogArg &create_mlog_arg,
+  int set_table_columns(ObSchemaGetterGuard &schema_guard,
+                        const obrpc::ObCreateMLogArg &create_mlog_arg,
                         const share::schema::ObTableSchema &base_table_schema,
                         share::schema::ObTableSchema &mlog_schema);
   int set_table_options(const obrpc::ObCreateMLogArg &create_mlog_arg,

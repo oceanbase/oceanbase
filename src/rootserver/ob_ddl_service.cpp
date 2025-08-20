@@ -4917,7 +4917,8 @@ int ObDDLService::check_support_alter_pk_and_columns(
   return ret;
 }
 
-int ObDDLService::check_alter_heap_table_index(const obrpc::ObIndexArg::IndexActionType type,
+int ObDDLService::check_alter_heap_table_index(share::schema::ObSchemaGetterGuard &schema_guard,
+                                               const obrpc::ObIndexArg::IndexActionType type,
                                                const ObTableSchema &orig_table_schema,
                                                obrpc::ObIndexArg *index_arg)
 {
@@ -4939,17 +4940,13 @@ int ObDDLService::check_alter_heap_table_index(const obrpc::ObIndexArg::IndexAct
     LOG_WARN("failed to build index table name", K(index_arg->index_name_), K(index_table_name), K(ret));
   }
   const ObIArray<ObAuxTableMetaInfo> &simple_index_infos = orig_table_schema.get_simple_index_infos();
-  ObSchemaGetterGuard schema_guard;
   const ObTableSchema *index_schema = NULL;
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret));
-  }
   ObIndexSchemaHashWrapper dest_index_schema_name_wrapper(tenant_id,
                                                          orig_table_schema.get_database_id(),
                                                          is_oracle_mode ? common::OB_INVALID_ID : orig_table_schema.get_table_id(),
                                                          index_table_name);
   for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {
+    ObIndexSchemaHashWrapper orgin_index_schema_name_wrapper;
     if (OB_FAIL(schema_guard.get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
       LOG_WARN("fail to get index schema", K(ret));
     } else if (OB_ISNULL(index_schema)) {
@@ -4957,11 +4954,12 @@ int ObDDLService::check_alter_heap_table_index(const obrpc::ObIndexArg::IndexAct
       LOG_WARN("the index to be altered is null", K(ret));
     } else if (ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY != index_schema->get_index_type()) {
       continue;
+    } else {
+      orgin_index_schema_name_wrapper = ObIndexSchemaHashWrapper(index_schema->get_tenant_id(),
+                                                                 orig_table_schema.get_database_id(),
+                                                                 is_oracle_mode ? common::OB_INVALID_ID : orig_table_schema.get_table_id(),
+                                                                 index_schema->get_table_name_str());
     }
-    ObIndexSchemaHashWrapper orgin_index_schema_name_wrapper(index_schema->get_tenant_id(),
-                                                             orig_table_schema.get_database_id(),
-                                                             is_oracle_mode ? common::OB_INVALID_ID : orig_table_schema.get_table_id(),
-                                                             index_schema->get_table_name_str());
     //RENAME_INDEX ddl needs to check whether it reuses the primary key name in the heap table
     if (OB_FAIL(ret)) {
     } else if (ObIndexArg::RENAME_INDEX == type) {
@@ -5165,7 +5163,7 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
         case ObIndexArg::ALTER_INDEX_TABLESPACE: {
           // offline ddl cannot appear at the same time with other ddl
           if (orig_table_schema.is_heap_organized_table() && ObIndexArg::ALTER_INDEX_TABLESPACE != type &&
-              OB_FAIL(check_alter_heap_table_index(type, orig_table_schema, index_arg))) {
+              OB_FAIL(check_alter_heap_table_index(schema_guard, type, orig_table_schema, index_arg))) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("Alter heap table index failed", K(ret));
           }

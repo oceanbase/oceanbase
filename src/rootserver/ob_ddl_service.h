@@ -2176,7 +2176,8 @@ private:
                                     bool &need_update,
                                     bool &need_continue);
 
-  int check_alter_heap_table_index(const obrpc::ObIndexArg::IndexActionType type,
+  int check_alter_heap_table_index(share::schema::ObSchemaGetterGuard &schema_guard,
+                                   const obrpc::ObIndexArg::IndexActionType type,
                                    const ObTableSchema &orig_table_schema,
                                    obrpc::ObIndexArg *index_arg);
   int validate_rename_table_args(const ObTableSchema *table_schema);
