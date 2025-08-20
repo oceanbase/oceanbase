@@ -163,6 +163,10 @@ private:
   int init_evolution_records();
   void reset_evolution_records();
   int start_evolution_plan(ObSpmCacheCtx &spm_ctx);
+  static bool enable_spm_improve(const uint64_t opt_version) {
+    return  (COMPAT_VERSION_4_2_5_BP4 <= opt_version && COMPAT_VERSION_4_3_0 > opt_version)
+            || COMPAT_VERSION_4_3_5_BP4 <= opt_version;
+  }
 protected:
   ObSqlPlanSet *plan_set_;
   common::SpinRWLock ref_lock_;
