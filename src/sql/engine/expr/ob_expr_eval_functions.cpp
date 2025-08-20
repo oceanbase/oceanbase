@@ -1854,6 +1854,20 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprMd5ConcatWs::calc_md5_concat_ws_vector                         /* 232 */
   NULL, // ObExprHiddenClusteringKey::eval_vector_hidden_clustering_key,         /* 233 */
   ObExprToPinyin::eval_to_pinyin_vector,                                 /* 234 */
+  NULL, // ObExprMul::mul_decint32_decint32_int32_vector,                         /* 235 */
+  NULL, // ObExprMul::mul_decint32_int32_decint32_vector,                         /* 236 */
+  NULL, // ObExprMul::mul_decint64_decint32_int32_vector,                         /* 237 */
+  NULL, // ObExprMul::mul_decint64_int32_decint32_vector,                         /* 238 */
+  NULL, // ObExprMul::mul_decint64_decint64_int32_vector,                         /* 239 */
+  NULL, // ObExprMul::mul_decint64_int32_decint64_vector,                         /* 240 */
+  NULL, // ObExprMul::mul_decint128_decint64_int32_vector,                        /* 241 */
+  NULL, // ObExprMul::mul_decint128_int32_decint64_vector,                        /* 242 */
+  NULL, // ObExprMul::mul_decint256_int32_decint128_vector,                       /* 243 */
+  NULL, // ObExprMul::mul_decint256_decint128_int32_vector,                       /* 244 */
+  NULL, // ObExprMul::mul_decint128_decint128_int32_vector,                       /* 245 */
+  NULL, // ObExprMul::mul_decint128_int32_decint128_vector,                       /* 246 */
+  NULL, // ObExprMul::mul_decint256_decint256_int32_vector,                       /* 247 */
+  NULL, // ObExprMul::mul_decint256_int32_decint256_vector,                       /* 248 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
