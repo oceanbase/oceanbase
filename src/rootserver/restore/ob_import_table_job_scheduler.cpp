@@ -688,7 +688,7 @@ int ObImportTableTaskScheduler::try_advance_status_(const int err_code)
   } else {
 
     share::ObImportTableTaskStatus next_status = import_task_->get_status().get_next_status(err_code);
-    if (import_task_->get_result().is_succeed()) { // avoid to cover comment
+    if (!import_task_->get_result().is_comment_setted()) { // avoid to cover comment
       share::ObTaskId trace_id(*ObCurTraceId::get_trace_id());
       ObImportResult result;
       if (OB_FAIL(result.set_result(err_code, trace_id, GCONF.self_addr_))) {
@@ -934,6 +934,7 @@ int ObImportTableTaskScheduler::wait_import_ddl_task_finish_(bool &is_finish)
       is_finish = true;
       LOG_INFO("[IMPORT_TABLE]import table failed", KPC_(import_task), K(error_message));
     }
+  } else if (OB_FALSE_IT(DEBUG_SYNC(BEFORE_RECOVER_TABLE_DDL_TASK_SUCCESS))) {
   } else if (OB_FAIL(statistics_import_results_())) {
     LOG_WARN("failed to statistics import result", K(ret));
   } else if (OB_FAIL(helper_.report_import_task_statistics(*sql_proxy_, *import_task_))) {
@@ -959,8 +960,8 @@ int ObImportTableTaskScheduler::statistics_import_results_()
   } else if (OB_FAIL(guard.get_table_schema(tenant_id, db_name, table_name, false/*no index*/, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(db_name), K(table_name));
   } else if (OB_ISNULL(table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table is not exist", K(tenant_id), K(db_name), K(table_name));
+    ret = OB_SUCCESS;
+    LOG_INFO("target table is not exist", K(tenant_id), K(db_name), K(table_name));
     ObImportResult::Comment comment;
     if (OB_TMP_FAIL(databuff_printf(comment.ptr(), comment.capacity(),
       "table %.*s has been deleted by user", table_name.length(), table_name.ptr()))) {
