@@ -1432,6 +1432,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprEmbeddedVec::generate_embedded_vec,                  /* 866 */
   NULL, // ObExprSemanticDistance::calc_semantic_distance,            /* 867 */
   NULL, // ObExprBucket::calc_bucket_expr,                            /* 868 */
+  NULL, // ObExprSemanticVectorDistance::calc_semantic_vector_distance, /* 869 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
