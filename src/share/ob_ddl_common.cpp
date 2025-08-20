@@ -1960,6 +1960,27 @@ int ObDDLUtil::calc_snapshot_with_gts(
   return ret;
 }
 
+int ObDDLUtil::check_is_table_restore_task(const uint64_t tenant_id, const int64_t task_id, bool &is_table_restore_task)
+{
+  int ret = OB_SUCCESS;
+  is_table_restore_task = false;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    rootserver::ObDDLTaskRecord task_record;
+    ObArenaAllocator allocator("ddl util");
+    if (task_id == 0) {
+      // skip check.
+    } else if (OB_FAIL(rootserver::ObDDLTaskRecordOperator::get_ddl_task_record(tenant_id, task_id, *GCTX.sql_proxy_, allocator, task_record))) {
+      LOG_WARN("fail to get ddl task record", K(ret), K(task_id));
+    } else if (DDL_TABLE_RESTORE == task_record.ddl_type_) {
+      is_table_restore_task = true;
+    }
+  }
+  return ret;
+}
+
 int ObDDLUtil::construct_domain_index_arg(const ObTableSchema *table_schema,
     const ObTableSchema *index_schema,
     rootserver::ObDDLTask &task,
@@ -1993,7 +2014,7 @@ int ObDDLUtil::construct_domain_index_arg(const ObTableSchema *table_schema,
 
   ObSEArray<ObString, 1> col_names;
   create_index_arg.index_option_.reset();
-  create_index_arg.is_offline_rebuild_ = true;
+  create_index_arg.is_offline_rebuild_ = task.get_src_tenant_id() == task.get_tenant_id();  // not table recover task.
   create_index_arg.parallelism_ = task.get_parallelism();
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(task.get_tenant_id(), new_schema_guard))) {

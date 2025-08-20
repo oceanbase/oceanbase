@@ -2137,6 +2137,7 @@ int ObDDLScheduler::create_build_fts_index_task(
 {
   int ret = OB_SUCCESS;
   int64_t task_id = 0;
+  bool in_table_restore = false;
   SMART_VAR(ObFtsIndexBuildTask, index_task) {
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
@@ -2149,7 +2150,10 @@ int ObDDLScheduler::create_build_fts_index_task(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), KPC(create_index_arg),
           KPC(data_table_schema), KPC(index_schema), K(tenant_data_version), KP(GCTX.sql_proxy_));
-    } else if (create_index_arg->is_offline_rebuild_ && OB_FAIL(ObDDLUtil::get_domain_index_share_table_snapshot(data_table_schema, index_schema, create_index_arg->tenant_id_, snapshot_version))) {
+    } else if (OB_FAIL(ObDDLUtil::check_is_table_restore_task(create_index_arg->tenant_id_, parent_task_id, in_table_restore))) {
+      LOG_WARN("fail to check is table restore task", K(ret));
+    } else if ((create_index_arg->is_offline_rebuild_ || in_table_restore)
+        && OB_FAIL(ObDDLUtil::get_domain_index_share_table_snapshot(data_table_schema, index_schema, create_index_arg->tenant_id_, snapshot_version))) {
       LOG_WARN("failed to get rowkey doc table snapshot", K(ret), K(data_table_schema), K(index_schema));
     } else if (OB_FAIL(ObFtsIndexBuilderUtil::check_supportability_for_building_index(data_table_schema, create_index_arg))) {
       LOG_WARN("fail to check supportability for building index", K(ret));
@@ -2246,6 +2250,7 @@ int ObDDLScheduler::create_build_vec_index_task(
 {
   int ret = OB_SUCCESS;
   int64_t task_id = 0;
+  bool in_table_restore = false;
   SMART_VAR(ObVecIndexBuildTask, index_task) {
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
@@ -2256,7 +2261,10 @@ int ObDDLScheduler::create_build_vec_index_task(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), KPC(create_index_arg),
           KPC(data_table_schema), KPC(index_schema));
-    } else if (create_index_arg->is_offline_rebuild_ && OB_FAIL(ObDDLUtil::get_domain_index_share_table_snapshot(data_table_schema, index_schema, create_index_arg->tenant_id_, snapshot_version))) {
+    } else if (OB_FAIL(ObDDLUtil::check_is_table_restore_task(create_index_arg->tenant_id_, parent_task_id, in_table_restore))) {
+      LOG_WARN("fail to check is table restore task", K(ret));
+    } else if ((create_index_arg->is_offline_rebuild_ || in_table_restore)
+        && OB_FAIL(ObDDLUtil::get_domain_index_share_table_snapshot(data_table_schema, index_schema, create_index_arg->tenant_id_, snapshot_version))) {
       LOG_WARN("failed to get rowkey doc table snapshot", K(ret), K(data_table_schema), K(index_schema));
     } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(*GCTX.sql_proxy_, data_table_schema->get_tenant_id(), task_id))) {
       LOG_WARN("fetch new task id failed", K(ret));
