@@ -2786,6 +2786,7 @@ def generate_load_inner_table_schema():
   run_command('{} {} -DOB_BUILD_WITH_EMPTY_LOAD_SCHEMA=ON --init'.format(build_sh_path, build_type))
   run_command('cd {} && {} {} && ./{}'.format(unittest_path, make_type, test_name, test_name))
   run_command('cp -f {}/ob_load_inner_table_schema.cpp {}'.format(unittest_path, current_dir))
+  run_command('{} {} --init'.format(build_sh_path, build_type))
 
 
 if __name__ == "__main__":
