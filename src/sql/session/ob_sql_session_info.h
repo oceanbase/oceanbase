@@ -1423,7 +1423,24 @@ public:
   int get_spm_mode(int64_t &spm_mode);
   bool is_enable_new_query_range() const;
   bool is_sqlstat_enabled();
-  int has_ccl_rules(share::schema::ObSchemaGetterGuard *&schema_guard, bool &has_ccl_rules);
+  // To avoid frequent ObSchemaMgr access in check_lazy_guard,
+  // refresh ccl_cnt every 5s
+  int has_ccl_rules(share::schema::ObSchemaGetterGuard *&schema_guard,
+    bool &has_ccl_rules)
+  {
+    int ret = OB_SUCCESS;
+    int64_t cur_time = ObTimeUtility::fast_current_time();
+    if (-1 == last_update_ccl_cnt_time_ || 5 * 1000 * 1000LL < (cur_time - last_update_ccl_cnt_time_)) {
+      uint64_t ccl_cnt = 0;
+      last_update_ccl_cnt_time_ = cur_time;
+      if (OB_FAIL(schema_guard->get_ccl_rule_count(get_effective_tenant_id(), ccl_cnt))) {
+        SQL_SESSION_LOG(WARN, "fail to get ccl rule count", K(ret));
+      }
+      has_ccl_rule_ = (ccl_cnt > 0);
+    }
+    has_ccl_rules = has_ccl_rule_;
+    return ret;
+  }
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   const ObSessionDDLInfo &get_ddl_info() const { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }
@@ -1668,7 +1685,7 @@ public:
   bool get_failover_mode() const { return failover_mode_; }
   void set_failover_mode(const bool failover_mode) { failover_mode_ = failover_mode; }
   void reset_service_name() { service_name_.reset(); }
-  bool has_ccl_rule() const { return has_ccl_rule_; }
+  bool has_ccl_rule_checked() const { return has_ccl_rule_; }
   int set_service_name(const ObString& service_name);
   int check_service_name_and_failover_mode() const;
   int check_service_name_and_failover_mode(const uint64_t tenant_id) const;

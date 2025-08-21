@@ -692,25 +692,6 @@ bool ObSQLSessionInfo::is_sqlstat_enabled()
   return bret;
 }
 
-// To avoid frequent ObSchemaMgr access in check_lazy_guard,
-// refresh ccl_cnt every 5s
-int ObSQLSessionInfo::has_ccl_rules(share::schema::ObSchemaGetterGuard *&schema_guard,
-  bool &has_ccl_rules)
-{
-  int ret = OB_SUCCESS;
-  int64_t cur_time = ObTimeUtility::current_time();
-  if (last_update_ccl_cnt_time_ == -1 || cur_time - last_update_ccl_cnt_time_ > 5 * 1000 * 1000LL) {
-    uint64_t ccl_cnt = 0;
-    last_update_ccl_cnt_time_ = cur_time;
-    if (OB_FAIL(schema_guard->get_ccl_rule_count(get_effective_tenant_id(), ccl_cnt))) {
-      LOG_WARN("fail to get ccl rule count", K(ret));
-    }
-    has_ccl_rule_ = (ccl_cnt > 0);
-  }
-  has_ccl_rules = has_ccl_rule_;
-  return ret;
-}
-
 void ObSQLSessionInfo::destroy(bool skip_sys_var)
 {
   if (is_inited_) {

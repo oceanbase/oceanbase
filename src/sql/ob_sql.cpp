@@ -2804,16 +2804,25 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
   bool is_begin_commit_stmt = false;
 
   //ccl check level-1: before get into sql engine
-  ObString emptry_format_sqlid;
-  common::ObSEArray<const common::ObObjParam *, 1> param_store;
-  if (OB_SUCC(ret)
-      && OB_FAIL(ObSQLUtils::match_ccl_rule(allocator, session, context, trimed_stmt, false,
-                                            param_store, emptry_format_sqlid,
-                                            CclRuleContainsInfo::NONE))) {
-    if (ret == OB_REACH_MAX_CCL_CONCURRENT_NUM) {
-      result.get_exec_context().set_need_disconnect(false);
+  if (OB_SUCC(ret) && session.is_enable_sql_ccl_rule()) {
+    bool has_ccl_rules = false;
+    if (OB_FAIL(session.has_ccl_rules(context.schema_guard_, has_ccl_rules))) {
+      LOG_WARN("fail to get ccl rule total count", K(ret));
+    } else if (!has_ccl_rules) {
+      //don't need to do ccl match
     } else {
-      LOG_WARN("fail to match ccl rule", K(ret));
+      ObString emptry_format_sqlid;
+      common::ObSEArray<const common::ObObjParam *, 1> param_store;
+      if (OB_SUCC(ret)
+          && OB_FAIL(ObSQLUtils::match_ccl_rule(allocator, session, context, trimed_stmt, false,
+                                                param_store, emptry_format_sqlid,
+                                                CclRuleContainsInfo::NONE))) {
+        if (ret == OB_REACH_MAX_CCL_CONCURRENT_NUM) {
+          result.get_exec_context().set_need_disconnect(false);
+        } else {
+          LOG_WARN("fail to match ccl rule", K(ret));
+        }
+      }
     }
   }
 
@@ -3348,6 +3357,7 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
             || basic_stmt->is_help_stmt()) {
     //ccl check level-3: after resolve sql
     if (OB_NOT_NULL(pc_ctx)
+        && result.get_session().has_ccl_rule_checked() && result.get_session().is_enable_sql_ccl_rule()
         && OB_FAIL(ObSQLUtils::match_ccl_rule(
              pc_ctx->allocator_, result.get_session(), sql_ctx, ObString(parse_result.input_sql_len_, parse_result.input_sql_),
              mode == PC_PS_MODE, pc_ctx->fp_result_.parameterized_params_, pc_ctx->sql_ctx_.format_sql_id_, CclRuleContainsInfo::DATABASE_AND_TABLE, &parse_result, basic_stmt))) {
@@ -4339,10 +4349,12 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
       }
 
       if (OB_SUCC(ret) && (PC_TEXT_MODE == pc_ctx.mode_ || PC_PS_MODE == pc_ctx.mode_)) {
-        if (OB_FAIL(ObSQLUtils::match_ccl_rule(&pc_ctx, *session, PC_PS_MODE == pc_ctx.mode_,
-                                               plan->get_dependency_table()))) {
-          LOG_WARN("fail to match ccl rule in plan cache", K(ret), K(pc_ctx.mode_),
-                   K(pc_ctx.raw_sql_));
+        if (session->has_ccl_rule_checked() && session->is_enable_sql_ccl_rule()) {
+          if (OB_FAIL(ObSQLUtils::match_ccl_rule(&pc_ctx, *session, PC_PS_MODE == pc_ctx.mode_,
+                                                 plan->get_dependency_table()))) {
+            LOG_WARN("fail to match ccl rule in plan cache", K(ret), K(pc_ctx.mode_),
+                     K(pc_ctx.raw_sql_));
+          }
         }
       }
     }
@@ -5340,12 +5352,14 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   generate_sql_id(pc_ctx, add_plan_to_pc, parse_result, signature_sql, signature_format_sql, ret);
 
   //ccl check level-2: after parse sql
-  if (OB_SUCC(ret)
-      && OB_FAIL(ObSQLUtils::match_ccl_rule(
-           pc_ctx.allocator_, session, context, trimed_stmt, pc_ctx.mode_ == PC_PS_MODE,
-           pc_ctx.fp_result_.parameterized_params_, pc_ctx.sql_ctx_.format_sql_id_,
-           CclRuleContainsInfo::DML, &parse_result))) {
-    LOG_WARN("fail to match ccl rule", K(ret));
+  if (session.has_ccl_rule_checked() && session.is_enable_sql_ccl_rule()) {
+    if (OB_SUCC(ret)
+        && OB_FAIL(ObSQLUtils::match_ccl_rule(
+             pc_ctx.allocator_, session, context, trimed_stmt, pc_ctx.mode_ == PC_PS_MODE,
+             pc_ctx.fp_result_.parameterized_params_, pc_ctx.sql_ctx_.format_sql_id_,
+             CclRuleContainsInfo::DML, &parse_result))) {
+      LOG_WARN("fail to match ccl rule", K(ret));
+    }
   }
 
   if (OB_FAIL(ret)) {

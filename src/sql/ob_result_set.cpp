@@ -41,7 +41,7 @@ ObResultSet::~ObResultSet()
     physical_plan->dec_concurrent_num();
   }
 
-  if (my_session_.is_enable_sql_ccl_rule() && my_session_.has_ccl_rule()) {
+  if (my_session_.has_ccl_rule_checked() && my_session_.is_enable_sql_ccl_rule()) {
     sql::ObSQLCCLRuleManager *sql_ccl_rule_mgr = MTL(sql::ObSQLCCLRuleManager *);
     if (!is_inner_result_set_ && sql_ccl_rule_mgr->is_inited() && OB_NOT_NULL(sql_ccl_rule_mgr) && OB_NOT_NULL(get_exec_context().get_sql_ctx())) {
       FOREACH(p_value_wrapper, get_exec_context().get_sql_ctx()->matched_ccl_rule_level_values_) {

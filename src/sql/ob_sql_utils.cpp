@@ -6454,13 +6454,8 @@ int ObSQLUtils::match_ccl_rule(ObIAllocator &alloc, ObSQLSessionInfo &session, O
                                ObStmt *stmt)
 {
   int ret = OB_SUCCESS;
-  bool has_ccl_rules = 0;
   if (!session.is_enable_sql_ccl_rule()) {
     //no need to do ccl match
-  } else if (OB_FAIL(session.has_ccl_rules(context.schema_guard_, has_ccl_rules))) {
-    LOG_WARN("fail to get ccl rule total count", K(ret));
-  } else if (!has_ccl_rules) {
-    //don't need to do ccl match
   } else if (!session.is_inner() && !context.is_remote_sql_ &&
              !(context.is_prepare_protocol_ && context.is_prepare_stage_) &&
              !(context.multi_stmt_item_.is_part_of_multi_stmt())) {
@@ -6627,13 +6622,8 @@ int ObSQLUtils::match_ccl_rule(const ObPlanCacheCtx *pc_ctx, ObSQLSessionInfo &s
       pc_ctx->fp_result_.parameterized_params_;
     stmt::StmtType stmt_type = pc_ctx->sql_ctx_.stmt_type_;
     ObString format_sqlid = pc_ctx->sql_ctx_.format_sql_id_;
-    bool has_ccl_rules = false;
     if (!session.is_enable_sql_ccl_rule()) {
       //no need to do ccl match
-    } else if (OB_FAIL(session.has_ccl_rules(context.schema_guard_, has_ccl_rules))) {
-      LOG_WARN("fail to get ccl rule total count", K(ret));
-    } else if (!has_ccl_rules) {
-      //don't need to do ccl match
     } else if (!session.is_inner() && !context.is_remote_sql_ &&
                !(context.is_prepare_protocol_ && context.is_prepare_stage_) &&
                !(context.multi_stmt_item_.is_part_of_multi_stmt())) {
