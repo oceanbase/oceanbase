@@ -132,6 +132,9 @@ int main(int argc, char *argv[])
   _OB_LOG(INFO, "cmd: [%s]", ss.str().c_str());
 
   ObAdminExecutor *executor = NULL;
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
+  oceanbase::ObClusterVersion::get_instance().update_cluster_version(CLUSTER_CURRENT_VERSION);
+
   if (argc < 2) {
     print_usage();
   } else {
