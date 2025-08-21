@@ -291,7 +291,7 @@ int ObResolverUtils::collect_schema_version(share::schema::ObSchemaGetterGuard &
               OX (syn_version.object_id_ = obj_id);
               OX (syn_version.version_ = schema_version);
               OX (syn_version.object_type_ = DEPENDENCY_SYNONYM);
-              OX (syn_version.invoker_db_id_ = session_info->get_database_id());
+              OX (syn_version.invoker_db_id_ = database_id);
               OZ (dependency_objects.push_back(syn_version));
               if (OB_NOT_NULL(dep_db_array)) {
                 OZ (dep_db_array->push_back(dep_db_id));
