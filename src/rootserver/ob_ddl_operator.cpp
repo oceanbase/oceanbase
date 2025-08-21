@@ -3339,7 +3339,11 @@ int ObDDLOperator::alter_table_alter_index(
       } else {
         new_index_table_schema.set_index_visibility(alter_index_arg.index_visibility_);
         new_index_table_schema.set_schema_version(new_schema_version);
-        new_index_table_schema.set_storage_cache_policy(alter_index_arg.storage_cache_policy_);
+        if (OB_ISNULL(alter_index_arg.storage_cache_policy_)) {
+          new_index_table_schema.set_storage_cache_policy(index_table_schema->get_storage_cache_policy());
+        } else {
+          new_index_table_schema.set_storage_cache_policy(alter_index_arg.storage_cache_policy_);
+        }
         if(OB_FAIL(schema_service->get_table_sql_service().update_table_options(
                     trans,
                     *index_table_schema,

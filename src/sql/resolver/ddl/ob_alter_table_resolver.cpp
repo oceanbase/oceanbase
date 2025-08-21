@@ -469,12 +469,20 @@ int ObAlterTableResolver::set_table_options()
       SQL_RESV_LOG(WARN, "Write ttl_definition to alter_table_schema failed!", K(ret));
     } else if (OB_FAIL(alter_table_schema.set_kv_attributes(kv_attributes_))) {
       SQL_RESV_LOG(WARN, "Write kv_attributes to alter_table_schema failed!", K(ret));
-    } else if (OB_FAIL(alter_table_schema.set_storage_cache_policy(storage_cache_policy_))) {
-      SQL_RESV_LOG(WARN, "Write storage_cache_policy to alter_table_schema failed!", K(ret));
     } else if (OB_FAIL(alter_table_schema.set_dynamic_partition_policy(dynamic_partition_policy_))) {
       SQL_RESV_LOG(WARN, "Write dynamic_partition_policy to alter_table_schema failed!", K(ret));
     } else {
       alter_table_schema.alter_option_bitset_ = alter_table_bitset_;
+    }
+    if (OB_SUCC(ret)) {
+      // if storage_cache_policy_ is not set, use the original table's storage cache policy
+      if (OB_ISNULL(storage_cache_policy_)) {
+        if (OB_FAIL(alter_table_schema.set_storage_cache_policy(table_schema_->get_storage_cache_policy()))) {
+          SQL_RESV_LOG(WARN, "Write storage_cache_policy to alter_table_schema failed!", K(ret));
+        }
+      } else if (OB_FAIL(alter_table_schema.set_storage_cache_policy(storage_cache_policy_))) {
+        SQL_RESV_LOG(WARN, "Write storage_cache_policy to alter_table_schema failed!", K(ret));
+      }
     }
 
     if (OB_SUCC(ret) && alter_table_schema.get_compressor_type() == ObCompressorType::ZLIB_LITE_COMPRESSOR) {
@@ -2763,6 +2771,8 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
     index_arg.index_option_.storage_format_version_ = storage_format_version_;
     index_arg.index_option_.comment_ = comment_;
     index_arg.index_option_.storage_cache_policy_ = storage_cache_policy_;
+    // reset storage cache policy, cause it will be reused in alter table options and alter index options
+    storage_cache_policy_.reset();
     index_arg.with_rowid_ = with_rowid_;
     index_arg.index_option_.parser_name_ = parser_name_;
     index_arg.index_option_.parser_properties_ = parser_properties_;
