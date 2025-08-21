@@ -41,60 +41,6 @@ void fin_obdal_env()
   ObDalEnvIniter::get_instance().global_destroy();
 }
 
-//========================= ObDalMemoryManager =========================
-ObDalMemoryManager::ObDalMemoryManager()
-  : attr_(),
-    mem_limiter_(),
-    allocator_()
-{
-  attr_.label_ = OB_DAL_SDK;
-}
-
-ObDalMemoryManager::~ObDalMemoryManager()
-{
-}
-
-ObDalMemoryManager &ObDalMemoryManager::get_instance()
-{
-  static ObDalMemoryManager memory_manger;
-  return memory_manger;
-}
-
-int ObDalMemoryManager::init()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(allocator_.init(DEFAULT_BLOCK_SIZE, mem_limiter_, attr_))) {
-    OB_LOG(WARN, "init allocator error", K(ret));
-  } else {
-    allocator_.set_nway(N_WAY);
-  }
-  return ret;
-}
-
-void *ObDalMemoryManager::allocate(std::size_t size, std::size_t align)
-{
-  int ret = OB_SUCCESS;
-  void *ptr = nullptr;
-  do {
-    ptr = allocator_.alloc_align(size, align);
-    if (OB_ISNULL(ptr)) {
-      ob_usleep(10000); // 10ms
-      if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        OB_LOG(ERROR, "ObVSliceAlloc failed to allocate memory",
-            K(size), K(align));
-      }
-    }
-  } while (OB_ISNULL(ptr));
-  return ptr;
-}
-
-void ObDalMemoryManager::free(void *ptr)
-{
-  allocator_.free_align(ptr);
-  ptr = nullptr;
-}
-
 //========================= ObDalEnvIniter =========================
 ObDalEnvIniter::ObDalEnvIniter()
   : lock_(common::ObLatchIds::OBJECT_DEVICE_LOCK),
@@ -110,11 +56,15 @@ ObDalEnvIniter &ObDalEnvIniter::get_instance()
 
 void *obdal_malloc(std::size_t size, std::size_t align)
 {
-  // Since there are some global static variables in obdal that cannot be cleaned up
-  // at fin_obdal_env and vslice alloc has memory_leak checks, ob_malloc replacement is used first
   void *ptr = nullptr;
   ObMemAttr attr;
   attr.label_ = OB_DAL_SDK;
+  const int64_t tenant_id = ObDalAccessor::obdal_get_tenant_id();
+  if (size < OBDAL_MALLOC_BIG_SIZE) {
+    attr.tenant_id_ = OB_SERVER_TENANT_ID;
+  } else {
+    attr.tenant_id_ = tenant_id;
+  }
   SET_IGNORE_MEM_VERSION(attr);
   do {
     // ptr = ObDalMemoryManager::get_instance().allocate(size, align);
@@ -175,8 +125,6 @@ int ObDalEnvIniter::global_init()
   if (is_global_inited_) {
     ret = OB_INIT_TWICE;
     OB_LOG(WARN, "cannot init twice", K(ret));
-  } else if (OB_FAIL(ObDalMemoryManager::get_instance().init())) {
-    OB_LOG(WARN, "failed init global obdal memory manager", K(ret));
   } else if (OB_FAIL(ObDalAccessor::init_env(reinterpret_cast<void *>(obdal_malloc),
                                              reinterpret_cast<void *>(obdal_free),
                                              reinterpret_cast<void *>(obdal_log_handler),
@@ -254,7 +202,7 @@ int ObDalAccount::assign(const ObObjectStorageInfo *storage_info)
 ObStorageObDalBase::ObStorageObDalBase()
   : is_inited_(false),
     is_write_with_if_match_(false),
-    allocator_(OB_STORAGE_OBDAL_ALLOCATOR),
+    allocator_(OB_STORAGE_OBDAL_ALLOCATOR, OB_MALLOC_NORMAL_BLOCK_SIZE, ObObjectStorageTenantGuard::get_tenant_id()),
     storage_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
     bucket_(),
     object_(),
@@ -320,11 +268,16 @@ int set_obdal_options_with_account(
     const ObString &bucket)
 {
   int ret = OB_SUCCESS;
+  const int64_t tenant_id = ObObjectStorageTenantGuard::get_tenant_id();
+  static constexpr int INTEGER_BUF_LEN = 32;
+  char tenant_id_str[INTEGER_BUF_LEN] = {0};
   if (OB_ISNULL(options)
       || OB_UNLIKELY(!obdal_account.is_valid()
       || bucket.empty())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), KP(options), K(obdal_account), K(bucket));
+  } else if (OB_FAIL(databuff_printf(tenant_id_str, INTEGER_BUF_LEN, "%ld", tenant_id))) {
+    OB_LOG(WARN, "failed to set tenant id", K(ret), K(tenant_id));
   } else {
     if (storage_type == ObStorageType::OB_STORAGE_S3) {
       if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "bucket", bucket.ptr()))) {
@@ -347,6 +300,8 @@ int set_obdal_options_with_account(
         OB_LOG(WARN, "faield to set enable virtual host style", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "timeout", "60"))) {
         OB_LOG(WARN, "failed to set timeout", K(ret));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "tenant_id", tenant_id_str))) {
+        OB_LOG(WARN, "failed to set tenant id", K(ret));
       }
     } else if (storage_type == ObStorageType::OB_STORAGE_OSS) {
       if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "bucket", bucket.ptr()))) {
@@ -359,6 +314,8 @@ int set_obdal_options_with_account(
         OB_LOG(WARN, "failed to set access key", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "timeout", "60"))) {
         OB_LOG(WARN, "failed to set timeout", K(ret));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "tenant_id", tenant_id_str))) {
+        OB_LOG(WARN, "failed to set tenant id", K(ret));
       }
     } else if (storage_type == ObStorageType::OB_STORAGE_AZBLOB) {
       if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "container", bucket.ptr()))) {
@@ -371,6 +328,8 @@ int set_obdal_options_with_account(
         OB_LOG(WARN, "failed to set access key", K(ret));
       } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "timeout", "120"))) {
         OB_LOG(WARN, "failed to set timeout", K(ret));
+      } else if (OB_FAIL(ObDalAccessor::obdal_operator_options_set(options, "tenant_id", tenant_id_str))) {
+        OB_LOG(WARN, "failed to set tenant id", K(ret));
       }
     }
   }
