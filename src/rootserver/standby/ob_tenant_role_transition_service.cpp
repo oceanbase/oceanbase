@@ -886,12 +886,20 @@ int ObTenantRoleTransitionService::wait_rebuild_master_key_version_finish_()
 {
   int ret = OB_SUCCESS;
   int64_t begin_time = ObTimeUtility::current_time();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  #ifdef OB_BUILD_TDE_SECURITY
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
+  } else if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tenant config", K(ret), K(tenant_id_));
+  } else if (!ObTdeMethodUtil::is_valid(ObString(tenant_config->tde_method.get_value()))) {
+    //do nothing
   } else if (OB_FAIL(ObRestoreCommonUtil::rebuild_master_key_version(
           GCTX.rs_rpc_proxy_, tenant_id_, false))) {
     LOG_WARN("failed to rebuild master key version", KR(ret));
   }
+  #endif
   if (OB_LIKELY(NULL != cost_detail_)) {
     int64_t wait_rebuild_master_key_task = ObTimeUtility::current_time() - begin_time;
     (void) cost_detail_->add_cost(ObTenantRoleTransCostDetail::WAIT_REBUILD_MASTER_KEY, wait_rebuild_master_key_task);
