@@ -1650,6 +1650,19 @@ int ObPLContext::set_subprogram_var_from_local(
   return ret;
 }
 
+int ObPLContext::set_subprogram_var(
+  ObSQLSessionInfo &session_info,
+  int64_t package_id, int64_t routine_id,
+  int64_t var_idx, const ObObjParam &value)
+{
+  int ret = OB_SUCCESS;
+  ObPLExecState *state = NULL;
+  OZ (get_exec_state_from_local(session_info, package_id, routine_id, state));
+  CK (OB_NOT_NULL(state));
+  OZ (state->set_var(var_idx, value));
+  return ret;
+}
+
 #ifdef OB_BUILD_ORACLE_PL
 ObPLCallStackTrace* ObPLContext::get_call_stack_trace()
 {

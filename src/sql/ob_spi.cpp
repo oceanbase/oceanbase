@@ -3784,7 +3784,7 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
     } else if (DECL_PKG == loc) {
       OZ (spi_set_package_variable(ctx, package_id, formal_param_idxs[i], dummy_result));
     } else {
-      OZ (ObPLContext::set_subprogram_var_from_local(
+      OZ (ObPLContext::set_subprogram_var(
         session_info, package_id, routine_id, formal_param_idxs[i], dummy_result));
     }
     if (convert) {
@@ -3793,6 +3793,30 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
         LOG_WARN("failed to destruct obj", K(tmp_ret));
       }
       ret = ret == OB_SUCCESS ? tmp_ret : ret;
+    }
+  }
+
+  return ret;
+}
+
+int ObSPIService::release_cursor_parameters(ObPLExecCtx *ctx,
+                                            ObSQLSessionInfo &session_info,
+                                            uint64_t package_id,
+                                            uint64_t routine_id,
+                                            const int64_t *formal_param_idxs,
+                                            int64_t cursor_param_count)
+{
+  int ret = OB_SUCCESS;
+  ObObjParam result;
+  CK (OB_NOT_NULL(ctx));
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < cursor_param_count; ++i) {
+    CK (OB_NOT_NULL(formal_param_idxs));
+    OX (result.reset());
+    OX (result.ObObj::reset());
+    OZ (ObPLContext::get_subprogram_var_from_local(session_info, package_id, routine_id, formal_param_idxs[i], result));
+    if (OB_SUCC(ret) && result.is_pl_extend() && result.get_meta().get_extend_type() == PL_REF_CURSOR_TYPE) {
+      OZ (spi_handle_ref_cursor_refcount(ctx, package_id, routine_id, formal_param_idxs[i], -1));
     }
   }
 
@@ -4237,6 +4261,9 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
     }
     if (OB_SUCC(ret) && DECL_PKG == loc) {
       OZ (spi_update_package_change_info(ctx, package_id, cursor_index));
+    }
+    if (OB_SUCC(ret) && DECL_PKG != loc) {
+      OZ (release_cursor_parameters(ctx, *session_info, package_id, routine_id, formal_param_idxs, cursor_param_count));
     }
   }
   if (OB_FAIL(ret) && lib::is_mysql_mode()) {

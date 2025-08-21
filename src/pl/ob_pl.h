@@ -998,6 +998,11 @@ public:
                                     int64_t routine_id,
                                     int64_t var_idx,
                                     const ObObjParam &value);
+  static int set_subprogram_var(sql::ObSQLSessionInfo &session_info,
+                                      int64_t package_id,
+                                      int64_t routine_id,
+                                      int64_t var_idx,
+                                      const ObObjParam &value);
   static int check_debug_priv(ObSchemaGetterGuard *guard,
                               sql::ObSQLSessionInfo *sess_info,
                               ObPLFunction *func);

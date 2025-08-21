@@ -1315,6 +1315,12 @@ private:
                                     const int64_t *formal_param_idxs,
                                     const ObSqlExpression **actual_param_exprs,
                                     int64_t cursor_param_count);
+  static int release_cursor_parameters(pl::ObPLExecCtx *ctx,
+                                      ObSQLSessionInfo &session_info,
+                                      uint64_t package_id,
+                                      uint64_t routine_id,
+                                      const int64_t *formal_param_idxs,
+                                      int64_t cursor_param_count);
   static bool is_sql_type_into_pl(ObObj &dest_addr, ObIArray<ObObj> &obj_array);
 
   static int streaming_cursor_open(pl::ObPLExecCtx *ctx,
