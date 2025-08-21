@@ -12,8 +12,8 @@
 
 #ifndef OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JNI_CONNECTOR_H_
 #define OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JNI_CONNECTOR_H_
-
 #include <jni.h>
+#include "lib/container/ob_array.h"
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_print_utils.h"
 
@@ -23,7 +23,8 @@ class ObSqlString;
 }
 
 namespace sql {
-class ObJniConnector {
+
+class ObOdpsJniConnector {
 public:
   enum OdpsType {
     /**
@@ -126,51 +127,66 @@ public:
 
   struct MirrorOdpsJniColumn{
     MirrorOdpsJniColumn():
-      name_(""),
       type_(OdpsType::UNKNOWN),
       precision_(-1),
       scale_(-1),
       length_(-1),
       type_size_(-1),
+      name_(""),
       type_expr_("") {}
 
     // simple primitive
     MirrorOdpsJniColumn(ObString name, OdpsType type, int32_t type_size,
                         ObString type_expr)
-        : name_(name), type_(type), type_size_(type_size),
-          type_expr_(type_expr) {}
+        : type_(type), type_size_(type_size), name_(name), type_expr_(type_expr) {}
 
     // char/varchar (default is -1 (in java side))
     MirrorOdpsJniColumn(ObString name, OdpsType type, int32_t length,
                         int32_t type_size, ObString type_expr)
-        : name_(name), type_(type), length_(length), type_size_(type_size),
-          type_expr_(type_expr) {}
+        : type_(type), length_(length), type_size_(type_size), name_(name), type_expr_(type_expr) {}
 
     // decimal
     MirrorOdpsJniColumn(ObString name, OdpsType type, int32_t precision,
                         int32_t scale, int32_t type_size, ObString type_expr)
-        : name_(name), type_(type), precision_(precision), scale_(scale),
-          type_size_(type_size), type_expr_(type_expr) {}
+        : type_(type), precision_(precision), scale_(scale), type_size_(type_size), name_(name),
+          type_expr_(type_expr) {}
 
     // array
     MirrorOdpsJniColumn(ObString name, OdpsType type)
-    : name_(name),
-      type_(type),
-      type_size_(-1),
-      type_expr_(),
-      child_columns_() {}
+    : type_(type), type_size_(-1),name_(name), type_expr_(), child_columns_() {}
 
     virtual ~MirrorOdpsJniColumn() {
       child_columns_.reset();
     }
     int assign(const MirrorOdpsJniColumn &other);
-
-    ObString name_;
+    ObOdpsJniConnector::OdpsType get_odps_type() const {
+      return type_;
+    }
+    int32_t get_precision() const {
+      return precision_;
+    }
+    int32_t get_scale() const {
+      return scale_;
+    }
+    int32_t get_length() const {
+      return length_;
+    }
+    int32_t get_child_columns_size() const {
+      return child_columns_.count();
+    }
+    const MirrorOdpsJniColumn& get_child_column(int32_t index) const {
+      return child_columns_.at(index);
+    }
+    const ObString get_name() const {
+      return name_;
+    }
+    bool is_child_ = false;
     OdpsType type_;
     int32_t precision_ = -1;
     int32_t scale_ = -1;
     int32_t length_ = -1;
     int32_t type_size_; // type size is useful to calc offset on memory
+    ObString name_;
     ObString type_expr_;
     ObArray<MirrorOdpsJniColumn> child_columns_;
 
@@ -237,13 +253,13 @@ public:
   };
 
 public:
-  static bool is_java_env_inited();
-  static int get_jni_env(JNIEnv *&env);
   static int check_jni_exception_(JNIEnv *env);
   static OdpsType get_odps_type_by_string(ObString type);
-  int detach_jni_env();
-  int inc_env_ref();
-  int dec_env_ref();
+  static int get_jni_class(JNIEnv *env, const char *class_name, jclass &class_obj);
+  static int get_jni_method(JNIEnv *env, jclass class_obj, const char *method_name, const char *method_signature, jmethodID &method_id);
+  static int construct_jni_object(JNIEnv *env, jobject &object, jclass clazz, jmethodID constructorMethodID, ...);
+  static int gen_jni_string(JNIEnv *env, const char *str, jstring &j_str);
+  static ObObjType get_ob_type_by_odps_type_default(OdpsType type);
 };
 
 }

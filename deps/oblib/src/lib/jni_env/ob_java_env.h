@@ -23,7 +23,7 @@
 namespace oceanbase
 {
 
-namespace sql
+namespace common
 {
 
 class ObJavaEnv {

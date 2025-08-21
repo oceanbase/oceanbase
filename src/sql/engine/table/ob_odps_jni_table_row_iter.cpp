@@ -20,8 +20,8 @@
 #include "share/external_table/ob_external_table_utils.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/charset/ob_charset_string_helper.h"
-#include "sql/engine/connector/ob_jni_scanner.h"
-#include "sql/engine/connector/ob_java_env.h"
+#include "sql/engine/connector/ob_odps_jni_reader.h"
+#include "lib/jni_env/ob_java_env.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
@@ -35,41 +35,25 @@ const char *ObODPSJNITableRowIterator::DATETIME_PREFIX = "DATETIME ";
 const char *ObODPSJNITableRowIterator::TIMESTAMP_PREFIX = "TIMESTAMP ";
 const char *ObODPSJNITableRowIterator::TIMESTAMP_NTZ_PREFIX = "TIMESTAMP_NTZ ";
 
-int ObODPSJNITableRowIterator::init_jni_schema_scanner(const ObODPSGeneralFormat &odps_format, const ObSQLSessionInfo* session_ptr_in)
+int ObODPSJNITableRowIterator::init_jni_schema_scanner(const ObODPSGeneralFormat &odps_format_in, const ObSQLSessionInfo* session_ptr_in)
 {
   int ret = OB_SUCCESS;
-  ObJavaEnv &java_env = ObJavaEnv::getInstance();
-  // This entry is first time to setup java env
-  if (!GCONF.ob_enable_java_env) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("java env is not enabled", K(ret));
-  } else if (!java_env.is_env_inited()) {
-    if (OB_FAIL(java_env.setup_java_env())) {
-      LOG_WARN("failed to setup java env", K(ret));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    /* do nothing */
-  } else if (!java_env.is_env_inited()) {
-    // Recheck the java env whether is ready.
-    ret = OB_JNI_ENV_ERROR;
-    LOG_WARN("java env is not ready for scanner", K(ret));
-  } else if (OB_FAIL(odps_format_.deep_copy(odps_format))) {
+  ObODPSGeneralFormat odps_format;
+  if (OB_FAIL(ObJniConnector::java_env_init())) {
+    LOG_WARN("failed to env init", K(ret));
+  } else if (OB_FAIL(odps_format.deep_copy(odps_format_in))) {
     LOG_WARN("failed to deep copy odps format", K(ret));
-  } else if (OB_FAIL(odps_format_.decrypt())) {
+  } else if (OB_FAIL(odps_format.decrypt())) {
     LOG_WARN("failed to decrypt odps format", K(ret));
   } else {
+    api_mode_ = odps_format.api_mode_;
     if (!odps_params_map_.created() && OB_FAIL(odps_params_map_.create(MAX_PARAMS_SIZE, "JNITableParams"))) {
       LOG_WARN("failed to create odps params map", K(ret));
-    } else if (OB_FAIL(init_required_mini_params(session_ptr_in))) {
+    } else if (OB_FAIL(init_required_mini_params(session_ptr_in, odps_format))) {
       LOG_WARN("failed to init required params", K(ret));
-    } else if (OB_FAIL(odps_params_map_.set_refactored(
-                   ObString::make_string("service"), ObString::make_string("schema")))) {
-      LOG_WARN("failed to init service param", K(ret));
     } else { /* do nothing */
-      if (odps_format_.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
-        if (odps_format_.api_mode_ == ObODPSGeneralFormat::ApiMode::BYTE) {
+      if (odps_format.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+        if (odps_format.api_mode_ == ObODPSGeneralFormat::ApiMode::BYTE) {
           if (OB_FAIL(odps_params_map_.set_refactored(
                   ObString::make_string("split_option"), ObString::make_string("byte"), 1))) {
             LOG_WARN("failed to init service param", K(ret));
@@ -81,6 +65,12 @@ int ObODPSJNITableRowIterator::init_jni_schema_scanner(const ObODPSGeneralFormat
           }
         }
       }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(odps_params_map_.set_refactored(
+                   ObString::make_string("service"), ObString::make_string("schema")))) {
+      LOG_WARN("failed to init service param", K(ret));
     }
   }
 
@@ -102,44 +92,27 @@ int ObODPSJNITableRowIterator::init_jni_schema_scanner(const ObODPSGeneralFormat
   return ret;
 }
 
-int ObODPSJNITableRowIterator::init_jni_meta_scanner(const ObODPSGeneralFormat &odps_format, const ObSQLSessionInfo* session_ptr_in)
+int ObODPSJNITableRowIterator::init_jni_meta_scanner(const ObODPSGeneralFormat &odps_format_in, const ObSQLSessionInfo* session_ptr_in)
 {
   int ret = OB_SUCCESS;
-  ObJavaEnv &java_env = ObJavaEnv::getInstance();
-  // This entry is first time to setup java env
-  if (!GCONF.ob_enable_java_env) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("java env is not enabled", K(ret));
-  } else if (!java_env.is_env_inited()) {
-    if (OB_FAIL(java_env.setup_java_env())) {
-      LOG_WARN("failed to setup java env", K(ret));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    /* do nothing */
-  } else if (!java_env.is_env_inited()) {
-    // Recheck the java env whether is ready.
-    ret = OB_JNI_ENV_ERROR;
-    LOG_WARN("java env is not ready for scanner", K(ret));
-  } else if (OB_FAIL(odps_format_.deep_copy(odps_format))) {
+  ObODPSGeneralFormat odps_format;
+  if (OB_FAIL(ObJniConnector::java_env_init())) {
+    LOG_WARN("failed to env init", K(ret));
+  } else if (OB_FAIL(odps_format.deep_copy(odps_format_in))) {
     LOG_WARN("failed to deep copy odps format", K(ret));
-  } else if (OB_FAIL(odps_format_.decrypt())) {
+  } else if (OB_FAIL(odps_format.decrypt())) {
     LOG_WARN("failed to decrypt odps format", K(ret));
   } else {
     if (!odps_params_map_.created() && OB_FAIL(odps_params_map_.create(MAX_PARAMS_SIZE, "JNITableParams"))) {
       LOG_WARN("failed to create odps params map", K(ret));
-    } else if (OB_FAIL(init_required_mini_params(session_ptr_in))) {
+    } else if (OB_FAIL(init_required_mini_params(session_ptr_in, odps_format))) {
       LOG_WARN("failed to init required params", K(ret));
-    } else if (OB_FAIL(odps_params_map_.set_refactored(
-                   ObString::make_string("service"), ObString::make_string("meta"), 1))) {
-      LOG_WARN("failed to init service param", K(ret));
     } else {
-      if (odps_format_.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+      if (odps_format.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
         if (predicate_buf_ != nullptr && OB_FAIL(odps_params_map_.set_refactored(
                     ObString::make_string("pushdown_predicate"), ObString(predicate_buf_len_, predicate_buf_)))) {
           LOG_WARN("failed to set pushdown predicate");
-        } else if (odps_format_.api_mode_ == ObODPSGeneralFormat::ApiMode::BYTE) {
+        } else if (odps_format.api_mode_ == ObODPSGeneralFormat::ApiMode::BYTE) {
           if (OB_FAIL(odps_params_map_.set_refactored(
                   ObString::make_string("split_option"), ObString::make_string("byte"), 1))) {
             LOG_WARN("failed to init service param", K(ret));
@@ -153,6 +126,12 @@ int ObODPSJNITableRowIterator::init_jni_meta_scanner(const ObODPSGeneralFormat &
         if (predicate_buf_ != nullptr) {
           LOG_INFO("show storage api pushdown filter", "filter", ObString(predicate_buf_len_, predicate_buf_));
         }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(odps_params_map_.set_refactored(
+                   ObString::make_string("service"), ObString::make_string("meta"), 1))) {
+        LOG_WARN("failed to init service param", K(ret));
       }
     }
   }
@@ -250,7 +229,7 @@ int ObODPSJNITableRowIterator::init(const storage::ObTableScanParam *scan_param)
 }
 
 
-int ObODPSJNITableRowIterator::init_required_mini_params(const ObSQLSessionInfo* session_ptr_in)
+int ObODPSJNITableRowIterator::init_required_mini_params(const ObSQLSessionInfo* session_ptr_in, const ObODPSGeneralFormat &odps_format)
 {
   int ret = OB_SUCCESS;
   ObString access_id;
@@ -278,16 +257,16 @@ int ObODPSJNITableRowIterator::init_required_mini_params(const ObSQLSessionInfo*
   } else if (!odps_params_map_.created()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("failed to get odps params map", K(ret));
-  } else if (OB_FAIL(ob_write_string(arena_alloc_, odps_format_.access_id_, access_id, true)) ||
-          OB_FAIL(ob_write_string(arena_alloc_, odps_format_.access_key_, access_key, true)) ||
-          OB_FAIL(ob_write_string(arena_alloc_, odps_format_.project_, project, true)) ||
-          OB_FAIL(ob_write_string(arena_alloc_, odps_format_.table_, table, true)) ||
-          OB_FAIL(ob_write_string(arena_alloc_, odps_format_.region_, region, true)) ||
-          OB_FAIL(ob_write_string(arena_alloc_, odps_format_.schema_, schema, true)) ||
-          OB_FAIL(ob_write_string(arena_alloc_, odps_format_.quota_, quota, true)) ||
-          OB_FAIL(ob_write_string(arena_alloc_, odps_format_.endpoint_, endpoint, true)) ||
-          OB_FAIL(ob_write_string(arena_alloc_, odps_format_.tunnel_endpoint_, tunnel_endpoint, true)) ||
-          OB_FAIL(ob_write_string(arena_alloc_, odps_format_.compression_code_, compression_code, true)) ||
+  } else if (OB_FAIL(ob_write_string(arena_alloc_, odps_format.access_id_, access_id, true)) ||
+          OB_FAIL(ob_write_string(arena_alloc_, odps_format.access_key_, access_key, true)) ||
+          OB_FAIL(ob_write_string(arena_alloc_, odps_format.project_, project, true)) ||
+          OB_FAIL(ob_write_string(arena_alloc_, odps_format.table_, table, true)) ||
+          OB_FAIL(ob_write_string(arena_alloc_, odps_format.region_, region, true)) ||
+          OB_FAIL(ob_write_string(arena_alloc_, odps_format.schema_, schema, true)) ||
+          OB_FAIL(ob_write_string(arena_alloc_, odps_format.quota_, quota, true)) ||
+          OB_FAIL(ob_write_string(arena_alloc_, odps_format.endpoint_, endpoint, true)) ||
+          OB_FAIL(ob_write_string(arena_alloc_, odps_format.tunnel_endpoint_, tunnel_endpoint, true)) ||
+          OB_FAIL(ob_write_string(arena_alloc_, odps_format.compression_code_, compression_code, true)) ||
           OB_FAIL(ob_write_string(arena_alloc_, tmp_trace_id, trace_id, true))) {
     LOG_WARN("failed to write string", K(ret));
   } else if (OB_FAIL(odps_params_map_.set_refactored(ObString::make_string("access_id"), access_id, 1))) {
@@ -331,7 +310,7 @@ int ObODPSJNITableRowIterator::init_required_mini_params(const ObSQLSessionInfo*
                 ObString::make_string("trace_id"), trace_id, 1))) {
     LOG_WARN("failed to add trace id", K(ret));
   } else { /* do nothing */
-    if (odps_format_.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+    if (odps_format.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
       if (OB_FAIL(odps_params_map_.set_refactored(
               ObString::make_string("api_mode"), ObString::make_string("storage_api"), 1))) {
         // Note: current only support tunnel api.
@@ -485,7 +464,7 @@ int ObODPSJNITableRowIterator::pull_data_columns()
     LOG_WARN("jni scanner is not opened", K(ret));
   } else {
     // ObString columns;
-    ObSEArray<ObString, 8> mirror_columns;
+    ObSEArray<ObString, 4> mirror_columns;
 
     if (OB_FAIL(odps_jni_schema_scanner_->get_odps_mirror_data_columns(
             arena_alloc_, mirror_columns, ObString::make_string("getMirrorDataColumns")))) {
@@ -511,7 +490,7 @@ int ObODPSJNITableRowIterator::pull_partition_columns()
     LOG_WARN("jni scanner is not opened", K(ret));
   } else {
     // ObString columns;
-    ObSEArray<ObString, 8> mirror_columns;
+    ObSEArray<ObString, 4> mirror_columns;
 
     if (OB_FAIL(odps_jni_schema_scanner_->get_odps_mirror_data_columns(
             arena_alloc_, mirror_columns, ObString::make_string("getMirrorPartitionColumns")))) {
@@ -523,8 +502,8 @@ int ObODPSJNITableRowIterator::pull_partition_columns()
   }
   return ret;
 }
-int ObODPSJNITableRowIterator::extract_mirror_odps_columns(ObSEArray<ObString, 8> &mirror_columns,
-                                                           ObSEArray<MirrorOdpsJniColumn, 8> &mirror_target_columns)
+int ObODPSJNITableRowIterator::extract_mirror_odps_columns(ObSEArray<ObString, 4> &mirror_columns,
+                                                           ObSEArray<MirrorOdpsJniColumn, 4> &mirror_target_columns)
 {
   int ret = OB_SUCCESS;
   int count = mirror_columns.count();
@@ -542,7 +521,7 @@ int ObODPSJNITableRowIterator::extract_mirror_odps_column(ObString &mirror_colum
   int ret = OB_SUCCESS;
   ObString name = mirror_column_string.split_on('#');
   ObString type = mirror_column_string.split_on('#');
-  OdpsType odps_type = ObJniConnector::get_odps_type_by_string(type);
+  OdpsType odps_type = ObOdpsJniConnector::get_odps_type_by_string(type);
   int type_size = 0;
   ObString type_expr;
   if (odps_type == OdpsType::CHAR || odps_type == OdpsType::VARCHAR) {
@@ -911,7 +890,7 @@ int ObODPSJNITableRowIterator::init_all_columns_name_as_odps_params()
 
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (odps_format_.api_mode_ == ObODPSGeneralFormat::ApiMode::TUNNEL_API && (is_empty_external_file_exprs_)) {
+    } else if (api_mode_ == ObODPSGeneralFormat::ApiMode::TUNNEL_API && (is_empty_external_file_exprs_)) {
       // Empty external file exprs does not need to init any fields and columns.
       // do nothing
     } else {
@@ -940,7 +919,7 @@ int ObODPSJNITableRowIterator::init_all_columns_name_as_odps_params()
 int ObODPSJNITableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
-  if (odps_format_.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+  if (api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
     if (OB_FAIL(get_next_rows_storage_api(count, capacity))) {
       LOG_WARN("failed to get storage next rows");
     }
@@ -1004,7 +983,7 @@ int ObODPSJNITableRowIterator::get_next_rows_storage_api(int64_t &count, int64_t
   ObEvalCtx &ctx = scan_param_->op_->get_eval_ctx();
   if (is_empty_external_file_exprs_
      && 0 == mirror_partition_column_list_.count()
-     && odps_format_.api_mode_  == ObODPSGeneralFormat::ApiMode::ROW) {
+     && api_mode_  == ObODPSGeneralFormat::ApiMode::ROW) {
     if (state_.count_ >= state_.step_ && OB_FAIL(next_task_storage_row_without_data_getter(capacity))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("get next task failed", K(ret));
@@ -1035,7 +1014,7 @@ int ObODPSJNITableRowIterator::get_next_rows_storage_api(int64_t &count, int64_t
       int64_t returned_row_cnt = 0;
       int64_t read_rows = 0;
       bool eof = false;
-      if (state_.odps_jni_scanner_->get_split_mode() == JniScanner::SplitMode::RETURN_OB_BATCH) {
+      if (state_.odps_jni_scanner_->get_split_mode() == ObOdpsJniReader::SplitMode::RETURN_OB_BATCH) {
         if (OB_FAIL(state_.odps_jni_scanner_->do_get_next_split_by_ob(&read_rows, &eof, capacity))) {
           // It should close remote scanner whatever get next is iter end or
           // other failures.
@@ -1070,11 +1049,11 @@ int ObODPSJNITableRowIterator::get_next_rows_storage_api(int64_t &count, int64_t
       } else if (eof) {
         // eof 分支中可能也有空元结构体生成
         if (OB_FAIL(ret)) {
-        } else if (state_.odps_jni_scanner_->get_split_mode() == JniScanner::SplitMode::RETURN_OB_BATCH) {
+        } else if (state_.odps_jni_scanner_->get_split_mode() == ObOdpsJniReader::SplitMode::RETURN_OB_BATCH) {
           if (OB_FAIL(state_.odps_jni_scanner_->release_table(should_read_rows))) {
             LOG_WARN("failed to release table", K(ret), K(should_read_rows));
           }
-        } else if (state_.odps_jni_scanner_->get_split_mode() == JniScanner::SplitMode::RETURN_ODPS_BATCH) {
+        } else if (state_.odps_jni_scanner_->get_split_mode() == ObOdpsJniReader::SplitMode::RETURN_ODPS_BATCH) {
           if (OB_FAIL(state_.odps_jni_scanner_->release_slice())) {
             LOG_WARN("failed to release table", K(ret), K(should_read_rows));
           }
@@ -1093,11 +1072,11 @@ int ObODPSJNITableRowIterator::get_next_rows_storage_api(int64_t &count, int64_t
         }
 
         if (OB_FAIL(ret)) {
-        } else if (state_.odps_jni_scanner_->get_split_mode() == JniScanner::SplitMode::RETURN_OB_BATCH) {
+        } else if (state_.odps_jni_scanner_->get_split_mode() == ObOdpsJniReader::SplitMode::RETURN_OB_BATCH) {
           if (OB_FAIL(state_.odps_jni_scanner_->release_table(should_read_rows))) {
             LOG_WARN("failed to release table", K(ret), K(should_read_rows));
           }
-        } else if (state_.odps_jni_scanner_->get_split_mode() == JniScanner::SplitMode::RETURN_ODPS_BATCH) {
+        } else if (state_.odps_jni_scanner_->get_split_mode() == ObOdpsJniReader::SplitMode::RETURN_ODPS_BATCH) {
           if (OB_FAIL(state_.odps_jni_scanner_->release_slice())) {
             LOG_WARN("failed to release table", K(ret), K(should_read_rows));
           }
@@ -1122,7 +1101,6 @@ int ObODPSJNITableRowIterator::get_next_rows_storage_api(int64_t &count, int64_t
             K(ret),
             K(i),
             K(should_read_rows),
-            K(odps_format_.table_),
             K(obexpr_odps_nonpart_col_idsmap_),
             K(obexpr_odps_part_col_idsmap_));
       }
@@ -1395,7 +1373,7 @@ int ObODPSJNITableRowIterator::get_next_rows_tunnel(int64_t &count, int64_t capa
       if (OB_ISNULL(state_.odps_jni_scanner_.get())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexcepted null ptr", K(ret), K(scan_param_));
-      } else if (state_.odps_jni_scanner_->get_split_mode() == JniScanner::SplitMode::RETURN_OB_BATCH) {
+      } else if (state_.odps_jni_scanner_->get_split_mode() == ObOdpsJniReader::SplitMode::RETURN_OB_BATCH) {
         if (OB_FAIL(state_.odps_jni_scanner_->do_get_next_split_by_ob(&should_read_rows, &eof, capacity))) {
           // It should close remote scanner whatever get next is iter end or
           // other failures.
@@ -1427,11 +1405,11 @@ int ObODPSJNITableRowIterator::get_next_rows_tunnel(int64_t &count, int64_t capa
       if (OB_FAIL(ret)) {
       } else if (eof) {
         if (OB_FAIL(ret)) {
-        } else if (state_.odps_jni_scanner_->get_split_mode() == JniScanner::SplitMode::RETURN_OB_BATCH) {
+        } else if (state_.odps_jni_scanner_->get_split_mode() == ObOdpsJniReader::SplitMode::RETURN_OB_BATCH) {
           if (OB_FAIL(state_.odps_jni_scanner_->release_table(should_read_rows))) {
             LOG_WARN("failed to release table", K(ret), K(should_read_rows));
           }
-        } else if (state_.odps_jni_scanner_->get_split_mode() == JniScanner::SplitMode::RETURN_ODPS_BATCH) {
+        } else if (state_.odps_jni_scanner_->get_split_mode() == ObOdpsJniReader::SplitMode::RETURN_ODPS_BATCH) {
           if (OB_FAIL(state_.odps_jni_scanner_->release_slice())) {
             LOG_WARN("failed to release table", K(ret), K(should_read_rows));
           }
@@ -1448,11 +1426,11 @@ int ObODPSJNITableRowIterator::get_next_rows_tunnel(int64_t &count, int64_t capa
         }
 
         if (OB_FAIL(ret)) {
-        } else if (state_.odps_jni_scanner_->get_split_mode() == JniScanner::SplitMode::RETURN_OB_BATCH) {
+        } else if (state_.odps_jni_scanner_->get_split_mode() == ObOdpsJniReader::SplitMode::RETURN_OB_BATCH) {
           if (OB_FAIL(state_.odps_jni_scanner_->release_table(should_read_rows))) {
             LOG_WARN("failed to release table", K(ret), K(should_read_rows));
           }
-        } else if (state_.odps_jni_scanner_->get_split_mode() == JniScanner::SplitMode::RETURN_ODPS_BATCH) {
+        } else if (state_.odps_jni_scanner_->get_split_mode() == ObOdpsJniReader::SplitMode::RETURN_ODPS_BATCH) {
           if (OB_FAIL(state_.odps_jni_scanner_->release_slice())) {
             LOG_WARN("failed to release table", K(ret), K(should_read_rows));
           }
@@ -1482,7 +1460,6 @@ int ObODPSJNITableRowIterator::get_next_rows_tunnel(int64_t &count, int64_t capa
             K(ret),
             K(i),
             K(should_read_rows),
-            K(odps_format_.table_),
             K(obexpr_odps_nonpart_col_idsmap_),
             K(obexpr_odps_part_col_idsmap_));
       }
@@ -1808,7 +1785,7 @@ int ObODPSJNITableRowIterator::init_data_tunnel_reader_params(int64_t start, int
 int ObODPSJNITableRowIterator::fill_column_exprs_storage(const ExprFixedArray &column_exprs, ObEvalCtx &ctx, int64_t num_rows)
 {
   int ret = OB_SUCCESS;
-  if (state_.odps_jni_scanner_->get_transfer_mode() == JniScanner::TransferMode::OFF_HEAP_TABLE) {
+  if (state_.odps_jni_scanner_->get_transfer_mode() == ObOdpsJniReader::TransferMode::OFF_HEAP_TABLE) {
     for (int64_t i = 0; OB_SUCC(ret) && i < obexpr_odps_nonpart_col_idsmap_.count(); ++i) {
       int64_t column_idx = obexpr_odps_nonpart_col_idsmap_.at(i).ob_col_idx_;
       ObExpr &expr = *column_exprs.at(column_idx);  // do not check null ptr
@@ -1905,7 +1882,7 @@ int ObODPSJNITableRowIterator::fill_column_exprs_tunnel(const ExprFixedArray &co
   if (OB_ISNULL(state_.odps_jni_scanner_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid odps jni scanner", K(ret));
-  } else if (state_.odps_jni_scanner_->get_transfer_mode() == JniScanner::TransferMode::OFF_HEAP_TABLE) {
+  } else if (state_.odps_jni_scanner_->get_transfer_mode() == ObOdpsJniReader::TransferMode::OFF_HEAP_TABLE) {
     for (int64_t i = 0; OB_SUCC(ret) && i < obexpr_odps_nonpart_col_idsmap_.count(); ++i) {
       int64_t column_idx = obexpr_odps_nonpart_col_idsmap_.at(i).ob_col_idx_;
       ObExpr &expr = *column_exprs.at(column_idx);  // do not check null ptr
@@ -2030,8 +2007,8 @@ int ObODPSJNITableRowIterator::pull_partition_info()
     ret = OB_JNI_ENV_ERROR;
     LOG_WARN("jni scanner is not opened", K(ret));
   } else {
-    ObSEArray<ObString, 8> partition_specs;
-    if (odps_format_.api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+    ObSEArray<ObString, 4> partition_specs;
+    if (api_mode_ != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
       if (OB_FAIL(odps_jni_schema_scanner_->get_odps_partition_phy_specs(arena_alloc_, partition_specs))) {
         LOG_WARN("failed to get partition specs", K(ret));
       }
@@ -2050,7 +2027,7 @@ int ObODPSJNITableRowIterator::pull_partition_info()
   return ret;
 }
 
-int ObODPSJNITableRowIterator::extract_odps_partition_specs(ObSEArray<ObString, 8> &partition_specs)
+int ObODPSJNITableRowIterator::extract_odps_partition_specs(ObSEArray<ObString, 4> &partition_specs)
 {
   int ret = OB_SUCCESS;
   int count = partition_specs.count();
@@ -2195,7 +2172,6 @@ void ObODPSJNITableRowIterator::reset()
   task_alloc_.clear();
   column_exprs_alloc_.clear();
 
-  real_row_idx_ = 0;
   read_rounds_ = 0;
   read_rows_ = 0;
   batch_size_ = -1;
@@ -3031,7 +3007,7 @@ int ObODPSJNITableRowIterator::create_odps_decoder(ObEvalCtx &ctx,
   int ret = OB_SUCCESS;
   // Column meta is mapping by
   // `com.oceanbase.jni.connector.OffHeapTable#getMetaNativeAddress`
-  JniScanner::JniTableMeta& column_meta = state_.odps_jni_scanner_->get_jni_table_meta();
+  ObOdpsJniReader::JniTableMeta& column_meta = state_.odps_jni_scanner_->get_jni_table_meta();
   if (is_fixed_odps_type(odps_column.type_)) {
     void *ptr = column_exprs_alloc_.alloc(sizeof(OdpsFixedTypeDecoder));
     if (OB_ISNULL(ptr)) {
@@ -3091,7 +3067,7 @@ int ObODPSJNITableRowIterator::create_odps_decoder(ObEvalCtx &ctx,
 
 // =================== LONG FUNC END ==================================
 
-int ObODPSJNITableRowIterator::OdpsDecoder::init(JniScanner::JniTableMeta& column_meta,
+int ObODPSJNITableRowIterator::OdpsDecoder::init(ObOdpsJniReader::JniTableMeta& column_meta,
                                                  ObEvalCtx &ctx,
                                                  const ObExpr &expr,
                                                  ObODPSArrayHelper *array_helper)
@@ -3125,7 +3101,7 @@ int ObODPSJNITableRowIterator::OdpsDecoder::init(JniScanner::JniTableMeta& colum
 }
 
 
-int ObODPSJNITableRowIterator::OdpsFixedTypeDecoder::init(JniScanner::JniTableMeta& column_meta,
+int ObODPSJNITableRowIterator::OdpsFixedTypeDecoder::init(ObOdpsJniReader::JniTableMeta& column_meta,
                                                           ObEvalCtx &ctx,
                                                           const ObExpr &expr,
                                                           ObODPSArrayHelper *array_helper)
@@ -3140,7 +3116,7 @@ int ObODPSJNITableRowIterator::OdpsFixedTypeDecoder::init(JniScanner::JniTableMe
   return ret;
 }
 
-int ObODPSJNITableRowIterator::OdpsVarietyTypeDecoder::init(JniScanner::JniTableMeta& column_meta,
+int ObODPSJNITableRowIterator::OdpsVarietyTypeDecoder::init(ObOdpsJniReader::JniTableMeta& column_meta,
                                                             ObEvalCtx &ctx,
                                                             const ObExpr &expr,
                                                             ObODPSArrayHelper *array_helper)
@@ -3155,7 +3131,7 @@ int ObODPSJNITableRowIterator::OdpsVarietyTypeDecoder::init(JniScanner::JniTable
   return ret;
 }
 
-int ObODPSJNITableRowIterator::OdpsArrayTypeDecoder::init(JniScanner::JniTableMeta& column_meta,
+int ObODPSJNITableRowIterator::OdpsArrayTypeDecoder::init(ObOdpsJniReader::JniTableMeta& column_meta,
                                                           ObEvalCtx &ctx,
                                                           const ObExpr &expr,
                                                           ObODPSArrayHelper *array_helper)
@@ -4610,20 +4586,8 @@ int ObOdpsJniUploaderMgr::init_writer_params_in_px(
   } else if (sql::ObExternalFileFormat::ODPS_FORMAT != external_properties.format_type_) {
     // do nothing
   } else {
-    ObJavaEnv &java_env = ObJavaEnv::getInstance();
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (!GCONF.ob_enable_java_env) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("java env is not enabled", K(ret));
-    } else if (!java_env.is_env_inited()) {
-      if (OB_FAIL(java_env.setup_java_env())) {
-        LOG_WARN("failed to setup java env", K(ret));
-      }
-    }
-    // open session
-    if (OB_FAIL(ret)) {
-      // do nothing
+    if (OB_FAIL(ObJniConnector::java_env_init())) {
+      LOG_WARN("failed to env init", K(ret));
     } else if (inited_) {
       // do nothing
     } else if (OB_FAIL(create_writer_params_map(write_arena_alloc_,

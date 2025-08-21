@@ -319,12 +319,10 @@ ob_set_subtarget(ob_sql engine_cmd
 )
 
 ob_set_subtarget(ob_sql engine_connector
-  engine/connector/ob_java_native_method.cpp
-  engine/connector/ob_java_env.cpp
-  engine/connector/ob_java_helper.cpp
-  engine/connector/ob_jni_connector.cpp
-  engine/connector/ob_jni_scanner.cpp
-  engine/connector/ob_jni_writer.cpp
+  engine/connector/ob_odps_jni_connector.cpp
+  engine/connector/ob_odps_catalog_jni_agent.cpp
+  engine/connector/ob_odps_jni_reader.cpp
+  engine/connector/ob_odps_jni_writer.cpp
 )
 
 ob_set_subtarget(ob_sql engine_dml

@@ -10,16 +10,88 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/engine/connector/ob_java_env.h"
-#include "sql/engine/connector/ob_java_helper.h"
-#include "sql/engine/connector/ob_jni_connector.h"
+#include <jni.h>
+#include "ob_odps_jni_connector.h"
+#include "lib/jni_env/ob_java_env.h"
 
 namespace oceanbase {
 
 namespace sql {
 
+int ObOdpsJniConnector::get_jni_class(JNIEnv *env, const char *class_name, jclass &class_obj) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(env)) {
+    ret = OB_JNI_ENV_ERROR;
+    LOG_WARN("failed to get jni env", K(ret), K(lbt()));
+  } else {
+    class_obj = env->FindClass(class_name);
+    if (OB_FAIL(check_jni_exception_(env))) {
+      LOG_WARN("jni is with exception", K(ret));
+    } else if (OB_ISNULL(class_obj)) {
+      ret = OB_JNI_CLASS_NOT_FOUND_ERROR;
+      LOG_WARN("failed to found class: ", K(class_name), K(ret));
+    }
+  }
+  return ret;
+}
 
-int ObJniConnector::check_jni_exception_(JNIEnv *env) {
+int ObOdpsJniConnector::get_jni_method(JNIEnv *env, jclass class_obj, const char *method_name, const char *method_signature, jmethodID &method_id) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(env)) {
+    ret = OB_JNI_ENV_ERROR;
+    LOG_WARN("failed to get jni env", K(ret), K(lbt()));
+  } else {
+    method_id = env->GetMethodID(class_obj, method_name, method_signature);
+    if (OB_FAIL(check_jni_exception_(env))) {
+      LOG_WARN("jni is with exception", K(ret));
+    } else if (OB_ISNULL(method_id)) {
+      ret = OB_JNI_METHOD_NOT_FOUND_ERROR;
+      LOG_WARN("failed to found method: ", K(method_name), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOdpsJniConnector::construct_jni_object(JNIEnv *env, jobject &object, jclass clazz, jmethodID constructorMethodID, ...) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(env)) {
+    ret = OB_JNI_ENV_ERROR;
+    LOG_WARN("failed to get jni env", K(ret), K(lbt()));
+  } else {
+    va_list args;
+    va_start(args, constructorMethodID);
+    object = env->NewObjectV(clazz, constructorMethodID, args);
+    va_end(args);
+    if (OB_FAIL(check_jni_exception_(env))) {
+      LOG_WARN("jni is with exception", K(ret));
+    } else if (OB_ISNULL(object)) {
+      ret = OB_JNI_OBJECT_NOT_FOUND_ERROR;
+      LOG_WARN("failed to found object: ", K(clazz), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOdpsJniConnector::gen_jni_string(JNIEnv *env, const char *str, jstring &j_str) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(env)) {
+    ret = OB_JNI_ENV_ERROR;
+    LOG_WARN("failed to get jni env", K(ret), K(lbt()));
+  } else if (OB_ISNULL(str)) {
+    j_str = nullptr;
+  } else {
+    j_str = env->NewStringUTF(str);
+    if (OB_FAIL(check_jni_exception_(env))) {
+      LOG_WARN("jni is with exception", K(ret));
+    } else if (OB_ISNULL(j_str)) {
+      ret = OB_JNI_OBJECT_NOT_FOUND_ERROR;
+      LOG_WARN("failed to gen object: ", K(str), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOdpsJniConnector::check_jni_exception_(JNIEnv *env) {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(env)) {
     ret = OB_JNI_ENV_ERROR;
@@ -44,7 +116,9 @@ int ObJniConnector::check_jni_exception_(JNIEnv *env) {
 
           if (jmsg != nullptr) {
               const char* cmsg = env->GetStringUTFChars(jmsg, nullptr);
+              int64_t len = env->GetStringUTFLength(jmsg);
               LOG_WARN("Exception Message: ", K(cmsg), K(ret));
+              LOG_USER_ERROR(OB_JNI_JAVA_EXCEPTION_ERROR, len, cmsg);
               env->ReleaseStringUTFChars(jmsg, cmsg);
               env->DeleteLocalRef(jmsg);
           }
@@ -96,70 +170,7 @@ int ObJniConnector::check_jni_exception_(JNIEnv *env) {
   return ret;
 }
 
-int ObJniConnector::get_jni_env(JNIEnv *&env) {
-  int ret = OB_SUCCESS;
-  // This entry method is the first time to init jni env
-  if (!ObJavaEnv::getInstance().is_env_inited()) {
-    ret = OB_JNI_ENV_ERROR;
-    LOG_WARN("failed to init env variables", K(ret));
-  } else {
-    JVMFunctionHelper &helper = JVMFunctionHelper::getInstance();
-    if (OB_FAIL(helper.get_env(env))) {
-      LOG_WARN("failed to get jni env from helper", K(ret));
-    } else if (nullptr == env) {
-      ret = OB_JNI_ENV_ERROR;
-      LOG_WARN("failed to get null jni env from helper", K(ret));
-    } else { /* do nothing */
-    }
-    if (OB_SUCC(ret) && !helper.is_inited()) {
-      // Means helper is not ready.
-      ret = OB_JNI_ENV_ERROR;
-      LOG_WARN("failed to get jni env", K(ret));
-    } else if (OB_SUCC(ret) && OB_FAIL(helper.get_env(env))) {
-      // re-get the env
-      LOG_WARN("failed to re-get jni env", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObJniConnector::inc_env_ref()
-{
-  int ret = OB_SUCCESS;
-  JVMFunctionHelper &helper = JVMFunctionHelper::getInstance();
-  if (OB_FAIL(helper.inc_ref())) {
-    LOG_WARN("failed to inc ref", K(ret));
-  }
-  int cur_ref = helper.cur_ref();
-  LOG_TRACE("current env reference time in increase method", K(ret), K(cur_ref), K(lbt()));
-  return ret;
-}
-
-int ObJniConnector::dec_env_ref()
-{
-  int ret = OB_SUCCESS;
-  JVMFunctionHelper &helper = JVMFunctionHelper::getInstance();
-  if (OB_FAIL(helper.dec_ref())) {
-    LOG_WARN("failed to decrease ref", K(ret));
-  }
-  int cur_ref = helper.cur_ref();
-  LOG_TRACE("current env reference time in decrease method", K(ret), K(cur_ref), K(lbt()));
-  return ret;
-}
-
-int ObJniConnector::detach_jni_env()
-{
-  int ret = OB_SUCCESS;
-  // If using JVMFunctionHelper once, then jvm will allocate a thread.
-  // Only detatch it and libhdfs.so will handle all scenes.
-  JVMFunctionHelper &helper = JVMFunctionHelper::getInstance();
-  if (OB_FAIL(helper.detach_current_thread())) {
-    LOG_WARN("failed to detach jni env", K(ret));
-  }
-  return ret;
-}
-
-ObJniConnector::OdpsType ObJniConnector::get_odps_type_by_string(ObString type)
+ObOdpsJniConnector::OdpsType ObOdpsJniConnector::get_odps_type_by_string(ObString type)
 {
   OdpsType ret_type = OdpsType::UNKNOWN;
   if (type.prefix_match("BOOLEAN")) {
@@ -214,7 +225,7 @@ ObJniConnector::OdpsType ObJniConnector::get_odps_type_by_string(ObString type)
   return ret_type;
 }
 
-int ObJniConnector::MirrorOdpsJniColumn::assign(const MirrorOdpsJniColumn &other)
+int ObOdpsJniConnector::MirrorOdpsJniColumn::assign(const MirrorOdpsJniColumn &other)
 {
   int ret = OB_SUCCESS;
   if (this != &other) {
@@ -230,6 +241,70 @@ int ObJniConnector::MirrorOdpsJniColumn::assign(const MirrorOdpsJniColumn &other
     }
   }
   return ret;
+}
+
+ObObjType ObOdpsJniConnector::get_ob_type_by_odps_type_default(OdpsType type) {
+  ObObjType ret_type = ObObjType::ObMaxType;
+  switch (type) {
+    case OdpsType::BOOLEAN:
+      ret_type = ObObjType::ObTinyIntType;
+      break;
+    case OdpsType::TINYINT:
+      ret_type = ObObjType::ObTinyIntType;
+      break;
+    case OdpsType::SMALLINT:
+      ret_type = ObObjType::ObSmallIntType;
+      break;
+    case OdpsType::INT:
+      ret_type = ObObjType::ObInt32Type;
+      break;
+    case OdpsType::BIGINT:
+      ret_type = ObObjType::ObIntType;
+      break;
+    case OdpsType::FLOAT:
+      ret_type = ObObjType::ObFloatType;
+      break;
+    case OdpsType::DOUBLE:
+      ret_type = ObObjType::ObDoubleType;
+      break;
+    case OdpsType::DECIMAL:
+      ret_type = ObObjType::ObDecimalIntType;
+      break;
+    case OdpsType::VARCHAR:
+      ret_type = ObObjType::ObVarcharType;
+      break;
+    case OdpsType::CHAR:
+      ret_type = ObObjType::ObCharType;
+      break;
+    case OdpsType::STRING:
+      ret_type = ObObjType::ObMediumTextType;
+      break;
+    case OdpsType::BINARY:
+      ret_type = ObObjType::ObTextType;
+      break;
+    case OdpsType::TIMESTAMP_NTZ:
+      ret_type = ObObjType::ObTimestampLTZType;
+      break;
+    case OdpsType::TIMESTAMP:
+      ret_type = ObObjType::ObTimestampType;
+      break;
+    case OdpsType::DATETIME:
+      ret_type = ObObjType::ObDateTimeType;
+      break;
+    case OdpsType::DATE:
+      ret_type = ObObjType::ObDateType;
+      break;
+    case OdpsType::ARRAY:
+      ret_type = ObObjType::ObCollectionSQLType;
+      break;
+    case OdpsType::JSON:
+      ret_type = ObObjType::ObJsonType;
+      break;
+    default:
+      ret_type = ObObjType::ObMaxType;
+  }
+
+  return ret_type;
 }
 
 }

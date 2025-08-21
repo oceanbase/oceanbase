@@ -158,7 +158,7 @@ extern "C" HdfsBuilderSetKerbTicketCachePathFunc obHdfsBuilderSetKerbTicketCache
 namespace oceanbase
 {
 
-namespace sql
+namespace common
 {
 
 class JVMClass;
@@ -275,7 +275,6 @@ public:
   int detach_current_thread();
   int destroy_env();
   bool is_inited() { return is_inited_; }
-
 private:
   JVMFunctionHelper():load_lib_lock_(common::ObLatchIds::JAVA_HELPER_LOCK) {
     int ret = OB_SUCCESS;
@@ -287,10 +286,8 @@ private:
       is_inited_ = true;
     }
   }
-
   // Only simplify checking jni exception and clear it to avoid jni excution failed.
   int check_jni_exception_(JNIEnv *env);
-
   // Check loaded jars are valid
   bool is_valid_loaded_jars_();
 

@@ -10,20 +10,18 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JAR_VERSION_H_
-#define OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JAR_VERSION_H_
+#ifndef OBLIB_SRC_LIB_JNI_ENV_OB_JNI_CONNECTOR_H_
+#define OBLIB_SRC_LIB_JNI_ENV_OB_JNI_CONNECTOR_H_
 
-#include "share/ob_cluster_version.h"
+#include <jni.h>
 
-namespace oceanbase
-{
-namespace sql
-{
-
-#define JAR_VERSION_100 (oceanbase::common::cal_version(1, 0, 0, 0))
-#define JAR_VERSION_101 (oceanbase::common::cal_version(1, 0, 1, 0))
-
-} // namespace sql
-} // namespace oceanbase
-
-#endif /* OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JAR_VERSION_H_ */
+namespace  oceanbase {
+namespace common {
+class ObJniConnector {
+public:
+  static int java_env_init();
+  static int get_jni_env(JNIEnv *&env);
+};
+}
+}
+#endif

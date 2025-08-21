@@ -16,7 +16,7 @@
 
 #include "lib/guard/ob_shared_guard.h"
 #include "plugin/interface/ob_plugin_external_intf.h"
-#include "sql/engine/connector/ob_java_helper.h"
+#include "lib/jni_env/ob_java_helper.h"
 #include "plugin/external_table/ob_external_jni_utils.h"
 
 namespace oceanbase {

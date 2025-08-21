@@ -14,7 +14,6 @@
 #define OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JNI_SCANNER_H_
 
 #include <memory>
-#include <jni.h>
 #include <map>
 #include <set>
 
@@ -26,7 +25,8 @@
 #include "lib/hash/ob_hashmap.h"
 #include "lib/hash/ob_hashset.h"
 #include "lib/lock/ob_mutex.h"
-#include "sql/engine/connector/ob_jni_connector.h"
+#include "lib/jni_env/ob_jni_connector.h"
+#include "ob_odps_jni_connector.h"
 
 namespace arrow {
   class RecordBatch;
@@ -44,13 +44,13 @@ class ObSqlString;
 namespace sql
 {
 
-class JniScanner;
-typedef std::shared_ptr<JniScanner> JNIScannerPtr;
+class ObOdpsJniReader;
+typedef std::shared_ptr<ObOdpsJniReader> JNIScannerPtr;
 
-class JniScanner: public ObJniConnector
+class ObOdpsJniReader: public ObOdpsJniConnector
 {
 public:
-  using ObJniConnector::JniTableMeta;
+  using ObOdpsJniConnector::JniTableMeta;
   enum SplitMode {
     RETURN_ODPS_BATCH,
     RETURN_OB_BATCH
@@ -61,10 +61,10 @@ public:
   };
 
 public:
-  JniScanner(ObString factory_class, ObString scanner_type,
+  ObOdpsJniReader(ObString factory_class, ObString scanner_type,
              const bool is_schema_scanner = false);
 
-  virtual ~JniScanner() = default;
+  virtual ~ObOdpsJniReader() = default;
 
   int do_init(common::hash::ObHashMap<ObString, ObString> &params);
   int do_open();
@@ -86,7 +86,7 @@ public:
   ObString get_transfer_mode_str() {
     ObString transfer_option;
     if (transfer_mode_
-      == JniScanner::TransferMode::OFF_HEAP_TABLE) {
+      == ObOdpsJniReader::TransferMode::OFF_HEAP_TABLE) {
       transfer_option = ObString::make_string("offHeapTable");
     } else {
       transfer_option = ObString::make_string("arrowTable");
@@ -111,10 +111,10 @@ public:
                                    const ObString &partition_spec,
                                    int64_t &row_count);
   int get_odps_partition_specs(ObIAllocator &allocator,
-                               ObSEArray<ObString, 8> &partition_specs);
-  int get_odps_partition_phy_specs(ObIAllocator &allocator, ObSEArray<ObString, 8> &partition_specs);
+                               ObSEArray<ObString, 4> &partition_specs);
+  int get_odps_partition_phy_specs(ObIAllocator &allocator, ObSEArray<ObString, 4> &partition_specs);
   int get_odps_mirror_data_columns(ObIAllocator &allocator,
-                              ObSEArray<ObString, 8> &mirror_colums,
+                              ObSEArray<ObString, 4> &mirror_colums,
                               const ObString& mode);
   int add_extra_optional_part_spec(const ObString& partition_spec);
   int get_file_total_row_count(int64_t &count);
@@ -165,7 +165,7 @@ private:
   int64_t MAX_PARAMS_SET_SIZE = 8;
   static const int64_t DEFAULT_BATCH_SIZE = 256;
 private:
-  DISALLOW_COPY_AND_ASSIGN(JniScanner);
+  DISALLOW_COPY_AND_ASSIGN(ObOdpsJniReader);
 };
 
 // TODO(bitao): add more jni scanner

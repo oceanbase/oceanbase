@@ -11,26 +11,23 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#include <memory>
+#include "ob_odps_jni_writer.h"
 
 #include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_sql_string.h"
+#include "share/rc/ob_tenant_base.h"
 
-#include "ob_java_helper.h"
-#include "ob_jni_writer.h"
-#include <memory>
 
 namespace oceanbase {
 namespace sql {
 
 
-int JniWriter::init_params(const common::hash::ObHashMap<ObString, ObString> &params) {
+int ObOdpsJniWriter::init_params(const common::hash::ObHashMap<ObString, ObString> &params) {
   int ret = OB_SUCCESS;
   if (is_params_created()) {
     LOG_INFO("jni writer is already inited, skip to re-init", K(ret));
-  } else if (OB_FAIL(detect_java_runtime())) {
-    ret = OB_JNI_JAVA_HOME_NOT_FOUND_ERROR;
-    LOG_WARN("failed to detect java runtime", K(ret));
   } else if (params.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("failed to use empty params for initializing jni scanner", K(ret));
@@ -58,7 +55,7 @@ int JniWriter::init_params(const common::hash::ObHashMap<ObString, ObString> &pa
   return ret;
 }
 
-int JniWriter::do_open() {
+int ObOdpsJniWriter::do_open() {
   int ret = OB_SUCCESS;
   if (!is_params_created()) {
     ret = OB_INVALID_ARGUMENT;
@@ -67,7 +64,7 @@ int JniWriter::do_open() {
     LOG_INFO("jni scanner is already opend, skip get jni env");
   } else {
     JNIEnv *env = nullptr;
-    if (OB_FAIL(get_jni_env(env))) {
+    if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
         LOG_WARN("failed to get jni env", K(ret));
     } else if (nullptr == env) {
       ret = OB_INVALID_ARGUMENT;
@@ -93,16 +90,15 @@ int JniWriter::do_open() {
 
   return ret;
 }
-int JniWriter::init_jni_table_writer_(JNIEnv *env)
+int ObOdpsJniWriter::init_jni_table_writer_(JNIEnv *env)
 {
   int ret = OB_SUCCESS;
   jclass writer_factory_class = env->FindClass(jni_writer_factory_class_.ptr());
-  if (OB_ISNULL(writer_factory_class)) {
+  if (OB_FAIL(check_jni_exception_(env))) {
+    LOG_WARN("jni is with exception", K(ret));
+  } else if (OB_ISNULL(writer_factory_class)) {
     ret = OB_JNI_CLASS_NOT_FOUND_ERROR;
     LOG_WARN("failed to found class: writer", K(ret));
-    if (OB_FAIL(check_jni_exception_(env))) {
-      LOG_WARN("jni is with exception", K(ret));
-    }
   }
 
   if (OB_SUCC(ret)) {
@@ -121,13 +117,17 @@ int JniWriter::init_jni_table_writer_(JNIEnv *env)
         if (OB_FAIL(check_jni_exception_(env))) {
           ret = OB_JNI_ERROR;
           LOG_WARN("failed to init writer class.", K(ret));
-        } else {
-          env->DeleteLocalRef(writer_factory_class);
-          env->DeleteLocalRef(writer_factory_obj);
         }
+      }
+      if (OB_NOT_NULL(writer_factory_obj)) {
+        env->DeleteLocalRef(writer_factory_obj);
       }
     }
   }
+  if (OB_NOT_NULL(writer_factory_class)) {
+    env->DeleteLocalRef(writer_factory_class);
+  }
+
 
   if (OB_SUCC(ret)) {
     bool is_get_session = writer_params_.get(ObString::make_string("session_id")) == nullptr;
@@ -192,7 +192,7 @@ int JniWriter::init_jni_table_writer_(JNIEnv *env)
 }
 
 
-int JniWriter::init_jni_method_(JNIEnv *env) {
+int ObOdpsJniWriter::init_jni_method_(JNIEnv *env) {
   int ret = OB_SUCCESS;
   // init jmethod
   if (OB_SUCC(ret)) {
@@ -301,11 +301,11 @@ int JniWriter::init_jni_method_(JNIEnv *env) {
 }
 
 
-int JniWriter::get_current_block_addr() {
+int ObOdpsJniWriter::get_current_block_addr() {
   int ret = OB_SUCCESS;
 
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_INVALID_ARGUMENT;
@@ -340,11 +340,11 @@ int JniWriter::get_current_block_addr() {
   return ret;
 }
 
-int JniWriter::do_open_record(int block_id) {
+int ObOdpsJniWriter::do_open_record(int block_id) {
   int ret = OB_SUCCESS;
 
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_INVALID_ARGUMENT;
@@ -400,7 +400,7 @@ int JniWriter::do_open_record(int block_id) {
       LOG_WARN("failed to find method", K(ret));
     } else if (FALSE_IT(size  = env->CallIntMethod(listObject, sizeMethod))) {
       /* do nothing */
-    } else if (OB_FAIL((check_jni_exception_(env)))) {
+    } else if (OB_FAIL(check_jni_exception_(env))) {
       LOG_WARN("failed to get odps schema", K(ret));
     } else if (OB_ISNULL(integerClass = env->FindClass("java/lang/Integer"))) {
       ret = OB_JNI_CLASS_NOT_FOUND_ERROR;
@@ -438,10 +438,10 @@ int JniWriter::do_open_record(int block_id) {
   return ret;
 }
 
-int JniWriter::do_write_next_brs(void *brs, int batch_size) {
+int ObOdpsJniWriter::do_write_next_brs(void *brs, int batch_size) {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_INVALID_ARGUMENT;
@@ -456,11 +456,11 @@ int JniWriter::do_write_next_brs(void *brs, int batch_size) {
   return ret;
 }
 
-int JniWriter::get_session_id(ObIAllocator& outstring_alloc_, ObString& sid) {
+int ObOdpsJniWriter::get_session_id(ObIAllocator& outstring_alloc_, ObString& sid) {
   int ret = OB_SUCCESS;
 
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_JNI_ENV_ERROR;
@@ -492,12 +492,12 @@ int JniWriter::get_session_id(ObIAllocator& outstring_alloc_, ObString& sid) {
   return ret;
 }
 
-int JniWriter::finish_write()
+int ObOdpsJniWriter::finish_write()
 {
   int ret = OB_SUCCESS;
 
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_JNI_ENV_ERROR;
@@ -513,12 +513,12 @@ int JniWriter::finish_write()
   return ret;
 }
 
-int JniWriter::append_block_id(int64_t block_id)
+int ObOdpsJniWriter::append_block_id(int64_t block_id)
 {
   int ret = OB_SUCCESS;
 
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_JNI_ENV_ERROR;
@@ -533,12 +533,12 @@ int JniWriter::append_block_id(int64_t block_id)
   return ret;
 }
 
-int JniWriter::commit_session(int64_t num_block)
+int ObOdpsJniWriter::commit_session(int64_t num_block)
 {
   int ret = OB_SUCCESS;
 
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_JNI_ENV_ERROR;
@@ -553,7 +553,7 @@ int JniWriter::commit_session(int64_t num_block)
   return ret;
 }
 
-int JniWriter::do_close()
+int ObOdpsJniWriter::do_close()
 {
   int ret = OB_SUCCESS;
   if (!is_params_created()) {
@@ -565,7 +565,7 @@ int JniWriter::do_close()
     params_created_ = false;
   } else {
     JNIEnv *env = nullptr;
-    if (OB_FAIL(get_jni_env(env))) {
+    if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
       LOG_WARN("failed to get jni env", K(ret));
     } else if (nullptr == env) {
       ret = OB_JNI_ENV_ERROR;
@@ -593,7 +593,7 @@ int JniWriter::do_close()
 JNIWriterPtr create_odps_jni_writer()
 {
   const char *writer_factory_class = "com/oceanbase/external/odps/utils/OdpsTunnelConnectorFactory";
-  return std::make_shared<JniWriter>(writer_factory_class);
+  return std::make_shared<ObOdpsJniWriter>(writer_factory_class);
 }
 
 }  // namespace sql

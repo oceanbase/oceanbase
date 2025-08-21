@@ -20,7 +20,7 @@
 
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
-#include "sql/engine/connector/ob_jni_connector.h"
+#include "lib/jni_env/ob_jni_connector.h"
 #include "plugin/external_table/ob_external_jni_utils.h"
 #include "plugin/external_table/ob_external_filter.h"
 #include "plugin/external_table/ob_external_arrow_object.h"

@@ -27,7 +27,7 @@
 #endif
 
 #ifdef OB_BUILD_JNI_ODPS
-#include "sql/engine/connector/ob_jni_writer.h"
+#include "sql/engine/connector/ob_odps_jni_writer.h"
 #include <arrow/api.h>
 #include "sql/engine/basic/ob_arrow_basic.h"
 #endif
@@ -270,12 +270,12 @@ private:
 
   int create_odps_schema();
 
-  int into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector::OdpsType odps_type, arrow::Field &arrow_field,
+  int into_odps_jni_batch_one_col(int64_t col_idx, ObOdpsJniConnector::OdpsType odps_type, arrow::Field &arrow_field,
       ObDatumMeta &meta, ObObjMeta &obj_meta, ObIVector &expr_vector, arrow::ArrayBuilder *builder,
       const ObBatchRows &brs, int &act_cnt, ObIAllocator &alloc, const bool is_strict_mode, const ObDateSqlMode date_sql_mode);
 
   int set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder,
-                                                ObJniConnector::OdpsType odps_type,
+                                                ObOdpsJniConnector::OdpsType odps_type,
                                                 const ObDatum &datum,
                                                 const ObDatumMeta &datum_meta,
                                                 const ObObjMeta &obj_meta,
@@ -285,7 +285,7 @@ private:
                                                 const ObDateSqlMode date_sql_mode);
 
   int set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builder,
-                                                 ObJniConnector::OdpsType odps_type,
+                                                 ObOdpsJniConnector::OdpsType odps_type,
                                                  const ObDatum &datum,
                                                  const ObDatumMeta &datum_meta,
                                                  const ObObjMeta &obj_meta,

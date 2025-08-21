@@ -13,7 +13,7 @@
 #pragma once
 
 #include "lib/string/ob_string.h"
-#include "sql/engine/connector/ob_java_helper.h"
+#include "lib/jni_env/ob_java_helper.h"
 
 namespace oceanbase {
 namespace plugin {

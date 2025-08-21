@@ -26,7 +26,7 @@
 
 namespace oceanbase
 {
-namespace sql
+namespace common
 {
 
 ObJavaEnv &ObJavaEnv::getInstance()

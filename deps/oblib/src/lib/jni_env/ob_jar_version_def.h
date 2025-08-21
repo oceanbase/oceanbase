@@ -10,31 +10,20 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JAVA_NATIVE_METHOD_H_
-#define OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JAVA_NATIVE_METHOD_H_
+#ifndef OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JAR_VERSION_H_
+#define OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JAR_VERSION_H_
 
-#include <jni.h>
-#include "lib/alloc/alloc_struct.h"
-#include "share/rc/ob_tenant_base.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
-
 namespace sql
 {
 
-// Without the Java UDF then only support mem malloc and free api
-struct JavaNativeMethods {
-private:
-  static common::ObMemAttr mem_attr_;
-  static common::ObMalloc malloc_;
-
-public:
-  static jlong memory_malloc(JNIEnv *env, jclass clazz, jlong bytes);
-  static void memory_free(JNIEnv *env, jclass clazz, jlong address);
-};
+#define JAR_VERSION_100 (oceanbase::common::cal_version(1, 0, 0, 0))
+#define JAR_VERSION_101 (oceanbase::common::cal_version(1, 0, 1, 0))
 
 } // namespace sql
 } // namespace oceanbase
 
-#endif /* OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JAVA_NATIVE_METHOD_H_ */
+#endif /* OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JAR_VERSION_H_ */

@@ -1042,13 +1042,22 @@ public:
   static int resolve_direct_load_hint(const ParseNode &hint_node, ObDirectLoadHint &hint);
   //////////end of functions for sql hint/////////////
   static int set_upper_column_name(ObColumnSchemaV2 &column_schema);
-#ifdef OB_BUILD_CPP_ODPS
-  static int build_column_schemas_for_odps(const common::ObIArray<oceanbase::sql::ObODPSTableRowIterator::OdpsColumn> &column_list,
-                                           const common::ObIArray<ObString> &part_col_names,
+  template <typename ODPSType>
+  static int build_column_schemas_for_odps(const ObIArray<ODPSType> &column_list,
+                                           const ObIArray<ObString> &part_col_names,
                                            ObTableSchema& table_schema);
+  template <typename ODPSType>
+  static int build_column_for_odps(const ODPSType &odps_column,
+                                   ObColumnSchemaV2 &column_schema,
+                                   common::ObIAllocator &allocator);
+  template <typename ODPSType>
+  static int build_array_info(const ODPSType &odps_column,
+                              ObSEArray<common::ObString, 8> &info,
+                              ObString &info_str,
+                              int root_level,
+                              common::ObIAllocator &allocator);
   static int set_partition_info_for_odps(ObTableSchema &table_schema,
                                          const common::ObIArray<ObString> &part_col_names);
-#endif
 
 private:
   int resolve_table_check_constraint_items(const TableItem *table_item,

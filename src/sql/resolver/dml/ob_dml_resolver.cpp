@@ -4689,19 +4689,19 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
   return ret;
 }
 
-#ifdef OB_BUILD_CPP_ODPS
-int ObDMLResolver::build_column_schemas_for_odps(const ObIArray<ObODPSTableRowIterator::OdpsColumn> &column_list,
+template <typename ODPSType>
+int ObDMLResolver::build_column_schemas_for_odps(const ObIArray<ODPSType> &column_list,
                                                 const ObIArray<ObString> &part_col_names,
                                                 ObTableSchema& table_schema)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
+  ObArenaAllocator arena_allocator;
   int64_t idx = 0;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < column_list.count(); ++i) {
     ObColumnSchemaV2 column_schema;
-    const ObODPSTableRowIterator::OdpsColumn &odps_column = column_list.at(i);
-    ObString field_name = ObString(odps_column.name_.c_str());
+    const ODPSType &odps_column = column_list.at(i);
+    ObString field_name = ObString(odps_column.get_name());
 
     if (OB_SUCC(ret)) {
       // 设置基本属性
@@ -4709,147 +4709,8 @@ int ObDMLResolver::build_column_schemas_for_odps(const ObIArray<ObODPSTableRowIt
       column_schema.set_column_id(i + OB_END_RESERVED_COLUMN_ID_NUM);
       column_schema.set_column_name(field_name);
 
-      if (OB_SUCC(ret)) {
-        apsara::odps::sdk::ODPSColumnTypeInfo odps_type_info = odps_column.type_info_;
-        const apsara::odps::sdk::ODPSColumnType odps_type = odps_type_info.mType;
-        const int32_t odps_type_length = odps_type_info.mSpecifiedLength;
-        const int32_t odps_type_precision = odps_type_info.mPrecision;
-        const int32_t odps_type_scale = odps_type_info.mScale;
-        // 根据ODPS类型设置对应的OB类型
-        switch(odps_column.type_info_.mType) {
-          case apsara::odps::sdk::ODPS_TINYINT:
-          case apsara::odps::sdk::ODPS_BOOLEAN:
-            if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObDecimalIntType);
-              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObTinyIntType]);
-            } else {
-              column_schema.set_data_type(ObTinyIntType);
-            }
-            break;
-          case apsara::odps::sdk::ODPS_SMALLINT:
-            if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObDecimalIntType);
-              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObSmallIntType]);
-            } else {
-              column_schema.set_data_type(ObSmallIntType);
-            }
-            break;
-          case apsara::odps::sdk::ODPS_INTEGER:
-            if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObDecimalIntType);
-              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObInt32Type]);
-            } else {
-              column_schema.set_data_type(ObInt32Type);
-            }
-            break;
-          case apsara::odps::sdk::ODPS_BIGINT:
-            if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObDecimalIntType);
-              column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObIntType]);
-            } else {
-              column_schema.set_data_type(ObIntType);
-            }
-            break;
-          case apsara::odps::sdk::ODPS_FLOAT:
-          {
-            column_schema.set_data_type(ObFloatType);
-            column_schema.set_data_length(12);
-            column_schema.set_data_scale(-1);
-            break;
-          }
-          case apsara::odps::sdk::ODPS_DOUBLE:
-          {
-            column_schema.set_data_type(ObDoubleType);
-            column_schema.set_data_length(23);
-            column_schema.set_data_scale(-1);
-            break;
-          }
-          case apsara::odps::sdk::ODPS_DECIMAL:
-          {
-            column_schema.set_data_type(ObDecimalIntType);
-            column_schema.set_data_precision(odps_type_precision);
-            column_schema.set_data_scale(odps_type_scale);
-            break;
-          }
-          case apsara::odps::sdk::ODPS_CHAR:
-          {
-            int64_t char_len = odps_type_length;
-            if (odps_type_length <= 0) {
-              char_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_CHAR_LENGTH_BYTE : OB_MAX_CHAR_LENGTH;
-            }
-            column_schema.set_data_type(ObCharType);
-            column_schema.set_data_length(char_len);
-            column_schema.set_length_semantics(LS_CHAR);
-            break;
-          }
-          case apsara::odps::sdk::ODPS_VARCHAR:
-          {
-            int64_t varchar_len = odps_type_length;
-            if (odps_type_length <= 0) {
-              varchar_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH :
-                                                    OB_MAX_MYSQL_VARCHAR_LENGTH;
-            }
-            column_schema.set_data_type(ObVarcharType);
-            column_schema.set_data_length(varchar_len);
-            column_schema.set_length_semantics(LS_CHAR);
-            break;
-          }
-          case apsara::odps::sdk::ODPS_STRING:
-          case apsara::odps::sdk::ODPS_BINARY:
-          {
-            column_schema.set_data_type(ObMediumTextType);
-            column_schema.set_data_length(OB_MAX_MEDIUMTEXT_LENGTH);
-            column_schema.set_is_string_lob(); // 默认为ob的string类型
-            break;
-          }
-          case apsara::odps::sdk::ODPS_TIMESTAMP:
-          {
-            if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObTimestampLTZType);
-            } else {
-              column_schema.set_data_type(ObTimestampType);
-              column_schema.set_data_scale(6);  // 确保scale >= 6
-            }
-            break;
-          }
-          case apsara::odps::sdk::ODPS_TIMESTAMP_NTZ:
-          {
-            if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObTimestampNanoType);
-            } else {
-              column_schema.set_data_type(ObDateTimeType);
-              column_schema.set_data_scale(6);  // 确保scale >= 3
-            }
-            break;
-          }
-          case apsara::odps::sdk::ODPS_DATE:
-            if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObDateTimeType);
-            } else {
-              column_schema.set_data_type(ObDateType);
-            }
-            break;
-          case apsara::odps::sdk::ODPS_DATETIME:
-          {
-            if (lib::is_oracle_mode()) {
-              column_schema.set_data_type(ObTimestampNanoType);
-            } else {
-              column_schema.set_data_type(ObDateTimeType);
-              column_schema.set_data_scale(3);  // 确保scale >= 3
-            }
-            break;
-          }
-          case apsara::odps::sdk::ODPS_JSON:
-          {
-            column_schema.set_data_type(ObJsonType);
-            break;
-          }
-          default:
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("odps data type not support", K(ret), K(odps_column.type_info_.mType));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "ODPS type");
-            break;
-        }
+      if (OB_FAIL(build_column_for_odps(odps_column, column_schema, arena_allocator))) {
+        LOG_WARN("failed to build column schema for odps", K(ret));
       }
 
       bool is_part_col = false;
@@ -4868,10 +4729,10 @@ int ObDMLResolver::build_column_schemas_for_odps(const ObIArray<ObODPSTableRowIt
           ObSqlString temp_str;
           if (OB_FAIL(temp_str.assign_fmt("%s%ld", N_PARTITION_LIST_COL, ++idx))) {
             LOG_WARN("failed to assign fmt", K(ret));
-          } else if (OB_FAIL(ob_write_string(allocator, temp_str.string(), mock_gen_column_str))) {
+          } else if (OB_FAIL(ob_write_string(arena_allocator, temp_str.string(), mock_gen_column_str))) {
             LOG_WARN("failed to write string", K(ret));
           }
-        } else if (OB_FAIL(format.mock_gen_column_def(column_schema, allocator, mock_gen_column_str))) {
+        } else if (OB_FAIL(format.mock_gen_column_def(column_schema, arena_allocator, mock_gen_column_str))) {
           LOG_WARN("fail to mock gen column def", K(ret));
         }
 
@@ -4892,6 +4753,265 @@ int ObDMLResolver::build_column_schemas_for_odps(const ObIArray<ObODPSTableRowIt
 
   return ret;
 }
+
+
+template <typename ODPSType>
+int ObDMLResolver::build_column_for_odps(const ODPSType &odps_column,
+                                         ObColumnSchemaV2 &column_schema,
+                                         common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(ret)) {
+    ObOdpsJniConnector::OdpsType odps_type = odps_column.get_odps_type();
+
+    const int32_t odps_type_length = odps_column.get_length();
+    const int32_t odps_type_precision = odps_column.get_precision();
+    const int32_t odps_type_scale = odps_column.get_scale();
+    // 根据ODPS类型设置对应的OB类型
+    switch(odps_type) {
+      case ObOdpsJniConnector::OdpsType::TINYINT:
+      case ObOdpsJniConnector::OdpsType::BOOLEAN:
+        if (lib::is_oracle_mode()) {
+          column_schema.set_data_type(ObDecimalIntType);
+          column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObTinyIntType]);
+        } else {
+          column_schema.set_data_type(ObTinyIntType);
+        }
+        break;
+      case ObOdpsJniConnector::OdpsType::SMALLINT:
+        if (lib::is_oracle_mode()) {
+          column_schema.set_data_type(ObDecimalIntType);
+          column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObSmallIntType]);
+        } else {
+          column_schema.set_data_type(ObSmallIntType);
+        }
+        break;
+      case ObOdpsJniConnector::OdpsType::INT:
+        if (lib::is_oracle_mode()) {
+          column_schema.set_data_type(ObDecimalIntType);
+          column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObInt32Type]);
+        } else {
+          column_schema.set_data_type(ObInt32Type);
+        }
+        break;
+      case ObOdpsJniConnector::OdpsType::BIGINT:
+        if (lib::is_oracle_mode()) {
+          column_schema.set_data_type(ObDecimalIntType);
+          column_schema.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObIntType]);
+        } else {
+          column_schema.set_data_type(ObIntType);
+        }
+        break;
+      case ObOdpsJniConnector::OdpsType::FLOAT:
+      {
+        column_schema.set_data_type(ObFloatType);
+        column_schema.set_data_length(12);
+        column_schema.set_data_scale(-1);
+        break;
+      }
+      case ObOdpsJniConnector::OdpsType::DOUBLE:
+      {
+        column_schema.set_data_type(ObDoubleType);
+        column_schema.set_data_length(23);
+        column_schema.set_data_scale(-1);
+        break;
+      }
+      case ObOdpsJniConnector::OdpsType::DECIMAL:
+      {
+        column_schema.set_data_type(ObDecimalIntType);
+        column_schema.set_data_precision(odps_type_precision);
+        column_schema.set_data_scale(odps_type_scale);
+        break;
+      }
+      case ObOdpsJniConnector::OdpsType::CHAR:
+      {
+        int64_t char_len = odps_type_length;
+        if (odps_type_length <= 0) {
+          char_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_CHAR_LENGTH_BYTE : OB_MAX_CHAR_LENGTH;
+        }
+        column_schema.set_data_type(ObCharType);
+        column_schema.set_data_length(char_len);
+        column_schema.set_length_semantics(LS_CHAR);
+        break;
+      }
+      case ObOdpsJniConnector::OdpsType::VARCHAR:
+      {
+        int64_t varchar_len = odps_type_length;
+        if (odps_type_length <= 0) {
+          varchar_len = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH :
+                                                OB_MAX_MYSQL_VARCHAR_LENGTH;
+        }
+        column_schema.set_data_type(ObVarcharType);
+        column_schema.set_data_length(varchar_len);
+        column_schema.set_length_semantics(LS_CHAR);
+        break;
+      }
+      case ObOdpsJniConnector::OdpsType::STRING:
+      case ObOdpsJniConnector::OdpsType::BINARY:
+      {
+        column_schema.set_data_type(ObMediumTextType);
+        column_schema.set_data_length(OB_MAX_MEDIUMTEXT_LENGTH);
+        column_schema.set_is_string_lob(); // 默认为ob的string类型
+        break;
+      }
+      case ObOdpsJniConnector::OdpsType::TIMESTAMP:
+      {
+        if (lib::is_oracle_mode()) {
+          column_schema.set_data_type(ObTimestampLTZType);
+        } else {
+          column_schema.set_data_type(ObTimestampType);
+          column_schema.set_data_scale(6);  // 确保scale >= 6
+        }
+        break;
+      }
+      case ObOdpsJniConnector::OdpsType::TIMESTAMP_NTZ:
+      {
+        if (lib::is_oracle_mode()) {
+          column_schema.set_data_type(ObTimestampNanoType);
+        } else {
+          column_schema.set_data_type(ObDateTimeType);
+          column_schema.set_data_scale(6);  // 确保scale >= 3
+        }
+        break;
+      }
+      case ObOdpsJniConnector::OdpsType::DATE:
+        if (lib::is_oracle_mode()) {
+          column_schema.set_data_type(ObDateTimeType);
+        } else {
+          column_schema.set_data_type(ObDateType);
+        }
+        break;
+      case ObOdpsJniConnector::OdpsType::DATETIME:
+      {
+        if (lib::is_oracle_mode()) {
+          column_schema.set_data_type(ObTimestampNanoType);
+        } else {
+          column_schema.set_data_type(ObDateTimeType);
+          column_schema.set_data_scale(3);  // 确保scale >= 3
+        }
+        break;
+      }
+      case ObOdpsJniConnector::OdpsType::JSON:
+      {
+        column_schema.set_data_type(ObJsonType);
+        break;
+      }
+      case ObOdpsJniConnector::OdpsType::ARRAY:
+      {
+        ObSEArray<common::ObString, 8> info;
+        ObString info_str;
+        column_schema.set_data_type(ObCollectionSQLType);
+        if (OB_FAIL(build_array_info(odps_column, info, info_str, 0, allocator))) {
+          LOG_WARN("failed to build extended info", K(ret));
+        } else if (OB_FAIL(column_schema.set_extended_type_info(info))) {
+          LOG_WARN("failed to set extended type info", K(ret));
+        }
+        break;
+      }
+      default:
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("odps data type not support", K(ret), K(odps_type));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "ODPS type");
+        break;
+    }
+  }
+  return ret;
+}
+
+
+template <typename ODPSType>
+int ObDMLResolver::build_array_info(const ODPSType &odps_column, ObSEArray<common::ObString, 8> &info,
+                                    ObString &info_str,  int root_level, common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString temp_str;
+  if (root_level > 0) {
+    if (!ObResolverUtils::is_collection_support_type(
+      ObOdpsJniConnector::get_ob_type_by_odps_type_default(odps_column.get_odps_type()))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("odps data type not support", K(ret), K(odps_column.get_odps_type()));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "ODPS type");
+    }
+    if (OB_SUCC(ret) && root_level == 7) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("odps data type not support", K(ret), K(odps_column.get_odps_type()));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "ODPS type");
+    }
+  }
+  if (OB_SUCC(ret)) {
+    switch (odps_column.get_odps_type()) {
+      case ObOdpsJniConnector::OdpsType::BOOLEAN:
+        info_str = ObString::make_string("TINYINT");
+        break;
+      case ObOdpsJniConnector::OdpsType::TINYINT:
+        info_str = ObString::make_string("TINYINT");
+        break;
+      case ObOdpsJniConnector::OdpsType::SMALLINT:
+        info_str = ObString::make_string("SMALLINT");
+        break;
+      case ObOdpsJniConnector::OdpsType::INT:
+        info_str = ObString::make_string("INT");
+        break;
+      case ObOdpsJniConnector::OdpsType::BIGINT:
+        info_str = ObString::make_string("BIGINT");
+        break;
+      case ObOdpsJniConnector::OdpsType::FLOAT:
+        info_str = ObString::make_string("FLOAT");
+        break;
+      case ObOdpsJniConnector::OdpsType::DOUBLE:
+        info_str = ObString::make_string("DOUBLE");
+        break;
+      case ObOdpsJniConnector::OdpsType::DECIMAL:
+        temp_str.append_fmt("DECIMAL(%d,%d)", odps_column.get_precision(), odps_column.get_scale());
+        break;
+      case ObOdpsJniConnector::OdpsType::CHAR:
+        temp_str.append_fmt("CHAR(%d)", odps_column.get_length());
+        break;
+      case ObOdpsJniConnector::OdpsType::VARCHAR:
+        temp_str.append_fmt("VARCHAR(%d)", odps_column.get_length());
+        break;
+      case ObOdpsJniConnector::OdpsType::STRING:
+        info_str = ObString::make_string("STRING");
+        break;
+      case ObOdpsJniConnector::OdpsType::BINARY:
+        info_str = ObString::make_string("BINARY");
+        break;
+      case ObOdpsJniConnector::OdpsType::ARRAY:
+        for (int64_t i = 0; OB_SUCC(ret) && i < odps_column.get_child_columns_size(); i++) {
+          if (OB_FAIL(SMART_CALL(build_array_info(odps_column.get_child_column(i), info, info_str, root_level + 1, allocator)))) {
+            LOG_WARN("failed to build array info", K(ret));
+          } else if (OB_FAIL(temp_str.append_fmt("ARRAY(%s)", info_str.ptr()))) {
+            LOG_WARN("failed to append array info", K(ret));
+          }
+        }
+        break;
+      default:
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("odps data type not support", K(ret), K(odps_column.get_odps_type()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "ODPS type");
+        break;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (odps_column.get_odps_type() == ObOdpsJniConnector::OdpsType::ARRAY
+    || odps_column.get_odps_type() == ObOdpsJniConnector::OdpsType::VARCHAR
+    || odps_column.get_odps_type() == ObOdpsJniConnector::OdpsType::CHAR
+    || odps_column.get_odps_type() == ObOdpsJniConnector::OdpsType::DECIMAL) {
+      if (OB_FAIL(ob_write_string(allocator, temp_str.string(), info_str, true))) {
+        LOG_WARN("failed to write string", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (root_level == 0) {
+        if (OB_FAIL(info.push_back(info_str))) {
+          LOG_WARN("failed to push back info", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 
 int ObDMLResolver::set_partition_info_for_odps(ObTableSchema &table_schema,
                                               const common::ObIArray<ObString> &part_col_names)
@@ -5006,7 +5126,6 @@ int ObDMLResolver::set_partition_info_for_odps(ObTableSchema &table_schema,
   }
   return ret;
 }
-#endif
 
 int ObDMLResolver::sample_external_file_name(common::ObIAllocator &allocator,
                                             ObTableSchema &table_schema,
@@ -5110,26 +5229,63 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
     case ObExternalFileFormat::FormatType::ODPS_FORMAT:
     {
       // TODO: implement getting table schema by using odps jni
-#ifdef OB_BUILD_CPP_ODPS
-      ObODPSTableRowIterator odps_driver;
-      if (OB_FAIL(odps_driver.init_tunnel(format.odps_format_))) {
-        LOG_WARN("failed to init tunnel", K(ret));
-      }
-      else if (OB_FAIL(odps_driver.pull_all_columns())) {
-        LOG_WARN("failed to pull column", K(ret));
-      } else if (OB_FAIL(build_column_schemas_for_odps(odps_driver.get_column_list(),
-                                                      odps_driver.get_part_col_names(),
-                                                      table_schema))) {
-        LOG_WARN("failed to build column schemas for odps", K(ret));
-      } else if (OB_FAIL(set_partition_info_for_odps(table_schema,
-                                                    odps_driver.get_part_col_names()))) {
-        LOG_WARN("failed to set partition info for odps", K(ret));
-      }
-#else
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
-      LOG_WARN("not support to read odps in opensource", K(ret));
+      if (GCONF._use_odps_jni_connector) {
+#ifdef OB_BUILD_JNI_ODPS
+        ObODPSJNITableRowIterator odps_jni_driver;
+        if (OB_FAIL(odps_jni_driver.init_jni_schema_scanner(format.odps_format_, THIS_WORKER.get_session()))) {
+          LOG_WARN("failed to init schema scanner", K(ret));
+        } else if (OB_FAIL(odps_jni_driver.pull_data_columns())) {
+          LOG_WARN("failed to pull data columns", K(ret));
+        } else if (OB_FAIL(odps_jni_driver.pull_partition_columns())) {
+          LOG_WARN("failed to pull partition columns", K(ret));
+        } else {
+          ObSEArray<sql::ObODPSJNITableRowIterator::MirrorOdpsJniColumn, 8> all_column_list;
+          ObIArray<sql::ObODPSJNITableRowIterator::MirrorOdpsJniColumn> &nonpart_column_list = odps_jni_driver.get_mirror_nonpart_column_list();
+          ObIArray<sql::ObODPSJNITableRowIterator::MirrorOdpsJniColumn> &partition_column_list = odps_jni_driver.get_mirror_partition_column_list();
+          ObSEArray<ObString, 8> part_col_names;
+          for (int64_t i = 0;  OB_SUCC(ret) && i < partition_column_list.count(); i++) {
+            if(OB_FAIL(part_col_names.push_back(partition_column_list.at(i).name_))) {
+              LOG_WARN("failed to push back partition column name", K(ret));
+            }
+          }
+          if (OB_FAIL(ret)) {
+
+          } else if (OB_FAIL(append(all_column_list, nonpart_column_list))) {
+            LOG_WARN("failed to append nonpart column list", K(ret));
+          } else if (OB_FAIL(append(all_column_list, partition_column_list))) {
+            LOG_WARN("failed to append partition column list", K(ret));
+          } else if (OB_FAIL(ObDMLResolver::build_column_schemas_for_odps(all_column_list, part_col_names, table_schema))) {
+            LOG_WARN("failed to build column schemas for odps", K(ret));
+          } else if (OB_FAIL(ObDMLResolver::set_partition_info_for_odps(table_schema, part_col_names))) {
+            LOG_WARN("failed to set partition info for odps", K(ret));
+          }
+        }
+#elif
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
+        LOG_WARN("not support to read odps in opensource", K(ret));
 #endif
+      } else {
+#ifdef OB_BUILD_CPP_ODPS
+        ObODPSTableRowIterator odps_driver;
+        if (OB_FAIL(odps_driver.init_tunnel(format.odps_format_))) {
+          LOG_WARN("failed to init tunnel", K(ret));
+        } else if (OB_FAIL(odps_driver.pull_all_columns())) {
+          LOG_WARN("failed to pull column", K(ret));
+        } else if (OB_FAIL(build_column_schemas_for_odps(odps_driver.get_column_list(),
+                                                        odps_driver.get_part_col_names(),
+                                                        table_schema))) {
+          LOG_WARN("failed to build column schemas for odps", K(ret));
+        } else if (OB_FAIL(set_partition_info_for_odps(table_schema,
+                                                      odps_driver.get_part_col_names()))) {
+          LOG_WARN("failed to set partition info for odps", K(ret));
+        }
+#else
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
+        LOG_WARN("not support to read odps in opensource", K(ret));
+#endif
+      }
       break;
     }
     case ObExternalFileFormat::FormatType::PARQUET_FORMAT:

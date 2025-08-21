@@ -20,8 +20,8 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/file/file_directory_utils.h"
 #include "share/config/ob_server_config.h"
-#include "sql/engine/connector/ob_java_env.h"
-#include "sql/engine/connector/ob_jni_connector.h"
+#include "lib/jni_env/ob_java_env.h"
+#include "lib/jni_env/ob_jni_connector.h"
 
 namespace oceanbase {
 using namespace sql;

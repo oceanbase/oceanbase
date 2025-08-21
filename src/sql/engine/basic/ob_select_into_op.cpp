@@ -30,7 +30,7 @@
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "lib/udt/ob_collection_type.h"
 #include "share/config/ob_server_config.h"
-#include "sql/engine/connector/ob_java_env.h"
+#include "lib/jni_env/ob_java_env.h"
 #include "sql/engine/table/ob_odps_jni_table_row_iter.h"
 
 #include <arrow/c/bridge.h>
@@ -295,21 +295,9 @@ int ObSelectIntoOp::init_odps_jni_tunnel()
   }
   arrow_alloc_.init(MTL_ID());
 
-  ObJavaEnv &java_env = ObJavaEnv::getInstance();
-  // This entry is first time to setup java env
   if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (!GCONF.ob_enable_java_env) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("java env is not enabled", K(ret));
-  } else if (!java_env.is_env_inited()) {
-    if (OB_FAIL(java_env.setup_java_env())) {
-      LOG_WARN("failed to setup java env", K(ret));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
+  } else if (OB_FAIL(ObJniConnector::java_env_init())) {
+    LOG_WARN("failed to env init", K(ret));
   } else if (is_in_px) {
     int task_id = input->task_id_;
     block_id_ = task_id;
@@ -2517,7 +2505,7 @@ int ObSelectIntoOp::create_odps_schema()
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObExpr *> &select_exprs = MY_SPEC.select_exprs_;
-  const ObIArray<ObJniConnector::OdpsType> &col_type_from_odps = uploader_.writer_ptr->get_schema_from_odps();
+  const ObIArray<ObOdpsJniConnector::OdpsType> &col_type_from_odps = uploader_.writer_ptr->get_schema_from_odps();
   intptr_t export_schema_ptr = uploader_.writer_ptr->get_export_schema_ptr();
 
   if (export_schema_ptr == 0) {
@@ -2578,7 +2566,7 @@ inline T arrow_get(ObIVector& expr_vector, int64_t idx)
   } while(false);
 
 int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder,
-                                                    ObJniConnector::OdpsType odps_type,
+                                                    ObOdpsJniConnector::OdpsType odps_type,
                                                     const ObDatum &datum,
                                                     const ObDatumMeta &datum_meta,
                                                     const ObObjMeta &obj_meta,
@@ -2606,7 +2594,7 @@ int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder
   } else {
     switch (odps_type)
     {
-      case ObJniConnector::OdpsType::BOOLEAN:
+      case ObOdpsJniConnector::OdpsType::BOOLEAN:
       {
         if (ObTinyIntType == ob_type) {
           PUT_DATUM_INTO_ARROW_BUILDER(arrow::BooleanBuilder, datum.get_tinyint() != 0);
@@ -2619,37 +2607,37 @@ int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder
         }
         break;
       }
-      case ObJniConnector::OdpsType::TINYINT:
+      case ObOdpsJniConnector::OdpsType::TINYINT:
       {
         PUT_DATUM_INTO_ARROW_BUILDER(arrow::Int8Builder, datum.get_tinyint());
         break;
       }
-      case ObJniConnector::OdpsType::SMALLINT:
+      case ObOdpsJniConnector::OdpsType::SMALLINT:
       {
         PUT_DATUM_INTO_ARROW_BUILDER(arrow::Int16Builder, datum.get_smallint());
         break;
       }
-      case ObJniConnector::OdpsType::INT:
+      case ObOdpsJniConnector::OdpsType::INT:
       {
         PUT_DATUM_INTO_ARROW_BUILDER(arrow::Int32Builder, datum.get_int32());
         break;
       }
-      case ObJniConnector::OdpsType::BIGINT:
+      case ObOdpsJniConnector::OdpsType::BIGINT:
       {
         PUT_DATUM_INTO_ARROW_BUILDER(arrow::Int64Builder, datum.get_int());
         break;
       }
-      case ObJniConnector::OdpsType::FLOAT:
+      case ObOdpsJniConnector::OdpsType::FLOAT:
       {
         PUT_DATUM_INTO_ARROW_BUILDER(arrow::FloatBuilder, datum.get_float());
         break;
       }
-      case ObJniConnector::OdpsType::DOUBLE:
+      case ObOdpsJniConnector::OdpsType::DOUBLE:
       {
         PUT_DATUM_INTO_ARROW_BUILDER(arrow::DoubleBuilder, datum.get_double());
         break;
       }
-      case ObJniConnector::OdpsType::DECIMAL:
+      case ObOdpsJniConnector::OdpsType::DECIMAL:
       {
         std::string dec;
         if (OB_FAIL(decimal_to_string(datum, datum_meta, dec, allocator))) {
@@ -2685,10 +2673,10 @@ int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder
         }
         break;
       }
-      case ObJniConnector::OdpsType::CHAR:
-      case ObJniConnector::OdpsType::VARCHAR:
-      case ObJniConnector::OdpsType::STRING:
-      case ObJniConnector::OdpsType::BINARY:
+      case ObOdpsJniConnector::OdpsType::CHAR:
+      case ObOdpsJniConnector::OdpsType::VARCHAR:
+      case ObOdpsJniConnector::OdpsType::STRING:
+      case ObOdpsJniConnector::OdpsType::BINARY:
       {
         ObString lob_str;
         if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator,
@@ -2699,7 +2687,7 @@ int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder
                                                               &ctx_))) {
             LOG_WARN("failed to read string", K(ret));
         } else if (CHARSET_UTF8MB4 == ObCharset::charset_type_by_coll(datum_meta.cs_type_)
-            || ObJniConnector::OdpsType::BINARY == odps_type
+            || ObOdpsJniConnector::OdpsType::BINARY == odps_type
             || CS_TYPE_BINARY == datum_meta.cs_type_
         ) {
           res_len = static_cast<uint32_t>(lob_str.length());
@@ -2719,14 +2707,14 @@ int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder
           LOG_WARN("failed to convert charset", K(ret));
         }
         if (OB_FAIL(ret)) {
-        } else if ((ObJniConnector::OdpsType::CHAR == odps_type && res_len > 255) ||
-                   (ObJniConnector::OdpsType::VARCHAR == odps_type && res_len > 65535) ||
-                   (ObJniConnector::OdpsType::STRING == odps_type && res_len > 8 * 1024 * 1024) ||
-                   (ObJniConnector::OdpsType::BINARY == odps_type && res_len > 8 * 1024 * 1024)) {
+        } else if ((ObOdpsJniConnector::OdpsType::CHAR == odps_type && res_len > 255) ||
+                   (ObOdpsJniConnector::OdpsType::VARCHAR == odps_type && res_len > 65535) ||
+                   (ObOdpsJniConnector::OdpsType::STRING == odps_type && res_len > 8 * 1024 * 1024) ||
+                   (ObOdpsJniConnector::OdpsType::BINARY == odps_type && res_len > 8 * 1024 * 1024)) {
           ret = OB_DATA_OUT_OF_RANGE;
           LOG_WARN("string length out of range", K(res_len));
         } else if (OB_ISNULL(buf) && res_len == 0) {
-          if (ObJniConnector::OdpsType::BINARY != odps_type) {
+          if (ObOdpsJniConnector::OdpsType::BINARY != odps_type) {
             arrow::StringBuilder* builder_ref = dynamic_cast<arrow::StringBuilder *>(builder);
             if (OB_ISNULL(builder_ref)) {
               ret = OB_ODPS_ERROR;
@@ -2754,7 +2742,7 @@ int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder
         }
         break;
       }
-      case ObJniConnector::OdpsType::JSON:
+      case ObOdpsJniConnector::OdpsType::JSON:
       {
         ObString json_str;
         ObIJsonBase *j_base = NULL;
@@ -2793,8 +2781,8 @@ int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder
         }
         break;
       }
-      case ObJniConnector::OdpsType::TIMESTAMP:
-      case ObJniConnector::OdpsType::TIMESTAMP_NTZ:
+      case ObOdpsJniConnector::OdpsType::TIMESTAMP:
+      case ObOdpsJniConnector::OdpsType::TIMESTAMP_NTZ:
       {
         int64_t datetime = datum.get_datetime();
         ObMySQLDateTime mdatetime = datetime;
@@ -2802,7 +2790,7 @@ int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder
             && CAST_FAIL(ObTimeConverter::mdatetime_to_datetime(mdatetime, datetime, date_sql_mode))) {
           LOG_WARN("mdatetime_to_datetime fail", K(ret));
         }
-        int64_t us = ObJniConnector::OdpsType::TIMESTAMP == odps_type
+        int64_t us = ObOdpsJniConnector::OdpsType::TIMESTAMP == odps_type
                      ? datum.get_timestamp()
                      : datetime;
         int64_t sec = us / 1000000;
@@ -2817,7 +2805,7 @@ int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder
         }
         break;
       }
-      case ObJniConnector::OdpsType::DATE:
+      case ObOdpsJniConnector::OdpsType::DATE:
       {
         int32_t date = datum.get_date();
         ObMySQLDate mdate = date;
@@ -2832,7 +2820,7 @@ int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder
         }
         break;
       }
-      case ObJniConnector::OdpsType::DATETIME:
+      case ObOdpsJniConnector::OdpsType::DATETIME:
       {
         int32_t tmp_offset = 0;
         int64_t datetime = datum.get_datetime();
@@ -2865,7 +2853,7 @@ int ObSelectIntoOp::set_odps_column_value_mysql_jni(arrow::ArrayBuilder *builder
 
 
 int ObSelectIntoOp::set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builder,
-                                                 ObJniConnector::OdpsType odps_type,
+                                                 ObOdpsJniConnector::OdpsType odps_type,
                                                  const ObDatum &datum,
                                                  const ObDatumMeta &datum_meta,
                                                  const ObObjMeta &obj_meta,
@@ -2891,7 +2879,7 @@ int ObSelectIntoOp::set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builde
   } else {
       switch (odps_type)
       {
-        case ObJniConnector::OdpsType::BOOLEAN:
+        case ObOdpsJniConnector::OdpsType::BOOLEAN:
         {
           if (OB_FAIL(decimal_or_number_to_int64(datum, datum_meta, int_value))) {
             LOG_WARN("failed to get int64", K(ret));
@@ -2900,7 +2888,7 @@ int ObSelectIntoOp::set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builde
           }
           break;
         }
-        case ObJniConnector::OdpsType::TINYINT:
+        case ObOdpsJniConnector::OdpsType::TINYINT:
         {
           if (OB_FAIL(decimal_or_number_to_int64(datum, datum_meta, int_value))) {
             LOG_WARN("failed to get int64", K(ret));
@@ -2912,7 +2900,7 @@ int ObSelectIntoOp::set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builde
           }
           break;
         }
-        case ObJniConnector::OdpsType::SMALLINT:
+        case ObOdpsJniConnector::OdpsType::SMALLINT:
         {
           if (OB_FAIL(decimal_or_number_to_int64(datum, datum_meta, int_value))) {
             LOG_WARN("failed to get int64", K(ret));
@@ -2924,7 +2912,7 @@ int ObSelectIntoOp::set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builde
           }
           break;
         }
-        case ObJniConnector::OdpsType::INT:
+        case ObOdpsJniConnector::OdpsType::INT:
         {
           if (OB_FAIL(decimal_or_number_to_int64(datum, datum_meta, int_value))) {
             LOG_WARN("failed to get int64", K(ret));
@@ -2936,7 +2924,7 @@ int ObSelectIntoOp::set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builde
           }
           break;
         }
-        case ObJniConnector::OdpsType::BIGINT:
+        case ObOdpsJniConnector::OdpsType::BIGINT:
         {
           if (OB_FAIL(decimal_or_number_to_int64(datum, datum_meta, int_value))) {
             LOG_WARN("failed to get int64", K(ret));
@@ -2945,17 +2933,17 @@ int ObSelectIntoOp::set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builde
           }
           break;
         }
-        case ObJniConnector::OdpsType::FLOAT:
+        case ObOdpsJniConnector::OdpsType::FLOAT:
         {
           PUT_DATUM_INTO_ARROW_BUILDER(arrow::FloatBuilder, datum.get_float());
           break;
         }
-        case ObJniConnector::OdpsType::DOUBLE:
+        case ObOdpsJniConnector::OdpsType::DOUBLE:
         {
           PUT_DATUM_INTO_ARROW_BUILDER(arrow::DoubleBuilder, datum.get_double());
           break;
         }
-        case ObJniConnector::OdpsType::DECIMAL:
+        case ObOdpsJniConnector::OdpsType::DECIMAL:
         {
           std::string dec;
           if (OB_FAIL(decimal_to_string(datum, datum_meta, dec, allocator))) {
@@ -2991,16 +2979,16 @@ int ObSelectIntoOp::set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builde
           }
           break;
         }
-        case ObJniConnector::OdpsType::CHAR:
-        case ObJniConnector::OdpsType::VARCHAR:
-        case ObJniConnector::OdpsType::STRING:
-        case ObJniConnector::OdpsType::BINARY: {
+        case ObOdpsJniConnector::OdpsType::CHAR:
+        case ObOdpsJniConnector::OdpsType::VARCHAR:
+        case ObOdpsJniConnector::OdpsType::STRING:
+        case ObOdpsJniConnector::OdpsType::BINARY: {
           ObString lob_str;
           if (OB_FAIL(ObTextStringHelper::read_real_string_data(
                   allocator, datum, datum_meta, obj_meta.has_lob_header(), lob_str, &ctx_))) {
             LOG_WARN("failed to read string", K(ret));
           } else if (CHARSET_UTF8MB4 == ObCharset::charset_type_by_coll(datum_meta.cs_type_) ||
-                     ObJniConnector::OdpsType::BINARY == odps_type || CS_TYPE_BINARY == datum_meta.cs_type_) {
+                     ObOdpsJniConnector::OdpsType::BINARY == odps_type || CS_TYPE_BINARY == datum_meta.cs_type_) {
             res_len = static_cast<uint32_t>(lob_str.length());
             buf = const_cast<char *>(lob_str.ptr());
           } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(lob_str.length() * ObCharset::MAX_MB_LEN)))) {
@@ -3018,14 +3006,14 @@ int ObSelectIntoOp::set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builde
             LOG_WARN("failed to convert charset", K(ret));
           }
           if (OB_FAIL(ret)) {
-          } else if ((ObJniConnector::OdpsType::CHAR == odps_type && res_len > 255) ||
-                     (ObJniConnector::OdpsType::VARCHAR == odps_type && res_len > 65535) ||
-                     (ObJniConnector::OdpsType::STRING == odps_type && res_len > 8 * 1024 * 1024) ||
-                     (ObJniConnector::OdpsType::BINARY == odps_type && res_len > 8 * 1024 * 1024)) {
+          } else if ((ObOdpsJniConnector::OdpsType::CHAR == odps_type && res_len > 255) ||
+                     (ObOdpsJniConnector::OdpsType::VARCHAR == odps_type && res_len > 65535) ||
+                     (ObOdpsJniConnector::OdpsType::STRING == odps_type && res_len > 8 * 1024 * 1024) ||
+                     (ObOdpsJniConnector::OdpsType::BINARY == odps_type && res_len > 8 * 1024 * 1024)) {
             ret = OB_DATA_OUT_OF_RANGE;
             LOG_WARN("string length out of range", K(res_len));
           } else if (OB_ISNULL(buf) && res_len == 0) {
-            if (ObJniConnector::OdpsType::BINARY != odps_type) {
+            if (ObOdpsJniConnector::OdpsType::BINARY != odps_type) {
               arrow::StringBuilder *builder_ref = dynamic_cast<arrow::StringBuilder *>(builder);
               if (OB_ISNULL(builder_ref)) {
                 ret = OB_ODPS_ERROR;
@@ -3051,7 +3039,7 @@ int ObSelectIntoOp::set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builde
               }
             }
           } else {
-            if (ObJniConnector::OdpsType::BINARY != odps_type) {
+            if (ObOdpsJniConnector::OdpsType::BINARY != odps_type) {
               arrow::StringBuilder *builder_ref = dynamic_cast<arrow::StringBuilder *>(builder);
               if (OB_ISNULL(builder_ref)) {
                 ret = OB_ODPS_ERROR;
@@ -3079,7 +3067,7 @@ int ObSelectIntoOp::set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builde
           }
           break;
         }
-        case ObJniConnector::OdpsType::JSON: {
+        case ObOdpsJniConnector::OdpsType::JSON: {
           ObString json_str;
           ObIJsonBase *j_base = NULL;
           ObJsonBuffer jbuf(&allocator);
@@ -3117,14 +3105,14 @@ int ObSelectIntoOp::set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builde
           }
           break;
         }
-        case ObJniConnector::OdpsType::TIMESTAMP:
-        case ObJniConnector::OdpsType::TIMESTAMP_NTZ:
+        case ObOdpsJniConnector::OdpsType::TIMESTAMP:
+        case ObOdpsJniConnector::OdpsType::TIMESTAMP_NTZ:
         {
           ObOTimestampData timestamp = datum.get_otimestamp_tiny();
           PUT_DATUM_INTO_ARROW_BUILDER(arrow::TimestampBuilder, timestamp.time_us_ * 1000 + timestamp.time_ctx_.tail_nsec_);
           break;
         }
-        case ObJniConnector::OdpsType::DATE:
+        case ObOdpsJniConnector::OdpsType::DATE:
         {
           int64_t day = datum.get_datetime() / 1000000 / 3600 / 24;
           if (datum.get_date() < ODPS_DATE_MIN_VAL) {
@@ -3135,7 +3123,7 @@ int ObSelectIntoOp::set_odps_column_value_oracle_jni(arrow::ArrayBuilder *builde
           }
           break;
         }
-        case ObJniConnector::OdpsType::DATETIME:
+        case ObOdpsJniConnector::OdpsType::DATETIME:
         {
           ObOTimestampData timestamp = datum.get_otimestamp_tiny();
           int32_t tmp_offset = 0;
@@ -3168,7 +3156,7 @@ int ObSelectIntoOp::into_odps_jni()
   date_sql_mode.init(sql_mode);
   bool is_strict_mode = common::is_strict_mode(sql_mode);
   const ObIArray<ObExpr*> &select_exprs = MY_SPEC.select_exprs_;
-  const ObIArray<ObJniConnector::OdpsType> &col_type_from_odps = uploader_.writer_ptr->get_schema_from_odps();
+  const ObIArray<ObOdpsJniConnector::OdpsType> &col_type_from_odps = uploader_.writer_ptr->get_schema_from_odps();
   const arrow::FieldVector &type_vec = arrow_schema_->fields();
   ObDatum *datum = NULL;
   arrow::Result<std::shared_ptr<arrow::RecordBatchBuilder> > rbatchRes =
@@ -3184,7 +3172,7 @@ int ObSelectIntoOp::into_odps_jni()
       ObDatumMeta &meta = select_exprs.at(col_idx)->datum_meta_;
       ObObjMeta &obj_meta = select_exprs.at(col_idx)->obj_meta_;
       arrow::ArrayBuilder *array_builder = rbatch->GetField(col_idx);
-      ObJniConnector::OdpsType odps_type = col_type_from_odps.at(col_idx);
+      ObOdpsJniConnector::OdpsType odps_type = col_type_from_odps.at(col_idx);
 
       if (OB_ISNULL(select_exprs.at(col_idx)) || OB_ISNULL(array_builder) || OB_ISNULL(type_vec.at(col_idx))) {
         ret = OB_ERR_UNEXPECTED;
@@ -3550,7 +3538,7 @@ int vectorize_fill_decimal(arrow::ArrayBuilder *builder, const ObBatchRows &brs,
 
 template <typename ArrowBuilderType>
 int vectorize_fill_string(arrow::ArrayBuilder *builder, const ObBatchRows &brs, ObIVector &expr_vector, ObDatumMeta &meta,
-    const ObObjMeta &obj_meta, ObIAllocator &alloc, ObJniConnector::OdpsType odps_type, int& act_cnt)
+    const ObObjMeta &obj_meta, ObIAllocator &alloc, ObOdpsJniConnector::OdpsType odps_type, int& act_cnt)
 {
   int ret = OB_SUCCESS;
   act_cnt = 0;
@@ -3600,10 +3588,10 @@ int vectorize_fill_string(arrow::ArrayBuilder *builder, const ObBatchRows &brs, 
           }
           if (OB_FAIL(ret)) {
             // do nothing
-          } else if ((ObJniConnector::OdpsType::CHAR == odps_type && res_len > 255) ||
-                     (ObJniConnector::OdpsType::VARCHAR == odps_type && res_len > 65535) ||
-                     (ObJniConnector::OdpsType::STRING == odps_type && res_len > 8 * 1024 * 1024) ||
-                     (ObJniConnector::OdpsType::BINARY == odps_type && res_len > 8 * 1024 * 1024)) {
+          } else if ((ObOdpsJniConnector::OdpsType::CHAR == odps_type && res_len > 255) ||
+                     (ObOdpsJniConnector::OdpsType::VARCHAR == odps_type && res_len > 65535) ||
+                     (ObOdpsJniConnector::OdpsType::STRING == odps_type && res_len > 8 * 1024 * 1024) ||
+                     (ObOdpsJniConnector::OdpsType::BINARY == odps_type && res_len > 8 * 1024 * 1024)) {
             ret = OB_DATA_OUT_OF_RANGE;
             LOG_WARN("string length out of range", K(res_len));
           } else if (OB_ISNULL(buf) && res_len == 0) {
@@ -3628,14 +3616,14 @@ int vectorize_fill_string(arrow::ArrayBuilder *builder, const ObBatchRows &brs, 
 
 bool ObSelectIntoOp::day_number_checker(int32_t days) { return days > ODPS_DATE_MIN_VAL; }
 
-int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector::OdpsType odps_type,
+int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObOdpsJniConnector::OdpsType odps_type,
     arrow::Field &arrow_field, ObDatumMeta &meta, ObObjMeta &obj_meta, ObIVector &expr_vector,
     arrow::ArrayBuilder *builder, const ObBatchRows &brs, int &act_cnt, ObIAllocator &alloc,
     const bool is_strict_mode, const ObDateSqlMode date_sql_mode)
 {
   int ret = OB_SUCCESS;
   switch (odps_type) {
-    case ObJniConnector::OdpsType::BIGINT:
+    case ObOdpsJniConnector::OdpsType::BIGINT:
       if (!is_oracle_mode()) {
         if (OB_FAIL((vectorize_fill_int_mysql<arrow::Int64Type, int64_t>(builder, brs, expr_vector, meta, act_cnt, is_strict_mode, date_sql_mode)))) {
           LOG_WARN("fail to fill int64", K(ret));
@@ -3646,7 +3634,7 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector:
         }
       }
       break;
-    case ObJniConnector::OdpsType::TINYINT:
+    case ObOdpsJniConnector::OdpsType::TINYINT:
       if (!is_oracle_mode()) {
         if (OB_FAIL((vectorize_fill_int_mysql<arrow::Int8Type, int8_t>(builder, brs, expr_vector, meta, act_cnt, is_strict_mode, date_sql_mode)))) {
           LOG_WARN("fail to fill int64", K(ret));
@@ -3658,7 +3646,7 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector:
       }
 
       break;
-    case ObJniConnector::OdpsType::SMALLINT:
+    case ObOdpsJniConnector::OdpsType::SMALLINT:
       if (!is_oracle_mode()) {
         if (OB_FAIL((vectorize_fill_int_mysql<arrow::Int16Type, int16_t>(builder, brs, expr_vector, meta, act_cnt, is_strict_mode, date_sql_mode)))) {
           LOG_WARN("fail to fill int64", K(ret));
@@ -3670,7 +3658,7 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector:
       }
 
       break;
-    case ObJniConnector::OdpsType::INT:
+    case ObOdpsJniConnector::OdpsType::INT:
       if (!is_oracle_mode()) {
         if (OB_FAIL((vectorize_fill_int_mysql<arrow::Int32Type, int32_t>(builder, brs, expr_vector, meta, act_cnt, is_strict_mode, date_sql_mode)))) {
           LOG_WARN("fail to fill int64", K(ret));
@@ -3681,17 +3669,17 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector:
         }
       }
       break;
-    case ObJniConnector::OdpsType::DOUBLE:
+    case ObOdpsJniConnector::OdpsType::DOUBLE:
       if (OB_FAIL((vectorize_fill_double<arrow::DoubleType, double>(builder, brs, expr_vector, act_cnt)))) {
         LOG_WARN("fail to fill double", K(ret));
       }
       break;
-    case ObJniConnector::OdpsType::FLOAT:
+    case ObOdpsJniConnector::OdpsType::FLOAT:
       if (OB_FAIL((vectorize_fill_double<arrow::FloatType, float>(builder, brs, expr_vector, act_cnt)))) {
         LOG_WARN("fail to fill float", K(ret));
       }
       break;
-    case ObJniConnector::OdpsType::BOOLEAN:
+    case ObOdpsJniConnector::OdpsType::BOOLEAN:
       if (!is_oracle_mode()) {
         if (obj_meta.get_type() == ObTinyIntType) {
           if (OB_FAIL((vectorize_fill_bool_mysql<int8_t>(builder, brs, expr_vector, act_cnt, meta)))) {
@@ -3716,19 +3704,19 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector:
         }
       }
       break;
-    case ObJniConnector::OdpsType::VARCHAR:
-    case ObJniConnector::OdpsType::CHAR:
-    case ObJniConnector::OdpsType::STRING:
+    case ObOdpsJniConnector::OdpsType::VARCHAR:
+    case ObOdpsJniConnector::OdpsType::CHAR:
+    case ObOdpsJniConnector::OdpsType::STRING:
       if (OB_FAIL(vectorize_fill_string<arrow::StringBuilder>(builder, brs, expr_vector, meta, obj_meta, alloc, odps_type, act_cnt))) {
         LOG_WARN("failed to vectorize fill string");
       }
       break;
-    case ObJniConnector::OdpsType::BINARY:
+    case ObOdpsJniConnector::OdpsType::BINARY:
       if (OB_FAIL(vectorize_fill_string<arrow::BinaryBuilder>(builder, brs, expr_vector, meta, obj_meta, alloc, odps_type, act_cnt))) {
         LOG_WARN("failed to vectorize fill string");
       }
       break;
-    case ObJniConnector::OdpsType::DECIMAL:
+    case ObOdpsJniConnector::OdpsType::DECIMAL:
       if (arrow_field.type()->id() == arrow::Type::DECIMAL || arrow_field.type()->id() == arrow::Type::DECIMAL128) {
         if (OB_FAIL(vectorize_fill_decimal<arrow::Decimal128Builder>(builder, brs, expr_vector, act_cnt, meta))) {
           LOG_WARN("fail to vectorize decimal", K(ret));
@@ -3739,7 +3727,7 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector:
         }
       }
       break;
-    case ObJniConnector::OdpsType::DATE:  // arrowType = new ArrowType.Date(DateUnit.DAY);
+    case ObOdpsJniConnector::OdpsType::DATE:  // arrowType = new ArrowType.Date(DateUnit.DAY);
     {
       std::shared_ptr<DaysChecker> filter = std::make_shared<DaysChecker>(day_number_checker);
       if (!is_oracle_mode()) {
@@ -3781,7 +3769,7 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector:
       }
       break;
     }
-    case ObJniConnector::OdpsType::DATETIME:  // arrowType = new ArrowType.Date(DateUnit.MILLISECOND);
+    case ObOdpsJniConnector::OdpsType::DATETIME:  // arrowType = new ArrowType.Date(DateUnit.MILLISECOND);
     {
       arrow::NumericBuilder<arrow::Date64Type> *builder_ref =
           dynamic_cast<arrow::NumericBuilder<arrow::Date64Type> *>(builder);
@@ -3837,8 +3825,8 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector:
       }
       break;
     }
-    case ObJniConnector::OdpsType::TIMESTAMP:
-    case ObJniConnector::OdpsType::TIMESTAMP_NTZ:
+    case ObOdpsJniConnector::OdpsType::TIMESTAMP:
+    case ObOdpsJniConnector::OdpsType::TIMESTAMP_NTZ:
       // arrowType = new ArrowType.Timestamp(TimeUnit.NANOSECOND, null);
       // arrowType = new ArrowType.Timestamp(TimeUnit.NANOSECOND, null);
     {
@@ -3865,7 +3853,7 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector:
                   ObTimeConverter::mdatetime_to_datetime(mdatetime, datetime, date_sql_mode))) {
               LOG_WARN("mdatetime_to_datetime fail", K(ret));
             }
-            int64_t us = JniWriter::OdpsType::TIMESTAMP == odps_type
+            int64_t us = ObOdpsJniWriter::OdpsType::TIMESTAMP == odps_type
                    ? expr_vector.get_timestamp(i)
                    : datetime;
             int64_t sec = us / 1000000;
@@ -3893,7 +3881,7 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector:
       }
       break;
     }
-    case ObJniConnector::OdpsType::JSON:
+    case ObOdpsJniConnector::OdpsType::JSON:
     {
       arrow::StringBuilder *builder_ref =
           dynamic_cast<arrow::StringBuilder *>(builder);
@@ -3944,7 +3932,7 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector:
       }
       break;
     }
-    case ObJniConnector::OdpsType::ARRAY:
+    case ObOdpsJniConnector::OdpsType::ARRAY:
     {
       arrow::ListBuilder *list_builder = dynamic_cast<arrow::ListBuilder *>(builder);
       arrow::ArrayBuilder *child_builder = nullptr;
@@ -3983,10 +3971,10 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObJniConnector:
       }
       break;
     }
-    case ObJniConnector::OdpsType::STRUCT:
-    case ObJniConnector::OdpsType::INTERVAL_DAY_TIME:
-    case ObJniConnector::OdpsType::INTERVAL_YEAR_MONTH:
-    case ObJniConnector::OdpsType::MAP:
+    case ObOdpsJniConnector::OdpsType::STRUCT:
+    case ObOdpsJniConnector::OdpsType::INTERVAL_DAY_TIME:
+    case ObOdpsJniConnector::OdpsType::INTERVAL_YEAR_MONTH:
+    case ObOdpsJniConnector::OdpsType::MAP:
     default:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected type", K(odps_type), K(ret));
@@ -4098,7 +4086,7 @@ int vectorize_fill_array_string(arrow::ArrayBuilder *child_builder,
                                 ObIArrayType *child_array,
                                 ObODPSArrayHelper *array_helper,
                                 ObIAllocator &alloc)
-                                // JniWriter::OdpsType odps_type)
+                                // ObOdpsJniWriter::OdpsType odps_type)
 {
   int ret = OB_SUCCESS;
   ArrowBuilderType *builder = dynamic_cast<ArrowBuilderType *>(child_builder);
@@ -4140,10 +4128,10 @@ int vectorize_fill_array_string(arrow::ArrayBuilder *child_builder,
         }
         if (OB_FAIL(ret)) {
           // do nothing
-        // } else if ((JniWriter::OdpsType::CHAR == odps_type && res_len > 255) ||
-        //            (JniWriter::OdpsType::VARCHAR == odps_type && res_len > 65535) ||
-        //            (JniWriter::OdpsType::STRING == odps_type && res_len > 8 * 1024 * 1024) ||
-        //            (JniWriter::OdpsType::BINARY == odps_type && res_len > 8 * 1024 * 1024)) {
+        // } else if ((ObOdpsJniWriter::OdpsType::CHAR == odps_type && res_len > 255) ||
+        //            (ObOdpsJniWriter::OdpsType::VARCHAR == odps_type && res_len > 65535) ||
+        //            (ObOdpsJniWriter::OdpsType::STRING == odps_type && res_len > 8 * 1024 * 1024) ||
+        //            (ObOdpsJniWriter::OdpsType::BINARY == odps_type && res_len > 8 * 1024 * 1024)) {
         //   ret = OB_DATA_OUT_OF_RANGE;
         //   LOG_WARN("string length out of range", K(res_len));
         } else if (OB_ISNULL(buf) && res_len == 0) {
@@ -4322,7 +4310,7 @@ int ObSelectIntoOp::into_odps_jni_batch(const ObBatchRows &brs)
     ObArenaAllocator allocator("IntoOdps", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObMallocHookAttrGuard guard(ObMemAttr(MTL_ID(), "IntoOdps"));//???
 
-    const ObIArray<ObJniConnector::OdpsType> &col_type_from_odps = uploader_.writer_ptr->get_schema_from_odps();
+    const ObIArray<ObOdpsJniConnector::OdpsType> &col_type_from_odps = uploader_.writer_ptr->get_schema_from_odps();
     const arrow::FieldVector &type_vec = arrow_schema_->fields();
 
     arrow::Result<std::shared_ptr<arrow::RecordBatchBuilder> > rbatchRes =

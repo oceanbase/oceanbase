@@ -346,7 +346,7 @@ int ObResolverUtils::collect_schema_version(share::schema::ObSchemaGetterGuard &
   return ret;
 }
 
-inline bool ObResolverUtils::is_collection_support_type(const ObObjType type)
+bool ObResolverUtils::is_collection_support_type(const ObObjType type)
 {
   return (type == ObTinyIntType || type == ObSmallIntType ||
           type == ObInt32Type || type == ObIntType ||

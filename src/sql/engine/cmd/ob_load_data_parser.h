@@ -89,7 +89,7 @@ struct ObODPSGeneralFormat {
     "COLLECT_STATISTICS_ON_CREATE",
     "REGION",
     "API_MODE",
-    "SPLIT_MODE"
+    "SPLIT"
   };
   common::ObString access_type_;
   common::ObString access_id_;

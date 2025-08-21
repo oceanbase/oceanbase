@@ -30,6 +30,134 @@ int ObODPSTableRowIterator::OdpsPartition::reset()
   return ret;
 }
 
+ObODPSTableRowIterator::OdpsColumn::OdpsColumn(): this_type_info_(&type_info_) {
+  int ret = OB_SUCCESS;
+  is_child_ = false;
+}
+
+
+ObODPSTableRowIterator::OdpsColumn::OdpsColumn(const std::string name, const apsara::odps::sdk::ODPSColumnTypeInfo& type_info) :
+name_(name),
+type_info_(type_info),
+this_type_info_(&type_info_)
+{
+  int ret = OB_SUCCESS;
+  is_child_ = false;
+}
+
+ObODPSTableRowIterator::OdpsColumn::OdpsColumn(const ObODPSTableRowIterator::OdpsColumn& other) {
+  int ret = OB_SUCCESS;
+  name_ = other.name_;
+  type_info_ = other.type_info_;
+  this_type_info_ = &type_info_;
+  is_child_ = other.is_child_;
+}
+
+ObODPSTableRowIterator::OdpsColumn ObODPSTableRowIterator::OdpsColumn::operator=(const ObODPSTableRowIterator::OdpsColumn& other) {
+  name_ = other.name_;
+  type_info_ = other.type_info_;
+  this_type_info_ = &type_info_;
+  int ret = OB_SUCCESS;
+  is_child_ = other.is_child_;
+  return *this;
+}
+const ObODPSTableRowIterator::OdpsColumn ObODPSTableRowIterator::OdpsColumn::get_child_column(int32_t index) const {
+  // copy construct for sub
+  if (index < 0 || index >= this_type_info_->mSubTypes.size()) {
+    return OdpsColumn();
+  } else {
+    int ret = OB_SUCCESS;
+    LOG_WARN("get child column", K(index), K(this_type_info_->mSubTypes.at(index).mType));
+    return OdpsColumn(&this_type_info_->mSubTypes.at(index));
+  }
+}
+
+ObOdpsJniConnector::OdpsType ObODPSTableRowIterator::OdpsColumn::get_odps_type() const {
+  ObOdpsJniConnector::OdpsType odps_type = ObOdpsJniConnector::OdpsType::UNKNOWN;
+  if (OB_ISNULL(this_type_info_)) {
+    int ret = OB_SUCCESS;
+    LOG_WARN("this_type_info_ is null", K(this_type_info_));
+  } else {
+    int ret = OB_SUCCESS;
+    LOG_WARN("this_type_info_ is not null", K(this_type_info_->mType), K(type_info_.mType), K(this_type_info_), K(&type_info_));
+    switch (this_type_info_->mType) {
+      case apsara::odps::sdk::ODPSColumnType::ODPS_BIGINT:
+        odps_type = ObOdpsJniConnector::OdpsType::BIGINT;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_DOUBLE:
+        odps_type = ObOdpsJniConnector::OdpsType::DOUBLE;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_BOOLEAN:
+        odps_type = ObOdpsJniConnector::OdpsType::BOOLEAN;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_DATETIME:
+        odps_type = ObOdpsJniConnector::OdpsType::DATETIME;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_STRING:
+        odps_type = ObOdpsJniConnector::OdpsType::STRING;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_DECIMAL:
+        odps_type = ObOdpsJniConnector::OdpsType::DECIMAL;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_TINYINT:
+        odps_type = ObOdpsJniConnector::OdpsType::TINYINT;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_SMALLINT:
+        odps_type = ObOdpsJniConnector::OdpsType::SMALLINT;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_INTEGER:
+        odps_type = ObOdpsJniConnector::OdpsType::INT;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_CHAR:
+        odps_type = ObOdpsJniConnector::OdpsType::CHAR;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_VARCHAR:
+        odps_type = ObOdpsJniConnector::OdpsType::VARCHAR;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_BINARY:
+        odps_type = ObOdpsJniConnector::OdpsType::BINARY;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_DATE:
+        odps_type = ObOdpsJniConnector::OdpsType::DATE;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_TIMESTAMP:
+        odps_type = ObOdpsJniConnector::OdpsType::TIMESTAMP;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_FLOAT:
+        odps_type = ObOdpsJniConnector::OdpsType::FLOAT;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_MAP:
+        odps_type = ObOdpsJniConnector::OdpsType::MAP;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_ARRAY:
+        odps_type = ObOdpsJniConnector::OdpsType::ARRAY;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_INTERVAL_DAY_TIME:
+        odps_type = ObOdpsJniConnector::OdpsType::INTERVAL_DAY_TIME;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_INTERVAL_YEAR_MONTH:
+        odps_type = ObOdpsJniConnector::OdpsType::INTERVAL_YEAR_MONTH;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_STRUCT:
+        odps_type = ObOdpsJniConnector::OdpsType::STRUCT;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_JSON:
+        odps_type = ObOdpsJniConnector::OdpsType::JSON;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_TIMESTAMP_NTZ:
+        odps_type = ObOdpsJniConnector::OdpsType::TIMESTAMP_NTZ;
+        break;
+      case apsara::odps::sdk::ODPSColumnType::ODPS_UNKNOWN:
+        odps_type = ObOdpsJniConnector::OdpsType::UNKNOWN;
+        break;
+      default:
+        odps_type = ObOdpsJniConnector::OdpsType::UNKNOWN;
+        break;
+    }
+  }
+  return odps_type;
+}
+
 int ObODPSTableRowIterator::init_tunnel(const sql::ObODPSGeneralFormat &odps_format, bool need_decrypt)
 {
   int ret = OB_SUCCESS;
@@ -96,6 +224,9 @@ int ObODPSTableRowIterator::init_tunnel(const sql::ObODPSGeneralFormat &odps_for
       } else if (OB_ISNULL((odps_->GetTables()).get())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexcepted null ptr", K(ret));
+      } else if (OB_ISNULL(odps_format_.project_.ptr()) || OB_ISNULL(odps_format_.table_.ptr())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(odps_format_.project_), K(odps_format_.schema_), K(odps_format_.table_));
       } else if (OB_ISNULL((table_handle_ = odps_->GetTables()->Get(std::string(odps_format_.project_.ptr(), odps_format_.project_.length()), // do not need try catch
                                                           std::string(odps_format_.schema_.ptr(), odps_format_.schema_.length()),
                                                           std::string(odps_format_.table_.ptr(), odps_format_.table_.length()))).get())) {
@@ -889,7 +1020,6 @@ int ObODPSTableRowIterator::pull_all_columns() {
         LOG_WARN("unexcepted null ptr", K(ret));
       } else {
         for (uint32_t i = 0; OB_SUCC(ret) && i < schema_handle->GetColumnCount(); i++) {
-          std::string name_ = schema_handle->GetTableColumn(i).GetName();
           if (OB_FAIL(column_list_.push_back(ObODPSTableRowIterator::OdpsColumn(schema_handle->GetTableColumn(i).GetName(),
                                                         schema_handle->GetTableColumn(i).GetTypeInfo())))) {
             LOG_WARN("failed to push back column_list_", K(ret));

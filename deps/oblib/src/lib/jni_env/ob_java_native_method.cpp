@@ -19,7 +19,7 @@
 namespace oceanbase
 {
 
-namespace sql
+namespace common
 {
 
 jlong JavaNativeMethods::memory_malloc(JNIEnv *env, jclass clazz, jlong bytes) {

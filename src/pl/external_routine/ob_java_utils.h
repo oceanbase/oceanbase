@@ -14,8 +14,8 @@
 #define OCEANBASE_SRC_PL_EXTERNAL_ROUTINE_OB_JAVA_UTILS_H_
 
 #include "object/ob_object.h"
-#include "sql/engine/connector/ob_java_env.h"
-#include "sql/engine/connector/ob_jni_connector.h"
+#include "lib/jni_env/ob_java_env.h"
+#include "lib/jni_env/ob_jni_connector.h"
 
 namespace oceanbase
 {

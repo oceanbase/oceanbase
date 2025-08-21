@@ -17,19 +17,17 @@
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
 
+#include "ob_odps_jni_reader.h"
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_log_module.h"
-
-#include "ob_java_env.h"
-#include "ob_java_helper.h"
-#include "ob_jni_scanner.h"
+#include "lib/jni_env/ob_java_env.h"
 #include "share/config/ob_server_config.h"
 
 namespace oceanbase {
 
 namespace sql {
-JniScanner::JniScanner(ObString factory_class, ObString scanner_type, const bool is_schema_scanner)
+ObOdpsJniReader::ObOdpsJniReader(ObString factory_class, ObString scanner_type, const bool is_schema_scanner)
     : total_read_rows_(0),
       remain_total_rows_(0),
       start_offset_(0),
@@ -48,20 +46,18 @@ JniScanner::JniScanner(ObString factory_class, ObString scanner_type, const bool
   int ret = OB_SUCCESS;
 
   if (0 == GCONF._ob_java_odps_data_transfer_mode.case_compare("arrowTable")) {
-    transfer_mode_ = JniScanner::TransferMode::ARROW_TABLE;
-    split_mode_ = JniScanner::SplitMode::RETURN_ODPS_BATCH;
+    transfer_mode_ = ObOdpsJniReader::TransferMode::ARROW_TABLE;
+    split_mode_ = ObOdpsJniReader::SplitMode::RETURN_ODPS_BATCH;
   } else {
-    transfer_mode_ = JniScanner::TransferMode::OFF_HEAP_TABLE;
-    split_mode_ = JniScanner::SplitMode::RETURN_OB_BATCH;
+    transfer_mode_ = ObOdpsJniReader::TransferMode::OFF_HEAP_TABLE;
+    split_mode_ = ObOdpsJniReader::SplitMode::RETURN_OB_BATCH;
   }
 }
 
-int JniScanner::do_init(common::hash::ObHashMap<ObString, ObString> &params) {
+int ObOdpsJniReader::do_init(common::hash::ObHashMap<ObString, ObString> &params) {
   int ret = OB_SUCCESS;
   if (inited_) {
     LOG_INFO("jni scanner is already inited, skip to re-init", K(ret));
-  } else if (OB_FAIL(detect_java_runtime())) {
-    LOG_WARN("failed to detect java runtime", K(ret));
   } else if (params.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("failed to use empty params for initializing jni scanner", K(ret));
@@ -102,46 +98,6 @@ int JniScanner::do_init(common::hash::ObHashMap<ObString, ObString> &params) {
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(skipped_required_params_.create(MAX_PARAMS_SET_SIZE))) {
-      LOG_WARN("failed to create scanner skipped required params set", K(ret));
-    } else if (false == skipped_required_params_.created()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("skipped lrequiredog params set is not created", K(ret));
-    } else {
-      if (OB_FAIL(skipped_required_params_.set_refactored(
-              ObString::make_string("access_id")))) {
-        LOG_WARN("failed to add access id to required set", K(ret));
-      } else if (OB_FAIL(skipped_required_params_.set_refactored(
-                     ObString::make_string("access_key")))) {
-        LOG_WARN("failed to add access key to required set", K(ret));
-      } else if (OB_FAIL(skipped_required_params_.set_refactored(
-                     ObString::make_string("region")))) {
-        LOG_WARN("failed to add region to required set", K(ret));
-      } else if (OB_FAIL(skipped_required_params_.set_refactored(
-                     ObString::make_string("project")))) {
-        LOG_WARN("failed to add project to required set", K(ret));
-      } else if (OB_FAIL(skipped_required_params_.set_refactored(
-                     ObString::make_string("table_name")))) {
-        LOG_WARN("failed to add project to required set", K(ret));
-      } else if (OB_FAIL(skipped_required_params_.set_refactored(
-                     ObString::make_string("odps_url")))) {
-        LOG_WARN("failed to add odps_url to required set", K(ret));
-      } else if (OB_FAIL(skipped_required_params_.set_refactored(
-                     ObString::make_string("tunnel_url")))) {
-        LOG_WARN("failed to add tunnel_url to required set", K(ret));
-      } else if (OB_FAIL(skipped_required_params_.set_refactored(
-                     ObString::make_string("public_access")))) {
-        LOG_WARN("failed to add public_access to required set", K(ret));
-      } else if (OB_FAIL(skipped_required_params_.set_refactored(
-                     ObString::make_string("use_epoch_offset")))) {
-        LOG_WARN("failed to add use_epoch_offset to required set", K(ret));
-      } else {
-        // do nothing
-      }
-    }
-  }
-
   if (OB_SUCC(ret) && !inited_) {
     inited_ = true;
   }
@@ -150,7 +106,7 @@ int JniScanner::do_init(common::hash::ObHashMap<ObString, ObString> &params) {
 }
 
 
-int JniScanner::init_jni_method_(JNIEnv *env) {
+int ObOdpsJniReader::init_jni_method_(JNIEnv *env) {
   int ret = OB_SUCCESS;
   // init jmethod
   jni_scanner_open_ = env->GetMethodID(jni_scanner_cls_, "open", "()V");
@@ -192,17 +148,6 @@ int JniScanner::init_jni_method_(JNIEnv *env) {
   } else { /* do nothing */
   }
 
-  // if (OB_SUCC(ret)) {
-  //   jni_scanner_release_column_ = env->GetMethodID(
-  //       jni_scanner_cls_, "releaseOffHeapColumnVector", "(I)V");
-  //   if (OB_FAIL(check_jni_exception_(env))) {
-  //     ret = OB_INVALID_ERROR;
-  //     LOG_WARN("failed to get `releaseOffHeapColumnVector` jni method", K(ret));
-  //   } else { /* do nothing */
-  //   }
-  // } else { /* do nothing */
-  // }
-
   if (OB_SUCC(ret)) {
     jni_scanner_release_table_ =
         env->GetMethodID(jni_scanner_cls_, "releaseOffHeapTable", "()V");
@@ -215,7 +160,7 @@ int JniScanner::init_jni_method_(JNIEnv *env) {
   return ret;
 }
 
-int JniScanner::init_jni_table_scanner_(JNIEnv *env) {
+int ObOdpsJniReader::init_jni_table_scanner_(JNIEnv *env) {
   int ret = OB_SUCCESS;
   jclass scanner_factory_class =
       env->FindClass(jni_scanner_factory_class_.ptr());
@@ -354,13 +299,13 @@ int JniScanner::init_jni_table_scanner_(JNIEnv *env) {
   return ret;
 }
 
-int JniScanner::do_open() {
+int ObOdpsJniReader::do_open() {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
   if (is_opened_) {
     LOG_INFO("jni scanner is already opened, skip to re-open", K(ret));
   } else {
-    if (OB_FAIL(get_jni_env(env))) {
+    if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
       LOG_WARN("failed to get jni env", K(ret));
     } else if (nullptr == env) {
       ret = OB_INVALID_ARGUMENT;
@@ -399,7 +344,7 @@ int JniScanner::do_open() {
   return ret;
 }
 
-int JniScanner::do_close() {
+int ObOdpsJniReader::do_close() {
   int ret = OB_SUCCESS;
   if (!is_inited()) {
     LOG_WARN("jni scanner is not inited, skip to close", K(ret));
@@ -407,11 +352,10 @@ int JniScanner::do_close() {
     LOG_WARN("jni_scanner is not opened, but inited", K(ret));
     scanner_params_.reuse();
     skipped_log_params_.reuse();
-    skipped_required_params_.reuse();
     inited_ = false;
   } else {
     JNIEnv *env = nullptr;
-    if (OB_FAIL(get_jni_env(env))) {
+    if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
       LOG_WARN("failed to get jni env", K(ret));
     } else if (nullptr == env) {
       ret = OB_JNI_ENV_ERROR;
@@ -463,7 +407,6 @@ int JniScanner::do_close() {
     if (OB_SUCC(ret)) {
       scanner_params_.reuse();
       skipped_log_params_.reuse();
-      skipped_required_params_.reuse();
       inited_ = false;
       is_opened_ = false;
       is_schema_scanner_ = false;
@@ -474,15 +417,15 @@ int JniScanner::do_close() {
   return ret;
 }
 
-int JniScanner::do_get_next_split_by_ob(int64_t *read_rows, bool *eof, int capacity) {
+int ObOdpsJniReader::do_get_next_split_by_ob(int64_t *read_rows, bool *eof, int capacity) {
   // Call com.oceanbase.jni.connector.ConnectorScanner#getNextOffHeapChunk
   // return the address of meta information
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
-  if (transfer_mode_ == JniScanner::ARROW_TABLE) {
+  if (transfer_mode_ == ObOdpsJniReader::ARROW_TABLE) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("arrow table do not support get next split in ob batchsize", K(ret));
-  } else if (OB_FAIL(get_jni_env(env))) {
+  } else if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (OB_ISNULL(env)) {
     ret = OB_JNI_ENV_ERROR;
@@ -533,16 +476,16 @@ int JniScanner::do_get_next_split_by_ob(int64_t *read_rows, bool *eof, int capac
   return ret;
 }
 
-int JniScanner::do_get_next_split_by_odps(int64_t *read_rows, bool *eof, int capacity)
+int ObOdpsJniReader::do_get_next_split_by_odps(int64_t *read_rows, bool *eof, int capacity)
 {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
-  if (transfer_mode_ == JniScanner::OFF_HEAP_TABLE) {
+  if (transfer_mode_ == ObOdpsJniReader::OFF_HEAP_TABLE) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("arrow table do not support get next split in ob batchsize", K(ret));
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(get_jni_env(env))) {
+  } else if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (OB_ISNULL(env)) {
     ret = OB_JNI_ENV_ERROR;
@@ -635,34 +578,9 @@ int JniScanner::do_get_next_split_by_odps(int64_t *read_rows, bool *eof, int cap
   return ret;
 }
 
-// int JniScanner::release_column(int32_t column_index) {
-//   int ret = OB_SUCCESS;
-//   JNIEnv *env = nullptr;
-//   if (OB_FAIL(get_jni_env(env))) {
-//     LOG_WARN("failed to get jni env", K(ret));
-//   } else if (nullptr == env) {
-//     ret = OB_INVALID_ARGUMENT;
-//     LOG_WARN("failed to init jni env", K(ret));
-//   } else if (OB_ISNULL(jni_scanner_obj_)) {
-//     ret = OB_INVALID_ARGUMENT;
-//     LOG_WARN("scanner object is null", K(ret));
-//   } else if (OB_ISNULL(jni_scanner_release_column_)) {
-//     ret = OB_JNI_METHOD_NOT_FOUND_ERROR;
-//     LOG_WARN("failed to find method to release column", K(ret));
-//   } else {
-//     // Column is not released when fill_column_ failed. It will be released
-//     // when releasing table.
-//     env->CallVoidMethod(jni_scanner_obj_, jni_scanner_release_column_, column_index);
-//     if (OB_FAIL(check_jni_exception_(env))) {
-//       LOG_WARN("check jni with exception", K(ret));
-//     }
-//   }
-//   return ret;
-// }
-
-int JniScanner::release_slice() {
+int ObOdpsJniReader::release_slice() {
   int ret = OB_SUCCESS;
-  if (transfer_mode_ == JniScanner::ARROW_TABLE) {
+  if (transfer_mode_ == ObOdpsJniReader::ARROW_TABLE) {
     if (nullptr != cur_arrow_batch_) {
       cur_arrow_batch_.reset();
       cur_arrow_batch_ = nullptr;
@@ -676,10 +594,10 @@ int JniScanner::release_slice() {
   }
   return ret;
 }
-int JniScanner::release_table(const int64_t num_rows) {
+int ObOdpsJniReader::release_table(const int64_t num_rows) {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_INVALID_ARGUMENT;
@@ -716,41 +634,13 @@ int JniScanner::release_table(const int64_t num_rows) {
   return ret;
 }
 
-int JniScanner::add_extra_optional_params(
-    common::hash::ObHashMap<ObString, ObString> &extra_params) {
-  int ret = OB_SUCCESS;
-  if (extra_params.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("empty extra params for initializing jni scanner", K(ret));
-  } else if (!scanner_params_.created()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("scanner params should be initialized before", K(ret));
-  } else {
-    common::hash::ObHashMap<ObString, ObString>::iterator params_iter;
-    for (params_iter = extra_params.begin();
-         OB_SUCC(ret) && params_iter != extra_params.end(); params_iter++) {
-
-      if (OB_HASH_EXIST ==
-          skipped_required_params_.exist_refactored(params_iter->first)) {
-        // do noting
-      } else if (OB_FAIL(scanner_params_.set_refactored(
-                     params_iter->first, params_iter->second, 1))) {
-        // init scanner params
-        LOG_WARN("failed to add extra scanner params", K(ret),
-                 K(params_iter->first), K(params_iter->second));
-      } else { /* do nothing */}
-    }
-  }
-  return ret;
-}
-
 // --------------- public method for odps ---------------
-int JniScanner::get_odps_partition_specs(
-    ObIAllocator &allocator, ObSEArray<ObString, 8> &partition_specs) {
+int ObOdpsJniReader::get_odps_partition_specs(
+    ObIAllocator &allocator, ObSEArray<ObString, 4> &partition_specs) {
   int ret = OB_SUCCESS;
   partition_specs.reset();
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_JNI_ENV_ERROR;
@@ -815,12 +705,12 @@ int JniScanner::get_odps_partition_specs(
   return ret;
 }
 
-int JniScanner::get_odps_partition_phy_specs(
-    ObIAllocator &allocator, ObSEArray<ObString, 8> &partition_specs) {
+int ObOdpsJniReader::get_odps_partition_phy_specs(
+    ObIAllocator &allocator, ObSEArray<ObString, 4> &partition_specs) {
   int ret = OB_SUCCESS;
   partition_specs.reset();
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_JNI_ENV_ERROR;
@@ -885,10 +775,10 @@ int JniScanner::get_odps_partition_phy_specs(
   return ret;
 }
 
-int JniScanner::get_file_total_row_count(int64_t& count) {
+int ObOdpsJniReader::get_file_total_row_count(int64_t& count) {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_INVALID_ARGUMENT;
@@ -917,10 +807,10 @@ int JniScanner::get_file_total_row_count(int64_t& count) {
   return ret;
 }
 
-int JniScanner::get_file_total_size(int64_t& size) {
+int ObOdpsJniReader::get_file_total_size(int64_t& size) {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_INVALID_ARGUMENT;
@@ -949,10 +839,10 @@ int JniScanner::get_file_total_size(int64_t& size) {
   return ret;
 }
 
-int JniScanner::get_split_count(int64_t& size) {
+int ObOdpsJniReader::get_split_count(int64_t& size) {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_INVALID_ARGUMENT;
@@ -982,10 +872,10 @@ int JniScanner::get_split_count(int64_t& size) {
 }
 
 
-int JniScanner::get_session_id(ObIAllocator& alloc, ObString& id) {
+int ObOdpsJniReader::get_session_id(ObIAllocator& alloc, ObString& id) {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_INVALID_ARGUMENT;
@@ -1021,10 +911,10 @@ int JniScanner::get_session_id(ObIAllocator& alloc, ObString& id) {
   return ret;
 }
 
-int JniScanner::get_serilize_session(ObIAllocator& alloc, ObString& sstr) {
+int ObOdpsJniReader::get_serilize_session(ObIAllocator& alloc, ObString& sstr) {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_INVALID_ARGUMENT;
@@ -1060,10 +950,10 @@ int JniScanner::get_serilize_session(ObIAllocator& alloc, ObString& sstr) {
   return ret;
 }
 
-int JniScanner::get_project_timezone_info(ObIAllocator& alloc, ObString& sstr) {
+int ObOdpsJniReader::get_project_timezone_info(ObIAllocator& alloc, ObString& sstr) {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_INVALID_ARGUMENT;
@@ -1104,11 +994,11 @@ int JniScanner::get_project_timezone_info(ObIAllocator& alloc, ObString& sstr) {
   return ret;
 }
 
-int JniScanner::get_odps_partition_row_count(
+int ObOdpsJniReader::get_odps_partition_row_count(
     ObIAllocator &allocator, const ObString &partition_spec, int64_t &row_count) {
   int ret = OB_SUCCESS;
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_JNI_ENV_ERROR;
@@ -1169,13 +1059,13 @@ int JniScanner::get_odps_partition_row_count(
 }
 
 // "getMirrorPartitionColumns" "getMirrorDataColumns"
-int JniScanner::get_odps_mirror_data_columns(ObIAllocator &allocator,
-                                        ObSEArray<ObString, 8> &mirror_colums,
+int ObOdpsJniReader::get_odps_mirror_data_columns(ObIAllocator &allocator,
+                                        ObSEArray<ObString, 4> &mirror_colums,
                                         const ObString& mode) {
   int ret = OB_SUCCESS;
   mirror_colums.reset();
   JNIEnv *env = nullptr;
-  if (OB_FAIL(get_jni_env(env))) {
+  if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
     LOG_WARN("failed to get jni env", K(ret));
   } else if (nullptr == env) {
     ret = OB_JNI_ENV_ERROR;
@@ -1241,7 +1131,7 @@ int JniScanner::get_odps_mirror_data_columns(ObIAllocator &allocator,
   return ret;
 }
 
-int JniScanner::add_extra_optional_part_spec(const ObString &partition_spec) {
+int ObOdpsJniReader::add_extra_optional_part_spec(const ObString &partition_spec) {
   int ret = OB_SUCCESS;
   if (!scanner_params_.created()) {
     ret = OB_INVALID_ARGUMENT;
@@ -1269,8 +1159,7 @@ JNIScannerPtr create_odps_jni_scanner(const bool is_schema_scanner) {
   const char *scanner_factory_class =
       "com/oceanbase/external/odps/utils/OdpsTunnelConnectorFactory";
   ObString scanner_type;
-  return std::shared_ptr<JniScanner>(
-      new JniScanner(scanner_factory_class, scanner_type, is_schema_scanner));
+  return std::make_shared<ObOdpsJniReader>(scanner_factory_class, scanner_type, is_schema_scanner);
 }
 
 } // namespace sql

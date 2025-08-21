@@ -291,6 +291,10 @@ ob_set_subtarget(oblib_lib common_mixed
   locale/ob_locale_type.cc
   locale/ob_locale.cpp
   enumset/ob_enum_set_meta.cpp
+  jni_env/ob_java_helper.cpp
+  jni_env/ob_java_env.cpp
+  jni_env/ob_java_native_method.cpp
+  jni_env/ob_jni_connector.cpp
   other/recursion.cpp
 )
 

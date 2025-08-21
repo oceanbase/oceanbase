@@ -19,7 +19,7 @@
 #include "lib/string/ob_sql_string.h"
 #include "share/config/ob_server_config.h"
 
-#include "ob_java_helper.h"
+#include "lib/jni_env/ob_java_helper.h"
 #include "ob_jar_version_def.h"
 #include "share/ob_errno.h"
 
@@ -58,8 +58,7 @@ HdfsBuilderSetKerbTicketCachePathFunc obHdfsBuilderSetKerbTicketCachePath = NULL
 namespace oceanbase
 {
 
-using namespace common;
-namespace sql
+namespace common
 {
 
 thread_local JNIEnv* JVMFunctionHelper::jni_env_ = nullptr;

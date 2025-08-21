@@ -167,7 +167,7 @@ public:
   static int resolve_sparse_vector_type_info(const ParseNode &type_node,
                                       ObStringBuffer &buf,
                                       uint8_t &depth);
-  inline static bool is_collection_support_type(const ObObjType type);
+  static bool is_collection_support_type(const ObObjType type);
   // type_infos is %ori_cs_type, need convert to %cs_type first
   static int check_extended_type_info(common::ObIAllocator &alloc,
                                       ObIArray<ObString> &type_infos,

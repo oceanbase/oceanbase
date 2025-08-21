@@ -14,13 +14,13 @@
 #define OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JNI_WRITER_H_
 
 #include <memory>
-#include <jni.h>
 
 #include "sql/engine/expr/ob_expr.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/lock/ob_mutex.h"
-#include "sql/engine/connector/ob_jni_connector.h"
+#include "lib/jni_env/ob_jni_connector.h"
+#include "ob_odps_jni_connector.h"
 
 namespace oceanbase {
 namespace common {
@@ -28,17 +28,17 @@ class ObSqlString;
 }
 
 namespace sql {
-class JniWriter;
-typedef std::shared_ptr<JniWriter> JNIWriterPtr;
+class ObOdpsJniWriter;
+typedef std::shared_ptr<ObOdpsJniWriter> JNIWriterPtr;
 typedef lib::ObLockGuard<lib::ObMutex> LockGuard;
 
-class JniWriter: public ObJniConnector {
+class ObOdpsJniWriter: public ObOdpsJniConnector {
 public:
-  JniWriter(ObString factory_class, int64_t batch_size = DEFAULT_BATCH_SIZE)
+  ObOdpsJniWriter(ObString factory_class, int64_t batch_size = DEFAULT_BATCH_SIZE)
       : params_created_(false), is_opened_(false), jni_writer_factory_class_(factory_class)
   {}
 
-  virtual ~JniWriter() = default;
+  virtual ~ObOdpsJniWriter() = default;
   int init_params(const common::hash::ObHashMap<ObString, ObString> &params);
 
   int do_open();
@@ -90,7 +90,7 @@ private:
   common::ObSEArray<OdpsType, 32> column_types_;
 
 
-  DISALLOW_COPY_AND_ASSIGN(JniWriter);
+  DISALLOW_COPY_AND_ASSIGN(ObOdpsJniWriter);
 };
 
 JNIWriterPtr create_odps_jni_writer();

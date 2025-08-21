@@ -15,6 +15,7 @@
 
 #include "share/catalog/ob_catalog_properties.h"
 #include "share/catalog/ob_external_catalog.h"
+#include "sql/engine/connector/ob_odps_catalog_jni_agent.h"
 
 namespace oceanbase
 {
@@ -48,10 +49,15 @@ private:
   int convert_odps_format_to_str_properties_(const ObODPSGeneralFormat &odps_format, ObString &str);
 
   common::ObIAllocator &allocator_;
+  ObODPSCatalogProperties properties_;
+#ifdef OB_BUILD_CPP_ODPS
   apsara::odps::sdk::Configuration conf_;
   apsara::odps::sdk::IODPSPtr odps_;
   apsara::odps::sdk::IODPSTablesPtr tables_;
-  ObODPSCatalogProperties properties_;
+#endif
+#ifdef OB_BUILD_JNI_ODPS
+  JNICatalogPtr jni_catalog_ptr_;
+#endif
 };
 
 } // namespace share

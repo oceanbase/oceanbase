@@ -17,8 +17,8 @@
 #include "lib/allocator/page_arena.h"
 #include "sql/ob_spi.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/connector/ob_java_env.h"
-#include "sql/engine/connector/ob_jni_connector.h"
+#include "lib/jni_env/ob_java_env.h"
+#include "lib/jni_env/ob_jni_connector.h"
 
 namespace oceanbase
 {
@@ -33,14 +33,8 @@ int ObJavaUDFExecutor::init()
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(lbt()));
-  } else {
-    sql::ObJavaEnv &java_env = sql::ObJavaEnv::getInstance();
-    // This entry is first time to setup java env
-    if (!java_env.is_env_inited()) {
-      if (OB_FAIL(java_env.setup_java_env())) {
-        LOG_WARN("failed to setup java env", K(ret));
-      }
-    }
+  } else if (OB_FAIL(ObJniConnector::java_env_init())) {
+    LOG_WARN("failed to init java env", K(ret));
   }
 
   return ret;
@@ -123,7 +117,7 @@ int ObJavaUDFExecutor::execute(int64_t batch_size,
   if (OB_SUCC(ret)) {
     JNIEnv *env = nullptr;
 
-    if (OB_FAIL(sql::ObJniConnector::get_jni_env(env))) {
+    if (OB_FAIL(ObJniConnector::get_jni_env(env))) {
       LOG_WARN("failed to get_jni_env", K(ret));
     } else {
       jclass executor_clazz = nullptr;

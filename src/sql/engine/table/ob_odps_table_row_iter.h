@@ -23,6 +23,7 @@
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "lib/lock/ob_thread_cond.h"
 #include "sql/engine/table/ob_odps_table_utils.h"
+#include "sql/engine/connector/ob_odps_jni_connector.h"
 
 namespace oceanbase {
 namespace sql {
@@ -30,7 +31,6 @@ namespace sql {
 class ObODPSTableRowIterator : public ObExternalTableRowIterator {
 public:
   static const int64_t READER_HASH_MAP_BUCKET_NUM = 1 << 7;
-  static const int64_t ODPS_BLOCK_DOWNLOAD_SIZE = 1 << 18;
 public:
   struct StateValues {
     StateValues() :
@@ -91,15 +91,50 @@ public:
   };
 
   struct OdpsColumn {
-    OdpsColumn() {}
-    OdpsColumn(std::string name, apsara::odps::sdk::ODPSColumnTypeInfo type_info) :
-      name_(name),
-      type_info_(type_info)
-    {
-    }
     std::string name_;
     apsara::odps::sdk::ODPSColumnTypeInfo type_info_;
+    const apsara::odps::sdk::ODPSColumnTypeInfo* this_type_info_;
+    bool is_child_; // 指向父级type_info的指针
+    OdpsColumn();
+    OdpsColumn(const std::string name, const apsara::odps::sdk::ODPSColumnTypeInfo& type_info);
+    // shallow copy of name_ the variable cannot live longer than the object
+    OdpsColumn operator=(const OdpsColumn& other);
+    OdpsColumn(const OdpsColumn& other);
+
+    const ObString get_name() const {
+      return ObString(name_.c_str());
+    }
+
+    bool is_child() const { return is_child_; }
+
+
+    int32_t get_precision() const {
+      return this_type_info_->mPrecision;
+    }
+
+    int32_t get_scale() const {
+      return this_type_info_->mScale;
+    }
+
+    int32_t get_length() const {
+      return this_type_info_->mSpecifiedLength;
+    }
+
+    int32_t get_child_columns_size() const {
+      return this_type_info_->mSubTypes.size();
+    }
+    const OdpsColumn get_child_column(int32_t index) const;
+    ObOdpsJniConnector::OdpsType get_odps_type() const;
+
     TO_STRING_KV(K(ObString(name_.c_str())), K(type_info_.mType), K(type_info_.mPrecision), K(type_info_.mScale), K(type_info_.mSpecifiedLength));
+  private:
+    OdpsColumn(const apsara::odps::sdk::ODPSColumnTypeInfo* type_info) :
+      this_type_info_(type_info)
+    {
+      name_ = "";
+      is_child_ = true;
+    }
+
   };
 public:
   ObODPSTableRowIterator() :

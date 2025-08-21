@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include <thread>
-#include "sql/engine/connector/ob_java_env.h"
+#include "lib/jni_env/ob_java_env.h"
 #include "plugin/sys/ob_plugin_helper.h"
 #include "plugin/external_table/ob_external_java_plugin.h"
 #include "plugin/external_table/ob_external_jni_utils.h"
