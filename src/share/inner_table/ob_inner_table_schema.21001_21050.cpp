@@ -570,7 +570,7 @@ int ObInnerTableSchema::v_session_wait_history_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT      SID,     CON_ID,     SVR_IP,     SVR_PORT,     `SEQ#`,     `EVENT#`,     EVENT,     P1TEXT,     P1,     P2TEXT,     P2,     P3TEXT,     P3,     WAIT_TIME,     WAIT_TIME_MICRO,     TIME_SINCE_LAST_WAIT_MICRO FROM OCEANBASE.GV$SESSION_WAIT_HISTORY                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     SID,     CON_ID,     SVR_IP,     SVR_PORT,     `SEQ#`,     `EVENT#`,     EVENT,     P1TEXT,     P1,     P2TEXT,     P2,     P3TEXT,     P3,     WAIT_TIME,     WAIT_TIME_MICRO,     TIME_SINCE_LAST_WAIT_MICRO FROM OCEANBASE.GV$SESSION_WAIT_HISTORY                      WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

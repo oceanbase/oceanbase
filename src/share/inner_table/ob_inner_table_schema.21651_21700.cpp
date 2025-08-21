@@ -570,7 +570,7 @@ int ObInnerTableSchema::dba_ob_sensitive_rules_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SR.sensitive_rule_name as RULE_NAME,     CASE WHEN SR.protection_policy = 1 THEN 'NONE'           WHEN SR.protection_policy = 2 THEN 'ENCRYPTION'           WHEN SR.protection_policy = 3 THEN 'MASKING'          ELSE NULL           END as PROTECTION_POLICY,     SR.method as METHOD,     CASE WHEN SR.enabled = 1 THEN 'YES' ELSE 'NO' END as ENABLED   FROM oceanbase.__all_sensitive_rule SR   ORDER BY SR.sensitive_rule_id; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SR.sensitive_rule_name as RULE_NAME,     CASE WHEN SR.protection_policy = 1 THEN 'NONE'          WHEN SR.protection_policy = 2 THEN 'ENCRYPTION'          WHEN SR.protection_policy = 3 THEN 'MASKING'          ELSE NULL          END as PROTECTION_POLICY,     SR.method as METHOD,     CASE WHEN SR.enabled = 1 THEN 'YES' ELSE 'NO' END as ENABLED   FROM oceanbase.__all_sensitive_rule SR   ORDER BY SR.sensitive_rule_id; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -621,7 +621,7 @@ int ObInnerTableSchema::cdb_ob_sensitive_rules_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SR.TENANT_ID as TENANT_ID,     SR.sensitive_rule_name as RULE_NAME,     CASE WHEN SR.protection_policy = 1 THEN 'NONE'           WHEN SR.protection_policy = 2 THEN 'ENCRYPTION'           WHEN SR.protection_policy = 3 THEN 'MASKING'          ELSE NULL           END as PROTECTION_POLICY,     SR.method as METHOD,     CASE WHEN SR.enabled = 1 THEN 'YES' ELSE 'NO' END as ENABLED   FROM oceanbase.__all_virtual_sensitive_rule SR   ORDER BY SR.sensitive_rule_id; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SR.TENANT_ID as TENANT_ID,     SR.sensitive_rule_name as RULE_NAME,     CASE WHEN SR.protection_policy = 1 THEN 'NONE'          WHEN SR.protection_policy = 2 THEN 'ENCRYPTION'          WHEN SR.protection_policy = 3 THEN 'MASKING'          ELSE NULL          END as PROTECTION_POLICY,     SR.method as METHOD,     CASE WHEN SR.enabled = 1 THEN 'YES' ELSE 'NO' END as ENABLED   FROM oceanbase.__all_virtual_sensitive_rule SR   ORDER BY SR.sensitive_rule_id; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -672,7 +672,7 @@ int ObInnerTableSchema::dba_ob_sensitive_columns_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SR.sensitive_rule_name as RULE_NAME,     D.database_name as DATABASE_NAME,     T.table_name as TABLE_NAME,     C.column_name as COLUMN_NAME   FROM      oceanbase.__all_sensitive_column SC     JOIN oceanbase.__all_sensitive_rule SR       ON  SC.tenant_id = SR.tenant_id       AND SC.sensitive_rule_id = SR.sensitive_rule_id     JOIN oceanbase.__all_column C       ON  SC.tenant_id = C.tenant_id       AND SC.table_id  = C.table_id       AND SC.column_id = C.column_id     JOIN oceanbase.__all_table T       ON  SC.tenant_id = T.tenant_id       AND C.table_id = T.table_id     JOIN oceanbase.__all_database D       ON  SC.tenant_id = D.tenant_id       AND T.database_id = D.database_id   WHERE D.in_recyclebin = 0      AND D.database_name != '__recyclebin'     AND T.table_mode >> 12 & 15 in (0,1)   ORDER BY SR.sensitive_rule_id, D.database_id, T.table_id, C.column_id   ; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SR.sensitive_rule_name as RULE_NAME,     D.database_name as DATABASE_NAME,     T.table_name as TABLE_NAME,     C.column_name as COLUMN_NAME   FROM     oceanbase.__all_sensitive_column SC     JOIN oceanbase.__all_sensitive_rule SR       ON  SC.tenant_id = SR.tenant_id       AND SC.sensitive_rule_id = SR.sensitive_rule_id     JOIN oceanbase.__all_column C       ON  SC.tenant_id = C.tenant_id       AND SC.table_id  = C.table_id       AND SC.column_id = C.column_id     JOIN oceanbase.__all_table T       ON  SC.tenant_id = T.tenant_id       AND C.table_id = T.table_id     JOIN oceanbase.__all_database D       ON  SC.tenant_id = D.tenant_id       AND T.database_id = D.database_id   WHERE D.in_recyclebin = 0     AND D.database_name != '__recyclebin'     AND T.table_mode >> 12 & 15 in (0,1)   ORDER BY SR.sensitive_rule_id, D.database_id, T.table_id, C.column_id   ; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -723,7 +723,7 @@ int ObInnerTableSchema::cdb_ob_sensitive_columns_schema(ObTableSchema &table_sch
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SC.TENANT_ID as TENANT_ID,     SR.sensitive_rule_name as RULE_NAME,     D.database_name as DATABASE_NAME,     T.table_name as TABLE_NAME,     C.column_name as COLUMN_NAME   FROM      oceanbase.__all_virtual_sensitive_column SC     JOIN oceanbase.__all_virtual_sensitive_rule SR       ON SC.tenant_id = SR.tenant_id       AND SC.sensitive_rule_id = SR.sensitive_rule_id     JOIN oceanbase.__all_virtual_column C       ON  SC.tenant_id = C.tenant_id       AND SC.table_id  = C.table_id       AND SC.column_id = C.column_id     JOIN oceanbase.__all_virtual_table T       ON SC.tenant_id = T.tenant_id       AND C.table_id = T.table_id     JOIN oceanbase.__all_virtual_database D       ON SC.tenant_id = D.tenant_id       AND T.database_id = D.database_id   WHERE D.in_recyclebin = 0      AND D.database_name != '__recyclebin'     AND T.table_mode >> 12 & 15 in (0,1)   ORDER BY SR.sensitive_rule_id, D.database_id, T.table_id, C.column_id   ; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SC.TENANT_ID as TENANT_ID,     SR.sensitive_rule_name as RULE_NAME,     D.database_name as DATABASE_NAME,     T.table_name as TABLE_NAME,     C.column_name as COLUMN_NAME   FROM     oceanbase.__all_virtual_sensitive_column SC     JOIN oceanbase.__all_virtual_sensitive_rule SR       ON SC.tenant_id = SR.tenant_id       AND SC.sensitive_rule_id = SR.sensitive_rule_id     JOIN oceanbase.__all_virtual_column C       ON  SC.tenant_id = C.tenant_id       AND SC.table_id  = C.table_id       AND SC.column_id = C.column_id     JOIN oceanbase.__all_virtual_table T       ON SC.tenant_id = T.tenant_id       AND C.table_id = T.table_id     JOIN oceanbase.__all_virtual_database D       ON SC.tenant_id = D.tenant_id       AND T.database_id = D.database_id   WHERE D.in_recyclebin = 0     AND D.database_name != '__recyclebin'     AND T.table_mode >> 12 & 15 in (0,1)   ORDER BY SR.sensitive_rule_id, D.database_id, T.table_id, C.column_id   ; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -774,7 +774,7 @@ int ObInnerTableSchema::dba_ob_sensitive_rule_plainaccess_users_schema(ObTableSc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SR.sensitive_rule_name as RULE_NAME,     U.user_name as USER_NAME,     CASE WHEN U.type = 0 THEN 'USER'          WHEN U.type = 1 THEN 'ROLE'          ELSE NULL           END as USER_TYPE   FROM oceanbase.__all_sensitive_rule_privilege SR   JOIN oceanbase.__all_user U     ON  SR.tenant_id = U.tenant_id     AND SR.user_id = U.user_id   ORDER BY SR.sensitive_rule_name, U.user_id; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SR.sensitive_rule_name as RULE_NAME,     U.user_name as USER_NAME,     CASE WHEN U.type = 0 THEN 'USER'          WHEN U.type = 1 THEN 'ROLE'          ELSE NULL          END as USER_TYPE   FROM oceanbase.__all_sensitive_rule_privilege SR   JOIN oceanbase.__all_user U     ON  SR.tenant_id = U.tenant_id     AND SR.user_id = U.user_id   ORDER BY SR.sensitive_rule_name, U.user_id; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -825,7 +825,7 @@ int ObInnerTableSchema::cdb_ob_sensitive_rule_plainaccess_users_schema(ObTableSc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SR.TENANT_ID as TENANT_ID,     SR.sensitive_rule_name as RULE_NAME,     U.user_name as USER_NAME,     CASE WHEN U.type = 0 THEN 'USER'          WHEN U.type = 1 THEN 'ROLE'          ELSE NULL           END as USER_TYPE   FROM oceanbase.__all_virtual_sensitive_rule_privilege SR   JOIN oceanbase.__all_virtual_user U     ON  SR.tenant_id = U.tenant_id      AND SR.user_id = U.user_id   ORDER BY SR.sensitive_rule_name, U.user_id; )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     SR.TENANT_ID as TENANT_ID,     SR.sensitive_rule_name as RULE_NAME,     U.user_name as USER_NAME,     CASE WHEN U.type = 0 THEN 'USER'          WHEN U.type = 1 THEN 'ROLE'          ELSE NULL          END as USER_TYPE   FROM oceanbase.__all_virtual_sensitive_rule_privilege SR   JOIN oceanbase.__all_virtual_user U     ON  SR.tenant_id = U.tenant_id     AND SR.user_id = U.user_id   ORDER BY SR.sensitive_rule_name, U.user_id; )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
