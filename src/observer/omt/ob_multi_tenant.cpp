@@ -2931,7 +2931,7 @@ int ObMultiTenant::inc_tenant_ddl_count(const uint64_t tenant_id, const int64_t 
 int ObMultiTenant::dec_tenant_ddl_count(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  SpinWLockGuard guard(lock_);
+  SpinRLockGuard guard(lock_);
   ObTenant *tenant = NULL;
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;

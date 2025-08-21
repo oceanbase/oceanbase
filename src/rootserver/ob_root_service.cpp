@@ -3446,7 +3446,7 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
         uint64_t compat_version = 0;
         if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), compat_version))) {
           LOG_WARN("fail to get data version", KR(ret));
-        } else if (compat_version < DATA_VERSION_4_3_5_3) {
+        } else if (compat_version < DATA_VERSION_4_3_5_4) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "MySQL compatible temporary table");
           LOG_WARN("not support to create mysql tmp table", KR(ret), K(compat_version));

@@ -812,7 +812,7 @@ int ObCreateTableHelper::generate_table_schema_()
     LOG_WARN("fail to generate schema, not support semistruct encoding for this version",
              KR(ret), K(tenant_id_), K(compat_version), K(arg_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support semistruct encoding");
-  } else if (compat_version < DATA_VERSION_4_3_5_3 && arg_.schema_.is_mysql_tmp_table()) {
+  } else if (compat_version < DATA_VERSION_4_3_5_4 && arg_.schema_.is_mysql_tmp_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "MySQL compatible temporary table");
     LOG_WARN("not support to create mysql tmp table", KR(ret), K_(tenant_id), K(compat_version), K(arg_.schema_));

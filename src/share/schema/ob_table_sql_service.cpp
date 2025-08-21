@@ -4936,7 +4936,7 @@ int ObTableSqlService::insert_temp_table_info(ObISQLClient &sql_client, const Ob
                 ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
         || OB_FAIL(dml.add_pk_column("table_id", table_id))
         || OB_FAIL(dml.add_column("create_host", table_schema.get_create_host_str()))
-        || OB_FAIL(data_version >= DATA_VERSION_4_3_5_3
+        || OB_FAIL(data_version >= DATA_VERSION_4_3_5_4
                    && dml.add_column("table_session_id", table_schema.get_session_id()))) {
       LOG_WARN("fail to add dml", KR(ret));
     } else if (OB_FAIL(exec.exec_insert(OB_ALL_TEMP_TABLE_TNAME, dml, affected_rows))) {

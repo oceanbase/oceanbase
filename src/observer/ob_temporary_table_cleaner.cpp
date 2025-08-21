@@ -296,7 +296,7 @@ int ObSessionTmpTableCleaner::normal_table_clean()
     LOG_INFO("not primary tenant, temp table clean skip", K_(tenant_id));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
     LOG_WARN("get tenant data version failed", KR(ret), K_(tenant_id));
-  } else if (data_version < DATA_VERSION_4_3_5_3) {
+  } else if (data_version < DATA_VERSION_4_3_5_4) {
     // skip
   } else {
     ObArray<uint64_t> session_ids;
@@ -342,7 +342,7 @@ int ObSessionTmpTableCleaner::standalone_table_clean()
     LOG_INFO("not primary tenant, temp table clean skip", K_(tenant_id));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
     LOG_WARN("get tenant data version failed", KR(ret), K_(tenant_id));
-  } else if (data_version < DATA_VERSION_4_3_5_3) {
+  } else if (data_version < DATA_VERSION_4_3_5_4) {
     // skip
   } else {
 
