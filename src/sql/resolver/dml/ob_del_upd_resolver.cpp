@@ -232,8 +232,22 @@ int ObDelUpdResolver::resolve_assignments(const ParseNode &parse_node,
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(resolve_json_partial_update_flag(table_assigns, scope))) {
-      LOG_WARN("resolve_json_partial_update_flag fail", K(ret));
+    } else {
+      const TableItem &base_table_item = table->get_base_table_item();
+      const ObTableSchema *table_schema = NULL;
+      if (OB_ISNULL(schema_checker_) || OB_ISNULL(params_.session_info_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(schema_checker_), K(params_.session_info_),
+            K(allocator_), K(ret));
+      } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
+                                                         base_table_item.ref_id_,
+                                                         table_schema,
+                                                         base_table_item.is_link_table()))) {
+        LOG_WARN("failed to get table schema", K(ret));
+      } else if (table_schema->is_delete_insert_merge_engine()) {
+      } else if (OB_FAIL(resolve_json_partial_update_flag(table_assigns, scope))) {
+        LOG_WARN("resolve_json_partial_update_flag fail", K(ret));
+      }
     }
   }
   return ret;
