@@ -1722,7 +1722,8 @@ int ObLogPlanHint::get_aggregation_info(bool &force_use_hash,
                                         bool &force_partition_wise,
                                         bool &force_dist_hash,
                                         bool &force_pull_to_local,
-                                        bool &force_hash_local) const
+                                        bool &force_hash_local,
+                                        bool &force_pushdown_group_by) const
 {
   int ret = OB_SUCCESS;
   force_use_hash = false;
@@ -1734,6 +1735,7 @@ int ObLogPlanHint::get_aggregation_info(bool &force_use_hash,
   force_dist_hash = false;
   force_pull_to_local = false;
   force_hash_local = false;
+  force_pushdown_group_by = pushdown_group_by();
   const ObAggHint *agg_hint = static_cast<const ObAggHint*>(get_normal_hint(T_USE_HASH_AGGREGATE));
   const ObPQHint *pq_hint = static_cast<const ObPQHint*>(get_normal_hint(T_PQ_GBY_HINT));
   const bool enable_pq_hint = COMPAT_VERSION_4_3_3 <= optimizer_features_enable_version_

@@ -5610,7 +5610,8 @@ int ObLogPlan::inner_candi_allocate_scala_group_by(const ObIArray<ObAggFunRawExp
 int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
                                               GroupingOpHelper &groupby_helper,
                                               const ObIArray<ObRawExpr*> &reduce_exprs,
-                                              uint64_t &group_dist_methods)
+                                              uint64_t &group_dist_methods,
+                                              bool is_for_three_stage)
 {
   int ret = OB_SUCCESS;
   bool is_partition_wise = false;
@@ -5668,9 +5669,10 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
     } else {
       group_dist_methods &= ~DistAlgo::DIST_PULL_TO_LOCAL;
     }
-    can_re_parallel = top->can_re_parallel()
+    can_re_parallel = (top->can_re_parallel()
                       && (group_dist_methods & DistAlgo::DIST_HASH_HASH)
-                      && query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2);
+                      && query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP2)) ||
+                      (query_ctx->check_opt_compat_version(COMPAT_VERSION_4_4_1) && groupby_helper.grouping_dop_ > 1);
     if (!top->is_distributed()) {
       group_dist_methods &= ~DistAlgo::DIST_PARTITION_WISE;
       group_dist_methods &= ~DistAlgo::DIST_PULL_TO_LOCAL;
@@ -5731,7 +5733,11 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
   }
 
   if (OB_SUCC(ret) && (group_dist_methods & DistAlgo::DIST_HASH_HASH)) {
-    if (top->is_distributed() || can_re_parallel) {
+    bool ignore_hash_hash = query_ctx->check_opt_compat_version(COMPAT_VERSION_4_4_1) &&
+                            !groupby_helper.force_pushdown_group_by() &&
+                            is_for_three_stage &&
+                            top->get_parallel() <= 1;
+    if ((top->is_distributed() && !ignore_hash_hash) || can_re_parallel) {
       OPT_TRACE("group operator will use hash method");
     } else {
       group_dist_methods &= ~DistAlgo::DIST_HASH_HASH;
@@ -5997,7 +6003,8 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
                                                                 groupby_helper.force_partition_wise_,
                                                                 groupby_helper.force_dist_hash_,
                                                                 groupby_helper.force_pull_to_local_,
-                                                                groupby_helper.force_hash_local_))) {
+                                                                groupby_helper.force_hash_local_,
+                                                                groupby_helper.force_pushdown_group_by_))) {
       LOG_WARN("failed to get aggregation info from hint", K(ret));
     } else if (OB_FAIL(check_storage_groupby_pushdown(tenant_config, aggr_items, group_exprs,
                                                       groupby_helper.pushdown_groupby_columns_,
