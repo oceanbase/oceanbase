@@ -1726,7 +1726,7 @@ int ObPluginVectorIndexUtils::fill_mem_context_detail_info(ObPluginVectorIndexSe
             if (OB_NOT_NULL(adaptor->get_incr_data()) &&
                 OB_NOT_NULL(adaptor->get_incr_data()->mem_ctx_) &&
                 OB_NOT_NULL(adaptor->get_incr_data()->mem_ctx_->mem_ctx())) {
-              if (OB_FAIL(databuff_printf(buf, buf_len, pos,", \"vsag_incr_%lu\":%d", adaptor->get_inc_table_id(), adaptor->get_incr_vsag_mem_hold()))) {
+              if (OB_FAIL(databuff_printf(buf, buf_len, pos,", \"vsag_incr_%lu\":%ld", adaptor->get_inc_table_id(), adaptor->get_incr_vsag_mem_hold()))) {
                 OB_LOG(WARN, "failed to get vsag incr data mem info", K(ret));
               }
             }
@@ -1734,7 +1734,7 @@ int ObPluginVectorIndexUtils::fill_mem_context_detail_info(ObPluginVectorIndexSe
             } else if (OB_NOT_NULL(adaptor->get_snap_data_()) &&
                 OB_NOT_NULL(adaptor->get_snap_data_()->mem_ctx_) &&
                 OB_NOT_NULL(adaptor->get_snap_data_()->mem_ctx_->mem_ctx())) {
-              if (OB_FAIL(databuff_printf(buf, buf_len, pos,", \"vsag_snap_%lu\":%d", adaptor->get_snapshot_table_id(), adaptor->get_snap_vsag_mem_hold()))) {
+              if (OB_FAIL(databuff_printf(buf, buf_len, pos,", \"vsag_snap_%lu\":%ld", adaptor->get_snapshot_table_id(), adaptor->get_snap_vsag_mem_hold()))) {
                 OB_LOG(WARN, "failed to get vsag snap data mem info", K(ret));
               }
             }

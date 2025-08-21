@@ -3485,7 +3485,7 @@ void ObPluginVectorIndexAdaptor::output_bitmap(roaring::api::roaring64_bitmap_t 
   tmp_allocator.reset();
 }
 
-int ObPluginVectorIndexAdaptor::get_incr_vsag_mem_used()
+int64_t ObPluginVectorIndexAdaptor::get_incr_vsag_mem_used()
 {
   int64_t size = 0;
   if (incr_data_->is_inited()) {
@@ -3494,7 +3494,7 @@ int ObPluginVectorIndexAdaptor::get_incr_vsag_mem_used()
   return size;
 }
 
-int ObPluginVectorIndexAdaptor::get_incr_vsag_mem_hold()
+int64_t ObPluginVectorIndexAdaptor::get_incr_vsag_mem_hold()
 {
   int64_t size = 0;
   if (incr_data_->is_inited()) {
@@ -3503,7 +3503,7 @@ int ObPluginVectorIndexAdaptor::get_incr_vsag_mem_hold()
   return size;
 }
 
-int ObPluginVectorIndexAdaptor::get_snap_vsag_mem_used()
+int64_t ObPluginVectorIndexAdaptor::get_snap_vsag_mem_used()
 {
   int64_t size = 0;
   if (snap_data_->is_inited()) {
@@ -3512,7 +3512,7 @@ int ObPluginVectorIndexAdaptor::get_snap_vsag_mem_used()
   return size;
 }
 
-int ObPluginVectorIndexAdaptor::get_snap_vsag_mem_hold()
+int64_t ObPluginVectorIndexAdaptor::get_snap_vsag_mem_hold()
 {
   int64_t size = 0;
   if (snap_data_->is_inited()) {

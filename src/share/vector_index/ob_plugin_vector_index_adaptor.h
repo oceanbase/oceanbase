@@ -659,10 +659,10 @@ public:
   uint64_t get_all_vsag_mem_used() {
     return ATOMIC_LOAD(all_vsag_use_mem_);
   }
-  int get_incr_vsag_mem_used();
-  int get_incr_vsag_mem_hold();
-  int get_snap_vsag_mem_used();
-  int get_snap_vsag_mem_hold();
+  int64_t get_incr_vsag_mem_used();
+  int64_t get_incr_vsag_mem_hold();
+  int64_t get_snap_vsag_mem_used();
+  int64_t get_snap_vsag_mem_hold();
   ObIAllocator *get_allocator() { return allocator_; }
 
   void *get_algo_data() { return algo_data_; }
