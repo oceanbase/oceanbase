@@ -196,6 +196,17 @@ public:
   TO_STRING_KV(K_(cur_sql), K_(qc_tid));
 };
 
+// dummy struct for static check
+struct ObLakeTableFileDesc
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  explicit ObLakeTableFileDesc() : dummy_(0) {}
+  TO_STRING_KV(K_(dummy));
+  int dummy_;
+};
+
 // PX 端描述每个 SQC 的数据结构
 class ObPxSqcMeta
 {
@@ -468,6 +479,8 @@ private:
   bool partition_random_affinitize_{true}; // whether do partition random in gi task split
   // record ordering of locations. first is operator id of table scan and second is asc.
   ObSEArray<std::pair<int64_t, bool>, 18> locations_order_;
+  // dummy struct for static check
+  ObLakeTableFileDesc lake_table_file_desc_;
 };
 
 class ObDfo

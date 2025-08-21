@@ -68,7 +68,8 @@ OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     branch_id_base_,
                     partition_random_affinitize_,
                     locations_order_,
-                    px_tablets_info_);
+                    px_tablets_info_,
+                    lake_table_file_desc_);
 OB_SERIALIZE_MEMBER(ObPxTask,
                     qc_id_,
                     dfo_id_,
@@ -99,6 +100,7 @@ OB_SERIALIZE_MEMBER(ObSqcTableLocationKey,
                     is_loc_uncertain_);
 OB_SERIALIZE_MEMBER(ObPxCleanDtlIntermResInfo, ch_total_info_, sqc_id_, task_count_);
 OB_SERIALIZE_MEMBER(ObPxCleanDtlIntermResArgs, info_, batch_size_);
+OB_SERIALIZE_MEMBER(ObLakeTableFileDesc, dummy_);
 
 int ObQCMonitoringInfo::init(const ObDfo &dfo) {
   int ret = OB_SUCCESS;
