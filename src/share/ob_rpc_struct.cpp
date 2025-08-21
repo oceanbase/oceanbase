@@ -11639,7 +11639,8 @@ OB_SERIALIZE_MEMBER(ObDelSSTabletMacroCacheRes, macro_read_cache_cnt_, macro_wri
 ObRpcRemoteWriteDDLIncCommitLogArg::ObRpcRemoteWriteDDLIncCommitLogArg()
   : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(),
     lob_meta_tablet_id_(), tx_desc_(nullptr), need_release_(false),
-    direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID)
+    direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID),
+    trans_id_(), seq_no_()
 {}
 
 ObRpcRemoteWriteDDLIncCommitLogArg::~ObRpcRemoteWriteDDLIncCommitLogArg()
@@ -11654,8 +11655,10 @@ int ObRpcRemoteWriteDDLIncCommitLogArg::init(const uint64_t tenant_id,
                                              const share::ObLSID &ls_id,
                                              const common::ObTabletID tablet_id,
                                              const common::ObTabletID lob_meta_tablet_id,
-                                             transaction::ObTxDesc *tx_desc,
-                                             const ObDirectLoadType direct_load_type)
+                                             ObTxDesc *tx_desc,
+                                             const ObDirectLoadType direct_load_type,
+                                             const ObTransID &trans_id,
+                                             const ObTxSEQ &seq_no)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_id_ = OB_INVALID_ID && !ls_id.is_valid() || !tablet_id.is_valid() ||
@@ -11674,6 +11677,8 @@ int ObRpcRemoteWriteDDLIncCommitLogArg::init(const uint64_t tenant_id,
     lob_meta_tablet_id_ = lob_meta_tablet_id;
     tx_desc_ = tx_desc;
     direct_load_type_ = direct_load_type;
+    trans_id_ = trans_id;
+    seq_no_ = seq_no;
   }
   return ret;
 }
@@ -11710,7 +11715,7 @@ OB_DEF_SERIALIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
     }
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE, direct_load_type_);
+    LST_DO_CODE(OB_UNIS_ENCODE, direct_load_type_, trans_id_, seq_no_);
   }
   return ret;
 }
@@ -11733,7 +11738,7 @@ OB_DEF_DESERIALIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
     }
   }
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, direct_load_type_);
+    LST_DO_CODE(OB_UNIS_DECODE, direct_load_type_, trans_id_, seq_no_);
   }
   return ret;
 }
@@ -11745,7 +11750,7 @@ OB_DEF_SERIALIZE_SIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
   if (tx_desc_ != nullptr) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, *tx_desc_);
   }
-  LST_DO_CODE(OB_UNIS_ADD_LEN, direct_load_type_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, direct_load_type_, trans_id_, seq_no_);
   return len;
 }
 

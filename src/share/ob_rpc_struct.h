@@ -11968,7 +11968,9 @@ public:
            const common::ObTabletID tablet_id,
            const common::ObTabletID lob_meta_tablet_id,
            transaction::ObTxDesc *tx_desc,
-           const ObDirectLoadType direct_load_type = ObDirectLoadType::DIRECT_LOAD_INCREMENTAL);
+           const ObDirectLoadType direct_load_type = ObDirectLoadType::DIRECT_LOAD_INCREMENTAL,
+           const transaction::ObTransID &trans_id = transaction::ObTransID(),
+           const transaction::ObTxSEQ &seq_no = transaction::ObTxSEQ());
   int release();
   bool is_valid() const
   {
@@ -11976,7 +11978,7 @@ public:
            OB_NOT_NULL(tx_desc_) && tx_desc_->is_valid();
   }
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(lob_meta_tablet_id), KP_(tx_desc),
-               K_(need_release), K_(direct_load_type));
+               K_(need_release), K_(direct_load_type), K_(trans_id), K_(seq_no));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -11985,6 +11987,8 @@ public:
   transaction::ObTxDesc *tx_desc_;
   bool need_release_;
   ObDirectLoadType direct_load_type_;
+  transaction::ObTransID trans_id_;
+  transaction::ObTxSEQ seq_no_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLIncCommitLogArg);
 };
