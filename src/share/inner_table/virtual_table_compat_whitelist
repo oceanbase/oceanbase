@@ -9,3 +9,4 @@ table_name mysql.user table_id 12009
 table_name mysql.db table_id 12010
 table_name mysql.proc table_id 12030
 table_name oceanbase.__all_virtual_server table_id 12276
+table_name oceanbase.__all_virtual_ss_ls_meta table_id 11125
