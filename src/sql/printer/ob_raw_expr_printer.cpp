@@ -776,7 +776,8 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       ObIArray<pl::ObObjAccessIdx> &access_idxs = obj_access_expr->get_orig_access_idxs();
       int64_t start = access_idxs.count() - 1;
       for (;start > 0; --start) {
-        if (OB_NOT_NULL(access_idxs.at(start).get_sysfunc_)) {
+        if (OB_NOT_NULL(access_idxs.at(start).get_sysfunc_)
+            && T_FUN_UDF == access_idxs.at(start).get_sysfunc_->get_expr_type()) {
           break;
         }
       }
@@ -791,8 +792,13 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
           PRINT_EXPR(current_idx.get_sysfunc_);
         } else if (!current_idx.var_name_.empty()) {
           DATA_PRINTF("%.*s", current_idx.var_name_.length(), current_idx.var_name_.ptr());
-        } else {
+        } else if (current_idx.is_local()) {
+          DATA_PRINTF(":%ld", current_idx.var_index_);
+        } else if (current_idx.is_const()) {
           DATA_PRINTF("%ld", current_idx.var_index_);
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected current idx type", K(ret), K(current_idx));
         }
         if (parent_is_table) {
           DATA_PRINTF(")");
