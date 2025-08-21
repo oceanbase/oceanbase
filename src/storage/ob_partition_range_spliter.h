@@ -148,8 +148,6 @@ public:
 
   static constexpr int64_t OPEN_INDEX_MICRO_BLOCK_LIMIT = 100;
 
-  static constexpr int64_t INIT_INDEX_MICRO_BLOCK_OPEN_COUNT = 10;
-
   ObIndexBlockTreeTraverser() : is_inited_(false) {}
 
   int init(ObSSTable &sstable, const ObITableReadInfo &index_read_info);
@@ -648,7 +646,7 @@ public:
   static constexpr int64_t MIN_SPLIT_TABLE_ROW_COUNT = 65535; // 64K rows
   static constexpr int64_t TOO_MARY_RANGES_THRESHOLD = 20;
   static constexpr int64_t SPLIT_RANGE_FACTOR = 2;
-  static constexpr int64_t DEFAULT_MAX_SPLIT_TIME_COST = 20; // ms
+  static constexpr int64_t DEFAULT_MAX_SPLIT_TIME_COST = 10; // ms
   static constexpr int64_t INDEX_BLOCK_PER_TIME = 3; // access 3 index block / ms
 
   /**

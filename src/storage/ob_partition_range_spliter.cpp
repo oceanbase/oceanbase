@@ -94,7 +94,7 @@ int ObIndexBlockTreeTraverser::traverse(ObIMultiRangeEstimateContext &context,
     LOG_WARN("Invalid context", KR(ret), K(context));
   } else if (FALSE_IT(context_ = &context)) {
   } else if (FALSE_IT(avg_range_visited_node_cnt_ = 1.0 * open_index_micro_block_limit / context.get_ranges_count())) {
-  } else if (FALSE_IT(remain_can_visited_node_cnt_ = INIT_INDEX_MICRO_BLOCK_OPEN_COUNT)) {
+  } else if (FALSE_IT(remain_can_visited_node_cnt_ = 0)) {
   } else if (sstable_->is_empty()) {
     // skip
   } else if (OB_FAIL(sstable_->get_index_tree_root(root_index_block))) {
@@ -148,7 +148,12 @@ int ObIndexBlockTreeTraverser::goto_next_level_node(const ObMicroIndexInfo &micr
   bool should_estimate = false;
   bool is_in_cache = false;
 
-  if (micro_index_info.is_data_block() && micro_index_info.get_row_count() <= OPEN_DATA_MICRO_BLOCK_ROW_LIMIT) {
+  // in SS mode, get one index micro block maybe need 10ms, which is too slow
+  // so we won't open the leaf node in index-block-tree, unless there is only one macro_block (in range)
+  // TODO(menglan): must need prefetch for perf
+  if (GCTX.is_shared_storage_mode() && micro_index_info.is_leaf_block() && path_info.path_count_ > 1) {
+    should_estimate = true;
+  } else if (micro_index_info.is_data_block() && micro_index_info.get_row_count() <= OPEN_DATA_MICRO_BLOCK_ROW_LIMIT) {
     should_estimate = true;
   } else {
     if (OB_FAIL(path_caches_.find(level, &micro_index_info, is_in_cache))) {
@@ -1906,10 +1911,15 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_info(const ObIArray<ObStoreRan
 
     // TODO(menglan): adapt now sql implement
     constexpr int64_t ONE_TASK_ROW_COUNT = 32768;
-    total_size
-        = max(total_size,
-              max(total_macro_block_count * OB_DEFAULT_MACRO_BLOCK_SIZE + memtable_total_size,
-                  (total_row_count / ONE_TASK_ROW_COUNT + 1) * OB_DEFAULT_MACRO_BLOCK_SIZE));
+    if (GCTX.is_shared_storage_mode()) {
+      total_size = max(total_size,
+                       total_macro_block_count * OB_DEFAULT_MACRO_BLOCK_SIZE + memtable_total_size);
+    } else {
+      total_size
+          = max(total_size,
+                max(total_macro_block_count * OB_DEFAULT_MACRO_BLOCK_SIZE + memtable_total_size,
+                    (total_row_count / ONE_TASK_ROW_COUNT + 1) * OB_DEFAULT_MACRO_BLOCK_SIZE));
+    }
 
     LOG_TRACE("Finish estimate ranges info",
               K(total_size),
