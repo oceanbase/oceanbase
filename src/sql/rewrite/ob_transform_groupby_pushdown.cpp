@@ -369,8 +369,7 @@ int ObTransformGroupByPushdown::check_aggr_exprs_valid(ObSelectStmt &stmt,
                  T_FUN_COUNT == aggr_expr->get_expr_type()) {
         only_min_max = false;
       } else {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid param of aggr func", K(ret), K(aggr_expr));
+        is_valid = false;
       }
     }
   }
