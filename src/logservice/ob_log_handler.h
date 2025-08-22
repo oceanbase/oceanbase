@@ -529,6 +529,8 @@ public:
   // So if advance_base_info returns OB_SUCCESS, that means log sync and replay_status have been disabled.
   int advance_base_info(const palf::PalfBaseInfo &palf_base_info, const bool is_rebuild) override final;
   // check if palf is in sync state or need rebuild
+  // in SN, we compare follower's log_sync_scn with leader's log_sync_scn.
+  // in SS, we compare follower's replayed_scn with leader's log_sync_scn, because follower has no log_sync_scn.
   // @param [out] is_log_sync: if the log of this replica is sync with leader's,
   //    - false: leader's max_scn  - local max_scn > 3s + keepalive_interval
   //    - true:  leader's max_scn  - local max_scn < 3s + keepalive_interval
