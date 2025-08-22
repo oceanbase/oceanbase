@@ -14833,9 +14833,9 @@ int ObJoinOrder::create_and_add_mj_path(const Path *left_path,
                                                               normal_filters,
                                                               false))) {
     LOG_WARN("failed to classify subquery exprs", K(ret));
-  } else if (RIGHT_SEMI_JOIN == join_type || RIGHT_ANTI_JOIN == join_type) {
+  } else if (RIGHT_SEMI_JOIN == join_type || RIGHT_ANTI_JOIN == join_type || RIGHT_OUTER_JOIN == join_type) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected right semt/anti merge join", K(ret), K(join_type));
+    LOG_WARN("unexpected right semt/anti/outer merge join", K(ret), K(join_type));
   } else if (OB_FAIL(alloc_join_path(join_path))) {
     LOG_WARN("failed to allocate a merge join path", K(ret));
   } else {
@@ -15390,10 +15390,13 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
         && OB_FAIL(get_valid_path_info_from_hint(right_tree.get_tables(),
                                                  contain_fake_cte, path_info))) {
       LOG_WARN("failed to get valid path info from hint", K(ret));
-    } else if (RIGHT_OUTER_JOIN == path_info.join_type_
-               || FULL_OUTER_JOIN == path_info.join_type_) {
+    } else if (FULL_OUTER_JOIN == path_info.join_type_) {
       path_info.local_methods_ &= ~NESTED_LOOP_JOIN;
-      OPT_TRACE("right or full outer join can not use nested loop join");
+      OPT_TRACE("full outer join can not use nested loop join");
+    } else if (RIGHT_OUTER_JOIN == path_info.join_type_) {
+      path_info.local_methods_ &= ~NESTED_LOOP_JOIN;
+      path_info.local_methods_ &= ~MERGE_JOIN;
+      OPT_TRACE("right outer join can not use nested loop join and merge join");
     } else if (RIGHT_SEMI_JOIN == path_info.join_type_ || RIGHT_ANTI_JOIN == path_info.join_type_) {
       path_info.local_methods_ &= ~NESTED_LOOP_JOIN;
       path_info.local_methods_ &= ~MERGE_JOIN;
