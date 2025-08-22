@@ -10513,7 +10513,6 @@ BASELINE_EXEC_COUNT	bigint(20)	YES		NULL
 BASELINE_CPU_TIME	bigint(20)	YES		NULL	
 EVO_PLAN_HASH	bigint(20) unsigned	YES		NULL	
 BASELINE_PLAN_HASH	bigint(20) unsigned	YES		NULL	
-EVO_EXEC_INFO	varbinary(2048)	YES		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_SPM_EVO_RESULT|%') then 2

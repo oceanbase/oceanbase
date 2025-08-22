@@ -23,6 +23,51 @@ namespace oceanbase
 {
 namespace sql
 {
+
+int ObPlanExecutingStat::get_executing_info(int64_t &exec_time, int64_t &exec_cnt) const
+{
+  int ret = OB_SUCCESS;
+  exec_time = 0;
+  exec_cnt = 0;
+  const int64_t exec_cur_timestamp = ObTimeUtility::current_time();
+  int64_t exec_start_timestamp = 0;
+  const int64_t all_exec_cnt = ATOMIC_LOAD(&(exec_cnt_));
+  for (int64_t i = 0; OB_SUCC(ret) && exec_cnt < all_exec_cnt && i < MAX_EXECUTING_SIZE; ++i) {
+    exec_start_timestamp = ATOMIC_LOAD(&(exec_start_timestamps_[i]));
+    if (0 < exec_start_timestamp) {
+      exec_time += exec_cur_timestamp - exec_start_timestamp;
+      ++exec_cnt;
+    }
+  }
+  return ret;
+}
+
+int ObPlanExecutingStat::set_executing_record(const int64_t exec_start_timestamp)
+{
+  int ret = OB_SUCCESS;
+  bool finish = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !finish && i < MAX_EXECUTING_SIZE; ++i) {
+    if (0 == ATOMIC_VCAS(&(exec_start_timestamps_[i]), 0, exec_start_timestamp)) {
+      ATOMIC_INC(&exec_cnt_);
+      finish = true;
+    }
+  }
+  return ret;
+}
+
+int ObPlanExecutingStat::erase_executing_record(const int64_t exec_start_timestamp)
+{
+  int ret = OB_SUCCESS;
+  bool find = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !find && i < MAX_EXECUTING_SIZE; ++i) {
+    if (exec_start_timestamp == ATOMIC_VCAS(&(exec_start_timestamps_[i]), exec_start_timestamp, 0)) {
+      ATOMIC_DEC(&exec_cnt_);
+      find = true;
+    }
+  }
+  return ret;
+}
+
 int ObGetAllPlanIdOp::set_key_array(common::ObIArray<uint64_t> *key_array)
 {
 int ret = common::OB_SUCCESS;

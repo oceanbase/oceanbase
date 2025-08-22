@@ -2559,6 +2559,29 @@ int ObSqlPlanSet::get_evolving_evolution_task(EvolutionPlanList &evo_task_list)
   }
   return ret;
 }
+
+int ObSqlPlanSet::alloc_evolution_records(ObEvolutionRecords *&evolution_records)
+{
+  int ret = OB_SUCCESS;
+  evolution_records = NULL;
+  void *buf = NULL;
+  if (OB_ISNULL(buf = alloc_.alloc(sizeof(ObEvolutionRecords)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret));
+  } else {
+    evolution_records = new(buf)ObEvolutionRecords();
+  }
+  return ret;
+}
+
+void ObSqlPlanSet::free_evolution_records(ObEvolutionRecords *&evolution_records)
+{
+  if (NULL != evolution_records) {
+    alloc_.free(evolution_records);
+    evolution_records = NULL;
+  }
+}
+
 #endif
 
 }

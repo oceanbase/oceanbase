@@ -134,8 +134,8 @@ public:
   }
   void reset_evolution_stat()
   {
-    stat_.is_evolution_ = false;
-    stat_.evolution_stat_.reset();
+    ATOMIC_STORE(&(stat_.is_evolution_), false);
+    ATOMIC_STORE(&(stat_.evolution_stat_.records_), NULL);
   }
   int64_t get_evo_perf() const;
   int64_t get_cpu_time() const { return stat_.evolution_stat_.cpu_time_; }
@@ -145,6 +145,7 @@ public:
   bool get_evolution() const { return stat_.is_evolution_; }
   inline bool inner_check_if_is_expired(const int64_t first_exec_row_count,
                                         const int64_t current_row_count) const;
+  void update_evolution_stat(const ObAuditRecordData &record);
   bool check_if_is_expired_by_error(const int error_code) const;
   void update_plan_expired_info(const ObAuditRecordData &record,
                                 const bool is_first,
@@ -160,7 +161,7 @@ public:
 
   bool is_plan_unstable(const int64_t sample_count,
                         const int64_t sample_exec_row_count,
-                        const int64_t sample_exec_usec);
+                        const int64_t sample_exec_usec) const;
   bool is_expired() const { return NOT_EXPIRED != stat_.is_expired_; }
   void set_is_expired(ObPlanExpiredStat expired_stat) { stat_.is_expired_ = expired_stat; }
   void inc_large_querys();
@@ -402,6 +403,8 @@ public:
   inline void set_online_sample_percent(double v) { online_sample_percent_ = v; }
   int64_t get_das_dop() { return das_dop_; }
   void set_das_dop(int64_t v) { das_dop_ = v; }
+  void set_gen_plan_usec(uint64_t v) { stat_.gen_plan_usec_  = v; }
+
 public:
   int inc_concurrent_num();
   void dec_concurrent_num();
@@ -419,6 +422,10 @@ public:
   virtual PreCalcExprHandler* get_pre_calc_expr_handler() override;
 
   void set_enable_plan_expiration(bool enable) { stat_.enable_plan_expiration_ = enable; }
+  void set_optimizer_features_enable_version(uint64_t opt_version)
+  { optimizer_features_enable_version_ = opt_version; }
+  uint64_t get_optimizer_features_enable_version() const
+  { return optimizer_features_enable_version_;  }
   int64_t &get_access_table_num() { return stat_.access_table_num_; }
   int64_t get_access_table_num() const { return stat_.access_table_num_; }
   ObTableRowCount *&get_table_row_count_first_exec() { return stat_.table_row_count_first_exec_; }
@@ -791,6 +798,7 @@ private:
   int64_t px_node_count_;
   int64_t px_worker_share_plan_enabled_;
   bool extend_sql_plan_monitor_metrics_;
+  uint64_t optimizer_features_enable_version_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

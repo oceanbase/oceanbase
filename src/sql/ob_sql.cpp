@@ -3515,6 +3515,7 @@ int ObSql::generate_plan(ParseResult &parse_result,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("Failed to alloc physical plan from tc factory", K(ret));
     } else {
+      phy_plan->stat_.plan_id_ = phy_plan->get_object_id();
       // update is_use_jit flag
       phy_plan->set_use_rich_format(sql_ctx.session_info_->use_rich_format());
       phy_plan->stat_.is_use_jit_ = use_jit;
@@ -5293,6 +5294,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   int ret = OB_SUCCESS;
   FLTSpanGuard(hard_parse);
   bool is_valid = true;
+  int64_t gen_plan_start_time = ObTimeUtility::current_time();
   PlanCacheMode mode = pc_ctx.mode_;
   ObString outlined_stmt = trimed_stmt;//use outline if available
   ObString signature_sql;
@@ -5317,7 +5319,6 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   pc_ctx.not_param_index_.reset();
   pc_ctx.neg_param_index_.reset();
   bool plan_added = false;
-  bool need_get_baseline = false;
 #ifdef OB_BUILD_SPM
   spm_ctx.bl_key_.sql_cs_type_ = session.get_local_collation_connection();
 #endif
@@ -5369,7 +5370,6 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
     }
   }
 
-#ifndef OB_BUILD_SPM
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(get_outline_data(context, pc_ctx, signature_sql, signature_format_sql,
@@ -5382,11 +5382,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
                                             pc_ctx.is_begin_commit_stmt(),
                                             mode,
                                             &outline_parse_result))) {
-    if (OB_ERR_PROXY_REROUTE == ret) {
-      LOG_DEBUG("Failed to generate plan", K(ret));
-    } else {
-      LOG_WARN("Failed to generate plan", K(ret), K(result.get_exec_context().need_disconnect()));
-    }
+    ret = deal_generate_physical_plan_error(result.get_exec_context(), pc_ctx, ret);
   } else if (OB_FALSE_IT(backup_recovery_guard.recovery())) {
   } else if (OB_FAIL(try_get_plan(pc_ctx, result, use_plan_cache, add_plan_to_pc))) {
     LOG_WARN("failed to try get plan", K(ret), K(add_plan_to_pc));
@@ -5396,141 +5392,122 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
                                    add_plan_to_pc))) { //加入多表分布式计划的判断，判断是否还需需要add plan
     LOG_WARN("get need_add_plan failed", K(ret));
   } else if (!add_plan_to_pc) {
-    // do nothing
-  } else if (is_match_udr && OB_FAIL(pc_add_udr_plan(item_guard,
-                                                     pc_ctx,
-                                                     result,
-                                                     outline_state,
-                                                     plan_added))) {
-    LOG_WARN("fail to add plan to plan cache", K(ret));
+    if (context.is_batch_params_execute() && parse_result.result_tree_->children_[0]->type_ != T_EXPLAIN) {
+      ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
+      LOG_WARN("add_plan_to_pc is false so batched multi_stmt rollback", K(ret));
+    }
+  } else if (is_match_udr && OB_FAIL(pc_add_udr_plan(item_guard, pc_ctx, result, outline_state, plan_added))) {
+    LOG_WARN("fail to add udr plan to plan cache", K(ret));
+#ifdef OB_BUILD_SPM
+  } else if (!is_match_udr && OB_FAIL(pc_add_spm_plan(pc_ctx, result, outline_state, plan_cache))) {
+    LOG_WARN("fail to add spm plan to plan cache", K(ret));
+#else
   } else if (!is_match_udr && OB_FAIL(pc_add_plan(pc_ctx, result, outline_state, plan_cache, plan_added))) {
     LOG_WARN("fail to add plan to plan cache", K(ret));
-  }
-#else
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(get_outline_data(context, pc_ctx, signature_sql, signature_format_sql,
-                                      outline_state, outline_parse_result))) {
-    LOG_WARN("failed to get outline data for query", K(ret));
-  } else if (OB_FAIL(generate_physical_plan(parse_result,
-                                            &pc_ctx,
-                                            context,
-                                            result,
-                                            pc_ctx.is_begin_commit_stmt(),
-                                            mode,
-                                            &outline_parse_result))) {
-    if (OB_ERR_PROXY_REROUTE == ret) {
-      LOG_DEBUG("Failed to generate plan", K(ret));
-    } else if (OB_OUTLINE_NOT_REPRODUCIBLE == ret && spm_ctx.is_retry_for_spm_) {
-      LOG_TRACE("spm need get baseline due to generate plan failed");
-      need_get_baseline = true;
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("Failed to generate plan", K(ret), K(result.get_exec_context().need_disconnect()));
-    }
-  } else if (OB_FALSE_IT(backup_recovery_guard.recovery())) {
-  } else if (OB_FAIL(try_get_plan(pc_ctx, result, use_plan_cache, add_plan_to_pc))) {
-    LOG_WARN("failed to try get plan", K(ret), K(add_plan_to_pc));
-  } else if (OB_FAIL(need_add_plan(pc_ctx,
-                                   result,
-                                   use_plan_cache,
-                                   add_plan_to_pc))) { //加入多表分布式计划的判断，判断是否还需需要add plan
-    LOG_WARN("get need_add_plan failed", K(ret));
-  } else if (!add_plan_to_pc &&
-      (context.is_batch_params_execute() && parse_result.result_tree_->children_[0]->type_ != T_EXPLAIN)) {
-    ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
-    LOG_WARN("add_plan_to_pc is false so batched multi_stmt rollback", K(ret));
-  } else if (spm_ctx.is_retry_for_spm_) {
-    // handle spm baseline plan
-    ObPlanBaselineItem* baseline_item = static_cast<ObPlanBaselineItem*>(spm_ctx.baseline_guard_.get_cache_obj());
-    if (OB_ISNULL(result.get_physical_plan()) || OB_ISNULL(baseline_item)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null physical plan", K(ret), K(result.get_physical_plan()), K(baseline_item));
-    } else if (result.get_physical_plan()->get_plan_hash_value() == baseline_item->get_plan_hash_value()) {
-      pc_ctx.need_evolution_ = true;
-      spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN;
-      if (OB_FAIL(pc_add_plan(pc_ctx, result, outline_state, plan_cache, plan_added))) {
-        LOG_WARN("fail to add plan to plan cache", K(ret));
-      } else if (!plan_added && ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN == spm_ctx.spm_stat_) {
-        if (spm_ctx.evolution_task_in_two_plan_set_) {
-          // now baseline plan and evolving plan may be added to different plan set due to different
-          // constrain. In this situation, we can't compare two plan. So just keep try next baseline.
-          spm_ctx.evolution_task_in_two_plan_set_ = false;
-          need_get_baseline = true;
-        } else if (spm_ctx.baseline_exists_) {
-          // When adding baseline plan and find other session alerady added. Then stop searching next
-          // baseline and execute this plan directly.
-          need_get_baseline = false;
-          spm_ctx.baseline_exists_ = false;
-        }
-      } else if (plan_added && ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN == spm_ctx.spm_stat_) {
-        if ((nullptr != spm_ctx.baseline_guard_.get_cache_obj() &&
-             static_cast<ObPlanBaselineItem*>(spm_ctx.baseline_guard_.get_cache_obj())->get_fixed()) ||
-            SPM_MODE_BASELINE_FIRST == spm_ctx.spm_mode_) {
-          // fixed baseline plan or baseline first mode, use is directly
-        } else {
-          spm_ctx.spm_force_disable_ = true;
-          spm_ctx.spm_stat_ = ObSpmCacheCtx::STAT_FIRST_EXECUTE_PLAN;
-          spm_ctx.is_retry_for_spm_ = false;
-          ret = OB_SQL_RETRY_SPM;
-        }
-      }
-    } else {
-      LOG_TRACE("spm need get baseline due to plan hash value not equal");
-      need_get_baseline = true;
-    }
-  } else {
-    // handle spm evolution plan or not spm plan
-    if (add_plan_to_pc) {
-      bool baseline_enable = false;
-      bool baseline_exists = true;
-      bool baseline_find = false;
-      if (DEPENDENCY_OUTLINE == outline_state.outline_version_.object_type_ || is_match_udr) {
-        // outline has higher priority than baseline
-      } else if (OB_FAIL(ObSpmController::check_baseline_enable(pc_ctx, result.get_physical_plan(), baseline_enable))) {
-        LOG_WARN("failed to check need capture baseline", K(ret));
-      } else if (!baseline_enable) {
-        // do nothing
-      } else if (OB_FAIL(ObSpmController::check_baseline_exists(pc_ctx, result.get_physical_plan(), baseline_exists))) {
-        LOG_WARN("failed to check baseline exists", K(ret));
-      } else if (!baseline_exists) {
-        pc_ctx.need_evolution_ = true;
-        spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_ADD_EVOLUTION_PLAN;
-      }
-      if (OB_SUCC(ret)) {
-        if (is_match_udr && OB_FAIL(pc_add_udr_plan(item_guard,
-                                                    pc_ctx,
-                                                    result,
-                                                    outline_state,
-                                                    plan_added))) {
-          LOG_WARN("fail to add plan to plan cache", K(ret));
-        } else if (!is_match_udr && OB_FAIL(pc_add_plan(pc_ctx, result, outline_state, plan_cache, plan_added))) {
-          LOG_WARN("fail to add plan to plan cache", K(ret));
-        } else if (!plan_added) {
-          // plan not add to plan cache, do not check if need evolution.
-          if (spm_ctx.check_execute_status_) {
-            // session which add plan succeed need check execute status
-            spm_ctx.check_execute_status_ = false;
-            LOG_TRACE("plan not add, disable check execute status");
-          }
-        } else if (baseline_enable && !baseline_exists) {
-          need_get_baseline = true;
-        }
-      }
-    }
-  }
-  if (OB_SUCC(ret) && need_get_baseline) {
-    ObSpmController::get_next_baseline_outline(spm_ctx);
-    ret = OB_SQL_RETRY_SPM;
-    LOG_TRACE("spm get next baeline outline", K(spm_ctx.baseline_guard_.get_cache_obj()), K(ret));
-  }
 #endif
+  }
+
+  if (OB_NOT_NULL(result.get_physical_plan())) {
+    result.get_physical_plan()->set_gen_plan_usec(ObTimeUtility::current_time() - gen_plan_start_time);
+  }
   //if the error code is ob_timeout, we add more error info msg for dml query.
   if (OB_UNLIKELY(OB_TIMEOUT == ret && session.is_user_session())) {
     LOG_USER_ERROR(OB_TIMEOUT, THIS_WORKER.get_timeout_ts() - result.get_session().get_query_start_time());
   }
   return ret;
 }
+
+int ObSql::deal_generate_physical_plan_error(ObExecContext &exec_ctx, ObPlanCacheCtx &pc_ctx, int ret)
+{
+  if (OB_ERR_PROXY_REROUTE == ret) {
+    LOG_DEBUG("Failed to generate plan", K(ret));
+#ifdef OB_BUILD_SPM
+  } else if (OB_OUTLINE_NOT_REPRODUCIBLE == ret && pc_ctx.sql_ctx_.spm_ctx_.is_retry_for_spm_) {
+    LOG_TRACE("spm need get baseline due to generate plan failed");
+    ObPlanBaselineItem* baseline_item = static_cast<ObPlanBaselineItem*>(pc_ctx.sql_ctx_.spm_ctx_.baseline_guard_.get_cache_obj());
+    if (OB_LIKELY(NULL != baseline_item)) {
+      LOG_TRACE("spm need get baseline due to generate plan failed", K(ret), K(baseline_item->get_plan_type()),
+                                                  K(baseline_item->get_plan_hash_value()),
+                                                  K(baseline_item->get_outline_data_str()));
+    }
+    ObSpmController::get_next_baseline_outline(pc_ctx.sql_ctx_.spm_ctx_);
+    ret = OB_SQL_RETRY_SPM;
+#endif
+  } else {
+    LOG_WARN("Failed to generate plan", K(ret), K(exec_ctx.need_disconnect()));
+  }
+  return ret;
+}
+
+#ifdef OB_BUILD_SPM
+int ObSql::pc_add_spm_plan(ObPlanCacheCtx &pc_ctx,
+                           ObResultSet &result,
+                           ObOutlineState &outline_state,
+                           ObPlanCache *plan_cache)
+
+{
+  int ret = OB_SUCCESS;
+  bool need_get_baseline = false;
+  ObPlanBaselineItem *baseline_item = NULL;
+  bool plan_added = false;
+  pc_ctx.need_evolution_ = true;
+  ObSpmCacheCtx &spm_ctx = pc_ctx.sql_ctx_.spm_ctx_;
+  if (!spm_ctx.is_retry_for_spm_) {
+    pc_ctx.need_evolution_ = false;
+    spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_INVALID;
+    if (DEPENDENCY_OUTLINE != outline_state.outline_version_.object_type_
+        && OB_FAIL(ObSpmController::check_baseline_enable(pc_ctx, result.get_physical_plan(), pc_ctx.need_evolution_))) {
+      LOG_WARN("failed to check need capture baseline", K(ret));
+    } else if (pc_ctx.need_evolution_ && OB_FALSE_IT(spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_ADD_EVOLUTION_PLAN)) {
+    } else if (OB_FAIL(pc_add_plan(pc_ctx, result, outline_state, plan_cache, plan_added))) {
+      LOG_WARN("fail to add plan to plan cache", K(ret));
+    } else if (!plan_added || !pc_ctx.need_evolution_) {
+      /* do nothing */
+    } else if (OB_FAIL(ObSpmController::update_plan_baseline_cache(pc_ctx, result.get_physical_plan()))) {
+      LOG_WARN("failed to check baseline exists", K(ret));
+    } else if ((spm_ctx.evo_plan_is_baseline_ && SPM_MODE_BASELINE_FIRST == spm_ctx.spm_mode_)
+               || spm_ctx.evo_plan_is_fixed_baseline_) {
+      spm_ctx.is_retry_for_spm_ = false;
+      spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_START_EVOLUTION;
+      ret = OB_SQL_RETRY_SPM;
+    } else {
+      need_get_baseline = true;
+    }
+  } else if (OB_ISNULL(result.get_physical_plan())
+             || OB_ISNULL(baseline_item = static_cast<ObPlanBaselineItem*>(spm_ctx.baseline_guard_.get_cache_obj()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null physical plan", K(ret), K(result.get_physical_plan()), K(baseline_item));
+  } else if (result.get_physical_plan()->get_plan_hash_value() != baseline_item->get_plan_hash_value()) {
+    LOG_TRACE("spm need get baseline due to plan hash value not equal");
+    need_get_baseline = true;
+  } else if (OB_FALSE_IT(spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN)) {
+  } else if (OB_FAIL(pc_add_plan(pc_ctx, result, outline_state, plan_cache, plan_added))) {
+    LOG_WARN("fail to add plan to plan cache", K(ret));
+  } else if (!plan_added && spm_ctx.evolution_task_in_two_plan_set_) {
+    // now baseline plan and evolving plan may be added to differnet plan set due to different
+    // constrain. In this situation, we can't compare two plan. So just keep try next baseline.
+    spm_ctx.evolution_task_in_two_plan_set_ = false;
+    need_get_baseline = true;
+  } else if (OB_UNLIKELY(!plan_added)) {
+    /* fail to add baseline plan by unexpected reason, execute baseline plan directly */
+    LOG_INFO("fail to add baseline plan", K(result.get_physical_plan()->get_sql_id_string()));
+  } else if (baseline_item->get_fixed() || SPM_MODE_BASELINE_FIRST == spm_ctx.spm_mode_) {
+    // fixed baseline plan or baseline first mode, use is directly
+    spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_START_EVOLUTION;
+  } else {
+    spm_ctx.is_retry_for_spm_ = false;
+    spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_START_EVOLUTION;
+    ret = OB_SQL_RETRY_SPM;
+  }
+
+  if (OB_SUCC(ret) && need_get_baseline) {
+    ObSpmController::get_next_baseline_outline(spm_ctx);
+    ret = OB_SQL_RETRY_SPM;
+    LOG_TRACE("spm get next baeline outline", K(spm_ctx.baseline_guard_.get_cache_obj()), K(ret));
+  }
+  return ret;
+}
+#endif
 
 int ObSql::handle_parser(const ObString &sql,
                          ObExecContext &exec_ctx,

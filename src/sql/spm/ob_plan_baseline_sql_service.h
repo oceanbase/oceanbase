@@ -61,9 +61,7 @@ public:
   int update_plan_baseline(ObIAllocator& allocator,
                            const uint64_t tenant_id,
                            const ObBaselineKey& key,
-                           ObPlanBaselineItem* baseline,
-                           bool update_info,
-                           int64_t record_type = 0);
+                           ObPlanBaselineItem* baseline);
 
   int delete_baseline_item(ObMySQLTransaction& trans,
                            const uint64_t tenant_id,
@@ -96,7 +94,16 @@ public:
   int fill_plan_baseline_item(common::sqlclient::ObMySQLResult& result, ObPlanBaselineItem& baseline_item);
 
   int get_plan_baselines(ObPlanCache* lib_cache, ObSpmCacheCtx& spm_ctx, ObBaselineKey& key);
-
+  int update_baselines_from_table_for_key(const uint64_t tenant_id,
+                                          ObPlanCache &lib_cache,
+                                          ObSpmCacheCtx &spm_ctx,
+                                          ObBaselineKey &key,
+                                          ObMySQLProxy::MySQLResult &res);
+  int update_baseline_from_sql_result(const uint64_t tenant_id,
+                                      ObPlanCache &lib_cache,
+                                      ObSpmCacheCtx &spm_ctx,
+                                      ObBaselineKey &key,
+                                      sqlclient::ObMySQLResult &result);
   int get_need_sync_baseline_keys(ObIAllocator& allocator,
                                   const uint64_t tenant_id,
                                   const int64_t last_sync_time,
@@ -164,18 +171,16 @@ public:
 
   int batch_record_evolution_result(const uint64_t tenant_id,
                                     ObIArray<EvolutionTaskResult*> &evo_res_array);
-  int insert_spm_record(ObMySQLProxy *proxy,
-                        const uint64_t tenant_id,
-                        const ObBaselineKey& key,
-                        int64_t record_type);
+  int get_evo_exec_info_hex_str(ObIAllocator &allocator,
+                                const ObEvolutionRecords &records,
+                                char *&binary_str,
+                                char *&hex_str,
+                                int32_t &hex_pos);
   int delete_timeout_record(const uint64_t tenant_id, const uint64_t current_time);
-
-  int update_baseline_item_verify_result(ObMySQLTransaction& trans,
-                                         const uint64_t tenant_id,
-                                         const ObBaselineKey& key,
-                                         const uint64_t& plan_hash,
-                                         const ObEvolutionStat &evo_stat,
-                                         int64_t& affected_rows);
+  int batch_delete_rows(const uint64_t exec_tenant_id,
+                        ObSqlString &delete_sql,
+                        const int64_t batch_size,
+                        int64_t &total_affected_rows);
   int update_baseline_item_outline_info(ObMySQLTransaction &trans,
                                         const uint64_t tenant_id,
                                         ObPlanCache *lib_cache,

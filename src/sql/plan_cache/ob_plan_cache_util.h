@@ -514,6 +514,29 @@ enum ObPlanExpiredStat  {
   EXPIRED_BY_EXEC_TIME,   //  expired by unstable execution time
 };
 
+struct ObPlanExecutingStat
+{
+  static const int32_t MAX_EXECUTING_SIZE = 100;
+
+  int get_executing_info(int64_t &exec_time, int64_t &exec_cnt) const;
+  int set_executing_record(const int64_t exec_start_timestamp);
+  int erase_executing_record(const int64_t exec_start_timestamp);
+
+  ObPlanExecutingStat()
+    : exec_cnt_(0)
+    {
+      MEMSET(exec_start_timestamps_, 0, MAX_EXECUTING_SIZE * sizeof(int64_t));
+    }
+  ObPlanExecutingStat(const ObPlanExecutingStat &other)
+    : exec_cnt_(other.exec_cnt_)
+    {
+      MEMCPY(exec_start_timestamps_, other.exec_start_timestamps_, MAX_EXECUTING_SIZE * sizeof(int64_t));
+    }
+  private:
+  int64_t exec_cnt_;
+  int64_t exec_start_timestamps_[MAX_EXECUTING_SIZE];
+};
+
 struct ObVecIndexExecCtx {
   ObVecIndexExecCtx()
     : cur_path_(0),
@@ -685,7 +708,8 @@ struct ObPlanStat
   bool is_use_auto_dop_;
   AdaptivePCInfo adaptive_pc_info_;
   ObVecIndexExecCtx vec_index_exec_ctx_;
-
+  ObPlanExecutingStat executing_stat_;
+  uint64_t gen_plan_usec_;  // plan generation time cost
 
   ObPlanStat()
     : plan_id_(0),
@@ -766,7 +790,9 @@ struct ObPlanStat
       is_inner_(false),
       is_use_auto_dop_(false),
       adaptive_pc_info_(),
-      vec_index_exec_ctx_()
+      vec_index_exec_ctx_(),
+      executing_stat_(),
+      gen_plan_usec_(0)
 {
   exact_mode_sql_id_[0] = '\0';
 }
@@ -849,7 +875,9 @@ struct ObPlanStat
       is_inner_(rhs.is_inner_),
       is_use_auto_dop_(rhs.is_use_auto_dop_),
       adaptive_pc_info_(rhs.adaptive_pc_info_),
-      vec_index_exec_ctx_(rhs.vec_index_exec_ctx_)
+      vec_index_exec_ctx_(rhs.vec_index_exec_ctx_),
+      executing_stat_(rhs.executing_stat_),
+      gen_plan_usec_(rhs.gen_plan_usec_)
   {
     exact_mode_sql_id_[0] = '\0';
     MEMCPY(plan_sel_info_str_, rhs.plan_sel_info_str_, rhs.plan_sel_info_str_len_);
@@ -951,6 +979,19 @@ struct ObPlanStat
   inline bool is_updated() const
   {
     return last_active_time_ != 0;
+  }
+
+  inline void set_executing_record(const int64_t exec_start_timestamp)
+  {
+    if (is_evolution_) {
+      executing_stat_.set_executing_record(exec_start_timestamp);
+    }
+  }
+  inline void erase_executing_record(const int64_t exec_start_timestamp)
+  {
+    if (is_evolution_) {
+      executing_stat_.erase_executing_record(exec_start_timestamp);
+    }
   }
 
   /* XXX: support printing maxium 30 class members.
