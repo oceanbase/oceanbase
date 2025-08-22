@@ -154,7 +154,7 @@ int ObITenantTmpFileManager::remove(const int64_t fd)
   //   // some modules remove tmp file when they are destroying.
   //   // at this time, the tmp file mgr is not running because of stop().
   //   // thus, we need to support this case
-  //   ret = OB_ERR_UNEXPECTED;
+  //   ret = OB_NOT_RUNNING;
   //   LOG_WARN("ObITenantTmpFileManager is not running", KR(ret), K(is_running_));
   } else if (OB_FAIL(files_.erase(ObTmpFileKey(fd), tmp_file_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
