@@ -3758,7 +3758,7 @@ int ObTableScanOp::multivalue_get_pure_data(
     if (OB_FAIL(ret)) {
     } else if (FALSE_IT(rowkey_end = column_count - 1)) {
     } else if (FALSE_IT(rowkey_start = rowkey_end - data_rowkey_cnt)) {
-    } else if (OB_FAIL(extend_domain_obj_buffer(SAPTIAL_INDEX_DEFAULT_ROW_COUNT))) {
+    } else if (OB_FAIL(extend_domain_obj_buffer(record_num))) {
       LOG_WARN("failed to extend obobj buffer.", K(ret));
     } else {
       ObObj tmp_objs[column_count];
