@@ -4830,6 +4830,13 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
                         "task_id", res.task_id_,
                         "table_id", table_id_buffer,
                         "schema_version", res.schema_version_);
+#ifdef ERRSIM
+  SERVER_EVENT_SYNC_ADD("ddl_scheduler", "alter_table_detail",
+                        "table_id", arg.alter_table_schema_.get_table_id(),
+                        "association_table_id", arg.alter_table_schema_.get_association_table_id(),
+                        "table_name", arg.alter_table_schema_.get_table_name(),
+                        "ddl_type", res.ddl_type_);
+#endif
   LOG_INFO("finish alter table ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
