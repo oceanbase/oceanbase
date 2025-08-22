@@ -78277,6 +78277,9 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
   keywords = all_def_keywords['__all_external_resource'])
 
+# 101120: __all_ai_model_endpoint
+# 101121: __all_ai_model_endpoint
+
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
 ################################################################################
