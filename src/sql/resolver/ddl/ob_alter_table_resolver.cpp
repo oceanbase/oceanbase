@@ -1914,17 +1914,28 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
     if (OB_SUCC(ret) && index_arg.index_columns_.count() > 1) {
       bool has_multivalue_index = false;
       bool has_functional_index = false;
-      for (int64_t i = 0; OB_SUCC(ret) && i < index_arg.index_columns_.count(); ++i) {
-        const ObColumnSortItem &si = index_arg.index_columns_.at(i);
-        if (si.is_func_index_) {
-          bool is_multi_value = false;
-          ParseNode *expr_node = node.children_[i]->children_[0];
-          if (OB_FAIL(ObMulValueIndexBuilderUtil::is_multivalue_index_type(expr_node, is_multi_value))) {
-            LOG_WARN("check multivalue type by parse node failed", K(ret), K(i));
-          } else if (is_multi_value) {
-            has_multivalue_index = true;
-          } else {
-            has_functional_index = true;
+      for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
+        if (i >= index_arg.index_columns_.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("index_columns count mismatch with parse node", K(ret), K(i), K(index_arg.index_columns_.count()), K(node.num_child_));
+        } else {
+          const ObColumnSortItem &si = index_arg.index_columns_.at(i);
+          if (si.is_func_index_) {
+            bool is_multi_value = false;
+            if (OB_ISNULL(node.children_[i]) ||
+                OB_ISNULL(node.children_[i]->children_[0])) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid parse node structure", K(ret), K(i), K(node.num_child_));
+            } else {
+              ParseNode *expr_node = node.children_[i]->children_[0];
+              if (OB_FAIL(ObMulValueIndexBuilderUtil::is_multivalue_index_type(expr_node, is_multi_value))) {
+                LOG_WARN("check multivalue type by parse node failed", K(ret), K(i));
+              } else if (is_multi_value) {
+                has_multivalue_index = true;
+              } else {
+                has_functional_index = true;
+              }
+            }
           }
         }
       }
