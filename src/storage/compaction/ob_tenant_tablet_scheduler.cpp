@@ -1631,6 +1631,7 @@ int ObTenantTabletScheduler::schedule_ddl_tablet_merge(
 #ifdef OB_BUILD_SHARED_STORAGE
   bool is_ls_leader = false;
   if (OB_FAIL(ret)) {
+  } else if (!GCTX.is_shared_storage_mode()) {
   } else if (OB_TMP_FAIL(ObDDLUtil::is_ls_leader(*ls_handle.get_ls(), is_ls_leader))) {
     LOG_WARN("failed to check if is ls leader", K(tmp_ret), K(*ls_handle.get_ls()));
     is_ls_leader = false;

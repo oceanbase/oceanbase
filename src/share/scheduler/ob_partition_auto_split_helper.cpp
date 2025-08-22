@@ -963,7 +963,7 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_INVALID_SIZE == auto_split_tablet_size) {
+  } else if (auto_split_tablet_size <= 0) {
     can_split = false;
   } else if (OB_FAIL(check_sstable_limit(*tablet, num_sstables_exceed_limit))) {
     LOG_WARN("fail to check sstable limit", K(ret), KPC(tablet));
