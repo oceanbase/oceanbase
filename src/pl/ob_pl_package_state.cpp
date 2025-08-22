@@ -878,7 +878,8 @@ int ObPLPackageState::check_version(const ObPackageStateVersion &state_version,
       if(OB_FAIL(ObRoutinePersistentInfo::check_dep_schema(schema_guard,
                                                            spec.get_dependency_table(),
                                                            cur_state_version.header_merge_version_,
-                                                           match))) {
+                                                           match,
+                                                           true))) {
         LOG_WARN("fail to check dep schema", K(ret), K(cur_state_version), K(state_version));
       }
     }
@@ -888,7 +889,8 @@ int ObPLPackageState::check_version(const ObPackageStateVersion &state_version,
       if(OB_FAIL(ObRoutinePersistentInfo::check_dep_schema(schema_guard,
                                                            body->get_dependency_table(),
                                                            cur_state_version.body_merge_version_,
-                                                           match))) {
+                                                           match,
+                                                           true))) {
         LOG_WARN("fail to check dep schema", K(ret), K(cur_state_version), K(state_version));
       }
     }

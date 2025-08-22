@@ -156,7 +156,8 @@ public:
   static int check_dep_schema(ObSchemaGetterGuard &schema_guard,
                               const DependencyTable &dep_schema_objs,
                               int64_t merge_version,
-                              bool &match);
+                              bool &match,
+                              bool is_check_package_state = false);
 
   int read_dll_from_disk(ObSQLSessionInfo *session_info,
                           schema::ObSchemaGetterGuard &schema_guard,

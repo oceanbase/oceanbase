@@ -495,7 +495,8 @@ template<typename DependencyTable>
 int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
                                               const DependencyTable &dep_schema_objs,
                                               int64_t merge_version,
-                                              bool &match)
+                                              bool &match,
+                                              bool is_check_package_state)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_ID;
@@ -520,7 +521,8 @@ int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
         match = false;
       } else if (new_version <= merge_version) {
         match = true;
-      } else {
+      } else if (SEQUENCE_SCHEMA != dep_schema_objs.at(i).get_schema_type()) {
+        // new_version > merge_version, sequence schema do not considered
         match = false;
       }
     } else {
@@ -536,6 +538,8 @@ int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
         // do nothing
       } else if (table_schema->get_schema_version() <= merge_version) {
         match = true;
+      } else if (is_check_package_state) {
+        match = false;
       } else {
         // here do not set false , will check column info later
         match = true;
@@ -552,12 +556,14 @@ int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
 template int ObRoutinePersistentInfo::check_dep_schema<ObPLDependencyTable>(ObSchemaGetterGuard &schema_guard,
                                           const ObPLDependencyTable &dep_schema_objs,
                                           int64_t merge_version,
-                                          bool &match);
+                                          bool &match,
+                                          bool is_check_package_state);
 
 template int ObRoutinePersistentInfo::check_dep_schema<sql::DependenyTableStore>(ObSchemaGetterGuard &schema_guard,
                                           const sql::DependenyTableStore &dep_schema_objs,
                                           int64_t merge_version,
-                                          bool &match);
+                                          bool &match,
+                                          bool is_check_package_state);
 
 int ObRoutinePersistentInfo::read_dll_from_disk(ObSQLSessionInfo *session_info,
                                             schema::ObSchemaGetterGuard &schema_guard,
@@ -756,35 +762,42 @@ int ObRoutinePersistentInfo::decode_and_check_extra_info(char *buf,
   return ret;
 }
 
+bool ob_schema_obj_version_less(const share::schema::ObSchemaObjVersion &a,
+                                const share::schema::ObSchemaObjVersion &b)
+{
+  return a.object_id_ < b.object_id_;
+}
+
 template<typename DependencyTable>
 int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
                                                ObPLExtraInfo& extra_info,
                                                schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
-  ObArray<int64_t> dep_obj_ids;
+  ObPLDependencyTable dep_table_objs;
   char *buf = NULL;
   ObSqlString concat_ids_sql;
   for (int64_t i = 0; OB_SUCC(ret) && i < dep_table.count(); ++i) {
-    OZ (add_var_to_array_no_dup(dep_obj_ids, dep_table.at(i).object_id_));
+    OZ (add_var_to_array_no_dup(dep_table_objs, dep_table.at(i)));
   }
-  OX (lib::ob_sort(dep_obj_ids.begin(), dep_obj_ids.end()));
-  for (int64_t i = 0; OB_SUCC(ret) && i < dep_obj_ids.count(); ++i) {
-    OZ (concat_ids_sql.append_fmt("%ld", dep_obj_ids.at(i)));
-    if(OB_SUCC(ret) &&  DEPENDENCY_TABLE == dep_table.at(i).object_type_) {
+  OX (lib::ob_sort(dep_table_objs.begin(), dep_table_objs.end(), ob_schema_obj_version_less));
+  for (int64_t i = 0; OB_SUCC(ret) && i < dep_table_objs.count(); ++i) {
+    OZ (concat_ids_sql.append_fmt("%ld", dep_table_objs.at(i).object_id_));
+    if(OB_SUCC(ret) &&  DEPENDENCY_TABLE == dep_table_objs.at(i).object_type_) {
       // get column info and encode to extra_info
       const ObTableSchema *table_schema = nullptr;
       OZ (schema_guard.get_table_schema(MTL_ID(),
-                                        dep_table.at(i).object_id_,
+                                        dep_table_objs.at(i).object_id_,
                                         table_schema));
       if (OB_SUCCESS != ret) {
-        LOG_WARN("failed to get table schema", K(ret), K(dep_table.at(i)));
+        LOG_WARN("failed to get table schema", K(ret), K(dep_table_objs.at(i)));
       } else if (nullptr == table_schema) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get an unexpected null table schema", K(dep_table.at(i).object_id_));
+        LOG_WARN("get an unexpected null table schema", K(dep_table_objs.at(i).object_id_));
       } else if (table_schema->is_index_table()) {
         // do nothing
       } else {
+        OZ (concat_ids_sql.append_fmt("%s", table_schema->get_table_name()));
         ObTableSchema::const_column_iterator cs_iter = table_schema->column_begin();
         ObTableSchema::const_column_iterator cs_iter_end = table_schema->column_end();
         for (; OB_SUCC(ret) && cs_iter != cs_iter_end; ++cs_iter) {
@@ -793,12 +806,15 @@ int ObRoutinePersistentInfo::get_pl_extra_info(const DependencyTable &dep_table,
             // do nothing
           } else {
             // column_id_,meta_type_,charset_type_,accuracy_,is_invisible_col_,column_name_
-            OZ (concat_ids_sql.append_fmt("%ld%ld%ld%ld%ld%s",
+            OZ (concat_ids_sql.append_fmt("%d%d%d%d%ld%ld%ld%d%s",
                                           column_schema->get_column_id(),
-                                          column_schema->get_meta_type(),
-                                          column_schema->get_charset_type(),
-                                          column_schema->get_accuracy().get_accuracy(),
-                                          column_schema->is_invisible_column(),
+                                          static_cast<uint8_t>(column_schema->get_meta_type().get_type()),
+                                          static_cast<uint8_t>(column_schema->get_meta_type().get_cs_level()),
+                                          static_cast<uint8_t>(column_schema->get_meta_type().get_cs_type()),
+                                          static_cast<uint8_t>(column_schema->get_meta_type().get_extend_type()),
+                                          static_cast<uint64_t>(column_schema->get_charset_type()),
+                                          static_cast<uint64_t>(column_schema->get_accuracy().get_accuracy()),
+                                          static_cast<uint8_t>(column_schema->is_invisible_column()),
                                           column_schema->get_column_name()));
             // extended_type_info
             const common::ObIArray<common::ObString>& type_info = column_schema->get_extended_type_info();
