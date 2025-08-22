@@ -1963,14 +1963,14 @@ public:
 
   static int extract_nullable_exprs(const ObRawExpr *expr, ObIArray<const ObRawExpr *> &vars);
 
-  static int check_contain_correlated_lateral_table(const TableItem *table_item, bool &is_contain);
+  static int check_contain_correlated_table(const TableItem *table_item, bool &is_contain);
 
   static int check_lateral_ref_outer_table(const ObDMLStmt *stmt,
                                            const TableItem *parent_table_item,
                                            const TableItem *table_item,
                                            bool &is_ref);
 
-  static int check_contain_correlated_lateral_table(const ObDMLStmt *stmt, bool &is_contain);
+  static int check_contain_correlated_table(const ObDMLStmt *stmt, bool &is_contain);
 
   static int cartesian_tables_pre_split(ObSelectStmt *subquery,
                                         ObIArray<ObRawExpr*> &outer_conditions,
@@ -1992,8 +1992,6 @@ public:
   static int connect_tables(const ObIArray<uint64_t> &table_ids,
                             const ObIArray<TableItem *> &from_tables,
                             UnionFind &uf);
-  static int check_contain_correlated_function_table(const ObDMLStmt *stmt, bool &is_contain);
-  static int check_contain_correlated_json_table(const ObDMLStmt *stmt, bool &is_contain);
   static int check_contain_lost_deterministic_expr(const ObIArray<ObRawExpr*> &exprs,
                                                    bool &is_contain);
   static bool is_enable_values_table_rewrite(const uint64_t compat_version);
