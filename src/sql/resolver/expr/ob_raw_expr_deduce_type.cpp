@@ -18,6 +18,7 @@
 #include "sql/engine/expr/ob_expr_between.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/parser/ob_parser.h"
+#include "sql/engine/expr/ob_expr_estimate_ndv.h"
 
 namespace oceanbase
 {
@@ -2083,7 +2084,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         }
         if (OB_SUCC(ret)) {
           result_type.set_varchar();
-          result_type.set_length(ObAggregateProcessor::get_llc_size());
+          result_type.set_length(ObAggrInfo::APPROX_COUNT_MAX_BUCKET_LEN);
           ObCollationType coll_type = CS_TYPE_INVALID;
           CK(OB_NOT_NULL(my_session_));
           OC( (my_session_->get_collation_connection)(coll_type) );

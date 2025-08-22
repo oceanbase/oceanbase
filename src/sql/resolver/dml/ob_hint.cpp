@@ -1038,6 +1038,12 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       break;
     }
 
+    case APPROX_COUNT_DISTINCT_PRECISION: {
+      is_valid = val.is_int()
+                 && val.get_int() >= 4
+                 && val.get_int() <= 16;
+      break;
+    }
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;

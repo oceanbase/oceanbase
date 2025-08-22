@@ -41,6 +41,7 @@ class ObDMLStmt;
 class ObRawExprUniqueSet;
 class ObSQLSessionInfo;
 class ObRawExprFactory;
+class ObLogPlan;
 
 class ObExprCGCtx
 {
@@ -50,9 +51,10 @@ public:
               share::schema::ObSchemaGetterGuard *schema_guard,
               const uint64_t cur_cluster_version)
     : allocator_(&allocator), session_(session),
-      schema_guard_(schema_guard), cur_cluster_version_(cur_cluster_version)
+      schema_guard_(schema_guard), cur_cluster_version_(cur_cluster_version),
+      log_plan_(nullptr)
   {}
-
+  void set_log_plan(const ObLogPlan *log_plan) { log_plan_ = log_plan; }
 private:
 DISALLOW_COPY_AND_ASSIGN(ObExprCGCtx);
 
@@ -61,6 +63,7 @@ public:
   ObSQLSessionInfo *session_;
   share::schema::ObSchemaGetterGuard *schema_guard_;
   uint64_t cur_cluster_version_;
+  const ObLogPlan *log_plan_;
 };
 
 class ObRawExpr;
@@ -156,6 +159,7 @@ public:
   }
 
   void set_batch_size(const int64_t v) { batch_size_ = v; }
+  void set_log_plan(const ObLogPlan *log_plan)  { op_cg_ctx_.set_log_plan(log_plan); }
 
   void set_rt_question_mark_eval(const bool v) { rt_question_mark_eval_ = v; }
   void set_contain_dynamic_eval_rt_qm(const bool v) { contain_dynamic_eval_rt_qm_ = v; }

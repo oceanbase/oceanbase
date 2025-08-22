@@ -1342,6 +1342,8 @@ int ObBasicStatsEstimator::fill_hints(common::ObIAllocator &alloc,
                                               table_name.length(),
                                               table_name.ptr()))) {
     LOG_WARN("failed to append fmt", K(ret));
+  } else if (OB_FAIL(default_hints.append_fmt(" OPT_PARAM('APPROX_COUNT_DISTINCT_PRECISION', 10) "))) {
+    LOG_WARN("failed to append fmt", K(ret));
   } else if (use_column_store && OB_FAIL(default_hints.append_fmt(use_col_tab_hint,
                                                                   table_name.length(),
                                                                   table_name.ptr()))) {

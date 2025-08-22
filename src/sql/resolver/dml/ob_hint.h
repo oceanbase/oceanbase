@@ -229,6 +229,7 @@ struct ObOptParamHint
     DEF(ORC_FILTER_PUSHDOWN_LEVEL,)                 \
     DEF(ENABLE_INDEX_MERGE,)                        \
     DEF(ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY, )     \
+    DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
