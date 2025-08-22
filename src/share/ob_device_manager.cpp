@@ -196,14 +196,13 @@ bool ObClusterEnableObdalConfig::is_enable_obdal() const
 int ObClusterStateMgr::is_supported_enable_worm_version() const
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  uint64_t data_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-    OB_LOG(WARN, "get data version failed", K(ret));
-  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_3_5_2)) {
+  const uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  if (min_cluster_version <= MOCK_CLUSTER_VERSION_4_2_5_5
+    || (min_cluster_version >= CLUSTER_VERSION_4_3_0_0 && min_cluster_version < CLUSTER_VERSION_4_3_5_2)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "date version is less than 4.3.5.2, set enable_worm is");
-    OB_LOG(WARN, "date version is less than 4.3.5.2, setting enable_worm is not supported", K(ret), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "setting 'enable_worm' for cluster version lower than 4.3.5.2 is");
+    OB_LOG(WARN, "setting 'enable_worm' for cluster version lower than 4.3.5.2 is is not supported",
+              KR(ret), K(min_cluster_version));
   }
   return ret;
 }
