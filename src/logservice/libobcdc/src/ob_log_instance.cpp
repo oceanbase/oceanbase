@@ -418,12 +418,15 @@ int init_max_syslog_file_count_with_libpalf_()
 }
 #endif
 
+#define MPRINT(format, ...) fprintf(stderr, format "\n", ##__VA_ARGS__)
+
 int ObLogInstance::init_logger_()
 {
   int ret = OB_SUCCESS;
   char log_dir[OB_MAX_FILE_NAME_LENGTH];
   char log_file[OB_MAX_FILE_NAME_LENGTH];
   char stderr_log_file[OB_MAX_FILE_NAME_LENGTH];
+  ObPLogWriterCfg log_cfg;
 
   if (is_assign_log_dir_valid_) {
     (void)snprintf(log_dir, sizeof(log_dir), "%s", assign_log_dir_);
@@ -437,6 +440,8 @@ int ObLogInstance::init_logger_()
 
   if (OB_FAIL(common::FileDirectoryUtils::create_full_path(log_dir))) {
     LOG_ERROR("FileDirectoryUtils create_full_path fail", KR(ret), K(log_dir));
+  } else if (!OB_LOGGER.is_inited() && OB_FAIL(OB_LOGGER.init(log_cfg, false/*is_arb_replica*/))) {
+    MPRINT("init logger failed, ret: %d", ret);
   } else {
     const int64_t max_log_file_count = TCONF.max_log_file_count;
     const bool enable_log_limit = (1 == TCONF.enable_log_limit);
@@ -486,8 +491,6 @@ int ObLogInstance::init_logger_()
 
   return ret;
 }
-
-#define MPRINT(format, ...) fprintf(stderr, format "\n", ##__VA_ARGS__)
 
 void ObLogInstance::print_version()
 {
