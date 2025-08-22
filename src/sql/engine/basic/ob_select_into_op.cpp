@@ -483,14 +483,14 @@ int ObSelectIntoOp::calc_url_and_set_access_info()
                                 schema_ptr,
                                 true))) {
         LOG_WARN("get location schema failed", K(ret), K(session->get_effective_tenant_id()), K(path));
-      } else if (OB_ISNULL(schema_ptr)) {
+      } else if (OB_ISNULL(schema_ptr) && IntoFileLocation::REMOTE_HDFS != file_location_) {  // hdfs可能不需要k8s认证
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("match location object failed", K(ret), K(session->get_effective_tenant_id()), K(path));
       } else if (OB_FAIL(ob_write_string(ctx_.get_allocator(), path, basic_url_, true))) {
         LOG_WARN("failed to append string", K(ret));
-      } else if (OB_FAIL(ob_write_string(ctx_.get_allocator(), schema_ptr->get_location_access_info(), storage_info, true))) {
+      } else if (OB_NOT_NULL(schema_ptr) && OB_FAIL(ob_write_string(ctx_.get_allocator(), schema_ptr->get_location_access_info(), storage_info, true))) {
         LOG_WARN("failed to append string", K(ret));
-      } else if (path.prefix_match(OB_HDFS_PREFIX)) {
+      } else if (IntoFileLocation::REMOTE_HDFS == file_location_) {
         access_info_ = &hdfs_info_;
       }
     } else {
