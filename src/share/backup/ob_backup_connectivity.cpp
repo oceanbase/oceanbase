@@ -608,6 +608,10 @@ int ObBackupCheckFile::check_appender_permission_(const ObBackupDest &backup_des
   const static int64_t BUF_LENGTH = 64;
   char data[BUF_LENGTH];
   ObBackupPath path;
+  // here mtl_id is 0, use sys tenant's memory instead of 500 tenant
+  ObObjectStorageTenantGuard object_storage_tenant_guard(
+  OB_SYS_TENANT_ID, OB_IO_MANAGER.get_object_storage_io_timeout_ms(OB_SYS_TENANT_ID) * 1000LL);
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup check file not init", K(ret));

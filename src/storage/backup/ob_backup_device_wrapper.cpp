@@ -130,6 +130,9 @@ int ObBackupWrapperIODevice::open(
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(mutex_);
+  const uint64_t io_tenant_id = MTL_ID();
+  ObObjectStorageTenantGuard object_storage_tenant_guard(
+    io_tenant_id, OB_IO_MANAGER.get_object_storage_io_timeout_ms(io_tenant_id) * 1000LL);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("backup wrapper io device", K(ret));

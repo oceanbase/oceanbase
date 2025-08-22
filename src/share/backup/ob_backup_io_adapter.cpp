@@ -370,6 +370,8 @@ int ObBackupIoAdapter::mk_parent_dir(const common::ObString &uri, const common::
   int ret = OB_SUCCESS;
   char path[OB_MAX_URI_LENGTH];
   ObIODevice *device_handle = NULL;
+  ObObjectStorageTenantGuard object_storage_tenant_guard(
+    get_tenant_id(), OB_IO_MANAGER.get_object_storage_io_timeout_ms(get_tenant_id()) * 1000LL);
 
   if (uri.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -492,7 +494,8 @@ int ObBackupIoAdapter::seal_file(
   int tmp_ret = OB_SUCCESS;
   ObIOFd fd;
   ObIODevice *device_handle = nullptr;
-
+  ObObjectStorageTenantGuard object_storage_tenant_guard(
+    get_tenant_id(), OB_IO_MANAGER.get_object_storage_io_timeout_ms(get_tenant_id()) * 1000LL);
   if (OB_FAIL(open_with_access_type(device_handle, fd,
       storage_info, uri, ObStorageAccessType::OB_STORAGE_ACCESS_APPENDER, storage_id_mod))) {
     OB_LOG(WARN, "fail to get device and open file !", K(uri), K(storage_info), KR(ret));

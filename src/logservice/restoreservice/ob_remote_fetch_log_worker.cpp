@@ -294,7 +294,9 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
   const int64_t DEFAULT_BUF_SIZE = 64 * 1024 * 1024L;
   int64_t fetch_log_size = 0;
   task->task_stat_.start_fetch_ts_ = ObTimeUtility::current_time();
-
+  const uint64_t io_tenant_id = MTL_ID();
+  ObObjectStorageTenantGuard object_storage_tenant_guard(
+        io_tenant_id, OB_IO_MANAGER.get_object_storage_io_timeout_ms(io_tenant_id) * 1000LL);
   if (OB_UNLIKELY(! task->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(ret), K(task));

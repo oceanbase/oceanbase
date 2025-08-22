@@ -9403,11 +9403,16 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
       } else if (job_id < 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid job_id", K(ret), K(job_id));
-      } else if (OB_FAIL(ObRestoreUtil::fill_physical_restore_job(job_id, arg, job_info))) {
-        LOG_WARN("fail to fill physical restore job", K(ret), K(job_id), K(arg));
       } else {
-        job_info.set_restore_start_ts(start_ts);
-        res_job_id = job_id;
+        // here mtl_id is 0, use sys tenant's memory instead of 500 tenant
+        MTL_SWITCH(OB_SYS_TENANT_ID) {
+          if (OB_FAIL(ObRestoreUtil::fill_physical_restore_job(job_id, arg, job_info))) {
+            LOG_WARN("fail to fill physical restore job", K(ret), K(job_id), K(arg));
+          } else {
+            job_info.set_restore_start_ts(start_ts);
+            res_job_id = job_id;
+          }
+        }
       }
       if (FAILEDx(check_restore_tenant_valid(job_info, schema_guard))) {
         LOG_WARN("failed to check restore tenant vailid", KR(ret), K(job_info));
