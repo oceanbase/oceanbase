@@ -210,7 +210,7 @@ public:
   ///
   /// @retval OB_SUCCESS        Success
   /// @retval other_error_code  Fail
-  int revert_participants();
+  int revert_participants(volatile bool &stop_flag);
 
 public:
   static bool is_state_valid(const int state) { return state >= TRANS_CTX_STATE_DISCARDED && state < TRANS_CTX_STATE_MAX; }
@@ -360,7 +360,7 @@ private:
     return (revertable_info & 0xC000000000000000) == 0xC000000000000000;
   }
   // wait until trans redo dispatched.
-  void wait_trans_redo_dispatched_();
+  void wait_trans_redo_dispatched_(volatile bool &stop_flag);
 
 private:
   IObLogTransCtxMgr         *host_;
