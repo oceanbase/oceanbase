@@ -4006,6 +4006,9 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
   cursor.set_unstreaming();
   HEAP_VAR(ObSPIResultSet, spi_result) {
     ObSPICursor* spi_cursor = NULL;
+    CK (OB_NOT_NULL(ctx));
+    CK (OB_NOT_NULL(ctx->exec_ctx_));
+    CK (OB_NOT_NULL(ctx->exec_ctx_->get_sql_ctx()));
     OZ (spi_result.init(session_info));
     OZ (spi_result.start_nested_stmt_if_need(ctx, sql, static_cast<stmt::StmtType>(type), for_update));
     OZ (save_unstreaming_cursor_sql(cursor, (sql != NULL ? sql : ps_sql)));
@@ -4025,7 +4028,9 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
           ObPLSqlAuditGuard audit_guard(
             *(ctx->exec_ctx_), session_info, spi_result, audit_record, ret, (sql != NULL ? sql : ps_sql), retry_ctrl, trace_id_guard, static_cast<stmt::StmtType>(type));
           ObSPIRetryCtrlGuard retry_guard(retry_ctrl, spi_result, session_info, ret);
-
+          if (cursor.is_ps_cursor()) {
+            spi_result.get_sql_ctx().can_reroute_sql_ = ctx->exec_ctx_->get_sql_ctx()->can_reroute_sql_;
+          }
           CK (OB_NOT_NULL(spi_result.get_memory_ctx()));
           OZ (inner_open(ctx,
                          spi_result.get_memory_ctx()->get_arena_allocator(),
@@ -4075,6 +4080,15 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
           }
           if (!cursor.is_ps_cursor()) {
             retry_guard.test();
+          }
+          if (cursor.is_ps_cursor() && OB_ERR_PROXY_REROUTE == ret && spi_result.get_sql_ctx().can_reroute_sql_) {
+            LOG_WARN("need proxy reroute sql", K(ret), K(spi_result.get_sql_ctx().get_reroute_info()));
+            if (NULL == ctx->exec_ctx_->get_sql_ctx()->get_or_create_reroute_info()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("reroute info is null", K(ret));
+            } else {
+              ctx->exec_ctx_->get_sql_ctx()->get_reroute_info()->assign(*spi_result.get_sql_ctx().get_reroute_info());
+            }
           }
           int close_ret = spi_result.close_result_set();
           if (OB_SUCCESS != close_ret) {
