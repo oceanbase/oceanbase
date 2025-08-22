@@ -1955,6 +1955,7 @@ int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
   candidate.ls_id_ = ls_id;
   candidate.ls_status_ = LSStatus::LS_NORMAL;
   candidate.gc_reason_ = GCReason::INVALID_GC_REASON;
+  common::ObArray<ObTabletID> tablet_id_set;
   if (OB_FAIL(get_ls_status_from_table(ls_id, ls_status))) {
     int tmp_ret = OB_SUCCESS;
     bool is_tenant_dropped = false;
@@ -1982,6 +1983,15 @@ int ObGarbageCollector::gc_check_ls_status_(storage::ObLS &ls,
       if (OB_SUCC(ret)) {
       } else if (OB_SUCCESS != (tmp_ret = ls.get_migration_status(migration_status))) {
         CLOG_LOG(WARN, "get_migration_status failed", K(tmp_ret), K(ls_id));
+#ifdef OB_BUILD_SHARED_STORAGE
+      } else if (GCTX.is_shared_storage_mode()
+                 && OB_TMP_FAIL(ls.get_tablet_svr()->get_all_tablet_ids(
+                     true /* except_ls_inner_tablet */, tablet_id_set))) {
+        CLOG_LOG(WARN, "get_all_tablet_ids failed", KR(tmp_ret), K(ls_id));
+      } else if (GCTX.is_shared_storage_mode() && tablet_id_set.count() != 0) {
+        CLOG_LOG(INFO, "tablets in ls are not mark delete, ls is not allowd to GC", K(ls_id),
+            K(tablet_id_set.count()), K(tablet_id_set));
+#endif
       } else if (OB_SUCCESS != (tmp_ret = ObMigrationStatusHelper::check_ls_allow_gc(
             ls.get_ls_id(), migration_status, allow_gc))) {
         CLOG_LOG(WARN, "failed to check ls allowed to gc", K(tmp_ret), K(migration_status), K(ls_id));
