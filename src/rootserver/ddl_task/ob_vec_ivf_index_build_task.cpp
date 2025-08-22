@@ -176,6 +176,7 @@ int ObVecIVFIndexBuildTask::init(const ObDDLTaskRecord &task_record)
                                                      pos))) {
     LOG_WARN("deserialize params from message failed", K(ret));
   } else {
+    task_type_ = task_record.ddl_type_;
     tenant_id_ = task_record.tenant_id_;
     task_id_ = task_record.task_id_;
     schema_version_ = schema_version;
