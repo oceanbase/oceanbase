@@ -134,14 +134,14 @@ int ObLinkOp::init_dblink()
   } else if (OB_FAIL(my_session->get_dblink_context().get_dblink_conn(dblink_id_, dblink_conn, tm_sessid_))) {
     LOG_WARN("failed to get dblink connection from session", K(my_session), K(sessid_), K(ret));
   } else {
-    if (NULL == dblink_conn) { // nothing about transaction
-      if (OB_FAIL(ObDblinkService::init_dblink_param_ctx(dblink_param_ctx_,
-                                                         my_session,
-                                                         allocator_, // useless in oracle mode
-                                                         dblink_id_,
-                                                         link_type_))) {
-        LOG_WARN("failed to init dblink param ctx", K(ret), K(dblink_param_ctx_), K(dblink_id_), K(link_type_));
-      } else if (OB_FAIL(dblink_proxy_->create_dblink_pool(dblink_param_ctx_,
+    if (OB_FAIL(ObDblinkService::init_dblink_param_ctx(dblink_param_ctx_,
+                                                        my_session,
+                                                        allocator_, // useless in oracle mode
+                                                        dblink_id_,
+                                                        link_type_))) {
+      LOG_WARN("failed to init dblink param ctx", K(ret), K(dblink_param_ctx_), K(dblink_id_), K(link_type_));
+    } else if (NULL == dblink_conn) { // nothing about transaction
+      if (OB_FAIL(dblink_proxy_->create_dblink_pool(dblink_param_ctx_,
                                                     dblink_schema_->get_host_name(),
                                                     dblink_schema_->get_host_port(),
                                                     dblink_schema_->get_tenant_name(),
@@ -156,12 +156,14 @@ int ObLinkOp::init_dblink()
       } else if (OB_FAIL(my_session->get_dblink_context().register_dblink_conn_pool(dblink_conn_->get_common_server_pool()))) {
         LOG_WARN("failed to register dblink conn pool to current session", K(ret));
       } else {
-        LOG_TRACE("link op get connection from dblink pool", K(in_xa_transaction_), KP(dblink_conn_), K(lbt()));
+        LOG_TRACE("link op get connection from dblink pool", K(dblink_param_ctx_), K(in_xa_transaction_), KP(dblink_conn_), K(lbt()));
       }
     } else if (dblink_conn->get_dblink_driver_proto() != link_type_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("wrong driver proto", K(ret), K(dblink_conn->get_dblink_driver_proto()), K(link_type_), K(next_sql_req_level_));
-    } else { // about transaction
+    } else if (OB_FAIL(dblink_proxy_->prepare_enviroment(dblink_param_ctx_, dblink_conn))) {
+      LOG_WARN("prepare environment failed", K(ret));
+    } else {
       dblink_conn_ = dblink_conn;
       in_xa_transaction_ = true; //to tell link scan op don't release dblink_conn_
       LOG_TRACE("link op get connection from xa transaction", K(dblink_id_), KP(dblink_conn_));
