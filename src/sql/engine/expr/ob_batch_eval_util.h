@@ -19,6 +19,7 @@
 #include "share/vector/ob_uniform_base.h"
 #include "share/vector/ob_discrete_base.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -121,15 +122,9 @@ struct ObDoArithBatchEval
     common::ObDatumDesc desc;
     // if ArithOp is for DatumFunctor which need alloc mem, here need set batch_info_idx
     ObEvalCtx::BatchInfoScopeGuard *batch_info_guard = nullptr;
+    char guard_buffer[sizeof(ObEvalCtx::BatchInfoScopeGuard)];
     if (ArithOp::is_need_alloc_mem()) {
-      char *ptr = NULL;
-      if (OB_ISNULL(ptr =static_cast<char *>(ob_malloc(sizeof(ObEvalCtx::BatchInfoScopeGuard),
-          ObModIds::OB_SQL_EXPR_CALC)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc memory for batch_info_guard", K(ret));
-      } else {
-        batch_info_guard = new (ptr) ObEvalCtx::BatchInfoScopeGuard(ctx);
-      }
+      batch_info_guard = new (guard_buffer) ObEvalCtx::BatchInfoScopeGuard(ctx);
     }
 
     for (int64_t i = 0; i < size && OB_SUCC(ret);) {
@@ -184,7 +179,6 @@ struct ObDoArithBatchEval
     // ~BatchInfoScopeGuard and free memory
     if (batch_info_guard) {
       batch_info_guard->~BatchInfoScopeGuard();
-      ob_free(batch_info_guard);
     }
     if (OB_SUCC(ret) && desc.is_null()) {
       expr.get_eval_info(ctx).notnull_ = false;
