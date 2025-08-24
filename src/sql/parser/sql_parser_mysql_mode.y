@@ -525,7 +525,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_resource_option resource_option_list resource_option
 %type <ival> reference_action
 %type <node> alter_foreign_key_action
-%type <node> analyze_stmt analyze_statistics_clause opt_analyze_for_clause opt_analyze_for_clause_list opt_analyze_for_clause_element opt_analyze_sample_clause sample_option for_all opt_indexed_hiddden opt_size_clause size_clause for_columns for_columns_list for_columns_item column_clause
+%type <node> analyze_stmt analyze_statistics_clause opt_analyze_for_clause opt_analyze_for_clause_list opt_analyze_for_clause_element opt_analyze_sample_clause sample_option for_all opt_indexed_hiddden opt_size_clause size_clause for_columns for_columns_list for_columns_item column_clause ignore_clause customize_clause
 %type <node> optimize_stmt
 %type <node> dump_memory_stmt
 %type <node> create_savepoint_stmt rollback_savepoint_stmt release_savepoint_stmt
@@ -24000,11 +24000,35 @@ for_all
 ;
 
 for_all:
-FOR ALL opt_indexed_hiddden COLUMNS opt_size_clause
+FOR ALL opt_indexed_hiddden COLUMNS opt_size_clause ignore_clause customize_clause
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_FOR_ALL, 2,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FOR_ALL, 4,
                            $3, /*opt_indexed_hiddden*/
-                           $5  /*opt_size_clause*/);
+                           $5, /*opt_size_clause*/
+                           $6, /*ignore_clause*/
+                           $7  /*customize_clause*/);
+}
+;
+
+ignore_clause:
+/*empty*/
+{
+  $$ = NULL;
+}
+| IGNORE column_list
+{
+  merge_nodes($$, result, T_COLUMN_LIST, $2);
+}
+;
+
+customize_clause:
+/*empty*/
+{
+  $$ = NULL;
+}
+| SET for_columns_list %prec LOWER_PARENS
+{
+  merge_nodes($$, result, T_FOR_COLUMNS, $2);
 }
 ;
 
