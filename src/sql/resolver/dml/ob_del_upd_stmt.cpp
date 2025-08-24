@@ -174,6 +174,7 @@ int ObInsertTableInfo::assign(const ObInsertTableInfo &other)
     LOG_WARN("failed to assign exprs", K(ret));
   } else {
     is_replace_ = other.is_replace_;
+    all_values_simple_const_ = other.all_values_simple_const_;
   }
   return ret;
 }
@@ -199,6 +200,7 @@ int ObInsertTableInfo::deep_copy(ObIRawExprCopier &expr_copier,
     LOG_WARN("failed to do propare allocate array", K(ret));
   } else {
     is_replace_ = other.is_replace_;
+    all_values_simple_const_ = other.all_values_simple_const_;
     for (int64_t i = 0; OB_SUCC(ret) && i < assignments_.count(); i++) {
       if (OB_FAIL(assignments_.at(i).deep_copy(expr_copier, other.assignments_.at(i)))) {
         LOG_WARN("failed to deep copy expr", K(ret));
@@ -227,24 +229,28 @@ int ObInsertTableInfo::iterate_stmt_expr(ObStmtExprVisitor &visitor)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column expr is null", K(ret));
     } else if (col_expr->is_table_part_key_column()) {
-      for (int64_t j = i; OB_SUCC(ret) && j < values_vector_.count(); j += value_desc_cnt) {
+      for (int64_t j = i; OB_SUCC(ret) && visitor.is_required(SCOPE_INSERT_VECTOR) &&
+                          j < values_vector_.count(); j += value_desc_cnt) {
         if (OB_FAIL(visitor.visit(values_vector_.at(j), SCOPE_INSERT_VECTOR))) {
           LOG_WARN("add expr to expr checker failed", K(ret), K(i), K(j));
         }
       }
     }
   }
-  // !value_from_select() && !subquery_exprs_.empty()
-  for (int64_t i = 0; OB_SUCC(ret) && i < values_vector_.count(); ++i) {
-    if (OB_ISNULL(values_vector_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if ((values_vector_.at(i)->has_flag(CNT_SUB_QUERY) ||
-                values_vector_.at(i)->has_flag(CNT_ONETIME) ||
-                values_vector_.at(i)->has_flag(CNT_PL_UDF)) &&
-               OB_FAIL(visitor.visit(values_vector_.at(i), SCOPE_INSERT_VECTOR))) {
-      LOG_WARN("failed to add expr to expr checker", K(ret));
-    } else { /*do nothing*/ }
+  if (OB_SUCC(ret) && visitor.is_required(SCOPE_INSERT_VECTOR)) {
+    // For large insert queries, just traversing the values is time-consuming,
+    // so add a short-circuit check before traversal.
+    for (int64_t i = 0; OB_SUCC(ret) && i < values_vector_.count(); ++i) {
+      if (OB_ISNULL(values_vector_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if ((values_vector_.at(i)->has_flag(CNT_SUB_QUERY) ||
+                  values_vector_.at(i)->has_flag(CNT_ONETIME) ||
+                  values_vector_.at(i)->has_flag(CNT_PL_UDF)) &&
+                OB_FAIL(visitor.visit(values_vector_.at(i), SCOPE_INSERT_VECTOR))) {
+        LOG_WARN("failed to add expr to expr checker", K(ret));
+      } else { /*do nothing*/ }
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < assignments_.count(); ++i) {
     ObAssignment &assign = assignments_.at(i);

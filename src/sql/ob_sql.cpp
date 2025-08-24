@@ -3325,6 +3325,9 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
   stmt_ora_need_privs.need_privs_.set_allocator(&allocator);
   _LOG_DEBUG("start to generate physical plan for query.(query = %.*s)",
               parse_result.input_sql_len_, parse_result.input_sql_);
+  if (OB_NOT_NULL(result.get_exec_context().get_query_ctx())) {
+    result.get_exec_context().get_query_ctx()->init_type_ctx(result.get_exec_context().get_my_session());
+  }
   if (OB_FAIL(sanity_check(sql_ctx))) { //check sql_ctx.session_info_ and sql_ctx.schema_guard_
     LOG_WARN("Failed to do sanity check", K(ret));
   } else if (OB_FAIL(generate_stmt(parse_result,

@@ -240,7 +240,8 @@ public:
   int get_all_tablet_and_object_id(const share::schema::ObPartitionLevel part_level,
                                    const common::ObPartID part_id,
                                    common::ObIArray<common::ObTabletID> &tablet_ids,
-                                   common::ObIArray<common::ObObjectID> &out_part_ids);
+                                   common::ObIArray<common::ObObjectID> &out_part_ids,
+                                   const bool need_dedup);
   int get_all_tablet_and_object_id(common::ObIArray<common::ObTabletID> &tablet_ids,
                                    common::ObIArray<common::ObObjectID> &out_part_ids);
   int get_default_tablet_and_object_id(const share::schema::ObPartitionLevel part_level,
@@ -358,9 +359,6 @@ class ObDASLocationRouter
 public:
   ObDASLocationRouter(common::ObIAllocator &allocator);
   ~ObDASLocationRouter();
-  int nonblock_get(const ObDASTableLocMeta &loc_meta,
-                   const common::ObTabletID &tablet_id,
-                   share::ObLSLocation &location);
 
   int nonblock_get_candi_tablet_locations(const ObDASTableLocMeta &loc_meta,
                                           const common::ObIArray<ObTabletID> &tablet_ids,
@@ -418,10 +416,19 @@ private:
   int get_vt_ls_location(uint64_t table_id,
                          const common::ObTabletID &tablet_id,
                          share::ObLSLocation &location);
+  int nonblock_get(const ObDASTableLocMeta &loc_meta,
+                   const common::ObTabletID &tablet_id,
+                   share::ObLSLocation &location);
   int nonblock_get_readable_replica(const uint64_t tenant_id,
                                     const common::ObTabletID &tablet_id,
                                     ObDASTabletLoc &tablet_loc,
                                     const ObRoutePolicyType route_policy);
+  int nonblock_get_candi_tablet_location(const ObDASTableLocMeta &loc_meta,
+                                         const common::ObTabletID &tablet_id,
+                                         const common::ObObjectID &partition_id,
+                                         const common::ObObjectID &first_level_part_id,
+                                         share::ObLSLocation &location,
+                                         ObCandiTabletLoc &candi_tablet_loc);
 private:
   int last_errno_;
   int cur_errno_;

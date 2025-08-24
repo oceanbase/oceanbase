@@ -65,9 +65,10 @@ TEST(TestRawExprFlag, inherit_info_flag)
 
   std::ofstream of_result(tmp_file);
   ASSERT_TRUE(of_result.is_open());
-  ObExprInfo child_info;
-  ObConstRawExpr expr;
-  ObExprInfo &parent_info = expr.get_expr_info();
+  ObConstRawExpr child_expr;
+  ObConstRawExpr parent_expr;
+  const ObExprInfo &child_info = child_expr.get_expr_info();
+  const ObExprInfo &parent_info = parent_expr.get_expr_info();
 
   of_result << "========== inherit is flag ==========" << std::endl;
   of_result << std::endl;
@@ -77,10 +78,10 @@ TEST(TestRawExprFlag, inherit_info_flag)
   for (int32_t i = 0; i <= IS_INFO_MASK_END; ++i) {
     ObExprInfoFlag child_flag = static_cast<ObExprInfoFlag>(i);
     ObExprInfoFlag parent_flag = static_cast<ObExprInfoFlag>(i + CNT_INFO_MASK_BEGIN);
-    child_info.reset();
-    parent_info.reset();
-    OK (child_info.add_member(i));
-    OK (expr.add_child_flags(child_info));
+    child_expr.reset_flag();
+    parent_expr.reset_flag();
+    OK (child_expr.add_flag(i));
+    OK (parent_expr.add_child_flags(child_info));
     EXPECT_EQ(1, parent_info.num_members());
     EXPECT_TRUE(parent_info.has_member(i + CNT_INFO_MASK_BEGIN));
     of_result << "| " << get_expr_info_flag_str(child_flag)
@@ -95,10 +96,10 @@ TEST(TestRawExprFlag, inherit_info_flag)
 
   for (int32_t i = INHERIT_MASK_BEGIN; i <= INHERIT_MASK_END; ++i) {
     ObExprInfoFlag flag = static_cast<ObExprInfoFlag>(i);
-    child_info.reset();
-    parent_info.reset();
-    OK (child_info.add_member(i));
-    OK (expr.add_child_flags(child_info));
+    child_expr.reset_flag();
+    parent_expr.reset_flag();
+    OK (child_expr.add_flag(i));
+    OK (parent_expr.add_child_flags(child_info));
     EXPECT_EQ(1, parent_info.num_members());
     EXPECT_TRUE(parent_info.has_member(i));
     EXPECT_EQ(parent_info, child_info);

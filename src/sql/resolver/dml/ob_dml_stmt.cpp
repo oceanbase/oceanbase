@@ -1825,10 +1825,6 @@ int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info, bool nee
         LOG_WARN("failed to formalize expr", K(ret));
       } else if (OB_FAIL(expr->pull_relation_id())) {
         LOG_WARN("pull expr relation ids failed", K(ret), K(*expr));
-      } else if (OB_FAIL(expr->extract_info())) {
-        // zhanyue todo: adjust this.
-        // Add IS_JOIN_COND flag need use expr relation_ids, here call extract_info() again.
-        LOG_WARN("failed to extract info", K(*expr));
       } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(expr, subquery_exprs_, true))) {
         LOG_WARN("failed to extract query ref expr", K(ret));
       }
@@ -3870,6 +3866,10 @@ int ObDMLStmt::get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs)
 {
   ObStmtExprGetter visitor;
   visitor.set_relation_scope();
+  if (is_insert_stmt() &&
+      static_cast<const ObInsertStmt*>(this)->get_insert_table_info().all_values_simple_const_) {
+    visitor.remove_scope(SCOPE_INSERT_VECTOR);
+  }
   return get_relation_exprs(relation_exprs, visitor);
 }
 
@@ -3879,6 +3879,10 @@ int ObDMLStmt::get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs,
 {
   ObStmtExprGetter visitor;
   visitor.set_relation_scope();
+  if (is_insert_stmt() &&
+      static_cast<const ObInsertStmt*>(this)->get_insert_table_info().all_values_simple_const_) {
+    visitor.remove_scope(SCOPE_INSERT_VECTOR);
+  }
   visitor.set_expr_flags_required(flags, match_any_flag);
   return get_relation_exprs(relation_exprs, visitor);
 }
@@ -3887,6 +3891,10 @@ int ObDMLStmt::get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_e
 {
   ObStmtExprGetter visitor;
   visitor.set_relation_scope();
+  if (is_insert_stmt() &&
+      static_cast<const ObInsertStmt*>(this)->get_insert_table_info().all_values_simple_const_) {
+    visitor.remove_scope(SCOPE_INSERT_VECTOR);
+  }
   return get_relation_exprs(relation_expr_ptrs, visitor);
 }
 
@@ -3896,6 +3904,10 @@ int ObDMLStmt::get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_e
 {
   ObStmtExprGetter visitor;
   visitor.set_relation_scope();
+  if (is_insert_stmt() &&
+      static_cast<const ObInsertStmt*>(this)->get_insert_table_info().all_values_simple_const_) {
+    visitor.remove_scope(SCOPE_INSERT_VECTOR);
+  }
   visitor.set_expr_flags_required(flags, match_any_flag);
   return get_relation_exprs(relation_expr_ptrs, visitor);
 }

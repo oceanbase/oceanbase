@@ -559,6 +559,68 @@ public:
   }
 
   template<int64_t M, typename FlagType2, bool auto_free2>
+  int add_members_with_mask(const ObSqlBitSet<M, FlagType2, auto_free2> &other,
+                            int64_t begin_index, int64_t end_index)
+  {
+    int ret = common::OB_SUCCESS;
+    end_index = MIN(end_index + 1, other.bit_count());
+    if (!is_valid()) {
+      ret = desc_.init_errcode_;
+      SQL_RESV_LOG(WARN, "got init error", K(desc_.init_errcode_));
+    } else if (OB_ISNULL(bit_set_word_array_)) {
+      ret = common::OB_INVALID_ARGUMENT;
+      SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(bit_set_word_array_));
+    } else if (begin_index >= other.bit_count()) {
+      // do nothing
+    } else if (OB_UNLIKELY(begin_index < 0 || end_index < begin_index)) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(begin_index), K(end_index), K(other));
+    } else {
+      int64_t this_count = desc_.len_;
+      int64_t that_count = ((end_index - 1) >> PER_BITSETWORD_MOD_BITS) + 1;
+
+      int64_t begin_word = begin_index / PER_BITSETWORD_BITS;
+      int64_t end_word = end_index / PER_BITSETWORD_BITS;
+      int64_t begin_pos = begin_index % PER_BITSETWORD_BITS;
+      int64_t end_pos = end_index % PER_BITSETWORD_BITS;
+
+      if (this_count < that_count) {
+        if (desc_.cap_ >= that_count) {
+          // do nothing
+        } else {
+          int64_t new_word_cnt = that_count * 2;
+          if (OB_FAIL(alloc_new_buf(new_word_cnt))) {
+            SQL_RESV_LOG(WARN, "failed to alloc new buffer", K(ret));
+          }
+        }
+      }
+
+      if (OB_SUCC(ret) && that_count >= desc_.len_) {
+        desc_.len_ = static_cast<int16_t>(that_count);
+      }
+
+      if (OB_SUCC(ret)) {
+        if (begin_word < end_word) {
+          bit_set_word_array_[begin_word] |= other.get_bitset_word(begin_word)
+                                             & ~(((BitSetWord) 1 << begin_pos) - 1);
+          for (int64_t i = begin_word + 1; i < end_word; ++i) {
+            bit_set_word_array_[i] |= other.get_bitset_word(i);
+          }
+          if (end_pos > 0) {
+            bit_set_word_array_[end_word] |= other.get_bitset_word(end_word)
+                                             & (((BitSetWord) 1 << end_pos) - 1);
+          }
+        } else {
+          bit_set_word_array_[begin_word] |= other.get_bitset_word(begin_word)
+                                             & ~(((BitSetWord) 1 << begin_pos) - 1)
+                                             & (((BitSetWord) 1 << end_pos) - 1);
+        }
+      }
+    }
+    return ret;
+  }
+
+  template<int64_t M, typename FlagType2, bool auto_free2>
   int add_members2(const ObSqlBitSet<M, FlagType2, auto_free2> &other)
   {
     return add_members(other);
@@ -1261,12 +1323,14 @@ public:
         col_name_(),
         dblink_name_(),
         is_star_(false),
+        is_access_root_(true),
         ref_expr_(NULL),
         parents_expr_info_(),
         parent_aggr_level_(-1),
         access_idents_(),
         current_resolve_level_(-1),
-        is_access_root_(true)
+        parent_expr_(NULL),
+        parent_qname_idx_(-1)
   {
   }
   virtual ~ObQualifiedName() {}
@@ -1279,11 +1343,13 @@ public:
     col_name_ = other.col_name_;
     dblink_name_ = other.dblink_name_;
     is_star_ = other.is_star_;
+    is_access_root_ = other.is_access_root_;
     ref_expr_ = other.ref_expr_;
     parents_expr_info_ = other.parents_expr_info_;
     parent_aggr_level_ = other.parent_aggr_level_;
     current_resolve_level_ = other.current_resolve_level_;
-    is_access_root_ = other.is_access_root_;
+    parent_expr_ = other.parent_expr_;
+    parent_qname_idx_ = other.parent_qname_idx_;
     return access_idents_.assign(other.access_idents_);
   }
   ObQualifiedName &operator =(const ObQualifiedName &other)
@@ -1365,6 +1431,9 @@ public:
   }
 
   inline bool is_access_root() const { return is_access_root_; }
+  inline bool parent_exists() const { return parent_expr_ != NULL || parent_qname_exists(); }
+  inline bool parent_qname_exists() const { return parent_qname_idx_ >= 0; }
+  int replace_ref_in_parent(ObRawExpr *real_ref_expr, ObIArray<ObQualifiedName> &columns);
 
   int replace_access_ident_params(ObRawExpr *from, ObRawExpr *to);
 
@@ -1379,7 +1448,9 @@ public:
                K_(access_idents),
                K_(current_resolve_level),
                K_(is_access_root),
-               K_(catalog_name));
+               K_(catalog_name),
+               K_(parent_expr),
+               K_(parent_qname_idx));
 public:
   common::ObString catalog_name_;
   common::ObString database_name_;
@@ -1387,6 +1458,7 @@ public:
   common::ObString col_name_; //当用于UDF的时候，表示function name
   common::ObString dblink_name_;
   bool is_star_;
+  bool is_access_root_; //a(b(c))会被递归解析出c、b(c)、a(b(c))三个ObQualifiedName，只有a(b(c))是root
   ObColumnRefRawExpr *ref_expr_;
   ObExprInfo parents_expr_info_;
   int64_t parent_aggr_level_;
@@ -1394,7 +1466,8 @@ public:
   common::ObSEArray<ObObjAccessIdent, 4, common::ModulePageAllocator, true> access_idents_;
   // the depth of resolve level
   int64_t current_resolve_level_;
-  bool is_access_root_; //a(b(c))会被递归解析出c、b(c)、a(b(c))三个ObQualifiedName，只有a(b(c))是root
+  ObRawExpr *parent_expr_;
+  int64_t parent_qname_idx_;
 };
 
 // bug 6349933: for most of the cases, 8 tables should be more than enough
@@ -2059,12 +2132,12 @@ public:
   ObRawExprFactory *get_expr_factory() { return expr_factory_; }
   const ObRawExprFactory *get_expr_factory() const { return expr_factory_; }
 
-  void set_expr_info(const ObExprInfo &info);
   int add_flag(int32_t flag);
-  int add_flags(const ObExprInfo &flags);
   int add_child_flags(const ObExprInfo &flags);
   bool has_flag(ObExprInfoFlag flag) const;
   int clear_flag(int32_t flag);
+  void reset_flag() { info_.reset(); }
+  const ObExprInfo &get_expr_info() const;
   /**                                                   +-is_immutable_const_expr-+
    *                               （1、1+2、sysdate）   ｜        (1、1+2)
    *                             +-is_static_const_expr-+
@@ -2084,8 +2157,6 @@ public:
   bool is_static_scalar_const_expr() const;
   bool is_dynamic_const_expr() const;
   bool has_hierarchical_query_flag() const;
-  const ObExprInfo &get_expr_info() const;
-  ObExprInfo &get_expr_info();
 
   int add_relation_id(int64_t rel_idx);
   int add_relation_ids(const ObRelIds &rel_ids);
@@ -2624,11 +2695,6 @@ inline bool ObRawExpr::has_hierarchical_query_flag() const
          || has_flag(CNT_SYS_CONNECT_BY_PATH);;
 }
 
-inline int ObRawExpr::add_flags(const ObExprInfo &flags)
-{
-  return info_.add_members(flags);
-}
-
 inline bool ObRawExpr::has_flag(ObExprInfoFlag flag) const
 {
   return info_.has_member(flag);
@@ -2641,14 +2707,6 @@ inline bool ObRawExpr::inner_same_as(
   return (get_expr_type() == expr.get_expr_type() && get_result_type() == expr.get_result_type());
 }
 
-inline void ObRawExpr::set_expr_info(const ObExprInfo &info)
-{
-  info_ = info;
-}
-inline ObExprInfo &ObRawExpr::get_expr_info()
-{
-  return info_;
-}
 inline const ObExprInfo &ObRawExpr::get_expr_info() const
 {
   return info_;

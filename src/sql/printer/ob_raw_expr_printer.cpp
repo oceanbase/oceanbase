@@ -965,6 +965,20 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       }
       break;
     }
+    case T_ANY: {
+      SET_SYMBOL_IF_EMPTY("ANY");
+    }
+    case T_ALL: {
+      SET_SYMBOL_IF_EMPTY("ALL");
+      if (1 != expr->get_param_count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr param count should be equal 1 ", K(ret), K(expr->get_param_count()));
+      } else {
+        DATA_PRINTF(" %.*s ", LEN_AND_PTR(symbol));
+        PRINT_EXPR(expr->get_param_expr(0));
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unknown expr type", K(ret), "type", get_type_name(type));

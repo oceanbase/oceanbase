@@ -1371,6 +1371,35 @@ struct NullAwareAntiJoinInfo {
   ObSEArray<ObExprConstraint, 2> expr_constraints_;
 };
 
+struct MergeKeyInfoHelper
+{
+  MergeKeyInfoHelper() :
+      join_order_(nullptr), non_ordering_merge_key_info_(nullptr), can_ignore_merge_plan_(false) {}
+  ~MergeKeyInfoHelper();
+  int init(ObJoinOrder *join_order, const ObIArray<ObRawExpr *> &merge_keys, bool can_ignore_merge_plan);
+  int get_merge_key_info(Path *path, MergeKeyInfo *&merge_key_info);
+  int init_merge_join_structure(ObIAllocator &allocator,
+                                           const ObIArray<Path*> &paths,
+                                           const ObIArray<ObRawExpr*> &join_exprs,
+                                           ObIArray<MergeKeyInfo*> &merge_keys,
+                                           const bool can_ignore_merge_plan);
+  TO_STRING_KV(K_(can_ignore_merge_plan),
+               K_(merge_keys),
+               K_(paths),
+               K_(merge_key_infos));
+
+  ObArenaAllocator allocator_;
+  ObJoinOrder *join_order_;
+  ObSEArray<ObRawExpr*, 4> merge_keys_;
+  ObSEArray<ObOrderDirection, 4> default_directions_;
+  ObSEArray<Path *, 8> paths_;
+  ObSEArray<MergeKeyInfo *, 8> merge_key_infos_;
+  MergeKeyInfo *non_ordering_merge_key_info_;
+  bool can_ignore_merge_plan_;
+
+  DISALLOW_COPY_AND_ASSIGN(MergeKeyInfoHelper);
+};
+
   class ObJoinOrder
   {
   public:
@@ -2288,7 +2317,7 @@ struct NullAwareAntiJoinInfo {
     int generate_mj_paths(const EqualSets &equal_sets,
                           const ObIArray<ObSEArray<Path*, 16>> &left_paths,
                           const ObIArray<ObSEArray<Path*, 16>> &right_paths,
-                          const ObIArray<ObSEArray<MergeKeyInfo*, 16>> &left_merge_keys,
+                          MergeKeyInfoHelper &left_merge_infos,
                           const ObIArray<ObRawExpr*> &left_join_keys,
                           const ObIArray<ObRawExpr*> &right_join_keys,
                           const ObIArray<bool> &null_safe_info,
@@ -2302,7 +2331,7 @@ struct NullAwareAntiJoinInfo {
     int generate_mj_paths(const EqualSets &equal_sets,
                           const ObIArray<Path*> &left_paths,
                           const ObIArray<Path*> &right_paths,
-                          const ObIArray<MergeKeyInfo*> &left_merge_keys,
+                          MergeKeyInfoHelper &left_merge_infos,
                           const ObIArray<ObRawExpr*> &left_join_keys,
                           const ObIArray<ObRawExpr*> &right_join_keys,
                           const ObIArray<bool> &null_safe_info,
@@ -2323,18 +2352,6 @@ struct NullAwareAntiJoinInfo {
                                      bool &best_need_sort,
                                      int64_t &best_prefix_pos,
                                      bool prune_mj);
-
-    int init_merge_join_structure(ObIAllocator &allocator,
-                                  const ObIArray<ObSEArray<Path*, 16>> &paths,
-                                  const ObIArray<ObRawExpr*> &join_exprs,
-                                  ObIArray<ObSEArray<MergeKeyInfo*, 16>> &merge_keys,
-                                  const bool can_ignore_merge_plan);
-
-    int init_merge_join_structure(common::ObIAllocator &allocator,
-                                  const common::ObIArray<Path*> &paths,
-                                  const common::ObIArray<ObRawExpr*> &join_exprs,
-                                  common::ObIArray<MergeKeyInfo*> &merge_keys,
-                                  const bool can_ignore_merge_plan);
 
     int push_down_order_siblings(JoinPath *join_path, const Path *right_path);
 

@@ -12133,11 +12133,9 @@ int ObJoinOrder::inner_generate_join_paths(const ObJoinOrder &left_tree,
       ((MERGE_JOIN & path_info.local_methods_) ||
        (MERGE_JOIN & reverse_path_info.local_methods_))) {
     LOG_TRACE("start to generate merge join paths");
-    ObArenaAllocator allocator;
     bool can_ignore_merge_plan = !(interesting_paths_.empty() || !path_info.prune_mj_);
-    typedef ObSEArray<ObSEArray<MergeKeyInfo*, 16>, 4> MergeKeyInfoArray;
-    SMART_VARS_2((MergeKeyInfoArray, left_merge_infos),
-                 (MergeKeyInfoArray, right_merge_infos)) {
+    SMART_VARS_2((MergeKeyInfoHelper, left_merge_info_helper),
+                 (MergeKeyInfoHelper, right_merge_info_helper)) {
       get_plan()->get_selectivity_ctx().init_join_ctx(path_info.join_type_,
                                                       &left_tree.get_tables(),
                                                       &right_tree.get_tables(),
@@ -12157,23 +12155,15 @@ int ObJoinOrder::inner_generate_join_paths(const ObJoinOrder &left_tree,
           other_cond_sel,
           get_plan()->get_predicate_selectivities()))) {
         LOG_WARN("failed to calculate selectivity", K(ret), K(merge_join_filters));
-      } else if (OB_FAIL(init_merge_join_structure(allocator,
-                                                  left_paths,
-                                                  left_merge_keys,
-                                                  left_merge_infos,
-                                                  can_ignore_merge_plan))) {
-        LOG_WARN("failed to init merge join structure", K(ret));
-      } else if (OB_FAIL(init_merge_join_structure(allocator,
-                                                  right_paths,
-                                                  right_merge_keys,
-                                                  right_merge_infos,
-                                                  can_ignore_merge_plan))) {
-        LOG_WARN("failed to init merge join structure", K(ret));
+      } else if (OB_FAIL(left_merge_info_helper.init(this, left_merge_keys, can_ignore_merge_plan))) {
+        LOG_WARN("failed to init", K(ret));
+      } else if (OB_FAIL(right_merge_info_helper.init(this, right_merge_keys, can_ignore_merge_plan))) {
+        LOG_WARN("failed to init", K(ret));
       } else if ((MERGE_JOIN & path_info.local_methods_) &&
                   OB_FAIL(generate_mj_paths(equal_sets,
                                             left_paths,
                                             right_paths,
-                                            left_merge_infos,
+                                            left_merge_info_helper,
                                             left_merge_keys,
                                             right_merge_keys,
                                             null_safe_merge_info,
@@ -12188,7 +12178,7 @@ int ObJoinOrder::inner_generate_join_paths(const ObJoinOrder &left_tree,
                 OB_FAIL(generate_mj_paths(equal_sets,
                                           right_paths,
                                           left_paths,
-                                          right_merge_infos,
+                                          right_merge_info_helper,
                                           right_merge_keys,
                                           left_merge_keys,
                                           null_safe_merge_info,
@@ -13464,7 +13454,7 @@ int ObJoinOrder::classify_mergejoin_conditions(const ObJoinOrder &left_tree,
 int ObJoinOrder::generate_mj_paths(const EqualSets &equal_sets,
                                    const ObIArray<ObSEArray<Path*, 16>> &left_paths,
                                    const ObIArray<ObSEArray<Path*, 16>> &right_paths,
-                                   const ObIArray<ObSEArray<MergeKeyInfo*, 16>> &left_merge_keys,
+                                   MergeKeyInfoHelper &left_merge_infos,
                                    const ObIArray<ObRawExpr*> &left_join_keys,
                                    const ObIArray<ObRawExpr*> &right_join_keys,
                                    const ObIArray<bool> &null_safe_info,
@@ -13476,34 +13466,28 @@ int ObJoinOrder::generate_mj_paths(const EqualSets &equal_sets,
                                    const ValidPathInfo &path_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(left_paths.count() != left_merge_keys.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected array count", K(left_paths.count()),
-        K(left_merge_keys.count()), K(ret));
+  if (path_info.is_reverse_path_) {
+    OPT_TRACE_TITLE("Consider Reverse Merge", ob_join_type_str(path_info.join_type_));
   } else {
-    if (path_info.is_reverse_path_) {
-      OPT_TRACE_TITLE("Consider Reverse Merge", ob_join_type_str(path_info.join_type_));
-    } else {
-      OPT_TRACE_TITLE("Consider Merge", ob_join_type_str(path_info.join_type_));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < left_paths.count(); i++) {
-      for (int64_t j = 0; OB_SUCC(ret) && j < right_paths.count(); j++) {
-        if (OB_FAIL(generate_mj_paths(equal_sets,
-                                      left_paths.at(i),
-                                      right_paths.at(j),
-                                      left_merge_keys.at(i),
-                                      left_join_keys,
-                                      right_join_keys,
-                                      null_safe_info,
-                                      equal_join_conditions,
-                                      other_join_conditions,
-                                      filters,
-                                      equal_cond_sel,
-                                      other_cond_sel,
-                                      path_info))) {
-          LOG_WARN("failed to generated merge join paths", K(ret));
-        } else { /*do nothing*/ }
-      }
+    OPT_TRACE_TITLE("Consider Merge", ob_join_type_str(path_info.join_type_));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < left_paths.count(); i++) {
+    for (int64_t j = 0; OB_SUCC(ret) && j < right_paths.count(); j++) {
+      if (OB_FAIL(generate_mj_paths(equal_sets,
+                                    left_paths.at(i),
+                                    right_paths.at(j),
+                                    left_merge_infos,
+                                    left_join_keys,
+                                    right_join_keys,
+                                    null_safe_info,
+                                    equal_join_conditions,
+                                    other_join_conditions,
+                                    filters,
+                                    equal_cond_sel,
+                                    other_cond_sel,
+                                    path_info))) {
+        LOG_WARN("failed to generated merge join paths", K(ret));
+      } else { /*do nothing*/ }
     }
   }
   return ret;
@@ -13512,7 +13496,7 @@ int ObJoinOrder::generate_mj_paths(const EqualSets &equal_sets,
 int ObJoinOrder::generate_mj_paths(const EqualSets &equal_sets,
                                    const ObIArray<Path*> &left_paths,
                                    const ObIArray<Path*> &right_paths,
-                                   const ObIArray<MergeKeyInfo*> &left_merge_keys,
+                                   MergeKeyInfoHelper &left_merge_infos,
                                    const ObIArray<ObRawExpr*> &left_join_keys,
                                    const ObIArray<ObRawExpr*> &right_join_keys,
                                    const ObIArray<bool> &null_safe_info,
@@ -13552,12 +13536,44 @@ int ObJoinOrder::generate_mj_paths(const EqualSets &equal_sets,
     /*do nothing*/
   } else {
     LOG_TRACE("succeed to get distributed merge join method", K(dist_method));
+    ObSEArray<Path*, 4> better_left_paths;
+    ObSEArray<MergeKeyInfo*, 4> better_left_merge_keys;
+    Path *best_sort_path = nullptr;
+    MergeKeyInfo *best_sort_merge_key = nullptr;
+    double best_sort_path_cost = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < left_paths.count(); i++) {
-      if (OB_ISNULL(left_path = left_paths.at(i)) || OB_ISNULL(merge_key = left_merge_keys.at(i))) {
+      if (OB_ISNULL(left_path = left_paths.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(left_path), K(merge_key), K(ret));
-      } else if (merge_key->need_sort_ && !merge_key->order_needed_) {
+      } else if (OB_FAIL(left_merge_infos.get_merge_key_info(left_path, merge_key))) {
+        LOG_WARN("failed to get merge key info", K(ret));
+      } else if (OB_ISNULL(merge_key)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(merge_key));
+      } else if (!merge_key->need_sort_) {
+        if (OB_FAIL(better_left_paths.push_back(left_path)) ||
+            OB_FAIL(better_left_merge_keys.push_back(merge_key))
+            ) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      } else if (!merge_key->order_needed_) {
         // if no further order needed, not generate merge style plan
+      } else if (nullptr == best_sort_path || left_path->get_cost() < best_sort_path_cost) {
+        best_sort_path = left_path;
+        best_sort_merge_key = merge_key;
+        best_sort_path_cost = left_path->get_cost();
+      }
+    }
+    if (OB_SUCC(ret) && nullptr != best_sort_path) {
+      if (OB_FAIL(better_left_paths.push_back(best_sort_path)) ||
+          OB_FAIL(better_left_merge_keys.push_back(best_sort_merge_key))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < better_left_paths.count(); i++) {
+      if (OB_ISNULL(left_path = better_left_paths.at(i)) || OB_ISNULL(merge_key = better_left_merge_keys.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(left_path), K(merge_key), K(ret));
       } else if (OB_FAIL(ObOptimizerUtil::adjust_exprs_by_mapping(equal_join_conditions,
                                                                   merge_key->map_array_,
                                                                   adjusted_join_conditions))) {
@@ -13739,85 +13755,103 @@ int ObJoinOrder::find_minimal_cost_merge_path(const Path &left_path,
   return ret;
 }
 
-int ObJoinOrder::init_merge_join_structure(ObIAllocator &allocator,
-                                           const ObIArray<ObSEArray<Path*, 16>> &paths,
-                                           const ObIArray<ObRawExpr*> &join_exprs,
-                                           ObIArray<ObSEArray<MergeKeyInfo*, 16>> &merge_keys,
-                                           const bool can_ignore_merge_plan)
+int MergeKeyInfoHelper::init(ObJoinOrder *join_order, const ObIArray<ObRawExpr *> &merge_keys, bool can_ignore_merge_plan)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<MergeKeyInfo*, 16> temp_merge_keys;
-  for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); i++) {
-    temp_merge_keys.reuse();
-    if (OB_FAIL(init_merge_join_structure(allocator,
-                                          paths.at(i),
-                                          join_exprs,
-                                          temp_merge_keys,
-                                          can_ignore_merge_plan))) {
-      LOG_WARN("failed to init merge join structure", K(ret));
-    } else if (OB_FAIL(merge_keys.push_back(temp_merge_keys))) {
-      LOG_WARN("failed to push back merge keys", K(ret));
-    } else { /*do nothing*/ }
+  join_order_ = join_order;
+  can_ignore_merge_plan_ = can_ignore_merge_plan;
+  if (OB_FAIL(merge_keys_.assign(merge_keys))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::get_default_directions(merge_keys_.count(),
+                                                             default_directions_))) {
+    LOG_WARN("failed to get default directions", K(ret));
   }
   return ret;
 }
 
-int ObJoinOrder::init_merge_join_structure(ObIAllocator &allocator,
-                                           const ObIArray<Path*> &paths,
-                                           const ObIArray<ObRawExpr*> &join_exprs,
-                                           ObIArray<MergeKeyInfo*> &merge_keys,
-                                           const bool can_ignore_merge_plan)
+int MergeKeyInfoHelper::get_merge_key_info(Path *path, MergeKeyInfo *&merge_key_info)
 {
   int ret = OB_SUCCESS;
-  Path *path = NULL;
-  ObSEArray<ObOrderDirection, 8> default_directions;
-  MergeKeyInfo *interesting_key = NULL; // interesting ordering merge key
-  MergeKeyInfo *merge_key = NULL;
-  const ObDMLStmt *stmt = NULL;
-  int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
+  merge_key_info = nullptr;
+  ObLogPlan *plan = nullptr;
+  const ObDMLStmt *stmt = nullptr;
+  bool non_ordering = false;
+  if (OB_ISNULL(path) || OB_ISNULL(join_order_) ||
+      OB_ISNULL(plan = join_order_->get_plan()) ||
+      OB_ISNULL(stmt = plan->get_stmt()) ||
+      OB_UNLIKELY(paths_.count() != merge_key_infos_.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(get_plan()), K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::get_default_directions(join_exprs.count(),
-                                                             default_directions))) {
-    LOG_WARN("failed to get default directions", K(ret));
+    LOG_WARN("unexpected param", KPC(path), K(plan), K(stmt), KPC(this));
+  } else {
+    non_ordering = path->ordering_.empty();
+    if (non_ordering) {
+      merge_key_info = non_ordering_merge_key_info_;
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && nullptr == merge_key_info && i < paths_.count(); i ++) {
+        if (paths_.at(i) == path) {
+          merge_key_info = merge_key_infos_.at(i);
+        }
+      }
+    }
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
-    if (OB_ISNULL(path = paths.at(i)) || OB_ISNULL(path->parent_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(path), K(ret));
-    } else if (OB_ISNULL(merge_key = static_cast<MergeKeyInfo*>(
-                         allocator.alloc(sizeof(MergeKeyInfo))))) {
+  if (OB_SUCC(ret) && nullptr == merge_key_info) {
+    MergeKeyInfo *interesting_key = NULL; // interesting ordering merge key
+    int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
+    if (OB_ISNULL(merge_key_info = static_cast<MergeKeyInfo*>(
+                         allocator_.alloc(sizeof(MergeKeyInfo))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("failed to alloc merge key info", K(ret));
-    } else if (OB_FALSE_IT(merge_key = new(merge_key)MergeKeyInfo(allocator, join_exprs.count()))) {
-    } else if (OB_FAIL(ObOptimizerUtil::decide_sort_keys_for_merge_style_op(
+    } else {
+      merge_key_info = new(merge_key_info)MergeKeyInfo(allocator_, merge_keys_.count());
+      if (non_ordering) {
+        non_ordering_merge_key_info_ = merge_key_info;
+      } else {
+        if (OB_FAIL(merge_key_infos_.push_back(merge_key_info))) {
+          LOG_WARN("failed to push back merge key", K(ret));
+          merge_key_info = nullptr;
+          merge_key_info->~MergeKeyInfo();
+        } else if (OB_FAIL(paths_.push_back(path))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
+    }
+    if (FAILEDx(ObOptimizerUtil::decide_sort_keys_for_merge_style_op(
                                                   stmt,
-                                                  get_plan()->get_equal_sets(),
+                                                  plan->get_equal_sets(),
                                                   path->ordering_,
                                                   path->parent_->get_fd_item_set(),
                                                   path->parent_->get_output_equal_sets(),
                                                   path->parent_->get_output_const_exprs(),
-                                                  get_plan()->get_onetime_query_refs(),
+                                                  plan->get_onetime_query_refs(),
                                                   path->parent_->get_is_at_most_one_row(),
-                                                  join_exprs,
-                                                  default_directions,
-                                                  *merge_key,
+                                                  merge_keys_,
+                                                  default_directions_,
+                                                  *merge_key_info,
                                                   interesting_key))) {
       LOG_WARN("failed to decide sort key for merge set", K(ret));
-    } else if (OB_FAIL(merge_keys.push_back(merge_key))) {
-      LOG_WARN("failed to push back merge key", K(ret));
-    } else if (can_ignore_merge_plan) {
-      if (OB_FAIL(check_all_interesting_order(merge_key->order_items_,
-                                              stmt,
-                                              interesting_order_info))) {
+    } else if (can_ignore_merge_plan_ && merge_key_info->need_sort_) {
+      if (OB_FAIL(join_order_->check_all_interesting_order(merge_key_info->order_items_,
+                                                           stmt,
+                                                           interesting_order_info))) {
         LOG_WARN("failed to check interesting order", K(ret));
       } else if (OrderingFlag::NOT_MATCH == interesting_order_info) {
-        merge_key->order_needed_ = false;
+        merge_key_info->order_needed_ = false;
       }
     }
   }
   return ret;
+}
+
+MergeKeyInfoHelper::~MergeKeyInfoHelper()
+{
+  for (int64_t i = 0; i < merge_key_infos_.count(); i ++) {
+    if (OB_NOT_NULL(merge_key_infos_.at(i))) {
+      merge_key_infos_.at(i)->~MergeKeyInfo();
+    }
+  }
+  if (OB_NOT_NULL(non_ordering_merge_key_info_)) {
+    non_ordering_merge_key_info_->~MergeKeyInfo();
+  }
 }
 
 int ObJoinOrder::set_nl_filters(JoinPath *join_path,

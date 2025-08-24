@@ -1171,5 +1171,10 @@ int ObQueryCtx::get_local_session_vars(const int64_t idx, const ObLocalSessionVa
   return ret;
 }
 
+void ObQueryCtx::init_type_ctx(const ObSQLSessionInfo *session)
+{
+  ObSQLUtils::init_type_ctx(session, initial_type_ctx_);
+}
+
 }
 }

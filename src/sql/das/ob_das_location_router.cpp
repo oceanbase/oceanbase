@@ -266,8 +266,14 @@ int ObDASTabletMapper::get_tablet_and_object_id(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid part level", KR(ret), K(part_level));
     }
-    OZ(append_array_no_dup(tablet_ids, tmp_tablet_ids));
-    OZ(append_array_no_dup(object_ids, tmp_part_ids));
+    if (OB_FAIL(ret)) {
+    } else if (tablet_ids.empty() && object_ids.empty()) {
+      OZ(tablet_ids.assign(tmp_tablet_ids));
+      OZ(object_ids.assign(tmp_part_ids));
+    } else {
+      OZ(append_array_no_dup(tablet_ids, tmp_tablet_ids));
+      OZ(append_array_no_dup(object_ids, tmp_part_ids));
+    }
   } else {
     if (part_level == PARTITION_LEVEL_TWO) {
       ret = OB_NOT_SUPPORTED;
@@ -560,7 +566,8 @@ int ObDASTabletMapper::get_tablet_and_object_id(const ObPartitionLevel part_leve
 int ObDASTabletMapper::get_all_tablet_and_object_id(const ObPartitionLevel part_level,
                                                     const ObPartID part_id,
                                                     ObIArray<ObTabletID> &tablet_ids,
-                                                    ObIArray<ObObjectID> &out_part_ids)
+                                                    ObIArray<ObObjectID> &out_part_ids,
+                                                    const bool need_dedup)
 {
   int ret = OB_SUCCESS;
   uint64_t table_id = NULL == table_schema_ ? vt_svr_pair_->get_table_id()
@@ -571,9 +578,17 @@ int ObDASTabletMapper::get_all_tablet_and_object_id(const ObPartitionLevel part_
   ObSEArray<ObTabletID, 4> tmp_tablet_ids;
   ObSEArray<ObObjectID, 4> tmp_part_ids;
   OZ (get_tablet_and_object_id(part_level, part_id, whole_range, tmp_tablet_ids, tmp_part_ids));
-  OZ(append_array_no_dup(tablet_ids, tmp_tablet_ids));
-  OZ(append_array_no_dup(out_part_ids, tmp_part_ids));
-
+  if (OB_FAIL(ret)) {
+  } else if (tablet_ids.empty() && out_part_ids.empty()) {
+    OZ(tablet_ids.assign(tmp_tablet_ids));
+    OZ(out_part_ids.assign(tmp_part_ids));
+  } else if (!need_dedup) {
+    OZ(append(tablet_ids, tmp_tablet_ids));
+    OZ(append(out_part_ids, tmp_part_ids));
+  } else {
+    OZ(append_array_no_dup(tablet_ids, tmp_tablet_ids));
+    OZ(append_array_no_dup(out_part_ids, tmp_part_ids));
+  }
   return ret;
 }
 
@@ -582,26 +597,27 @@ int ObDASTabletMapper::get_all_tablet_and_object_id(ObIArray<ObTabletID> &tablet
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(table_schema_)) {
+    bool need_dedup = !out_part_ids.empty();
     if (!table_schema_->is_partitioned_table()) {
       if (OB_FAIL(get_non_partition_tablet_id(tablet_ids, out_part_ids))) {
         LOG_WARN("get non partition tablet id failed", K(ret));
       }
     } else if (PARTITION_LEVEL_ONE == table_schema_->get_part_level()) {
       if (OB_FAIL(get_all_tablet_and_object_id(PARTITION_LEVEL_ONE, OB_INVALID_ID,
-                                             tablet_ids, out_part_ids))) {
+                                               tablet_ids, out_part_ids, need_dedup))) {
         LOG_WARN("fail to get tablet ids", K(ret));
       }
     } else {
       ObArray<ObTabletID> tmp_tablet_ids;
       ObArray<ObObjectID> tmp_part_ids;
       if (OB_FAIL(get_all_tablet_and_object_id(PARTITION_LEVEL_ONE, OB_INVALID_ID,
-                                               tmp_tablet_ids, tmp_part_ids))) {
+                                               tmp_tablet_ids, tmp_part_ids, false))) {
         LOG_WARN("Failed to get all part ids", K(ret));
       }
       for (int64_t idx = 0; OB_SUCC(ret) && idx < tmp_part_ids.count(); ++idx) {
         ObObjectID part_id = tmp_part_ids.at(idx);
         if (OB_FAIL(get_all_tablet_and_object_id(PARTITION_LEVEL_TWO, part_id,
-                                                 tablet_ids, out_part_ids))) {
+                                                 tablet_ids, out_part_ids, need_dedup))) {
           LOG_WARN("fail to get tablet ids", K(ret));
         }
       }
@@ -974,23 +990,7 @@ int ObDASLocationRouter::nonblock_get(const ObDASTableLocMeta &loc_meta,
                                                             location))) {
       LOG_WARN("fail to get tablet locations", K(ret), K(tenant_id), K(ls_id));
     }
-    if (is_partition_change_error(ret)) {
-      /*During the execution phase, if nonblock location interface is used to obtain the location
-       * and an exception occurs, retries are necessary.
-       * However, statement-level retries cannot rollback many execution states,
-       * so it is necessary to avoid retries in this scenario as much as possible.
-       * During the execution phase, when encountering a location exception for the first time,
-       * try to refresh the location once synchronously.
-       * If it fails, then proceed with statement-level retries.*/
-      int tmp_ret = block_renew_tablet_location(tablet_id, location);
-      if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
-        LOG_WARN("block renew tablet location failed", KR(tmp_ret), K(tablet_id));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    }
   }
-  save_cur_exec_status(ret);
 
   return ret;
 }
@@ -1009,31 +1009,102 @@ int ObDASLocationRouter::nonblock_get_candi_tablet_locations(const ObDASTableLoc
     LOG_WARN("Partition location list prepare error", K(ret));
   } else {
     ObLSLocation location;
+    ObSEArray<int64_t, 8> failed_idx_list;
+    int err_no = OB_SUCCESS;
     int64_t i = 0;
     for (; OB_SUCC(ret) && i < N; ++i) {
       location.reset();
+      ObObjectID first_level_part_id = first_level_part_ids.empty() ? OB_INVALID_ID : first_level_part_ids.at(i);
       ObCandiTabletLoc &candi_tablet_loc = candi_tablet_locs.at(i);
       //after 4.1, all modules that need to access location will use nonblock_get to fetch location
       //if the location has expired, DAS location router will refresh all accessed tablets
-      if (OB_FAIL(nonblock_get(loc_meta, tablet_ids.at(i), location))) {
-        LOG_WARN("Get partition error, the location cache will be renewed later",
-                 K(ret), "tablet_id", tablet_ids.at(i), K(candi_tablet_loc));
-      } else {
-        ObObjectID first_level_part_id = first_level_part_ids.empty() ? OB_INVALID_ID : first_level_part_ids.at(i);
-        if (OB_FAIL(candi_tablet_loc.set_part_loc_with_only_readable_replica(partition_ids.at(i),
-                                                                             first_level_part_id,
-                                                                             tablet_ids.at(i),
-                                                                             location,
-                                                                             static_cast<ObRoutePolicyType>(loc_meta.route_policy_)))) {
-          LOG_WARN("fail to set partition location with only readable replica",
-                   K(ret),K(i), K(location), K(candi_tablet_locs), K(tablet_ids), K(partition_ids));
+      if (OB_FAIL(nonblock_get_candi_tablet_location(loc_meta, tablet_ids.at(i),
+                                                     partition_ids.at(i), first_level_part_id,
+                                                     location, candi_tablet_loc))) {
+        if (is_partition_change_error(ret)) {
+          /* During the execution phase, if nonblock location interface is used to obtain the location
+           * and an exception occurs, retries are necessary.
+           * However, statement-level retries cannot rollback many execution states,
+           * so it is necessary to avoid retries in this scenario as much as possible.
+           * During the execution phase, when encountering a location exception for the first time,
+           * try to refresh the location once synchronously.
+           * If it fails, then proceed with statement-level retries.*/
+          if (OB_SUCCESS == err_no) {
+            err_no = ret;
+          }
+          ret = OB_SUCCESS;
+          LOG_TRACE("Get partition error, the location cache will be renewed later",
+                    K(ret), "tablet_id", tablet_ids.at(i), K(candi_tablet_loc));
+          if (OB_FAIL(failed_idx_list.push_back(i))) {
+            LOG_WARN("failed to push back tablet idx", K(ret));
+          }
+        } else {
+          LOG_WARN("failed to nonblock get candi tablet location ", K(ret));
         }
-        LOG_DEBUG("set partition location with only readable replica",
-                 K(ret),K(i), K(location), K(candi_tablet_locs), K(tablet_ids), K(partition_ids));
       }
     } // for end
+    if (OB_SUCC(ret) && !failed_idx_list.empty()) {
+      ObList<ObTabletID, ObIAllocator> failed_list(allocator_);
+      for (int64_t j = 0; j < failed_idx_list.count(); ++j) {
+        int64_t i = failed_idx_list.at(j);
+        if (OB_FAIL(failed_list.push_back(tablet_ids.at(i)))) {
+          LOG_WARN("failed to push back tablet id", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        bool is_nonblock = false;
+        if (OB_ISNULL(GCTX.location_service_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("GCTX.location_service_ is null", KR(ret));
+        } else if (OB_FAIL(GCTX.location_service_->batch_renew_tablet_locations(MTL_ID(),
+                                                                                failed_list,
+                                                                                err_no,
+                                                                                is_nonblock))) {
+          LOG_WARN("failed to batch renew tablet locations", KR(ret),
+                   "tenant_id", MTL_ID(), K(err_no), K(is_nonblock), K(failed_list));
+        }
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < failed_idx_list.count(); ++j) {
+        int64_t i = failed_idx_list.at(j);
+        location.reset();
+        ObObjectID first_level_part_id = first_level_part_ids.empty() ? OB_INVALID_ID : first_level_part_ids.at(i);
+        ObCandiTabletLoc &candi_tablet_loc = candi_tablet_locs.at(i);
+        if (OB_FAIL(nonblock_get_candi_tablet_location(loc_meta, tablet_ids.at(i),
+                                                       partition_ids.at(i), first_level_part_id,
+                                                       location, candi_tablet_loc))) {
+          LOG_WARN("failed to nonblock get candi tablet location ", K(ret));
+        }
+      }
+    }
   }
+  save_cur_exec_status(ret);
   NG_TRACE(get_location_cache_end);
+  return ret;
+}
+
+int ObDASLocationRouter::nonblock_get_candi_tablet_location(const ObDASTableLocMeta &loc_meta,
+                                                            const ObTabletID &tablet_id,
+                                                            const ObObjectID &partition_id,
+                                                            const ObObjectID &first_level_part_id,
+                                                            ObLSLocation &location,
+                                                            ObCandiTabletLoc &candi_tablet_loc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(nonblock_get(loc_meta, tablet_id, location))) {
+    LOG_TRACE("Get partition error, the location cache will be renewed later",
+              K(ret), "tablet_id", tablet_id, K(candi_tablet_loc));
+  } else {
+    if (OB_FAIL(candi_tablet_loc.set_part_loc_with_only_readable_replica(partition_id,
+                                                                         first_level_part_id,
+                                                                         tablet_id,
+                                                                         location,
+                                                                         static_cast<ObRoutePolicyType>(loc_meta.route_policy_)))) {
+      LOG_WARN("fail to set partition location with only readable replica",
+               K(ret), K(location), K(candi_tablet_loc), K(tablet_id), K(partition_id));
+    }
+    LOG_DEBUG("set partition location with only readable replica",
+              K(ret), K(location), K(candi_tablet_loc), K(tablet_id), K(partition_id));
+  }
   return ret;
 }
 

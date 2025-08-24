@@ -1483,6 +1483,8 @@ int ObDMLResolver::replace_col_udt_qname(ObQualifiedName& q_name)
     } else {
       // mock new q_name with ref_expr and access_idents_.data_[0].type_ = oceanbase::sql::SYS_FUNC
       udt_col_func_q_name.ref_expr_= q_name.ref_expr_;
+      udt_col_func_q_name.parent_expr_ = q_name.parent_expr_;
+      udt_col_func_q_name.parent_qname_idx_ = q_name.parent_qname_idx_;
       if (OB_FAIL(udt_col_func_q_name.access_idents_.push_back(ObObjAccessIdent(ObString("UDT_REF"), OB_INVALID_INDEX)))) {
         LOG_WARN("push back col ref ident failed", K(ret));
       } else {
@@ -2020,7 +2022,16 @@ int ObDMLResolver::resolve_columns_field_list_first(ObRawExpr *&expr, ObArray<Ob
         }
       }
     }
-    if (OB_SUCC(ret) && false == found) {
+    if (OB_FAIL(ret)) {
+    } else if (found) {
+      ObQualifiedName &q_name = columns.at(i);
+      if (OB_UNLIKELY(i != real_exprs.count() - 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected real_exprs", K(i), K(columns), K(ret));
+      } else if (OB_FAIL(q_name.replace_ref_in_parent(real_exprs.at(i), columns))) {
+        LOG_WARN("failed to repalce ref column", K(ret));
+      }
+    } else {
       ObQualifiedName &q_name = columns.at(i);
       ObRawExpr *real_ref_expr = NULL;
       if (OB_FAIL(replace_col_udt_qname(q_name))) {
@@ -2724,7 +2735,8 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
                                              const ObString &column_name,
                                              bool include_hidden,
                                              ColumnItem *&col_item,
-                                             ObDMLStmt *stmt /* = NULL */)
+                                             ObDMLStmt *stmt /* = NULL */,
+                                             bool need_check_exist /* = true */)
 {
   int ret = OB_SUCCESS;
   ObColumnRefRawExpr *col_expr = NULL;
@@ -2746,7 +2758,7 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
                          && !table_item.is_fake_cte_table())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not base table or alias from base table", K_(table_item.type), K(ret));
-  } else if (NULL != (col_item = stmt->get_column_item(table_item.table_id_, column_name))) {
+  } else if (need_check_exist && NULL != (col_item = stmt->get_column_item(table_item.table_id_, column_name))) {
     if (!include_hidden) {
       if (!ObCharset::case_insensitive_equal(column_name, OB_HIDDEN_PK_INCREMENT_COLUMN_NAME)) {
         //do nothing
@@ -2935,6 +2947,8 @@ int ObDMLResolver::replace_col_ref_prefix(ObQualifiedName &col_ref, uint64_t idx
               || col_ref_expr->get_result_type().is_user_defined_sql_type()
               || col_ref_expr->get_result_type().is_geometry()) {
     col_ref.ref_expr_= q_name.ref_expr_;
+    col_ref.parent_expr_ = q_name.parent_expr_;
+    col_ref.parent_qname_idx_ = q_name.parent_qname_idx_;
     col_ref.access_idents_.reset();
     if (OB_FAIL(col_ref.access_idents_.push_back(ObObjAccessIdent(ObString("UDT_REF"), OB_INVALID_INDEX)))) {
       LOG_WARN("push back col ref ident failed", K(ret));
@@ -2994,7 +3008,6 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr*> real_exprs;
   ObArray<ObRawExpr*> ref_exprs;
-  ObArray<ObRawExpr*> replace_ref_exprs;
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
     ObQualifiedName& q_name = columns.at(i);
     ObQualifiedName tmp_q_name = q_name;
@@ -3003,7 +3016,7 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
 
     if (OB_FAIL(replace_col_ref_prefix(q_name))) {
       LOG_WARN("replace col udt qname failed", K(ret), K(q_name));
-    } else if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr))) {
+    } else if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr, true))) {
       // try to resolve nextval(seq) or currval(seq)
       if (ret == OB_ERR_BAD_FIELD_ERROR) {
         if (i + 1 < columns.count()) {
@@ -3031,16 +3044,14 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
       report_user_error_msg(ret, expr, q_name);
     } else if (OB_FAIL(real_exprs.push_back(real_ref_expr))) {
       LOG_WARN("push back failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::implict_cast_pl_udt_to_sql_udt(params_.expr_factory_,
-                                        params_.session_info_, real_ref_expr))) {
-      LOG_WARN("add implict cast to pl udt expr failed", K(ret));
-    } else if (OB_FAIL(ref_exprs.push_back(q_name.ref_expr_))
-              || OB_FAIL(replace_ref_exprs.push_back(real_ref_expr))) {
+    } else if (OB_FAIL(ref_exprs.push_back(q_name.ref_expr_))) {
       LOG_WARN("push back failed", K(ret));
     } else { /*do nothing*/ }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, ref_exprs, replace_ref_exprs))) {
+  } else if (!expr->is_column_ref_expr()) {
+    // do nothing
+  } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, ref_exprs, real_exprs))) {
     LOG_WARN("replace column ref expr failed", K(ret));
   }
 
@@ -3163,7 +3174,8 @@ int ObDMLResolver::try_resolve_sql_symbol(ObQualifiedName &q_name,
 int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
                                                 ObIArray<ObQualifiedName> &columns,
                                                 ObIArray<ObRawExpr*> &real_exprs,
-                                                ObRawExpr *&real_ref_expr)
+                                                ObRawExpr *&real_ref_expr,
+                                                bool need_cast_udt)
 {
   int ret = OB_SUCCESS;
   bool is_external = false; // identifier can not calc in sql context, should replace to question mark.
@@ -3222,14 +3234,6 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
     }
   }
 
-  //因为obj access的参数拉平处理，a(b,c)在columns会被存储为b,c,a，所以解释完一个ObQualifiedName，
-  //都要把他前面的ObQualifiedName拿过来尝试替换一遍参数
-  for (int64_t i = 0; OB_SUCC(ret) && i < real_exprs.count(); ++i) {
-    if (OB_FAIL(ObRawExprUtils::replace_ref_column(real_ref_expr, columns.at(i).ref_expr_, real_exprs.at(i)))) {
-      LOG_WARN("replace column ref expr failed", K(ret));
-    }
-  }
-
   if (OB_SUCC(ret)
       && q_name.is_access_root()
       && is_external
@@ -3241,8 +3245,30 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
     }
   }
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
-    OZ (columns.at(i).replace_access_ident_params(q_name.ref_expr_, real_ref_expr));
+  if (OB_SUCC(ret) && need_cast_udt) {
+    // TODO: move these code to type deduce
+    if (q_name.parent_qname_exists()) {
+      // do nothing
+    } else if (OB_FAIL(ObRawExprUtils::implict_cast_pl_udt_to_sql_udt(params_.expr_factory_,
+                                        params_.session_info_, real_ref_expr))) {
+      LOG_WARN("add implict cast to pl udt expr failed", K(ret));
+    }
+  }
+  // column/sys_func/udf等identifier都会被先解析成ObQualifiedName. 以 f1(concat(c1+1, 'a'), 2) 为例
+  // 这个表达式会解析成3个qname [q1,q2,q3]，每个qname对应一个子树，对应关系如下
+  // q1 -> c1
+  // q2 -> concat(q1+1, 'a')
+  // q3 -> f1(q2, 2)
+  // 所以解释完一个ObQualifiedName，都要将其 parent 中的 ref_expr 替换为 real_ref_expr
+  // qname的parent可能是一个raw expr，也可能是一个qname，关联关系在ObRawExprResolverImpl中维护
+  // 这个例子中每个qname的parent如下
+  // q1 -> q1+1
+  // q2 -> q3
+  // q3 -> NULL
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(q_name.replace_ref_in_parent(real_ref_expr, columns))) {
+      LOG_WARN("failed to replace ref column", K(q_name));
+    }
   }
 
   if (OB_ERR_BAD_FIELD_ERROR == ret) {
@@ -3326,14 +3352,6 @@ int ObDMLResolver::resolve_aggr_exprs(ObRawExpr *&expr,
       ret = OB_ERR_INVALID_GROUP_FUNC_USE;
       LOG_WARN("invalid scope for agg function", K(ret), K(current_scope_));
     }
-    // for (int64_t i = 0; OB_SUCC(ret) && i < aggr_exprs.count(); i++) {
-      // ObAggFunRawExpr *final_aggr = NULL;
-      // if (final_aggr != aggr_exprs.at(i)) {
-        // if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, aggr_exprs.at(i), final_aggr))) {
-          // LOG_WARN("repalce reference column failed", K(ret));
-        // }
-      // }
-    // }
     for (int64_t i = 0; OB_SUCC(ret) && i < aggr_exprs.count(); i++) {
       ObDelUpdStmt *del_up_stmt = static_cast<ObDelUpdStmt*>(stmt_);
       if (OB_ISNULL(del_up_stmt) || OB_ISNULL(expr)) {
@@ -9001,7 +9019,7 @@ int ObDMLResolver::resolve_and_split_sql_expr_with_bool_expr(const ParseNode &no
       if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(and_exprs.at(i), new_expr,
                                                           *params_.expr_factory_))) {
         LOG_WARN("try create bool expr failed", K(ret), K(i));
-      } else if (OB_FAIL(new_expr->formalize(session_info_))) {
+      } else if (and_exprs.at(i) != new_expr && OB_FAIL(new_expr->formalize(session_info_))) {
         LOG_WARN("formalize expr failed", K(ret));
       } else {
         and_exprs.at(i) = new_expr;
@@ -9271,7 +9289,7 @@ int ObDMLResolver::add_column_to_stmt(const TableItem &table_item,
     } else if (table_item.is_basic_table() || table_item.is_link_table()) {
       column_item = stmt->get_column_item_by_id(table_item.table_id_, col.get_column_id());
       if (NULL == column_item) {
-        if (OB_FAIL(resolve_basic_column_item(table_item, col.get_column_name_str(), true, column_item, stmt))) {
+        if (OB_FAIL(resolve_basic_column_item(table_item, col.get_column_name_str(), true, column_item, stmt, false))) {
           LOG_WARN("fail to add column item to array", K(ret));
         } else if (OB_ISNULL(column_item) || OB_ISNULL(column_item->expr_)) {
           ret = OB_ERR_BAD_FIELD_ERROR;
@@ -10805,7 +10823,7 @@ int ObDMLResolver::resolve_generated_column_expr_temp(TableItem *table_item)
         // fulltext columns on main table are hidden virtual generated columns, do not access it by default
         // for view, cid need to be resolved in data_table select stmt
       } else if (NULL == get_stmt()->get_column_item_by_id(table_item->table_id_, col_schema->get_column_id())) {
-        if (OB_FAIL(resolve_basic_column_item(*table_item, col_schema->get_column_name_str(), true, col_item, get_stmt()))) {
+        if (OB_FAIL(resolve_basic_column_item(*table_item, col_schema->get_column_name_str(), true, col_item, get_stmt(), false))) {
           LOG_WARN("fail to add column item to array", K(ret));
         }
       }
@@ -20355,7 +20373,7 @@ int ObDMLResolver::try_update_column_expr_for_fts(
     } else {
       ColumnItem *doc_id_col = get_stmt()->get_column_item_by_id(rowkey_doc_table->table_id_, col_id);
       if (NULL == doc_id_col) {
-        if (OB_FAIL(resolve_basic_column_item(*rowkey_doc_table, doc_id_col_name, true, doc_id_col, get_stmt()))) {
+        if (OB_FAIL(resolve_basic_column_item(*rowkey_doc_table, doc_id_col_name, true, doc_id_col, get_stmt(), false))) {
           STORAGE_FTS_LOG(WARN, "fail to add column doc id item to array", K(ret));
         } else if (OB_ISNULL(doc_id_col) || OB_ISNULL(doc_id_col->expr_)) {
           ret = OB_ERR_BAD_FIELD_ERROR;

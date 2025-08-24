@@ -131,6 +131,25 @@ void ObQualifiedName::format_qualified_name(ObNameCaseMode mode)
   }
 }
 
+int ObQualifiedName::replace_ref_in_parent(ObRawExpr *real_ref_expr,
+                                           ObIArray<ObQualifiedName> &columns)
+{
+  int ret = OB_SUCCESS;
+  if (parent_expr_ != NULL) {
+    if (OB_FAIL(ObRawExprUtils::replace_ref_column(parent_expr_, ref_expr_, real_ref_expr))) {
+      LOG_WARN("failed to replace ref column", K(ret));
+    }
+  } else if (parent_qname_idx_ >= 0) {
+    if (OB_UNLIKELY(parent_qname_idx_ >= columns.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected idx", K(ret), K(parent_qname_idx_), K(columns.count()));
+    } else if (OB_FAIL(columns.at(parent_qname_idx_).replace_access_ident_params(ref_expr_, real_ref_expr))) {
+      LOG_WARN("failed to replace access ident params", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObQualifiedName::replace_access_ident_params(ObRawExpr *from, ObRawExpr *to)
 {
   int ret = common::OB_SUCCESS;
@@ -161,6 +180,9 @@ int ObObjAccessIdent::extract_params(int64_t level, common::ObIArray<ObRawExpr*>
 int ObObjAccessIdent::replace_params(ObRawExpr *from, ObRawExpr *to)
 {
   int ret = common::OB_SUCCESS;
+  if (sys_func_expr_ != NULL) {
+    OZ (ObRawExprUtils::replace_ref_column(sys_func_expr_, from, to));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < params_.count(); ++i) {
     OZ (ObRawExprUtils::replace_ref_column(params_.at(i).first, from, to));
   }
@@ -482,20 +504,8 @@ int ObRawExpr::add_child_flags(const ObExprInfo &flags)
 {
   int ret = OB_SUCCESS;
   if (INHERIT_MASK_BEGIN < flags.bit_count()) {
-    ObExprInfo tmp(flags);
-    int64_t mask_end = INHERIT_MASK_END < flags.bit_count() ?
-                       static_cast<int64_t>(INHERIT_MASK_END) : flags.bit_count() - 1;
-    if (OB_FAIL(tmp.do_mask(INHERIT_MASK_BEGIN, mask_end))) {
-      LOG_WARN("failed to do mask", K(ret));
-    } else if (OB_FAIL(info_.add_members(tmp))) {
-      LOG_WARN("failed to add expr info", K(ret));
-    }
-  }
-  for (int32_t i = 0; OB_SUCC(ret) && i <= IS_INFO_MASK_END; ++i) {
-    if (flags.has_member(i)) {
-      if (OB_FAIL(info_.add_member(i + CNT_INFO_MASK_BEGIN))) {
-        LOG_WARN("failed to add member", K(i), K(ret));
-      }
+    if (OB_FAIL(info_.add_members_with_mask(flags, INHERIT_MASK_BEGIN, INHERIT_MASK_END))) {
+      LOG_WARN("failed to add expr info with mask", K(ret));
     }
   }
   return ret;

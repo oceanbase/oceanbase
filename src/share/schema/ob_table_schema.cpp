@@ -1203,6 +1203,97 @@ int ObSimpleTableSchemaV2::get_part_idx_by_tablet(const ObTabletID &tablet_id, i
   return ret;
 }
 
+int ObSimpleTableSchemaV2::get_part_idx_by_tablets(const ObIArray<uint64_t> &tablet_ids,
+                                                   ObIArray<int64_t> &part_idx,
+                                                   ObIArray<int64_t> &subpart_idx) const
+{
+  int ret = OB_SUCCESS;
+  ObHashMap<int64_t, std::pair<int64_t, int64_t>> id_hashmap;
+
+  ObPartition **part_array = NULL;
+  int64_t part_num = get_partition_num();
+  std::pair<int64_t, int64_t> part_info(OB_INVALID_INDEX, OB_INVALID_INDEX);
+  part_idx.reuse();
+  subpart_idx.reuse();
+  if (OB_ISNULL(part_array = get_part_array()) ||
+      OB_UNLIKELY(PARTITION_LEVEL_ZERO == part_level_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid part", KR(ret), KPC(this));
+  } else if (OB_FAIL(id_hashmap.create(get_all_part_num(), ObModIds::OB_SCHEMA))) {
+    LOG_WARN("create hashmap failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i ++) {
+    if (OB_FAIL(id_hashmap.set_refactored(tablet_ids.at(i), part_info))) {
+      LOG_WARN("failed to set refactored", K(ret));
+    }
+  }
+  for (int64_t i = 0; i < part_num && OB_SUCC(ret); ++i) {
+    if (OB_ISNULL(part_array[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("NULL ptr", K(i), KPC(this), KR(ret));
+    } else if (PARTITION_LEVEL_ONE == part_level_) {
+      if (OB_FAIL(id_hashmap.get_refactored(part_array[i]->get_tablet_id().id(), part_info))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to check tablet id exist", K(ret));
+        }
+      } else if (OB_FAIL(id_hashmap.set_refactored(part_array[i]->get_tablet_id().id(),
+                                                   std::make_pair(i, OB_INVALID_INDEX),
+                                                   1/*overwrite*/))) {
+        LOG_WARN("failed to set refactored", K(ret));
+      }
+    } else if (PARTITION_LEVEL_TWO == part_level_) {
+      ObSubPartition **subpart_array = part_array[i]->get_subpart_array();
+      int64_t subpart_num = part_array[i]->get_subpartition_num();
+      if (OB_ISNULL(subpart_array)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("subpart array is null", KPC(this), KR(ret));
+      }
+      for (int64_t j = 0; j < subpart_num && OB_SUCC(ret); ++j) {
+        if (OB_ISNULL(subpart_array[j])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL ptr", KPC(this), KR(ret));
+        } else {
+          if (OB_FAIL(id_hashmap.get_refactored(subpart_array[j]->get_tablet_id().id(), part_info))) {
+            if (OB_HASH_NOT_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail to check tablet id exist", K(ret));
+            }
+          } else if (OB_FAIL(id_hashmap.set_refactored(subpart_array[j]->get_tablet_id().id(),
+                                                       std::make_pair(i, j), 1/*overwrite*/))) {
+            LOG_WARN("failed to set refactored", K(ret));
+          }
+        }
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("4.0 not support part type", KR(ret), KPC(this));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i ++) {
+    if (OB_FAIL(id_hashmap.get_refactored(tablet_ids.at(i), part_info))) {
+      LOG_WARN("failed to set refactored", K(ret));
+    } else if (OB_UNLIKELY(OB_INVALID_INDEX == part_info.first ||
+                           OB_INVALID_INDEX == part_info.second && PARTITION_LEVEL_TWO == part_level_)) {
+      ret = OB_TABLET_NOT_EXIST;
+      LOG_WARN("tablet is not exist", K(tablet_ids.at(i)), KPC(this), KR(ret));
+    } else if (OB_FAIL(part_idx.push_back(part_info.first))) {
+      LOG_WARN("failed to push back part idx", K(ret));
+    } else if (PARTITION_LEVEL_TWO == part_level_ && OB_FAIL(subpart_idx.push_back(part_info.second))) {
+      LOG_WARN("failed to push back subpart idx", K(ret));
+    }
+  }
+  if (id_hashmap.created()) {
+    int tmp_ret = id_hashmap.destroy();
+    if (OB_SUCC(ret) && OB_FAIL(tmp_ret)) {
+      LOG_WARN("failed to destory hashmap", K(ret));
+    }
+  }
+  return ret;
+}
+
 // only used for the first level parition;
 // not support get subpart_id by tablet_id;
 int ObSimpleTableSchemaV2::get_hidden_part_id_by_tablet_id(const ObTabletID &tablet_id, int64_t &part_id /*OUT*/) const

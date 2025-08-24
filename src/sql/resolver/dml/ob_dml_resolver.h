@@ -393,13 +393,15 @@ protected:
   int resolve_qualified_identifier(ObQualifiedName &q_name,
                                    ObIArray<ObQualifiedName> &columns,
                                    ObIArray<ObRawExpr*> &real_exprs,
-                                   ObRawExpr *&real_ref_expr);
+                                   ObRawExpr *&real_ref_expr,
+                                   bool need_cast_udt = false);
   int resolve_basic_column_ref(const ObQualifiedName &q_name, ObRawExpr *&real_ref_expr);
   int resolve_basic_column_item(const TableItem &table_item,
                                 const common::ObString &column_name,
                                 bool include_hidden,
                                 ColumnItem *&col_item,
-                                ObDMLStmt *stmt = NULL);
+                                ObDMLStmt *stmt = NULL,
+                                bool need_check_exist = true);
   int adjust_values_desc_position(ObInsertTableInfo& table_info,
                                   ObIArray<int64_t> &value_idxs);
 public:

@@ -1917,7 +1917,7 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
                                                                            bool &trans_happened)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt) || OB_ISNULL(expr)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt), K(expr));
   } else if (T_OP_EQ == expr->get_expr_type()) {
@@ -1956,7 +1956,8 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
         }
       }
     }
-  } else if (T_OP_AND == expr->get_expr_type()) {
+  } else if (T_OP_AND == expr->get_expr_type() &&
+             !(expr->get_param_count() >= 10 && stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1))) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       bool is_happened = false;
       if (OB_FAIL(SMART_CALL(recursive_collect_equal_pair_from_condition(stmt,
@@ -2007,7 +2008,8 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
         }
       }
     }
-  } else if (T_OP_OR == expr->get_expr_type()) {
+  } else if (T_OP_OR == expr->get_expr_type() &&
+             !(expr->get_param_count() >= 10 && stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1))) {
     ObArray<ExprConstInfo> complex_infos;
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ConstInfoContext tmp_ctx(const_ctx.shared_expr_checker_, const_ctx.allow_trans_);

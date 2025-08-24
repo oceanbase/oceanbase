@@ -210,6 +210,15 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
       }
     }
     if (OB_SUCC(ret)) {
+      if (OB_FAIL(transform_any_all_row(stmt, is_happened))) {
+        LOG_WARN("failed to transform any all row", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        OPT_TRACE("transform any all row", is_happened);
+        LOG_TRACE("succeed to transform any all row", K(is_happened), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (OB_FAIL(transform_exprs(stmt, is_happened))) {
         LOG_WARN("transform exprs failed", K(ret));
       } else {
@@ -11218,6 +11227,174 @@ int ObTransformPreProcess::reset_view_base_and_transpose_item(ObDMLStmt *stmt)
         table_item->view_base_item_ = NULL;
         table_item->transpose_table_def_ = NULL;
       }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::transform_any_all_row(ObDMLStmt *stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> relation_exprs;
+  ObSEArray<ObRawExpr*, 4> old_exprs;
+  ObSEArray<ObRawExpr*, 4> new_exprs;
+  trans_happened = false;
+  if (is_mysql_mode()) {
+    // do nothing
+  } else if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(stmt->get_relation_exprs(relation_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
+      bool happened = false;
+      ObRawExpr *new_expr = NULL;
+      if (OB_FAIL(convert_any_all_row_expr(relation_exprs.at(i), new_expr, happened))) {
+        LOG_WARN("failed to convert any/all expr", K(ret));
+      } else if (!happened) {
+        // do nothing
+      } else if (OB_ISNULL(new_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(new_expr->formalize(ctx_->session_info_))) {
+        LOG_WARN("failed to formalize expr", K(ret));
+      } else if (relation_exprs.at(i) != new_expr &&
+                 (OB_FAIL(old_exprs.push_back(relation_exprs.at(i))) ||
+                  OB_FAIL(new_exprs.push_back(new_expr)))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else {
+        trans_happened = trans_happened || happened;
+      }
+    }
+    if (OB_SUCC(ret) && trans_happened && !old_exprs.empty()) {
+      // call replacer if root expr changed
+      if (OB_FAIL(stmt->replace_relation_exprs(old_exprs, new_exprs))) {
+        LOG_WARN("failed to replace relation exprs", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::convert_any_all_row_expr(ObRawExpr *expr,
+                                                   ObRawExpr *&new_expr,
+                                                   bool &happened)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *sub_expr1 = NULL;
+  ObRawExpr *sub_expr2 = NULL;
+  ObRawExpr *sub_expr2_child = NULL;
+  ObOpRawExpr *op_expr = NULL;
+  happened = false;
+  new_expr = expr;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(expr), K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(convert_any_all_row_expr(expr->get_param_expr(i),
+                                                      expr->get_param_expr(i),
+                                                      happened)))) {
+        LOG_WARN("failed to convert any/all expr", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (T_OP_EQ > expr->get_expr_type()
+             || T_OP_NE < expr->get_expr_type()) {
+    /*do nothing*/
+  } else if (OB_UNLIKELY(2 != expr->get_param_count()) ||
+             OB_ISNULL(sub_expr1 = expr->get_param_expr(0)) ||
+             OB_ISNULL(sub_expr2 = expr->get_param_expr(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(expr->get_param_count()),
+        K(sub_expr1), K(sub_expr2), K(ret));
+  } else if (T_ANY != sub_expr2->get_expr_type() &&
+             T_ALL != sub_expr2->get_expr_type()) {
+    /*do nothing*/
+  } else if (OB_UNLIKELY(1 != sub_expr2->get_param_count()) ||
+             OB_ISNULL(sub_expr2_child = sub_expr2->get_param_expr(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(sub_expr2->get_param_count()),
+        K(sub_expr2_child), K(ret));
+  } else if (T_OP_ROW != sub_expr2_child->get_expr_type()) {
+    /*do nothing*/
+  } else if (T_OP_EQ == expr->get_expr_type() &&
+             T_ANY == sub_expr2->get_expr_type() &&
+             OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_OP_IN, op_expr))) {
+     LOG_WARN("create ObOpRawExpr failed", K(ret));
+  } else if (T_OP_NE == expr->get_expr_type() &&
+             T_ALL == sub_expr2->get_expr_type() &&
+             OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_OP_NOT_IN, op_expr))) {
+      LOG_WARN("create ObOpRawExpr failed", K(ret));
+  } else if (OB_NOT_NULL(op_expr)) {
+    if (OB_FAIL(op_expr->set_param_exprs(sub_expr1, sub_expr2_child))) {
+      LOG_WARN("failed to set param exprs", K(ret));
+    } else {
+      happened = true;
+      new_expr = op_expr;
+      LOG_DEBUG("succeed to convert any/all expr", K(*expr));
+    }
+  } else if (T_ANY == sub_expr2->get_expr_type() &&
+             (T_OP_EQ < expr->get_expr_type() && expr->get_expr_type() <= T_OP_NE) &&
+             OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_OP_OR, op_expr))) {
+    LOG_WARN("failed to create or expr", K(ret));
+  } else if (T_ALL == sub_expr2->get_expr_type() &&
+             (T_OP_EQ <= expr->get_expr_type() && expr->get_expr_type() < T_OP_NE) &&
+             OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_OP_AND, op_expr))) {
+    LOG_WARN("failed to create and expr", K(ret));
+  } else if (OB_ISNULL(op_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(op_expr->init_param_exprs(sub_expr2_child->get_param_count()))) {
+    LOG_WARN("failed to init param exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < sub_expr2_child->get_param_count(); i++) {
+      ObOpRawExpr *tmp_expr = NULL;
+      if (OB_ISNULL(sub_expr2_child->get_param_expr(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if ((T_OP_EQ != expr->get_expr_type() && T_OP_NE != expr->get_expr_type()) &&
+                 (T_OP_ROW == sub_expr2_child->get_param_expr(i)->get_expr_type() ||
+                 T_OP_ROW == sub_expr1->get_expr_type())) {
+        //由于oracle不支持形如(2,3) < ((2,3)(2,4))向量列表,因此需要禁掉,'<='、'>'、'>='同理
+        ret = OB_ERR_OPERATOR_CANNOT_BE_USED_WITH_LIST;
+        LOG_WARN("this operator cannot be used with lists", K(ret));
+      } else if (T_OP_EQ == expr->get_expr_type() &&
+                 OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_OP_EQ, tmp_expr))) {
+        LOG_WARN("failed to create equal expr", K(ret));
+      } else if (T_OP_NE == expr->get_expr_type() &&
+                 OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_OP_NE, tmp_expr))) {
+        LOG_WARN("failed to create not equal expr", K(ret));
+      } else if (T_OP_LT == expr->get_expr_type() &&
+                 OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_OP_LT, tmp_expr))) {
+        LOG_WARN("failed to create less expr", K(ret));
+      } else if (T_OP_LE == expr->get_expr_type() &&
+                 OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_OP_LE, tmp_expr))) {
+        LOG_WARN("failed to create less equal expr", K(ret));
+      } else if (T_OP_GT == expr->get_expr_type() &&
+                 OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_OP_GT, tmp_expr))) {
+        LOG_WARN("failed to create great expr", K(ret));
+      } else if (T_OP_GE == expr->get_expr_type() &&
+                 OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_OP_GE, tmp_expr))) {
+        LOG_WARN("failed to create great equal expr", K(ret));
+      } else if (OB_ISNULL(tmp_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(tmp_expr->set_param_exprs(sub_expr1,
+                                                   sub_expr2_child->get_param_expr(i)))) {
+        LOG_WARN("failed to set param exprs", K(ret));
+      } else if (sub_expr2_child->get_param_count() == 1) {//any/all仅仅只有一个row时，没有必要创建and/or
+        op_expr = tmp_expr;
+      } else if (OB_FAIL(op_expr->add_param_expr(tmp_expr))) {
+        LOG_WARN("failed to add param exprs", K(ret));
+      } else {/*do nothing*/}
+    }
+    if (OB_SUCC(ret)) {
+      happened = true;
+      new_expr = op_expr;
+      LOG_DEBUG("succeed to convert great equal any expr to great equal or expr", K(*expr));
     }
   }
   return ret;

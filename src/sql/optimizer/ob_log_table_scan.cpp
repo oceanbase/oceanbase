@@ -5776,7 +5776,7 @@ int ObLogTableScan::copy_gen_col_range_exprs()
               OB_UNLIKELY(!expr->is_column_ref_expr())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret));
-          } else if (!static_cast<ObColumnRefRawExpr*>(expr)->is_generalized_column()) {
+          } else if (!static_cast<ObColumnRefRawExpr*>(expr)->is_virtual_generated_column()) {
             // do nothing
           } else {
             need_copy = true;

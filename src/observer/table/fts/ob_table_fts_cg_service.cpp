@@ -316,7 +316,7 @@ int ObTableFtsExprCgService::generate_match_against_exprs(ObTableCtx &ctx,
     ObRawExpr *bool_expr = nullptr;
     if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(match_against, bool_expr, expr_factory))) {
       LOG_WARN("try create bool expr failed", K(ret));
-    } else if (OB_FAIL(bool_expr->formalize(&ctx.get_session_info()))) {
+    } else if (match_against != bool_expr && OB_FAIL(bool_expr->formalize(&ctx.get_session_info()))) {
       LOG_WARN("fail to formalize match against", K(ret));
     } else {
       pushdown_match_filter = bool_expr;

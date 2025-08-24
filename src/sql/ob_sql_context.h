@@ -838,7 +838,8 @@ public:
       has_dblink_(false),
       injected_random_status_(false),
       ori_question_marks_count_(0),
-      type_demotion_flag_(0)
+      type_demotion_flag_(0),
+      initial_type_ctx_()
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -885,6 +886,7 @@ public:
     ori_question_marks_count_ = 0;
     filter_ds_stat_cache_.reuse();
     type_demotion_flag_ = 0;
+    // initial_type_ctx_.reset();
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -930,7 +932,9 @@ public:
     ori_question_marks_count_ = count;
     question_marks_count_ = count;
   };
-
+  void init_type_ctx(const ObSQLSessionInfo *session);
+  bool is_type_ctx_inited() const { return NULL != initial_type_ctx_.get_session(); }
+  const ObExprTypeCtx& get_initial_type_ctx() const { return initial_type_ctx_; };
 
 public:
   static const int64_t CALCULABLE_EXPR_NUM = 1;
@@ -1009,6 +1013,9 @@ public:
       int8_t type_demotion_flag_reserved_   : 4;
     };
   };
+  // A type context master copy that requires duplication during usage.
+  // For scenarios involving numerous and deeply nested expressions, frequent type context initialization is costy.
+  ObExprTypeCtx initial_type_ctx_;
 };
 
 template<typename... Args>

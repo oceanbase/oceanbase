@@ -295,6 +295,7 @@ protected:
   int is_external_table_partition_column(const TableItem &table_item,
                                          uint64_t column_id,
                                          bool &is_part_column);
+  int check_value_row_all_simple_const(const ObIArray<ObRawExpr*> &value_row, bool &all_const);
 
 private:
   common::hash::ObPlacementHashSet<uint64_t, 4229> insert_column_ids_;
