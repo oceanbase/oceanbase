@@ -441,11 +441,11 @@ private:
   static int prewarm_split_point_macro_if_need(
       const int64_t dest_tablet_id,
       const ObSSTable &dest_sstable,
-      const ObIArray<ObMacroEndKey> &dest_macro_ranges/*fist and last macro of dest sstable if any*/);
+      const ObIArray<MacroBlockId> &dest_macro_ids/*fist and last macro of dest sstable if any*/);
   static int iterate_macros_update_eff_id(
       const ObTabletID &dest_tablet_id,
       ObDualMacroMetaIterator &meta_iter,
-      ObIArray<ObMacroEndKey> &dest_macro_end_keys,
+      ObIArray<MacroBlockId> &dest_macro_ids,
       ObIAllocator &allocator);
   static int iterate_micros_update_eff_id(
       const ObTabletID &dest_tablet_id,

@@ -2374,13 +2374,13 @@ int ObSplitDownloadSSTableTask::init(
 int ObSplitDownloadSSTableTask::iterate_macros_update_eff_id(
     const ObTabletID &dest_tablet_id,
     ObDualMacroMetaIterator &meta_iter,
-    ObIArray<ObMacroEndKey> &dest_macro_end_keys,
+    ObIArray<MacroBlockId> &dest_macro_ids,
     ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   ObDataMacroBlockMeta macro_meta;
   ObMacroBlockDesc data_macro_desc;
-  ObMacroEndKey tmp_macro_endkey;
+  MacroBlockId tmp_macro_id;
   ObDatumRowkey tmp_row_key;
   const int64_t MACRO_BATCH_SIZE = 100;
   ObSSLocalCacheService *local_cache_service = MTL(ObSSLocalCacheService *);
@@ -2397,9 +2397,9 @@ int ObSplitDownloadSSTableTask::iterate_macros_update_eff_id(
         }
         ret = OB_SUCCESS;
         // get the last macro end keys
-        if (!dest_macro_end_keys.empty() && dest_macro_end_keys.at(0).macro_id_ != tmp_macro_endkey.macro_id_) {
-          if (OB_FAIL(dest_macro_end_keys.push_back(tmp_macro_endkey))) {
-            LOG_WARN("failed to push back", K(ret), K(dest_macro_end_keys), K(tmp_macro_endkey));
+        if (!dest_macro_ids.empty() && dest_macro_ids.at(0) != tmp_macro_id) {
+          if (OB_FAIL(dest_macro_ids.push_back(tmp_macro_id))) {
+            LOG_WARN("failed to push back", K(ret), K(dest_macro_ids), K(tmp_macro_id));
           }
         }
         break;
@@ -2413,16 +2413,12 @@ int ObSplitDownloadSSTableTask::iterate_macros_update_eff_id(
         local_cache_service->update_macro_cache_tablet_id(macro_ids, dest_tablet_id);
         macro_ids.reuse();
       }
-      tmp_macro_endkey.reset();
-      tmp_macro_endkey.macro_id_ = data_macro_desc.macro_block_id_;
-      if (OB_FAIL(data_macro_desc.macro_meta_->get_rowkey(tmp_row_key))) { //shallow copy
-        LOG_WARN("failed to copy range", K(ret), K(data_macro_desc.range_));
-      } else if (OB_FAIL(tmp_row_key.deep_copy(tmp_macro_endkey.end_key_, allocator))) { //deep copy
-        LOG_WARN("failed to copy end key", K(ret));
-      } else if (dest_macro_end_keys.empty()) {
+      tmp_macro_id.reset();
+      tmp_macro_id = data_macro_desc.macro_block_id_;
+      if (dest_macro_ids.empty()) {
         //get first macro end keys
-        if (OB_FAIL(dest_macro_end_keys.push_back(tmp_macro_endkey))) { //shallow copy
-          LOG_WARN("failed to push back", K(ret), K(dest_macro_end_keys), K(tmp_macro_endkey));
+        if (OB_FAIL(dest_macro_ids.push_back(tmp_macro_id))) {
+          LOG_WARN("failed to push back", K(ret), K(dest_macro_ids), K(tmp_macro_id));
         }
       }
     }
@@ -2540,7 +2536,7 @@ int ObSplitDownloadSSTableTask::prewarm_for_split(const ObTabletHandle &dest_tab
   const ObITableReadInfo *read_info = nullptr;
   bool is_from_rewrite_warm_macro = false;
   ObMicroBlockIndexIterator micro_iter;
-  ObSEArray<ObMacroEndKey, 2> dest_macro_end_keys; // record the first and last macros of sstable if any
+  ObSEArray<MacroBlockId, 2> dest_macro_ids; // record the first and last macros of sstable if any
   ObTablet *dest_tablet = nullptr;
   if (OB_ISNULL(dest_tablet = dest_tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2555,34 +2551,31 @@ int ObSplitDownloadSSTableTask::prewarm_for_split(const ObTabletHandle &dest_tab
       const bool is_major_sstable = sstable.is_major_sstable();
       if (OB_FAIL(meta_iter.open(sstable, whole_range, *read_info, allocator))) {
         LOG_WARN("open dual macro meta iter failed", K(ret), K(sstable));
-      } else if (OB_FAIL(iterate_macros_update_eff_id(dest_tablet_id, meta_iter, dest_macro_end_keys, allocator))) {
+      } else if (OB_FAIL(iterate_macros_update_eff_id(dest_tablet_id, meta_iter, dest_macro_ids, allocator))) {
         LOG_WARN("failed to iterate macros and update effective id", K(ret));
       } else if (OB_FAIL(micro_iter.open(sstable, whole_range, dest_tablet->get_rowkey_read_info(), allocator, true))) {
         LOG_WARN("failed to open micro iter", K(ret), K(sstable), K(dest_tablet_id));
       } else if (OB_FAIL(iterate_micros_update_eff_id(dest_tablet_id, micro_iter))) {
         LOG_WARN("failed to iterate micros and update effective id", K(ret), K(dest_tablet_id));
-      } else if (OB_FAIL(prewarm_split_point_macro_if_need(dest_tablet->get_tablet_id().id(), sstable, dest_macro_end_keys))) {
-        LOG_WARN("failed to try prewamr split point macro", K(ret), K(sstable), K(dest_macro_end_keys));
+      } else if (OB_FAIL(prewarm_split_point_macro_if_need(dest_tablet->get_tablet_id().id(), sstable, dest_macro_ids))) {
+        LOG_WARN("failed to try prewamr split point macro", K(ret), K(sstable), K(dest_macro_ids));
       }
     }
-  }
-  for (int64_t i = 0; i < dest_macro_end_keys.count(); i++) {
-    dest_macro_end_keys.at(i).end_key_.destroy(allocator);
   }
   return ret;
 }
 
 int ObSplitDownloadSSTableTask::prewarm_split_point_macro_if_need(const int64_t dest_tablet_id,
                                                                   const ObSSTable &dest_sstable,
-                                                                  const ObIArray<ObMacroEndKey> &dest_macro_end_keys/*fist and last macro of dest sstable if any*/)
+                                                                  const ObIArray<MacroBlockId> &dest_macro_ids/*fist and last macro of dest sstable if any*/)
 {
   int ret = OB_SUCCESS;
   bool stop = false;
   /*TODO: only prewarm warm macro ly435438*/
   storage::ObSSTableMacroPrewarmer prewarmer(&dest_sstable, stop);
-  for (int64_t i = 0; i < dest_macro_end_keys.count(); ++i) {
-    if (OB_FAIL(prewarmer.prewarm_single_macro(dest_macro_end_keys.at(i).macro_id_, dest_tablet_id))) {
-      LOG_WARN("failed to prewarm macro", K(ret), K(dest_macro_end_keys.at(i).macro_id_));
+  for (int64_t i = 0; i < dest_macro_ids.count(); ++i) {
+    if (OB_FAIL(prewarmer.prewarm_single_macro(dest_macro_ids.at(i), dest_tablet_id))) {
+      LOG_WARN("failed to prewarm macro", K(ret), K(dest_macro_ids.at(i)));
     }
   }
   return ret;
