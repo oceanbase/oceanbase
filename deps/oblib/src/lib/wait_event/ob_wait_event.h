@@ -143,6 +143,7 @@ WAIT_EVENT_DEF(OCI_DBLINK_POOL_LOCK, 18113, "dbink pool lock", "", "", "", CONCU
 WAIT_EVENT_DEF(USER_INFO_LOCK, 18114, "user info lock", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(MYSQL_CONN_GET_LOCK, 18115, "mysql conn get lock", "", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(MYSQL_CONN_DBLINK_POOL_LOCK, 18116, "mysql conn dblink pool lock", "", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(BACKUP_VALIDATE_SERVICE_COND_WAIT, 18117, "backup validate service condition wait", "address", "", "", CONCURRENCY, true, true)
 
 
 //sleep
