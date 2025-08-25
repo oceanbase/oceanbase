@@ -16415,7 +16415,7 @@ int ObDMLResolver::resolve_pq_distribute_hint(const ParseNode &hint_node,
 {
   int ret = OB_SUCCESS;
   opt_hint = NULL;
-  if (OB_UNLIKELY(4 != hint_node.num_child_)
+  if (OB_UNLIKELY(5 != hint_node.num_child_)
       || OB_ISNULL(hint_node.children_[1])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected PQ Distribute hint node", K(ret), K(hint_node.num_child_));
@@ -16455,6 +16455,8 @@ int ObDMLResolver::resolve_pq_distribute_hint(const ParseNode &hint_node,
         dist_algo = DistAlgo::DIST_ALL_NONE;
       } else if (T_DISTRIBUTE_RANDOM == outer && T_DISTRIBUTE_ALL == inner) {
         dist_algo = DistAlgo::DIST_RANDOM_ALL;
+      } else if (T_DISTRIBUTE_RANDOM == outer && T_DISTRIBUTE_BROADCAST == inner) {
+        dist_algo = DistAlgo::DIST_RANDOM_BROADCAST;
       } else if (T_DISTRIBUTE_HASH_LOCAL == outer && T_DISTRIBUTE_HASH_LOCAL == inner) {
         dist_algo = DistAlgo::DIST_HASH_HASH_LOCAL;
       } else if (T_DISTRIBUTE_PARTITION == outer && T_DISTRIBUTE_HASH_LOCAL == inner) {
@@ -16481,6 +16483,9 @@ int ObDMLResolver::resolve_pq_distribute_hint(const ParseNode &hint_node,
       } else {
         pq_dis_hint->set_qb_name(qb_name);
         pq_dis_hint->set_dist_algo(dist_algo);
+        if (NULL != hint_node.children_[4]) {
+          pq_dis_hint->set_parallel(hint_node.children_[4]->value_);
+        }
         opt_hint = pq_dis_hint;
       }
     }

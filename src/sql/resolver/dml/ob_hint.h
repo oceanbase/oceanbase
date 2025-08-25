@@ -1194,7 +1194,8 @@ class ObJoinHint : public ObOptHint
 public:
   ObJoinHint(ObItemType hint_type = T_INVALID)
     : ObOptHint(hint_type),
-      dist_algo_(DistAlgo::DIST_INVALID_METHOD)
+      dist_algo_(DistAlgo::DIST_INVALID_METHOD),
+      parallel_(ObGlobalHint::UNSET_PARALLEL)
   {
     set_hint_class(HINT_JOIN_METHOD);
   }
@@ -1213,12 +1214,15 @@ public:
                                           ? DistAlgo::DIST_PARTITION_WISE | DistAlgo::DIST_EXT_PARTITION_WISE
                                           : dist_algo_; }
   void set_dist_algo(DistAlgo dist_algo) { dist_algo_ = dist_algo; }
+  void set_parallel(int64_t parallel) { parallel_ = parallel; }
+  int64_t get_parallel() const { return parallel_; }
 
-  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(tables), K_(dist_algo));
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(tables), K_(dist_algo), K_(parallel));
 
 private:
   common::ObSEArray<ObTableInHint, 4, common::ModulePageAllocator, true> tables_;
   DistAlgo dist_algo_;
+  int64_t parallel_;
 };
 
 class ObJoinFilterHint : public ObOptHint

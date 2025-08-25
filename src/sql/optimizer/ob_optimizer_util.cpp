@@ -8485,6 +8485,7 @@ bool ObOptimizerUtil::is_left_need_exchange(const ObShardingInfo &sharding,
 {
   return dist_algo == DIST_HASH_HASH ||
          dist_algo == DIST_HASH_NONE ||
+         dist_algo == DIST_RANDOM_BROADCAST ||
          dist_algo == DIST_BROADCAST_NONE ||
          dist_algo == DIST_BC2HOST_NONE ||
          dist_algo == DIST_PARTITION_NONE ||
@@ -8500,6 +8501,7 @@ bool ObOptimizerUtil::is_right_need_exchange(const ObShardingInfo &sharding,
 {
   return dist_algo == DIST_HASH_HASH ||
          dist_algo == DIST_NONE_BROADCAST ||
+         dist_algo == DIST_RANDOM_BROADCAST ||
          dist_algo == DIST_NONE_PARTITION ||
          dist_algo == DIST_NONE_HASH ||
          dist_algo == DIST_HASH_HASH_LOCAL ||
@@ -8531,6 +8533,8 @@ ObPQDistributeMethod::Type ObOptimizerUtil::get_left_dist_method(const ObShardin
     dist_method = ObPQDistributeMethod::HASH;
   } else if (DistAlgo::DIST_RANDOM_ALL == dist_algo) {
     dist_method = ObPQDistributeMethod::RANDOM;
+  } else if (DistAlgo::DIST_RANDOM_BROADCAST == dist_algo) {
+    dist_method = ObPQDistributeMethod::RANDOM;
   } else if (DistAlgo::DIST_PULL_TO_LOCAL == dist_algo &&
              sharding.is_sharding()) {
     dist_method = ObPQDistributeMethod::LOCAL;
@@ -8549,6 +8553,8 @@ ObPQDistributeMethod::Type ObOptimizerUtil::get_right_dist_method(const ObShardi
       DistAlgo::DIST_PARTITION_HASH_LOCAL == dist_algo) {
     dist_method = ObPQDistributeMethod::HASH;
   } else if (DistAlgo::DIST_NONE_BROADCAST == dist_algo) {
+    dist_method = ObPQDistributeMethod::BROADCAST;
+  } else if (DistAlgo::DIST_RANDOM_BROADCAST == dist_algo) {
     dist_method = ObPQDistributeMethod::BROADCAST;
   } else if (DistAlgo::DIST_HASH_LOCAL_BROADCAST == dist_algo) {
     dist_method = ObPQDistributeMethod::SM_BROADCAST;

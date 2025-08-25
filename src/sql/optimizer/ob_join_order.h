@@ -1065,6 +1065,7 @@ class Path
                                                          int64_t &available_parallel,
                                                          int64_t &server_cnt,
                                                          ObIArray<common::ObAddr> &server_list);
+
     inline bool is_nlj_with_param_down() const
     { return NULL != right_path_ && right_path_->is_inner_path() && !right_path_->nl_params_.empty(); }
     int check_right_is_local_scan(int64_t &local_scan_type) const;
@@ -2224,6 +2225,15 @@ struct NullAwareAntiJoinInfo {
 
     int check_can_push_join_pred(bool &can_push) const;
 
+    int compute_nlj_dop_by_auto_dop(Path *left_path,
+                                    Path *right_path,
+                                    const ObJoinType join_type,
+                                    const ObIArray<ObRawExpr*> &other_join_conditions,
+                                    const ObIArray<ObRawExpr*> &filter,
+                                    const bool with_nl_param,
+                                    const bool need_mat,
+                                    int64_t &parallel);
+
     int generate_inner_nl_paths(const EqualSets &equal_sets,
                                 const ObIArray<Path*> &left_paths,
                                 Path *right_path,
@@ -2321,7 +2331,8 @@ struct NullAwareAntiJoinInfo {
                                const common::ObIArray<ObRawExpr*> &where_conditions,
                                const bool has_equal_cond,
                                const bool is_normal_nl,
-                               bool need_mat = false);
+                               bool need_mat = false,
+                               int64_t join_parallel = ObGlobalHint::UNSET_PARALLEL);
 
     int create_and_add_hash_path(const Path *left_path,
                                  const Path *right_path,
@@ -2422,7 +2433,8 @@ struct NullAwareAntiJoinInfo {
                                     const JoinAlgo join_algo,
                                     const bool is_push_down,
                                     const bool is_naaj,
-                                    int64_t &distributed_types);
+                                    int64_t &distributed_types,
+                                    int64_t join_parallel = ObGlobalHint::UNSET_PARALLEL);
 
     bool is_partition_wise_valid(const Path &left_path,
                                  const Path &right_path);

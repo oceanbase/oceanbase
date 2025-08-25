@@ -12896,11 +12896,18 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint opt_comma NAME_OB opt_inde
 {
   (void)($5);               /* unused */
   (void)($7);               /* unused */
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTRIBUTE, 4, $3, $4, $6, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTRIBUTE, 5, $3, $4, $6, $8, NULL);
 }
-| PQ_DISTRIBUTE '(' qb_name_option relation_factor_in_pq_hint ')'
+| PQ_DISTRIBUTE '(' qb_name_option relation_factor_in_pq_hint')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTRIBUTE, 4, $3, $4, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTRIBUTE, 5, $3, $4, NULL, NULL, NULL);
+}
+| PQ_DISTRIBUTE '(' qb_name_option relation_factor_in_pq_hint opt_comma distribute_method opt_comma distribute_method opt_comma INTNUM ')'
+{
+  (void)($5);               /* unused */
+  (void)($7);               /* unused */
+  (void)($9);               /* unused */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTRIBUTE, 5, $3, $4, $6, $8, $10);
 }
 | PQ_MAP '(' qb_name_option relation_factor_in_pq_hint ')'
 {
