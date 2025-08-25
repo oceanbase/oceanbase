@@ -1913,7 +1913,7 @@ int ObSchemaServiceSQLImpl::fetch_aux_tables(
     ObSqlString hint;
     const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
     const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
-    const static char *FETCH_INDEX_SQL_FORMAT = "SELECT /*+ no_rewrite */ "\
+    const static char *FETCH_INDEX_SQL_FORMAT = "SELECT /*+ no_rewrite leading(l r) */ "\
                                                 "  r.table_id AS table_id, "\
                                                 "  r.table_type AS table_type, "\
                                                 "  r.index_type AS index_type, "\
