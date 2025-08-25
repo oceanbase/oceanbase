@@ -5493,7 +5493,17 @@ int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, Param
           }
         }
         OX (obj_params.push_back(*(data + actual_pos)));
-        OX (obj_params.at(obj_params.count() - 1).set_accuracy(coll->get_element_type().get_accuracy()));
+        if (OB_SUCC(ret)) {
+          if (SCALE_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_scale()) {
+            OX (obj_params.at(obj_params.count() - 1).set_scale(coll->get_element_type().get_accuracy().get_scale()));
+          }
+          if (PRECISION_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_precision()) {
+            OX (obj_params.at(obj_params.count() - 1).set_precision(coll->get_element_type().get_accuracy().get_precision()));
+          }
+          if (LENGTH_UNKNOWN_YET != coll->get_element_type().get_accuracy().get_length()) {
+            OX (obj_params.at(obj_params.count() - 1).set_length(coll->get_element_type().get_accuracy().get_length()));
+          }
+        }
       }
     }
   }
