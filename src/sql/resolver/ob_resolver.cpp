@@ -201,7 +201,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
 
 #define REGISTER_SELECT_STMT_RESOLVER(name)                                   \
   do {                                                                        \
-    ret = select_stmt_resolver_func<Ob##name##Resolver>(params_, parse_tree, stmt); \
+    ret = select_stmt_resolver_func<Ob##name##Resolver>(params_, *real_parse_tree, stmt); \
   } while (0)
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_resolve);
   int ret = OB_SUCCESS;
@@ -229,6 +229,13 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
                               params_.is_prepare_protocol_);
     OZ (resolver.resolve_condition_compile(&parse_tree, real_parse_tree, questionmark_count));
     OX (params_.query_ctx_->set_questionmark_count(questionmark_count));
+  } else if (T_SQL_STMT == parse_tree.type_) {
+    if (1 != parse_tree.num_child_) {
+      ret = OB_ERR_PARSE_SQL;
+      LOG_WARN("sql stmt should have only one child", K(ret), K(parse_tree.num_child_));
+    } else {
+      real_parse_tree = parse_tree.children_[0];
+    }
   } else {
     real_parse_tree = &parse_tree;
   }
