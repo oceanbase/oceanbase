@@ -2699,7 +2699,7 @@ DEF_BOOL(_enable_obdal, OB_CLUSTER_PARAMETER, "False",
 
 // for new created tenant, _ob_enable_truncate_partition_preserve_global_index will be True
 //
-DEF_BOOL(_ob_enable_truncate_partition_preserve_global_index, OB_TENANT_PARAMETER, "False",
+DEF_BOOL(_ob_enable_truncate_partition_preserve_global_index, OB_TENANT_PARAMETER, "True",
          "Specifies Whether to allow global indexes to be preserved when truncating/dropping the main table partition.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(default_table_merge_engine, OB_TENANT_PARAMETER, "PARTIAL_UPDATE",
