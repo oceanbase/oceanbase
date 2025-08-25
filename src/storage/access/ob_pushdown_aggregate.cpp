@@ -1116,7 +1116,7 @@ void ObHyperLogLogAggCell::reset()
 void ObHyperLogLogAggCell::reuse()
 {
   ObAggCell::reuse();
-  if (OB_ISNULL(ndv_calculator_)) {
+  if (OB_NOT_NULL(ndv_calculator_)) {
     ndv_calculator_->reuse();
   }
 }
