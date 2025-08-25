@@ -332,6 +332,14 @@ int ObBackupConfigParserMgr::init(const common::ObSqlString &name, const common:
     LOG_WARN("invalid backup config argumnet", K(ret), K(name), K(value));
   } else if (OB_FAIL(type.set_backup_config_type(name.ptr()))) {
     LOG_WARN("fail to set backup config type", K(ret), K(name));
+#ifdef OB_BUILD_SHARED_STORAGE
+  } else if (GCTX.is_shared_storage_mode()
+             && (ObBackupConfigType::Type::DATA_BACKUP_DEST == type.get_type()
+                 || ObBackupConfigType::Type::LOG_ARCHIVE_DEST == type.get_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("set log_archive_dest/data_backup_dest in Shared-Storage mode is not supported", K(name), K(tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "set log_archive_dest/data_backup_dest in Shared-Storage mode is ");
+#endif
   } else if (OB_FAIL(parser_generator_.set(type, tenant_id, value))) {
     LOG_WARN("fail to set backup parser generator", K(ret), K(type));
   } else if (OB_ISNULL(config_parser = parser_generator_.get_parser())) {
