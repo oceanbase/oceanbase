@@ -1304,7 +1304,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLForAllStmt &s)
     const ObPLForLoopStmt& for_loop = static_cast<const ObPLForLoopStmt&>(s);
     if (OB_NOT_NULL(s.get_sql_stmt()) && !s.get_save_exception()) {
       ObLLVMValue lower, upper, lower_obj, upper_obj;
-      ObLLVMValue ret_err, is_need_rollback;
+      ObLLVMValue ret_err, no_need_rollback;
       ObLLVMType ir_type;
       ObLLVMBasicBlock illegal_block, after_block, rollback_block, not_rollback_block;
       ObPLSqlStmt *sql_stmt = const_cast<ObPLSqlStmt*>(s.get_sql_stmt());
@@ -1318,8 +1318,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLForAllStmt &s)
       OZ (generator_.get_llvm_type(var->get_type(), ir_type));
       OZ (generator_.generate_bound_and_check(s, true, lower, upper, lower_obj, upper_obj, illegal_block));
       OZ (generator_.generate_sql(*(s.get_sql_stmt()), ret_err));
-      OZ (generator_.get_helper().create_icmp_eq(ret_err, OB_BATCHED_MULTI_STMT_ROLLBACK, is_need_rollback));
-      OZ (generator_.get_helper().create_cond_br(is_need_rollback, rollback_block, not_rollback_block));
+      OZ (generator_.get_helper().create_icmp_eq(ret_err, OB_SUCCESS, no_need_rollback));
+      OZ (generator_.get_helper().create_cond_br(no_need_rollback, not_rollback_block, rollback_block));
       OZ (generator_.set_current(not_rollback_block));
       OZ (generator_.generate_after_sql(*(s.get_sql_stmt()), ret_err));
       OZ (generator_.get_helper().create_br(after_block));

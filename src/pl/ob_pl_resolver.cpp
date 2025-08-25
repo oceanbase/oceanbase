@@ -5352,7 +5352,11 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
             ObObjAccessRawExpr *obj_access_expr = static_cast<ObObjAccessRawExpr*>(exec_param);
             CK (OB_NOT_NULL(obj_access_expr));
             OZ (obj_access_expr->get_final_type(type));
-            if (OB_SUCC(ret) && !type.is_obj_type()) {
+            if (OB_SUCC(ret)
+                  && (!type.is_obj_type()
+                      || ob_is_json(type.get_obj_type())
+                      || ob_is_geometry(type.get_obj_type())
+                      || ob_is_user_defined_sql_type(type.get_obj_type()))) {
               can_array_binding = false; // SQL Engine can not support SqlArray with ext element.
             }
           }
@@ -5418,7 +5422,11 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
               ObObjAccessRawExpr *obj_access_expr = static_cast<ObObjAccessRawExpr*>(exec_param);
               CK (OB_NOT_NULL(obj_access_expr));
               OZ (obj_access_expr->get_final_type(type));
-              if (OB_SUCC(ret) && !type.is_obj_type()) {
+              if (OB_SUCC(ret)
+                  && (!type.is_obj_type()
+                      || ob_is_json(type.get_obj_type())
+                      || ob_is_geometry(type.get_obj_type())
+                      || ob_is_user_defined_sql_type(type.get_obj_type()))) {
                 can_array_binding = false; // SQL Engine can not support SqlArray with ext element.
               }
             }
