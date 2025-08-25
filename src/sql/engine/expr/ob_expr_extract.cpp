@@ -159,7 +159,7 @@ int ObExprExtract::calc(T &result,
                         bool has_lob_header)
 {
   int ret = OB_SUCCESS;
-  class ObTime ob_time;
+  ObTime ob_time;
   memset(&ob_time, 0, sizeof(ob_time));
   if (date.is_null()) {
     result.set_null();
@@ -542,7 +542,7 @@ int ObExprExtract::calc_extract_mysql_batch(
       int &cast_ret = CM_IS_ERROR_ON_FAIL(cast_mode) ? ret : warning;
       ObDatum *datum_array = expr.args_[1]->locate_batch_datums(ctx);
       const int64_t cur_ts_value = get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx());
-      class ObTime ob_time;
+      ObTime ob_time;
       switch (unit_val) {
         case DATE_UNIT_DAY:
         case DATE_UNIT_WEEK:
