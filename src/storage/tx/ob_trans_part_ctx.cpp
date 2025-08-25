@@ -466,8 +466,7 @@ int ObPartTransCtx::trans_clear_(const share::SCN log_ts)
   share::SCN rec_log_ts = get_rec_log_ts_() == share::SCN::max_scn() ?
     log_ts : get_rec_log_ts_();
 
-  if (is_ctx_table_merged_
-      && OB_FAIL(ls_tx_ctx_mgr_->update_aggre_log_ts_wo_lock(rec_log_ts))) {
+  if (OB_FAIL(ls_tx_ctx_mgr_->update_aggre_log_ts_wo_lock(rec_log_ts))) {
     TRANS_LOG(ERROR, "update aggre log ts wo lock failed", KR(ret), "context", *this);
   } else {
     ret = mt_ctx_.trans_clear();
