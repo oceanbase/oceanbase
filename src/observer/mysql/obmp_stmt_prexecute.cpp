@@ -203,7 +203,9 @@ int ObMPStmtPrexecute::before_process()
         ObMySQLUtil::get_uint4(pos, extend_flag_);
       }
     }
-    session->set_last_trace_id(ObCurTraceId::get_trace_id());
+    if (OB_NOT_NULL(session)) {
+      session->set_last_trace_id(ObCurTraceId::get_trace_id());
+    }
     //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
     if (OB_FAIL(ret) && OB_NOT_NULL(session)) {
       int tmp_ret = OB_SUCCESS;
