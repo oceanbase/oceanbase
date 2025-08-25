@@ -106,6 +106,7 @@ storage_unittest(test_storage_logger_manager slog/test_storage_logger_manager.cp
 storage_unittest(test_storage_log_read_write slog/test_storage_log_read_write.cpp)
 storage_unittest(test_storage_log_replay slog/test_storage_log_replay.cpp)
 storage_unittest(test_linked_macro_block slog_ckpt/test_linked_macro_block.cpp)
+storage_unittest(test_tenant_slog_ckpt_util slog_ckpt/test_tenant_slog_ckpt_util.cpp)
 storage_unittest(test_tablet_dumped_medium_info test_tablet_dumped_medium_info.cpp)
 #storage_unittest(test_log_stream_backup backup/test_log_stream_backup.cpp)
 #storage_unittest(test_backup_ctx backup/test_backup_ctx.cpp)

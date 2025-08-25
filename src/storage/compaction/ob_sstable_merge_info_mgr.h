@@ -32,8 +32,11 @@ public:
   static int mtl_init(ObTenantSSTableMergeInfoMgr *&sstable_merge_info);
   static int64_t cal_max();
   static int get_next_info(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter,
-      compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter,
-      compaction::ObSSTableMergeHistory &merge_history, char *buf, const int64_t buf_len);
+                           compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter,
+                           compaction::ObIDiagnoseInfoMgr::Iterator &mds_iter,
+                           compaction::ObSSTableMergeHistory &merge_history,
+                           char *buf,
+                           const int64_t buf_len);
   ObTenantSSTableMergeInfoMgr();
   virtual ~ObTenantSSTableMergeInfoMgr();
   int init(const int64_t page_size=compaction::ObIDiagnoseInfoMgr::INFO_PAGE_SIZE);
@@ -41,7 +44,8 @@ public:
   void reset();
   void destroy();
   int open_iter(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter,
-                compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter);
+                compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter,
+                compaction::ObIDiagnoseInfoMgr::Iterator &mds_iter);
 
   int set_max(int64_t max_size);
   int gc_info();
@@ -51,13 +55,16 @@ public:
 
 public:
   static const int64_t MEMORY_PERCENTAGE = 2;   // max size = tenant memory size * MEMORY_PERCENTAGE / 100
-  static const int64_t MINOR_MEMORY_PERCENTAGE = 75;
+  static const int64_t MINOR_MEMORY_PERCENTAGE = 70;
+  static const int64_t MAJOR_MEMORY_PERCENTAGE = 25;
+  static const int64_t MDS_MEMORY_PERCENTAGE = 5;
   static const int64_t POOL_MAX_SIZE = 256LL * 1024LL * 1024LL; // 256MB
 
 private:
   bool is_inited_;
   compaction::ObIDiagnoseInfoMgr major_info_pool_;
   compaction::ObIDiagnoseInfoMgr minor_info_pool_;
+  compaction::ObIDiagnoseInfoMgr mds_info_pool_;
   DISALLOW_COPY_AND_ASSIGN(ObTenantSSTableMergeInfoMgr);
 };
 

@@ -446,6 +446,8 @@ const ObDagPrio::ObDagPrioEnum ObIDag::MergeDagPrio[] = {
     ObDagPrio::DAG_PRIO_COMPACTION_HIGH,
     ObDagPrio::DAG_PRIO_COMPACTION_MID,
     ObDagPrio::DAG_PRIO_COMPACTION_LOW,
+    ObDagPrio::DAG_PRIO_MDS_COMPACTION_HIGH,
+    ObDagPrio::DAG_PRIO_MDS_COMPACTION_MID,
 };
 const ObDagType::ObDagTypeEnum ObIDag::MergeDagType[] = {
     ObDagType::DAG_TYPE_MERGE_EXECUTE,
@@ -455,6 +457,8 @@ const ObDagType::ObDagTypeEnum ObIDag::MergeDagType[] = {
     ObDagType::DAG_TYPE_CO_MERGE_PREPARE,
     ObDagType::DAG_TYPE_CO_MERGE_SCHEDULE,
     ObDagType::DAG_TYPE_CO_MERGE_FINISH,
+    ObDagType::DAG_TYPE_MDS_MINI_MERGE,
+    ObDagType::DAG_TYPE_MDS_MINOR_MERGE,
 };
 
 ObIDag::ObIDag(const ObDagType::ObDagTypeEnum type)
@@ -3241,7 +3245,8 @@ int ObDagPrioScheduler::diagnose_minor_exe_dag(
   ObIDag *head = dag_list_[READY_DAG_LIST].get_header();
   ObIDag *cur = head->get_next();
   while (head != cur && OB_SUCC(ret)) {
-    if (cur->get_type() == ObDagType::DAG_TYPE_MERGE_EXECUTE) {
+    if (cur->get_type() == ObDagType::DAG_TYPE_MERGE_EXECUTE
+        || cur->get_type() == ObDagType::DAG_TYPE_MDS_MINOR_MERGE) {
       compaction::ObTabletMergeExecuteDag *exe_dag = static_cast<compaction::ObTabletMergeExecuteDag *>(cur);
       if (exe_dag->belong_to_same_tablet(&merge_dag_info)) {
         if (OB_FAIL(exe_dag->diagnose_compaction_info(progress))) {
@@ -4122,7 +4127,9 @@ void ObTenantDagScheduler::reload_config()
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
     set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_HIGH, tenant_config->compaction_high_thread_score);
+    set_thread_score(ObDagPrio::DAG_PRIO_MDS_COMPACTION_HIGH, tenant_config->mds_compaction_high_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_MID, tenant_config->compaction_mid_thread_score);
+    set_thread_score(ObDagPrio::DAG_PRIO_MDS_COMPACTION_MID, tenant_config->mds_compaction_mid_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_LOW, tenant_config->compaction_low_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_HA_HIGH, tenant_config->ha_high_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_HA_MID, tenant_config->ha_mid_thread_score);
@@ -4689,6 +4696,7 @@ int ObTenantDagScheduler::get_compaction_dag_count(int64_t dag_count)
 
 // get oldest minor execute dag
 int ObTenantDagScheduler::diagnose_minor_exe_dag(
+    const ObDagPrio::ObDagPrioEnum dag_prio,
     const compaction::ObMergeDagHash *merge_dag_info,
     compaction::ObDiagnoseTabletCompProgress &progress)
 {
@@ -4699,8 +4707,12 @@ int ObTenantDagScheduler::diagnose_minor_exe_dag(
   } else if (OB_ISNULL(merge_dag_info)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arugment", K(ret), KP(merge_dag_info));
-  } else if (OB_FAIL(prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_MID].diagnose_minor_exe_dag(*merge_dag_info, progress))) {
-    COMMON_LOG(WARN, "fail to diagnose minor exe dag", K(ret), KP(merge_dag_info));
+  } else if (OB_UNLIKELY(dag_prio != ObDagPrio::DAG_PRIO_COMPACTION_MID
+                         || dag_prio != ObDagPrio::DAG_PRIO_MDS_COMPACTION_MID)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid argument, un-expected dag prio", K(ret), K(dag_prio));
+  } else if (OB_FAIL(prio_sche_[dag_prio].diagnose_minor_exe_dag(*merge_dag_info, progress))) {
+    COMMON_LOG(WARN, "fail to diagnose minor exe dag", K(ret), KP(merge_dag_info), K(dag_prio));
   }
   return ret;
 }

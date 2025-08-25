@@ -265,6 +265,7 @@ class ObTabletMergeExecuteDag: public ObTabletMergeDag
 {
 public:
   ObTabletMergeExecuteDag();
+  ObTabletMergeExecuteDag(const share::ObDagType::ObDagTypeEnum type);
   virtual ~ObTabletMergeExecuteDag();
   virtual int init_by_param(const share::ObIDagInitParam *param) override; // for diagnose
   int prepare_init(

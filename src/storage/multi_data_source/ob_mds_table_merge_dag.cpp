@@ -30,7 +30,7 @@ namespace storage
 namespace mds
 {
 ERRSIM_POINT_DEF(EN_SKIP_MERGE_MDS_TABEL);
-ObMdsTableMergeDag::ObMdsTableMergeDag()
+ObTabletMdsMiniMergeDag::ObTabletMdsMiniMergeDag()
   : ObTabletMergeDag(ObDagType::DAG_TYPE_MDS_MINI_MERGE),
     is_inited_(false),
     flush_scn_(),
@@ -39,7 +39,7 @@ ObMdsTableMergeDag::ObMdsTableMergeDag()
 {
 }
 
-int ObMdsTableMergeDag::init_by_param(const share::ObIDagInitParam *param)
+int ObTabletMdsMiniMergeDag::init_by_param(const share::ObIDagInitParam *param)
 {
   int ret = OB_SUCCESS;
 
@@ -50,7 +50,7 @@ int ObMdsTableMergeDag::init_by_param(const share::ObIDagInitParam *param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), KP(param));
   } else {
-    const ObMdsTableMergeDagParam *mds_param = static_cast<const ObMdsTableMergeDagParam*>(param);
+    const ObTabletMdsMiniMergeDagParam *mds_param = static_cast<const ObTabletMdsMiniMergeDagParam*>(param);
     if (OB_UNLIKELY(!is_mds_mini_merge(mds_param->merge_type_))) {
       ret = OB_ERR_SYS;
       LOG_WARN("param type is not mds table merge type", K(ret), KPC(mds_param));
@@ -72,7 +72,7 @@ int ObMdsTableMergeDag::init_by_param(const share::ObIDagInitParam *param)
   return ret;
 }
 
-int ObMdsTableMergeDag::fill_compat_mode_()
+int ObTabletMdsMiniMergeDag::fill_compat_mode_()
 {
   int ret = OB_SUCCESS;
   // Mds dump should not access mds data to avoid potential dead lock
@@ -93,7 +93,7 @@ int ObMdsTableMergeDag::fill_compat_mode_()
   return ret;
 }
 
-int ObMdsTableMergeDag::create_first_task()
+int ObTabletMdsMiniMergeDag::create_first_task()
 {
   int ret = OB_SUCCESS;
   ObMdsTableMergeTask *task = nullptr;
@@ -114,7 +114,7 @@ int ObMdsTableMergeDag::create_first_task()
   return ret;
 }
 
-int ObMdsTableMergeDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const
+int ObTabletMdsMiniMergeDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -131,7 +131,7 @@ int ObMdsTableMergeDag::fill_info_param(compaction::ObIBasicInfoParam *&out_para
   return ret;
 }
 
-int ObMdsTableMergeDag::fill_dag_key(char *buf, const int64_t buf_len) const
+int ObTabletMdsMiniMergeDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
 
@@ -142,6 +142,11 @@ int ObMdsTableMergeDag::fill_dag_key(char *buf, const int64_t buf_len) const
 
   return ret;
 }
+
+ObTabletMdsMinorMergeDag::ObTabletMdsMinorMergeDag() : ObTabletMergeExecuteDag(ObDagType::DAG_TYPE_MDS_MINOR_MERGE)
+{
+}
+
 } // namespace mds
 } // namespace storage
 } // namespace oceanbase

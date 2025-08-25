@@ -199,6 +199,9 @@ max_partition_num
 max_stale_time_for_weak_consistency
 max_string_print_length
 max_syslog_file_count
+mds_compaction_high_thread_score
+mds_compaction_mid_thread_score
+mds_minor_compact_trigger
 memory_chunk_cache_size
 memory_limit
 memory_limit_percentage

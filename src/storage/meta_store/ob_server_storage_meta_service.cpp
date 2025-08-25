@@ -460,7 +460,7 @@ int ObServerStorageMetaService::try_write_checkpoint_for_compat()
         // nothing to do.
       } else {
         MTL_SWITCH(super_block.tenant_id_) {
-          if (OB_FAIL(MTL(ObTenantStorageMetaService*)->write_checkpoint(true/*is_force*/))) {
+          if (OB_FAIL(MTL(ObTenantStorageMetaService*)->write_checkpoint(ObTenantSlogCheckpointWorkflow::COMPAT_UPGRADE))) {
             LOG_WARN("fail to write tenant slog checkpoint", K(ret));
           } else {
             // we don't write checkpoint or update super_block for hidden tenant

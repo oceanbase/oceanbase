@@ -18,6 +18,7 @@
 #include "storage/column_store/ob_co_merge_dag.h"
 #include "storage/compaction/ob_schedule_tablet_func.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
+#include "storage/multi_data_source/ob_mds_table_merge_dag.h"
 
 namespace oceanbase
 {
@@ -661,9 +662,18 @@ int ObCompactionDiagnoseMgr::diagnose_dag(
   if (OB_FAIL(dag.init_by_param(&param))) {
     STORAGE_LOG(WARN, "failed to init dag", K(ret), K(param));
   } else if (is_minor_merge(merge_type)) {
-    if (OB_FAIL(MTL(ObTenantDagScheduler *)->diagnose_minor_exe_dag(&dag, progress))) {
+    if (OB_FAIL(MTL(ObTenantDagScheduler *)->diagnose_minor_exe_dag(ObDagPrio::DAG_PRIO_COMPACTION_MID,
+                                                                    &dag,
+                                                                    progress))) {
       if (OB_HASH_NOT_EXIST != ret) {
         STORAGE_LOG(WARN, "failed to diagnose minor execute dag", K(ret), K(ls_id), K(tablet_id), K(progress));
+      }
+    }
+  } else if (is_mds_minor_merge(merge_type)) {
+    if (OB_FAIL(MTL(ObTenantDagScheduler *)
+                    ->diagnose_minor_exe_dag(ObDagPrio::DAG_PRIO_MDS_COMPACTION_MID, &dag, progress))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        STORAGE_LOG(WARN, "failed to diagnose mds minor execute dag", K(ret), K(ls_id), K(tablet_id), K(progress));
       }
     }
   } else if (OB_FAIL(MTL(ObTenantDagScheduler *)->diagnose_dag(&dag, progress))) {
@@ -1220,8 +1230,15 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_mini_merge(
           tablet))) {
         LOG_WARN("diagnose failed", K(tmp_ret), K(ls_id), "tablet_id", tablet.get_tablet_meta().tablet_id_, KPC(latest_sstable));
       }
+      if (OB_TMP_FAIL(diagnose_tablet_merge(
+          MDS_MINI_MERGE,
+          ls_id,
+          tablet))) {
+        LOG_WARN("diagnose mds failed", K(tmp_ret), K(ls_id), "tablet_id", tablet.get_tablet_meta().tablet_id_, KPC(latest_sstable));
+      }
     } else {
       (void) get_and_set_suspect_info(MINI_MERGE, ls_id, tablet_id);
+      (void) get_and_set_suspect_info(MDS_MINI_MERGE, ls_id, tablet_id);
     }
   }
   return ret;
@@ -1230,6 +1247,7 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_mini_merge(
 int ObCompactionDiagnoseMgr::diagnose_tablet_minor_merge(const ObLSID &ls_id, ObTablet &tablet)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   int64_t minor_compact_trigger = ObPartitionMergePolicy::DEFAULT_MINOR_COMPACT_TRIGGER;
   {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
@@ -1243,6 +1261,12 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_minor_merge(const ObLSID &ls_id, Ob
         ls_id,
         tablet))) {
       LOG_WARN("diagnose failed", K(ret), K(ls_id), "tablet_id", tablet.get_tablet_meta().tablet_id_);
+    }
+    if (OB_TMP_FAIL(diagnose_tablet_merge(
+        MDS_MINOR_MERGE,
+        ls_id,
+        tablet))) {
+      LOG_WARN("diagnose failed", K(tmp_ret), K(ret), K(ls_id), "tablet_id", tablet.get_tablet_meta().tablet_id_);
     }
   }
   return ret;
@@ -1397,16 +1421,18 @@ int ObCompactionDiagnoseMgr::diagnose_row_store_dag(
     const int64_t compaction_scn)
 {
   int ret = OB_SUCCESS;
-  ObTabletMajorMergeDag major_dag;
-  ObTabletMergeExecuteDag minor_dag;
-  ObTabletMiniMergeDag mini_dag;
+  ObArenaAllocator temp_allocator("AllocDag", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObTabletMergeDag *dag = nullptr;
   if (is_major_merge_type(merge_type)) {
-    dag = &major_dag;
+    dag = OB_NEWx(ObTabletMajorMergeDag, &temp_allocator);
   } else if (is_minor_merge(merge_type)) {
-    dag = &minor_dag;
+    dag = OB_NEWx(ObTabletMergeExecuteDag, &temp_allocator);
   } else if (is_mini_merge(merge_type)) {
-    dag = &mini_dag;
+    dag = OB_NEWx(ObTabletMiniMergeDag, &temp_allocator);
+  } else if (is_mds_mini_merge(merge_type)) {
+    dag = OB_NEWx(mds::ObTabletMdsMiniMergeDag, &temp_allocator);
+  } else if (is_mds_minor_merge(merge_type)) {
+    dag = OB_NEWx(mds::ObTabletMdsMinorMergeDag, &temp_allocator);
   }
   if (OB_ISNULL(dag)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1433,6 +1459,7 @@ int ObCompactionDiagnoseMgr::diagnose_row_store_dag(
     } else if (OB_FAIL(diagnose_no_dag(dag->hash(), merge_type, ls_id, tablet_id, compaction_scn))) {
       LOG_WARN("failed to dagnose no dag", K(ret), K(ls_id), K(tablet_id));
     }
+    dag->~ObTabletMergeDag();
   }
   return ret;
 }

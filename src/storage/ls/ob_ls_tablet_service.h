@@ -209,13 +209,6 @@ public:
   int get_lock_memtable_mgr(ObMemtableMgrHandle &mgr_handle);
   int get_mds_table_mgr(mds::MdsTableMgrHandle &mgr_handle);
   int64_t get_tablet_count() const;
-
-  // update tablet
-  int update_tablet_checkpoint(
-    const ObTabletMapKey &key,
-    const ObMetaDiskAddr &old_addr,
-    const ObMetaDiskAddr &new_addr,
-    ObTabletHandle &new_handle);
   int update_tablet_table_store(
       const common::ObTabletID &tablet_id,
       const ObUpdateTableStoreParam &param,
@@ -455,6 +448,8 @@ public:
   int build_tablet_iter(ObHALSTabletIDIterator &iter);
   int build_tablet_iter(ObHALSTabletIterator &iter);
   int build_tablet_iter(ObLSTabletFastIter &iter, const bool except_ls_inner_tablet = false);
+  // only used for tenant slog checkpoint
+  int build_tablet_iter_with_lock_hold(ObLSTabletFastIter &iter);
 
   int is_tablet_exist(const common::ObTabletID &tablet_id, bool &is_exist);
 
@@ -479,6 +474,29 @@ public:
 
   // for transfer check tablet write stop
   int check_tablet_no_active_memtable(const ObIArray<ObTabletID> &tablet_list, bool &has);
+
+  /// @brief: apply defragment tablet(only used for slog checkpoint)
+  /// @param t3m: the target that tablet will be applied to.
+  /// @param tablet_key: key of specified tablet
+  /// @param old_addr: tablet's original address
+  /// @param new_handle: handle of specified tablet
+  /// @param tsms: used for write slog(if not null).
+  int apply_defragment_tablet(
+    ObTenantMetaMemMgr &t3m,
+    const ObTabletMapKey &tablet_key,
+    const ObMetaDiskAddr &old_addr,
+    ObTabletHandle &new_handle,
+    ObTenantStorageMetaService &tsms);
+
+   /// @brief: handle empty shell when doing slog truncate(only used for slog checkpoint)
+   /// @param t3m: used for empty shell cas
+   /// @param tablet_key: key of specified empty shell
+   /// @param old_addr: empty shell's original address
+   /// @return: return OB_NOT_SUPPORTED in SS mode.
+   int refresh_empty_shell_for_slog_ckpt(
+    ObTenantMetaMemMgr &t3m,
+    const ObTabletMapKey &tablet_key,
+    const ObMetaDiskAddr &old_addr);
 
 protected:
   virtual int prepare_dml_running_ctx(

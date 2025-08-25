@@ -32,31 +32,24 @@ struct ObLSCkptMember;
 
 enum class ObTenantStorageMetaType
 {
-  CKPT = 0,
-  SNAPSHOT = 1,
-  CLONE = 2,
+  SNAPSHOT = 0,
+  CLONE = 1,
   INVALID_TYPE
 };
 
 class ObTenantCheckpointSlogHandler;
 
-class ObTenantStorageCheckpointWriter final
+class ObTenantStorageSnapshotWriter final
 {
 public:
   static bool ignore_ret(int ret);
 public:
-  ObTenantStorageCheckpointWriter();
-  ~ObTenantStorageCheckpointWriter() = default;
-  ObTenantStorageCheckpointWriter(const ObTenantStorageCheckpointWriter &) = delete;
-  ObTenantStorageCheckpointWriter &operator=(const ObTenantStorageCheckpointWriter &) = delete;
+  ObTenantStorageSnapshotWriter();
+  ~ObTenantStorageSnapshotWriter() = default;
+  ObTenantStorageSnapshotWriter(const ObTenantStorageSnapshotWriter &) = delete;
+  ObTenantStorageSnapshotWriter &operator=(const ObTenantStorageSnapshotWriter &) = delete;
   int init(const ObTenantStorageMetaType meta_type, ObTenantCheckpointSlogHandler *ckpt_slog_handler);
   void reset();
-
-  // record meta for ckpt
-  int record_meta(
-      blocksstable::MacroBlockId &ls_meta_entry,
-      blocksstable::MacroBlockId &wait_gc_tablet_entry,
-      ObSlogCheckpointFdDispenser *fd_dispenser);
 
   // record meta for snapshot
   int record_single_ls_meta(
@@ -74,7 +67,6 @@ public:
   int get_ls_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
   int get_tablet_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
   int get_wait_gc_tablet_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
-  int batch_compare_and_swap_tablet();
   int rollback();
 
 private:
@@ -120,23 +112,12 @@ private:
   int record_wait_gc_tablet(
       blocksstable::MacroBlockId &wait_gc_tablet_entry,
       ObSlogCheckpointFdDispenser *fd_dispenser);
-  int persist_and_copy_tablet(
-      const uint64_t data_version,
-      const ObTabletMapKey &tablet_key,
-      const ObMetaDiskAddr &old_addr,
-      const int64_t ls_epoch,
-      char (&slog_buf)[sizeof(ObUpdateTabletLog)]);
   int copy_tablet(
       const uint64_t data_version,
       const ObTabletMapKey &tablet_key,
       const int64_t ls_epoch,
       char (&slog_buf)[sizeof(ObUpdateTabletLog)],
       share::SCN &clog_max_scn);
-  static int handle_old_version_tablet_for_compat(
-      common::ObArenaAllocator &allocator,
-      const ObTabletMapKey &tablet_key,
-      const ObTablet &old_tablet,
-      ObTabletHandle &new_tablet_handle);
 
 private:
   bool is_inited_;

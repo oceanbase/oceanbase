@@ -816,60 +816,6 @@ int ObLSTabletService::refresh_memtable_for_ckpt(
   return ret;
 }
 
-int ObLSTabletService::update_tablet_checkpoint(
-    const ObTabletMapKey &key,
-    const ObMetaDiskAddr &old_addr,
-    const ObMetaDiskAddr &new_addr,
-    ObTabletHandle &new_handle)
-{
-  int ret = OB_SUCCESS;
-
-  ObTimeGuard time_guard("UpdateTabletCKPT", 3_s);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ls tablet svr hasn't been inited", K(ret));
-  } else if (OB_UNLIKELY(!key.is_valid()
-                      || !old_addr.is_valid()
-                      || !new_addr.is_valid()
-                      || !new_addr.is_block()
-                      || !new_handle.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(key), K(new_addr), K(new_handle));
-  } else {
-    common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "CKPTUpdate"));
-    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-    ObTabletHandle tablet_handle;
-    ObMetaDiskAddr addr;
-    ObBucketHashWLockGuard lock_guard(bucket_lock_, key.tablet_id_.hash());
-    time_guard.click("Lock");
-    if (OB_FAIL(t3m->get_tablet_addr(key, addr))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_TABLET_NOT_EXIST;
-      }
-      LOG_WARN("fail to get old tablet addr", K(ret), K(key));
-    } else {
-      ObUpdateTabletPointerParam param;
-      if (OB_FAIL(t3m->get_tablet(WashTabletPriority::WTP_LOW, key, tablet_handle))) {
-        LOG_WARN("fail to get tablet", K(ret), K(key));
-      } else if (FALSE_IT(time_guard.click("GetOld"))) {
-      } else if (OB_FAIL(refresh_memtable_for_ckpt(old_addr, addr, new_handle))) {
-        LOG_WARN("fail to update tablet", K(ret), K(old_addr), K(addr), K(new_handle));
-      } else if (FALSE_IT(time_guard.click("UpdateTablet"))) {
-      } else if (OB_FAIL(new_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
-        LOG_WARN("fail to get updating tablet pointer param", K(ret), KPC(new_handle.get_obj()));
-      } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, tablet_handle, new_handle, param))) {
-        LOG_WARN("fail to compare and swap tablet", K(ret), K(tablet_handle), K(new_handle), K(param));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      time_guard.click("CASwap");
-      FLOG_INFO("succeeded to update tablet ckpt", K(key), K(old_addr), K(new_addr));
-    }
-  }
-  return ret;
-}
-
 int ObLSTabletService::update_tablet_table_store(
     const ObTabletHandle &old_tablet_handle,
     const ObIArray<storage::ObITable *> &tables)
@@ -4203,10 +4149,7 @@ int ObLSTabletService::safe_update_cas_tablet(
   int ret = OB_SUCCESS;
   ObUpdateTabletPointerParam param;
   int64_t ls_epoch = 0;
-  ObTenantCheckpointSlogHandler::ObCkptSlogROptLockGuard guard(MTL(ObTenantStorageMetaService*)->get_ckpt_slog_hdl());
-  if (OB_FAIL(guard.get_ret())) {
-    LOG_WARN("fail to get ckpt_slog_lock", K(ret));
-  } else if (OB_FAIL(new_handle.get_obj()->get_ls_epoch(ls_epoch))) {
+  if (OB_FAIL(new_handle.get_obj()->get_ls_epoch(ls_epoch))) {
     LOG_WARN("fail to get ls epoch", K(ret), K(key), K(new_handle));
   } else if (OB_FAIL(new_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
     LOG_WARN("fail to get updating tablet pointer parameters", K(ret), K(new_handle));
@@ -4236,10 +4179,7 @@ int ObLSTabletService::safe_update_cas_empty_shell(
   ObMetaDiskAddr addr;
   ObUpdateTabletPointerParam param;
   ObTablet *tablet = new_handle.get_obj();
-  ObTenantCheckpointSlogHandler::ObCkptSlogROptLockGuard guard(MTL(ObTenantStorageMetaService*)->get_ckpt_slog_hdl());
-  if (OB_FAIL(guard.get_ret())) {
-    LOG_WARN("fail to get ckpt_slog_lock", K(ret));
-  } else if (OB_FAIL(new_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
+  if (OB_FAIL(new_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
     LOG_WARN("fail to get updating tablet pointer parameters", K(ret), K(new_handle));
   } else if (OB_FAIL(TENANT_STORAGE_META_SERVICE.write_empty_shell_tablet(data_version, ls_->get_ls_epoch(), tablet, addr))) {
     LOG_WARN("fail to write emtpy shell tablet slog", K(ret), K(key), K(new_handle));
@@ -4267,10 +4207,7 @@ int ObLSTabletService::safe_create_cas_tablet(
   int ret = OB_SUCCESS;
   ObUpdateTabletPointerParam param;
   int64_t ls_epoch = 0;
-  ObTenantCheckpointSlogHandler::ObCkptSlogROptLockGuard guard(MTL(ObTenantStorageMetaService*)->get_ckpt_slog_hdl());
-  if (OB_FAIL(guard.get_ret())) {
-    LOG_WARN("fail to get ckpt_slog_lock", K(ret));
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_ls_epoch(ls_epoch))) {
+  if (OB_FAIL(tablet_handle.get_obj()->get_ls_epoch(ls_epoch))) {
     LOG_WARN("fail to get ls epoch", K(ret), K(ls_id), K(tablet_id), K(addr));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
     LOG_WARN("fail to get updating tablet pointer parameters", K(ret), K(tablet_handle));
@@ -4300,10 +4237,7 @@ int ObLSTabletService::safe_create_cas_empty_shell(
   ObTablet *tablet = tablet_handle.get_obj();
   ObUpdateTabletPointerParam param;
   ObMetaDiskAddr addr;
-  ObTenantCheckpointSlogHandler::ObCkptSlogROptLockGuard guard(MTL(ObTenantStorageMetaService*)->get_ckpt_slog_hdl());
-  if (OB_FAIL(guard.get_ret())) {
-    LOG_WARN("fail to get ckpt_slog_lock", K(ret));
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
+  if (OB_FAIL(tablet_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
     LOG_WARN("fail to get updating tablet pointer parameters", K(ret), K(tablet_handle));
   } else if (OB_FAIL(TENANT_STORAGE_META_SERVICE.write_empty_shell_tablet(data_version, ls_->get_ls_epoch(), tablet, addr))) {
     LOG_WARN("fail to write emtpy shell tablet", K(ret), K(tablet_id), K(addr));
@@ -7028,6 +6962,53 @@ int ObLSTabletService::build_tablet_iter(ObLSTabletFastIter &iter, const bool ex
   return ret;
 }
 
+/**
+ * @brief: hold all bucket rlock when building tablet iter(only used for tenant slog checkpoint)
+ * see
+*/
+int ObLSTabletService::build_tablet_iter_with_lock_hold(ObLSTabletFastIter &iter)
+{
+  int ret = common::OB_SUCCESS;
+  const int64_t max_retry_time = 1000;
+  int64_t retry_time = 0;
+  GetAllTabletIDOperator op(iter.tablet_ids_, /*except_ls_inner_tablet*/false);
+  iter.ls_tablet_service_ = this;
+  bool locked = false;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
+  }
+
+  while (OB_SUCC(ret) && !locked) {
+    // hold all bucket rlock
+    common::ObBucketTryRLockAllGuard rlock_guard(bucket_lock_);
+
+    if (OB_FAIL(rlock_guard.get_ret()) && OB_EAGAIN != ret) {
+      STORAGE_LOG(WARN, "failed to hold all ls bucket rlock", K(ret));
+    } else if (OB_EAGAIN == ret) {
+      if (retry_time >= max_retry_time) {
+        STORAGE_LOG(WARN, "already meet max_retry_time but still lock failed", K(ret), K(retry_time), K(max_retry_time));
+        break;
+      }
+      ++retry_time;
+      ret = OB_SUCCESS;
+      // sleep for 1ms and retry again...
+      ob_usleep(1000);
+    } else if (FALSE_IT(locked = true)) {
+    } else if (OB_FAIL(tablet_id_set_.foreach(op))) {
+      STORAGE_LOG(WARN, "fail to get all tablet ids from set", K(ret));
+    } else if (OB_UNLIKELY(!iter.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("iter is invalid", K(ret), K(iter));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    iter.reset();
+  }
+  return ret;
+}
+
 int ObLSTabletService::is_tablet_exist(const common::ObTabletID &tablet_id, bool &is_exist)
 {
   int ret = OB_SUCCESS;
@@ -7544,6 +7525,152 @@ int ObLSTabletService::check_tablet_no_active_memtable(const ObIArray<ObTabletID
       } else if (table_handle.get_table()->is_active_memtable()) {
         LOG_WARN("tablet has active memtable", K(tablet_id), K(table_handle));
         has = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSTabletService::apply_defragment_tablet(
+  ObTenantMetaMemMgr &t3m,
+  const ObTabletMapKey &tablet_key,
+  const ObMetaDiskAddr &old_addr,
+  ObTabletHandle &new_handle,
+  ObTenantStorageMetaService &tsms)
+{
+  int ret = OB_SUCCESS;
+
+  ObTimeGuard time_guard("ApplyTabletDfgt", 2_s);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls tablet service hasn't been initalized yet", K(ret));
+  } else if (OB_UNLIKELY(!tablet_key.is_valid()
+                      || !old_addr.is_valid()
+                      || !new_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tablet_key), K(old_addr), K(new_handle));
+  } else {
+    OB_ASSERT(new_handle.get_obj() != nullptr);
+    ObTabletHandle tablet_handle_from_t3m;
+    ObMetaDiskAddr tablet_addr_from_t3m;
+    ObUpdateTabletPointerParam param;
+    int64_t ls_epoch = 0;
+
+    // HOLD BUCKET LOCK
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_key.tablet_id_.hash());
+    time_guard.click("HeldBucketLock");
+    if (OB_FAIL(lock_guard.get_ret())) {
+      LOG_WARN("failed to hold bucket_lock_", K(ret), K(tablet_key.tablet_id_.hash()));
+    } else if (OB_FAIL(t3m.get_tablet_addr(tablet_key, tablet_addr_from_t3m))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_TABLET_NOT_EXIST;
+      }
+      LOG_WARN("failed to get tablet addr from t3m", K(ret), K(tablet_key));
+    } else if (!old_addr.is_equal_for_persistence(tablet_addr_from_t3m)) {
+      // nothing to do
+      LOG_INFO("tablet has been updated, skip applying tablet", K(tablet_key),
+        K(old_addr), K(tablet_addr_from_t3m));
+    } else if (OB_FAIL(new_handle.get_obj()->get_ls_epoch(ls_epoch))) {
+      LOG_WARN("fail to get ls epoch", K(ret), K(tablet_key), K(new_handle));
+    } else if (OB_FAIL(new_handle.get_obj()->get_updating_tablet_pointer_param(param))) {
+      LOG_WARN("failed to get updating tablet pointer parameters", K(ret), K(tablet_key), K(new_handle));
+    } else if (OB_FAIL(tsms.update_tablet(tablet_key.ls_id_,
+          ls_epoch, tablet_key.tablet_id_, param))) { // write slog if tsms is provided
+      LOG_WARN("failed to write update tablet slog", K(ret), K(tablet_key), K(param));
+    } else if (OB_FAIL(t3m.get_tablet(WashTabletPriority::WTP_LOW, tablet_key, tablet_handle_from_t3m))) {
+      // tablet must exists at t3m!!!
+      OB_ASSERT(ret != OB_ENTRY_NOT_EXIST && ret != OB_ITEM_NOT_SETTED);
+      LOG_WARN("failed to get tablet from t3m", K(ret), K(tablet_key));
+    } else if (OB_FAIL(refresh_memtable_for_ckpt(old_addr, tablet_addr_from_t3m, new_handle))) {
+      /// @c old_addr and @c tablet_addr_from_t3m must be equal for persister
+      OB_ASSERT(ret != OB_NOT_THE_OBJECT);
+      LOG_WARN("failed to update tablet", K(ret),
+        K(old_addr), K(tablet_addr_from_t3m), K(new_handle));
+    } else if (FALSE_IT(time_guard.click("UpdateTablet"))) {
+    } else if (OB_FAIL(t3m.compare_and_swap_tablet(tablet_key, tablet_handle_from_t3m,
+        new_handle, param))) {
+      LOG_WARN("fail to compare and swap tablet", K(ret), K(tablet_handle_from_t3m),
+          K(new_handle), K(param));
+
+      ob_usleep(1000);
+      ob_abort();
+    }
+  }
+  return ret;
+}
+
+int ObLSTabletService::refresh_empty_shell_for_slog_ckpt(
+  ObTenantMetaMemMgr &t3m,
+  const ObTabletMapKey &tablet_key,
+  const ObMetaDiskAddr &old_addr)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+
+  ObTablet *empty_shell = nullptr;
+  ObUpdateTabletPointerParam param;
+  ObTimeGuard time_guard("refreshEmptyShell", 3_s);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls tablet service hasn't been initalized yet", K(ret));
+  } else if (OB_UNLIKELY(GCTX.is_shared_storage_mode())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("refresh_empty_shell_for_slog_ckpt is only supported for SN mode", K(ret));
+  } else if (OB_UNLIKELY(!tablet_key.is_valid() ||
+                          !old_addr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(tablet_key), K(old_addr));
+  } else if (!old_addr.is_file()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("original addr is not a file, which means it's not a empty shell",
+      K(ret), K(old_addr));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_WARN("fail to get min data version", K(ret));
+  } else {
+    ObTabletHandle tablet_handle_from_t3m;
+    ObTabletHandle new_tablet_handle;
+    ObTablet *tablet_from_t3m = nullptr;
+    ObMetaDiskAddr tablet_addr_from_t3m;
+    ObUpdateTabletPointerParam param;
+    int64_t ls_epoch = 0;
+
+    // HOLD BUCKET LOCK
+    ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_key.tablet_id_.hash());
+    time_guard.click("HeldBucketLock");
+
+    if (OB_FAIL(lock_guard.get_ret())) {
+      LOG_WARN("failed to hold bucket_lock_", K(ret), K(tablet_key.tablet_id_.hash()));
+    } else if (OB_FAIL(t3m.get_tablet_addr(tablet_key, tablet_addr_from_t3m))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_TABLET_NOT_EXIST;
+      }
+      LOG_WARN("failed to get tablet addr from t3m", K(ret), K(tablet_key));
+    } else if (!old_addr.is_equal_for_persistence(tablet_addr_from_t3m)) {
+      // nothing to do
+      LOG_INFO("tablet has been updated, skip applying tablet", K(tablet_key),
+        K(old_addr), K(tablet_addr_from_t3m));
+    } else if (OB_FAIL(t3m.get_tablet(WashTabletPriority::WTP_LOW, tablet_key, tablet_handle_from_t3m))) {
+      // tablet must exists at t3m!!!
+      OB_ASSERT(ret != OB_ENTRY_NOT_EXIST && ret != OB_ITEM_NOT_SETTED);
+      LOG_WARN("failed to get tablet from t3m", K(ret), K(tablet_key));
+    } else if (FALSE_IT(time_guard.click("GetOld"))) {
+    } else if (OB_ISNULL(tablet_from_t3m = tablet_handle_from_t3m.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null tablet_from_t3m", K(ret));
+    } else if (OB_UNLIKELY(!tablet_from_t3m->is_empty_shell())) {
+      /// IMPOSSIBLE!!!
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected non empty shell tablet", K(ret));
+    } else if (OB_FAIL(tablet_from_t3m->get_ls_epoch(ls_epoch))) {
+      LOG_WARN("failed to get ls epoch", K(ret));
+    } else {
+      time_guard.click("Acquire");
+      const ObTabletPersisterParam param(data_version, tablet_key.ls_id_, ls_epoch, tablet_key.tablet_id_, tablet_from_t3m->get_transfer_seq());
+      if (OB_FAIL(ObTabletPersister::transform_empty_shell(param, *tablet_from_t3m, new_tablet_handle))) {
+        LOG_WARN("failed to transform empty shell", K(ret), K(tablet_key), K(data_version));
+      } else if (FALSE_IT(time_guard.click("Transform"))) {
+      } else if (OB_FAIL(safe_update_cas_empty_shell(data_version, tablet_key, tablet_handle_from_t3m, new_tablet_handle, time_guard))) {
+        LOG_WARN("fail to cas empty shell", K(ret), K(tablet_key), K(tablet_handle_from_t3m), K(new_tablet_handle), K(data_version));
       }
     }
   }

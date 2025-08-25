@@ -135,11 +135,11 @@ int ObScheduleDagFunc::schedule_and_get_lob_tablet_split_dag(
 }
 
 int ObScheduleDagFunc::schedule_mds_table_merge_dag(
-    storage::mds::ObMdsTableMergeDagParam &param,
+    storage::mds::ObTabletMdsMiniMergeDagParam &param,
     const bool is_emergency)
 {
   int ret = OB_SUCCESS;
-  CREATE_DAG(storage::mds::ObMdsTableMergeDag);
+  CREATE_DAG(storage::mds::ObTabletMdsMiniMergeDag);
   return ret;
 }
 

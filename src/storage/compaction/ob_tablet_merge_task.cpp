@@ -663,6 +663,12 @@ ObTabletMergeExecuteDag::ObTabletMergeExecuteDag()
 {
 }
 
+ObTabletMergeExecuteDag::ObTabletMergeExecuteDag(const share::ObDagType::ObDagTypeEnum type)
+  : ObTabletMergeDag(type),
+    result_()
+{
+}
+
 ObTabletMergeExecuteDag::~ObTabletMergeExecuteDag()
 {
 }

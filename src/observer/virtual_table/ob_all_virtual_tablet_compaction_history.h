@@ -80,6 +80,7 @@ private:
   {
     major_merge_info_iter_.reset();
     minor_merge_info_iter_.reset();
+    mds_merge_info_iter_.reset();
   }
 private:
   char ip_buf_[common::OB_IP_STR_BUFF];
@@ -93,6 +94,7 @@ private:
   compaction::ObSSTableMergeHistory merge_history_;
   compaction::ObIDiagnoseInfoMgr::Iterator major_merge_info_iter_;
   compaction::ObIDiagnoseInfoMgr::Iterator minor_merge_info_iter_;
+  compaction::ObIDiagnoseInfoMgr::Iterator mds_merge_info_iter_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTabletCompactionHistory);
 };
 

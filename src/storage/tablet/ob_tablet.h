@@ -1008,6 +1008,7 @@ public:
   static constexpr int32_t VERSION_V2 = 2;
   static constexpr int32_t VERSION_V3 = 3;
   static constexpr int32_t VERSION_V4 = 4;
+
 private:
   // ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE
   // Array size is too large, need to shrink it if possible

@@ -137,7 +137,7 @@ int ObPartitionMergePolicy::get_mds_merge_tables(
   {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
-      minor_compact_trigger = tenant_config->minor_compact_trigger;
+      minor_compact_trigger = tenant_config->mds_minor_compact_trigger;
     }
   }
   if (OB_FAIL(ret)) {

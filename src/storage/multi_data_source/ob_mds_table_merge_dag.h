@@ -23,13 +23,14 @@ namespace storage
 {
 namespace mds
 {
-class ObMdsTableMergeDag : public compaction::ObTabletMergeDag
+
+class ObTabletMdsMiniMergeDag : public compaction::ObTabletMergeDag
 {
 public:
-  ObMdsTableMergeDag();
-  virtual ~ObMdsTableMergeDag() = default;
-  ObMdsTableMergeDag(const ObMdsTableMergeDag&) = delete;
-  ObMdsTableMergeDag &operator=(const ObMdsTableMergeDag&) = delete;
+  ObTabletMdsMiniMergeDag();
+  virtual ~ObTabletMdsMiniMergeDag() = default;
+  ObTabletMdsMiniMergeDag(const ObTabletMdsMiniMergeDag&) = delete;
+  ObTabletMdsMiniMergeDag &operator=(const ObTabletMdsMiniMergeDag&) = delete;
 public:
   virtual int init_by_param(const share::ObIDagInitParam *param) override;
   virtual int create_first_task() override;
@@ -52,6 +53,16 @@ private:
   int64_t generate_ts_;
   int64_t mds_construct_sequence_;
 };
+
+class ObTabletMdsMinorMergeDag : public compaction::ObTabletMergeExecuteDag
+{
+public:
+  ObTabletMdsMinorMergeDag();
+  virtual ~ObTabletMdsMinorMergeDag() = default;
+  ObTabletMdsMinorMergeDag(const ObTabletMdsMinorMergeDag&) = delete;
+  ObTabletMdsMinorMergeDag &operator=(const ObTabletMdsMinorMergeDag&) = delete;
+};
+
 } // namespace mds
 } // namespace storage
 } // namespace oceanbase

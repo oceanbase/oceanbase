@@ -17,6 +17,7 @@
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
+#include "storage/slog_ckpt/ob_tenant_slog_checkpoint_util.h"
 
 namespace oceanbase
 {
@@ -2889,9 +2890,12 @@ int ObT3mTabletMapIterator::fetch_tablet_item()
   ObMemAttr attr = SET_USE_500(ObMemAttr(MTL_ID(), "TabletIterSE"));
   tablet_items_.set_attr(attr);
   FetchTabletItemOp fetch_op(tablet_map_, tablet_items_);
+  const int64_t tablet_cnt = tablet_map_.count();
   if (OB_UNLIKELY(tablet_items_.count() > 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("iterator use again, may be not reset", K(ret));
+  } else if (OB_FAIL(tablet_items_.reserve(tablet_cnt))) {
+    LOG_WARN("iterator failed to initialize", K(ret), K(tablet_cnt));
   } else if (OB_FAIL(tablet_map_.for_each_value_store(fetch_op))) {
     LOG_WARN("fail to fetch value store for each in map", K(ret));
   } else {
@@ -3038,6 +3042,54 @@ int ObTenantInMemoryTabletIterator::get_next_tablet(ObTabletHandle &handle)
         }
       }
     } while (OB_SUCC(ret) && !success);
+  }
+  return ret;
+}
+
+// =====================================
+//    ObT3mTabletStorageParamIterator
+// =====================================
+ObT3mTabletStorageParamIterator::ObT3mTabletStorageParamIterator(ObTenantMetaMemMgr &t3m)
+  : ObT3mTabletMapIterator(t3m)
+{
+}
+
+int ObT3mTabletStorageParamIterator::get_next(ObTabletStorageParam &param) {
+  int ret = OB_SUCCESS;
+
+  if (tablet_items_.count() == 0 && OB_FAIL(fetch_tablet_item())) {
+    LOG_WARN("failed to fetch value store pointers", K(ret));
+  } else {
+    ObMetaDiskAddr addr;
+    OB_ASSERT(ignore_err_code(OB_NOT_THE_OBJECT));
+    do {
+      if (idx_ == tablet_items_.count()) {
+        ret = OB_ITER_END;
+      } else {
+        param.tablet_key_ = tablet_items_.at(idx_);
+        if (OB_FAIL(tablet_map_.get_meta_addr(param.tablet_key_, addr))) {
+          STORAGE_LOG(WARN, "failed to fetch tablet addr", K(ret), K_(param.tablet_key));
+        } else if (addr.is_memory()) {
+          ret = OB_NOT_THE_OBJECT; // just skip and continue.
+          STORAGE_LOG(INFO, "skip MEM type", K_(param.tablet_key), K(addr));
+        } else if (addr.is_none()) {
+          ret = OB_NOT_THE_OBJECT; // just skip and continue.
+          STORAGE_LOG(INFO, "addr is none", K_(param.tablet_key), K(addr));
+        } else {
+          param.original_addr_ = addr;
+        }
+      }
+
+      if (OB_SUCC(ret) || ignore_err_code(ret)) {
+        ++idx_;
+      }
+
+    } while (ignore_err_code(ret));
+  }
+  // check it anyway
+  if (OB_UNLIKELY(OB_SUCCESS == ret && !param.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected invalid param", K(ret), K(param));
   }
   return ret;
 }

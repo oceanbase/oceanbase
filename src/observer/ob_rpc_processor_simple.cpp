@@ -3028,7 +3028,7 @@ int ObCheckpointSlogP::process()
     }
   } else {
     MTL_SWITCH(arg_.tenant_id_) {
-      if (OB_FAIL(MTL(ObTenantStorageMetaService*)->write_checkpoint(true/*is_force*/))) {
+      if (OB_FAIL(MTL(ObTenantStorageMetaService*)->write_checkpoint(ObTenantSlogCheckpointWorkflow::FORCE))) {
         LOG_WARN("write tenant checkpoint failed", K(ret), K(arg_.tenant_id_));
       }
     }

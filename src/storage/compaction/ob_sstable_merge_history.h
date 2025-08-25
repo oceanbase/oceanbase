@@ -215,6 +215,8 @@ struct ObSSTableMergeHistory : public ObIDiagnoseInfo
   int64_t get_macro_block_count() const { return block_info_.macro_block_count_; }
   int64_t get_multiplexed_macro_block_count() const { return block_info_.multiplexed_macro_block_count_; }
   bool is_major_merge_type() const { return compaction::is_major_merge_type(static_info_.merge_type_); }
+  bool is_minor_merge_type() const { return compaction::is_minor_merge_type(static_info_.merge_type_); }
+  bool is_mds_merge_type() const { return compaction::is_mds_merge(static_info_.merge_type_); }
   const ObNewMicroInfo &get_new_micro_info() const { return block_info_.new_micro_info_; }
   int fill_comment(char *buf, const int64_t buf_len, const char* other_info) const;
   void update_start_time();

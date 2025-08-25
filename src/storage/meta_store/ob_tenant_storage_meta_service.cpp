@@ -166,13 +166,13 @@ int ObTenantStorageMetaService::get_meta_block_list(
   return ret;
 }
 
-int ObTenantStorageMetaService::write_checkpoint(bool is_force)
+int ObTenantStorageMetaService::write_checkpoint(const ObTenantSlogCheckpointWorkflow::Type ckpt_type)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(ckpt_slog_handler_.write_checkpoint(is_force))) {
+  } else if (OB_FAIL(ckpt_slog_handler_.write_checkpoint(ckpt_type))) {
     LOG_WARN("fail to write checkpoint", K(ret));
   }
   return ret;
@@ -360,21 +360,6 @@ int ObTenantStorageMetaService::batch_update_tablet(const ObIArray<ObUpdateTable
       // do nothing
     } else if (OB_FAIL(slogger_.write_log(param_arr))) {
       LOG_WARN("fail to batch write slog", K(ret), K(param_arr.count()));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < param_arr.count(); i++) {
-        const ObStorageLogParam &log_param = param_arr.at(i);
-        const ObUpdateTabletLog *slog = reinterpret_cast<const ObUpdateTabletLog*>(log_param.data_);
-        const ObTabletMapKey tablet_key(slog->ls_id_, slog->tablet_id_);
-        do {
-          if (OB_FAIL(ckpt_slog_handler_.report_slog(tablet_key, log_param.disk_addr_))) {
-            if (OB_ALLOCATE_MEMORY_FAILED != ret) {
-              LOG_WARN("fail to report slog", K(ret), K(tablet_key), K(log_param));
-            } else if (REACH_TIME_INTERVAL(1000 * 1000L)) { // 1s
-              LOG_WARN("fail to report slog due to memory limit", K(ret), K(tablet_key), K(log_param));
-            }
-          }
-        } while (OB_ALLOCATE_MEMORY_FAILED == ret);
-      }
     }
   }
 
@@ -408,16 +393,6 @@ int ObTenantStorageMetaService::update_tablet(
       LOG_WARN("invalid slog entry", K(ret), K(slog_entry), K(ls_epoch), K(ls_id), K(tablet_id), K(param));
     } else if (OB_FAIL(slogger_.write_log(log_param))) {
       LOG_WARN("fail to write slog for creating tablet", K(ret), K(log_param));
-    } else {
-      do {
-        if (OB_FAIL(ckpt_slog_handler_.report_slog(tablet_key, log_param.disk_addr_))) {
-          if (OB_ALLOCATE_MEMORY_FAILED != ret) {
-            LOG_WARN("fail to report slog", K(ret), K(tablet_key));
-          } else if (REACH_TIME_INTERVAL(1000 * 1000L)) { // 1s
-            LOG_WARN("fail to report slog due to memory limit", K(ret), K(tablet_key));
-          }
-        }
-      } while (OB_ALLOCATE_MEMORY_FAILED == ret);
     }
   }
   return ret;
@@ -501,8 +476,6 @@ int ObTenantStorageMetaService::write_empty_shell_tablet(
       LOG_WARN("invalid slog entry", K(ret), K(slog_entry), K(ls_epoch), KPC(tablet));
     } else if (OB_FAIL(slogger_.write_log(log_param))) {
       LOG_WARN("fail to write slog for empty shell tablet", K(ret), K(log_param));
-    } else if (OB_FAIL(ckpt_slog_handler_.report_slog(tablet_key, log_param.disk_addr_))) {
-      LOG_WARN("fail to report slog", K(ret), K(tablet_key));
     } else {
       tablet_addr = log_param.disk_addr_;
     }

@@ -226,8 +226,10 @@ ob_set_subtarget(ob_storage ckpt
   slog_ckpt/ob_server_checkpoint_slog_handler.cpp
   slog_ckpt/ob_server_checkpoint_writer.cpp
   slog_ckpt/ob_tenant_checkpoint_slog_handler.cpp
+  slog_ckpt/ob_tenant_slog_checkpoint_workflow.cpp
+  slog_ckpt/ob_tenant_slog_checkpoint_util.cpp
   slog_ckpt/ob_tenant_storage_checkpoint_reader.cpp
-  slog_ckpt/ob_tenant_storage_checkpoint_writer.cpp
+  slog_ckpt/ob_tenant_storage_snapshot_writer.cpp
   slog_ckpt/ob_tenant_meta_snapshot_handler.cpp
   slog_ckpt/ob_tablet_replay_create_handler.cpp
 )

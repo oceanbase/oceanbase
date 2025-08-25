@@ -42,7 +42,7 @@ public:
 
   // for slog & checkpoint operation
   int get_meta_block_list(ObIArray<blocksstable::MacroBlockId> &meta_block_list);
-  int write_checkpoint(bool is_force);
+  int write_checkpoint(const ObTenantSlogCheckpointWorkflow::Type ckpt_type);
   storage::ObStorageLogger &get_slogger() { return slogger_; }
   const ObTenantCheckpointSlogHandler& get_ckpt_slog_hdl() const { return ckpt_slog_handler_; };
 

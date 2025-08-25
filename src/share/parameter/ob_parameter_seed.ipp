@@ -1143,8 +1143,14 @@ DEF_INT(compaction_low_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
 DEF_INT(compaction_mid_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of middle priority compaction. Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(mds_compaction_mid_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "the current work thread score of mds middle priority compaction. Range: [0,100] in integer. Especially, 0 means default value",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(compaction_high_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of high priority compaction. Range: [0,100] in integer. Especially, 0 means default value",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(mds_compaction_high_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "the current work thread score of mds high priority compaction. Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(ha_high_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of high availability high thread. Range: [0,100] in integer. Especially, 0 means default value",
@@ -1160,6 +1166,9 @@ DEF_INT(ddl_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(minor_compact_trigger, OB_TENANT_PARAMETER, "2", "[0,16]",
         "minor_compact_trigger, Range: [0,16] in integer",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(mds_minor_compact_trigger, OB_TENANT_PARAMETER, "2", "[2,16]",
+        "minor_compact_trigger, Range: [2,16] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_compaction_diagnose, OB_CLUSTER_PARAMETER, "False",
          "enable compaction diagnose function"

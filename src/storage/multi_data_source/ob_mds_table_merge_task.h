@@ -30,7 +30,7 @@ class ObTableHandleV2;
 
 namespace mds
 {
-class ObMdsTableMergeDag;
+class ObTabletMdsMiniMergeDag;
 
 class ObMdsTableMergeTask : public share::ObITask
 {
@@ -52,7 +52,7 @@ private:
       ObTableHandleV2 &table_handle);
 private:
   bool is_inited_;
-  ObMdsTableMergeDag *mds_merge_dag_;
+  ObTabletMdsMiniMergeDag *mds_merge_dag_;
 };
 } // namespace mds
 } // namespace storage
