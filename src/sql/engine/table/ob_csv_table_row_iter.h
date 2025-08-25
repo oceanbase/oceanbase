@@ -130,6 +130,7 @@ private:
   ObSqlString url_;
   ObExpr *file_name_expr_;
   bool is_bad_file_enabled_;
+  bool use_handle_batch_lines_ = false;
 };
 
 

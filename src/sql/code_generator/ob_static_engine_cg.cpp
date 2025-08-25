@@ -352,8 +352,11 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
     } else if (ObExternalFileFormat::CSV_FORMAT != format_type && !spec->use_rich_format_) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "Using non-rich vector format in external tables");
-    } else if (ObExternalFileFormat::CSV_FORMAT == format_type && spec->use_rich_format_) {
-      // csv is not support rich format for now.
+    } else if (ObExternalFileFormat::CSV_FORMAT == format_type && spec->use_rich_format_ &&
+          (GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_3_5_3 ||
+          (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_0_0 &&
+          GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0))) {
+      // csv is not support rich format for version < 4_3_5_3 and 4_4_0_x
       spec->use_rich_format_ = false;
     }
   }

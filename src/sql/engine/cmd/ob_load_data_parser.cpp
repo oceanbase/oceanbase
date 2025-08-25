@@ -474,19 +474,39 @@ int ObCSVGeneralParser::init_opt_variables()
   return ret;
 }
 
-int ObCSVGeneralParser::handle_irregular_line(int field_idx, int line_no,
-                                              ObIArray<LineErrRec> &errors)
-{
+int ObCSVGeneralParser::handle_irregular_line(int field_idx,
+                          int line_no,
+                          int output_line_no,
+                          bool is_batch_mode,
+                          common::ObIArray<LineErrRec> &errors) {
   int ret = OB_SUCCESS;
   LineErrRec rec;
   rec.err_code = field_idx > format_.file_column_nums_ ?
         OB_WARN_TOO_MANY_RECORDS : OB_WARN_TOO_FEW_RECORDS;
   rec.line_no = line_no;
-  OX (errors.push_back(rec));
-  for (int i = field_idx; OB_SUCC(ret) && i < format_.file_column_nums_; ++i) {
-    FieldValue &new_field = fields_per_line_.at(i);
-    new_field = FieldValue();
-    new_field.is_null_ = 1;
+  ret = errors.push_back(rec);
+  if (is_batch_mode) {
+    for (int i = field_idx, loc_idx = field_idx + output_line_no * format_.file_column_nums_;
+        OB_SUCC(ret) && i < format_.file_column_nums_; ++i, ++loc_idx) {
+      FieldValue &new_field = fields_per_line_.at(loc_idx);
+      new_field = FieldValue();
+      new_field.is_null_ = 1;
+    }
+  } else {
+    for (int i = field_idx; OB_SUCC(ret) && i < format_.file_column_nums_; ++i) {
+      FieldValue &new_field = fields_per_line_.at(i);
+      new_field = FieldValue();
+      new_field.is_null_ = 1;
+    }
+  }
+  return ret;
+}
+
+int ObCSVGeneralParser::reset_fields_per_line_count(int64_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(ret) && OB_FAIL(fields_per_line_.prepare_allocate(count))) {
+    LOG_WARN("fail to allocate memory", K(ret), K(count));
   }
   return ret;
 }

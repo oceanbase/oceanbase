@@ -4213,7 +4213,7 @@ int ObPartTransCtx::submit_direct_load_inc_log_(
     if (ret == OB_TX_NOLOGCB) {
       if (REACH_COUNT_PER_SEC(10) && REACH_TIME_INTERVAL(100 * 1000)) {
         TRANS_LOG(INFO, "no log cb with dli log", KR(ret), K(dli_log_type), K(batch_key),
-                  "busy_cbs.first", PC(busy_cbs_.is_empty() ? NULL : busy_cbs_.get_first()));
+                  K(trans_id_), K(ls_id_), K(busy_cbs_.get_size()));
       }
     } else {
       TRANS_LOG(WARN, "try to submit direct load inc log failed", K(ret), KPC(this));

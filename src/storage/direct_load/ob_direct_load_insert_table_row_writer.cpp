@@ -34,10 +34,11 @@ ObDirectLoadInsertTableBatchRowBufferWriter::ObDirectLoadInsertTableBatchRowBuff
   : allocator_("TLD_BatchBW"),
     insert_tablet_ctx_(nullptr),
     row_handler_(),
-    buffer_(),
+    batch_rows_(),
     datum_rows_(),
     tablet_id_(),
     slice_id_(0),
+    max_bytes_size_(0),
     row_count_(0),
     is_canceled_(false),
     is_inited_(false)
@@ -50,25 +51,28 @@ ObDirectLoadInsertTableBatchRowBufferWriter::~ObDirectLoadInsertTableBatchRowBuf
 int ObDirectLoadInsertTableBatchRowBufferWriter::inner_init(
   ObDirectLoadInsertTabletContext *insert_tablet_ctx,
   const ObDirectLoadInsertTableRowInfo &row_info,
+  const ObDirectLoadRowFlag &row_flag,
+  const int64_t max_bytes_size,
   ObIAllocator *lob_allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == insert_tablet_ctx || !row_info.is_valid())) {
+  if (OB_UNLIKELY(nullptr == insert_tablet_ctx || !row_info.is_valid() || max_bytes_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(insert_tablet_ctx), K(row_info));
+    LOG_WARN("invalid args", KR(ret), KP(insert_tablet_ctx), K(row_info), K(max_bytes_size));
   } else {
     const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     const int64_t rowkey_column_count = insert_tablet_ctx->get_rowkey_column_count();
     const int64_t column_count = insert_tablet_ctx->get_column_count();
     const int64_t max_batch_size = insert_tablet_ctx->get_max_batch_size();
     const ObIArray<share::schema::ObColDesc> *col_descs = insert_tablet_ctx->get_col_descs();
+    const ObBitVector *col_nullables = insert_tablet_ctx->get_col_nullables();
     ObIVector *trans_version_vector = nullptr;
     ObIVector *seq_no_vector = nullptr;
     if (OB_UNLIKELY(col_descs->count() != column_count)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected column count", KR(ret), KPC(col_descs), K(column_count));
-    } else if (OB_FAIL(buffer_.init(*col_descs, max_batch_size))) {
-      LOG_WARN("fail to init buffer", KR(ret));
+    } else if (OB_FAIL(batch_rows_.init(*col_descs, col_nullables, max_batch_size, row_flag))) {
+      LOG_WARN("fail to init batch rows", KR(ret));
     } else if (OB_FAIL(ObDirectLoadVectorUtils::make_const_multi_version_vector(
                  -row_info.trans_version_, allocator_, trans_version_vector))) {
       LOG_WARN("fail to make trans version vector", KR(ret));
@@ -82,12 +86,12 @@ int ObDirectLoadInsertTableBatchRowBufferWriter::inner_init(
       datum_rows_.row_flag_ = row_info.row_flag_;
       datum_rows_.mvcc_row_flag_ = row_info.mvcc_row_flag_;
       datum_rows_.trans_id_ = row_info.trans_id_;
-      const IVectorPtrs &vectors = buffer_.get_vectors();
+      const ObIArray<ObDirectLoadVector *> &vectors = batch_rows_.get_vectors();
       for (int64_t i = 0; i < vectors.count(); ++i) {
         if (i < rowkey_column_count) {
-          datum_rows_.vectors_.at(i) = vectors.at(i);
+          datum_rows_.vectors_.at(i) = vectors.at(i)->get_vector();
         } else {
-          datum_rows_.vectors_.at(i + multi_version_col_cnt) = vectors.at(i);
+          datum_rows_.vectors_.at(i + multi_version_col_cnt) = vectors.at(i)->get_vector();
         }
       }
       datum_rows_.vectors_.at(rowkey_column_count) = trans_version_vector;
@@ -101,6 +105,7 @@ int ObDirectLoadInsertTableBatchRowBufferWriter::inner_init(
     if (OB_SUCC(ret)) {
       insert_tablet_ctx_ = insert_tablet_ctx;
       tablet_id_ = insert_tablet_ctx->get_tablet_id();
+      max_bytes_size_ = max_bytes_size;
     }
   }
   return ret;
@@ -113,7 +118,7 @@ int ObDirectLoadInsertTableBatchRowBufferWriter::close()
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadInsertTableBatchRowBufferWriter not init", KR(ret), KP(this));
   } else {
-    if (!buffer_.empty() && OB_FAIL(flush_buffer())) {
+    if (!batch_rows_.empty() && OB_FAIL(flush_buffer())) {
       LOG_WARN("fail to flush buffer", KR(ret));
     } else if (OB_FAIL(row_handler_.close())) {
       LOG_WARN("fail to close row handler", KR(ret));
@@ -124,14 +129,30 @@ int ObDirectLoadInsertTableBatchRowBufferWriter::close()
   return ret;
 }
 
+bool ObDirectLoadInsertTableBatchRowBufferWriter::is_full() const
+{
+  return batch_rows_.full() || batch_rows_.bytes_usage() >= max_bytes_size_;
+}
+
+int ObDirectLoadInsertTableBatchRowBufferWriter::flush_buffer_if_need()
+{
+  int ret = OB_SUCCESS;
+  if (is_full()) {
+    if (OB_FAIL(flush_buffer())) {
+      LOG_WARN("fail to flush buffer", KR(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDirectLoadInsertTableBatchRowBufferWriter::flush_buffer()
 {
   int ret = OB_SUCCESS;
-  datum_rows_.row_count_ = buffer_.get_row_count();
+  datum_rows_.row_count_ = batch_rows_.size();
   if (OB_FAIL(flush_batch(datum_rows_))) {
     LOG_WARN("fail to flush batch", KR(ret));
   } else {
-    buffer_.reuse();
+    batch_rows_.reuse();
   }
   return ret;
 }
@@ -163,10 +184,13 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::init(
   ObLoadDataStat *job_stat)
 {
   int ret = OB_SUCCESS;
+  ObDirectLoadRowFlag row_flag;
+  row_flag.uncontain_hidden_pk_ = true;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadInsertTableBatchRowDirectWriter init twice", KR(ret), KP(this));
-  } else if (OB_FAIL(inner_init(insert_tablet_ctx, row_info, lob_allocator))) {
+  } else if (OB_FAIL(inner_init(insert_tablet_ctx, row_info, row_flag, DEFAULT_MAX_BYTES_SIZE,
+                                lob_allocator))) {
     LOG_WARN("fail to inner init", KR(ret));
   } else if (OB_UNLIKELY(nullptr == dml_row_handler)) {
     ret = OB_INVALID_ARGUMENT;
@@ -192,7 +216,6 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::init(
       dml_row_handler_ = dml_row_handler;
       job_stat_ = job_stat;
       expect_column_count_ = column_count - 1;
-      row_flag_.uncontain_hidden_pk_ = true;
       is_inited_ = true;
     }
   }
@@ -259,22 +282,24 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::after_flush_batch(ObBatchDatumR
   return ret;
 }
 
-int ObDirectLoadInsertTableBatchRowDirectWriter::append_batch(const IVectorPtrs &vectors,
-                                                              const int64_t batch_size)
+int ObDirectLoadInsertTableBatchRowDirectWriter::append_batch(
+  const ObDirectLoadBatchRows &batch_rows)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadInsertTableBatchRowDirectWriter not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(vectors.count() != expect_column_count_ || batch_size <= 0)) {
+  } else if (OB_UNLIKELY(batch_rows.get_column_count() != expect_column_count_ ||
+                         batch_rows.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(expect_column_count_), K(vectors.count()), K(batch_size));
+    LOG_WARN("invalid args", KR(ret), K(expect_column_count_), K(batch_rows));
   } else {
     const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    for (int64_t i = 0; i < vectors.count(); ++i) {
-      direct_datum_rows_.vectors_.at(i + multi_version_col_cnt + 1) = vectors.at(i);
+    const ObIArray<ObDirectLoadVector *> &vectors = batch_rows.get_vectors();
+    for (int64_t i = 1; i < vectors.count(); ++i) {
+      direct_datum_rows_.vectors_.at(i + multi_version_col_cnt) = vectors.at(i)->get_vector();
     }
-    direct_datum_rows_.row_count_ = batch_size;
+    direct_datum_rows_.row_count_ = batch_rows.size();
     if (OB_FAIL(row_handler_.handle_batch(direct_datum_rows_))) {
       LOG_WARN("fail to handle batch", KR(ret));
     } else if (OB_FAIL(flush_batch(direct_datum_rows_))) {
@@ -284,52 +309,58 @@ int ObDirectLoadInsertTableBatchRowDirectWriter::append_batch(const IVectorPtrs 
   return ret;
 }
 
-int ObDirectLoadInsertTableBatchRowDirectWriter::append_row(const IVectorPtrs &vectors,
-                                                            const int64_t row_idx)
+int ObDirectLoadInsertTableBatchRowDirectWriter::append_selective(
+  const ObDirectLoadBatchRows &batch_rows,
+  const uint16_t *selector,
+  const int64_t size)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadInsertTableBatchRowDirectWriter not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(vectors.count() != expect_column_count_ || row_idx < 0)) {
+  } else if (OB_UNLIKELY(batch_rows.get_column_count() != expect_column_count_ ||
+                         batch_rows.empty() || nullptr == selector || size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(expect_column_count_), K(vectors.count()), K(row_idx));
+    LOG_WARN("invalid args", KR(ret), K(expect_column_count_), K(batch_rows),
+             KP(selector), K(size));
   } else {
-    bool is_full = false;
-    // 先处理lob列, 降低内存压力
-    if (OB_FAIL(row_handler_.handle_row(vectors, row_idx, row_flag_))) {
-      LOG_WARN("fail to handle row", KR(ret));
-    } else if (OB_FAIL(buffer_.append_row(vectors, row_idx, row_flag_, is_full))) {
-      LOG_WARN("fail to append row", KR(ret));
-    } else if (is_full) {
-      if (OB_FAIL(flush_buffer())) {
-        LOG_WARN("fail to flush buffer", KR(ret));
+    if (OB_FAIL(row_handler_.handle_batch(batch_rows, selector, size))) {
+      LOG_WARN("fail to handle batch", KR(ret));
+    }
+    int64_t remaining = size;
+    while (OB_SUCC(ret) && remaining > 0) {
+      const int64_t append_size = MIN(remaining, batch_rows_.remain_size());
+      if (OB_FAIL(batch_rows_.append_selective(batch_rows, selector, append_size))) {
+        LOG_WARN("fail to append selective", KR(ret));
+      } else {
+        remaining -= append_size;
+        selector += append_size;
+        if (OB_FAIL(flush_buffer_if_need())) {
+          LOG_WARN("fail to flush buffer", KR(ret));
+        }
       }
     }
   }
   return ret;
 }
 
-int ObDirectLoadInsertTableBatchRowDirectWriter::append_row(const ObDirectLoadDatumRow &datum_row)
+int ObDirectLoadInsertTableBatchRowDirectWriter::append_row(const ObDirectLoadDatumRow &datum_row,
+                                                            const ObDirectLoadRowFlag &row_flag)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadInsertTableBatchRowDirectWriter not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(datum_row.count_ != expect_column_count_)) {
+  } else if (OB_UNLIKELY(datum_row.get_column_count() != expect_column_count_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(expect_column_count_), K(datum_row.count_));
+    LOG_WARN("invalid args", KR(ret), K(expect_column_count_), K(datum_row));
   } else {
-    bool is_full = false;
-    // 先处理lob列, 降低内存压力
-    if (OB_FAIL(row_handler_.handle_row(const_cast<ObDirectLoadDatumRow &>(datum_row), row_flag_))) {
+    if (OB_FAIL(row_handler_.handle_row(const_cast<ObDirectLoadDatumRow &>(datum_row), row_flag))) {
       LOG_WARN("fail to handle row", KR(ret));
-    } else if (OB_FAIL(buffer_.append_row(datum_row, row_flag_, is_full))) {
+    } else if (OB_FAIL(batch_rows_.append_row(datum_row))) {
       LOG_WARN("fail to append row", KR(ret));
-    } else if (is_full) {
-      if (OB_FAIL(flush_buffer())) {
-        LOG_WARN("fail to flush buffer", KR(ret));
-      }
+    } else if (OB_FAIL(flush_buffer_if_need())) {
+      LOG_WARN("fail to flush buffer", KR(ret));
     }
   }
   return ret;
@@ -361,10 +392,11 @@ int ObDirectLoadInsertTableBatchRowStoreWriter::init(
   ObLoadDataStat *job_stat)
 {
   int ret = OB_SUCCESS;
+  ObDirectLoadRowFlag row_flag;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadInsertTableBatchRowStoreWriter init twice", KR(ret), KP(this));
-  } else if (OB_FAIL(inner_init(insert_tablet_ctx, row_info))) {
+  } else if (OB_FAIL(inner_init(insert_tablet_ctx, row_info, row_flag, DEFAULT_MAX_BYTES_SIZE))) {
     LOG_WARN("fail to inner init", KR(ret));
   } else if (OB_UNLIKELY(slice_id <= 0 || nullptr == job_stat)) {
     ret = OB_INVALID_ARGUMENT;
@@ -401,13 +433,13 @@ int ObDirectLoadInsertTableBatchRowStoreWriter::write(ObDirectLoadIStoreRowItera
   } else {
     const ObDirectLoadRowFlag &row_flag = row_iter->get_row_flag();
     ObTabletCacheInterval *hide_pk_interval = row_iter->get_hide_pk_interval();
-    int64_t start_pos = buffer_.get_row_count();
-    bool is_full = false;
+    int64_t start_pos = batch_rows_.size();
     const ObDirectLoadDatumRow *datum_row = nullptr;
     if (OB_UNLIKELY(row_flag.uncontain_hidden_pk_ && nullptr == hide_pk_interval)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid row iter", KR(ret), KPC(row_iter));
     }
+    batch_rows_.set_row_flag(row_flag);
     while (OB_SUCC(ret)) {
       if (OB_UNLIKELY(is_canceled_)) {
         ret = OB_CANCELED;
@@ -431,13 +463,13 @@ int ObDirectLoadInsertTableBatchRowStoreWriter::write(ObDirectLoadIStoreRowItera
       // 先处理lob列, 降低内存压力
       else if (OB_FAIL(row_handler_.handle_row(const_cast<ObDirectLoadDatumRow &>(*datum_row), row_flag))) {
         LOG_WARN("fail to handle row", KR(ret), KPC(datum_row), K(row_flag));
-      } else if (OB_FAIL(buffer_.append_row(*datum_row, row_flag, is_full))) {
+      } else if (OB_FAIL(batch_rows_.append_row(*datum_row))) {
         LOG_WARN("fail to append row", KR(ret));
-      } else if (is_full) {
+      } else if (is_full()) {
         if (row_flag.uncontain_hidden_pk_ &&
             OB_FAIL(ObDirectLoadVectorUtils::batch_fill_hidden_pk(datum_rows_.vectors_.at(0),
                                                                   start_pos,
-                                                                  buffer_.get_row_count() - start_pos,
+                                                                  batch_rows_.size() - start_pos,
                                                                   *hide_pk_interval))) {
           LOG_WARN("fail to batch fill hidden pk", KR(ret));
         } else if (OB_FAIL(flush_buffer())) {
@@ -447,10 +479,10 @@ int ObDirectLoadInsertTableBatchRowStoreWriter::write(ObDirectLoadIStoreRowItera
         }
       }
     }
-    if (OB_SUCC(ret) && !buffer_.empty() && row_flag.uncontain_hidden_pk_) {
+    if (OB_SUCC(ret) && !batch_rows_.empty() && row_flag.uncontain_hidden_pk_) {
       if (OB_FAIL(ObDirectLoadVectorUtils::batch_fill_hidden_pk(datum_rows_.vectors_.at(0),
                                                                 start_pos,
-                                                                buffer_.get_row_count() - start_pos,
+                                                                batch_rows_.size() - start_pos,
                                                                 *hide_pk_interval))) {
         LOG_WARN("fail to batch fill hidden pk", KR(ret));
       }

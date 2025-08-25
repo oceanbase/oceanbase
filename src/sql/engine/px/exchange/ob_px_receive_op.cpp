@@ -96,7 +96,12 @@ ObPxReceiveOp::ObPxReceiveOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
     iter_end_(false),
     channel_linked_(false),
     task_channels_(),
-    row_reader_(get_spec().id_),
+    row_reader_(get_spec().id_, &(static_cast<const ObPxReceiveSpec &>(spec_).child_exprs_),
+      ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version() >= CLUSTER_VERSION_4_3_3_0,
+      ((ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version() >= MOCK_CLUSTER_VERSION_4_3_5_3 &&
+        ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version() < CLUSTER_VERSION_4_4_0_0) ||
+      ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version() >= CLUSTER_VERSION_4_4_1_0
+      )? &ctx_.get_allocator() : NULL),
     px_row_msg_proc_(&row_reader_),
     msg_loop_(op_monitor_info_),
     ts_cnt_(0),

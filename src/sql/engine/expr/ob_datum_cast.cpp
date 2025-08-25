@@ -2498,14 +2498,20 @@ static int common_string_text(const ObExpr &expr,
   int ret = OB_SUCCESS;
   ObObjType in_type = expr.args_[0]->datum_meta_.type_;
   ObObjType out_type = expr.datum_meta_.type_; // ObLongTextType
-  ObCollationType in_cs_type = expr.args_[0]->datum_meta_.cs_type_;
-  ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
+  const ObCollationType in_cs_type = expr.args_[0]->datum_meta_.cs_type_;
+  const ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
+  const bool has_lob_header = expr.obj_meta_.has_lob_header();
   ObString res_str = in_str;
   bool is_final_res = false;
-  bool is_different_charset_type = (ObCharset::charset_type_by_coll(in_cs_type)
-                                    != ObCharset::charset_type_by_coll(out_cs_type));
   OB_ASSERT(ob_is_text_tc(out_type));
-  if (is_different_charset_type) {
+  // fast path for mysql same cs type because charset_type_by_coll may be slow
+  if (OB_LIKELY(in_cs_type == out_cs_type && has_lob_header && lib::is_mysql_mode() && OB_ISNULL(lob_locator))) {
+    if (OB_FAIL(ObTextStringHelper::pack_to_disk_inrow_lob(expr, ctx, res_str, res_datum))) {
+      LOG_WARN("pack_to_disk_inrow_lob fail", K(ret), K(expr), K(ctx));
+    } else {
+      is_final_res = true;
+    }
+  } else if (ObCharset::charset_type_by_coll(in_cs_type) != ObCharset::charset_type_by_coll(out_cs_type)) {
     if (OB_FAIL(common_string_string(expr, in_type, in_cs_type, out_type,
                                      out_cs_type, in_str, ctx, res_datum, is_final_res))) {
       LOG_WARN("Lob: fail to cast string to longtext", K(ret), K(in_str), K(expr));
@@ -2521,10 +2527,9 @@ static int common_string_text(const ObExpr &expr,
 
   if (OB_FAIL(ret)) {
   } else if (is_final_res) {
-  } else if (expr.obj_meta_.has_lob_header() && lib::is_mysql_mode() && nullptr == lob_locator) {
+  } else if (has_lob_header && lib::is_mysql_mode() && nullptr == lob_locator) {
     // fast path for mysql string_text
-    ObExprStrResAlloc expr_res_alloc(expr, ctx);
-    if (OB_FAIL(ObTextStringHelper::pack_to_disk_inrow_lob(expr_res_alloc, res_str, res_datum))) {
+    if (OB_FAIL(ObTextStringHelper::pack_to_disk_inrow_lob(expr, ctx, res_str, res_datum))) {
       LOG_WARN("pack_to_disk_inrow_lob fail", K(ret), K(expr), K(ctx));
     }
   } else {
@@ -4471,10 +4476,6 @@ CAST_FUNC_NAME(string, text)
 {
   EVAL_STRING_ARG()
   {
-    ObObjType in_type = expr.args_[0]->datum_meta_.type_;
-    ObObjType out_type = expr.datum_meta_.type_;
-    ObCollationType in_cs_type = expr.args_[0]->datum_meta_.cs_type_;
-    ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
     ObString in_str(child_res->len_, child_res->ptr_);
     OZ(common_string_text(expr, in_str, ctx, NULL, res_datum));
   }

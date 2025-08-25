@@ -4599,6 +4599,10 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
       }
       return ret;
     }
+    int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
+      UNUSED(param);
+      return OB_SUCCESS;
+    }
   };
 
   struct Functor handle_one_line(col_cnt, is_parse_header, allocator, field_contents);

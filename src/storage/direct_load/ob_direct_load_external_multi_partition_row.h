@@ -11,7 +11,9 @@
  */
 #pragma once
 
+#include "share/ob_order_perserving_encoder.h"
 #include "share/table/ob_table_load_define.h"
+#include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "storage/direct_load/ob_direct_load_external_row.h"
 
 namespace oceanbase
@@ -52,6 +54,9 @@ public:
   int deep_copy(const ObDirectLoadConstExternalMultiPartitionRow &src, char *buf, const int64_t len,
                 int64_t &pos);
   int to_datum_row(ObDirectLoadDatumRow &datum_row) const;
+  int generate_aqs_store_row(unsigned char *encode_buf, const int64_t encode_buf_size,
+                             ObArray<share::ObEncParam> &enc_params, ObIAllocator &allocator,
+                             sql::ObChunkDatumStore::StoredRow *&store_row, bool &has_invalid_uni) const;
   OB_INLINE bool is_valid() const
   {
     return tablet_id_.is_valid() && rowkey_datum_array_.is_valid() && seq_no_.is_valid() &&
@@ -64,6 +69,19 @@ public:
                K_(is_ack),
                K_(buf_size),
                KP_(buf));
+
+private:
+  int build_sortkey_datum(unsigned char *encode_buf, const int64_t encode_buf_size,
+                          ObArray<share::ObEncParam> &enc_param, ObIAllocator &allocator,
+                          ObDatum &sortkey_datum, bool &has_invalid_uni) const;
+  int encode_table_id(unsigned char *encode_buf, const int64_t encode_buf_size,
+                      share::ObEncParam &enc_param, int64_t &data_len, bool &has_invalid_uni) const;
+  int encode_rowkey(unsigned char *encode_buf, const int64_t encode_buf_size,
+                    ObArray<share::ObEncParam> &enc_params, int64_t &data_len,
+                    bool &has_invalid_uni) const;
+  int encode_seq_no(unsigned char *encode_buf, const int64_t encode_buf_size,
+                    share::ObEncParam &enc_param, int64_t &data_len, bool &has_invalid_uni) const;
+
 public:
   common::ObTabletID tablet_id_;
   ObDirectLoadConstDatumArray rowkey_datum_array_;

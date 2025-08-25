@@ -914,15 +914,17 @@ ob_set_subtarget(ob_storage tablelock
 )
 
 ob_set_subtarget(ob_storage direct_load
-  direct_load/ob_direct_load_batch_row_buffer.cpp
+  direct_load/ob_direct_load_batch_rows.cpp
   direct_load/ob_direct_load_compare.cpp
   direct_load/ob_direct_load_conflict_check.cpp
+  direct_load/ob_direct_load_continuous_vector.cpp
   direct_load/ob_direct_load_data_block.cpp
   direct_load/ob_direct_load_data_fuse.cpp
   direct_load/ob_direct_load_data_insert.cpp
   direct_load/ob_direct_load_data_with_origin_query.cpp
   direct_load/ob_direct_load_datum_row.cpp
   direct_load/ob_direct_load_datum.cpp
+  direct_load/ob_direct_load_discrete_vector.cpp
   direct_load/ob_direct_load_external_fragment.cpp
   direct_load/ob_direct_load_external_multi_partition_row.cpp
   direct_load/ob_direct_load_external_multi_partition_table.cpp
@@ -930,6 +932,7 @@ ob_set_subtarget(ob_storage direct_load
   direct_load/ob_direct_load_external_table_builder.cpp
   direct_load/ob_direct_load_external_table_compactor.cpp
   direct_load/ob_direct_load_external_table.cpp
+  direct_load/ob_direct_load_fixed_length_vector.cpp
   direct_load/ob_direct_load_i_table.cpp
   direct_load/ob_direct_load_insert_data_table_ctx.cpp
   direct_load/ob_direct_load_insert_lob_table_ctx.cpp
@@ -993,6 +996,7 @@ ob_set_subtarget(ob_storage direct_load
   direct_load/ob_direct_load_table_store.cpp
   direct_load/ob_direct_load_tmp_file.cpp
   direct_load/ob_direct_load_vector_utils.cpp
+  direct_load/ob_direct_load_vector.cpp
 )
 
 ob_set_subtarget(ob_storage lob

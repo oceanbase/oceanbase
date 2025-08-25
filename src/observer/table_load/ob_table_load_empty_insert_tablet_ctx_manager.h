@@ -23,10 +23,6 @@ namespace table
 {
 struct ObTableLoadPartitionId;
 } // namespace table
-namespace storage
-{
-class ObDirectLoadInsertTableParam;
-} // namespace storage
 namespace observer
 {
 
