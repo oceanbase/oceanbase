@@ -83,7 +83,7 @@ class ObRowReshape;
 class ObDMLRunningCtx;
 class ObTableHandleV2;
 class ObTableScanIterator;
-class ObSingleRowGetter;
+class ObRowGetter;
 class ObLSTabletIterator;
 class ObLSTabletAddrIterator;
 class ObHALSTabletIDIterator;
@@ -888,24 +888,39 @@ private:
     ObRelativeTable &relative_table,
     ObStoreCtx &store_ctx,
     const ObDMLBaseParam &dml_param,
-    const ObColDescIArray &col_descs,
     const ObRowsInfo &rows_info);
-  static int get_conflict_row(
+  static int get_conflict_rows_by_project(
+    ObRelativeTable &relative_table,
+    const ObRowsInfo &rows_info);
+  static int get_conflict_rows_by_multi_get(
+    ObTabletHandle &tablet_handle,
+    ObRelativeTable &relative_table,
+    ObStoreCtx &store_ctx,
+    const ObDMLBaseParam &dml_param,
+    const ObRowsInfo &rows_info);
+  static int get_conflict_rows_by_single_get(
+    ObTabletHandle &tablet_handle,
+    ObRelativeTable &relative_table,
+    ObStoreCtx &store_ctx,
+    const ObDMLBaseParam &dml_param,
+    const ObRowsInfo &rows_info);
+
+  static int single_get_conflict_row(
     ObTabletHandle &tablet_handle,
     ObRelativeTable &data_table,
     ObStoreCtx &store_ctx,
     const ObDMLBaseParam &dml_param,
     const common::ObIArray<uint64_t> &out_col_ids,
-    const ObColDescIArray &col_descs,
     const ObDatumRowkey &datum_rowkey,
     blocksstable::ObDatumRowIterator *&dup_row_iter);
-  static int init_single_row_getter(
-      ObSingleRowGetter &row_getter,
+  static int init_row_getter(
+      ObRowGetter &row_getter,
       ObStoreCtx &store_ctx,
       const ObDMLBaseParam &dml_param,
       const ObIArray<uint64_t> &out_col_ids,
       ObRelativeTable &relative_table,
-      bool skip_read_lob = false);
+      const bool is_multi_get,
+      const bool skip_read_lob);
 
   static int process_old_rows_lob_col(
     ObTabletHandle &data_tablet_handle,
@@ -993,7 +1008,7 @@ private:
   static int get_storage_row(const blocksstable::ObDatumRow &sql_row,
                              const ObIArray<uint64_t> &column_ids,
                              const ObColDescIArray &column_descs,
-                             ObSingleRowGetter &row_getter,
+                             ObRowGetter &row_getter,
                              ObRelativeTable &data_table,
                              ObStoreCtx &store_ctx,
                              const ObDMLBaseParam &dml_param,
@@ -1079,10 +1094,6 @@ private:
       const int64_t row_count,
       const blocksstable::ObDatumRow *old_rows,
       int64_t &error_row_idx);
-  static int add_duplicate_row(
-      ObDatumRow *storage_row,
-      const blocksstable::ObStorageDatumUtils &rowkey_datum_utils,
-      blocksstable::ObDatumRowIterator *&duplicated_rows);
 
 private:
   friend class ObLSTabletIterator;

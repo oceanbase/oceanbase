@@ -2972,6 +2972,7 @@ OB_DEF_SERIALIZE_SIZE(ObPrimaryZone)
 ObPartitionSchema::ObPartitionSchema()
     : ObSchema()
 {
+  list_idx_hash_array_ = nullptr;
   reset();
 }
 
@@ -2980,12 +2981,14 @@ ObPartitionSchema::ObPartitionSchema(common::ObIAllocator *allocator)
       part_option_(allocator),
       sub_part_option_(allocator)
 {
+  list_idx_hash_array_ = nullptr;
   reset();
 }
 
 ObPartitionSchema::ObPartitionSchema(const ObPartitionSchema &src_schema)
     : ObSchema()
 {
+  list_idx_hash_array_ = nullptr;
   reset();
   *this = src_schema;
 }
@@ -3022,6 +3025,7 @@ void ObPartitionSchema::reuse_partition_schema()
   partition_array_ = NULL;
   partition_array_capacity_ = 0;
   partition_num_ = 0;
+  destroy_list_idx_hash_array_();
   def_subpartition_array_ = NULL;
   def_subpartition_num_ = 0;
   def_subpartition_array_capacity_ = 0;
@@ -3113,10 +3117,129 @@ int ObPartitionSchema::assign_partition_schema(const ObPartitionSchema &src_sche
       LOG_WARN("fail to set transition point", K(ret));
     } else if (OB_FAIL(set_interval_range(src_schema.get_interval_range()))) {
       LOG_WARN("fail to set interval range", K(ret));
+    } else if (OB_NOT_NULL(src_schema.list_idx_hash_array_)
+               && OB_FAIL(build_list_idx_hash_array())) {
+      LOG_WARN("fail to build list idx hash_array", KR(ret));
     }
   }
 
   return ret;
+}
+
+int ObPartitionSchema::build_list_idx_hash_array()
+{
+  int ret = OB_SUCCESS;
+  ObPartitionLevel part_level = get_part_level();
+  if ((PARTITION_LEVEL_ONE == part_level
+       || PARTITION_LEVEL_TWO == part_level)
+      && is_list_part()) {
+    ObPartition **part_array = get_part_array();
+    const int64_t partition_num = get_partition_num();
+    int64_t list_value_cnt = 0;
+    if (OB_ISNULL(part_array)
+        || partition_num <= 0
+        || OB_NOT_NULL(list_idx_hash_array_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid arg", KR(ret), KP(part_array), K(partition_num), KP(list_idx_hash_array_));
+    } else if (OB_FAIL(get_list_part_value_cnt_(list_value_cnt))) {
+      LOG_WARN("fail to get list value cnt", KR(ret), KPC(this));
+    } else if (list_value_cnt <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid list_value_cnt", KR(ret), K(list_value_cnt));
+    } else {
+      int64_t mem_size = common::hash::ObPointerHashArray<ObNewRowKey, const ObNewRowValue*,
+                                                         ObGetNewRowKey>::get_hash_array_mem_size(list_value_cnt);
+      char *buf = NULL;
+      if (OB_ISNULL(buf = static_cast<char*>(alloc(mem_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc mem failed", KR(ret), K(mem_size), K(list_value_cnt));
+      } else if (OB_ISNULL(list_idx_hash_array_ = new (buf) ListIdxHashArray(mem_size))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to new ListIdxHashArray", KR(ret), K(mem_size), K(list_value_cnt));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; i++) {
+          ObPartition *part = part_array[i];
+          if (OB_ISNULL(part)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("part is null", KR(ret), K(i));
+          } else if (part->get_list_row_values().count() <= 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("list value is empty", KR(ret), KPC(part));
+          }
+          for (int64_t j = 0; OB_SUCC(ret) && j < part->get_list_row_values().count(); j++) {
+            const ObNewRow &row = part->get_list_row_values().at(j);
+            void *tmp_buf = NULL;
+            ObNewRowValue *value = NULL;
+            if (OB_ISNULL(tmp_buf = alloc(sizeof(ObNewRowValue)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("alloc mem failed", KR(ret));
+            } else if (OB_ISNULL(value = new (tmp_buf) ObNewRowValue(row, i))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("fail to new ObNewRowValue", KR(ret));
+            } else if (OB_FAIL(list_idx_hash_array_->set_refactored(value->get_key(), value))) {
+              LOG_WARN("fail to set refactored", KR(ret), K(row), K(part->get_part_name()));
+            }
+          } // end for
+        } // end for
+
+        if (OB_FAIL(ret)) {
+          destroy_list_idx_hash_array_();
+          LOG_WARN("fail to build list idx hash array", KR(ret));
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPartitionSchema::get_list_part_value_cnt_(int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  ObPartitionLevel part_level = get_part_level();
+  count = 0;
+  if ((PARTITION_LEVEL_ONE == part_level
+       || PARTITION_LEVEL_TWO == part_level)
+      && is_list_part()) {
+    ObPartition **part_array = get_part_array();
+    const int64_t partition_num = get_partition_num();
+    if (OB_ISNULL(part_array)
+        || partition_num <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid arg", KR(ret), KP(part_array), K(partition_num));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; i++) {
+        ObPartition *part = part_array[i];
+        if (OB_ISNULL(part)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("part is null", KR(ret), K(i));
+        } else if (part->get_list_row_values().count() <= 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("list value is empty", KR(ret), KPC(part));
+        } else {
+          count += part->get_list_row_values().count();
+        }
+      } // end for
+    }
+  }
+  return ret;
+}
+
+void ObPartitionSchema::destroy_list_idx_hash_array_()
+{
+  if (OB_NOT_NULL(list_idx_hash_array_)) {
+    ListIdxHashArray::Iterator iter = list_idx_hash_array_->begin();
+    for (;iter != list_idx_hash_array_->end(); ++iter) {
+      ObNewRowValue *value = const_cast<ObNewRowValue *>(*iter);
+      if (OB_NOT_NULL(value)) {
+        value->~ObNewRowValue();
+        free(value);
+      }
+    }
+    list_idx_hash_array_->~ListIdxHashArray();
+    free(list_idx_hash_array_);
+    list_idx_hash_array_ = nullptr;
+  }
 }
 
 int ObPartitionSchema::try_assign_part_array(
@@ -3135,6 +3258,9 @@ int ObPartitionSchema::try_assign_part_array(
     free(partition_array_);
     partition_array_ = nullptr;
     partition_num_ = 0;
+  }
+  if (OB_NOT_NULL(list_idx_hash_array_)) {
+    destroy_list_idx_hash_array_();
   }
   part_level_ = that.get_part_level();
   part_option_ = that.get_part_option();
@@ -6680,8 +6806,10 @@ int ObPartitionUtils::get_tablet_and_part_id(
                  KR(ret), K(range), K(table_id));
       }
     } else if (table_schema.is_list_part()) {
+      const ListIdxHashArray *list_idx_hash_array = table_schema.get_list_idx_hash_array();
       if (OB_FAIL(ObPartitionUtils::get_list_tablet_and_part_id_(
-                  range, part_array, part_num, partition_indexes))) {
+                  range, part_array, part_num,
+                  list_idx_hash_array, partition_indexes))) {
         LOG_WARN("fail to fill list tablet_id and part_id",
                  KR(ret), K(range), K(table_id));
       }
@@ -6740,8 +6868,10 @@ int ObPartitionUtils::get_tablet_and_part_id(
                  KR(ret), K(row), K(table_id));
       }
     } else if (table_schema.is_list_part()) {
+      const ListIdxHashArray *list_idx_hash_array = table_schema.get_list_idx_hash_array();
       if (OB_FAIL(ObPartitionUtils::get_list_tablet_and_part_id_(
-                  row, part_array, part_num, partition_indexes))) {
+                  row, part_array, part_num,
+                  list_idx_hash_array, partition_indexes))) {
         LOG_WARN("fail to fill list tablet_id and part_id",
                  KR(ret), K(row), K(table_id));
       }
@@ -7292,6 +7422,7 @@ int ObPartitionUtils::get_list_tablet_and_part_id_(
     const common::ObNewRange &range,
     ObPartition * const* partition_array,
     const int64_t partition_num,
+    const ListIdxHashArray *list_idx_hash_array,
     common::ObIArray<PartitionIndex> &indexes)
 {
   int ret = OB_SUCCESS;
@@ -7312,7 +7443,8 @@ int ObPartitionUtils::get_list_tablet_and_part_id_(
     row.cells_ = const_cast<ObObj*>(range.start_key_.get_obj_ptr());
     row.count_ = range.start_key_.get_obj_cnt();
     if (OB_FAIL(get_list_tablet_and_part_id_(
-        row, partition_array, partition_num, indexes))) {
+        row, partition_array, partition_num,
+        list_idx_hash_array, indexes))) {
       LOG_WARN("fail to get list tablet and part_id", KR(ret), K(row));
     }
   }
@@ -7398,10 +7530,12 @@ int ObPartitionUtils::get_range_tablet_and_part_id_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_ENABLE_RAISE_PRUNING_PARTITION_ERROR);
 int ObPartitionUtils::get_list_tablet_and_part_id_(
     const common::ObNewRow &row,
     ObPartition * const* partition_array,
     const int64_t partition_num,
+    const ListIdxHashArray *list_idx_hash_array,
     common::ObIArray<PartitionIndex> &indexes)
 {
   int ret = OB_SUCCESS;
@@ -7412,23 +7546,41 @@ int ObPartitionUtils::get_list_tablet_and_part_id_(
     LOG_WARN("partition_array is null or partition_num is invalid",
              KR(ret), KP(partition_array), K(partition_num));
   } else {
+    bool need_double_check_in_array = false;
     int64_t part_idx = OB_INVALID_INDEX;
     int64_t default_value_idx = OB_INVALID_INDEX;
-    for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_INDEX == part_idx && i < partition_num; i++) {
-      const ObIArray<common::ObNewRow> &list_row_values = partition_array[i]->get_list_row_values();
-      for (int64_t j = 0; OB_SUCC(ret) && OB_INVALID_INDEX == part_idx && j < list_row_values.count(); j++) {
-        const ObNewRow &list_row = list_row_values.at(j);
-        if (row == list_row) {
-          part_idx = i;
+    if (OB_FAIL(get_list_row_idx_in_hash_array_(list_idx_hash_array, row, part_idx))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        need_double_check_in_array = true;
+      } else {
+        LOG_WARN("fail to check list hash exist", KR(ret));
+      }
+    }
+    // partition key is timestamp, ceate table with local time zone
+    // this kind of row value hash result is not equal, so need double check row value exist after get from hash_array
+    // see case in list_partition_pruning_oracle.test #3.timestamp
+    if (OB_SUCC(ret) && need_double_check_in_array) {
+      for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_INDEX == part_idx && i < partition_num; i++) {
+        const ObIArray<common::ObNewRow> &list_row_values = partition_array[i]->get_list_row_values();
+        for (int64_t j = 0; OB_SUCC(ret) && OB_INVALID_INDEX == part_idx && j < list_row_values.count(); j++) {
+          const ObNewRow &list_row = list_row_values.at(j);
+          if (row == list_row) {
+            part_idx = i;
+            // no need to rewrite ret, just raise error to find this kind of type
+            if (OB_UNLIKELY(ERRSIM_ENABLE_RAISE_PRUNING_PARTITION_ERROR)) {
+              LOG_ERROR("row not exist in hash, but row exists in partition array", K(row), K(list_row));
+            }
+          }
+        } // end for
+        if (list_row_values.count() == 1
+            && list_row_values.at(0).get_count() >= 1
+            && list_row_values.at(0).get_cell(0).is_max_value()) {
+          // calc default value position
+          default_value_idx = i;
         }
       } // end for
-      if (list_row_values.count() == 1
-          && list_row_values.at(0).get_count() >= 1
-          && list_row_values.at(0).get_cell(0).is_max_value()) {
-        // calc default value position
-        default_value_idx = i;
-      }
-    } // end dor
+    }
 
     if (OB_SUCC(ret)) {
       const ObPartition *partition = NULL;
@@ -7443,6 +7595,40 @@ int ObPartitionUtils::get_list_tablet_and_part_id_(
         LOG_WARN("fail to push back part_idx", KR(ret), K(part_idx));
       }
     }
+  }
+  return ret;
+}
+
+int ObPartitionUtils::get_list_row_idx_in_hash_array_(
+    const ListIdxHashArray *list_idx_hash_array,
+    const common::ObNewRow &row,
+    int64_t &part_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(list_idx_hash_array)) {
+    const ObNewRowValue *value = nullptr;
+    part_idx = OB_INVALID_INDEX;
+    ObNewRowKey key(row);
+    ret = list_idx_hash_array->get_refactored(key, value);
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(value)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("value should not be null", KR(ret), K(row));
+      } else {
+        part_idx = value->get_part_idx();
+        LOG_TRACE("hit list idx hash array", K(row), K(part_idx));
+      }
+    } else if (OB_HASH_NOT_EXIST == ret) {
+      // ignore
+    } else {
+      LOG_WARN("fail to get value from hash array", KR(ret), K(row));
+    }
+    // TODO need to use default value to find default idx
+    // hash result may be not equal in timestamp value, if has default value, insert may wirte into default value's partition
+    // after fix hash not equal problem, need to handle default value's idx
+  } else {
+    // if list_idx_hash_array is null, return hash not exist, try to find partition by row value in partition array
+    ret = OB_HASH_NOT_EXIST;
   }
   return ret;
 }

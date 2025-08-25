@@ -396,7 +396,8 @@ private:
   class SessionPool
   {
   public:
-    static const int64_t POOL_CAPACIPY = 32;
+    static const int64_t MAX_POOL_CAPACIPY = 256;
+    static const int64_t MIN_POOL_CAPACIPY = 32;
   public:
     SessionPool();
     int init(const int64_t capacity);
@@ -407,7 +408,7 @@ private:
                  K(session_pool_.get_total()),
                  K(session_pool_.get_free()));
   private:
-    ObSQLSessionInfo *session_array_[POOL_CAPACIPY];
+    ObSQLSessionInfo *session_array_[MAX_POOL_CAPACIPY];
     common::ObFixedQueue<ObSQLSessionInfo> session_pool_;
   };
   bool is_valid_tenant_id(uint64_t tenant_id) const;

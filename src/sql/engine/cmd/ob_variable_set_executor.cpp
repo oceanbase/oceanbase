@@ -730,6 +730,15 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
       if (OB_FAIL(ObBasicSessionInfo::check_optimizer_features_enable_valid(val))) {
         LOG_WARN("fail check privilege_features_enable valid", K(val), K(ret));
       }
+#ifdef OB_BUILD_CLOSE_MODULES
+    } else if (set_var.var_name_ == OB_SV_EARLY_LOCK_RELEASE) {
+      int64_t early_lock_release = 0;
+      if (OB_FAIL(val.get_int(early_lock_release))) {
+        LOG_WARN("fail get int", K(ret), K(val));
+      } else if (OB_FAIL(do_early_lock_release(ctx, *session, early_lock_release > 0))) {
+        LOG_WARN("fail do early lock release ", K(ret), K(early_lock_release), K(val));
+      }
+#endif
     }
 
     if (OB_SUCC(ret) && should_update_extra_var) {

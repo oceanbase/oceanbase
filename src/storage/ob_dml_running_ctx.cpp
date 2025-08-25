@@ -213,18 +213,6 @@ int ObDMLRunningCtx::check_need_old_row_legitimacy()
     LOG_WARN("check has udf column failed", K(ret));
   } else if (is_need_check_old_row_) {
     is_udf_ = true;
-  } else if (dml_param_.is_batch_stmt_ && !relative_table_.is_index_table()) {
-    //batch stmt execution dependency defensive check to check
-    //if the same row was modified multiple times
-    is_need_check_old_row_ = true;
-    ret = OB_E(EventTable::EN_INS_MULTI_VALUES_BATCH_OPT) OB_SUCCESS;
-    // no need to check old row, just for bmsql performance optimization
-    // TODO yuchen.ywc
-    if (OB_SUCCESS != ret) {
-      LOG_INFO("error sim when current statement is batch update", K(ret), K_(is_udf));
-      is_need_check_old_row_ = false;
-      ret = OB_SUCCESS;
-    }
   } else if (GCONF.enable_defensive_check()) {
     is_need_check_old_row_ = true;
     if ((relative_table_.is_index_table() && !relative_table_.can_read_index())

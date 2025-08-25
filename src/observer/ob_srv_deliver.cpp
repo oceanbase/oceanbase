@@ -497,11 +497,11 @@ int ObSrvDeliver::acquire_diagnostic_info_object(int64_t tenant_id, int64_t grou
     if (OB_INVALID_TENANT_ID == tenant_id || OB_DTL_TENANT_ID == tenant_id) {
       ret = OB_ERROR;
     } else {
-      MTL_SWITCH(tenant_id) {
-        if (check_throttle && MTL(common::ObDiagnosticInfoContainer *)->get_rpc_size() > RPC_DI_LIMIT_NUM) {
+      MTL_TENANT(tenant_id) {
+        if (check_throttle && MTL_TENANT_GET(common::ObDiagnosticInfoContainer *)->get_rpc_size() > RPC_DI_LIMIT_NUM) {
           ret = OB_EAGAIN;
-        } else if (OB_FAIL(MTL(common::ObDiagnosticInfoContainer *)
-                               ->acquire_diagnostic_info(tenant_id, group_id, session_id, di, using_cache))) {
+        } else if (OB_FAIL(MTL_TENANT_GET(common::ObDiagnosticInfoContainer *)
+                           ->acquire_diagnostic_info(tenant_id, group_id, session_id, di, using_cache))) {
           OB_ASSERT(di == nullptr);
           LOG_WARN("failed to acquire diagnostic info", K(ret), K(tenant_id), K(group_id),
               K(session_id));

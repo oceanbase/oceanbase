@@ -6766,6 +6766,8 @@ int ObSchemaServiceSQLImpl::sort_table_partition_info(
       LOG_WARN("failed to sort partition array", KR(ret), K(table_schema));
     } else if (OB_FAIL(ObSchemaServiceSQLImpl::sort_subpartition_array(table_schema))) {
       LOG_WARN("failed to sort subpartition array", KR(ret), K(table_schema));
+    } else if (OB_FAIL(table_schema.build_list_idx_hash_array())) {
+      LOG_WARN("fail to build list idx hash array", KR(ret));
     }
   }
   LOG_TRACE("fetch partition info", KR(ret), K(table_schema));

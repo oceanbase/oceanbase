@@ -1247,7 +1247,11 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
       } else {
         TRANS_LOG(ERROR, "unexpected sub state", K(*this));
       }
-      const int64_t GET_GTS_AHEAD_INTERVAL = 0; //GCONF._ob_get_gts_ahead_interval;
+      int64_t GET_GTS_AHEAD_INTERVAL = 0; //GCONF._ob_get_gts_ahead_interval;
+      if (can_use_gts_ahead_()) {
+        const int64_t gts_ahead = GCONF._ob_get_gts_ahead_interval;
+        GET_GTS_AHEAD_INTERVAL = 100000 < gts_ahead ? 100000 : gts_ahead;
+      }
       set_trans_need_wait_wrap_(receive_gts_ts, GET_GTS_AHEAD_INTERVAL);
       // the same as before prepare
       mt_ctx_.set_trans_version(gts);
@@ -3081,7 +3085,11 @@ int ObPartTransCtx::get_gts_(SCN &gts)
 {
   int ret = OB_SUCCESS;
   MonotonicTs receive_gts_ts;
-  const int64_t GET_GTS_AHEAD_INTERVAL = 0; //GCONF._ob_get_gts_ahead_interval;
+  int64_t GET_GTS_AHEAD_INTERVAL = 0; //GCONF._ob_get_gts_ahead_interval;
+  if (can_use_gts_ahead_()) {
+    const int64_t gts_ahead = GCONF._ob_get_gts_ahead_interval;
+    GET_GTS_AHEAD_INTERVAL = 100000 < gts_ahead ? 100000 : gts_ahead;
+  }
   const MonotonicTs stc_ahead = get_stc_() - MonotonicTs(GET_GTS_AHEAD_INTERVAL);
   ObTsMgr *ts_mgr = trans_service_->get_ts_mgr();
   const uint64_t target_gts_tenant_id = is_for_sslog_()
@@ -6654,6 +6662,7 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
     timeguard.click();
   }
   if (OB_SUCC(ret)) {
+    try_recover_trans_need_wait_wrap_();
     (void)try_submit_next_log_();
     big_segment_info_.reuse();
   }
@@ -11539,6 +11548,28 @@ int ObPartTransCtx::collect_mview_mds_op(bool &need_collect, ObMViewOpArg &arg)
 bool ObPartTransCtx::is_for_sslog_() const
 {
   return is_tenant_sslog_ls(tenant_id_, ls_id_);
+}
+
+// only root participant in user tenant can use gts ahead
+bool ObPartTransCtx::can_use_gts_ahead_() const
+{
+  return (is_root() || is_local_tx_()) && is_user_tenant(tenant_id_);
+}
+
+// only for swith_to_leader
+// if sp trans, do not try recover
+void ObPartTransCtx::try_recover_trans_need_wait_wrap_()
+{
+  ObTxState state = exec_info_.state_;
+  if (is_root()
+      && ObTxState::PREPARE <= state
+      && is_user_tenant(tenant_id_)) {
+    const int64_t gts_head_interval = GCONF._ob_get_gts_ahead_interval;
+    if (0 < gts_head_interval) {
+      const MonotonicTs receive_gts_ts = MonotonicTs::current_time();
+      set_trans_need_wait_wrap_(receive_gts_ts, gts_head_interval);
+    }
+  }
 }
 
 } // namespace transaction

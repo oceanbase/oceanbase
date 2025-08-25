@@ -39,6 +39,7 @@
 #include "sql/session/ob_local_session_var.h"
 #include "share/schema/ob_list_row_values.h" // ObListRowValues
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
+#include "share/schema/ob_new_row_struct.h"
 #include "sql/engine/expr/ob_expr_like.h"
 
 #ifdef __cplusplus
@@ -3135,6 +3136,7 @@ public:
   void reset_partition_array() {
     partition_array_capacity_ = 0;
     partition_num_ = 0;
+    destroy_list_idx_hash_array_();
     partition_array_ = NULL;
   }
   void reset_hidden_partition_array() {
@@ -3227,7 +3229,9 @@ public:
   //            existed (sub)partition it will return OB_DUPLICATE_OBJECT_EXIST
   //note this function would check both partitions and subpartitions
   int check_partition_duplicate_with_name(const ObString &name) const;
-
+  const share::schema::ListIdxHashArray *get_list_idx_hash_array() const { return list_idx_hash_array_; }
+  int build_list_idx_hash_array();
+  void destroy_list_idx_hash_array_();
 protected:
   int inner_add_partition(const ObPartition &part);
   template<class T>
@@ -3257,6 +3261,7 @@ protected:
   {
     return (sub_part_template_flags_ & flag) > 0;
   }
+  int get_list_part_value_cnt_(int64_t &count);
 protected:
   static const int64_t DEFAULT_ARRAY_CAPACITY = 128;
 protected:
@@ -3296,6 +3301,9 @@ protected:
   int64_t hidden_partition_num_;
   common::ObRowkey transition_point_;
   common::ObRowkey interval_range_;
+  // Record ObNewRow -> part_idx when table's firt part is list like
+  // won't serialize/deserialize
+  share::schema::ListIdxHashArray *list_idx_hash_array_;
 };
 /*TODO: Delete the following interfaces in ObTablegroupSchema and ObDatabaseSchema
 int ObTablegroupSchema::get_first_primary_zone_inherit()
@@ -3704,7 +3712,12 @@ private:
       const common::ObNewRange &range,
       ObPartition * const* partition_array,
       const int64_t partition_num,
+      const share::schema::ListIdxHashArray *list_idx_hash_array,
       common::ObIArray<PartitionIndex> &indexes);
+  static int get_list_row_idx_in_hash_array_(
+      const share::schema::ListIdxHashArray *list_idx_hash_array,
+      const common::ObNewRow &row,
+      int64_t &part_idx);
 
   // param[@in]:
   // - fill_tablet_id: if fill_tablet_id is false, invalid tablet_id.
@@ -3737,6 +3750,7 @@ private:
       const common::ObNewRow &row,
       ObPartition * const* partition_array,
       const int64_t partition_num,
+      const share::schema::ListIdxHashArray *list_idx_hash_array,
       common::ObIArray<PartitionIndex> &indexes);
 
   // param[@in]:

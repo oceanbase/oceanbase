@@ -83,6 +83,8 @@ PN_API int pn_update_thread_count(int gid, int thread_count);
 int pn_set_thread_count(int listen_id, int gid, int thread_count);
 // gid_tid = (gid<<8) | tid
 PN_API int pn_send(uint64_t gtid, struct sockaddr_storage* sock_addr, const pn_pkt_t* pkt, uint32_t* pkt_id_ret);
+PN_API void* pn_send_alloc(uint64_t gtid, int64_t sz);
+PN_API void pn_send_free(void* p);
 PN_API void* pn_resp_pre_alloc(uint64_t req_id, int64_t sz);
 PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t hdr_sz, int64_t payload_sz, int64_t resp_expired_abs_us);
 PN_API int pn_get_peer(uint64_t req_id, struct sockaddr_storage* addr);

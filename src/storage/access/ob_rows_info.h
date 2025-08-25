@@ -91,6 +91,7 @@ public:
       const common::ObIArray<uint64_t> *dup_row_column_ids,
       blocksstable::ObDatumRowIterator **dup_row_iter);
   int sort_keys();
+  const blocksstable::ObStorageDatumUtils *get_datum_utils() const { return datum_utils_; }
   blocksstable::ObDatumRowkey& get_conflict_rowkey()
   {
     const int64_t conflict_rowkey_idx = 1 == rowkeys_.count() ? 0 : conflict_rowkey_idx_;

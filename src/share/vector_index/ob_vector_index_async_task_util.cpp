@@ -1561,7 +1561,6 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
   storage::ObStoreCtxGuard store_ctx_guard;
   storage::ObValueRowIterator row_iter;
   storage::ObValueRowIterator delete_row_iter;
-  ObStorageDatumUtils util;
   common::ObNewRowIterator *snap_data_iter = nullptr;
   int64_t vector_key_col_idx = -1;
   int64_t vector_data_col_idx = -1;
@@ -1695,7 +1694,7 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
           LOG_WARN("failed to check snap hnswsq index", K(ret));
         } else if (OB_FAIL(adaptor.serialize(&allocator_, param, cb))) {
           LOG_WARN("fail to do vsag serialize", K(ret));
-        } else if (OB_FAIL(row_iter.init(false))) {
+        } else if (OB_FAIL(row_iter.init())) {
           LOG_WARN("fail to init row iter", K(ret));
         } else if (OB_FALSE_IT(index_type = adaptor.get_snap_index_type())) {
         } else if (index_type >= VIAT_MAX) {
@@ -1750,7 +1749,7 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
                 LOG_DEBUG("[vec async task] print datum column ids", K(ret),
                   K(vector_key_col_idx), K(vector_data_col_idx), K(vector_vid_col_idx), K(vector_col_idx), K(extra_column_idxs));
                 if (OB_FAIL(ret)) {
-                } else if (OB_FAIL(row_iter.add_row(datum_row, util))) {
+                } else if (OB_FAIL(row_iter.add_row(datum_row))) {
                   LOG_WARN("failed to add row to iter", K(ret));
                 }
                 datum_row.reuse();
@@ -1834,7 +1833,6 @@ int ObVecIndexAsyncTask::get_old_snapshot_data(
 {
   int ret = OB_SUCCESS;
   ObLobManager *lob_mngr = MTL(ObLobManager*);
-  ObStorageDatumUtils util;
   int64_t loop_cnt = 0;
   const uint64_t timeout_us = ObTimeUtility::current_time() + ObInsertLobColumnHelper::LOB_TX_TIMEOUT;
   if (OB_ISNULL(lob_mngr)) {
@@ -1843,7 +1841,7 @@ int ObVecIndexAsyncTask::get_old_snapshot_data(
   } else if (OB_ISNULL(table_scan_iter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null table scan iter", K(ret));
-  } else if (OB_FAIL(delete_row_iter.init(false))) {
+  } else if (OB_FAIL(delete_row_iter.init())) {
     LOG_WARN("failed to init row iter", K(ret));
   }
   HEAP_VAR(blocksstable::ObDatumRow, d_row, tenant_id_) {
@@ -1903,7 +1901,7 @@ int ObVecIndexAsyncTask::get_old_snapshot_data(
             }
           }
         }
-        if (OB_SUCC(ret) && OB_FAIL(delete_row_iter.add_row(d_row, util))) {
+        if (OB_SUCC(ret) && OB_FAIL(delete_row_iter.add_row(d_row))) {
           LOG_WARN("failed to add row to iter", K(ret));
         }
         d_row.reuse();
@@ -1941,7 +1939,7 @@ int ObVecIndexAsyncTask::delete_tablet_data(
   }
   while (OB_SUCC(ret) && delete_unfinish) {
     int cur_row_count = 0;
-    if (OB_FAIL(row_iter.init(false))) {
+    if (OB_FAIL(row_iter.init())) {
       LOG_WARN("fail to init row iter", K(ret));
     }
     while (OB_SUCC(ret) && cur_row_count <= BATCH_CNT) {
@@ -1953,7 +1951,7 @@ int ObVecIndexAsyncTask::delete_tablet_data(
       } else if (OB_ISNULL(datum_row) || !datum_row->is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get row invalid.", K(ret));
-      } else if (OB_FAIL(row_iter.add_row(*datum_row, util))) {
+      } else if (OB_FAIL(row_iter.add_row(*datum_row))) {
         LOG_WARN("failed to add row to iter", K(ret));
       } else {
         cur_row_count += 1;
@@ -1994,7 +1992,6 @@ int ObVecIndexAsyncTask::delete_incr_table_data(ObPluginVectorIndexAdaptor &adap
   storage::ObValueRowIterator index_row_iter;
   ObSEArray<uint64_t, 4> delta_dml_column_ids;
   ObSEArray<uint64_t, 4> index_dml_column_ids;
-  ObStorageDatumUtils util;
   ObAccessService *oas = MTL(ObAccessService *);
   int64_t loop_cnt = 0;
   const ObTableSchema *delta_table_schema;

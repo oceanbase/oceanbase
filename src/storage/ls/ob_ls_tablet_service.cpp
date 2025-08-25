@@ -3057,7 +3057,7 @@ int ObLSTabletService::get_storage_row(
     const ObDatumRow &sql_row,
     const ObIArray<uint64_t> &column_ids,
     const ObColDescIArray &column_descs,
-    ObSingleRowGetter &row_getter,
+    ObRowGetter &row_getter,
     ObRelativeTable &data_table,
     ObStoreCtx &store_ctx,
     const ObDMLBaseParam &dml_param,
@@ -3069,7 +3069,7 @@ int ObLSTabletService::get_storage_row(
   ObDatumRowkeyHelper rowkey_helper;
   if (OB_FAIL(rowkey_helper.prepare_datum_rowkey(sql_row, data_table.get_rowkey_column_num(), column_descs, datum_rowkey))) {
     LOG_WARN("failed to prepare rowkey", K(ret), K(sql_row), K(column_descs));
-  } else if (OB_FAIL(init_single_row_getter(row_getter, store_ctx, dml_param, column_ids, data_table, true))) {
+  } else if (OB_FAIL(init_row_getter(row_getter, store_ctx, dml_param, column_ids, data_table, false/*is_multi_get*/, true))) {
     LOG_WARN("failed to init single row getter", K(ret), K(column_ids));
   } else if (OB_FAIL(row_getter.open(datum_rowkey, use_fuse_row_cache))) {
     LOG_WARN("failed to open storage row", K(ret), K(datum_rowkey));
@@ -3091,7 +3091,7 @@ int ObLSTabletService::mock_duplicated_rows_(blocksstable::ObDatumRowIterator *&
     LOG_WARN("no memory to alloc ObValueRowIterator", K(ret));
   } else {
     duplicated_rows = dup_iter;
-    if (OB_FAIL(dup_iter->init(true))) {
+    if (OB_FAIL(dup_iter->init())) {
       LOG_WARN("failed to initialize ObValueRowIterator", K(ret));
       ObQueryIteratorFactory::free_insert_dup_iter(duplicated_rows);
       duplicated_rows = nullptr;
@@ -4283,12 +4283,13 @@ int ObLSTabletService::check_old_row_legitimacy(
     //the vertical partition is no longer maintained,
     //and the defense check skips the vertical partition function
     ObArenaAllocator scan_allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_TABLE_SCAN_ITER));
-    ObSingleRowGetter storage_row_getter(scan_allocator, *data_tablet_handle.get_obj());
+    ObRowGetter storage_row_getter(scan_allocator, *data_tablet_handle.get_obj());
     ObDatumRow *storage_old_row = nullptr;
     const ObIArray<uint64_t> &column_ids = *column_ids_ptr;
     const ObColDescIArray &column_descs =  *col_descs_ptr;
     uint64_t err_col_id = OB_INVALID_ID;
-    if (OB_FAIL(get_storage_row(old_row, column_ids, column_descs, storage_row_getter, data_table, store_ctx, dml_param, storage_old_row, true))) {
+    if (OB_FAIL(get_storage_row(old_row, column_ids, column_descs, storage_row_getter,
+                                data_table, store_ctx, dml_param, storage_old_row, true))) {
       if (OB_ITER_END == ret) {
         ret = OB_ERR_DEFENSIVE_CHECK;
         FLOG_WARN("old row in storage is not exists", K(ret), K(old_row));
@@ -5835,101 +5836,6 @@ int ObLSTabletService::check_row_locked_by_myself(
   return ret;
 }
 
-int ObLSTabletService::get_conflict_row(
-    ObTabletHandle &tablet_handle,
-    ObRelativeTable &data_table,
-    ObStoreCtx &store_ctx,
-    const ObDMLBaseParam &dml_param,
-    const common::ObIArray<uint64_t> &out_col_ids,
-    const ObColDescIArray &col_descs,
-    const ObDatumRowkey &datum_rowkey,
-    blocksstable::ObDatumRowIterator *&dup_row_iter)
-{
-  int ret = OB_SUCCESS;
-  ObArenaAllocator scan_allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_TABLE_SCAN_ITER));
-  ObTablet *data_tablet = tablet_handle.get_obj();
-  ObDatumRow *out_row = nullptr;
-
-  if (OB_ISNULL(data_tablet)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet is null", K(ret), K(tablet_handle));
-  } else {
-    ObSingleRowGetter row_getter(scan_allocator, *data_tablet);
-    if (OB_FAIL(init_single_row_getter(row_getter, store_ctx, dml_param, out_col_ids, data_table, true/*skip_read_lob*/))) {
-      LOG_WARN("failed to init single row getter", K(ret), K(out_col_ids));
-    } else if (OB_FAIL(row_getter.open(datum_rowkey, false/*use_fuse_row_cache*/))) {
-      LOG_WARN("failed to open storage row", K(ret), K(datum_rowkey));
-    } else if (OB_FAIL(row_getter.get_next_row(out_row))) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("failed to get single storage row", K(ret));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    } else if (OB_FAIL(add_duplicate_row(out_row, data_tablet->get_rowkey_read_info().get_datum_utils(), dup_row_iter))) {
-      LOG_WARN("failed to single get row", K(ret), K(datum_rowkey), K(out_row));
-    }
-  }
-
-  if (OB_FAIL(ret) && OB_TABLET_IS_SPLIT_SRC != ret) {
-    if (nullptr != dup_row_iter) {
-      ObQueryIteratorFactory::free_insert_dup_iter(dup_row_iter);
-      dup_row_iter = nullptr;
-    }
-  }
-  return ret;
-}
-
-int ObLSTabletService::init_single_row_getter(
-    ObSingleRowGetter &row_getter,
-    ObStoreCtx &store_ctx,
-    const ObDMLBaseParam &dml_param,
-    const ObIArray<uint64_t> &out_col_ids,
-    ObRelativeTable &relative_table,
-    bool skip_read_lob)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(row_getter.init_dml_access_param(relative_table, out_col_ids, skip_read_lob))) {
-    LOG_WARN("init dml access param failed", K(ret));
-  } else if (OB_FAIL(row_getter.prepare_cached_iter_node(dml_param))) {
-    LOG_WARN("prepare cached iter node failed", K(ret));
-  } else if (OB_FAIL(row_getter.init_dml_access_ctx(store_ctx, skip_read_lob))) {
-    LOG_WARN("init dml access ctx failed", K(ret));
-  }
-
-  return ret;
-}
-
-int ObLSTabletService::add_duplicate_row(
-    ObDatumRow *storage_row,
-    const blocksstable::ObStorageDatumUtils &rowkey_datum_utils,
-    blocksstable::ObDatumRowIterator *&duplicated_rows)
-{
-  int ret = OB_SUCCESS;
-  if (NULL == duplicated_rows) {
-    ObValueRowIterator *dup_iter = NULL;
-    if (OB_ISNULL(dup_iter = ObQueryIteratorFactory::get_insert_dup_iter())) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("no memory to alloc ObValueRowIterator", K(ret));
-    } else {
-      duplicated_rows = dup_iter;
-      if (OB_FAIL(dup_iter->init(false))) {
-        LOG_WARN("failed to initialize ObValueRowIterator", K(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret) && storage_row != nullptr) {
-    ObValueRowIterator *dup_iter = static_cast<ObValueRowIterator*>(duplicated_rows);
-    if (OB_FAIL(dup_iter->add_row(*storage_row, rowkey_datum_utils))) {
-      LOG_WARN("failed to store conflict row", K(ret), K(*storage_row));
-    } else {
-      LOG_DEBUG("get conflict row", KPC(storage_row));
-    }
-  }
-
-  return ret;
-}
-
 int ObLSTabletService::process_old_rows_lob_col(
     ObTabletHandle &data_tablet_handle,
     ObDMLRunningCtx &run_ctx,
@@ -6019,7 +5925,7 @@ int ObLSTabletService::table_refresh_row(
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator scan_allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_LOB_ACCESS_BUFFER));
-  ObSingleRowGetter storage_row_getter(scan_allocator, *data_tablet_handle.get_obj());
+  ObRowGetter storage_row_getter(scan_allocator, *data_tablet_handle.get_obj());
 
   int64_t col_cnt = col_descs.count();
   ObSEArray<uint64_t, 8> out_col_ids;
@@ -6031,7 +5937,8 @@ int ObLSTabletService::table_refresh_row(
   if (OB_FAIL(ret)) {
   } else {
     ObDatumRow *new_row = nullptr;
-    if (OB_FAIL(get_storage_row(datum_row, out_col_ids, col_descs, storage_row_getter, data_table, store_ctx, dml_param, new_row))) {
+    if (OB_FAIL(get_storage_row(datum_row, out_col_ids, col_descs, storage_row_getter,
+                                data_table, store_ctx, dml_param, new_row))) {
       if (ret == OB_ITER_END) {
         LOG_DEBUG("re-read old row not exist", K(ret), K(datum_row));
         ret = OB_SUCCESS;
@@ -7978,7 +7885,6 @@ int ObLSTabletService::insert_rows_wrap(
                                       relative_table,
                                       store_ctx,
                                       dml_param,
-                                      col_descs,
                                       rows_info))) {
       LOG_WARN("failed to get conflict row(s)", K(ret), K(rows_info));
       ret = tmp_ret;
@@ -8041,7 +7947,6 @@ int ObLSTabletService::insert_rows_wrap(
                                                   dml_split_ctx.dst_relative_table_,
                                                   store_ctx,
                                                   dml_param,
-                                                  col_descs,
                                                   tmp_rows_info))) {
                   LOG_WARN("failed to get conflict row(s)", K(ret), K(tmp_rows_info));
                   ret = tmp_ret;
@@ -8187,12 +8092,12 @@ int ObLSTabletService::check_row_locked_by_myself_wrap(
   }
   return ret;
 }
+
 int ObLSTabletService::get_conflict_rows(
     ObTabletHandle &tablet_handle,
     ObRelativeTable &relative_table,
     ObStoreCtx &store_ctx,
     const ObDMLBaseParam &dml_param,
-    const ObColDescIArray &col_descs,
     const ObRowsInfo &rows_info)
 {
   int ret = OB_SUCCESS;
@@ -8201,22 +8106,187 @@ int ObLSTabletService::get_conflict_rows(
   if (OB_UNLIKELY(!rows_info.has_set_error() || !rows_info.have_conflict())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("no confict rows in rows_info", K(ret), K(rows_info));
+  // just project the dup row from input row for primary table
+  } else if (!relative_table.is_storage_index_table()) {
+    if (OB_FAIL(get_conflict_rows_by_project(relative_table, rows_info))) {
+      LOG_WARN("fail to project conflict rows", K(ret), K(rows_info));
+    }
+  } else if (OB_FAIL(get_conflict_rows_by_multi_get(tablet_handle,
+                                                    relative_table,
+                                                    store_ctx,
+                                                    dml_param,
+                                                    rows_info))) {
+    if (OB_TABLET_IS_SPLIT_SRC == ret) {
+      if (OB_FAIL(get_conflict_rows_by_single_get(tablet_handle,
+                                                    relative_table,
+                                                    store_ctx,
+                                                    dml_param,
+                                                    rows_info))) {
+
+      }
+    }
   }
+  return ret;
+}
+
+int ObLSTabletService::get_conflict_rows_by_project(
+    ObRelativeTable &relative_table,
+    const ObRowsInfo &rows_info)
+{
+  int ret = OB_SUCCESS;
+  common::ObSEArray<int32_t, 16> projector;
+  const share::schema::ObTableSchemaParam *schema_param = relative_table.get_schema_param();
+  const int64_t row_count = rows_info.get_rowkey_cnt();
+  const common::ObIArray<uint64_t> &out_col_ids = *rows_info.dup_row_column_ids_;
+  blocksstable::ObDatumRowIterator *&dup_row_iter = *rows_info.dup_row_iter_;
+  ObValueRowIterator *dup_value_iter = nullptr;
+
+  for (int32_t i = 0; OB_SUCC(ret) && i < out_col_ids.count(); ++i) {
+    int idx = OB_INVALID_INDEX;
+    if (OB_FAIL(schema_param->get_col_map().get(out_col_ids.at(i), idx))) {
+      LOG_WARN("get column index from column map failed", K(ret), K(out_col_ids.at(i)));
+    } else if (OB_FAIL(projector.push_back(idx))) {
+      LOG_WARN("store output projector failed", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (nullptr == dup_row_iter) {
+      if (OB_ISNULL(dup_value_iter = ObQueryIteratorFactory::get_insert_dup_iter())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("no memory to alloc ObValueRowIterator", K(ret));
+      } else if (OB_FAIL(dup_value_iter->init())) {
+        LOG_WARN("failed to initialize ObValueRowIterator", K(ret));
+      } else {
+        dup_row_iter = dup_value_iter;
+      }
+    } else {
+      dup_value_iter = static_cast<ObValueRowIterator*>(dup_row_iter);
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+    if (rows_info.rowkeys_[i].marked_rowkey_.is_row_duplicate()) {
+      if (OB_FAIL(dup_value_iter->add_row(rows_info.rows_[rows_info.rowkeys_[i].row_idx_], projector))) {
+        LOG_WARN("failed to add row", K(ret), K(i), K(rows_info.rowkeys_[i]));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSTabletService::get_conflict_rows_by_multi_get(
+    ObTabletHandle &tablet_handle,
+    ObRelativeTable &relative_table,
+    ObStoreCtx &store_ctx,
+    const ObDMLBaseParam &dml_param,
+    const ObRowsInfo &rows_info)
+{
+  int ret = OB_SUCCESS;
+  const int64_t row_count = rows_info.get_rowkey_cnt();
+  ObMemAttr mem_attr(MTL_ID(), "GetConflictRow");
+  ObSEArray<ObDatumRowkey, 2> rowkeys;
+  rowkeys.set_attr(mem_attr);
+  ObArenaAllocator get_allocator(mem_attr);
+
   for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
     const ObDatumRowkey &datum_rowkey = rows_info.get_rowkey(i);
     if (!rows_info.is_row_duplicate(i)) {
       LOG_DEBUG("not conflict row", K(row_count), K(i), K(datum_rowkey));
-    } else if (OB_FAIL(get_conflict_row(tablet_handle, relative_table,
-        store_ctx, dml_param, *rows_info.dup_row_column_ids_, col_descs,
-        datum_rowkey, *rows_info.dup_row_iter_))) {
+    } else if (OB_FAIL(rowkeys.push_back(datum_rowkey))) {
+      LOG_WARN("Failed to push back datum_rowkey", K(ret), K(row_count), K(i), K(datum_rowkey));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(rowkeys.count() == 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect rowkwys count", K(ret));
+  } else if (rowkeys.count() > 1 && !rows_info.is_sorted()) { // need sort
+    ObDatumComparor<ObDatumRowkey> comparor(*rows_info.get_datum_utils(), ret, false/*reverse*/);
+    lib::ob_sort(rowkeys.begin(), rowkeys.end(), comparor);
+  }
+
+  if (OB_SUCC(ret)) {
+    ObTablet *data_tablet = tablet_handle.get_obj();
+    ObDatumRow *out_row = nullptr;
+    ObValueRowIterator *dup_value_iter = nullptr;
+    blocksstable::ObDatumRowIterator *&dup_row_iter = *rows_info.dup_row_iter_;
+
+    if (OB_ISNULL(data_tablet)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet is null", K(ret), K(tablet_handle));
+    } else if (nullptr == dup_row_iter) {
+      if (OB_ISNULL(dup_value_iter = ObQueryIteratorFactory::get_insert_dup_iter())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("no memory to alloc ObValueRowIterator", K(ret));
+      } else if (OB_FAIL(dup_value_iter->init())) {
+        LOG_WARN("failed to initialize ObValueRowIterator", K(ret));
+      } else {
+        dup_row_iter = dup_value_iter;
+      }
+    } else {
+      dup_value_iter = static_cast<ObValueRowIterator*>(dup_row_iter);
+    }
+
+    if (OB_SUCC(ret)) {
+      ObRowGetter row_getter(get_allocator, *data_tablet);
+      if (OB_FAIL(init_row_getter(row_getter,
+                                  store_ctx,
+                                  dml_param,
+                                  *rows_info.dup_row_column_ids_,
+                                  relative_table,
+                                  rowkeys.count() > 1/*is_multi_get*/,
+                                  true/*skip_read_lob*/))) {
+        LOG_WARN("failed to init single row getter", K(ret), K(rows_info));
+      } else if (OB_FAIL(row_getter.open(rowkeys, false/*use_fuse_row_cache*/))) {
+        LOG_WARN("failed to open storage row", K(ret), K(rowkeys));
+      }
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(row_getter.get_next_row(out_row))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("failed to get single storage row", K(ret));
+          }
+        } else if (OB_FAIL(dup_value_iter->add_row(*out_row))) {
+          LOG_WARN("failed to add row", K(ret));
+        }
+      }
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      } else if (OB_TABLET_IS_SPLIT_SRC != ret) {
+        if (nullptr != dup_row_iter) {
+          ObQueryIteratorFactory::free_insert_dup_iter(dup_row_iter);
+          dup_row_iter = nullptr;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSTabletService::get_conflict_rows_by_single_get(
+    ObTabletHandle &tablet_handle,
+    ObRelativeTable &relative_table,
+    ObStoreCtx &store_ctx,
+    const ObDMLBaseParam &dml_param,
+    const ObRowsInfo &rows_info)
+{
+  int ret = OB_SUCCESS;
+  const int64_t row_count = rows_info.get_rowkey_cnt();
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
+    const ObDatumRowkey &datum_rowkey = rows_info.get_rowkey(i);
+    if (!rows_info.is_row_duplicate(i)) {
+      LOG_DEBUG("not conflict row", K(row_count), K(i), K(datum_rowkey));
+    } else if (OB_FAIL(single_get_conflict_row(tablet_handle, relative_table,
+        store_ctx, dml_param, *rows_info.dup_row_column_ids_, datum_rowkey, *rows_info.dup_row_iter_))) {
       if (OB_TABLET_IS_SPLIT_SRC == ret) {
         ObDmlSplitCtx dml_split_ctx;
         if (OB_FAIL(dml_split_ctx.prepare_write_dst(
             tablet_handle, dml_param.data_row_for_lob_, store_ctx, relative_table, datum_rowkey))) {
           LOG_WARN("failed to prepare split dml ctx", K(ret));
-        } else if (OB_FAIL(get_conflict_row(dml_split_ctx.dst_tablet_handle_,
+        } else if (OB_FAIL(single_get_conflict_row(dml_split_ctx.dst_tablet_handle_,
             dml_split_ctx.dst_relative_table_, store_ctx, dml_param,
-            *rows_info.dup_row_column_ids_, col_descs, datum_rowkey, *rows_info.dup_row_iter_))) {
+            *rows_info.dup_row_column_ids_, datum_rowkey, *rows_info.dup_row_iter_))) {
           LOG_WARN("failed to get conflict rows", K(ret));
         }
       } else {
@@ -8224,6 +8294,88 @@ int ObLSTabletService::get_conflict_rows(
       }
     }
   }
+
+  return ret;
+}
+
+int ObLSTabletService::single_get_conflict_row(
+    ObTabletHandle &tablet_handle,
+    ObRelativeTable &data_table,
+    ObStoreCtx &store_ctx,
+    const ObDMLBaseParam &dml_param,
+    const common::ObIArray<uint64_t> &out_col_ids,
+    const ObDatumRowkey &datum_rowkey,
+    blocksstable::ObDatumRowIterator *&dup_row_iter)
+{
+  int ret = OB_SUCCESS;
+  ObMemAttr mem_attr(MTL_ID(), "GetConflictRow");
+  ObArenaAllocator get_allocator(mem_attr);
+  ObTablet *data_tablet = tablet_handle.get_obj();
+  ObDatumRow *out_row = nullptr;
+  ObValueRowIterator *dup_value_iter = nullptr;
+
+  if (OB_ISNULL(data_tablet)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet is null", K(ret), K(tablet_handle));
+  } else {
+    ObRowGetter row_getter(get_allocator, *data_tablet);
+    if (OB_FAIL(init_row_getter(row_getter, store_ctx, dml_param, out_col_ids,
+        data_table, false/*is_multi_get*/, true/*skip_read_lob*/))) {
+      LOG_WARN("failed to init single row getter", K(ret), K(out_col_ids));
+    } else if (OB_FAIL(row_getter.open(datum_rowkey, false/*use_fuse_row_cache*/))) {
+      LOG_WARN("failed to open storage row", K(ret), K(datum_rowkey));
+    } else if (OB_FAIL(row_getter.get_next_row(out_row))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("failed to get single storage row", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else if (nullptr == dup_row_iter) {
+      if (OB_ISNULL(dup_value_iter = ObQueryIteratorFactory::get_insert_dup_iter())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("no memory to alloc ObValueRowIterator", K(ret));
+      } else if (OB_FAIL(dup_value_iter->init())) {
+        LOG_WARN("failed to initialize ObValueRowIterator", K(ret));
+      } else {
+        dup_row_iter = dup_value_iter;
+      }
+    } else {
+      dup_value_iter = static_cast<ObValueRowIterator*>(dup_row_iter);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (out_row != nullptr && OB_FAIL(dup_value_iter->add_row(*out_row))) {
+      LOG_WARN("failed to add row", K(ret));
+    }
+  } else if (OB_TABLET_IS_SPLIT_SRC != ret) {
+    if (nullptr != dup_row_iter) {
+      ObQueryIteratorFactory::free_insert_dup_iter(dup_row_iter);
+      dup_row_iter = nullptr;
+    }
+  }
+  return ret;
+}
+
+int ObLSTabletService::init_row_getter(
+    ObRowGetter &row_getter,
+    ObStoreCtx &store_ctx,
+    const ObDMLBaseParam &dml_param,
+    const ObIArray<uint64_t> &out_col_ids,
+    ObRelativeTable &relative_table,
+    const bool is_multi_get,
+    const bool skip_read_lob)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(row_getter.init_dml_access_param(relative_table, out_col_ids, skip_read_lob))) {
+    LOG_WARN("init dml access param failed", K(ret));
+  } else if (OB_FAIL(row_getter.prepare_cached_iter_node(dml_param, is_multi_get))) {
+    LOG_WARN("prepare cached iter node failed", K(ret));
+  } else if (OB_FAIL(row_getter.init_dml_access_ctx(store_ctx, skip_read_lob))) {
+    LOG_WARN("init dml access ctx failed", K(ret));
+  }
+
   return ret;
 }
 
