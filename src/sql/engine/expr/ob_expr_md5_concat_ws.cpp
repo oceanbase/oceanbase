@@ -59,16 +59,15 @@ int ObExprMd5ConcatWs::calc_result_typeN(
       LOG_WARN("md5_concat_ws func not support lob", K(ret));
     } else {
       type.set_varchar();
+      static const int64_t MD5_RES_BIT_LENGTH = 32;
+      type.set_length(MD5_RES_BIT_LENGTH);
+      type.set_collation_type(get_default_collation_type(type.get_type(), type_ctx));
+      type.set_collation_level(CS_LEVEL_COERCIBLE);
     }
     if (OB_SUCC(ret)) {
-      ObLength len = 0;
-      for (int64_t i = 1; i < param_num; ++i) {
-        len += types[i].get_length();
+      for (int64_t i = 0; i < param_num; ++i) {
         types[i].set_calc_type(type.get_type());
       }
-      len += static_cast<ObLength>(types[0].get_length() * (param_num - 1));
-      types[0].set_calc_type(type.get_type());
-      type.set_length(len);
       if (OB_FAIL(aggregate_charsets_for_string_result(type, types, param_num, type_ctx))) {
         LOG_WARN("aggregate_charsets_for_string_result failed", K(ret));
       } else {
