@@ -521,7 +521,7 @@ int ObTableRsExecutor::execute(ObExecContext &ctx, obrpc::ObHTableDDLArg &arg, o
       } else if (OB_FAIL(sql_ctx->schema_guard_->reset())){
         LOG_WARN("schema_guard reset failed", K(ret));
       } else if (tenant_config.is_valid() && tenant_config->_enable_ddl_worker_isolation) {
-        if (OB_FAIL(tenant_ddl_guard.try_inc_ddl_count())) {
+        if (OB_FAIL(tenant_ddl_guard.try_inc_ddl_count(tenant_config->cpu_quota_concurrency))) {
           LOG_WARN("fail to inc tenant ddl count", KR(ret), K(tenant_id));
         }
       }

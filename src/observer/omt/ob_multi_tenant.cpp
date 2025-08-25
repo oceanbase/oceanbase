@@ -2978,10 +2978,11 @@ void ObSharedTimer::destroy()
   }
 }
 
-int ObMultiTenant::inc_tenant_ddl_count(const uint64_t tenant_id)
+int ObMultiTenant::inc_tenant_ddl_count(const uint64_t tenant_id, const int64_t cpu_quota_concurrency)
 {
   int ret = OB_SUCCESS;
-  SpinWLockGuard guard(lock_);
+  SpinRLockGuard guard(lock_);
+  DEBUG_SYNC(AFTER_GET_MTL_TENANT_LOCK);
   ObTenant *tenant = NULL;
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
@@ -2992,7 +2993,7 @@ int ObMultiTenant::inc_tenant_ddl_count(const uint64_t tenant_id)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant is null", KR(ret));
   } else {
-    if (tenant->check_ddl_thread_is_limit()) {
+    if (tenant->check_ddl_thread_is_limit(cpu_quota_concurrency)) {
       ret = OB_ERR_DDL_RESOURCE_NOT_ENOUGH;
       LOG_WARN("tenant ddl task larger than limit, need retry", KR(ret), K(tenant->cur_ddl_thread_count()));
     } else {
@@ -3006,7 +3007,7 @@ int ObMultiTenant::inc_tenant_ddl_count(const uint64_t tenant_id)
 int ObMultiTenant::dec_tenant_ddl_count(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  SpinWLockGuard guard(lock_);
+  SpinRLockGuard guard(lock_);
   ObTenant *tenant = NULL;
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;

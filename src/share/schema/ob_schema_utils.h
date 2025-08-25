@@ -446,7 +446,7 @@ class ObTenantDDLCountGuard
 {
 public:
   ObTenantDDLCountGuard (const uint64_t tenant_id) : tenant_id_(tenant_id), had_inc_ddl_(false) {}
-  int try_inc_ddl_count();
+  int try_inc_ddl_count(const int64_t cpu_quota_concurrency);
   ~ObTenantDDLCountGuard();
 private:
   const int64_t tenant_id_;

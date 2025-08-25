@@ -266,7 +266,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
   if (OB_SUCC(ret)) {
     if (tenant_config.is_valid() && tenant_config->_enable_ddl_worker_isolation
         && ObStmt::is_ddl_stmt(static_cast<stmt::StmtType>(cmd.get_cmd_type()), true)) {
-      if (OB_FAIL(tenant_ddl_guard.try_inc_ddl_count())) {
+      if (OB_FAIL(tenant_ddl_guard.try_inc_ddl_count(tenant_config->cpu_quota_concurrency))) {
         LOG_WARN("fail to inc tenant ddl count", KR(ret), K(tenant_id));
       }
     }

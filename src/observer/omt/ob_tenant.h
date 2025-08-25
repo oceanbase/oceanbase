@@ -431,7 +431,7 @@ public:
   int64_t cur_ddl_thread_count() {return ATOMIC_LOAD(&total_ddl_thread_cnt_);}
   void inc_ddl_thread_count() { ATOMIC_INC(&total_ddl_thread_cnt_); };
   void dec_ddl_thread_count() { ATOMIC_DEC(&total_ddl_thread_cnt_); };
-  bool check_ddl_thread_is_limit() { return ATOMIC_LOAD(&total_ddl_thread_cnt_) >= static_cast<int64_t>(unit_min_cpu() * cpu_quota_concurrency()); }
+  bool check_ddl_thread_is_limit(const int64_t cpu_quota_concurrency) { return ATOMIC_LOAD(&total_ddl_thread_cnt_) >= static_cast<int64_t>(unit_min_cpu() * cpu_quota_concurrency); }
   lib::Worker::CompatMode get_compat_mode() const;
   OB_INLINE share::ObTenantSpace &ctx() { return *ctx_; }
   int rdlock(common::ObLDHandle &handle);

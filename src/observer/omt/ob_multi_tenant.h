@@ -173,7 +173,7 @@ public:
 
   void set_workers_per_cpu(int64_t v);
   int check_if_unit_id_exist(const uint64_t unit_id, bool &exist);
-  int inc_tenant_ddl_count(const uint64_t tenant_id);
+  int inc_tenant_ddl_count(const uint64_t tenant_id, const int64_t cpu_quota_concurrency);
   int dec_tenant_ddl_count(const uint64_t tenant_id);
 
 protected:
