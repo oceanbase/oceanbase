@@ -887,6 +887,7 @@ int ObDbmsXplan::get_plan_info_by_id(sql::ObExecContext &ctx,
                     AND sp.SVR_PORT=plan_index.SVR_PORT \
                     AND sp.PLAN_HASH=plan_index.PLAN_HASH \
                     AND sp.SQL_ID=plan_index.SQL_ID \
+                    AND sp.PLAN_ID=plan_index.PLAN_ID \
                     ORDER BY ID")) {
       LOG_WARN("failed to assign string", K(ret));
     } else if (OB_FAIL(inner_get_plan_info(ctx, sql, plan_infos, use_wr))) {
@@ -1051,6 +1052,7 @@ int ObDbmsXplan::get_baseline_plan_info(sql::ObExecContext &ctx,
                     AND sp.SVR_PORT=plan_index.SVR_PORT \
                     AND sp.PLAN_HASH=plan_index.PLAN_HASH \
                     AND sp.SQL_ID=plan_index.SQL_ID \
+                    AND sp.PLAN_ID=plan_index.PLAN_ID \
                     ORDER BY ID")) {
       LOG_WARN("failed to assign string", K(ret));
     } else if (OB_FAIL(inner_get_plan_info(ctx, sql, plan_infos, use_wr))) {
