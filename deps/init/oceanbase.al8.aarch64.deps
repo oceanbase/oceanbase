@@ -10,7 +10,7 @@ arch=aarch64
 repo=http://mirrors.aliyun.com/oceanbase/community/stable/al/8/aarch64/
 
 [deps]
-obdal-0.2.2-292025081911.al8.aarch64.rpm target=community
+obdal-0.2.2-302025082510.al8.aarch64.rpm target=community
 devdeps-gtest-1.8.0-192024092714.al8.aarch64.rpm
 devdeps-isa-l-static-2.22.0-52024092714.al8.aarch64.rpm
 devdeps-libcurl-static-8.12.1-132025040210.al8.aarch64.rpm
