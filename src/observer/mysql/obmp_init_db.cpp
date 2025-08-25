@@ -137,7 +137,12 @@ int ObMPInitDB::process()
             }
           }
           force_local_retry = false;
-          if (RETRY_TYPE_LOCAL == retry_type) {
+          if (OB_UNLIKELY(session->is_zombie())) {
+            ret = OB_ERR_SESSION_INTERRUPTED;
+            LOG_WARN("session has been killed", K(ret),
+                     K(session->get_server_sid()),
+                     K(session->get_proxy_sessid()));
+          } else if (RETRY_TYPE_LOCAL == retry_type) {
             // 在本线程重试
             force_local_retry = true;
           } else if (RETRY_TYPE_PACKET == retry_type) {
