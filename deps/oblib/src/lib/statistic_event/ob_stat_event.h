@@ -872,6 +872,10 @@ STAT_EVENT_ADD_DEF(SS_SSTABLE_MINOR_MERGE_EXECUTE_TIME, "The total minor sstable
 STAT_EVENT_ADD_DEF(SS_SSTABLE_MAJOR_MERGE_EXECUTE_TIME, "The total major sstable merge execute time", ObStatClassIds::STORAGE, 240130, false, true, true)
 STAT_EVENT_ADD_DEF(SS_SSTABLE_SCHED_MINOR_MERGE_COUNT, "The total minor sstable merge schedule count", ObStatClassIds::STORAGE, 240131, false, true, true)
 STAT_EVENT_ADD_DEF(SS_SSTABLE_SCHED_MINOR_MERGE_TIME, "The total minor sstable merge schedule time", ObStatClassIds::STORAGE, 240132, false, true, true)
+STAT_EVENT_ADD_DEF(SS_SSTABLE_MINOR_MERGE_TOTAL_MACRO_BLOCK_COUNT, "The total minor sstable merge total macro block count", ObStatClassIds::STORAGE, 240133, false, true, true)
+STAT_EVENT_ADD_DEF(SS_SSTABLE_MINOR_MERGE_REUSE_MACRO_BLOCK_COUNT, "The total minor sstable merge reuse macro block count", ObStatClassIds::STORAGE, 240134, false, true, true)
+STAT_EVENT_ADD_DEF(SS_SSTABLE_MAJOR_MERGE_TOTAL_MACRO_BLOCK_COUNT, "The total major sstable merge total macro block count", ObStatClassIds::STORAGE, 240135, false, true, true)
+STAT_EVENT_ADD_DEF(SS_SSTABLE_MAJOR_MERGE_REUSE_MACRO_BLOCK_COUNT, "The total major sstable merge reuse macro block count", ObStatClassIds::STORAGE, 240136, false, true, true)
 
 // external table cache(2402xx)
 STAT_EVENT_ADD_DEF(OPT_EXTERNAL_TABLE_STAT_CACHE_HIT, "opt external table stat cache hit", ObStatClassIds::CACHE, 240201, false, true, true)
