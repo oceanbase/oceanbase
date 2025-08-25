@@ -519,6 +519,7 @@
 
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
+#include "sql/engine/expr/ob_expr_format_profile.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1299,6 +1300,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprCheckLocationAccess);
     REG_OP(ObExprStartUpMode);
     REG_OP(ObExprLocalDynamicFilter);
+    REG_OP(ObExprFormatProfile);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1648,6 +1650,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprTmpFileRead);
 #endif
   REG_OP_ORCL(ObExprLocalDynamicFilter);
+  REG_OP_ORCL(ObExprFormatProfile);
   REG_OP_ORCL(ObExprCheckLocationAccess);
 }
 

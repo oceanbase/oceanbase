@@ -16,6 +16,7 @@
 #include "sql/engine/aggregate/ob_hash_groupby_op.h"
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/expr/ob_expr_topn_filter.h"
+#include "share/diagnosis/ob_runtime_profile.h"
 
 namespace oceanbase
 {
@@ -85,14 +86,21 @@ void ObSortVecOp::destroy()
 
 int ObSortVecOp::inner_close()
 {
+  int ret = OB_SUCCESS;
   sort_op_provider_.collect_memory_dump_info(op_monitor_info_);
   sort_op_provider_.unregister_profile();
   if (MY_SPEC.enable_pd_topn_filter()) {
-    // TODO XUNSI: update plan monitor info of pushdown topn filter
-    // but all the others_values of the plan_monitor_node is used,
-    // add an extra string in json format is a considered way
+    uint32_t expr_ctx_id = MY_SPEC.pd_topn_filter_info_.expr_ctx_id_;
+    ObExprTopNFilterContext *topn_filter_ctx =
+        static_cast<ObExprTopNFilterContext *>(ctx_.get_expr_op_ctx(expr_ctx_id));
+    if (OB_NOT_NULL(topn_filter_ctx)) {
+      SET_METRIC_VAL(ObMetricId::TOPN_RUNTIME_FILTER_CHECK_ROWS, topn_filter_ctx->check_count_);
+      SET_METRIC_VAL(ObMetricId::TOPN_RUNTIME_FILTER_FILTER_ROWS, topn_filter_ctx->filter_count_);
+      SET_METRIC_VAL(ObMetricId::TOPN_RUNTIME_FILTER_BYPASS_ROWS,
+                     topn_filter_ctx->total_count_ - topn_filter_ctx->check_count_);
+    }
   }
-  return OB_SUCCESS;
+  return ret;
 }
 
 int ObSortVecOp::get_int_value(const ObExpr *in_val, int64_t &out_val)

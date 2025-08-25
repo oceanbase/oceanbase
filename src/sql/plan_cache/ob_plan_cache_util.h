@@ -1170,6 +1170,7 @@ public:
     enable_topn_runtime_filter_(false),
     min_const_integer_precision_(1),
     enable_runtime_filter_adaptive_apply_(false),
+    extend_sql_plan_monitor_metrics_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1229,6 +1230,7 @@ public:
   bool enable_topn_runtime_filter_;
   int8_t min_const_integer_precision_;
   bool enable_runtime_filter_adaptive_apply_;
+  bool extend_sql_plan_monitor_metrics_;
 
 private:
   // current cluster config version_

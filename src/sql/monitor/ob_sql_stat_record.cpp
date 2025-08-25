@@ -295,7 +295,7 @@ int ObExecutingSqlStatRecord::record_sqlstat_end_value(ObDiagnoseSessionInfo* di
 int ObExecutingSqlStatRecord::move_to_sqlstat_cache(
   ObSQLSessionInfo &session_info,
   ObString &cur_sql,
-  ObPhysicalPlan *plan /*= nullptr*/,
+  const ObPhysicalPlan *plan /*= nullptr*/,
   const bool is_px_remote_exec /*= false*/)
 {
   int ret = OB_SUCCESS;

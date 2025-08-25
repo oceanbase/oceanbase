@@ -2259,7 +2259,7 @@ int ObBasicSessionInfo::sys_variable_exists(const ObString &var, bool &is_exists
 }
 
 // for query and DML
-int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
+int ObBasicSessionInfo::set_cur_phy_plan(const ObPhysicalPlan *cur_phy_plan)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cur_phy_plan)) {

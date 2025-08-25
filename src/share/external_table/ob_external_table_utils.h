@@ -114,7 +114,7 @@ class ObExternalTableUtils {
     int64_t sqc_count);
   static int assigned_files_to_sqcs_by_load_balancer(
     const common::ObIArray<ObExternalFileInfo> &files,
-    const ObIArray<ObPxSqcMeta *> &sqcs,
+    const ObIArray<ObPxSqcMeta> &sqcs,
     common::ObIArray<int64_t> &assigned_idx);
   static int select_external_table_loc_by_load_balancer(
     const common::ObIArray<ObExternalFileInfo> &files,
@@ -124,14 +124,14 @@ class ObExternalTableUtils {
   static int assign_odps_file_to_sqcs(
     ObDfo &dfo,
     ObExecContext &exec_ctx,
-    ObIArray<ObPxSqcMeta *> &sqcs,
+    ObIArray<ObPxSqcMeta> &sqcs,
     int64_t parallel,
     ObODPSGeneralFormat::ApiMode odps_api_mode);
   static int split_odps_to_sqcs_process_tunnel(common::ObIArray<share::ObExternalFileInfo> &files,
-                                        ObIArray<ObPxSqcMeta *> &sqcs,
+                                        ObIArray<ObPxSqcMeta> &sqcs,
                                         int parallel);
   static int split_odps_to_sqcs_storage_api(int64_t split_task_count, int64_t table_total_file_size,
-      const ObString &session_str, const ObString &new_file_urls, ObIArray<ObPxSqcMeta *> &sqcs, int parallel,
+      const ObString &session_str, const ObString &new_file_urls, ObIArray<ObPxSqcMeta> &sqcs, int parallel,
       ObIAllocator &range_allocator, ObODPSGeneralFormat::ApiMode odps_api_mode);
   static int filter_files_in_locations(common::ObIArray<share::ObExternalFileInfo> &files,
       common::ObIArray<common::ObAddr> &locations);
@@ -140,7 +140,7 @@ class ObExternalTableUtils {
       ObIAllocator &allocator,
       const ObString &external_table_format_str,
       ObDfo &dfo,
-      ObIArray<ObPxSqcMeta *> &sqcs,
+      ObIArray<ObPxSqcMeta> &sqcs,
       int64_t parallel);
 
   static int collect_external_file_list(

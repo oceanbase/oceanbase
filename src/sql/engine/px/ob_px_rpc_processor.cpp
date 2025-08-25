@@ -85,6 +85,8 @@ int ObInitSqcP::process()
     LOG_WARN("pre setup op input failed", K(ret));
   } else if (OB_FAIL(sqc_handler->thread_count_auto_scaling(result_.reserved_thread_count_))) {
     LOG_WARN("fail to do thread auto scaling", K(ret), K(result_.reserved_thread_count_));
+  } else if (OB_FAIL(sqc_handler->prepare_tablets_info())) {
+    LOG_WARN("failed to prepare tablets_info");
   } else if (result_.reserved_thread_count_ <= 0) {
     ret = OB_ERR_INSUFFICIENT_PX_WORKER;
     ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(dop_, sqc_handler->get_phy_plan().get_px_dop());

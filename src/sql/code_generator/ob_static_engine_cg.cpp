@@ -180,14 +180,17 @@ int ObStaticEngineCG::generate(const ObLogPlan &log_plan, ObPhysicalPlan &phy_pl
   const bool is_subplan = false;
   bool check_eval_once = true;
   ObCompressorType compress_type = NONE_COMPRESSOR;
+  PartialExprFrameInfoGen partial_frame_gen;
   if (OB_ISNULL(log_plan.get_plan_root())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("no logical plan root", K(ret));
+  } else if (OB_FAIL(set_properties_pre(log_plan, phy_plan))) {
+    LOG_WARN("set other properties failed", K(ret));
   } else if (OB_FAIL(get_query_compress_type(log_plan, compress_type))) {
     LOG_WARN("fail to get query compress type", K(ret));
   } else if (OB_FAIL(postorder_generate_op(
               *log_plan.get_plan_root(), root_spec, in_root_job, is_subplan,
-              check_eval_once, need_check_output_datum, compress_type))) {
+              check_eval_once, need_check_output_datum, compress_type, partial_frame_gen))) {
     LOG_WARN("failed to generate plan", K(ret));
   } else if (OB_ISNULL(root_spec)) {
     ret = OB_ERR_UNEXPECTED;
@@ -195,7 +198,7 @@ int ObStaticEngineCG::generate(const ObLogPlan &log_plan, ObPhysicalPlan &phy_pl
   } else {
     phy_plan.set_root_op_spec(root_spec);
     phy_plan.set_is_use_auto_dop(opt_ctx_->is_use_auto_dop());
-    if (OB_FAIL(set_other_properties(log_plan, phy_plan))) {
+    if (OB_FAIL(set_properties_post(log_plan, phy_plan))) {
       LOG_WARN("set other properties failed", K(ret));
     }
   }
@@ -208,11 +211,14 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
                                             const bool is_subplan,
                                             bool &check_eval_once,
                                             const bool need_check_output_datum,
-                                            const ObCompressorType compress_type)
+                                            const ObCompressorType compress_type,
+                                            PartialExprFrameInfoGen &partial_frame_gen)
 {
   int ret = OB_SUCCESS;
   const int64_t child_num = op.get_num_of_child();
   const bool is_exchange = log_op_def::LOG_EXCHANGE == op.get_type();
+  const bool is_transmit = is_exchange && static_cast<ObLogExchange &>(op).is_px_producer();
+  const bool is_px_coord = is_exchange && static_cast<ObLogExchange &>(op).is_px_coord();
   bool is_link_scan = (log_op_def::LOG_LINK_SCAN == op.get_type());
   spec = NULL;
   // generate child first.
@@ -229,6 +235,15 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
       phy_plan_->set_has_link_sfd(op.get_plan()->get_stmt()->has_for_update());
     }
   }
+  ObIArray<ObRawExpr *> *origin_dfo_raw_exprs = partial_frame_gen.dfo_raw_exprs_;
+  ObArray<ObRawExpr *> dfo_raw_exprs;
+  if (is_transmit) {
+    bool in_nested_px = partial_frame_gen.px_coord_cnt_ > 1;
+    if (!in_nested_px) {
+      partial_frame_gen.dfo_raw_exprs_ = &dfo_raw_exprs;
+    }
+  }
+  partial_frame_gen.px_coord_cnt_ += is_px_coord ? 1 : 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < child_num && !is_link_scan; i++) {
     ObLogicalOperator *child_op = op.get_child(i);
     ObOpSpec *child_spec = NULL;
@@ -240,7 +255,8 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
                                                         in_root_job && is_exchange, is_subplan,
                                                         child_op_check_eval_once,
                                                         need_check_output_datum,
-                                                        compress_type)))) {
+                                                        compress_type,
+                                                        partial_frame_gen)))) {
       LOG_WARN("generate child op failed", K(ret), K(op.get_name()));
     } else if (OB_ISNULL(child_spec)) {
       ret = OB_ERR_UNEXPECTED;
@@ -330,6 +346,27 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
       OX(dml_spec->expr_frame_info_ = partial_frame);
     }
   }
+  if (OB_FAIL(ret)) {
+  } else if (NULL != partial_frame_gen.dfo_raw_exprs_ && phy_plan_->px_worker_share_plan_enabled()) {
+    if (OB_FAIL(partial_frame_gen.dfo_raw_exprs_->reserve(partial_frame_gen.dfo_raw_exprs_->count() + cur_op_exprs_.count()))) {
+      LOG_WARN("reserve failed", K(ret));
+    } else {
+      FOREACH_CNT_X(raw_expr, cur_op_exprs_, OB_SUCC(ret)) {
+        OZ(partial_frame_gen.dfo_raw_exprs_->push_back(*raw_expr));
+      }
+    }
+    if (OB_SUCC(ret) && is_transmit) {
+      ObExprFrameInfo *partial_frame = OB_NEWx(ObExprFrameInfo, (&phy_plan_->get_allocator()),
+                                               phy_plan_->get_allocator(),
+                                               phy_plan_->get_expr_frame_info().rt_exprs_);
+      OV(NULL != partial_frame, OB_ALLOCATE_MEMORY_FAILED);
+      OZ(ObStaticEngineExprCG::generate_partial_expr_frame(
+              *phy_plan_, *partial_frame, *partial_frame_gen.dfo_raw_exprs_, phy_plan_->get_use_rich_format()));
+      if (OB_SUCC(ret)) {
+        static_cast<ObPxTransmitSpec *>(spec)->dfo_expr_frame_info_ = partial_frame;
+      }
+    }
+  }
   if (OB_SUCC(ret) && is_subplan) {
     cur_op_exprs_.reset();
     cur_op_self_produced_exprs_.reset();
@@ -360,7 +397,8 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
       spec->use_rich_format_ = false;
     }
   }
-
+  partial_frame_gen.px_coord_cnt_ -= is_px_coord ? 1 : 0;
+  partial_frame_gen.dfo_raw_exprs_ = origin_dfo_raw_exprs;
   return ret;
 }
 
@@ -6781,32 +6819,6 @@ int ObStaticEngineCG::generate_spec(ObLogJoin &op,
               }
             }
           }
-
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(spec.left_rescan_params_.init(op.get_above_pushdown_left_params().count()))) {
-              LOG_WARN("fail to init fixed array", K(ret));
-            } else if (OB_FAIL(spec.right_rescan_params_.init(op.get_above_pushdown_right_params().count()))) {
-              LOG_WARN("fail to init fixed array", K(ret));
-            } else if (OB_FAIL(set_batch_exec_param(op.get_nl_params(), spec.rescan_params_))) {
-              LOG_WARN("fail to set batch exec param", K(ret));
-            }
-            ARRAY_FOREACH(op.get_above_pushdown_left_params(), i) {
-              ObExecParamRawExpr* param_expr = op.get_above_pushdown_left_params().at(i);
-              if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
-                                                                                 &spec,
-                                                                                 true)))) {
-                LOG_WARN("fail to push back param expr", K(ret));
-              }
-            }
-            ARRAY_FOREACH(op.get_above_pushdown_right_params(), i) {
-              ObExecParamRawExpr* param_expr = op.get_above_pushdown_right_params().at(i);
-              if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
-                                                                                 &spec,
-                                                                                 false)))) {
-                LOG_WARN("fail to push back param expr", K(ret));
-              }
-            }
-          }
         }
       }
     }
@@ -7012,33 +7024,6 @@ int ObStaticEngineCG::generate_join_spec(ObLogJoin &op, ObJoinSpec &spec)
                 }
                 // Note: no need to call init explicitly as init() is invoked inside assign()
                 OZ(nlj.left_expr_ids_in_other_cond_.at(i).assign(left_expr_ids));
-              }
-            }
-          }
-
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(nlj.left_rescan_params_.init(op.get_above_pushdown_left_params().count()))) {
-              LOG_WARN("fail to init fixed array", K(ret));
-            } else if (OB_FAIL(nlj.right_rescan_params_.init(op.get_above_pushdown_right_params().count()))) {
-              LOG_WARN("fail to init fixed array", K(ret));
-            } else if (OB_FAIL(set_batch_exec_param(op.get_nl_params(), nlj_spec.rescan_params_))) {
-              LOG_WARN("fail to set batch exec param", K(ret));
-            }
-            ARRAY_FOREACH(op.get_above_pushdown_left_params(), i) {
-              ObExecParamRawExpr* param_expr = op.get_above_pushdown_left_params().at(i);
-              if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
-                                                                                 &nlj,
-                                                                                 true)))) {
-                LOG_WARN("fail to push back param expr", K(ret));
-              }
-            }
-            ARRAY_FOREACH(op.get_above_pushdown_right_params(), i) {
-              ObExecParamRawExpr* param_expr = op.get_above_pushdown_right_params().at(i);
-              if (OB_FAIL(ret)) {
-              } else if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
-                                                                                 &nlj,
-                                                                                 false)))) {
-                LOG_WARN("fail to push back param expr", K(ret));
               }
             }
           }
@@ -7457,31 +7442,6 @@ int ObStaticEngineCG::generate_spec(
                   "array count mismatch");
     for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(exec_params); i++) {
       OZ(generate_param_spec(*exec_params[i], *setters[i]));
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(spec.left_rescan_params_.init(op.get_above_pushdown_left_params().count()))) {
-      LOG_WARN("fail to init fixed array", K(ret));
-    } else if (OB_FAIL(spec.right_rescan_params_.init(op.get_above_pushdown_right_params().count()))) {
-      LOG_WARN("fail to init fixed array", K(ret));
-    } else if (OB_FAIL(set_batch_exec_param(*exec_params[0], *setters[0]))) {
-      LOG_WARN("fail to set batch exec param", K(ret));
-    }
-    ARRAY_FOREACH(op.get_above_pushdown_left_params(), i) {
-      ObExecParamRawExpr* param_expr = op.get_above_pushdown_left_params().at(i);
-      if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
-                                                                      &spec,
-                                                                      true)))) {
-        LOG_WARN("fail to push back param expr", K(ret));
-      }
-    }
-    ARRAY_FOREACH(op.get_above_pushdown_right_params(), i) {
-      ObExecParamRawExpr* param_expr = op.get_above_pushdown_right_params().at(i);
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(batch_exec_param_caches_.push_back(BatchExecParamCache(param_expr,
-                                                                      &spec,
-                                                                      false)))) {
-        LOG_WARN("fail to push back param expr", K(ret));
-      }
     }
   }
 
@@ -9425,7 +9385,14 @@ int ObStaticEngineCG::generate_spec(ObLogStatCollector &op,
   return ret;
 }
 
-int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysicalPlan &phy_plan)
+int ObStaticEngineCG::set_properties_pre(const ObLogPlan &log_plan, ObPhysicalPlan &phy_plan)
+{
+  int ret = OB_SUCCESS;
+  phy_plan.set_px_worker_share_plan_enabled(GCONF._px_worker_share_plan_enabled && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0);
+  return ret;
+}
+
+int ObStaticEngineCG::set_properties_post(const ObLogPlan &log_plan, ObPhysicalPlan &phy_plan)
 {
   int ret = OB_SUCCESS;
   // set params info for plan cache
@@ -9844,6 +9811,11 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
   if (OB_SUCC(ret)) {
     phy_plan_->calc_whether_need_trans();
   }
+
+  if (OB_SUCC(ret) && log_plan.get_optimizer_context().extend_sql_plan_monitor_metrics()) {
+    phy_plan_->set_extend_sql_plan_monitor_metrics();
+  }
+
   return ret;
 }
 
@@ -10819,73 +10791,6 @@ int ObStaticEngineCG::check_fk_nested_dup_upd(const ObIArray<uint64_t>& table_id
           } else if (OB_FAIL(SMART_CALL(check_fk_nested_dup_upd(table_ids, child_table_id, child_col_id, visited_columns, is_dup)))) {
             LOG_WARN("failed deep search nested duplicate update table", K(ret), K(table_ids), K(root_column_id), K(root_table_id), K(child_table_id));
           }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObStaticEngineCG::set_batch_exec_param(const ObIArray<ObExecParamRawExpr *> &exec_params,
-                                           const ObFixedArray<ObDynamicParamSetter, ObIAllocator>& setters)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(exec_params.count() != setters.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("nl params should have the same length with rescan params", K(ret));
-  }
-  ARRAY_FOREACH(exec_params, i) {
-    const ObExecParamRawExpr* param_expr = exec_params.at(i);
-    const ObDynamicParamSetter& setter = setters.at(i);
-    for (int64_t j = batch_exec_param_caches_.count() - 1; OB_SUCC(ret) && j >= 0; --j) {
-      const BatchExecParamCache &cache = batch_exec_param_caches_.at(j);
-      if (param_expr != cache.expr_) {
-      } else if (OB_ISNULL(cache.spec_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (cache.spec_->get_type() == PHY_SUBPLAN_FILTER) {
-        ObSubPlanFilterSpec *spf = static_cast<ObSubPlanFilterSpec*>(cache.spec_);
-        if (cache.is_left_param_ &&
-                    OB_FAIL(spf->left_rescan_params_.push_back(setter))) {
-          LOG_WARN("fail to push back left rescan params", K(ret));
-        } else if (!cache.is_left_param_ &&
-                    OB_FAIL(spf->right_rescan_params_.push_back(setter))) {
-          LOG_WARN("fail to push back right rescan params", K(ret));
-        } else if (OB_FAIL(batch_exec_param_caches_.remove(j))) {
-          LOG_WARN("fail to remove batch nl param caches", K(ret));
-        }
-      } else if (cache.spec_->get_type() == PHY_NESTED_LOOP_JOIN) {
-        ObNestedLoopJoinSpec *nlj = static_cast<ObNestedLoopJoinSpec*>(cache.spec_);
-        if (cache.is_left_param_ &&
-                    OB_FAIL(nlj->left_rescan_params_.push_back(setter))) {
-          LOG_WARN("fail to push back left rescan params", K(ret));
-        } else if (!cache.is_left_param_ &&
-                    OB_FAIL(nlj->right_rescan_params_.push_back(setter))) {
-          LOG_WARN("fail to push back right rescan params", K(ret));
-        } else if (OB_FAIL(batch_exec_param_caches_.remove(j))) {
-          LOG_WARN("fail to remove batch nl param caches", K(ret));
-        }
-      } else if (cache.spec_->get_type() == PHY_VEC_SUBPLAN_FILTER) {
-        ObSubPlanFilterVecSpec *spf = static_cast<ObSubPlanFilterVecSpec*>(cache.spec_);
-        if (cache.is_left_param_ &&
-                    OB_FAIL(spf->left_rescan_params_.push_back(setter))) {
-          LOG_WARN("fail to push back left rescan params", K(ret));
-        } else if (!cache.is_left_param_ &&
-                    OB_FAIL(spf->right_rescan_params_.push_back(setter))) {
-          LOG_WARN("fail to push back right rescan params", K(ret));
-        } else if (OB_FAIL(batch_exec_param_caches_.remove(j))) {
-          LOG_WARN("fail to remove batch nl param caches", K(ret));
-        }
-      } else if (cache.spec_->get_type() == PHY_VEC_NESTED_LOOP_JOIN) {
-        ObNestedLoopJoinVecSpec *nlj = static_cast<ObNestedLoopJoinVecSpec*>(cache.spec_);
-        if (cache.is_left_param_ &&
-                    OB_FAIL(nlj->left_rescan_params_.push_back(setter))) {
-          LOG_WARN("fail to push back left rescan params", K(ret));
-        } else if (!cache.is_left_param_ &&
-                    OB_FAIL(nlj->right_rescan_params_.push_back(setter))) {
-          LOG_WARN("fail to push back right rescan params", K(ret));
-        } else if (OB_FAIL(batch_exec_param_caches_.remove(j))) {
-          LOG_WARN("fail to remove batch nl param caches", K(ret));
         }
       }
     }

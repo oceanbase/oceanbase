@@ -14,6 +14,7 @@
 #include "ob_sql_plan_monitor_node_list.h"
 #include "lib/rc/ob_rc.h"
 #include "observer/ob_server.h"
+#include "share/diagnosis/ob_runtime_profile.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -24,7 +25,8 @@ ObPlanMonitorNodeList::ObPlanMonitorNodeList() :
   inited_(false),
   destroyed_(false),
   recycle_threshold_(0),
-  batch_release_(0)
+  batch_release_(0),
+  profile_recycle_threshold_(0)
 {
 }
 
@@ -67,6 +69,7 @@ int ObPlanMonitorNodeList::init(uint64_t tenant_id, const int64_t tenant_mem_siz
       rt_node_id_ = -1;
       recycle_threshold_ = queue_size * 0.9; // when reach 90% usage, begin to recycle
       batch_release_ = queue_size * 0.05; // recycle 5% nodes per round
+      profile_recycle_threshold_ = int64_t(tenant_mem_size * 0.02 * 0.8);
       tenant_id_ = tenant_id;
       inited_ = true;
       destroyed_ = false;
@@ -120,6 +123,15 @@ int ObPlanMonitorNodeList::submit_node(ObMonitorNode &node)
   } else {
     deep_cp_node = new(buf) ObMonitorNode(node);
     deep_cp_node->covert_to_static_node();
+    if (OB_NOT_NULL(node.profile_)) {
+      if (OB_FAIL(node.profile_->to_persist_profile(deep_cp_node->raw_profile_,
+                                                    deep_cp_node->raw_profile_len_, &allocator_))) {
+        LOG_WARN("failed to persist profile");
+        // overwrite ret by design
+        ret = OB_SUCCESS;
+      }
+      deep_cp_node->profile_ = nullptr;
+    }
     int64_t req_id = 0;
     if (OB_FAIL(queue_.push(deep_cp_node, req_id))) {
       //sql audit槽位已满时会push失败, 依赖后台线程进行淘汰获得可用槽位
@@ -159,11 +171,11 @@ int ObPlanMonitorNodeList::revert_monitor_node(ObMonitorNode &node)
   return ret;
 }
 
-
-int ObPlanMonitorNodeList::convert_node_map_2_array(common::ObIArray<ObMonitorNode> &array)
+int ObPlanMonitorNodeList::convert_node_map_2_array(common::ObIArray<ObMonitorNode> &array,
+                                                    common::ObIAllocator *alloc)
 {
   int ret = OB_SUCCESS;
-  ObPlanMonitorNodeList::ObMonitorNodeTraverseCall call(array);
+  ObPlanMonitorNodeList::ObMonitorNodeTraverseCall call(array, alloc);
   if (OB_FAIL(node_map_.foreach_refactored(call))) {
     LOG_WARN("fail to traverse node map", K(ret));
   }
@@ -206,7 +218,16 @@ int ObPlanMonitorNodeList::ObMonitorNodeTraverseCall::recursive_add_node_to_arra
     if (OB_FAIL(node_array_.push_back(node))) {
       LOG_WARN("fail to push back mointor node", K(ret));
     } else {
-      node_array_.at(node_array_.count() - 1).covert_to_static_node();
+      ObMonitorNode &last_node = node_array_.at(node_array_.count() - 1);
+      last_node.covert_to_static_node();
+      if (OB_NOT_NULL(last_node.profile_)
+          && OB_FAIL(last_node.profile_->to_persist_profile(last_node.raw_profile_,
+                                                            last_node.raw_profile_len_, alloc_))) {
+        LOG_WARN("failed to persist profile");
+        // overwrite ret by design
+        ret = OB_SUCCESS;
+      }
+      last_node.profile_ = nullptr;
     }
   }
   return ret;

@@ -229,6 +229,7 @@ struct ObOptParamHint
     DEF(ORC_FILTER_PUSHDOWN_LEVEL,)                 \
     DEF(ENABLE_INDEX_MERGE,)                        \
     DEF(ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY, )     \
+    DEF(EXTENDED_SQL_PLAN_MONITOR_METRICS, )        \
     DEF(APPROX_COUNT_DISTINCT_PRECISION,)           \
 
 

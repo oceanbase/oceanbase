@@ -261,6 +261,7 @@ syspack_config = [
     SysPackConfig(SysPackGroup.ORACLE, "utl_tcp", "utl_tcp.sql", "utl_tcp_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "utl_smtp", "utl_smtp.sql", "utl_smtp_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_partition", "dbms_partition.sql", "dbms_partition_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
+    SysPackConfig(SysPackGroup.ORACLE, "dbms_xprofile", "dbms_xprofile.sql", "dbms_xprofile_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_balance", "dbms_balance.sql", "dbms_balance_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_data_dict", "dbms_data_dict.sql", "dbms_data_dict_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     # MySQL
@@ -285,6 +286,7 @@ syspack_config = [
     SysPackConfig(SysPackGroup.MYSQL, "dbms_space", "dbms_space_mysql.sql", "dbms_space_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_partition", "dbms_partition_mysql.sql", "dbms_partition_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_java", "dbms_java_mysql.sql", "dbms_java_body_mysql.sql"),
+    SysPackConfig(SysPackGroup.MYSQL, "dbms_xprofile", "dbms_xprofile_mysql.sql", "dbms_xprofile_mysql_body.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_balance", "dbms_balance_mysql.sql", "dbms_balance_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_data_dict", "dbms_data_dict_mysql.sql", "dbms_data_dict_body_mysql.sql"),
     # Oracle Special

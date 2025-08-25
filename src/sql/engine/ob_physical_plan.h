@@ -591,6 +591,9 @@ public:
   void update_adaptive_pc_info(const ObAuditRecordData &record, const AdaptivePCConf *adpt_pc_conf);
   void set_extend_sql_plan_monitor_metrics() { extend_sql_plan_monitor_metrics_ = true; }
   bool extend_sql_plan_monitor_metrics() const { return extend_sql_plan_monitor_metrics_; }
+  bool px_worker_share_plan_enabled() const { return px_worker_share_plan_enabled_; }
+  void set_px_worker_share_plan_enabled(bool v) { px_worker_share_plan_enabled_ = v; }
+
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:

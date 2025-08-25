@@ -471,7 +471,7 @@ public:
   int fill_px_batch_info(
       ObBatchRescanParams &params,
       int64_t batch_id,
-      sql::ObExpr::ObExprIArray &array);
+      const sql::ObExpr::ObExprIArray &array);
   int64_t get_px_batch_id() { return px_batch_id_; }
 
   ObDmlEventType get_dml_event() const { return dml_event_; }

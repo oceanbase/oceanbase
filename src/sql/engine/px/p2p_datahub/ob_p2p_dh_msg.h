@@ -69,6 +69,24 @@ static int transform_vec_p2p_msg_type(const ObP2PDatahubMsgType &in_type, ObP2PD
   return ret;
 }
 
+static inline bool is_bloom_filter(ObP2PDatahubMsgType msg_type)
+{
+  return msg_type == ObP2PDatahubMsgBase::BLOOM_FILTER_MSG
+         || msg_type == ObP2PDatahubMsgBase::BLOOM_FILTER_VEC_MSG;
+}
+
+static inline bool is_range_filter(ObP2PDatahubMsgType msg_type)
+{
+  return msg_type == ObP2PDatahubMsgBase::RANGE_FILTER_MSG
+         || msg_type == ObP2PDatahubMsgBase::RANGE_FILTER_VEC_MSG;
+}
+
+static inline bool is_in_filter(ObP2PDatahubMsgType msg_type)
+{
+  return msg_type == ObP2PDatahubMsgBase::IN_FILTER_MSG
+         || msg_type == ObP2PDatahubMsgBase::IN_FILTER_VEC_MSG;
+}
+
 public:
   ObP2PDatahubMsgBase() : trace_id_(), p2p_datahub_id_(OB_INVALID_ID),
       px_sequence_id_(OB_INVALID_ID), task_id_(OB_INVALID_ID),

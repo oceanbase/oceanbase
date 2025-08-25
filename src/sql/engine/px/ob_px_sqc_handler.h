@@ -132,6 +132,8 @@ public:
   const Ob2DArray<ObPxTabletRange> &get_partition_ranges() const { return part_ranges_; }
   int set_partition_ranges(const Ob2DArray<ObPxTabletRange> &part_ranges,
                            char *buf = NULL, int64_t max_size = 0);
+  int prepare_tablets_info();
+
   TO_STRING_KV(K_(tenant_id), K_(reserved_px_thread_count), KP_(notifier),
       K_(exec_ctx), K_(des_phy_plan), K_(sqc_init_args), KP_(sub_coord), K_(rpc_level));
 

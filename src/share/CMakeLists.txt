@@ -310,6 +310,10 @@ ob_set_subtarget(ob_share common_mixed
   datum/ob_datum.cpp
   datum/ob_datum_cmp_func_def.cpp
   diagnosis/ob_sql_monitor_statname.cpp
+  diagnosis/ob_profile_name_def.cpp
+  diagnosis/ob_profile_util.cpp
+  diagnosis/ob_runtime_metrics.cpp
+  diagnosis/ob_runtime_profile.cpp
   diagnosis/ob_sql_plan_monitor_node_list.cpp
   interrupt/ob_global_interrupt_call.cpp
   interrupt/ob_interrupt_rpc_proxy.cpp

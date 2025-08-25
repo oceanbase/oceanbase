@@ -84,6 +84,7 @@
 #include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
 #include "pl/sys_package/ob_dbms_partition.h"
 #include "pl/sys_package/ob_dbms_java.h"
+#include "pl/sys_package/ob_dbms_xprofile.h"
 #include "pl/sys_package/ob_dbms_data_dict.h"
 
 #ifdef INTERFACE_DEF
@@ -380,6 +381,10 @@
   INTERFACE_DEF(INTERFACE_DBMS_XPLAN_DISPLAY_SQL_PLAN_BASELINE, "DISPLAY_SQL_PLAN_BASELINE", (ObDbmsXplan::display_sql_plan_baseline))
   INTERFACE_DEF(INTERFACE_DBMS_XPLAN_DISPLAY_ACTIVE_SESSION_PLAN, "DISPLAY_ACTIVE_SESSION_PLAN", (ObDbmsXplan::display_active_session_plan))
   //end of dbms xplan
+
+  //start of dbms xprofile
+  INTERFACE_DEF(INTERFACE_DBMS_XPROFILE_DISPLAY_PROFILE, "DISPLAY_PROFILE", (ObDbmsXprofile::display_profile))
+  //end of dbms xprofile
 
 #ifdef OB_BUILD_ORACLE_PL
 

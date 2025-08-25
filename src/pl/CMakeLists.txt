@@ -58,6 +58,7 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_upgrade.cpp
   sys_package/ob_dbms_sql.cpp
   sys_package/ob_dbms_xplan.cpp
+  sys_package/ob_dbms_xprofile.cpp
   sys_package/ob_dbms_user_define_rule.cpp
   sys_package/ob_dbms_space.cpp
   sys_package/ob_dbms_mview_mysql.cpp

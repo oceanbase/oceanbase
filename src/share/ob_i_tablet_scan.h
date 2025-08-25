@@ -24,7 +24,6 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "storage/tx/ob_trans_define.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
-#include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
 namespace oceanbase
 {
 namespace share

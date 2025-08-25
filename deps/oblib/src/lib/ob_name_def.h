@@ -1276,5 +1276,6 @@
 #define N_INNER_INFO_COLS_COLUMN_KEY_PRINTER "inner_info_cols_column_key_printer"
 #define N_STARTUP_MODE                       "startup_mode"
 #define N_HIDDEN_CLUSTERING_KEY_COLUMN       "hidden_clustering_key_column"
+#define N_FORMAT_PROFILE                       "format_profile"
 #define N_BUCKET "bucket"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

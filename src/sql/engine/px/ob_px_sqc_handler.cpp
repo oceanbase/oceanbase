@@ -504,5 +504,17 @@ int ObPxSqcHandler::set_partition_ranges(const Ob2DArray<ObPxTabletRange> &part_
   return ret;
 }
 
+int ObPxSqcHandler::prepare_tablets_info()
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObPxTabletInfo> &px_tablets_info = sqc_init_args_->sqc_.get_px_tablets_info();
+  if (OB_FAIL(sub_coord_->set_tablets_info(px_tablets_info))) {
+    LOG_WARN("Failed to set partitions info");
+  }
+  LOG_TRACE("[Dop Assign]sqc handler get all partition rows info",
+            K(sqc_init_args_->sqc_.get_dfo_id()), K(px_tablets_info.count()), K(px_tablets_info));
+  return ret;
+}
+
 } // sql
 } // oceanbase

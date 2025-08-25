@@ -34,23 +34,33 @@ namespace sql
 {
 
 typedef obrpc::ObRpcResultCode ObPxUserErrorMsg;
+struct ObDASTabletLoc;
 
 struct ObPxTabletInfo
 {
   OB_UNIS_VERSION(1);
 public:
-  ObPxTabletInfo() : tablet_id_(), estimated_row_count_(0), physical_row_count_(0) {}
+  ObPxTabletInfo()
+      : tablet_id_(), estimated_row_count_(0), tablet_idx_(-1), tablet_loc_(nullptr)
+  {}
   virtual ~ObPxTabletInfo() = default;
-  void assign(const ObPxTabletInfo &partition_info) {
-    tablet_id_ = partition_info.tablet_id_;
-    estimated_row_count_ = partition_info.estimated_row_count_;
-    physical_row_count_ = partition_info.physical_row_count_;
+  void assign(const ObPxTabletInfo &tablet_info) {
+    tablet_id_ = tablet_info.tablet_id_;
+    estimated_row_count_ = tablet_info.estimated_row_count_;
+    tablet_idx_ = tablet_info.tablet_idx_;
+    tablet_loc_ = tablet_info.tablet_loc_;
   }
-  TO_STRING_KV(K_(tablet_id), K_(estimated_row_count), K_(physical_row_count));
+  static bool cmp_by_tablet_idx(ObPxTabletInfo &a, ObPxTabletInfo &b) {
+    return a.tablet_idx_ < b.tablet_idx_;
+  }
+  TO_STRING_KV(K_(tablet_id), K_(estimated_row_count), K_(tablet_idx));
   int64_t tablet_id_;
   int64_t estimated_row_count_;
-  int64_t physical_row_count_;
+  int64_t physical_row_count_; // no used, only for compat
+  int64_t tablet_idx_; //only used in qc, not need to serialize
+  ObDASTabletLoc *tablet_loc_; //only used in qc, not need to serialize
 };
+
 struct ObPxDmlRowInfo
 {
   OB_UNIS_VERSION(1);
@@ -366,7 +376,6 @@ public:
   void reset()
   {
     err_msg_.reset();
-    tablets_info_.reset();
   }
   TO_STRING_KV(K_(dfo_id), K_(sqc_id), K_(rc), K_(task_count));
 public:
@@ -375,8 +384,6 @@ public:
   int rc_; // 错误码
   int64_t task_count_;
   ObPxUserErrorMsg err_msg_; // for error msg & warning msg
-  // No need to serialize
-  ObSEArray<ObPxTabletInfo, 8> tablets_info_;
   bool sqc_order_gi_tasks_;
 };
 

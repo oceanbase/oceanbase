@@ -742,7 +742,7 @@ public:
   void switch_msg_type(const ObDtlMsg &msg);
   void set_row_meta(RowMeta &meta) { meta_ = &meta; }
 
-  TO_STRING_KV(KP_(id), K_(peer));
+  TO_STRING_KV(KP_(id), K_(peer), K_(peer_id));
 protected:
   int push_back_send_list();
   int wait_unblocking();

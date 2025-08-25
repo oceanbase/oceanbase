@@ -70,7 +70,7 @@ public :
       sharing_iter_end_(false),
       pruning_status_(READY_PRUNING),
       pruning_ret_(OB_SUCCESS),
-      partitions_info_(), parallelism_(0),
+      px_tablets_info_(), parallelism_(0),
       tablet_size_(0), gi_attri_flag_(0),
       lucky_one_(true),
       query_range_by_runtime_filter_(),
@@ -79,7 +79,7 @@ public :
       pump_version_(0) {}
   virtual ~ObGranulePumpArgs() { reset(); };
 
-  TO_STRING_KV(K(partitions_info_),
+  TO_STRING_KV(K(px_tablets_info_),
                K(parallelism_),
                K(tablet_size_),
                K(gi_attri_flag_),
@@ -112,7 +112,7 @@ public :
   PruningStatus pruning_status_;
   int pruning_ret_;
   //-----end
-  common::ObArray<ObPxTabletInfo> partitions_info_;
+  common::ObArray<ObPxTabletInfo> px_tablets_info_;
   common::ObArray<share::ObExternalFileInfo> external_table_files_;
   int64_t parallelism_;
   int64_t tablet_size_;
@@ -246,7 +246,7 @@ protected :
                     ObGITaskSet::ObGIRandomType random_type);
 
 public :
-  ObSEArray<ObPxTabletInfo, 8> partitions_info_;
+  ObSEArray<ObPxTabletInfo, 8> px_tablets_info_;
 };
 
 class ObRandomGranuleSplitter : public ObGranuleSplitter
@@ -391,7 +391,7 @@ public:
   int init_pump_args_inner(ObExecContext *ctx,
                            ObIArray<const ObTableScanSpec*> &scan_ops,
                            const common::ObIArray<DASTabletLocArray> &tablet_arrays,
-                           common::ObIArray<ObPxTabletInfo> &partitions_info,
+                           common::ObIArray<ObPxTabletInfo> &tablets_info,
                            common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                            const ObTableModifySpec* modify_op,
                            int64_t parallelism,
@@ -403,7 +403,7 @@ public:
    int init_pump_args(ObExecContext *ctx,
                       ObIArray<const ObTableScanSpec*> &scan_ops,
                       const common::ObIArray<DASTabletLocArray> &tablet_arrays,
-                      common::ObIArray<ObPxTabletInfo> &partitions_info,
+                      common::ObIArray<ObPxTabletInfo> &tablets_info,
                       common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                       const ObTableModifySpec* modify_op,
                       int64_t parallelism,
@@ -507,7 +507,7 @@ private:
                ObExecContext *ctx,
                ObIArray<const ObTableScanSpec*> &scan_ops,
                const common::ObIArray<DASTabletLocArray> &tablet_arrays,
-               common::ObIArray<ObPxTabletInfo> &partitions_info,
+               common::ObIArray<ObPxTabletInfo> &tablets_info,
                const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                const ObTableModifySpec* modify_op,
                int64_t parallelism,

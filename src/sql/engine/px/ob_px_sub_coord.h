@@ -59,8 +59,8 @@ public:
   ObPxSQCProxy &get_sqc_proxy() { return sqc_ctx_.sqc_proxy_; }
   ObSqcCtx &get_sqc_ctx() { return sqc_ctx_; }
   const ObDDLCtrl &get_ddl_control() { return ddl_ctrl_; }
-  int set_partitions_info(ObIArray<ObPxTabletInfo> &partitions_info) {
-    return sqc_ctx_.partitions_info_.assign(partitions_info);
+  int set_tablets_info(ObIArray<ObPxTabletInfo> &tablets_info) {
+    return sqc_ctx_.px_tablets_info_.assign(tablets_info);
   }
   int report_sqc_finish(int end_ret) {
     return sqc_ctx_.sqc_proxy_.report(end_ret);

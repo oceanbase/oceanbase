@@ -37,6 +37,8 @@ enum ObBcastOptimization {
   BC_TO_SERVER,
 };
 
+typedef common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> ObTabletIdxMap;
+
 // 监听各类事件，如 root dfo 调度事件，etc
 class ObIPxCoordEventListener
 {
@@ -116,6 +118,34 @@ class ObPxEstimateSizeUtil
 public:
   static int get_px_size(ObExecContext *exec_ctx, const PxOpSizeFactor factor,
     const int64_t total_size, int64_t &ret_size);
+
+  static int get_statistic_of_dfo_tables(int64_t parallel, ObExecContext &ctx, ObDfo &dfo,
+                                         const ObIArray<ObAddr> &addrs,
+                                         const ObIArray<const ObTableScanSpec *> &scan_ops,
+                                         ObIArray<ObPxTabletInfo> &px_tablets_info,
+                                         bool &is_opt_stat_valid,
+                                         bool &send_px_tablets_info_to_sqc);
+
+  static int get_affinity_gi_ops(const ObOpSpec *root, bool &has_affinity_gi,
+                                 bool &has_pw_affinity_gi);
+  static int
+  prepare_px_tablets_info(ObExecContext &ctx, ObSchemaGetterGuard &schema_guard,
+                          const ObTableScanSpec *scan_op, const DASTabletLocList &locations,
+                          ObIArray<ObPxTabletInfo> &px_tablets_info, bool &is_opt_stat_valid);
+
+  static int fill_px_tablets_info_with_stat(ObExecContext &ctx, const ObTableScanSpec *scan_op,
+                                            const DASTabletLocList &locations,
+                                            const ObTabletIdxMap &idx_map,
+                                            ObIArray<ObPxTabletInfo> &px_tablets_info,
+                                            bool &is_opt_stat_valid);
+
+  static int scale_partition_row_count_with_column_stat(int64_t tenant_id, ObExecContext &ctx,
+                                                        const ObTableScanSpec *scan_op,
+                                                        const DASTabletLocList &locations,
+                                                        int64_t ref_table_id,
+                                                        ObIArray<ObPxTabletInfo> &px_tablets_info,
+                                                        int64_t tablets_info_offset);
+
 };
 
 class ObSlaveMapItem
@@ -143,7 +173,6 @@ public:
 };
 
 
-typedef common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> ObTabletIdxMap;
 typedef common::hash::ObHashSet<ObAddr, common::hash::NoPthreadDefendMode> ObAddrSet;
 typedef common::hash::ObHashSet<ObZone, common::hash::NoPthreadDefendMode> ObZoneSet;
 
@@ -267,7 +296,8 @@ private:
 
   static int build_dfo_sqc(ObExecContext &ctx,
                            const DASTabletLocList &locations,
-                           ObDfo &dfo);
+                           ObDfo &dfo,
+                           const ObIArray<const ObTableScanSpec *> &scan_ops);
 
   /**
    * Calculate the partition information of all tables involved in the current DFO,
@@ -330,7 +360,7 @@ private:
   static int assign_external_files_to_sqc(ObDfo &dfo,
                                           ObExecContext &exec_ctx,
                                           bool is_file_on_disk,
-                                          common::ObIArray<ObPxSqcMeta *> &sqcs,
+                                          common::ObIArray<ObPxSqcMeta> &sqcs,
                                           int64_t parallel);
 private:
   static int generate_dh_map_info(ObDfo &dfo);
@@ -344,12 +374,12 @@ public:
   class ApplyFunc
   {
   public:
-    virtual int apply(ObExecContext &ctx, ObOpSpec &input) = 0;
+    virtual int apply(ObExecContext &ctx, const ObOpSpec &input) = 0;
     //TODO. For compatibilty now, to be remove on 4.2
-    virtual int reset(ObOpSpec &input) = 0;
+    virtual int reset(const ObOpSpec &input) = 0;
   };
 public:
-  static int visit(ObExecContext &ctx, ObOpSpec &root, ApplyFunc &func);
+  static int visit(ObExecContext &ctx, const ObOpSpec &root, ApplyFunc &func);
 };
 
 
@@ -377,7 +407,7 @@ public:
   static int serialize_tree(char *buf,
                             int64_t buf_len,
                             int64_t &pos,
-                            ObOpSpec &root,
+                            const ObOpSpec &root,
                             bool is_fulltree,
                             const common::ObAddr &run_svr,
                             ObPhyOpSeriCtx *seri_ctx = NULL);
@@ -400,7 +430,7 @@ public:
   static int serialize_sub_plan(char *buf,
                                 int64_t buf_len,
                                 int64_t &pos,
-                                ObOpSpec &root);
+                                const ObOpSpec &root);
   static int deserialize_sub_plan(const char *buf,
                                   int64_t data_len,
                                   int64_t &pos,
@@ -409,9 +439,8 @@ public:
   static int serialize_op_input(char *buf,
                                 int64_t buf_len,
                                 int64_t &pos,
-                                ObOpSpec &op_spec,
-                                ObOpKitStore &op_kit_store,
-                                bool is_fulltree);
+                                const ObOpSpec &op_spec,
+                                ObOpKitStore &op_kit_store);
   static int deserialize_op_input(const char *buf,
                                   int64_t buf_len,
                                   int64_t &pos,
@@ -420,7 +449,7 @@ public:
                               char *buf,
                               int64_t buf_len,
                               int64_t &pos,
-                              ObOpSpec &op_spec,
+                              const ObOpSpec &op_spec,
                               ObOpKitStore &op_kit_store,
                               bool is_fulltree,
                               int32_t &real_input_count);
@@ -428,33 +457,34 @@ public:
                               char *buf,
                               int64_t buf_len,
                               int64_t &pos,
-                              ObOpSpec &op_spec,
+                              const ObOpSpec &op_spec,
                               ObOpKitStore &op_kit_store,
                               bool is_fulltree,
                               int32_t &real_input_count);
   static int64_t get_serialize_op_input_size(
-                              ObOpSpec &op_spec,
-                              ObOpKitStore &op_kit_store,
-                              bool is_fulltree);
+                              const ObOpSpec &op_spec,
+                              ObOpKitStore &op_kit_store);
   static int64_t get_serialize_op_input_subplan_size(
-                              ObOpSpec &op_spec,
+                              const ObOpSpec &op_spec,
                               ObOpKitStore &op_kit_store,
                               bool is_fulltree);
   static int64_t get_serialize_op_input_tree_size(
-                              ObOpSpec &op_spec,
+                              const ObOpSpec &op_spec,
                               ObOpKitStore &op_kit_store,
                               bool is_fulltree);
 
-  static int64_t get_sub_plan_serialize_size(ObOpSpec &root);
+  static int64_t get_sub_plan_serialize_size(const ObOpSpec &root);
 
-  static int64_t get_tree_serialize_size(ObOpSpec &root, bool is_fulltree,
+  static int64_t get_tree_serialize_size(const ObOpSpec &root, bool is_fulltree,
       ObPhyOpSeriCtx *seri_ctx = NULL);
 
+  template <bool SERIALIZE_PLAN_PART>
   static int serialize_expr_frame_info(char *buf,
                                        int64_t buf_len,
                                        int64_t &pos,
                                        ObExecContext &ctx,
-                                       ObExprFrameInfo &expr_frame_info);
+                                       const ObExprFrameInfo &expr_frame_info);
+  template <bool SERIALIZE_PLAN_PART>
   static int serialize_frame_info(char *buf,
                                        int64_t buf_len,
                                        int64_t &pos,
@@ -462,28 +492,32 @@ public:
                                        char **frames,
                                        const int64_t frame_cnt,
                                        bool no_ser_data = false);
-  static int deserialize_frame_info(const char *buf,
-                                      int64_t buf_len,
-                                      int64_t &pos,
-                                      ObIAllocator &allocator,
-                                      ObIArray<ObFrameInfo> &all_frame,
-                                      ObIArray<char *> *char_ptrs_,
-                                      char **&frames,
-                                      int64_t &frame_cnt,
-                                      bool no_deser_data = false);
+  template <bool DESERIALIZE_PLAN_PART>
   static int deserialize_expr_frame_info(const char *buf,
                                        int64_t buf_len,
                                        int64_t &pos,
                                        ObExecContext &ctx,
-                                       ObExprFrameInfo &expr_frame_info);
+                                       const ObExprFrameInfo &expr_frame_info);
+  template <bool DESERIALIZE_PLAN_PART>
+  static int deserialize_frame_info(const char *buf,
+                                      int64_t buf_len,
+                                      int64_t &pos,
+                                      ObIAllocator &allocator,
+                                      const ObIArray<ObFrameInfo> &all_frame,
+                                      ObIArray<char *> *char_ptrs_,
+                                      char **&frames,
+                                      int64_t &frame_cnt,
+                                      bool no_deser_data = false);
+  template <bool SERIALIZE_PLAN_PART>
+  static int64_t get_serialize_expr_frame_info_size(
+                                      ObExecContext &ctx,
+                                      const ObExprFrameInfo &expr_frame_info);
+  template <bool SERIALIZE_PLAN_PART>
   static int64_t get_serialize_frame_info_size(
                                        const ObIArray<ObFrameInfo> &all_frame,
                                        char **frames,
                                        const int64_t frame_cnt,
                                        bool no_ser_data = false);
-  static int64_t get_serialize_expr_frame_info_size(
-                                      ObExecContext &ctx,
-                                      ObExprFrameInfo &expr_frame_info);
 };
 
 class ObPxChannelUtil
@@ -503,7 +537,7 @@ public:
   // asyn wait
   static int dtl_channles_asyn_wait(
             common::ObIArray<dtl::ObDtlChannel*> &channels, bool ignore_error = false);
-  static int sqcs_channles_asyn_wait(common::ObIArray<sql::ObPxSqcMeta *> &sqcs);
+  static int sqcs_channles_asyn_wait(common::ObIArray<sql::ObPxSqcMeta> &sqcs);
 };
 
 class ObPxAffinityByRandom
@@ -511,12 +545,28 @@ class ObPxAffinityByRandom
 public:
   struct TabletHashValue
   {
+    static bool asc_order_cmp(TabletHashValue &a, TabletHashValue &b)
+    {
+      return a.tablet_idx_ < b.tablet_idx_;
+    }
+    static bool desc_order_cmp(TabletHashValue &a, TabletHashValue &b)
+    {
+      return a.tablet_idx_ > b.tablet_idx_;
+    }
+    static bool cmp_by_hash_value(TabletHashValue &a, TabletHashValue &b)
+    {
+      return a.hash_value_ > b.hash_value_;
+    }
+    static bool cmp_by_row_count(TabletHashValue &a, TabletHashValue &b)
+    {
+      return a.tablet_info_.estimated_row_count_ > b.tablet_info_.estimated_row_count_;
+    }
     int64_t tablet_id_;
     int64_t tablet_idx_;
     uint64_t hash_value_;
     int64_t worker_id_;
-    ObPxTabletInfo partition_info_;
-    TO_STRING_KV(K_(tablet_id), K_(tablet_idx), K_(hash_value), K_(worker_id), K_(partition_info));
+    ObPxTabletInfo tablet_info_;
+    TO_STRING_KV(K_(tablet_id), K_(tablet_idx), K_(hash_value), K_(worker_id), K_(tablet_info));
   };
 public:
   ObPxAffinityByRandom(bool order_partitions, bool partition_random_affinitize)
@@ -529,10 +579,10 @@ public:
       int64_t tablet_idx,
       int64_t worker_cnt,
       uint64_t tenant_id,
-      ObPxTabletInfo &partition_row_info);
+      ObPxTabletInfo &tablet_row_info);
   int do_random(bool use_partition_info, uint64_t tenant_id);
   const ObIArray<TabletHashValue> &get_result() { return tablet_hash_values_; }
-  static int get_tablet_info(int64_t tablet_id, ObIArray<ObPxTabletInfo> &partitions_info, ObPxTabletInfo &partition_info);
+  static int get_tablet_info(int64_t tablet_id, ObIArray<ObPxTabletInfo> &tablets_info, ObPxTabletInfo &partition_info);
 private:
   int64_t worker_cnt_;
   ObSEArray<TabletHashValue, 8> tablet_hash_values_;
@@ -588,14 +638,14 @@ private:
 
   // for child with ObPQDistributeMethod::Type::PARTITION_HASH or PARTITION_RANGE
   static int build_pkey_affinitized_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
-  static int build_affinitized_partition_map_by_sqcs(common::ObIArray<ObPxSqcMeta *> &sqcs,
+  static int build_affinitized_partition_map_by_sqcs(common::ObIArray<ObPxSqcMeta> &sqcs,
                                                      ObDfo &child,
                                                      ObIArray<int64_t> &prefix_task_counts,
                                                      int64_t total_task_count,
                                                      ObPxPartChMapArray &map);
 
 private:
-  static int build_partition_map_by_sqcs(common::ObIArray<ObPxSqcMeta *> &sqcs,
+  static int build_partition_map_by_sqcs(common::ObIArray<ObPxSqcMeta> &sqcs,
                                          ObDfo &child,
                                          common::ObIArray<int64_t> &prefix_task_counts,
                                          ObPxPartChMapArray &map);

@@ -112,7 +112,8 @@ ObPxTransmitSpec::ObPxTransmitSpec(ObIAllocator &alloc, const ObPhyOperatorType 
       repartition_table_id_(0),
       wf_hybrid_aggr_status_expr_(NULL),
       wf_hybrid_pby_exprs_cnt_array_(alloc),
-      ddl_slice_id_expr_(NULL)
+      ddl_slice_id_expr_(NULL),
+      dfo_expr_frame_info_(NULL)
 {
 }
 

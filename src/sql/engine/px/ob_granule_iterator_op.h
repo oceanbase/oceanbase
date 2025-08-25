@@ -113,10 +113,8 @@ public:
     access_all_ = ObGranuleUtil::access_all(gi_attri_flag_);
     nlj_with_param_down_ = ObGranuleUtil::with_param_down(gi_attri_flag_);
   }
-  uint64_t get_gi_flags() { return gi_attri_flag_; }
-  // pw_op_tscs_和pw_dml_tsc_ids_作用是相同的，前者在调度sqc时生成，后者是4.1新增的cg时生成的，为了兼容性，
-  // 目前同时保留了这两个结构，4.2上可以直接删除pw_op_tscs_和所有引用到的地方
-  inline bool full_partition_wise() const { return partition_wise_join_ && (!affinitize_ || pw_op_tscs_.count() > 1 || pw_dml_tsc_ids_.count() > 1); }
+  uint64_t get_gi_flags() const { return gi_attri_flag_; }
+  inline bool full_partition_wise() const { return partition_wise_join_ && (!affinitize_ || pw_dml_tsc_ids_.count() > 1); }
 public:
   uint64_t index_table_id_;
   int64_t tablet_size_;
@@ -129,8 +127,6 @@ public:
   bool access_all_;
   // 是否是含有条件下降的nlj。
   bool nlj_with_param_down_;
-  // for compatibility now, to be removed on 4.2
-  common::ObFixedArray<const ObTableScanSpec*, ObIAllocator> pw_op_tscs_;
   common::ObFixedArray<int64_t, ObIAllocator> pw_dml_tsc_ids_;
   // 目前GI的所有属性都设置进了flag里面，使用的时候也尽量使用flag，而不是上面的
   // 几个单独的变量。目前来说因为兼容性的原因，无法删除上面的几个变量了，新加的
@@ -196,12 +192,11 @@ public:
 
   void reset();
   void reuse();
-  int set_tscs(common::ObIArray<const ObTableScanSpec*> &tscs);
-  int set_dml_op(const ObTableModifySpec *dml_op);
 
   virtual OperatorOpenOrder get_operator_open_order() const override
   { return OPEN_SELF_FIRST; }
   int get_next_granule_task(bool prepare = false, bool round_robin = false);
+  const common::ObIArray<int64_t> &get_pw_dml_tsc_ids() const { return MY_SPEC.pw_dml_tsc_ids_; }
 private:
   int parameters_init();
   // 非full partition wise获得task的方式

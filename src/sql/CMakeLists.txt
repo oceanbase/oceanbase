@@ -904,6 +904,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_tmp_file_write.cpp
   engine/expr/ob_expr_tmp_file_read.cpp
   engine/expr/ob_expr_local_dynamic_filter.cpp
+  engine/expr/ob_expr_format_profile.cpp
 )
 
 ob_set_subtarget(ob_sql_extra ALONE

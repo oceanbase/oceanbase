@@ -1619,6 +1619,7 @@ OTHER_XML	varchar(255)	NO
 PLAN_OPERATION_INACTIVE	bigint(0) unsigned	NO			
 OUTPUT_BATCHES	bigint(20)	NO		NULL	
 SKIPPED_ROWS_COUNT	bigint(20)	NO		NULL	
+PROFILE	varchar(65535)	NO		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$SQL_PLAN_MONITOR|%') then 2
@@ -1717,6 +1718,7 @@ OTHER_XML	varchar(255)	NO
 PLAN_OPERATION_INACTIVE	bigint(0) unsigned	NO			
 OUTPUT_BATCHES	bigint(20)	NO			
 SKIPPED_ROWS_COUNT	bigint(20)	NO			
+PROFILE	varchar(65535)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$SQL_PLAN_MONITOR|%') then 2

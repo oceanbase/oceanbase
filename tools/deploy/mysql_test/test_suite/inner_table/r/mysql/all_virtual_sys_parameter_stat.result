@@ -597,6 +597,7 @@ _px_max_pipeline_depth
 _px_message_compression
 _px_object_sampling
 _px_task_rebalance_trigger_time
+_px_worker_share_plan_enabled
 _query_record_size_limit
 _rebuild_replica_log_lag_threshold
 _recyclebin_object_purge_frequency

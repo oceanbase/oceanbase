@@ -367,7 +367,7 @@ public:
     }
   public:
     // 原StmtSavedValue的属性
-    ObPhysicalPlan *cur_phy_plan_;
+    const ObPhysicalPlan *cur_phy_plan_;
     volatile int64_t cur_query_len_;
 //  int64_t cur_query_start_time_;          // 用于计算事务超时时间，如果在base_save_session接口中操作
                                             // 会导致start_trans报事务超时失败，不放在基类中。
@@ -1095,7 +1095,7 @@ public:
   void get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const;
   void set_cur_sql_id(char *sql_id);
   void reset_cur_sql_id() { sql_id_[0] = '\0'; }
-  int set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan);
+  int set_cur_phy_plan(const ObPhysicalPlan *cur_phy_plan);
   virtual void set_ash_stat_value(ObActiveSessionStat &ash_stat);
   void reset_cur_phy_plan_to_null();
 
@@ -2480,7 +2480,7 @@ private:
   //===============================================================
 
   // 生命周期不保证，谨慎使用该指针
-  ObPhysicalPlan *cur_phy_plan_;
+  const ObPhysicalPlan *cur_phy_plan_;
   // sql_id of cur_phy_plan_ sql
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   uint64_t plan_id_; // for ASH sampling, get current SQL's sql_id & plan_id

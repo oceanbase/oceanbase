@@ -11,6 +11,7 @@
  */
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/ob_exec_feedback_info.h"
+#include "share/ob_define.h"
 
 
 using namespace oceanbase::common;

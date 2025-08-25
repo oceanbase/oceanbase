@@ -26,6 +26,14 @@
 
 namespace oceanbase
 {
+namespace common
+{
+template<typename MetricType>
+class ObOpProfile;
+struct ObMetric;
+typedef ObOpProfile<ObMetric> ObProfile;
+}
+
 namespace sql
 {
 class ObOperator;
@@ -70,7 +78,6 @@ public:
       output_row_count_(0),
       db_time_(0),
       block_time_(0),
-      disk_read_count_(0),
       otherstat_1_value_(0),
       otherstat_2_value_(0),
       otherstat_3_value_(0),
@@ -155,7 +162,6 @@ public:
   int64_t output_row_count_;
   uint64_t db_time_; // rdtsc cpu cycles spend on this op, include cpu instructions & io
   uint64_t block_time_; // rdtsc cpu cycles wait for network, io etc
-  int64_t disk_read_count_;
   // 各个算子特有的信息
   int64_t otherstat_1_value_;
   int64_t otherstat_2_value_;
@@ -184,6 +190,9 @@ public:
   int64_t workarea_max_tempseg_;
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
   uint64_t plan_hash_value_;
+  ObProfile *profile_{nullptr};
+  const char *raw_profile_{nullptr};
+  int64_t raw_profile_len_{0};
 };
 
 
@@ -223,13 +232,16 @@ public:
   class ObMonitorNodeTraverseCall
   {
   public:
-    ObMonitorNodeTraverseCall(common::ObIArray<ObMonitorNode> &node_array) :
-        node_array_(node_array), ret_(OB_SUCCESS) {}
+    ObMonitorNodeTraverseCall(common::ObIArray<ObMonitorNode> &node_array,
+                              common::ObIAllocator *alloc)
+        : node_array_(node_array), ret_(OB_SUCCESS), alloc_(alloc)
+    {}
     int operator() (common::hash::HashMapPair<ObMonitorNodeKey,
         ObMonitorNode *> &entry);
     int recursive_add_node_to_array(ObMonitorNode &node);
     common::ObIArray<ObMonitorNode> &node_array_;
     int ret_;
+    common::ObIAllocator *alloc_;
   };
 public:
   typedef hash::ObHashMap<ObMonitorNodeKey, ObMonitorNode *,
@@ -273,7 +285,7 @@ public:
   int64_t get_recycle_count()
   {
     int64_t cnt = 0;
-    if (get_size_used() > recycle_threshold_) {
+    if (get_size_used() > recycle_threshold_ || allocator_.allocated() > profile_recycle_threshold_) {
       cnt = batch_release_;
     }
     return cnt;
@@ -289,12 +301,16 @@ public:
   }
   void free_mem(void *ptr)
   {
+    char *raw_profile = const_cast<char *>(static_cast<ObMonitorNode *>(ptr)->raw_profile_);
+    if (raw_profile) {
+      allocator_.free(raw_profile);
+    }
     allocator_.free(ptr);
     ptr = NULL;
   }
   int register_monitor_node(ObMonitorNode &node);
   int revert_monitor_node(ObMonitorNode &node);
-  int convert_node_map_2_array(common::ObIArray<ObMonitorNode> &array);
+  int convert_node_map_2_array(common::ObIArray<ObMonitorNode> &array, common::ObIAllocator *alloc);
 private:
   int init(uint64_t tenant_id, const int64_t tenant_mem_size);
   void destroy();
@@ -312,6 +328,7 @@ private:
   uint64_t tenant_id_;
   int tg_id_;
   int64_t rt_node_id_;
+  int64_t profile_recycle_threshold_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanMonitorNodeList);
 };

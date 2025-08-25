@@ -127,7 +127,7 @@ public:
   ~ObOptStatsGatherPieceMsgListener() = default;
   static int on_message(
     ObOptStatsGatherPieceMsgCtx &piece_ctx,
-    common::ObIArray<ObPxSqcMeta *> &sqcs,
+    common::ObIArray<ObPxSqcMeta> &sqcs,
     const ObOptStatsGatherPieceMsg &pkt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptStatsGatherPieceMsgListener);

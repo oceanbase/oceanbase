@@ -54,7 +54,7 @@ int ObHashJoinInput::sync_wait(ObExecContext &ctx, int64_t &sync_event, EventPre
         if (ATOMIC_LOAD(&sync_event) + 1 >= exit_cnt) {
           // last thread, it will singal and exit by self
           ATOMIC_INC(&sync_event);
-          shared_hj_info->cond_.signal();
+          shared_hj_info->cond_.signal(INT32_MAX);
           LOG_DEBUG("debug sync event", K(ret), K(lbt()), K(sync_event));
           break;
         }

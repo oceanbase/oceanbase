@@ -17,6 +17,7 @@
 #include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
 #include "sql/engine/join/ob_partition_store.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
+#include "share/diagnosis/ob_runtime_profile.h"
 
 
 using namespace oceanbase;
@@ -936,6 +937,7 @@ int ObJoinFilterOp::build_and_broadcast_runtime_filter()
     has_sent_runtime_filter_ = true;
     // for the controller, it need to add row info manually
     op_monitor_info_.output_row_count_ += partition_splitter_->get_total_row_count();
+    INC_METRIC_VAL(ObMetricId::OUTPUT_ROWS, partition_splitter_->get_total_row_count());
   }
   return ret;
 }
@@ -1066,8 +1068,8 @@ int ObJoinFilterOp::try_merge_join_filter()
   for (int i = 0; i < local_rf_msgs_.count() && OB_SUCC(ret); ++i) {
     if (!MY_SPEC.is_shared_join_filter()) {
       lucky_devil_champions_.at(i) = true;
-    } else if (local_rf_msgs_.at(i)->get_msg_type() == ObP2PDatahubMsgBase::BLOOM_FILTER_MSG
-        || local_rf_msgs_.at(i)->get_msg_type() == ObP2PDatahubMsgBase::BLOOM_FILTER_VEC_MSG) {
+    } else if (ObP2PDatahubMsgBase::is_bloom_filter(local_rf_msgs_.at(i)->get_msg_type())) {
+      // shared bloom filter already merged when build
     } else if (OB_FAIL(shared_rf_msgs_.at(i)->merge(*local_rf_msgs_.at(i)))) {
       LOG_WARN("fail to do rf merge", K(ret));
     }
@@ -1075,8 +1077,7 @@ int ObJoinFilterOp::try_merge_join_filter()
   if (OB_SUCC(ret) && MY_SPEC.is_shared_join_filter()) {
     cur_cnt = ATOMIC_AAF(count_ptr, -1);
     for (int i = 0; i < local_rf_msgs_.count() && OB_SUCC(ret); ++i) {
-      if (local_rf_msgs_.at(i)->get_msg_type() == ObP2PDatahubMsgBase::BLOOM_FILTER_MSG
-          || local_rf_msgs_.at(i)->get_msg_type() == ObP2PDatahubMsgBase::BLOOM_FILTER_VEC_MSG) {
+      if (ObP2PDatahubMsgBase::is_bloom_filter(local_rf_msgs_.at(i)->get_msg_type())) {
         if (MY_SPEC.is_shuffle_) {
           bool is_local_dh = false;
           if (OB_FAIL(sqc_proxy->check_is_local_dh(local_rf_msgs_.at(i)->get_p2p_datahub_id(),
@@ -1218,6 +1219,7 @@ int ObJoinFilterOp::update_plan_monitor_info()
   op_monitor_info_.otherstat_6_value_ = MY_SPEC.filter_len_;
   int64_t check_count = 0;
   int64_t total_count = 0;
+  int64_t filter_count = 0;
   for (int i = 0; i < MY_SPEC.rf_infos_.count() && OB_SUCC(ret); ++i) {
     if (OB_INVALID_ID != MY_SPEC.rf_infos_.at(i).filter_expr_id_) {
       ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx = NULL;
@@ -1226,16 +1228,36 @@ int ObJoinFilterOp::update_plan_monitor_info()
         LOG_TRACE("join filter expr ctx is null");
       } else {
         op_monitor_info_.otherstat_1_value_ += join_filter_ctx->filter_count_;
+        filter_count += join_filter_ctx->filter_count_;
         total_count = max(total_count, join_filter_ctx->total_count_);
         check_count = max(check_count, join_filter_ctx->check_count_);
         op_monitor_info_.otherstat_4_value_ = max(join_filter_ctx->ready_ts_, op_monitor_info_.otherstat_4_value_);
         op_monitor_info_.otherstat_5_value_ = max(join_filter_ctx->by_pass_count_before_ready_, op_monitor_info_.otherstat_5_value_);
+
+        if (ObP2PDatahubMsgBase::is_bloom_filter(MY_SPEC.rf_infos_.at(i).dh_msg_type_)) {
+          INC_METRIC_VAL(ObMetricId::BLOOM_FILTER_CHECK_ROWS, join_filter_ctx->check_count_);
+          INC_METRIC_VAL(ObMetricId::BLOOM_FILTER_FILTER_ROWS, join_filter_ctx->filter_count_);
+          INC_METRIC_VAL(ObMetricId::BLOOM_FILTER_BYPASS_ROWS, join_filter_ctx->total_count_ - join_filter_ctx->check_count_);
+        } else if (ObP2PDatahubMsgBase::is_in_filter(MY_SPEC.rf_infos_.at(i).dh_msg_type_)) {
+          INC_METRIC_VAL(ObMetricId::IN_FILTER_CHECK_ROWS, join_filter_ctx->check_count_);
+          INC_METRIC_VAL(ObMetricId::IN_FILTER_FILTER_ROWS, join_filter_ctx->filter_count_);
+          INC_METRIC_VAL(ObMetricId::IN_FILTER_BYPASS_ROWS, join_filter_ctx->total_count_ - join_filter_ctx->check_count_);
+        } else if (ObP2PDatahubMsgBase::is_range_filter(MY_SPEC.rf_infos_.at(i).dh_msg_type_)) {
+          INC_METRIC_VAL(ObMetricId::RANGE_FILTER_CHECK_ROWS, join_filter_ctx->check_count_);
+          INC_METRIC_VAL(ObMetricId::RANGE_FILTER_FILTER_ROWS, join_filter_ctx->filter_count_);
+          INC_METRIC_VAL(ObMetricId::RANGE_FILTER_BYPASS_ROWS, join_filter_ctx->total_count_ - join_filter_ctx->check_count_);
+        }
       }
     }
   }
   if (OB_SUCC(ret)) {
     op_monitor_info_.otherstat_2_value_ += total_count;
     op_monitor_info_.otherstat_3_value_ += check_count;
+  }
+  if (OB_SUCC(ret)) {
+    INC_METRIC_VAL(ObMetricId::JOIN_FILTER_TOTAL_COUNT, total_count);
+    INC_METRIC_VAL(ObMetricId::JOIN_FILTER_CHECK_COUNT, check_count);
+    INC_METRIC_VAL(ObMetricId::JOIN_FILTER_FILTERED_COUNT, filter_count);
   }
   return ret;
 }
@@ -2264,8 +2286,7 @@ int ObJoinFilterOp::release_local_msg()
       if (!MY_SPEC.is_shared_join_filter()) {
         PX_P2P_DH.erase_msg(key, msg);
         local_rf_msgs_.at(i)->destroy();
-      } else if (local_rf_msgs_.at(i)->get_msg_type() != ObP2PDatahubMsgBase::BLOOM_FILTER_MSG
-          && local_rf_msgs_.at(i)->get_msg_type() != ObP2PDatahubMsgBase::BLOOM_FILTER_VEC_MSG) {
+      } else if (!ObP2PDatahubMsgBase::is_bloom_filter(local_rf_msgs_.at(i)->get_msg_type())) {
         local_rf_msgs_.at(i)->destroy();
       }
     }
