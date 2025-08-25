@@ -1840,16 +1840,13 @@ int ObDDLScheduler::schedule_auto_split_task()
           } else if (OB_TMP_FAIL(split_task_scheduler.push_tasks(failed_task))) {
             LOG_WARN("fail to push tasks", K(tmp_ret), K(failed_task));
           }
-        }
-        if (need_to_print && !ignore_this_task) {
+        } else if (need_to_print && !ignore_this_task) {
           int64_t count = snprintf(print_buf + pos, limit - pos, "(%lu,%ld,%d)", task.tenant_id_, task.tablet_id_.id(), tmp_ret);
           if (count >= 0 && pos + count < limit) {
             pos += count;
           } else {
             need_to_print = false; // print_buf not enough
           }
-        }
-        if (!ignore_this_task) {
           has_failed_task = true;
         }
       }
