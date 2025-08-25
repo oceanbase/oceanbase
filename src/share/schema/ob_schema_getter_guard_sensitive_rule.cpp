@@ -29,6 +29,25 @@ namespace share
 {
 namespace schema
 {
+int ObSchemaGetterGuard::get_sensitive_rule_schema_count(const uint64_t tenant_id, int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  const ObSchemaMgr *mgr = NULL;
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(tenant_id), KR(ret));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
+  } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mgr->sensitive_rule_mgr_.get_schema_count(count))) {
+    LOG_WARN("get schema count failed", KR(ret));
+  }
+  return ret;
+}
 
 int ObSchemaGetterGuard::get_sensitive_rule_schema_by_name(const uint64_t tenant_id,
                                                            const common::ObString &name,

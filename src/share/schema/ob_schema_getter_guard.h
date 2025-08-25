@@ -1100,6 +1100,7 @@ public:
   // catalog function end
 
   // sensitive rule function begin
+  int get_sensitive_rule_schema_count(const uint64_t tenant_id, int64_t &count);
   int get_sensitive_rule_schema_by_name(const uint64_t tenant_id,
                                         const common::ObString &name,
                                         const ObSensitiveRuleSchema *&schema);

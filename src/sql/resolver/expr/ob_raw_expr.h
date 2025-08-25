@@ -1827,6 +1827,7 @@ struct ObRawExprExtraInfo
     uint64_t range_flag_; // T_FUN_SYS_INNER_DOUBLE_TO_INT
                           // T_FUN_SYS_INNER_DECIMAL_TO_YEAR
     int64_t encryption_mode_;  // T_FUN_SYS_ENHANCED_AES_ENCRYPT
+                               // valid only for sensitive rule
     struct {  // T_OP_RUNTIME_FILTER
       RuntimeFilterType runtime_filter_type_;
       // when join with '<=>' in mysql mode, mark runtime filter with null equal condition,

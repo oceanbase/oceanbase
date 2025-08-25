@@ -169,6 +169,7 @@ public:
                           uint64_t &catalog_id,
                           ObIAllocator *allocator = NULL,
                           bool allow_not_exist = false) const;
+  int get_sensitive_rule_schema_count(const uint64_t tenant_id, int64_t &count) const;
   int get_sensitive_rule_id_name(const uint64_t tenant_id,
                                  common::ObString &sensitive_rule_name,
                                  uint64_t &sensitive_rule_id,

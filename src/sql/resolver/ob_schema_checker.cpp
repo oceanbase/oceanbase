@@ -571,6 +571,24 @@ int ObSchemaChecker::get_catalog_id_name(const uint64_t tenant_id,
   return ret;
 }
 
+int ObSchemaChecker::get_sensitive_rule_schema_count(const uint64_t tenant_id, int64_t &count) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
+  } else if (OB_ISNULL(schema_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(tenant_id), K(ret));
+  } else if (OB_FAIL(schema_mgr_->get_sensitive_rule_schema_count(tenant_id, count))) {
+    LOG_WARN("failed to get sensitive rule schema count", K(ret));
+  }
+  return ret;
+}
+
 int ObSchemaChecker::get_sensitive_rule_id_name(const uint64_t tenant_id,
                                                 common::ObString &sensitive_rule_name,
                                                 uint64_t &sensitive_rule_id,
@@ -586,7 +604,7 @@ int ObSchemaChecker::get_sensitive_rule_id_name(const uint64_t tenant_id,
   } else if (OB_ISNULL(schema_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || sensitive_rule_name.empty())) {
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || sensitive_rule_name.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(tenant_id), K(sensitive_rule_name), K(ret));
   } else if (OB_FAIL(schema_mgr_->get_sensitive_rule_schema_by_name(tenant_id, sensitive_rule_name, sensitive_rule_schema))) {
