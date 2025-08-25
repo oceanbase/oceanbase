@@ -15,6 +15,8 @@
 #define  private public
 #include "rootserver/ob_balance_ls_primary_zone.h"
 #include "rootserver/ob_primary_ls_service.h"
+#include "rootserver/balance/ob_partition_balance_helper.h"
+
 namespace oceanbase {
 using namespace common;
 using namespace share;
@@ -412,6 +414,89 @@ TEST_F(TestPrimaryLSService, LS_FLAG)
 
   ret = flag.str_to_flag(str9.str());
   ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+}
+
+TEST_F(TestPrimaryLSService, transfer_merge)
+{
+  int ret = OB_SUCCESS;
+  ObPartTransferJobGenerator part_job;
+  common::ObMySQLProxy sql_proxy;
+  uint64_t tenant_id = 1002;
+  int64_t primary_zone_num = 1, unit_group_num = 1;
+  ObObjectID table_id = 1;
+  ObObjectID part_object_id = 2;
+  ObTransferPartInfo part_info(table_id, part_object_id);
+  ObLSID src_ls_id(1001), dest_ls_id(1002), tmp_ls_id(1003);
+  hash::ObHashMap<ObTransferPartInfo, ObArray<ObTransferTaskKey>> part_map;
+  ret = part_map.create(ObPartTransferJobGenerator::HASH_MAP_SIZE, "TmpPartMap", ObModIds::OB_HASH_NODE);
+  ObArray<ObTransferTaskKey> tranfery_key_array1;
+  ObTransferTaskKey key(src_ls_id, dest_ls_id);
+  ObTransferTaskKey key1(src_ls_id, dest_ls_id);
+  ObTransferTaskKey key2(src_ls_id, tmp_ls_id);
+  ObTransferTaskKey key3(tmp_ls_id, tmp_ls_id);
+  ObTransferTaskKey key4(tmp_ls_id, dest_ls_id);
+  ObTransferTaskKey key5(dest_ls_id, src_ls_id);
+  ObTransferTaskKey key6(dest_ls_id, src_ls_id);
+  ret = tranfery_key_array1.push_back(key);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = tranfery_key_array1.push_back(key1);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = tranfery_key_array1.push_back(key2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = tranfery_key_array1.push_back(key3);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = tranfery_key_array1.push_back(key4);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = tranfery_key_array1.push_back(key5);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = tranfery_key_array1.push_back(key6);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = part_map.set_refactored(part_info, tranfery_key_array1);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = part_job.merge_transfer_task_for_each_part_(part_map);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(1, part_map.get(part_info)->count());
+  ASSERT_EQ(1001, part_map.get(part_info)->at(0).get_src_ls_id().id());
+  ASSERT_EQ(1002, part_map.get(part_info)->at(0).get_dest_ls_id().id());
+
+  ObObjectID part_object_id1 = 3;
+  ObTransferPartInfo part_info1(table_id, part_object_id1);
+  ObArray<ObTransferTaskKey> tranfery_key_array2;
+  ret = tranfery_key_array2.push_back(key6);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = tranfery_key_array2.push_back(key2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = tranfery_key_array2.push_back(key4);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = part_map.set_refactored(part_info1, tranfery_key_array2);
+  ret = part_job.merge_transfer_task_for_each_part_(part_map);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+
+  ObObjectID part_object_id2 = 5;
+  ObTransferPartInfo part_info2(table_id, part_object_id2);
+  ObArray<ObTransferTaskKey> tranfery_key_array3;
+  ret = tranfery_key_array3.push_back(key6);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = tranfery_key_array3.push_back(key2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = part_map.set_refactored(part_info2, tranfery_key_array3);
+  ret = part_job.merge_transfer_task_for_each_part_(part_map);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = part_map.reuse();
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = part_map.set_refactored(part_info, tranfery_key_array1);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = part_map.set_refactored(part_info1, tranfery_key_array2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = part_map.set_refactored(part_info2, tranfery_key_array3);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = part_job.merge_transfer_task_for_each_part_(part_map);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(3, part_map.size());
+  ASSERT_EQ(0, part_map.get(part_info1)->count());
+
 
 
 }

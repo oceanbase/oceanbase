@@ -39,22 +39,27 @@ int ObPartitionBalance::prepare_ls_()
   return OB_SUCCESS;
 }
 
-int ObPartitionBalance::process()
+int ObPartitionBalance::process(const ObBalanceJobID &job_id, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
   ObBalanceJobType job_type(ObBalanceJobType::BALANCE_JOB_PARTITION);
-  ObString balance_strategy("partition balance");
+  ObBalanceStrategy balance_strategy(ObBalanceStrategy::PB_INTER_GROUP);
   if (OB_FAIL(prepare_balance_group_())) {
     LOG_WARN("prepare_balance_group fail", KR(ret));
   } else if (OB_FAIL(save_balance_group_stat_())) {
     LOG_WARN("save_balance_group_stat fail", KR(ret));
+  } else if (OB_FAIL(process_weight_balance_intragroup_())) {
+    LOG_WARN("process_weight_balance_intragroup failed", KR(ret));
   } else if (OB_FAIL(process_balance_partition_inner_())) {
     LOG_WARN("process_balance_partition_inner fail", KR(ret));
   } else if (OB_FAIL(process_balance_partition_extend_())) {
     LOG_WARN("process_balance_partition_extend fail", KR(ret));
   } else if (OB_FAIL(process_balance_partition_disk_())) {
     LOG_WARN("process_balance_partition_disk fail", KR(ret));
-  } else if (OB_FAIL(job_generator_.gen_balance_job_and_tasks(job_type, balance_strategy))) {
+  } else if (!job_generator_.need_gen_job()) {
+    LOG_INFO("no need gen job");
+  } else if (job_generator_.need_gen_job()
+            && OB_FAIL(job_generator_.gen_balance_job_and_tasks(job_type, balance_strategy))) {
     LOG_WARN("gen_balance_job_and_tasks fail", KR(ret));
   }
   return ret;
@@ -86,6 +91,52 @@ void print_part_map(const ObTransferPartMap &part_map, const char* label) {
   }
 }
 
+void print_part_group(const ObPartitionBalance &part_balance)
+{
+  FOREACH(iter, part_balance.bg_map_) {
+    const ObBalanceGroup &bg = iter->first;
+    const ObArray<ObBalanceGroupInfo*> &ls_part_groups = iter->second;
+    for (int ls_idx = 0; ls_idx < ls_part_groups.count(); ls_idx++) {
+      const ObBalanceGroupInfo *part_groups = ls_part_groups.at(ls_idx);
+      ObArray<ObPartGroupInfo *> part_groups_arr;
+      ObSqlString part_groups_str;
+      const ObPartGroupContainer *pg_ctn = dynamic_cast<ObPartGroupContainer *>(part_groups->pg_container_);
+      for (auto unit_it = pg_ctn->bg_units_.begin(); unit_it != pg_ctn->bg_units_.end(); unit_it++) {
+        const ObBalanceGroupUnit *unit = *unit_it;
+        for (int i = 0; i < unit->pg_buckets_.count(); i++) {
+          append(part_groups_arr, unit->pg_buckets_.at(i));
+        }
+      }
+      std::sort(part_groups_arr.begin(), part_groups_arr.end(), [] (const ObPartGroupInfo *left, const ObPartGroupInfo *right) {
+        const ObTransferPartInfo &part_left = left->part_list_.at(0);
+        const ObTransferPartInfo &part_right = right->part_list_.at(0);
+        if (part_left.table_id_ == part_right.table_id_) {
+          return part_left.part_object_id_ < part_right.part_object_id_;
+        }
+        return part_left.table_id_ < part_right.table_id_;
+      });
+      for (int i = 0; i < part_groups_arr.count(); i++) {
+        ObPartGroupInfo *part_group = part_groups_arr.at(i);
+        if (i > 0) {
+          part_groups_str.append(" ");
+        }
+        part_groups_str.append("[");
+        for (int j = 0; j < part_group->count(); j++) {
+          ObTransferPartInfo &part = part_group->part_list_.at(j);
+          if (j > 0) {
+            part_groups_str.append_fmt(" ");
+          }
+          part_groups_str.append_fmt("%ld:%ld", part.table_id(), part.part_object_id());
+        }
+        part_groups_str.append_fmt("]");
+      }
+      LOG_INFO("balance_part_job bg_map", "balance group", bg.id_, "ls_id", part_groups->ls_id_,
+              "part_group_count", part_groups->get_part_groups_count(),
+              "part_groups", part_groups_str);
+    }
+  }
+}
+
 class ObBalancePartitionTest : public ObSimpleClusterTestBase
 {
 public:
@@ -99,6 +150,7 @@ public:
     sql_proxy.write("use test", affected_rows);
     sql_proxy.write("drop tablegroup if exists my_tablegroup", affected_rows);
   }
+
   int run(int ls_cnt) {
     int ret = OB_SUCCESS;
     g_ls_cnt = ls_cnt;
@@ -106,31 +158,33 @@ public:
     ObCurTraceId::get_trace_id()->set(std::string(std::to_string(ObTimeUtility::current_time()%10000)).c_str());
     ObTenantSwitchGuard guard;
     ObLSStatusOperator status_op;
-    TEST_INFO("balance_part_job start>>>>>>>>>>>>>>>>>");
+    TEST_INFO("balance_part_job start>>>>>>>>>>>>>>>>>", K(ls_cnt));
 
     if (OB_FAIL(guard.switch_to(OB_SYS_TENANT_ID))) {
       LOG_WARN("switch tenant", KR(ret));
-    } else if (OB_FAIL(balance_part_job.init(OB_SYS_TENANT_ID, GCTX.schema_service_, GCTX.sql_proxy_, 1,1))) {
+    } else if (OB_FAIL(balance_part_job.init(OB_SYS_TENANT_ID, GCTX.schema_service_,
+        GCTX.sql_proxy_, 1, 1, ObPartitionBalance::GEN_TRANSFER_TASK))) {
       LOG_WARN("balance_part_job init fail", KR(ret));
     } else if (OB_FAIL(balance_part_job.process())) {
       LOG_WARN("balance_part_job process fail", KR(ret));
     } else {
       std::sort(balance_part_job.ls_desc_array_.begin(), balance_part_job.ls_desc_array_.end(), [] (const ObLSDesc* left, const ObLSDesc* right) {
-        return left->partgroup_cnt_ < right->partgroup_cnt_;
+        return left->get_partgroup_cnt() < right->get_partgroup_cnt();
       });
       TEST_INFO("balance_part_job bg_map size", K(balance_part_job.bg_map_.size()));
       for (auto iter = balance_part_job.bg_map_.begin(); iter != balance_part_job.bg_map_.end(); iter++) {
         for (int i = 0; i < iter->second.count(); i++) {
-          TEST_INFO("balance_part_job bg_map", K(iter->first), K(iter->second.at(i)->ls_id_), K(iter->second.at(i)->part_groups_.count()));
+          TEST_INFO("balance_part_job bg_map", K(iter->first), K(iter->second.at(i)->ls_id_), K(iter->second.at(i)->get_part_groups_count()));
         }
       }
       print_part_map(balance_part_job.job_generator_.dup_to_normal_part_map_, "dup_to_normal");
       print_part_map(balance_part_job.job_generator_.normal_to_dup_part_map_, "normal_to_dup");
       print_part_map(balance_part_job.job_generator_.dup_to_dup_part_map_, "dup_to_dup");
       print_part_map(balance_part_job.job_generator_.normal_to_normal_part_map_, "normal_to_normal");
-      if (balance_part_job.ls_desc_array_.at(balance_part_job.ls_desc_array_.count()-1)->partgroup_cnt_ - balance_part_job.ls_desc_array_.at(0)->partgroup_cnt_ > 1) {
+      print_part_group(balance_part_job);
+      if (balance_part_job.ls_desc_array_.at(balance_part_job.ls_desc_array_.count() - 1)->get_partgroup_cnt() - balance_part_job.ls_desc_array_.at(0)->get_partgroup_cnt() > 1) {
         ret = -1;
-        LOG_WARN("partition not balance", KR(ret), K(balance_part_job.ls_desc_array_.at(balance_part_job.ls_desc_array_.count()-1)), K(balance_part_job.ls_desc_array_.at(0)));
+        LOG_WARN("partition not balance", KR(ret), K(ls_cnt), KPC(balance_part_job.ls_desc_array_.at(balance_part_job.ls_desc_array_.count()-1)), KPC(balance_part_job.ls_desc_array_.at(0)));
       }
     }
     return ret;
@@ -158,10 +212,11 @@ TEST_F(ObBalancePartitionTest, simple_table)
   ObSqlString sql;
   int64_t affected_rows = 0;
   // 创建表
-  for (int i = 1; i <= 17; i++) {
+  for (int i = 1; i <= 60; i++) {
     sql.assign_fmt("create table basic_%d(col1 int)", i);
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
+  LOG_INFO("-----------round robin-------------");
   for (int i = 1; i <= 20; i++) {
     ASSERT_EQ(OB_SUCCESS, run(i));
   }
@@ -175,10 +230,11 @@ TEST_F(ObBalancePartitionTest, partition)
   // 创建表
   for (int i = 1; i <= 5; i++) {
     ObSqlString sql;
-    sql.assign_fmt("create table partition_%d(col1 int) partition by hash(col1) partitions 10", i);
+    sql.assign_fmt("create table partition_%d(col1 int) partition by hash(col1) partitions 30", i);
     int64_t affected_rows = 0;
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
+  LOG_INFO("-----------round robin-------------");
   for (int i = 1; i <= 10; i++) {
     ASSERT_EQ(OB_SUCCESS, run(i));
   }
@@ -191,10 +247,11 @@ TEST_F(ObBalancePartitionTest, subpart)
    // 创建表
    for (int i = 1; i <= 5; i++) {
     ObSqlString sql;
-    sql.assign_fmt("create table subpart_%d(col1 int) partition by range(col1) subpartition by hash(col1) subpartitions 10 (partition p1 values less than (100), partition p2 values less than MAXVALUE)", i);
+    sql.assign_fmt("create table subpart_%d(col1 int) partition by range(col1) subpartition by hash(col1) subpartitions 20 (partition p1 values less than (100), partition p2 values less than MAXVALUE)", i);
     int64_t affected_rows = 0;
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
+  LOG_INFO("-----------round robin-------------");
   for (int i = 1; i <= 10; i++) {
     ASSERT_EQ(OB_SUCCESS, run(i));
   }
@@ -220,6 +277,7 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_none)
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
 
+  LOG_INFO("-----------round robin-------------");
   for (int i = 1; i <= 3; i++) {
     ASSERT_EQ(OB_SUCCESS, run(i));
   }
@@ -239,6 +297,7 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_partition1)
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
 
+  LOG_INFO("-----------round robin-------------");
   for (int i = 1; i <= 3; i++) {
     ASSERT_EQ(OB_SUCCESS, run(i));
   }
@@ -258,6 +317,7 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_partition2)
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
 
+  LOG_INFO("-----------round robin-------------");
   for (int i = 1; i <= 3; i++) {
     ASSERT_EQ(OB_SUCCESS, run(i));
   }
@@ -280,6 +340,7 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_partition3)
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
 
+  LOG_INFO("-----------round robin-------------");
   for (int i = 1; i <= 3; i++) {
     ASSERT_EQ(OB_SUCCESS, run(i));
   }
@@ -299,6 +360,7 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_adaptive1)
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
 
+  LOG_INFO("-----------round robin-------------");
   for (int i = 1; i <= 3; i++) {
     ASSERT_EQ(OB_SUCCESS, run(i));
   }
@@ -318,6 +380,7 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_adaptive2)
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
 
+  LOG_INFO("-----------round robin-------------");
   for (int i = 1; i <= 3; i++) {
     ASSERT_EQ(OB_SUCCESS, run(i));
   }
@@ -337,6 +400,7 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_adaptive3)
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
 
+  LOG_INFO("-----------round robin-------------");
   for (int i = 1; i <= 3; i++) {
     ASSERT_EQ(OB_SUCCESS, run(i));
   }
@@ -347,6 +411,88 @@ TEST_F(ObBalancePartitionTest, end)
   if (RunCtx.time_sec_ > 0) {
     ::sleep(RunCtx.time_sec_);
   }
+}
+
+void mock_pg(
+    const int64_t pg_cnt,
+    const int64_t bg_unit_id,
+    const int64_t balance_weight,
+    ObPartGroupContainer &pg_container)
+{
+  for (int64_t i = 0; i < pg_cnt; ++i) {
+    int64_t part_group_uid = bg_unit_id * pg_cnt + i;
+    ObTransferPartInfo part(part_group_uid, part_group_uid);
+    int64_t data_size = i + bg_unit_id + pg_cnt;
+    void *buf = pg_container.alloc_.alloc(sizeof(ObPartGroupInfo));
+    ObPartGroupInfo *part_group = new(buf) ObPartGroupInfo(pg_container.alloc_);
+    ASSERT_EQ(OB_SUCCESS, part_group->init(part_group_uid, bg_unit_id));
+    ASSERT_EQ(OB_SUCCESS, part_group->add_part(part, data_size, balance_weight));
+    ASSERT_EQ(OB_SUCCESS, pg_container.append_part_group(part_group));
+  }
+  TEST_INFO("mock_pg finished", K(pg_container));
+}
+
+TEST_F(ObBalancePartitionTest, test_part_group_container)
+{
+  TEST_INFO("-----------test part group container-------------");
+  ObArenaAllocator allocer;
+  const int64_t LS_NUM = 3;
+  const int64_t WEIGHTED_PG_NUM = 10;
+  ObPartGroupContainer src_pg_container(allocer);
+  ObPartGroupContainer dest_pg_container(allocer);
+  ObPartGroupContainer weighted_pg_container(allocer);
+  ObBalanceGroupID bg_id(111,0);
+  ASSERT_EQ(OB_SUCCESS, src_pg_container.init(bg_id, LS_NUM));
+  ASSERT_EQ(OB_SUCCESS, dest_pg_container.init(bg_id, LS_NUM));
+  ASSERT_EQ(OB_SUCCESS, weighted_pg_container.init(bg_id, LS_NUM));
+  mock_pg(100, 1, 0, src_pg_container);
+  mock_pg(100, 2, 0, src_pg_container);
+  mock_pg(WEIGHTED_PG_NUM, 1, 1, src_pg_container);
+  TEST_INFO("src_pg_container", K(src_pg_container));
+
+  ObArray<int64_t> weight_arr;
+  ASSERT_EQ(OB_SUCCESS, src_pg_container.get_balance_weight_array(weight_arr));
+  ASSERT_EQ(WEIGHTED_PG_NUM, weight_arr.count());
+  TEST_INFO("get_balance_weight_array", K(weight_arr), K(src_pg_container));
+
+  ObPartGroupInfo *largest_pg = nullptr;
+  ObPartGroupInfo *smallest_pg = nullptr;
+  ASSERT_EQ(OB_SUCCESS, src_pg_container.get_largest_part_group(largest_pg));
+  ASSERT_EQ(OB_SUCCESS, src_pg_container.get_smallest_part_group(smallest_pg));
+  ASSERT_TRUE(largest_pg != nullptr);
+  ASSERT_TRUE(smallest_pg != nullptr);
+  TEST_INFO("get largest and smallest part_group", KPC(largest_pg), KPC(smallest_pg), K(src_pg_container));
+
+  ASSERT_EQ(OB_SUCCESS, src_pg_container.remove_part_group(largest_pg));
+  ASSERT_EQ(OB_SUCCESS, src_pg_container.remove_part_group(smallest_pg));
+  ObPartGroupInfo *tmp_pg = nullptr;
+  ASSERT_EQ(OB_SUCCESS, src_pg_container.get_largest_part_group(tmp_pg));
+  ASSERT_TRUE(largest_pg != tmp_pg && tmp_pg->get_data_size() < largest_pg->get_data_size());
+  tmp_pg = nullptr;
+  ASSERT_EQ(OB_SUCCESS, src_pg_container.get_smallest_part_group(tmp_pg));
+  ASSERT_TRUE(smallest_pg != tmp_pg && tmp_pg->get_data_size() > smallest_pg->get_data_size());
+
+  int64_t SELECT_NUM = 5;
+  for(int64_t i = 0; i < SELECT_NUM; ++i) {
+    ObPartGroupInfo *pg = nullptr;
+    ASSERT_EQ(OB_SUCCESS, src_pg_container.select(1, dest_pg_container, pg));
+    ASSERT_EQ(OB_SUCCESS, src_pg_container.remove_part_group(pg));
+    ASSERT_EQ(OB_SUCCESS, dest_pg_container.append_part_group(pg));
+    TEST_INFO("select with weight", K(i), KPC(pg), K(src_pg_container), K(dest_pg_container));
+  }
+  SELECT_NUM = 20;
+  for(int64_t i = 0; i < SELECT_NUM; ++i) {
+    ObPartGroupInfo *pg = nullptr;
+    ASSERT_EQ(OB_SUCCESS, src_pg_container.select(0, dest_pg_container, pg));
+    ASSERT_EQ(OB_SUCCESS, src_pg_container.remove_part_group(pg));
+    ASSERT_EQ(OB_SUCCESS, dest_pg_container.append_part_group(pg));
+    TEST_INFO("select without weight", K(i), KPC(pg), K(src_pg_container), K(dest_pg_container));
+  }
+
+  ASSERT_EQ(OB_SUCCESS, src_pg_container.split_out_weighted_part_groups(weighted_pg_container));
+  ASSERT_TRUE(src_pg_container.get_balance_weight() == 0);
+  TEST_INFO("split_out_weighted_part_groups", K(weighted_pg_container), K(src_pg_container));
+
 }
 
 } // end unittest

@@ -14,6 +14,7 @@
 
 #include "ob_restore_common_util.h"
 #include "rootserver/ob_ls_service_helper.h"
+#include "rootserver/ob_tenant_info_loader.h"
 #include "rootserver/standby/ob_tenant_role_transition_service.h"
 #include "src/share/ob_schema_status_proxy.h"
 #include "rootserver/ob_ddl_service.h"
@@ -85,6 +86,7 @@ int ObRestoreCommonUtil::create_all_ls(
   int ret = OB_SUCCESS;
   ObLSStatusOperator status_op;
   ObLSStatusInfo status_info;
+  ObAllTenantInfo tenant_info;
   if (OB_UNLIKELY(!is_user_tenant(tenant_id)
                   || !tenant_schema.is_valid()
                   || ls_attr_array.empty()
@@ -92,6 +94,11 @@ int ObRestoreCommonUtil::create_all_ls(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tenant_schema),
                                               K(ls_attr_array), KP(sql_proxy));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, sql_proxy, false, tenant_info))) {
+    LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!tenant_info.is_normal_status())) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("the tenant's switchover status should be NORMAL", KR(ret), K(tenant_info));
   } else {
     common::ObMySQLTransaction trans;
     const int64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(tenant_id);
@@ -115,8 +122,8 @@ int ObRestoreCommonUtil::create_all_ls(
           LOG_WARN("failed to get ls status info", KR(ret), K(tenant_id), K(ls_info));
         } else if (OB_FAIL(ObLSServiceHelper::create_new_ls_in_trans(
                    ls_info.get_ls_id(), ls_info.get_ls_group_id(), ls_info.get_create_scn(),
-                   share::NORMAL_SWITCHOVER_STATUS, tenant_stat, trans, ls_flag, source_tenant_id))) {
-          LOG_WARN("failed to add new ls status info", KR(ret), K(ls_info), K(source_tenant_id));
+                   tenant_info.get_switchover_epoch(), tenant_stat, trans, ls_flag, source_tenant_id))) {
+          LOG_WARN("failed to add new ls status info", KR(ret), K(ls_info), K(source_tenant_id), K(tenant_info));
         }
         LOG_INFO("create init ls", KR(ret), K(ls_info), K(source_tenant_id));
       }

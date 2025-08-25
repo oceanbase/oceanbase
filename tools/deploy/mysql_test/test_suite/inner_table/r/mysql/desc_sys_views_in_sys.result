@@ -3608,6 +3608,7 @@ IN_RECYCLEBIN	varchar(3)	NO
 COLLATION	varchar(128)	NO			
 READ_ONLY	varchar(3)	NO		NULL	
 COMMENT	varchar(2048)	NO		NULL	
+TABLEGROUP_NAME	varchar(128)	NO		NULL	
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_DATABASES|%') then 2
@@ -3626,6 +3627,7 @@ IN_RECYCLEBIN	varchar(3)	NO
 COLLATION	varchar(128)	NO			
 READ_ONLY	varchar(3)	NO		NULL	
 COMMENT	varchar(2048)	NO		NULL	
+TABLEGROUP_NAME	varchar(128)	NO		NULL	
 set @query_type = (select 
 case 
 when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_DATABASES|%') then 2
@@ -14864,6 +14866,55 @@ when ('|V$OB_SS_SSTABLES|' like '%|proc|%') then 4
 else 1
 end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.proc limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_OBJECT_BALANCE_WEIGHT;
+Field	Type	Null	Key	Default	Extra
+TABLE_ID	bigint(20)	NO		NULL	
+PARTITION_ID	bigint(20)	NO		NULL	
+SUBPARTITION_ID	bigint(20)	NO		NULL	
+WEIGHT	bigint(20)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+PARTITION_NAME	varchar(64)	NO			
+SUBPARTITION_NAME	varchar(64)	NO			
+TABLEGROUP_NAME	varchar(128)	NO		NULL	
+DATABASE_ID	bigint(20)	NO			
+TABLEGROUP_ID	bigint(20)	NO		NULL	
+OBJECT_ID	bigint(20)	NO			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_OBJECT_BALANCE_WEIGHT|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_OBJECT_BALANCE_WEIGHT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_OBJECT_BALANCE_WEIGHT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_OBJECT_BALANCE_WEIGHT limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_OBJECT_BALANCE_WEIGHT;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+TABLE_ID	bigint(20)	NO		NULL	
+PARTITION_ID	bigint(20)	NO		NULL	
+SUBPARTITION_ID	bigint(20)	NO		NULL	
+WEIGHT	bigint(20)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
+TABLE_NAME	varchar(256)	NO			
+PARTITION_NAME	varchar(64)	NO			
+SUBPARTITION_NAME	varchar(64)	NO			
+TABLEGROUP_NAME	varchar(128)	NO		NULL	
+DATABASE_ID	bigint(20)	NO			
+TABLEGROUP_ID	bigint(20)	NO		NULL	
+OBJECT_ID	bigint(20)	NO			
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_OBJECT_BALANCE_WEIGHT|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_OBJECT_BALANCE_WEIGHT|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CDB_OB_OBJECT_BALANCE_WEIGHT|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_OBJECT_BALANCE_WEIGHT limit 1);
 cnt
 1
 desc oceanbase.DBA_OB_CS_REPLICA_STATS;

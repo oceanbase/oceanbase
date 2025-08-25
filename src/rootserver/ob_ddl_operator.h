@@ -1211,6 +1211,9 @@ private:
       const share::schema::ObSysVariableSchema &sys_variable,
       const uint64_t tenant_id,
       common::ObMySQLTransaction &trans);
+  int try_create_tablegroup_for_database_(
+      common::ObMySQLTransaction &trans,
+      share::schema::ObDatabaseSchema &database_schema);
 private:
   static const int64_t ENCRYPT_KEY_LENGTH = 15;
 protected:

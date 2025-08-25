@@ -139,6 +139,9 @@
 #include "sql/resolver/cmd/ob_tenant_clone_resolver.h"
 #include "sql/resolver/cmd/ob_olap_async_job_resolver.h"
 #include "sql/resolver/cmd/ob_flashback_standby_log_resolver.h"
+#include "sql/resolver/cmd/ob_alter_ls_resolver.h"
+#include "sql/resolver/cmd/ob_service_name_resolver.h"
+#include "sql/resolver/cmd/ob_transfer_partition_resolver.h"
 #include "sql/resolver/ddl/ob_create_ccl_rule_resolver.h"
 #include "sql/resolver/ddl/ob_drop_ccl_rule_resolver.h"
 #ifdef OB_BUILD_TDE_SECURITY
@@ -1321,12 +1324,16 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(TransferPartition);
         break;
       }
-      case T_CANCEL_BALANCE_JOB: {
+      case T_BALANCE_JOB_OP: {
         REGISTER_STMT_RESOLVER(TransferPartition);
         break;
       }
       case T_SERVICE_NAME: {
         REGISTER_STMT_RESOLVER(ServiceName);
+        break;
+      }
+      case T_ALTER_LS: {
+        REGISTER_STMT_RESOLVER(AlterLS);
         break;
       }
       case T_REPAIR_TABLE: {

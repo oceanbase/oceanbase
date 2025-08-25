@@ -31,6 +31,7 @@
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/incremental/ob_sswriter_msg.h"
 #endif
+#include "share/ls/ob_alter_ls_struct.h"
 
 namespace oceanbase
 {

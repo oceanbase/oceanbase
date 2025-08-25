@@ -25,7 +25,7 @@ namespace share
 {
 static const char* BALANCE_JOB_STATUS_ARRAY[] =
 {
-  "DOING", "CANCELING", "COMPLETED", "CANCELED"
+  "DOING", "CANCELING", "COMPLETED", "CANCELED", "SUSPEND"
 };
 static const char *BALANCE_JOB_TYPE[] =
 {
@@ -99,7 +99,8 @@ int ObBalanceJob::init(const uint64_t tenant_id,
            const int64_t primary_zone_num,
            const int64_t unit_group_num,
            const ObString &comment,
-           const ObString &balance_strategy)
+           const ObBalanceStrategy &balance_strategy,
+           const int64_t max_end_time)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -107,14 +108,12 @@ int ObBalanceJob::init(const uint64_t tenant_id,
                   || ! job_id.is_valid()
                   || !job_type.is_valid() || !job_status.is_valid()
                   || 0 == primary_zone_num || 0 == unit_group_num
-                  || balance_strategy.empty())) {
+                  || !balance_strategy.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(job_id), K(job_type), K(job_status),
-                                 K(primary_zone_num), K(unit_group_num), K(balance_strategy), K(comment));
+        K(primary_zone_num), K(unit_group_num), K(balance_strategy), K(comment), K(max_end_time));
   } else if (OB_FAIL(comment_.assign(comment))) {
     LOG_WARN("failed to assign commet", KR(ret), K(comment));
-  } else if (OB_FAIL(balance_strategy_.assign(balance_strategy))) {
-    LOG_WARN("failed to assign balance strategy", KR(ret), K(balance_strategy));
   } else {
     tenant_id_ = tenant_id;
     job_id_ = job_id;
@@ -122,10 +121,13 @@ int ObBalanceJob::init(const uint64_t tenant_id,
     job_status_ = job_status;
     primary_zone_num_ = primary_zone_num;
     unit_group_num_ = unit_group_num;
+    max_end_time_ = max_end_time;
+    balance_strategy_ = balance_strategy;
   }
   return ret;
 }
 
+// max_end_time can be OB_INVALID_TIMESTAMP
 bool ObBalanceJob::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_
@@ -134,7 +136,13 @@ bool ObBalanceJob::is_valid() const
          && 0 != unit_group_num_
          && job_type_.is_valid()
          && job_status_.is_valid()
-         && !balance_strategy_.empty();
+         && balance_strategy_.is_valid();
+}
+
+bool ObBalanceJob::is_timeout() const
+{
+  return OB_INVALID_TIMESTAMP < max_end_time_
+      && max_end_time_ <= ObTimeUtility::current_time();
 }
 
 void ObBalanceJob::reset()
@@ -147,6 +155,7 @@ void ObBalanceJob::reset()
   job_status_.reset();
   comment_.reset();
   balance_strategy_.reset();
+  max_end_time_ = OB_INVALID_TIMESTAMP;
 }
 
 int ObBalanceJobTableOperator::insert_new_job(const ObBalanceJob &job,
@@ -172,6 +181,40 @@ int ObBalanceJobTableOperator::insert_new_job(const ObBalanceJob &job,
   return ret;
 }
 
+int ObBalanceJobTableOperator::construct_get_balance_job_sql_(
+    const uint64_t tenant_id,
+    const bool for_update,
+    ObSqlString &sql)
+{
+  int ret = OB_SUCCESS;
+  sql.reset();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(sql.assign_fmt(
+      "select time_to_usec(gmt_create) as start_time, time_to_usec(gmt_modified) as finish_time, *"))) {
+    LOG_WARN("assign fmt failed", KR(ret), K(tenant_id), K(for_update));
+  } else { // for max_end_time
+    bool is_supported = false;
+    if (OB_FAIL(ObBalanceStrategy::check_compat_version(tenant_id, is_supported))) {
+      LOG_WARN("check compat version failed", KR(ret), K(tenant_id), K(is_supported));
+    } else if (!is_supported) {
+      // skip
+    } else if (OB_FAIL(sql.append_fmt(", time_to_usec(max_end_time) as max_end_time_int64"))) {
+      LOG_WARN("append fmt failed", KR(ret), K(tenant_id), K(for_update));
+    }
+  }
+
+  if (FAILEDx(sql.append_fmt(" from %s", OB_ALL_BALANCE_JOB_TNAME))) {
+    LOG_WARN("append fmt failed", KR(ret), K(tenant_id), K(for_update), K(sql));
+  } else if (!for_update) {
+    // skip
+  } else if (OB_FAIL(sql.append_fmt(" for update"))) {
+    LOG_WARN("append fmt failed", KR(ret), K(tenant_id), K(for_update), K(sql));
+  }
+  return ret;
+}
+
 int ObBalanceJobTableOperator::get_balance_job(const uint64_t tenant_id,
                       const bool for_update,
                       ObISQLClient &client,
@@ -185,13 +228,8 @@ int ObBalanceJobTableOperator::get_balance_job(const uint64_t tenant_id,
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(sql.assign_fmt("select time_to_usec(gmt_create) as "
-                                    "start_time, time_to_usec(gmt_modified) "
-                                    " as finish_time, * from %s",
-                                    OB_ALL_BALANCE_JOB_TNAME))) {
-    LOG_WARN("failed to assign sql", KR(ret), K(sql));
-  } else if (for_update && OB_FAIL(sql.append_fmt(" for update"))) {
-    LOG_WARN("failed to assign sql", KR(ret), K(sql));
+  } else if (OB_FAIL(construct_get_balance_job_sql_(tenant_id, for_update, sql))) {
+    LOG_WARN("construct get balance job sql failed", KR(ret), K(tenant_id), K(for_update));
   } else {
     HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;
@@ -211,10 +249,12 @@ int ObBalanceJobTableOperator::get_balance_job(const uint64_t tenant_id,
         int64_t primary_zone_num = 0;
         int64_t unit_num = 0;
         int64_t job_id = ObBalanceJobID::INVALID_ID;
+        int64_t max_end_time = OB_INVALID_TIMESTAMP;
         ObString comment;
-        ObString balance_strategy;
+        ObString balance_strategy_str;
         ObString job_type;
         ObString job_status;
+        ObBalanceStrategy balance_strategy;
         EXTRACT_INT_FIELD_MYSQL(*result, "start_time", start_time, int64_t);
         EXTRACT_INT_FIELD_MYSQL(*result, "finish_time", finish_time, int64_t);
         EXTRACT_INT_FIELD_MYSQL(*result, "job_id", job_id, int64_t);
@@ -223,14 +263,18 @@ int ObBalanceJobTableOperator::get_balance_job(const uint64_t tenant_id,
         EXTRACT_VARCHAR_FIELD_MYSQL(*result, "job_type", job_type);
         EXTRACT_VARCHAR_FIELD_MYSQL(*result, "status", job_status);
         EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*result, "comment", comment);
-        EXTRACT_VARCHAR_FIELD_MYSQL(*result, "balance_strategy_name", balance_strategy);
+        EXTRACT_VARCHAR_FIELD_MYSQL(*result, "balance_strategy_name", balance_strategy_str);
+        EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "max_end_time_int64", max_end_time,
+            int64_t, true/*skip_null_err*/, true/*skip_column_err*/, OB_INVALID_TIMESTAMP);
         if (OB_FAIL(ret)) {
           LOG_WARN("failed to get cell", KR(ret),  K(job_id), K(unit_num), K(primary_zone_num), K(job_type),
               K(job_status), K(comment), K(start_time), K(finish_time));
+        } else if (OB_FAIL(balance_strategy.parse_from_str(balance_strategy_str))) {
+          LOG_WARN("parse from str failed", KR(ret), K(balance_strategy_str));
         } else if (OB_FAIL(job.init(tenant_id, ObBalanceJobID(job_id), ObBalanceJobType(job_type),
-            ObBalanceJobStatus(job_status), primary_zone_num, unit_num, comment, balance_strategy))) {
+            ObBalanceJobStatus(job_status), primary_zone_num, unit_num, comment, balance_strategy, max_end_time))) {
           LOG_WARN("failed to init job", KR(ret), K(tenant_id), K(job_id), K(unit_num), K(start_time),
-                      K(primary_zone_num), K(job_type), K(job_status), K(comment), K(balance_strategy));
+                      K(primary_zone_num), K(job_type), K(job_status), K(comment), K(balance_strategy), K(max_end_time));
         }
       }
       if (OB_SUCC(ret)) {
@@ -282,18 +326,29 @@ int ObBalanceJobTableOperator::update_job_status(const uint64_t tenant_id,
   return ret;
 }
 
-int ObBalanceJobTableOperator::fill_dml_spliter(share::ObDMLSqlSplicer &dml,
-                              const ObBalanceJob &job)
+int ObBalanceJobTableOperator::fill_dml_spliter(
+    share::ObDMLSqlSplicer &dml,
+    const ObBalanceJob &job)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(dml.add_column("balance_strategy_name", job.get_balance_strategy()))
+  if (OB_FAIL(dml.add_column("balance_strategy_name", job.get_balance_strategy().str()))
       || OB_FAIL(dml.add_column("job_id", job.get_job_id().id()))
       || OB_FAIL(dml.add_column("job_type", job.get_job_type().to_str()))
       || OB_FAIL(dml.add_column("status", job.get_job_status().to_str()))
       || OB_FAIL(dml.add_column("target_primary_zone_num", job.get_primary_zone_num()))
-     || OB_FAIL(dml.add_column("target_unit_num", job.get_unit_group_num()))
+      || OB_FAIL(dml.add_column("target_unit_num", job.get_unit_group_num()))
       || OB_FAIL(dml.add_column("comment", job.get_comment().string()))) {
     LOG_WARN("failed to fill dml spliter", KR(ret), K(job));
+  } else {
+    bool is_supported = false;
+    if (OB_FAIL(ObBalanceStrategy::check_compat_version(job.get_tenant_id(), is_supported))) {
+      LOG_WARN("check compat version failed", KR(ret), K(job), K(is_supported));
+    } else if (!is_supported) {
+      // skip
+    } else if (OB_INVALID_TIMESTAMP != job.get_max_end_time()
+        && OB_FAIL(dml.add_time_column("max_end_time", job.get_max_end_time()))) {
+      LOG_WARN("add max_end_time failed", KR(ret), K(job));
+    }
   }
   return ret;
 }
@@ -358,5 +413,48 @@ int ObBalanceJobTableOperator::clean_job(const uint64_t tenant_id,
   }
   return ret;
 }
+
+int ObBalanceJobTableOperator::update_job_balance_strategy(
+    const uint64_t tenant_id,
+    const ObBalanceJobID job_id,
+    const ObBalanceJobStatus job_status,
+    const ObBalanceStrategy &old_strategy,
+    const ObBalanceStrategy &new_strategy,
+    ObISQLClient &client)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+      || !job_id.is_valid()
+      || !job_status.is_valid()
+      || !old_strategy.is_valid()
+      || !new_strategy.is_valid()
+      || new_strategy == old_strategy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(job_id),
+        K(job_status), K(old_strategy), K(new_strategy));
+  } else if (OB_FAIL(sql.assign_fmt(
+      "update %s set balance_strategy_name = '%s' "
+      "where job_id = %ld and status = '%s' and balance_strategy_name = '%s'",
+      OB_ALL_BALANCE_JOB_TNAME,
+      new_strategy.str(),
+      job_id.id(),
+      job_status.to_str(),
+      old_strategy.str()))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(tenant_id),
+        K(job_id), K(job_status), K(old_strategy), K(new_strategy));
+  } else if (OB_FAIL(client.write(tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to exec sql", KR(ret), K(tenant_id), K(sql));
+  } else if (is_zero_row(affected_rows)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("update nothing, status or strategy may be changed", KR(ret), K(sql), K(affected_rows));
+  } else if (!is_single_row(affected_rows)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect single row", KR(ret), K(sql), K(affected_rows));
+  }
+  return ret;
+}
+
 }//end of share
 }//end of ob

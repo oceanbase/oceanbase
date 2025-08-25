@@ -24376,11 +24376,17 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_CANCEL_BALANCE_JOB",
+      "type":"T_BALANCE_JOB_OP",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
+         {
+          "type":"T_INT",
+          "int_val":1,
+          "str_len":0,
+          "str_val":""
+        },
          { }
       ]
     }
@@ -24396,11 +24402,17 @@ question_mask_size: 0
   "str_val":"",
   "children": [
      {
-      "type":"T_CANCEL_BALANCE_JOB",
+      "type":"T_BALANCE_JOB_OP",
       "int_val":0,
       "str_len":0,
       "str_val":"",
       "children": [
+         {
+          "type":"T_INT",
+          "int_val":1,
+          "str_len":0,
+          "str_val":""
+        },
          {
           "type":"T_TENANT_NAME",
           "int_val":9223372036854775807,

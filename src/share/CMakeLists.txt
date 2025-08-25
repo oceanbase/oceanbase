@@ -477,6 +477,7 @@ ob_set_subtarget(ob_share ls
   ls/ob_ls_creator.cpp
   ls/ob_ls_election_reference_info_operator.cpp
   ls/ob_ls_log_stat_info.cpp
+  ls/ob_alter_ls_struct.cpp
 )
 
 ob_set_subtarget(ob_share redolog
@@ -694,6 +695,8 @@ ob_set_subtarget(ob_share balance
   balance/ob_balance_task_table_operator.cpp
   balance/ob_balance_task_helper_operator.cpp
   balance/ob_transfer_partition_task_table_operator.cpp
+  balance/ob_scheduled_trigger_partition_balance.cpp
+  balance/ob_object_balance_weight_operator.cpp
 )
 
 ob_set_subtarget(ob_share ncomp_dll

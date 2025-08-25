@@ -356,10 +356,6 @@ private:
       const share::schema::ObTenantSchema &orig_tenant_schema,
       const common::ObIArray<common::ObZone> &zones_in_pool,
       const common::ObIArray<share::schema::ObZoneRegion> &zone_region_list);
-
-  int check_alter_tenant_when_rebalance_is_disabled_(
-      const share::schema::ObTenantSchema &orig_tenant_schema,
-      const share::schema::ObTenantSchema &new_tenant_schema);
   int check_revoke_pools_permitted(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const common::ObIArray<share::ObResourcePoolName> &new_pool_name_list,

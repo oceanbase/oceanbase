@@ -20,7 +20,7 @@
 #include "share/ob_ls_id.h"//share::ObLSID
 #include "share/ob_display_list.h"  // ObDisplayList
 #include "share/transfer/ob_transfer_info.h"//ObTransferPartList
-#include "share/ob_balance_define.h" // ObBalanceJobID, ObBalanceTaskID, ObTransferTaskID
+#include "share/ob_balance_define.h" // ObBalanceJobID, ObBalanceTaskID, ObTransferTaskID, ObBalanceStrategy
 
 namespace oceanbase
 {
@@ -45,6 +45,7 @@ class BufferCtx;
 namespace share
 {
 class ObBalanceJobStatus;
+class ObBalanceStrategy;
 class ObDMLSqlSplicer;
 #define IS_BALANCE_TASK(BALANCE_TASK, BALANCE)\
   bool is_##BALANCE()const { return BALANCE_TASK == val_;}
@@ -102,7 +103,8 @@ public:
   static const int64_t BALANCE_TASK_ALTER = 1;
   static const int64_t BALANCE_TASK_MERGE = 2;
   static const int64_t BALANCE_TASK_TRANSFER = 3;
-  static const int64_t BALANCE_TASK_MAX = 4;
+  static const int64_t BALANCE_TASK_CREATE = 4;
+  static const int64_t BALANCE_TASK_MAX = 5;
 
 
   ObBalanceTaskType(const int64_t value = BALANCE_TASK_INVALID) : val_(value) {}
@@ -117,6 +119,7 @@ public:
   IS_BALANCE_TASK(BALANCE_TASK_ALTER, alter_task)
   IS_BALANCE_TASK(BALANCE_TASK_MERGE, merge_task)
   IS_BALANCE_TASK(BALANCE_TASK_TRANSFER, transfer_task)
+  IS_BALANCE_TASK(BALANCE_TASK_CREATE, create_task)
   // assignment
   ObBalanceTaskType &operator=(const int64_t value) { val_ = value; return *this; }
 
@@ -159,25 +162,12 @@ public:
            const ObLSID &src_ls_id,
            const ObLSID &dest_ls_id,
            const ObTransferTaskID curr_transfer_task_id,
-           const ObTransferPartList &part_list,
-           const ObTransferPartList &finished_part_list,
-           const ObBalanceTaskIDList &parent_list,
-           const ObBalanceTaskIDList &child_list,
-           const ObString &comment);
-  int init(const uint64_t tenant_id,
-           const ObBalanceJobID job_id,
-           const ObBalanceTaskID balance_task_id,
-           const ObBalanceTaskType task_type,
-           const ObBalanceTaskStatus task_status,
-           const uint64_t ls_group_id,
-           const ObLSID &src_ls_id,
-           const ObLSID &dest_ls_id,
-           const ObTransferTaskID curr_transfer_task_id,
            const ObString &part_list_str,
            const ObString &finished_part_list_str,
            const ObString &parent_list_str,
            const ObString &child_list_str,
-           const ObString &comment);
+           const ObString &comment,
+           const ObString &balance_strategy_str);
   int simple_init(const uint64_t tenant_id,
            const ObBalanceJobID job_id,
            const ObBalanceTaskID balance_task_id,
@@ -185,14 +175,15 @@ public:
            const uint64_t ls_group_id,
            const ObLSID &src_ls_id,
            const ObLSID &dest_ls_id,
-           const ObTransferPartList &part_list);
+           const ObTransferPartList &part_list,
+           const ObBalanceStrategy &balance_strategy);
 
   bool is_valid() const;
   TO_STRING_KV(K_(tenant_id), K_(job_id), K_(balance_task_id), K_(task_status),
                K_(src_ls_id), K_(dest_ls_id),
                K_(task_type), K_(ls_group_id),
                K_(current_transfer_task_id), K_(parent_list), K_(child_list),
-               K_(part_list), K_(finished_part_list), K_(comment));
+               K_(part_list), K_(finished_part_list), K_(comment), K_(balance_strategy));
 private:
 int init_(const uint64_t tenant_id,
            const ObBalanceJobID job_id,
@@ -233,6 +224,7 @@ public:
   ObBalanceTaskIDList& get_parent_task_list() { return parent_list_; }
   ObBalanceTaskIDList& get_child_task_list() { return child_list_; }
   const ObSqlString& get_comment() const { return comment_; }
+  const ObBalanceStrategy& get_balance_strategy() const { return balance_strategy_; }
 
 private:
   ObTransferPartList part_list_;
@@ -240,6 +232,7 @@ private:
   ObBalanceTaskIDList parent_list_;
   ObBalanceTaskIDList child_list_;
   ObSqlString comment_;
+  ObBalanceStrategy balance_strategy_;
 };
 typedef ObArray<ObBalanceTask> ObBalanceTaskArray;
 typedef ObIArray<ObBalanceTask> ObBalanceTaskIArray;
@@ -432,6 +425,8 @@ public:
    * */
   static int get_job_task_cnt(const uint64_t tenant_id, const ObBalanceJobID job_id,
   int64_t &task_cnt, ObISQLClient &client);
+  static int get_ls_task_cnt(const uint64_t tenant_id, const ObLSID ls_id,
+      int64_t &task_cnt, ObISQLClient &client);
   /*
    * @description: update ls part list before set to transfer
    * @param[in] tenant_id : user_tenant_id
@@ -473,6 +468,9 @@ public:
   static int load_need_transfer_task(const uint64_t tenant_id,
                                        ObBalanceTaskIArray &task_array,
                                        ObISQLClient &client);
+private:
+  static int execute_task_cnt_sql_(const uint64_t tenant_id, const ObSqlString &sql,
+      int64_t &task_cnt, ObISQLClient &client);
 
 };
 #undef IS_BALANCE_TASK

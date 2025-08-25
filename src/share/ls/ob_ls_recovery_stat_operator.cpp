@@ -125,12 +125,12 @@ int ObLSRecoveryStat::assign(const ObLSRecoveryStat &other)
 }
 ////////////////////ObLSRecoveryStatOperator/////////////
 int ObLSRecoveryStatOperator::create_new_ls(const ObLSStatusInfo &ls_info,
-                                            const SCN &create_ls_scn,
-                                            const common::ObString &zone_priority,
-                                            const share::ObTenantSwitchoverStatus &working_sw_status,
-                                            ObMySQLTransaction &trans)
+                            const SCN &create_ls_scn,
+                            const common::ObString &zone_priority,
+                            const int64_t switchover_epoch,
+                            ObMySQLTransaction &trans)
 {
-  UNUSEDx(zone_priority, working_sw_status);
+  UNUSEDx(zone_priority, switchover_epoch);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ls_info.is_valid() || !create_ls_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;

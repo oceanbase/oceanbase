@@ -1543,10 +1543,10 @@ int ObBootstrap::insert_sys_ls_(const share::schema::ObTenantSchema &tenant_sche
       LOG_WARN("failed to init ls info", KR(ret), K(primary_zone), K(sys_flag));
     } else if (GCTX.is_shared_storage_mode()
             && OB_FAIL(life_agent.create_new_ls(sslog_status_info, SCN::base_scn(), primary_zone_str.string(),
-                                                share::NORMAL_SWITCHOVER_STATUS))) {
+                                                ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH))) {
       LOG_WARN("failed to create new sslog ls", KR(ret), K(sslog_status_info), K(primary_zone_str));
     } else if (OB_FAIL(life_agent.create_new_ls(sys_status_info, SCN::base_scn(), primary_zone_str.string(),
-                                                share::NORMAL_SWITCHOVER_STATUS))) {
+                                                ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH))) {
       LOG_WARN("failed to create new sys ls", KR(ret), K(sys_status_info), K(primary_zone_str));
     }
   }

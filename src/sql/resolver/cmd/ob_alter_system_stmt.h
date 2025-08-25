@@ -17,8 +17,6 @@
 #include "share/ob_rpc_struct.h"
 #include "share/scheduler/ob_sys_task_stat.h"
 #include "share/backup/ob_backup_clean_struct.h"
-#include "rootserver/ob_transfer_partition_command.h"
-#include "share/ob_service_name_proxy.h"
 #include "share/rebuild_tablet/ob_rebuild_tablet_location.h"
 #include "share/table/ob_redis_importer.h"
 
@@ -1484,28 +1482,6 @@ public:
 	TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(clone_tenant_name));
 private:
   common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> clone_tenant_name_;
-};
-class ObTransferPartitionStmt : public ObSystemCmdStmt
-{
-public:
-  ObTransferPartitionStmt()
-    : ObSystemCmdStmt(stmt::T_TRANSFER_PARTITION),
-      arg_() {}
-  virtual ~ObTransferPartitionStmt() {}
-
-  rootserver::ObTransferPartitionArg &get_arg() { return arg_; }
-private:
-  rootserver::ObTransferPartitionArg arg_;
-};
-
-class ObServiceNameStmt : public ObSystemCmdStmt
-{
-public:
-  ObServiceNameStmt() : ObSystemCmdStmt(stmt::T_SERVICE_NAME), arg_() {}
-  virtual ~ObServiceNameStmt() {}
-  share::ObServiceNameArg &get_arg() { return arg_; }
-private:
-  share::ObServiceNameArg arg_;
 };
 
 class ObRebuildTabletStmt : public ObSystemCmdStmt

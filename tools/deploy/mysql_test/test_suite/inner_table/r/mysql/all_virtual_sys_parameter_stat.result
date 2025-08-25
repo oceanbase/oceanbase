@@ -105,6 +105,7 @@ enable_adaptive_plan_cache
 enable_async_syslog
 enable_auto_split
 enable_cgroup
+enable_database_sharding_none
 enable_dblink
 enable_ddl
 enable_early_lock_release
@@ -191,6 +192,7 @@ log_transport_compress_all
 log_transport_compress_func
 ls_gc_delay_time
 ls_meta_table_check_interval
+ls_scale_out_factor
 major_compact_trigger
 major_freeze_duty_time
 max_partition_num

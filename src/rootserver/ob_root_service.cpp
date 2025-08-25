@@ -32,6 +32,7 @@
 #endif
 #include "share/backup/ob_backup_config.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
+#include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
 
 #include "sql/engine/cmd/ob_user_cmd_executor.h"
 #include "src/sql/engine/px/ob_dfo.h"
@@ -10368,6 +10369,8 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
       ret = check_write_throttle_trigger_percentage(*item);
     } else if (0 == STRCMP(item->name_.ptr(), _NO_LOGGING)) {
       ret = check_no_logging(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), ENABLE_DATABASE_SHARDING_NONE)) {
+      ret = check_enable_database_sharding_none_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), DEFAULT_TABLE_ORGANIZATION)) {
       ret = check_default_table_organization_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), DEFAULT_TABLE_STORE_FORMAT)){
@@ -10404,26 +10407,16 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("config invalid", KR(ret), K(*item), K(balancer_idle_time), K(tenant_id));
         }
-      }
-    } else if (0 == STRCMP(item->name_.ptr(), BALANCER_IDLE_TIME)) {
-      const int64_t DEFAULT_PARTITION_BALANCE_SCHEDULE_INTERVAL = 2 * 3600 * 1000 * 1000L; // 2h
-      for (int i = 0; i < item->tenant_ids_.count() && valid; i++) {
-        const uint64_t tenant_id = item->tenant_ids_.at(i);
-        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-        int64_t interval = tenant_config.is_valid()
-            ? tenant_config->partition_balance_schedule_interval
-            : DEFAULT_PARTITION_BALANCE_SCHEDULE_INTERVAL;
-        int64_t idle_time = ObConfigTimeParser::get(item->value_.ptr(), valid);
-        if (valid && (idle_time > interval)) {
-          valid = false;
-          char err_msg[DEFAULT_BUF_LENGTH];
-          (void)snprintf(err_msg, sizeof(err_msg), "balancer_idle_time of tenant %ld, "
-              "it should not be longer than partition_balance_schedule_interval", tenant_id);
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, err_msg);
-        }
-        if (!valid) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("config invalid", KR(ret), K(*item), K(interval), K(tenant_id));
+        if (OB_SUCC(ret) && is_user_tenant(tenant_id)) {
+          // When dbms_scheduler job SCHEDULED_TRIGGER_PARTITION_BALANCE is enabled,
+          // modify partition_balance_schedule_interval to valid value is not allowed.
+          bool passed = false;
+          if (OB_FAIL(ObScheduledTriggerPartitionBalance::check_modify_schedule_interval(
+              tenant_id,
+              interval,
+              passed))) {
+            LOG_WARN("check schedule interval failed", KR(ret), K(tenant_id), K(interval));
+          }
         }
       }
     } else if (0 == STRCMP(item->name_.ptr(), LOG_DISK_UTILIZATION_LIMIT_THRESHOLD)) {
@@ -10670,6 +10663,23 @@ int ObRootService::check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &ite
   } else if (value > GCONF.data_disk_write_limit_percentage) {
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, warn_log);
+  }
+  return ret;
+}
+
+int ObRootService::check_enable_database_sharding_none_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  const char *warn_log = "tenant config enable_database_sharding_none in oracle mode";
+  ARRAY_FOREACH(item.tenant_ids_, i) {
+    const uint64_t tenant_id = item.tenant_ids_.at(i);
+    bool is_oracle_mode = false;
+    if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+      LOG_WARN("fail to check is oracle mode", KR(ret), K(tenant_id));
+    } else if (is_oracle_mode) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, warn_log);
+    }
   }
   return ret;
 }

@@ -116,6 +116,7 @@ ob_set_subtarget(ob_rootserver common
   ob_load_inner_table_schema_executor.cpp
   ob_load_sys_package_task.cpp
   ob_root_rebuild_tablet.cpp
+  ob_alter_ls_command.cpp
   ob_alter_table_constraint_checker.cpp
   ob_location_ddl_operator.cpp
   ob_location_ddl_service.cpp
@@ -135,6 +136,8 @@ ob_set_subtarget(ob_rootserver balance
   balance/ob_tenant_ls_balance_group_info.cpp
   balance/ob_ls_all_part_builder.cpp
   balance/ob_partition_balance_helper.cpp
+  balance/ob_object_balance_weight_mgr.cpp
+  balance/ob_part_group_container.cpp
 )
 
 ob_set_subtarget(ob_rootserver ddl_task

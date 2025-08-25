@@ -23,11 +23,11 @@ using namespace common;
 int ObLsElectionReferenceInfoOperator::create_new_ls(const ObLSStatusInfo &ls_info,
                                                      const SCN &create_ls_scn,
                                                      const common::ObString &zone_priority,
-                                                     const share::ObTenantSwitchoverStatus &working_sw_status,
+                                                     const int64_t switchover_epoch,
                                                      ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  UNUSEDx(create_ls_scn, working_sw_status);
+  UNUSEDx(create_ls_scn, switchover_epoch);
   if (OB_UNLIKELY(!ls_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid_argument", KR(ret), K(ls_info));

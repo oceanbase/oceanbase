@@ -7987,7 +7987,24 @@ all_ncomp_dll_v2 = dict(
 )
 def_table_schema(**all_ncomp_dll_v2)
 
-# 529: __all_object_balance_weight
+def_table_schema(
+  owner          = 'wangzhennan.wzn',
+  table_name     = '__all_object_balance_weight',
+  table_id       = '529',
+  table_type     = 'SYSTEM_TABLE',
+  gm_columns     = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('table_id', 'int', 'false'),
+    ('partition_id', 'int', 'false'),
+    ('subpartition_id', 'int', 'false'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+  normal_columns = [
+    ('weight', 'int', 'false'),
+  ],
+)
+
 def_table_schema(
   owner = 'zhangyiqiang.zyq',
   table_id = 530,
@@ -16352,7 +16369,12 @@ def_table_schema(**gen_iterate_virtual_table_def(
   keywords = all_def_keywords['__all_ncomp_dll_v2']))
 # 12507: __all_virtual_logstore_service_status
 # 12508: __all_virtual_logstore_service_info
-# 12509: __all_virtual_object_balance_weight
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12509',
+  table_name = '__all_virtual_object_balance_weight',
+  keywords = all_def_keywords['__all_object_balance_weight']))
+
 # 12510: __all_virtual_standby_log_transport_stat
 
 def_table_schema(**gen_iterate_private_virtual_table_def(
@@ -17511,7 +17533,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15486', all_def_ke
 # 15487: __all_virtual_logstore_service_status
 # 15488: __all_virtual_logstore_service_info
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15489', all_def_keywords['__all_virtual_tablet_pointer_status']))
-# 15490: __all_object_balance_weight
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15490', all_def_keywords['__all_object_balance_weight'])))
 # 15491: __all_virtual_standby_log_transport_stat
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15492', all_def_keywords['__all_virtual_wr_sql_plan_aux_key2snapshot'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15493', all_def_keywords['__all_virtual_cs_replica_tablet_stats']))
@@ -23014,10 +23036,13 @@ def_table_schema(
          (CASE D.IN_RECYCLEBIN WHEN 0 THEN 'NO' ELSE 'YES' END) AS IN_RECYCLEBIN,
          C.COLLATION AS COLLATION,
          (CASE D.READ_ONLY WHEN 0 THEN 'NO' ELSE 'YES' END) AS READ_ONLY,
-         D.COMMENT AS COMMENT
+         D.COMMENT AS COMMENT,
+         TG.TABLEGROUP_NAME
   FROM OCEANBASE.__ALL_DATABASE AS D
   LEFT JOIN OCEANBASE.__TENANT_VIRTUAL_COLLATION AS C
   ON D.COLLATION_TYPE = C.COLLATION_TYPE
+  LEFT JOIN OCEANBASE.__ALL_TABLEGROUP AS TG
+  ON D.DEFAULT_TABLEGROUP_ID = TG.TABLEGROUP_ID
   """.replace("\n", " "),
 )
 
@@ -23036,10 +23061,13 @@ def_table_schema(
          (CASE D.IN_RECYCLEBIN WHEN 0 THEN 'NO' ELSE 'YES' END) AS IN_RECYCLEBIN,
          C.COLLATION AS COLLATION,
          (CASE D.READ_ONLY WHEN 0 THEN 'NO' ELSE 'YES' END) AS READ_ONLY,
-         D.COMMENT AS COMMENT
+         D.COMMENT AS COMMENT,
+         TG.TABLEGROUP_NAME
   FROM OCEANBASE.__ALL_VIRTUAL_DATABASE AS D
   LEFT JOIN OCEANBASE.__TENANT_VIRTUAL_COLLATION AS C
   ON D.COLLATION_TYPE = C.COLLATION_TYPE
+  LEFT JOIN OCEANBASE.__ALL_VIRTUAL_TABLEGROUP AS TG
+  ON D.TENANT_ID = TG.TENANT_ID AND D.DEFAULT_TABLEGROUP_ID = TG.TABLEGROUP_ID
   """.replace("\n", " "),
 )
 
@@ -42331,8 +42359,203 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
-# 21629: DBA_OB_OBJECT_BALANCE_WEIGHT
-# 21630: CDB_OB_OBJECT_BALANCE_WEIGHT
+def_table_schema(
+  owner           = 'wangzhennan.wzn',
+  table_name      = 'DBA_OB_OBJECT_BALANCE_WEIGHT',
+  table_id        = '21629',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT CASE WHEN A.TABLE_ID = D.TABLEGROUP_ID AND A.PARTITION_ID = -1 AND A.SUBPARTITION_ID = -1
+              THEN NULL ELSE A.TABLE_ID END AS TABLE_ID,
+         CASE A.PARTITION_ID WHEN -1 THEN NULL ELSE A.PARTITION_ID END AS PARTITION_ID,
+         CASE A.SUBPARTITION_ID WHEN -1 THEN NULL ELSE A.SUBPARTITION_ID END AS SUBPARTITION_ID,
+         A.WEIGHT,
+         C.DATABASE_NAME,
+         B.TABLE_NAME,
+         B.PARTITION_NAME,
+         B.SUBPARTITION_NAME,
+         D.TABLEGROUP_NAME,
+         CASE B.DATABASE_ID WHEN -1 THEN NULL ELSE B.DATABASE_ID END AS DATABASE_ID,
+         CASE D.TABLEGROUP_ID WHEN -1 THEN NULL ELSE D.TABLEGROUP_ID END AS TABLEGROUP_ID,
+         B.OBJECT_ID
+  FROM OCEANBASE.__ALL_OBJECT_BALANCE_WEIGHT A
+  JOIN (
+        SELECT
+        DATABASE_ID,
+        TABLE_NAME,
+        TABLE_ID,
+        -1 AS PART_ID,
+        -1 AS SUBPART_ID,
+        NULL AS PARTITION_NAME,
+        NULL AS SUBPARTITION_NAME,
+        TABLE_ID AS OBJECT_ID,
+        TABLEGROUP_ID
+        FROM OCEANBASE.__ALL_TABLE
+        WHERE TENANT_ID = 0 AND TABLE_ID > 500000
+
+        UNION ALL
+
+        SELECT
+        T.DATABASE_ID AS DATABASE_ID,
+        T.TABLE_NAME AS TABLE_NAME,
+        T.TABLE_ID AS TABLE_ID,
+        P.PART_ID AS PART_ID,
+        -1 AS SUBPART_ID,
+        P.PART_NAME AS PARTITION_NAME,
+        NULL AS SUBPARTITION_NAME,
+        P.PART_ID AS OBJECT_ID,
+        T.TABLEGROUP_ID AS TABLEGROUP_ID
+        FROM OCEANBASE.__ALL_TABLE T JOIN OCEANBASE.__ALL_PART P
+            ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID
+        WHERE T.TENANT_ID = 0 AND T.TABLE_ID > 500000
+
+        UNION ALL
+
+        SELECT
+        T.DATABASE_ID AS DATABASE_ID,
+        T.TABLE_NAME AS TABLE_NAME,
+        T.TABLE_ID AS TABLE_ID,
+        Q.PART_ID AS PART_ID,
+        Q.SUB_PART_ID AS SUBPART_ID,
+        P.PART_NAME AS PARTITION_NAME,
+        Q.SUB_PART_NAME AS SUBPARTITION_NAME,
+        Q.SUB_PART_ID AS OBJECT_ID,
+        T.TABLEGROUP_ID AS TABLEGROUP_ID
+        FROM OCEANBASE.__ALL_TABLE T, OCEANBASE.__ALL_PART P, OCEANBASE.__ALL_SUB_PART Q
+        WHERE T.TABLE_ID = P.TABLE_ID AND P.TABLE_ID = Q.TABLE_ID AND P.PART_ID = Q.PART_ID
+        AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = Q.TENANT_ID
+        AND T.TENANT_ID = 0 AND T.TABLE_ID > 500000
+
+        UNION ALL
+
+        SELECT
+        -1 AS DATABASE_ID,
+        NULL AS TABLE_NAME,
+        TABLEGROUP_ID AS TABLE_ID,
+        -1 AS PART_ID,
+        -1 AS SUBPART_ID,
+        NULL AS PARTITION_NAME,
+        NULL AS SUBPARTITION_NAME,
+        TABLEGROUP_ID AS OBJECT_ID,
+        TABLEGROUP_ID AS TABLEGROUP_ID
+        FROM OCEANBASE.__ALL_TABLEGROUP
+        WHERE TENANT_ID = 0 AND TABLEGROUP_ID > 500000
+      ) B
+      ON A.TABLE_ID = B.TABLE_ID AND A.PARTITION_ID = B.PART_ID
+         AND A.SUBPARTITION_ID = B.SUBPART_ID
+  LEFT JOIN OCEANBASE.__ALL_DATABASE C
+      ON B.DATABASE_ID = C.DATABASE_ID AND C.TENANT_ID = 0
+  LEFT JOIN OCEANBASE.__ALL_TABLEGROUP D
+      ON B.TABLEGROUP_ID = D.TABLEGROUP_ID AND D.TENANT_ID = 0
+  ORDER BY A.TABLE_ID, A.PARTITION_ID, A.SUBPARTITION_ID
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'wangzhennan.wzn',
+  table_name      = 'CDB_OB_OBJECT_BALANCE_WEIGHT',
+  table_id        = '21630',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT A.TENANT_ID,
+         CASE WHEN A.TABLE_ID = D.TABLEGROUP_ID AND A.PARTITION_ID = -1 AND A.SUBPARTITION_ID = -1
+              THEN NULL ELSE A.TABLE_ID END AS TABLE_ID,
+         CASE A.PARTITION_ID WHEN -1 THEN NULL ELSE A.PARTITION_ID END AS PARTITION_ID,
+         CASE A.SUBPARTITION_ID WHEN -1 THEN NULL ELSE A.SUBPARTITION_ID END AS SUBPARTITION_ID,
+         A.WEIGHT,
+         C.DATABASE_NAME,
+         B.TABLE_NAME,
+         B.PARTITION_NAME,
+         B.SUBPARTITION_NAME,
+         D.TABLEGROUP_NAME,
+         CASE B.DATABASE_ID WHEN -1 THEN NULL ELSE B.DATABASE_ID END AS DATABASE_ID,
+         CASE D.TABLEGROUP_ID WHEN -1 THEN NULL ELSE D.TABLEGROUP_ID END AS TABLEGROUP_ID,
+         B.OBJECT_ID
+  FROM OCEANBASE.__ALL_VIRTUAL_OBJECT_BALANCE_WEIGHT A
+  JOIN (
+        SELECT
+        TENANT_ID,
+        DATABASE_ID,
+        TABLE_NAME,
+        TABLE_ID,
+        -1 AS PART_ID,
+        -1 AS SUBPART_ID,
+        NULL AS PARTITION_NAME,
+        NULL AS SUBPARTITION_NAME,
+        TABLE_ID AS OBJECT_ID,
+        TABLEGROUP_ID
+        FROM OCEANBASE.__ALL_VIRTUAL_TABLE
+        WHERE TABLE_ID > 500000
+
+        UNION ALL
+
+        SELECT
+        T.TENANT_ID AS TENANT_ID,
+        T.DATABASE_ID AS DATABASE_ID,
+        T.TABLE_NAME AS TABLE_NAME,
+        T.TABLE_ID AS TABLE_ID,
+        P.PART_ID AS PART_ID,
+        -1 AS SUBPART_ID,
+        P.PART_NAME AS PARTITION_NAME,
+        NULL AS SUBPARTITION_NAME,
+        P.PART_ID AS OBJECT_ID,
+        T.TABLEGROUP_ID AS TABLEGROUP_ID
+        FROM OCEANBASE.__ALL_VIRTUAL_TABLE T JOIN OCEANBASE.__ALL_VIRTUAL_PART P
+            ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID
+        WHERE T.TENANT_ID = P.TENANT_ID AND T.TABLE_ID > 500000
+
+        UNION ALL
+
+        SELECT
+        T.TENANT_ID AS TENANT_ID,
+        T.DATABASE_ID AS DATABASE_ID,
+        T.TABLE_NAME AS TABLE_NAME,
+        T.TABLE_ID AS TABLE_ID,
+        Q.PART_ID AS PART_ID,
+        Q.SUB_PART_ID AS SUBPART_ID,
+        P.PART_NAME AS PARTITION_NAME,
+        Q.SUB_PART_NAME AS SUBPARTITION_NAME,
+        Q.SUB_PART_ID AS OBJECT_ID,
+        T.TABLEGROUP_ID AS TABLEGROUP_ID
+        FROM OCEANBASE.__ALL_VIRTUAL_TABLE T, OCEANBASE.__ALL_VIRTUAL_PART P,
+            OCEANBASE.__ALL_VIRTUAL_SUB_PART Q
+        WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=Q.TABLE_ID AND P.PART_ID =Q.PART_ID
+            AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = Q.TENANT_ID AND T.TABLE_ID > 500000
+
+        UNION ALL
+
+        SELECT
+        TENANT_ID,
+        -1 AS DATABASE_ID,
+        NULL AS TABLE_NAME,
+        TABLEGROUP_ID AS TABLE_ID,
+        -1 AS PART_ID,
+        -1 AS SUBPART_ID,
+        NULL AS PARTITION_NAME,
+        NULL AS SUBPARTITION_NAME,
+        TABLEGROUP_ID AS OBJECT_ID,
+        TABLEGROUP_ID AS TABLEGROUP_ID
+        FROM OCEANBASE.__ALL_VIRTUAL_TABLEGROUP
+        WHERE TABLEGROUP_ID > 500000
+      ) B
+      ON A.TENANT_ID = B.TENANT_ID AND A.TABLE_ID = B.TABLE_ID
+          AND A.PARTITION_ID = B.PART_ID AND A.SUBPARTITION_ID = B.SUBPART_ID
+  LEFT JOIN OCEANBASE.__ALL_VIRTUAL_DATABASE C
+      ON A.TENANT_ID = C.TENANT_ID AND B.DATABASE_ID = C.DATABASE_ID
+  LEFT JOIN OCEANBASE.__ALL_VIRTUAL_TABLEGROUP D
+      ON A.TENANT_ID = D.TENANT_ID AND B.TABLEGROUP_ID = D.TABLEGROUP_ID
+  ORDER BY A.TENANT_ID, A.TABLE_ID, A.PARTITION_ID, A.SUBPARTITION_ID
+  """.replace("\n", " "),
+)
 
 # 21631: GV$OB_STANDBY_LOG_TRANSPORT_STAT
 # 21632: V$OB_STANDBY_LOG_TRANSPORT_STAT
@@ -59262,10 +59485,13 @@ def_table_schema(
          (CASE D.IN_RECYCLEBIN WHEN 0 THEN 'NO' ELSE 'YES' END) AS IN_RECYCLEBIN,
          C.COLLATION AS COLLATION,
          (CASE D.READ_ONLY WHEN 0 THEN 'NO' ELSE 'YES' END) AS READ_ONLY,
-         D."COMMENT" AS "COMMENT"
+         D."COMMENT" AS "COMMENT",
+         TG.TABLEGROUP_NAME AS TABLEGROUP_NAME
   FROM SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
   LEFT JOIN SYS.TENANT_VIRTUAL_COLLATION C
   ON D.COLLATION_TYPE = C.COLLATION_TYPE
+  LEFT JOIN SYS.ALL_VIRTUAL_TABLEGROUP_REAL_AGENT TG
+  ON D.TENANT_ID = TG.TENANT_ID AND D.DEFAULT_TABLEGROUP_ID = TG.TABLEGROUP_ID
   """.replace("\n", " "),
 )
 
@@ -65151,7 +65377,110 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25304: DBA_OB_OBJECT_BALANCE_WEIGHT
+def_table_schema(
+  owner           = 'wangzhennan.wzn',
+  table_name      = 'DBA_OB_OBJECT_BALANCE_WEIGHT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25304',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT CASE WHEN A.TABLE_ID = D.TABLEGROUP_ID AND A.PARTITION_ID = -1 AND A.SUBPARTITION_ID = -1
+              THEN NULL ELSE A.TABLE_ID END AS TABLE_ID,
+         CASE A.PARTITION_ID WHEN -1 THEN NULL ELSE A.PARTITION_ID END AS PARTITION_ID,
+         CASE A.SUBPARTITION_ID WHEN -1 THEN NULL ELSE A.SUBPARTITION_ID END AS SUBPARTITION_ID,
+         A.WEIGHT,
+         C.DATABASE_NAME,
+         B.TABLE_NAME,
+         B.PARTITION_NAME,
+         B.SUBPARTITION_NAME,
+         D.TABLEGROUP_NAME,
+         CASE B.DATABASE_ID WHEN -1 THEN NULL ELSE B.DATABASE_ID END AS DATABASE_ID,
+         CASE D.TABLEGROUP_ID WHEN -1 THEN NULL ELSE D.TABLEGROUP_ID END AS TABLEGROUP_ID,
+         B.OBJECT_ID
+  FROM SYS.ALL_VIRTUAL_OBJECT_BALANCE_WEIGHT_REAL_AGENT A
+  JOIN (
+        SELECT
+        TENANT_ID,
+        DATABASE_ID,
+        TABLE_NAME,
+        TABLE_ID,
+        -1 AS PART_ID,
+        -1 AS SUBPART_ID,
+        NULL AS PARTITION_NAME,
+        NULL AS SUBPARTITION_NAME,
+        TABLE_ID AS OBJECT_ID,
+        TABLEGROUP_ID
+        FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
+        WHERE TENANT_ID = EFFECTIVE_TENANT_ID() AND TABLE_ID > 500000
+
+        UNION ALL
+
+        SELECT
+        T.TENANT_ID AS TENANT_ID,
+        T.DATABASE_ID AS DATABASE_ID,
+        T.TABLE_NAME AS TABLE_NAME,
+        T.TABLE_ID AS TABLE_ID,
+        P.PART_ID AS PART_ID,
+        -1 AS SUBPART_ID,
+        P.PART_NAME AS PARTITION_NAME,
+        NULL AS SUBPARTITION_NAME,
+        P.PART_ID AS OBJECT_ID,
+        T.TABLEGROUP_ID AS TABLEGROUP_ID
+        FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P
+            ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID
+        WHERE T.TENANT_ID = EFFECTIVE_TENANT_ID() AND T.TABLE_ID > 500000
+
+        UNION ALL
+
+        SELECT
+        T.TENANT_ID AS TENANT_ID,
+        T.DATABASE_ID AS DATABASE_ID,
+        T.TABLE_NAME AS TABLE_NAME,
+        T.TABLE_ID AS TABLE_ID,
+        Q.PART_ID AS PART_ID,
+        Q.SUB_PART_ID AS SUBPART_ID,
+        P.PART_NAME AS PARTITION_NAME,
+        Q.SUB_PART_NAME AS SUBPARTITION_NAME,
+        Q.SUB_PART_ID AS OBJECT_ID,
+        T.TABLEGROUP_ID AS TABLEGROUP_ID
+        FROM SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT Q
+            JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P ON P.PART_ID =Q.PART_ID AND Q.TENANT_ID = P.TENANT_ID
+            JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T ON T.TABLE_ID =P.TABLE_ID AND T.TENANT_ID = Q.TENANT_ID
+        WHERE T.TABLE_ID = P.TABLE_ID AND P.TABLE_ID = Q.TABLE_ID AND P.PART_ID = Q.PART_ID
+        AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = Q.TENANT_ID
+        AND T.TENANT_ID = EFFECTIVE_TENANT_ID() AND T.TABLE_ID > 500000
+
+        UNION ALL
+
+        SELECT
+        TENANT_ID,
+        -1 AS DATABASE_ID,
+        NULL AS TABLE_NAME,
+        TABLEGROUP_ID AS TABLE_ID,
+        -1 AS PART_ID,
+        -1 AS SUBPART_ID,
+        NULL AS PARTITION_NAME,
+        NULL AS SUBPARTITION_NAME,
+        TABLEGROUP_ID AS OBJECT_ID,
+        TABLEGROUP_ID AS TABLEGROUP_ID
+        FROM SYS.ALL_VIRTUAL_TABLEGROUP_REAL_AGENT
+        WHERE TENANT_ID = EFFECTIVE_TENANT_ID() AND TABLEGROUP_ID > 500000
+      ) B
+      ON A.TABLE_ID = B.TABLE_ID AND A.PARTITION_ID = B.PART_ID
+         AND A.SUBPARTITION_ID = B.SUBPART_ID
+  JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT C
+      ON B.DATABASE_ID = C.DATABASE_ID AND B.TENANT_ID = C.TENANT_ID
+  LEFT JOIN SYS.ALL_VIRTUAL_TABLEGROUP_REAL_AGENT D
+      ON B.TABLEGROUP_ID = D.TABLEGROUP_ID AND B.TENANT_ID = D.TENANT_ID
+  ORDER BY A.TABLE_ID, A.PARTITION_ID, A.SUBPARTITION_ID
+  """.replace("\n", " "),
+)
 
 def_table_schema(
   owner = 'huangrenhuang.hrh',

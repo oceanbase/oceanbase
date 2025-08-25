@@ -378,6 +378,7 @@
 # 526: __wr_res_mgr_sysstat
 # 527: __all_kv_redis_table
 # 528: __all_ncomp_dll_v2
+# 529: __all_object_balance_weight
 # 530: __wr_sql_plan_aux_key2snapshot
 # 531: __ft_dict_ik_utf8
 # 532: __ft_stopword_ik_utf8
@@ -1234,6 +1235,8 @@
 # 12505: __all_virtual_temp_file
 # 12506: __all_virtual_ncomp_dll_v2
 # 12506: __all_ncomp_dll_v2  # BASE_TABLE_NAME
+# 12509: __all_virtual_object_balance_weight
+# 12509: __all_object_balance_weight  # BASE_TABLE_NAME
 # 12511: __all_virtual_wr_sql_plan_aux_key2snapshot
 # 12511: __wr_sql_plan_aux_key2snapshot  # BASE_TABLE_NAME
 # 12513: __all_virtual_cs_replica_tablet_stats
@@ -1971,6 +1974,8 @@
 # 15486: __all_ncomp_dll_v2  # BASE_TABLE_NAME
 # 15489: ALL_VIRTUAL_TABLET_POINTER_STATUS
 # 15489: __all_virtual_tablet_pointer_status  # BASE_TABLE_NAME
+# 15490: ALL_VIRTUAL_OBJECT_BALANCE_WEIGHT_REAL_AGENT
+# 15490: __all_object_balance_weight  # BASE_TABLE_NAME
 # 15492: ALL_VIRTUAL_WR_SQL_PLAN_AUX_KEY2SNAPSHOT
 # 15492: __wr_sql_plan_aux_key2snapshot  # BASE_TABLE_NAME
 # 15492: __all_virtual_wr_sql_plan_aux_key2snapshot  # BASE_TABLE_NAME1
@@ -2544,6 +2549,8 @@
 # 21622: DBA_OB_TEMP_FILES
 # 21623: CDB_OB_TEMP_FILES
 # 21628: proc
+# 21629: DBA_OB_OBJECT_BALANCE_WEIGHT
+# 21630: CDB_OB_OBJECT_BALANCE_WEIGHT
 # 21633: DBA_OB_CS_REPLICA_STATS
 # 21634: CDB_OB_CS_REPLICA_STATS
 # 21635: GV$OB_PLUGINS
@@ -2859,6 +2866,7 @@
 # 25301: PROXY_USERS
 # 25302: DBA_OB_SERVICES
 # 25303: DBA_OB_STORAGE_IO_USAGE
+# 25304: DBA_OB_OBJECT_BALANCE_WEIGHT
 # 25305: USER_SCHEDULER_JOBS
 # 25306: DBA_OB_TENANT_FLASHBACK_LOG_SCN
 # 25307: DBA_OB_CCL_RULES

@@ -78,6 +78,7 @@
 #include "pl/sys_package/ob_dbms_mview_stats_mysql.h"
 #include "pl/sys_package/ob_pl_dbms_trusted_certificate_manager.h"
 #include "pl/sys_package/ob_dbms_limit_calculator_mysql.h"
+#include "pl/sys_package/ob_dbms_balance.h"
 #include "pl/sys_package/ob_dbms_external_table.h"
 #include "pl/sys_package/ob_dbms_vector_mysql.h"
 #include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
@@ -864,6 +865,14 @@
   INTERFACE_DEF(INTERFACE_DBMS_OB_LIMIT_CALCULATOR_PHY_RES_CALCULATE_BY_UNIT, "PHY_RES_CALCULATE_BY_UNIT", (ObDBMSLimitCalculator::phy_res_calculate_by_unit))
   INTERFACE_DEF(INTERFACE_DBMS_OB_LIMIT_CALCULATOR_PHY_RES_CALCULATE_BY_STADNBY_TENANT, "PHY_RES_CALCULATE_BY_STANDBY_TENANT", (ObDBMSLimitCalculator::phy_res_calculate_by_standby_tenant))
   // end of dbms_ob_limit_calculator
+
+  // start of dbms_balance
+  INTERFACE_DEF(INTERFACE_DBMS_BALANCE_TRIGGER_PARTITION_BALANCE, "DBMS_BALANCE_TRIGGER_PARTITION_BALANCE", (ObDBMSBalance::trigger_partition_balance))
+  INTERFACE_DEF(INTERFACE_DBMS_BALANCE_SET_BALANCE_WEIGHT, "DBMS_BALANCE_SET_BALANCE_WEIGHT", (ObDBMSBalance::set_balance_weight))
+  INTERFACE_DEF(INTERFACE_DBMS_BALANCE_CLEAR_BALANCE_WEIGHT, "DBMS_BALANCE_CLEAR_BALANCE_WEIGHT", (ObDBMSBalance::clear_balance_weight))
+  INTERFACE_DEF(INTERFACE_DBMS_BALANCE_SET_TABLEGROUP_BALANCE_WEIGHT, "DBMS_BALANCE_SET_TABLEGROUP_BALANCE_WEIGHT", (ObDBMSBalance::set_tablegroup_balance_weight))
+  INTERFACE_DEF(INTERFACE_DBMS_BALANCE_CLEAR_TABLEGROUP_BALANCE_WEIGHT, "DBMS_BALANCE_CLEAR_TABLEGROUP_BALANCE_WEIGHT", (ObDBMSBalance::clear_tablegroup_balance_weight))
+  // end of dbms_balance
 
   // start of dbms_external_table
   INTERFACE_DEF(INTERFACE_DBMS_EXTERNAL_TABLE_AUTO_REFRESH_EXTERNAL_TABLE, "AUTO_REFRESH_EXTERNAL_TABLE", (ObDBMSExternalTable::auto_refresh_external_table))

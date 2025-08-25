@@ -1198,6 +1198,108 @@ int ObInnerTableSchema::proc_schema(ObTableSchema &table_schema)
   return ret;
 }
 
+int ObInnerTableSchema::dba_ob_object_balance_weight_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_OBJECT_BALANCE_WEIGHT_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_OBJECT_BALANCE_WEIGHT_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT CASE WHEN A.TABLE_ID = D.TABLEGROUP_ID AND A.PARTITION_ID = -1 AND A.SUBPARTITION_ID = -1                THEN NULL ELSE A.TABLE_ID END AS TABLE_ID,          CASE A.PARTITION_ID WHEN -1 THEN NULL ELSE A.PARTITION_ID END AS PARTITION_ID,          CASE A.SUBPARTITION_ID WHEN -1 THEN NULL ELSE A.SUBPARTITION_ID END AS SUBPARTITION_ID,          A.WEIGHT,          C.DATABASE_NAME,          B.TABLE_NAME,          B.PARTITION_NAME,          B.SUBPARTITION_NAME,          D.TABLEGROUP_NAME,          CASE B.DATABASE_ID WHEN -1 THEN NULL ELSE B.DATABASE_ID END AS DATABASE_ID,          CASE D.TABLEGROUP_ID WHEN -1 THEN NULL ELSE D.TABLEGROUP_ID END AS TABLEGROUP_ID,          B.OBJECT_ID   FROM OCEANBASE.__ALL_OBJECT_BALANCE_WEIGHT A   JOIN (         SELECT         DATABASE_ID,         TABLE_NAME,         TABLE_ID,         -1 AS PART_ID,         -1 AS SUBPART_ID,         NULL AS PARTITION_NAME,         NULL AS SUBPARTITION_NAME,         TABLE_ID AS OBJECT_ID,         TABLEGROUP_ID         FROM OCEANBASE.__ALL_TABLE         WHERE TENANT_ID = 0 AND TABLE_ID > 500000          UNION ALL          SELECT         T.DATABASE_ID AS DATABASE_ID,         T.TABLE_NAME AS TABLE_NAME,         T.TABLE_ID AS TABLE_ID,         P.PART_ID AS PART_ID,         -1 AS SUBPART_ID,         P.PART_NAME AS PARTITION_NAME,         NULL AS SUBPARTITION_NAME,         P.PART_ID AS OBJECT_ID,         T.TABLEGROUP_ID AS TABLEGROUP_ID         FROM OCEANBASE.__ALL_TABLE T JOIN OCEANBASE.__ALL_PART P             ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID         WHERE T.TENANT_ID = 0 AND T.TABLE_ID > 500000          UNION ALL          SELECT         T.DATABASE_ID AS DATABASE_ID,         T.TABLE_NAME AS TABLE_NAME,         T.TABLE_ID AS TABLE_ID,         Q.PART_ID AS PART_ID,         Q.SUB_PART_ID AS SUBPART_ID,         P.PART_NAME AS PARTITION_NAME,         Q.SUB_PART_NAME AS SUBPARTITION_NAME,         Q.SUB_PART_ID AS OBJECT_ID,         T.TABLEGROUP_ID AS TABLEGROUP_ID         FROM OCEANBASE.__ALL_TABLE T, OCEANBASE.__ALL_PART P, OCEANBASE.__ALL_SUB_PART Q         WHERE T.TABLE_ID = P.TABLE_ID AND P.TABLE_ID = Q.TABLE_ID AND P.PART_ID = Q.PART_ID         AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = Q.TENANT_ID         AND T.TENANT_ID = 0 AND T.TABLE_ID > 500000          UNION ALL          SELECT         -1 AS DATABASE_ID,         NULL AS TABLE_NAME,         TABLEGROUP_ID AS TABLE_ID,         -1 AS PART_ID,         -1 AS SUBPART_ID,         NULL AS PARTITION_NAME,         NULL AS SUBPARTITION_NAME,         TABLEGROUP_ID AS OBJECT_ID,         TABLEGROUP_ID AS TABLEGROUP_ID         FROM OCEANBASE.__ALL_TABLEGROUP         WHERE TENANT_ID = 0 AND TABLEGROUP_ID > 500000       ) B       ON A.TABLE_ID = B.TABLE_ID AND A.PARTITION_ID = B.PART_ID          AND A.SUBPARTITION_ID = B.SUBPART_ID   LEFT JOIN OCEANBASE.__ALL_DATABASE C       ON B.DATABASE_ID = C.DATABASE_ID AND C.TENANT_ID = 0   LEFT JOIN OCEANBASE.__ALL_TABLEGROUP D       ON B.TABLEGROUP_ID = D.TABLEGROUP_ID AND D.TENANT_ID = 0   ORDER BY A.TABLE_ID, A.PARTITION_ID, A.SUBPARTITION_ID   )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::cdb_ob_object_balance_weight_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_CDB_OB_OBJECT_BALANCE_WEIGHT_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_CDB_OB_OBJECT_BALANCE_WEIGHT_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT A.TENANT_ID,          CASE WHEN A.TABLE_ID = D.TABLEGROUP_ID AND A.PARTITION_ID = -1 AND A.SUBPARTITION_ID = -1                THEN NULL ELSE A.TABLE_ID END AS TABLE_ID,          CASE A.PARTITION_ID WHEN -1 THEN NULL ELSE A.PARTITION_ID END AS PARTITION_ID,          CASE A.SUBPARTITION_ID WHEN -1 THEN NULL ELSE A.SUBPARTITION_ID END AS SUBPARTITION_ID,          A.WEIGHT,          C.DATABASE_NAME,          B.TABLE_NAME,          B.PARTITION_NAME,          B.SUBPARTITION_NAME,          D.TABLEGROUP_NAME,          CASE B.DATABASE_ID WHEN -1 THEN NULL ELSE B.DATABASE_ID END AS DATABASE_ID,          CASE D.TABLEGROUP_ID WHEN -1 THEN NULL ELSE D.TABLEGROUP_ID END AS TABLEGROUP_ID,          B.OBJECT_ID   FROM OCEANBASE.__ALL_VIRTUAL_OBJECT_BALANCE_WEIGHT A   JOIN (         SELECT         TENANT_ID,         DATABASE_ID,         TABLE_NAME,         TABLE_ID,         -1 AS PART_ID,         -1 AS SUBPART_ID,         NULL AS PARTITION_NAME,         NULL AS SUBPARTITION_NAME,         TABLE_ID AS OBJECT_ID,         TABLEGROUP_ID         FROM OCEANBASE.__ALL_VIRTUAL_TABLE         WHERE TABLE_ID > 500000          UNION ALL          SELECT         T.TENANT_ID AS TENANT_ID,         T.DATABASE_ID AS DATABASE_ID,         T.TABLE_NAME AS TABLE_NAME,         T.TABLE_ID AS TABLE_ID,         P.PART_ID AS PART_ID,         -1 AS SUBPART_ID,         P.PART_NAME AS PARTITION_NAME,         NULL AS SUBPARTITION_NAME,         P.PART_ID AS OBJECT_ID,         T.TABLEGROUP_ID AS TABLEGROUP_ID         FROM OCEANBASE.__ALL_VIRTUAL_TABLE T JOIN OCEANBASE.__ALL_VIRTUAL_PART P             ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID         WHERE T.TENANT_ID = P.TENANT_ID AND T.TABLE_ID > 500000          UNION ALL          SELECT         T.TENANT_ID AS TENANT_ID,         T.DATABASE_ID AS DATABASE_ID,         T.TABLE_NAME AS TABLE_NAME,         T.TABLE_ID AS TABLE_ID,         Q.PART_ID AS PART_ID,         Q.SUB_PART_ID AS SUBPART_ID,         P.PART_NAME AS PARTITION_NAME,         Q.SUB_PART_NAME AS SUBPARTITION_NAME,         Q.SUB_PART_ID AS OBJECT_ID,         T.TABLEGROUP_ID AS TABLEGROUP_ID         FROM OCEANBASE.__ALL_VIRTUAL_TABLE T, OCEANBASE.__ALL_VIRTUAL_PART P,             OCEANBASE.__ALL_VIRTUAL_SUB_PART Q         WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=Q.TABLE_ID AND P.PART_ID =Q.PART_ID             AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = Q.TENANT_ID AND T.TABLE_ID > 500000          UNION ALL          SELECT         TENANT_ID,         -1 AS DATABASE_ID,         NULL AS TABLE_NAME,         TABLEGROUP_ID AS TABLE_ID,         -1 AS PART_ID,         -1 AS SUBPART_ID,         NULL AS PARTITION_NAME,         NULL AS SUBPARTITION_NAME,         TABLEGROUP_ID AS OBJECT_ID,         TABLEGROUP_ID AS TABLEGROUP_ID         FROM OCEANBASE.__ALL_VIRTUAL_TABLEGROUP         WHERE TABLEGROUP_ID > 500000       ) B       ON A.TENANT_ID = B.TENANT_ID AND A.TABLE_ID = B.TABLE_ID           AND A.PARTITION_ID = B.PART_ID AND A.SUBPARTITION_ID = B.SUBPART_ID   LEFT JOIN OCEANBASE.__ALL_VIRTUAL_DATABASE C       ON A.TENANT_ID = C.TENANT_ID AND B.DATABASE_ID = C.DATABASE_ID   LEFT JOIN OCEANBASE.__ALL_VIRTUAL_TABLEGROUP D       ON A.TENANT_ID = D.TENANT_ID AND B.TABLEGROUP_ID = D.TABLEGROUP_ID   ORDER BY A.TENANT_ID, A.TABLE_ID, A.PARTITION_ID, A.SUBPARTITION_ID   )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 int ObInnerTableSchema::dba_ob_cs_replica_stats_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;

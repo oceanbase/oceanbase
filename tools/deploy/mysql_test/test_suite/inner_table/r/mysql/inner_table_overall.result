@@ -321,6 +321,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 526	__wr_res_mgr_sysstat	0	201001	1
 527	__all_kv_redis_table	0	201001	1
 528	__all_ncomp_dll_v2	0	201001	1
+529	__all_object_balance_weight	0	201001	1
 530	__wr_sql_plan_aux_key2snapshot	0	201001	1
 531	__ft_dict_ik_utf8	0	201001	1
 532	__ft_stopword_ik_utf8	0	201001	1
@@ -836,6 +837,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12504	__all_virtual_function_io_stat	2	201001	1
 12505	__all_virtual_temp_file	2	201001	1
 12506	__all_virtual_ncomp_dll_v2	2	201001	1
+12509	__all_virtual_object_balance_weight	2	201001	1
 12511	__all_virtual_wr_sql_plan_aux_key2snapshot	2	201001	1
 12513	__all_virtual_cs_replica_tablet_stats	2	201001	1
 12514	__all_virtual_ddl_diagnose_info	2	201001	1
@@ -1398,6 +1400,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21622	DBA_OB_TEMP_FILES	1	201001	1
 21623	CDB_OB_TEMP_FILES	1	201001	1
 21628	proc	1	201003	1
+21629	DBA_OB_OBJECT_BALANCE_WEIGHT	1	201001	1
+21630	CDB_OB_OBJECT_BALANCE_WEIGHT	1	201001	1
 21633	DBA_OB_CS_REPLICA_STATS	1	201001	1
 21634	CDB_OB_CS_REPLICA_STATS	1	201001	1
 21635	GV$OB_PLUGINS	1	201001	1

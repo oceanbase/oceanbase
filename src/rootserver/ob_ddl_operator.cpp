@@ -28,6 +28,8 @@
 #include "share/ob_zone_merge_info.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
+#include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
+#include "share/balance/ob_object_balance_weight_operator.h" // ObObjectBalanceWeightOperator
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "pl/ob_pl_persistent.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
@@ -538,16 +540,105 @@ int ObDDLOperator::create_database(ObDatabaseSchema &database_schema,
     LOG_ERROR("schema_service must not null");
   } else if (OB_FAIL(schema_service->fetch_new_database_id(
       database_schema.get_tenant_id(), new_database_id))) {
-    LOG_WARN("fetch new database id failed", K(database_schema.get_tenant_id()),
-             K(ret));
+    LOG_WARN("fetch new database id failed", KR(ret), K(tenant_id), K(new_database_id));
+  } else if (FALSE_IT(database_schema.set_database_id(new_database_id))) {
+  } else if (OB_FAIL(try_create_tablegroup_for_database_(trans, database_schema))) {
+    LOG_WARN("failed to create tablegroup for database", KR(ret), K(database_schema));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
-    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+    LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id), K(new_schema_version));
   } else {
-    database_schema.set_database_id(new_database_id);
     database_schema.set_schema_version(new_schema_version);
     if (OB_FAIL(schema_service->get_database_sql_service().insert_database(
         database_schema, trans, ddl_stmt_str))) {
-      LOG_WARN("insert database failed", K(database_schema), K(ret));
+      LOG_WARN("insert database failed", KR(ret), K(database_schema));
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::try_create_tablegroup_for_database_(
+    common::ObMySQLTransaction &trans,
+    share::schema::ObDatabaseSchema &database_schema)
+{
+  int ret = OB_SUCCESS;
+  ObTablegroupSchema tablegroup_schema;
+  ObSqlString tablegroup_name;
+  uint64_t tenant_data_version = 0;
+  const uint64_t tenant_id = database_schema.get_tenant_id();
+  const uint64_t database_id = database_schema.get_database_id();
+  uint64_t tablegroup_id = OB_INVALID_ID;
+  bool enable_database_sharding_none = false;
+  bool is_oracle_mode = false;
+  bool tablegroup_is_exist = false;
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      enable_database_sharding_none = tenant_config->enable_database_sharding_none;
+    }
+  }
+
+  if (OB_UNLIKELY(!trans.is_started() || !is_valid_id(database_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(database_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_4_1_0) {
+    // do nothing
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to get compat mode", KR(ret), K(tenant_id));
+  } else if (is_oracle_mode
+      || !database_schema.get_default_tablegroup_name().empty()
+      || !enable_database_sharding_none) {
+    // do nothing
+  } else if (OB_FAIL(tablegroup_name.assign_fmt("TG_DB_%lu", database_id))) {
+    LOG_WARN("failed to generate tablegroup name", KR(ret), K(database_id));
+  } else if (OB_FAIL(schema_service_.check_tablegroup_exist(
+      tenant_id,
+      tablegroup_name.string(),
+      tablegroup_id,
+      tablegroup_is_exist))) {
+    LOG_WARN("check tablegroup exist failed", KR(ret), K(tenant_id),
+        K(tablegroup_name), K(tablegroup_id), K(tablegroup_is_exist));
+  } else if (tablegroup_is_exist) {
+    LOG_WARN("tablegroup already exists", KR(ret), K(tablegroup_name), K(tablegroup_id));
+    ObSqlString err_msg;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(err_msg.assign_fmt("tablegroup %.*s already exists, "
+        "create default sharding none tablegroup for database failed",
+        tablegroup_name.length(),
+        tablegroup_name.ptr()))) {
+      LOG_WARN("fail to assign error msg", KR(ret), KR(tmp_ret));
+    } else {
+      LOG_USER_WARN(OB_ENTRY_EXIST, err_msg.ptr());
+    }
+    // reset
+    database_schema.set_default_tablegroup_id(OB_INVALID_ID);
+    database_schema.set_default_tablegroup_name(ObString()); // empty
+  } else {
+    tablegroup_schema.set_tenant_id(tenant_id);
+    tablegroup_schema.set_tablegroup_name(tablegroup_name.string());
+    tablegroup_schema.set_comment("auto-created sharding none tablegroup for database");
+    ObObjectBalanceWeight tablegroup_balance_weight;
+    const int64_t default_tablegroup_weight = 1;
+    if (OB_FAIL(tablegroup_schema.set_sharding(OB_PARTITION_SHARDING_NONE))) {
+      LOG_WARN("set sharding failed", KR(ret), K(tablegroup_schema));
+    } else if (OB_FAIL(create_tablegroup(tablegroup_schema, trans))) {
+      LOG_WARN("create tablegroup failed", KR(ret), K(tablegroup_schema));
+    } else if (OB_FAIL(database_schema.set_default_tablegroup_name(tablegroup_name.string()))) {
+      LOG_WARN("set default tablegroup name failed", KR(ret), K(tablegroup_name));
+    } else if (FALSE_IT(tablegroup_id = tablegroup_schema.get_tablegroup_id())) {
+    } else if (OB_FAIL(tablegroup_balance_weight.init_tablegroup_weight(
+        tenant_id,
+        tablegroup_id,
+        default_tablegroup_weight))) {
+      LOG_WARN("init tablegroup balance weight failed", KR(ret), K(tenant_id),
+          "tablegroup_id", tablegroup_id, K(default_tablegroup_weight));
+    } else if (OB_FAIL(ObObjectBalanceWeightOperator::update(trans, tablegroup_balance_weight))) {
+      LOG_WARN("update tablegroup balance weight failed", KR(ret), K(tablegroup_balance_weight));
+    } else {
+      database_schema.set_default_tablegroup_id(tablegroup_id);
+      LOG_INFO("create sharding none tablegroup for database", KR(ret),
+          K(tenant_id), K(database_id), K(tablegroup_name), K(tablegroup_id));
     }
   }
   return ret;
@@ -11651,6 +11742,12 @@ int ObDDLOperator::init_tenant_scheduled_job(
                      tenant_id,
                      trans))) {
     LOG_WARN("create scheduled trigger partition balance job failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObScheduledTriggerPartitionBalance::create_scheduled_trigger_partition_balance_job(
+    sys_variable,
+    tenant_id,
+    true/*is_enabled*/,
+    trans))) {
+      LOG_WARN("create scheduled trigger partition balance job failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(datadict::ObDataDictScheduler::create_scheduled_trigger_dump_data_dict_job(
       sys_variable,
       tenant_id,

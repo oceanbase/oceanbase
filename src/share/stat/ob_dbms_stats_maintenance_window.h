@@ -75,6 +75,12 @@ public:
                                   const uint64_t tenant_id,
                                   int32_t &offset_sec);
 
+  static int parse_next_date(
+      const sql::ObSQLSessionInfo *session,
+      const common::ObString &next_date_str,
+      int32_t &offset_sec,
+      int64_t &next_date_ts);
+
 private:
   static int get_window_job_info(const int64_t current_time,
                                  const int64_t nth_window,

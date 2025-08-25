@@ -34,6 +34,7 @@
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
+#include "rootserver/ob_tenant_balance_service.h" // ObTenantBalanceService
 #include "storage/high_availability/ob_transfer_service.h" // ObTransferService
 #include "sql/udr/ob_udr_mgr.h"
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_scheduler.h"
@@ -47,6 +48,8 @@
 #include "rootserver/ob_disaster_recovery_task_utils.h" // DisasterRecoveryUtils
 #include "rootserver/ob_disaster_recovery_service.h" // for ObDRService
 #include "rootserver/ob_split_partition_helper.h"
+#include "rootserver/ob_tenant_balance_service.h"//for ObTenantBalanceService
+#include "rootserver/ob_balance_task_execute_service.h"//ObBalanceTaskExecuteService
 #include "sql/session/ob_sess_info_verify.h"
 #include "observer/table/ttl/ob_ttl_service.h"
 #include "share/stat/ob_opt_stat_manager.h" // for ObOptStatManager
@@ -73,6 +76,7 @@
 #include "share/object_storage/ob_device_config_mgr.h"
 #include "rootserver/restore/ob_restore_service.h"
 #include "rootserver/backup/ob_archive_scheduler_service.h"
+#include "rootserver/ob_alter_ls_command.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/ob_inner_tablet_access_service.h"
 #include "rootserver/standby/ob_flashback_standby_log_command.h"
@@ -82,6 +86,7 @@
 #include "close_modules/arbitration/rootserver/ob_arbitration_service.h" // for ObArbitrationService
 #include "close_modules/arbitration/share/arbitration_service/ob_arbitration_service_utils.h" // for ObArbitrationServiceUtils
 #endif
+
 
 namespace oceanbase
 {
@@ -344,6 +349,36 @@ int ObAdminDRTaskP::process()
     LOG_WARN("fail to handle ob admin command", KR(ret), K_(arg));
   }
   LOG_INFO("finish handle ls replica task triggered by ob_admin", K_(arg));
+  return ret;
+}
+
+int ObRpcTriggerPartitionBalanceP::process()
+{
+  int ret = OB_SUCCESS;
+  rootserver::ObTenantBalanceService *balance_service = nullptr;
+  const uint64_t tenant_id = arg_.get_tenant_id();
+  bool is_leader = false;
+  const int64_t start_time = ObTimeUtility::current_time();
+  LOG_INFO("start to trigger partition balance", K_(arg), K(start_time));
+  if (OB_UNLIKELY(tenant_id != MTL_ID())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tenant not match", KR(ret), K_(arg), K(MTL_ID()));
+  } else if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K_(arg));
+  } else if (OB_ISNULL(balance_service = MTL(rootserver::ObTenantBalanceService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be null", K(ret), KP(balance_service));
+  } else if (OB_FAIL(storage::ObStorageHAUtils::check_ls_is_leader(tenant_id, SYS_LS, is_leader))) {
+    LOG_WARN("fail to check sys ls is leader", K(ret), K(tenant_id));
+  } else if (!is_leader) {
+    ret = OB_NOT_MASTER;
+    LOG_WARN("is not sys ls leader, need retry", K(ret), K(is_leader));
+  } else if (OB_FAIL(balance_service->trigger_partition_balance(tenant_id, arg_.get_balance_timeout()))) {
+    LOG_WARN("trigger partition balance failed", KR(ret), K_(arg));
+  }
+  LOG_INFO("finish trigger partition balance", KR(ret), K_(arg),
+      "cost", ObTimeUtility::current_time() - start_time);
   return ret;
 }
 
@@ -3536,6 +3571,16 @@ int ObRpcNotifyCloneSchedulerP::process()
   return ret;
 }
 
+int ObRpcAlterLSP::process()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("receive admin alter ls", K(arg_));
+  if (OB_FAIL(rootserver::ObAlterLSCommand::process(arg_, result_))) {
+    LOG_WARN("fail to process", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
 #define CHECK_PALF_LS_LEADER                                                          \
     if (OB_SUCC(ret)) {                                                               \
       int64_t proposal_id = 0;                                                        \
@@ -3577,6 +3622,16 @@ int ObRpcNotifyTenantThreadP::process()
       } else if (obrpc::ObNotifyTenantThreadArg::RECOVERY_LS_SERVICE == arg_.get_thread_type()) {
         rootserver::ObRecoveryLSService *service = MTL(rootserver::ObRecoveryLSService *);
         WAKE_UP_TENANT_SERVICE
+      } else if (obrpc::ObNotifyTenantThreadArg::BALANCE_TASK_EXECUTE == arg_.get_thread_type()) {
+        rootserver::ObTenantBalanceService *tbalance_service = MTL(rootserver::ObTenantBalanceService*);
+        rootserver::ObBalanceTaskExecuteService *balance_exe_ser = MTL(rootserver::ObBalanceTaskExecuteService*);
+        if (OB_ISNULL(tbalance_service) || OB_ISNULL(balance_exe_ser)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("service is null", KR(ret), K(arg_), KP(tbalance_service), KP(balance_exe_ser));
+        } else {
+          balance_exe_ser->wakeup();
+          tbalance_service->wakeup();
+        }
       } else if (obrpc::ObNotifyTenantThreadArg::DISASTER_RECOVERY_SERVICE == arg_.get_thread_type()) {
         rootserver::ObDRService *service = MTL(rootserver::ObDRService *);
         WAKE_UP_TENANT_SERVICE

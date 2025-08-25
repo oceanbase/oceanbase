@@ -14,7 +14,7 @@
 #define OCEANBASE_ROOTSERVER_OB_BALANCE_GROUP_DEFINE_H_
 #include "lib/ob_define.h"
 #include "lib/string/ob_fixed_length_string.h"
-#include "share/ob_ls_id.h"
+#include "share/transfer/ob_transfer_info.h"  // ObTransferPartInfo, ObTransferPartList
 
 namespace oceanbase
 {
@@ -59,8 +59,8 @@ public:
     return !(*this == other);
   }
 
-  TO_STRING_KV(K_(id_high),
-               K_(id_low));
+  bool is_non_part_table_bg() const { return NON_PART_BG_ID == *this; }
+  bool is_sharding_none_tablegroup_bg() const { return SHARDING_NONE_TABLEGROUP_BG_ID == *this; }
 
   bool is_valid() const {
     return OB_INVALID_ID != id_high_
@@ -72,13 +72,15 @@ public:
     id_low_ = common::OB_INVALID_ID;
   }
 
+  TO_STRING_KV(K_(id_high), K_(id_low));
 public:
+  static const ObBalanceGroupID NON_PART_BG_ID;
+  static const ObBalanceGroupID DUP_TABLE_BG_ID;
+  static const ObBalanceGroupID SHARDING_NONE_TABLEGROUP_BG_ID;
+
   uint64_t id_high_;
   uint64_t id_low_;
 };
-
-static const ObBalanceGroupID NON_PART_BG_ID(0, 0);
-static const ObBalanceGroupID DUP_TABLE_BG_ID(0, 1);
 
 class ObBalanceGroup
 {
@@ -102,15 +104,83 @@ public:
   bool operator !=(const ObBalanceGroup &other) const {
     return !(*this == other);
   }
+  bool is_non_part_table_bg() const { return id_.is_non_part_table_bg(); }
+  bool is_valid() const { return id_.is_valid() && !name_.is_empty(); }
 
   TO_STRING_KV(K_(id), K_(name));
 public:
   const static char* NON_PART_BG_NAME;
   const static char* DUP_TABLE_BG_NAME;
+  const static char* SHARDING_NONE_TABLEGROUP_BG_NAME;
 private:
   ObBalanceGroupID id_;
   ObBalanceGroupName name_;
   // TODO: add type
+};
+
+
+// A group of partitions that should be distributed on the same LS and transfered together
+class ObPartGroupInfo
+{
+public:
+  ObPartGroupInfo() :
+      part_group_uid_(OB_INVALID_ID),
+      bg_unit_id_(OB_INVALID_ID),
+      data_size_(0),
+      weight_(0),
+      part_list_("PartGroup") {}
+
+  ObPartGroupInfo(common::ObIAllocator &alloc) :
+      part_group_uid_(OB_INVALID_ID),
+      bg_unit_id_(OB_INVALID_ID),
+      data_size_(0),
+      weight_(0),
+      part_list_(alloc, "PartGroup") {}
+
+  ~ObPartGroupInfo() {
+    part_group_uid_ = OB_INVALID_ID;
+    bg_unit_id_ = OB_INVALID_ID;
+    data_size_ = 0;
+    weight_ = 0;
+    part_list_.reset();
+  }
+  bool is_valid()
+  {
+    return is_valid_id(part_group_uid_)
+        && is_valid_id(bg_unit_id_);
+  }
+  bool is_same_pg(const uint64_t part_group_uid) { return part_group_uid == part_group_uid_; }
+  uint64_t get_part_group_uid() const { return part_group_uid_; }
+  uint64_t get_bg_unit_id() const { return bg_unit_id_; }
+  int64_t get_data_size() const { return data_size_; }
+  int64_t get_weight() const { return weight_; }
+  const share::ObTransferPartList &get_part_list() const { return part_list_; }
+  int64_t count() const { return part_list_.count(); }
+  int assign(const ObPartGroupInfo &other);
+  int init(const uint64_t part_group_uid, const uint64_t bg_unit_id);
+  // add new partition into partition group
+  int add_part(
+      const share::ObTransferPartInfo &part,
+      const int64_t data_size,
+      const int64_t balance_weight);
+  // less by weight
+  static bool weight_cmp(const ObPartGroupInfo *left, const ObPartGroupInfo *right)
+  {
+    bool bret = false;
+    if (OB_NOT_NULL(left) && OB_NOT_NULL(right)) {
+      if (left->get_weight() < right->get_weight()) {
+        bret = true;
+      }
+    }
+    return bret;
+  }
+  TO_STRING_KV(K_(part_group_uid), K_(bg_unit_id), K_(data_size), K_(weight), K_(part_list));
+private:
+  uint64_t part_group_uid_;
+  uint64_t bg_unit_id_; // database id or tablegroup id
+  int64_t data_size_;
+  int64_t weight_;
+  share::ObTransferPartList part_list_;
 };
 
 }//end namespace rootserver

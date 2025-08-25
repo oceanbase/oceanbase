@@ -32,6 +32,7 @@ const char* const __MIN_FULL_RESOURCE_POOL_MEMORY = "__min_full_resource_pool_me
 const char* const SERVER_BALANCE_CRITICAL_DISK_WATERLEVEL = "server_balance_critical_disk_waterlevel";
 const char* const ENABLE_REBALANCE = "enable_rebalance";
 const char* const ENABLE_REREPLICATION = "enable_rereplication";
+const char* const ENABLE_DATABASE_SHARDING_NONE = "enable_database_sharding_none";
 const char* const MERGER_CHECK_INTERVAL = "merger_check_interval";
 const char* const ENABLE_MAJOR_FREEZE = "enable_major_freeze";
 const char* const ENABLE_DDL = "enable_ddl";

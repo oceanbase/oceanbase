@@ -30635,6 +30635,13 @@ int ObDDLService::alter_database(const ObAlterDatabaseArg &arg)
         LOG_WARN("fail to assign database schema", KR(ret));
       } else if (OB_FAIL(set_new_database_options(arg, new_database_schema))) {
         LOG_WARN("failed to set new database options", K(ret));
+      } else if (arg.alter_option_bitset_.has_member(ObAlterDatabaseArg::DEFAULT_TABLEGROUP)) {
+        if (origin_database_schema->get_default_tablegroup_id()
+            == new_database_schema.get_default_tablegroup_id()) {
+          // do nothing
+        } else if (OB_FAIL(update_tables_tablegroup_for_database_(trans, new_database_schema))) {
+          LOG_WARN("failed to update tables tablegroup for database", KR(ret), K(new_database_schema));
+        }
       }
       if (OB_SUCC(ret)) {
         ret = ddl_operator.alter_database(new_database_schema, trans,
@@ -30655,6 +30662,78 @@ int ObDDLService::alter_database(const ObAlterDatabaseArg &arg)
       LOG_WARN("publish schema failed, ", K(ret));
     }
   }
+  return ret;
+}
+
+// 1.tablegroup schema has been checked before
+// 2.new_tablegroup_id may be invalid when set tabelgroup = null/""
+int ObDDLService::update_tables_tablegroup_for_database_(
+    ObMySQLTransaction &trans,
+    const share::schema::ObDatabaseSchema &new_database_schema)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_time = ObTimeUtil::current_time();
+  const uint64_t tenant_id = new_database_schema.get_tenant_id();
+  const uint64_t database_id = new_database_schema.get_database_id();
+  const ObString &database_name = new_database_schema.get_database_name_str();
+  const uint64_t new_tablegroup_id = new_database_schema.get_default_tablegroup_id();
+  const ObString &new_tablegroup_name = new_database_schema.get_default_tablegroup_name();
+  ObArray<uint64_t> table_ids;
+  uint64_t tenant_data_version = 0;
+  ObSchemaGetterGuard schema_guard;
+
+  if (OB_ISNULL(schema_service_) || OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null ptr", KR(ret), KP(schema_service_), KP(sql_proxy_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_4_1_0) {
+    // do nothing
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("failed to get schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_ids_in_database(tenant_id, database_id, table_ids))) {
+    LOG_WARN("get table_ids in database failed", KR(ret), K(tenant_id), K(database_id));
+  } else {
+    ObTableGroupHelp helper(*this, *schema_service_, *sql_proxy_);
+    const ObTableSchema *first_table_schema_ptr = nullptr;
+    ObTableSchema first_table_schema;
+    ARRAY_FOREACH(table_ids, i) {
+      const uint64_t table_id = table_ids.at(i);
+      const ObTableSchema *table_schema = nullptr;
+      ObSqlString ddl_stmt_str;
+      // 1. Do not get all full table_schemas in database, because it will consume large amount of memory.
+      // 2. Get tenant schema guard again to release the memory of the previous schemas.
+      // 3. Since we are currently within the ddl thread, the schema_guard must be the latest.
+      if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("failed to get schema guard", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", KR(ret), K(i));
+      } else if (!need_balance_table(*table_schema) || table_schema->is_duplicate_table()) {
+        // do nothing
+      } else if (OB_FAIL(helper.update_table_tablegroup(
+          trans,
+          schema_guard,
+          new_tablegroup_id,
+          *table_schema,
+          ddl_stmt_str.string()/*empty string*/,
+          first_table_schema_ptr))) {
+        LOG_WARN("add table to tablegroup failed", KR(ret), K(new_tablegroup_id),
+            K(ddl_stmt_str), KPC(table_schema), KP(first_table_schema_ptr));
+      } else if (0 == i) {
+        if (OB_FAIL(first_table_schema.assign(*table_schema))) {
+          LOG_WARN("fail to assign table schema", KR(ret), KPC(table_schema));
+        } else {
+          first_table_schema_ptr = &first_table_schema;
+        }
+      }
+    }
+  }
+  LOG_INFO("update tables tablegroup for database finished", KR(ret), K(tenant_id),
+      K(database_id), K(database_name), K(new_tablegroup_id), K(new_tablegroup_name),
+      "table_count", table_ids.count(), "time_cost", ObTimeUtil::current_time() - start_time);
   return ret;
 }
 

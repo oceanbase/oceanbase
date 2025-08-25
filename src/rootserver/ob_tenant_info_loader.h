@@ -265,8 +265,6 @@ public:
   return service_names_cache_.get_service_name(service_name_id, service_name);
  }
 
-
-protected:
  /**
   * @description:
   *    get tenant info

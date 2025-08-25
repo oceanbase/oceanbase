@@ -860,6 +860,12 @@ DEF_TIME(partition_balance_schedule_interval, OB_TENANT_PARAMETER, "2h", "[0s,]"
          "Default value 2h and the value 0s means disable partition balance. "
          "Range: [0s, +∞)",
          ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(ls_scale_out_factor, OB_TENANT_PARAMETER, "1", "[1, 10]",
+        "Parameters can allow tenant to have enough LS to meet the scaling requirements, "
+        "and disabling transfer when scaling can also achieve a flat effect. "
+        "Default value 1. "
+        "Range: [1, +∞)]",
+        ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(balancer_tolerance_percentage, OB_CLUSTER_PARAMETER, "10", "[1, 100)",
         "specifies the tolerance (in percentage) of the unbalance of the disk space utilization "
         "among all units. The average disk space utilization is calculated by dividing "
@@ -902,6 +908,9 @@ DEF_INT(server_balance_cpu_mem_tolerance_percent, OB_CLUSTER_PARAMETER, "5", "[1
         "when the deviation between the average usage and some server load is greater than this tolerance "
         "Range: [1, 100] in percentage",
         ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(enable_database_sharding_none, OB_TENANT_PARAMETER, "False",
+         "Enable automatic creation of sharding none tablegroup for new databases in MySQL mode.",
+         ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_TIME(_lcl_op_interval, OB_CLUSTER_PARAMETER, "30ms", "[0ms, 1s]",
          "Scan interval for every detector node, smaller interval support larger deadlock scale, but cost more system resource. "

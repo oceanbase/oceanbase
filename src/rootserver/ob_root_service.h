@@ -1038,6 +1038,7 @@ private:
   int check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_vector_memory_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_transfer_task_tablet_count_threshold_(obrpc::ObAdminSetConfigItem &item);
+  int check_enable_database_sharding_none_(obrpc::ObAdminSetConfigItem &item);
   int check_default_table_organization_(obrpc::ObAdminSetConfigItem &item);
   int check_default_table_store_format_(obrpc::ObAdminSetConfigItem &item);
   int start_ddl_service_();

@@ -139,7 +139,7 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   share::SCN create_scn;
   ObLSStatusInfo info;
   ObZone zone_priority("z1");
-  ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), share::NORMAL_SWITCHOVER_STATUS);
+  ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   ObZone primary_zone("z1");
   ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
@@ -149,7 +149,7 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
       get_curr_simple_server().get_observer().get_mysql_proxy());
   ASSERT_EQ(1, ls_array.count());
   SERVER_LOG(INFO, "ls status", K(ls_array));
-  ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), share::NORMAL_SWITCHOVER_STATUS);
+  ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   create_scn.set_min();
 
@@ -157,7 +157,7 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ObLSID ls_id(1002);
   ret = info.init(tenant_id_, ls_id, 0, share::OB_LS_CREATING, 0, primary_zone, flag);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), share::NORMAL_SWITCHOVER_STATUS);
+  ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   //设置初始成员列表
@@ -186,7 +186,7 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ObLSID ls_id3(1003);
   ret = new_status_info2.init(tenant_id_, ls_id3, 0, share::OB_LS_CREATING, 0, primary_zone, flag);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = ls_life.create_new_ls(new_status_info2, create_scn, zone_priority.str(), share::NORMAL_SWITCHOVER_STATUS);
+  ret = ls_life.create_new_ls(new_status_info2, create_scn, zone_priority.str(), ObAllTenantInfo::INITIAL_SWITCHOVER_EPOCH);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObAddr server4(common::ObAddr::IPV4, "127.1.1.1", 4882);
   ObMember arb_member2(server4, 0);

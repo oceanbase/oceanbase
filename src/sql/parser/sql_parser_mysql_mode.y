@@ -512,7 +512,7 @@ END_P SET_VAR DELIMITER
 %type <node> tenant_name_list opt_tenant_list tenant_list_tuple cache_type flush_scope opt_zone_list
 %type <node> into_opt into_clause field_opt field_term field_term_list line_opt line_term line_term_list into_var_list into_var file_partition_opt file_opt file_option_list file_option file_size_const binary_format
 %type <node> string_list text_string string_val_list ulong_num
-%type <node> balance_task_type opt_balance_task_type
+%type <node> balance_task_type opt_balance_task_type balance_job_op
 %type <node> list_expr list_partition_element list_partition_expr list_partition_list list_partition_option opt_list_partition_list opt_list_subpartition_list list_subpartition_list list_subpartition_element drop_partition_name_list
 %type <node> primary_zone_name change_tenant_name_or_tenant_id distribute_method distribute_method_list opt_distribute_method_list
 %type <node> load_data_stmt opt_load_local opt_duplicate opt_compression opt_load_charset opt_load_ignore_rows infile_string url_spec
@@ -524,7 +524,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_column_reference opt_reference_option_list reference_option require_specification tls_option_list tls_option
 %type <node> opt_resource_option resource_option_list resource_option
 %type <ival> reference_action
-%type <node> alter_foreign_key_action
+%type <node> alter_foreign_key_action alter_ls_stmt
 %type <node> analyze_stmt analyze_statistics_clause opt_analyze_for_clause opt_analyze_for_clause_list opt_analyze_for_clause_element opt_analyze_sample_clause sample_option for_all opt_indexed_hiddden opt_size_clause size_clause for_columns for_columns_list for_columns_item column_clause
 %type <node> optimize_stmt
 %type <node> dump_memory_stmt
@@ -537,12 +537,13 @@ END_P SET_VAR DELIMITER
 %type <node> opt_sql_throttle_for_priority opt_sql_throttle_using_cond sql_throttle_one_or_more_metrics sql_throttle_metric
 %type <node> opt_copy_id opt_backup_dest opt_backup_backup_dest opt_tenant_info opt_with_active_piece get_format_unit opt_backup_tenant_list opt_backup_to opt_description policy_name opt_recovery_window opt_redundancy opt_backup_copies opt_restore_until opt_encrypt_key
 %type <node> opt_recover_tenant recover_table_list recover_table_relation_name restore_remap_list remap_relation_name table_relation_name opt_recover_remap_item_list restore_remap_item_list restore_remap_item remap_item remap_table_val opt_tenant
-%type <node> opt_restore_with_config_list restore_with_config_list restore_with_config restore_with_item
+%type <node> opt_restore_with_config_list restore_with_config_list restore_with_config restore_with_item ls_attr_list
 %type <node> new_or_old new_or_old_column_ref diagnostics_info_ref
 %type <node> on_empty on_error json_on_response opt_returning_type opt_on_empty_or_error json_value_expr opt_ascii opt_truncate_clause
 %type <node> json_extract_unquote_expr json_extract_expr json_query_expr opt_multivalue opt_asis opt_array opt_pretty opt_wrapper opt_scalars opt_query_on_error_or_empty_or_mismatch  on_empty_query  on_error_query on_mismatch_query opt_response_query
 %type <node> ws_nweights opt_ws_as_char opt_ws_levels ws_level_flag_desc ws_level_flag_reverse ws_level_flags ws_level_list ws_level_list_item ws_level_number ws_level_range ws_level_list_or_range
 %type <node> get_diagnostics_stmt get_statement_diagnostics_stmt get_condition_diagnostics_stmt statement_information_item_list condition_information_item_list statement_information_item condition_information_item statement_information_item_name condition_information_item_name condition_arg
+%type <node> ls_attr
 %type <node> method_opt method_list method extension mvt_param
 %type <node> opt_storage_name opt_calibration_list calibration_info_list
 %type <node> switchover_tenant_stmt switchover_clause opt_verify
@@ -760,6 +761,7 @@ stmt:
   | drop_tenant_snapshot_stmt   { $$ = $1; check_question_mark($$, result); }
   | clone_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
   | transfer_partition_stmt { $$ = $1; check_question_mark($$, result); }
+  | alter_ls_stmt           { $$ = $1; check_question_mark($$, result); }
   | mock_stmt {$$ = $1; check_question_mark($$, result);}
   | service_name_stmt { $$ = $1; check_question_mark($$, result); }
   | create_location_stmt  { $$ = $1; check_question_mark($$, result); }
@@ -24440,10 +24442,10 @@ alter_with_opt_hint SYSTEM transfer_partition_clause opt_tenant_name
   (void)($1);
   malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_TRANSFER_PARTITION, 2, $6, $7);
 }
-| alter_with_opt_hint SYSTEM CANCEL BALANCE JOB opt_tenant_name
+| alter_with_opt_hint SYSTEM balance_job_op BALANCE JOB opt_tenant_name
 {
   (void)($1);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_BALANCE_JOB, 1, $6)
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BALANCE_JOB_OP, 2, $3, $6)
 }
 ;
 transfer_partition_clause:
@@ -24851,6 +24853,78 @@ DAY
   $$->is_hidden_const_ = 1;
   $$->is_date_unit_ = 1;
   dup_expr_string($$, result, @1.first_column, @1.last_column);
+}
+;
+balance_job_op:
+CANCEL
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+}
+|
+suspend_or_resume
+{
+  $$ = $1;
+}
+;
+/*===========================================================
+ *
+ * 日志流运维命令
+ *
+ *===========================================================*/
+alter_ls_stmt:
+alter_with_opt_hint SYSTEM CREATE LS ls_attr_list opt_tenant_name
+{
+ (void)($1);
+ ParseNode *ls_attr = NULL;
+ merge_nodes(ls_attr, result, T_LS_ATTR_LIST, $5);
+ ParseNode *op_node = NULL;
+ malloc_terminal_node(op_node, result->malloc_pool_, T_INT);
+ op_node->value_ = 1;
+ malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_LS, 3, op_node, ls_attr, $6);
+}
+| alter_with_opt_hint SYSTEM MODIFY ls ls_attr_list opt_tenant_name
+{
+  (void)($1);
+  ParseNode *ls_attr = NULL;
+  merge_nodes(ls_attr, result, T_LS_ATTR_LIST, $5);
+  ParseNode *op_node = NULL;
+  malloc_terminal_node(op_node, result->malloc_pool_, T_INT);
+  op_node->value_ = 2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_LS, 4, op_node, $4, ls_attr, $6);
+
+}
+| alter_with_opt_hint SYSTEM DROP ls opt_tenant_name
+{
+  (void)($1);
+  ParseNode *op_node = NULL;
+  malloc_terminal_node(op_node, result->malloc_pool_, T_INT);
+  op_node->value_ = 3;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_LS, 3, op_node, $4, $5);
+}
+;
+
+ls_attr_list:
+ls_attr
+{
+  $$ = $1;
+}
+| ls_attr_list ',' ls_attr
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+ls_attr:
+UNIT_GROUP opt_equal_mark INTNUM
+{
+  (void)($2); /* make bison mute */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_UNIT_GROUP, 1, $3)
+}
+| PRIMARY_ZONE opt_equal_mark relation_name_or_string
+{
+  (void)($2) ; /* make bison mute */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PRIMARY_ZONE, 1, $3);
 }
 ;
 /*===========================================================

@@ -158,7 +158,7 @@ int ObLSPrimaryZoneInfo::assign(const ObLSPrimaryZoneInfo &other)
 int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
                                       const SCN &current_tenant_scn,
                                       const common::ObString &zone_priority,
-                                      const share::ObTenantSwitchoverStatus &working_sw_status,
+                                      const int64_t switchover_epoch,
                                       ObMySQLTransaction &trans)
 {
   UNUSEDx(current_tenant_scn, zone_priority);
@@ -167,16 +167,15 @@ int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
   ObLSFlagStr flag_str;
   common::ObSqlString sql;
   const char *table_name = OB_ALL_LS_STATUS_TNAME;
-  if (OB_UNLIKELY(!ls_info.is_valid()
-                  || !working_sw_status.is_valid())) {
+  if (OB_UNLIKELY(!ls_info.is_valid() || OB_INVALID_VERSION == switchover_epoch)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid_argument", KR(ret), K(ls_info), K(working_sw_status));
+    LOG_WARN("invalid_argument", KR(ret), K(ls_info), K(switchover_epoch));
   } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
                   ls_info.tenant_id_, &trans, true, tenant_info))) {
     LOG_WARN("failed to load tenant info", KR(ret), K(ls_info));
-  } else if (working_sw_status != tenant_info.get_switchover_status()) {
+  } else if (switchover_epoch != tenant_info.get_switchover_epoch()) {
     ret = OB_NEED_RETRY;
-    LOG_WARN("tenant not in specified switchover status", K(ls_info), K(working_sw_status), K(tenant_info));
+    LOG_WARN("the tenant's switchover_epoch has been changed",KR(ret), K(ls_info), K(switchover_epoch), K(tenant_info));
   } else if (OB_FAIL(ls_info.get_flag().flag_to_str(flag_str))) {
     LOG_WARN("fail to convert ls flag into string", KR(ret), K(ls_info));
   } else if (ls_info.get_flag().is_duplicate_ls()) {

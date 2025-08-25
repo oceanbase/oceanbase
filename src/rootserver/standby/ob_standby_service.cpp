@@ -774,6 +774,7 @@ int ObStandbyService::switch_to_standby_prepare_ls_status_(
        and normal switchover status */
     if (OB_FAIL(ObLSServiceHelper::process_status_to_steady(true/* lock_sys_ls */,
                                    share::PREP_SWITCHING_TO_STANDBY_SWITCHOVER_STATUS,
+                                   switchover_epoch,
                                    tenant_stat))) {
       LOG_WARN("failed to process_ls_status_missmatch", KR(ret));
     } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role(

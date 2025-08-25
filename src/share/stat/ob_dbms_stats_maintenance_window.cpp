@@ -391,34 +391,11 @@ int ObDbmsStatsMaintenanceWindow::is_stats_maintenance_window_attr(ObExecContext
         LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "the hour of interval must be between 0 and 24");
       }
     } else if (0 == attr_name.case_compare("next_date")) {
-      ObObj time_obj;
-      ObObj src_obj;
       int64_t current_time = ObTimeUtility::current_time();
-      ObArenaAllocator calc_buf("DbmsStatsWindow");
-      ObCastCtx cast_ctx(&calc_buf, NULL, CM_NONE, ObCharset::get_system_collation());
-      cast_ctx.dtc_params_ = session->get_dtc_params();
       int64_t specify_time = -1;
       int32_t offset_sec = 0;
-      src_obj.set_string(ObVarcharType, val_name);
-      const ObTimeZoneInfo* tz_info = get_timezone_info(session);
-      if (NULL != tz_info) {
-        if (OB_FAIL(tz_info->get_timezone_offset(ObTimeUtility::current_time(), offset_sec))) {
-          LOG_WARN("failed to get timezone offset", K(ret));
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (lib::is_oracle_mode()) {
-        if (OB_FAIL(ObObjCaster::to_type(ObTimestampTZType, cast_ctx, src_obj, time_obj))) {
-          LOG_WARN("failed to ObTimestampTZType type", K(ret));
-        } else {
-          specify_time = time_obj.get_otimestamp_value().time_us_;
-        }
-      } else if (lib::is_mysql_mode()) {
-        if (OB_FAIL(ObObjCaster::to_type(ObDateTimeType, cast_ctx, src_obj, time_obj))) {
-          LOG_WARN("failed to ObTimestampType type", K(ret));
-        } else {
-          specify_time = time_obj.get_datetime() - SEC_TO_USEC(offset_sec);
-        }
+      if (OB_FAIL(parse_next_date(session, val_name, offset_sec, specify_time))) {
+        LOG_WARN("parse next date failed", KR(ret), K(val_name));
       }
       if (OB_SUCC(ret)) {
         bool is_valid = false;
@@ -724,6 +701,53 @@ int ObDbmsStatsMaintenanceWindow::check_job_exists(common::ObMySQLProxy *sql_pro
       }
     }
     LOG_INFO("succeed to check job exists", K(ret), K(select_sql), K(is_join_exists), K(row_count));
+  }
+  return ret;
+}
+
+int ObDbmsStatsMaintenanceWindow::parse_next_date(
+    const sql::ObSQLSessionInfo *session,
+    const common::ObString &next_date_str,
+    int32_t &offset_sec,
+    int64_t &next_date_ts)
+{
+  int ret = OB_SUCCESS;
+  next_date_ts = OB_INVALID_TIMESTAMP;
+  offset_sec = 0;
+  if (OB_ISNULL(session)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("null session", KR(ret), K(session), K(next_date_str));
+  } else if (next_date_str.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid next_date", KR(ret), K(next_date_str), K(next_date_ts));
+  } else {
+    ObObj time_obj;
+    ObObj src_obj;
+    int64_t current_time = ObTimeUtility::current_time();
+    ObArenaAllocator allocator("ParseNextDate");
+    ObCastCtx cast_ctx(&allocator, NULL, CM_NONE, ObCharset::get_system_collation());
+    cast_ctx.dtc_params_ = session->get_dtc_params();
+    src_obj.set_string(ObVarcharType, next_date_str);
+    const ObTimeZoneInfo* tz_info = get_timezone_info(session);
+    if (NULL != tz_info) {
+      if (OB_FAIL(tz_info->get_timezone_offset(ObTimeUtility::current_time(), offset_sec))) {
+        LOG_WARN("failed to get timezone offset", KR(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (lib::is_oracle_mode()) {
+      if (OB_FAIL(ObObjCaster::to_type(ObTimestampTZType, cast_ctx, src_obj, time_obj))) {
+        LOG_WARN("failed to ObTimestampTZType type", KR(ret));
+      } else {
+        next_date_ts = time_obj.get_otimestamp_value().time_us_;
+      }
+    } else { // mysql mode
+      if (OB_FAIL(ObObjCaster::to_type(ObDateTimeType, cast_ctx, src_obj, time_obj))) {
+        LOG_WARN("failed to ObTimestampType type", KR(ret));
+      } else {
+        next_date_ts = time_obj.get_datetime() - SEC_TO_USEC(offset_sec);
+      }
+    }
   }
   return ret;
 }

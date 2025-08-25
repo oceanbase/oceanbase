@@ -12794,6 +12794,21 @@ int ObFinishTransferTaskArg::assign(const ObFinishTransferTaskArg &other)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObTriggerPartitionBalanceArg, tenant_id_, balance_timeout_);
+
+int ObTriggerPartitionBalanceArg::init(const uint64_t tenant_id, const int64_t balance_timeout)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || balance_timeout < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(balance_timeout));
+  } else {
+    tenant_id_ = tenant_id;
+    balance_timeout_ = balance_timeout;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER((ObTryAddDepInofsForSynonymBatchArg, ObDDLArg),
                     tenant_id_, synonym_ids_);
 

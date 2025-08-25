@@ -146,6 +146,13 @@
 #include "sql/engine/cmd/ob_olap_async_job_executor.h"
 #include "sql/resolver/cmd/ob_event_stmt.h"
 #include "sql/engine/cmd/ob_event_executor.h"
+#include "sql/resolver/cmd/ob_alter_ls_stmt.h"
+#include "sql/engine/cmd/ob_alter_ls_executor.h"
+#include "sql/resolver/cmd/ob_service_name_stmt.h"
+#include "sql/engine/cmd/ob_service_name_executor.h"
+#include "sql/resolver/cmd/ob_transfer_partition_stmt.h"
+#include "sql/engine/cmd/ob_transfer_partition_executor.h"
+
 #include "sql/resolver/cmd/ob_flashback_standby_log_stmt.h"
 #include "sql/engine/cmd/ob_flashback_standby_log_executor.h"
 #include "sql/engine/cmd/ob_ccl_rule_executor.h"
@@ -1169,6 +1176,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
        }
       case stmt::T_TRANSFER_PARTITION: {
         DEFINE_EXECUTE_CMD(ObTransferPartitionStmt, ObTransferPartitionExecutor);
+        break;
+      }
+      case stmt::T_ALTER_LS: {
+        DEFINE_EXECUTE_CMD(ObAlterLSStmt, ObAlterLSExecutor);
         break;
       }
       case stmt::T_CHANGE_EXTERNAL_STORAGE_DEST: {

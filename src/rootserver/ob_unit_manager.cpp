@@ -1861,11 +1861,7 @@ int ObUnitManager::register_alter_resource_tenant_unit_num_rs_job(
   } else { // tenant_data_version >= DATA_VERSION_4_2_1_0
     // step 1: cancel rs job if exists
     int64_t job_id = 0;
-    if (!ObShareUtil::is_tenant_enable_rebalance(tenant_id)) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("enable_rebalance is disabled, modify tenant unit num not allowed", KR(ret), K(tenant_id));
-      (void) print_user_error_(tenant_id);
-    } else if(OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
+    if (OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
       LOG_WARN("fail to execute cancel_alter_resource_tenant_unit_num_rs_job",
           KR(ret), K(tenant_id), K(sql_text));
     } else {
@@ -1909,12 +1905,7 @@ int ObUnitManager::register_shrink_tenant_pool_unit_num_rs_job(
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   int64_t job_id = 0;
-  if (!ObShareUtil::is_tenant_enable_rebalance(tenant_id)) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("enable_rebalance is disabled, modify tenant unit num not allowed", KR(ret), K(tenant_id));
-    (void) print_user_error_(tenant_id);
-  } else {
-    ret = create_alter_resource_tenant_unit_num_rs_job(
+  ret = create_alter_resource_tenant_unit_num_rs_job(
         tenant_id,
         new_unit_num,
         old_unit_num,
@@ -1922,28 +1913,9 @@ int ObUnitManager::register_shrink_tenant_pool_unit_num_rs_job(
         sql_text,
         trans,
         JOB_TYPE_SHRINK_RESOURCE_TENANT_UNIT_NUM);
-    FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] create a new rs job in Version < 4.2",
-        KR(ret), K(tenant_id), K(job_id), K(sql_text));
-  }
+  FLOG_INFO("[ALTER_RESOURCE_TENANT_UNIT_NUM NOTICE] create a new rs job in Version < 4.2",
+      KR(ret), K(tenant_id), K(job_id), K(sql_text));
   return ret ;
-}
-
-void ObUnitManager::print_user_error_(const uint64_t tenant_id)
-{
-  const int64_t ERR_MSG_LEN = 256;
-  char err_msg[ERR_MSG_LEN] = {'\0'};
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  if (OB_FAIL(databuff_printf(err_msg, ERR_MSG_LEN, pos,
-      "Tenant (%lu) 'enable_rebalance' is disabled, alter tenant unit num", tenant_id))) {
-    if (OB_SIZE_OVERFLOW == ret) {
-      LOG_WARN("format to buff size overflow", KR(ret));
-    } else {
-      LOG_WARN("format new unit num failed", KR(ret));
-    }
-  } else {
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
-  }
 }
 
 int ObUnitManager::cancel_alter_resource_tenant_unit_num_rs_job(
@@ -2035,10 +2007,6 @@ int ObUnitManager::rollback_alter_resource_tenant_unit_num_rs_job(
     if (OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
       LOG_WARN("fail to execute cancel_alter_resource_tenant_unit_num_rs_job in v4.1", KR(ret), K(tenant_id));
     }
-  } else if (!ObShareUtil::is_tenant_enable_rebalance(tenant_id)) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("enable_rebalance is disabled, modify tenant unit num not allowed", KR(ret), K(tenant_id));
-    (void) print_user_error_(tenant_id);
   } else if (OB_FAIL(cancel_alter_resource_tenant_unit_num_rs_job(tenant_id, trans))) {
     LOG_WARN("fail to execute cancel_alter_resource_tenant_unit_num_rs_job", KR(ret), K(tenant_id));
   } else if (OB_FAIL(create_alter_resource_tenant_unit_num_rs_job(tenant_id,
@@ -2610,8 +2578,6 @@ int ObUnitManager::alter_resource_tenant(
           K(new_unit_num), K(sql_text), K(old_unit_num));
     }
   } else if (AUN_EXPAND == alter_unit_num_type) {
-    // in 4.1, if enable_rebalance is false, this op can be executed successfully
-    // in 4.2, it will return OB_OP_NOT_ALLOW
     if (delete_unit_group_id_array.count() > 0) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "expand pool unit num combined with deleting unit");
@@ -2621,7 +2587,6 @@ int ObUnitManager::alter_resource_tenant(
           KPC(pools), K(sql_text), K(old_unit_num));
     }
   } else if (AUN_SHRINK == alter_unit_num_type) {
-    // both 4.1 and 4.2 do not allow this op when enable_rebalance is false.
     if (OB_FAIL(shrink_tenant_pools_unit_num(tenant_id, *pools, new_unit_num,
             old_unit_num, delete_unit_group_id_array, sql_text))) {
       LOG_WARN("fail to shrink pool unit num", K(ret), K(new_unit_num), K(sql_text), K(old_unit_num));
