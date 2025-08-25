@@ -317,7 +317,7 @@ int TabletDfgtPicker::add_tablet(const ObTabletStorageParam &param)
         STORAGE_LOG(WARN, "failed to update shared macro block map", K(ret), K(param));
       } else {
         value->total_occupied_ += tablet_size_aligned;
-        OB_ASSERT(value->total_occupied_ < OB_DEFAULT_MACRO_BLOCK_SIZE);
+        OB_ASSERT(value->total_occupied_ <= OB_DEFAULT_MACRO_BLOCK_SIZE);
       }
     } else if (OB_HASH_NOT_EXIST != ret) {
       STORAGE_LOG(WARN, "failed to get value from shared macro block map", K(ret), K(block_id));
