@@ -68,6 +68,7 @@ enum class ObJsonNodeType
   J_MYSQL_DATE = 30, // mysql date
   J_MYSQL_DATETIME = 31, // mysql datetime
   J_SEMI_HETE_COL = 34,
+  J_SEMI_BIN = 35, //  semistruct bin data
   J_MAX_TYPE,
 
   J_ERROR = 200 // 14
