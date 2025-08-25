@@ -1691,7 +1691,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
             if (stat.is_primary_key_) {
               if (!is_oracle_mode && is_organization_set_to_heap()) {
                 primary_key_set_in_heap_table = true;
-                if (OB_FAIL(uk_or_heap_table_pk_add_to_index_list(index_node_position_list, i))) {
+                if (OB_FAIL(uk_or_heap_table_pk_add_to_index_list(index_node_position_list, i, true))) {
                   SQL_RESV_LOG(WARN, "add heap table pk to index list failed", K(ret));
                 } else if (OB_FALSE_IT(column.add_column_flag(HEAP_TABLE_PRIMARY_KEY_FLAG))) {
                 } else if (OB_FALSE_IT(column.set_rowkey_position(0))) {
@@ -1762,7 +1762,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
             if (stat.is_unique_key_) {
               //consider column with unique_key as a special index node,
               //then resolve it in resolve_index_node()
-              if (OB_FAIL(uk_or_heap_table_pk_add_to_index_list(index_node_position_list, i))) {
+              if (OB_FAIL(uk_or_heap_table_pk_add_to_index_list(index_node_position_list, i, false))) {
                 SQL_RESV_LOG(WARN, "add heap table pk to index list failed", K(ret));
               }
             }
@@ -1840,7 +1840,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
         } else if (NULL == primary_node) {
           if (!is_oracle_mode && is_organization_set_to_heap()) {
             primary_node_in_heap_table = element;
-            if (OB_FAIL(uk_or_heap_table_pk_add_to_index_list(index_node_position_list, i))) {
+            if (OB_FAIL(uk_or_heap_table_pk_add_to_index_list(index_node_position_list, i, true))) {
               SQL_RESV_LOG(WARN, "add heap table pk to index list failed", K(ret));
             }
           } else {
@@ -4148,15 +4148,26 @@ int ObCreateTableResolver::resolve_single_column_primary_key_node(const ParseNod
   return ret;
 }
 
-int ObCreateTableResolver::uk_or_heap_table_pk_add_to_index_list(ObArray<int> &index_node_position_list, const int32_t node_index)
+int ObCreateTableResolver::uk_or_heap_table_pk_add_to_index_list(ObArray<int> &index_node_position_list, const int32_t node_index, const bool is_heap_table_pk)
 {
   int ret = OB_SUCCESS;
   if (OB_MAX_INDEX_PER_TABLE == index_node_position_list.count()) {
     ret = OB_ERR_TOO_MANY_KEYS;
     LOG_USER_ERROR(OB_ERR_TOO_MANY_KEYS, OB_MAX_INDEX_PER_TABLE);
-  } else if (OB_FAIL(index_node_position_list.push_back(node_index))){
+  } else if (is_heap_table_pk) {
+    // heap table pk is always the first index, so we need to move the existing indexes to the right
+    if (OB_FAIL(index_node_position_list.push_back(0))) {
+      SQL_RESV_LOG(WARN, "extend index list failed", K(ret));
+    } else {
+      for (int64_t j = index_node_position_list.count() - 1; j > 0; --j) {
+        index_node_position_list[j] = index_node_position_list[j - 1];
+      }
+      index_node_position_list[0] = node_index;
+    }
+  } else if (OB_FAIL(index_node_position_list.push_back(node_index))) {
     SQL_RESV_LOG(WARN, "add index node failed", K(ret));
   } else {
+    // do nothing
   }
   return ret;
 }

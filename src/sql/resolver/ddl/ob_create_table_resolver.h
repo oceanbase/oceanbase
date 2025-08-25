@@ -140,7 +140,7 @@ private:
   int resolve_primary_key_node_in_heap_table(const ParseNode *element, common::ObArray<ObColumnResolveStat> &stats,
                                              ObSEArray<ObColumnSchemaV2, SEARRAY_INIT_NUM> &resolved_cols);
   int resolve_single_column_primary_key_node(const ParseNode *column_list_node, ObTableSchema &tbl_schema, bool &process_heap_table_primary_key, ObString &first_column_name);
-  int uk_or_heap_table_pk_add_to_index_list(ObArray<int> &index_node_position_list, const int32_t node_index);
+  int uk_or_heap_table_pk_add_to_index_list(ObArray<int> &index_node_position_list, const int32_t node_index, const bool is_heap_table_pk);
   int set_default_enable_macro_block_bloom_filter_(share::schema::ObTableSchema &table_schema);
   int set_default_micro_block_format_version_(share::schema::ObTableSchema &table_schema);
   int check_building_domain_index_legal();
