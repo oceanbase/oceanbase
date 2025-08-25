@@ -145,7 +145,5 @@ OceanBase は、Mulan Public License バージョン 2 に基づいてライセ�
 
 OceanBase コミュニティにぜひご参加ください！
 
-* [Discord](https://discord.gg/74cF8vbNEs)
-* [Stack Overflow で質問](https://stackoverflow.com/questions/tagged/oceanbase)
-* DingTalk グループ: [33254054](images/dingtalk.png)
-* WeChat グループ (WeChat ID: OBCE666 のアシスタントを追加)
+* [Discord](https://discord.gg/74cF8vbNEs): ご質問の投稿、フィードバックの共有、最新情報の取得、および他のOceanBaseユーザーとの交流が可能です。
+* [GitHub Issues](https://github.com/oceanbase/oceanbase/issues): ご報告いただける内容には、OceanBaseのご利用中に遭遇した不具合や、新たな機能に関するご要望が含まれます。
