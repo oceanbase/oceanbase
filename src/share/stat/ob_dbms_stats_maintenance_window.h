@@ -103,6 +103,7 @@ private:
   static int get_stats_history_manager_job_sql(const bool is_oracle_mode,
                                                const uint64_t tenant_id,
                                                const int64_t job_id,
+                                               const int64_t offset_sec,
                                                const ObString &exec_env,
                                                ObSqlString &raw_sql);
   static int get_spm_stats_job_sql(const bool is_oracle_mode,
