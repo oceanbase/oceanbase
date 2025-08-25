@@ -3657,7 +3657,7 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
         OZ (check_anonymous_collection_compatible(*actual_composite, formal_param_type, need_cast));
         if (OB_SUCC(ret) && need_cast && !formal_param_type.is_generic_type() && !formal_param_type.is_opaque_type() && func_.get_in_args().has_member(param_idx)) { //in arg and need cast add convert_composite
           OX (get_params().at(param_idx) = actual_param);
-          OZ (convert_composite(ctx_, get_params().at(param_idx), formal_param_type));
+          OZ (convert_composite(ctx_, get_params().at(param_idx), formal_param_type.get_user_type_id()));
           OX (need_free_.at(param_idx) = get_params().at(param_idx).get_ext() != 0 ? true : false);
           OX (param_converted_.at(param_idx) = true);
         }
@@ -3688,7 +3688,7 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
       OV (is_compatible, OB_ERR_SP_WRONG_ARG_NUM, formal_udt_id, actual_udt_id, formal_param_type, actual_param);
       if (OB_SUCC(ret) && actual_udt_id != formal_udt_id && !formal_param_type.is_generic_type() && !formal_param_type.is_opaque_type() && func_.get_in_args().has_member(param_idx)) { //in arg and need cast add convert_composite
         OX (get_params().at(param_idx) = actual_param);
-        OZ (convert_composite(ctx_, get_params().at(param_idx), formal_param_type));
+        OZ (convert_composite(ctx_, get_params().at(param_idx), formal_param_type.get_user_type_id()));
         OX (need_free_.at(param_idx) = get_params().at(param_idx).get_ext() != 0 ? true : false);
         OX (param_converted_.at(param_idx) = true);
       }
@@ -3743,7 +3743,7 @@ int ObPLExecState::check_anonymous_collection_compatible(const ObPLComposite &co
   return ret;
 }
 
-int ObPLExecState::convert_composite(ObPLExecCtx &ctx, ObObjParam &param, const ObPLDataType &dest_type)
+int ObPLExecState::convert_composite(ObPLExecCtx &ctx, ObObjParam &param, int64_t dest_type_id)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
@@ -3758,7 +3758,7 @@ int ObPLExecState::convert_composite(ObPLExecCtx &ctx, ObObjParam &param, const 
   CK (OB_NOT_NULL(sql_proxy = ctx.exec_ctx_->get_sql_proxy()));
   CK (OB_NOT_NULL(package_guard = ctx.exec_ctx_->get_package_guard()));
 
-  OZ (ctx.get_user_type(dest_type.get_user_type_id(), pl_user_type, &tmp_allocator));
+  OZ (ctx.get_user_type(dest_type_id, pl_user_type, &tmp_allocator));
   CK (OB_NOT_NULL(pl_user_type));
 
   if (OB_SUCC(ret) && param.is_ext() && param.get_ext() != 0) {
@@ -3770,7 +3770,7 @@ int ObPLExecState::convert_composite(ObPLExecCtx &ctx, ObObjParam &param, const 
       *ctx.allocator_, *session, *schema_guard, *package_guard, *sql_proxy, false);
     OZ (pl_user_type->init_obj(*(schema_guard), *ctx.allocator_, dst, dst_size));
     OZ (pl_user_type->convert(resolve_ctx, src_ptr, dst_ptr));
-    if (OB_FAIL(ret)) {
+    if (OB_SUCCESS != ret) {
       ObUserDefinedType::destruct_objparam(*ctx.allocator_, dst, session);
     }
     OX (param = dst);

@@ -3441,7 +3441,7 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
       for (int64_t i = 0; i < processed_count; i++) {
         ObObj *dst_table_pos = reinterpret_cast<ObObj*>(table_data) + i;
         int tmp_ret = ObUserDefinedType::destruct_objparam(*collection_allocator, *dst_table_pos, NULL, true);
-        if (OB_FAIL(tmp_ret)) {
+        if (OB_SUCCESS != tmp_ret) {
           LOG_WARN("failed to destruct objparam", K(tmp_ret));
         }
       }
@@ -4477,7 +4477,9 @@ int ObPLCollection::init_allocator(common::ObIAllocator &allocator, bool need_ne
  * 3、如果data域是record，那么该record本身的内存同样由Collection自己的allocator分配；record里的基础数据类型的内存同样由Collection自己的allocator分配；
  * 4、如果data域里是子Collection，那么该子Collection数据结构本身由父Collection的allocator分配，子Collection的内存管理递归遵循此约定。
  * */
-int ObPLCollection::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool ignore_del_element)
+int ObPLCollection::deep_copy(ObPLCollection *src,
+                              ObIAllocator *allocator,
+                              bool ignore_del_element)
 {
   int ret = OB_SUCCESS;
   /*
