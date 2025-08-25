@@ -123,7 +123,7 @@ int ObLogTransRedoDispatcher::dispatch_by_partition_order_(TransCtx &trans, vola
     PartTransTask *next_part_trans_task = part_trans_task->next_task();
     bool is_part_dispatch_finish = false;
 
-    while(OB_SUCC(ret) && !is_part_dispatch_finish && !stop_flag) {
+    while(OB_SUCC(ret) && !stop_flag) {
       bool has_memory_to_dispatch_redo = false;
 
       if (OB_FAIL(try_get_and_dispatch_single_redo_(*part_trans_task, has_memory_to_dispatch_redo, is_part_dispatch_finish, stop_flag))) {
@@ -131,9 +131,11 @@ int ObLogTransRedoDispatcher::dispatch_by_partition_order_(TransCtx &trans, vola
           LOG_ERROR("try_get_and_dispatch_single_redo_ fail", KR(ret), K(has_memory_to_dispatch_redo),
               K(is_part_dispatch_finish), KP(part_trans_task), KPC(part_trans_task));
         }
+      } else if (is_part_dispatch_finish) {
+        break;
       } else if (!has_memory_to_dispatch_redo) {
         // sleep 5 ms and retry current PartTransTask
-        ob_usleep(5 * 1000);
+        ob_usleep(5 * _MSEC_);
       } else {
         /* dispatch one redo of PartTransTask success */
         monitor.mark_and_get_cost("get_and_dispatch_redo_done", true);
@@ -263,13 +265,13 @@ int ObLogTransRedoDispatcher::dispatch_part_redo_with_budget_(
           LOG_ERROR("try_get_and_dispatch_single_redo_ fail", KR(ret), K(has_memory_to_dispatch_redo),
               K(is_part_dispatch_finish), K(part_trans_dispatch_budget));
         }
-      } else if (!has_memory_to_dispatch_redo) {
-        budget_usedup_part_cnt++;
       } else if (is_part_dispatch_finish) {
         trans_dispatch_ctx_.inc_dispatched_part();
         if (OB_FAIL(dispatched_part_idx_arr.push_back(i))) {
           LOG_ERROR("failed to push_back dispatch finished part idx to dispatched_part_idx_arr", KR(ret), K(part_trans_dispatch_budget));
         }
+      } else if (!has_memory_to_dispatch_redo) {
+        budget_usedup_part_cnt++;
       }
     }
 
@@ -311,7 +313,10 @@ int ObLogTransRedoDispatcher::try_get_and_dispatch_single_redo_(
   // 2. get_next_dispatch_redo: will get expected error code OB_EMPTY_RESULT if all redo of current PartTranstask
   //     has been dispatched. In this case, try with another PartTransTask
   // 3. dispatch_redo_: expected OB_SUCCESS, all kind of other error code are unexpected and libobcdc should stop
-  if (OB_FAIL(check_redo_can_dispatch_(has_memory_to_dispatch_redo, part_budget))) {
+  if (part_trans_task.is_part_dispatch_finish()) {
+    // if trans has no redo log, will mark dispatch finish before check redo_dispatcher_memory_limit
+    is_part_dispatch_finish = true;
+  } else if (OB_FAIL(check_redo_can_dispatch_(has_memory_to_dispatch_redo, part_budget))) {
     LOG_ERROR("failed to check_redo_can_dispatch", KR(ret), K_(cur_dispatched_redo_memory), K_(redo_memory_limit),
         K(part_trans_task), K(has_memory_to_dispatch_redo), K(stop_flag), KP(part_budget), KPC(part_budget));
   } else if (has_memory_to_dispatch_redo) {
