@@ -12,6 +12,7 @@ target_link_libraries(test_sql_fast_parser
   gmock
   -static-libstdc++
 )
+target_link_options(test_sql_fast_parser PRIVATE LINKER:--unresolved-symbols=ignore-all)
 target_include_directories(test_sql_fast_parser
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
