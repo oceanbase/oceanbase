@@ -1967,6 +1967,7 @@ constexpr int OB_KV_TABLE_NOT_ENABLED = -10520;
 constexpr int OB_KV_HBASE_NAMESPACE_NOT_FOUND = -10521;
 constexpr int OB_KV_HBASE_TABLE_EXISTS = -10522;
 constexpr int OB_KV_HBASE_TABLE_NOT_FOUND = -10523;
+constexpr int OB_KV_SESS_NOT_EXIST = -10524;
 constexpr int OB_KV_ODP_TIMEOUT = -10650;
 constexpr int OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN = -11000;
 constexpr int OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES = -11001;
@@ -2055,8 +2056,8 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
+constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -2241,7 +2242,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_CURL_ERROR__USER_ERROR_MSG "curl error"
 #define OB_MAJOR_FREEZE_NOT_ALLOW__USER_ERROR_MSG "%s"
 #define OB_PREPARE_FREEZE_FAILED__USER_ERROR_MSG "prepare freeze failed"
-#define OB_INVALID_DATE_VALUE__USER_ERROR_MSG "Incorrect datetime value: '%.*s'%s"
+#define OB_INVALID_DATE_VALUE__USER_ERROR_MSG "Incorrect datetime value: '%.*s' for column '%s'"
 #define OB_INACTIVE_SQL_CLIENT__USER_ERROR_MSG "Inactive sql client, only read allowed"
 #define OB_INACTIVE_RPC_PROXY__USER_ERROR_MSG "Inactive rpc proxy, can not send RPC request"
 #define OB_INTERVAL_WITH_MONTH__USER_ERROR_MSG "Interval with year or month can not be converted to microseconds"
@@ -4428,6 +4429,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_KV_HBASE_NAMESPACE_NOT_FOUND__USER_ERROR_MSG "namespace '%.*s' is not found"
 #define OB_KV_HBASE_TABLE_EXISTS__USER_ERROR_MSG "table '%.*s' already exists"
 #define OB_KV_HBASE_TABLE_NOT_FOUND__USER_ERROR_MSG "table '%.*s' not found"
+#define OB_KV_SESS_NOT_EXIST__USER_ERROR_MSG "Hbase scan session not exist, session id is: %lu"
 #define OB_KV_ODP_TIMEOUT__USER_ERROR_MSG "ODP process timeout"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__USER_ERROR_MSG "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__USER_ERROR_MSG "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
@@ -4556,8 +4558,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -9298,6 +9300,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_KV_HBASE_TABLE_EXISTS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10522, table '%.*s' already exists"
 #define OB_KV_HBASE_TABLE_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10523, table '%.*s' not found"
 #define OB_KV_HBASE_TABLE_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10523, table '%.*s' not found"
+#define OB_KV_SESS_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10524, Hbase scan session not exist, session id is: %lu"
+#define OB_KV_SESS_NOT_EXIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10524, Hbase scan session not exist, session id is: %lu"
 #define OB_KV_ODP_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10650, ODP process timeout"
 #define OB_KV_ODP_TIMEOUT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10650, ODP process timeout"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11000, Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
@@ -9554,12 +9558,12 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2497];
+extern int g_all_ob_errnos[2498];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

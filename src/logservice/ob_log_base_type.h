@@ -181,6 +181,8 @@ enum ObLogBaseType
   // for sslog uid service
   SSLOG_UID_LOG_BASE_TYPE = 57,
 #endif
+  // for obkv table async query session id service
+  TABLE_SESS_ID_LOG_BASE_TYPE = 58,
 
   // pay attention!!!
   // add log type in log_base_type_to_string
@@ -322,6 +324,8 @@ int log_base_type_to_string(const ObLogBaseType log_type,
   } else if (log_type == SSLOG_UID_LOG_BASE_TYPE) {
     strncpy(str ,"SSLOG_UID", str_len);
 #endif
+  } else if (log_type == TABLE_SESS_ID_LOG_BASE_TYPE) {
+    strncpy(str, "TABLE_SESS_ID", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }

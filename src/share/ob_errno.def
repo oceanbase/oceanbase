@@ -2794,6 +2794,7 @@ DEFINE_ERROR_EXT(OB_KV_TABLE_NOT_ENABLED, -10520, -1, "HY000", "OBKV fail to ena
 DEFINE_ERROR_EXT(OB_KV_HBASE_NAMESPACE_NOT_FOUND, -10521, -1, "HY000", "OBKV Hbase fail to find namespace", "namespace '%.*s' is not found");
 DEFINE_ERROR_EXT(OB_KV_HBASE_TABLE_EXISTS, -10522, -1, "HY000", "OBKV Hbase table already exists", "table '%.*s' already exists");
 DEFINE_ERROR_EXT(OB_KV_HBASE_TABLE_NOT_FOUND, -10523, -1, "HY000", "OBKV Hbase table not found", "table '%.*s' not found");
+DEFINE_ERROR_EXT(OB_KV_SESS_NOT_EXIST, -10524, -1, "HY000", "OBKV Hbase scan session not exist", "Hbase scan session not exist, session id is: %lu");
 DEFINE_ERROR(OB_KV_ODP_TIMEOUT, -10650, -1, "HY000", "ODP process timeout");
 
 // 余留位置
