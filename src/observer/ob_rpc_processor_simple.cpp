@@ -86,6 +86,8 @@
 #include "close_modules/arbitration/rootserver/ob_arbitration_service.h" // for ObArbitrationService
 #include "close_modules/arbitration/share/arbitration_service/ob_arbitration_service_utils.h" // for ObArbitrationServiceUtils
 #endif
+#include "share/backup/ob_backup_connectivity.h"
+
 
 
 namespace oceanbase

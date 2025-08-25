@@ -1873,6 +1873,7 @@ int ObPrefetchBackupInfoTask::inner_process_(int64_t &task_id)
   } else {
     const bool is_run_out = provider_->is_run_out();
     if (!is_run_out) {
+      DEBUG_SYNC(BACKUP_INFO_TASK_BEFORE_GET_NEXT_BATCH);
       if (OB_FAIL(provider_->get_next_batch_items(sorted_items, task_id))) {
         if (OB_ITER_END == ret) {
           LOG_INFO("provider reach end", K(ret));

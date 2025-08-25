@@ -18,6 +18,7 @@
 #include "src/share/ob_all_server_tracer.h" //SVR_TRACER
 #include "storage/ob_locality_manager.h"
 #include "lib/string/ob_sensitive_string.h"
+#include "share/backup/ob_backup_connectivity.h"
 
 
 using namespace oceanbase;
@@ -1094,24 +1095,61 @@ int ObLogArchiveBackupInfo::get_backup_dest(ObBackupDest &backup_dest) const
 }
 
 //***********************ObBackupStorageInfo***************************
+ObBackupStorageInfo::ObBackupStorageInfo(): dest_id_(OB_INVALID_DEST_ID)
+{
+}
+
 ObBackupStorageInfo::~ObBackupStorageInfo()
 {
   reset();
+}
+
+void ObBackupStorageInfo::reset()
+{
+  common::ObObjectStorageInfo::reset();
+  dest_id_ = OB_INVALID_DEST_ID;
+}
+
+int ObBackupStorageInfo::assign(const ObObjectStorageInfo &storage_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!storage_info.is_backup_storage_info())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only backup storage info can assign", KR(ret), K(storage_info));
+  } else if (OB_FAIL(common::ObObjectStorageInfo::assign(storage_info))) {
+    LOG_WARN("failed to assign storage info", KR(ret), K(storage_info));
+  } else {
+    const ObBackupStorageInfo *backup_storage_info = static_cast<const ObBackupStorageInfo *>(&storage_info);
+    dest_id_ = backup_storage_info->get_dest_id();
+  }
+  return ret;
+}
+
+// Comparison operators for ObBackupStorageInfo
+bool ObBackupStorageInfo::operator ==(const ObBackupStorageInfo &storage_info) const
+{
+  return ObObjectStorageInfo::operator==(storage_info) && dest_id_ == storage_info.dest_id_;
+}
+
+bool ObBackupStorageInfo::operator !=(const ObBackupStorageInfo &storage_info) const
+{
+  return !(*this == storage_info);
 }
 
 int ObBackupStorageInfo::set(
     const common::ObStorageType device_type,
     const char *endpoint,
     const char *authorization,
-    const char *extension)
+    const char *extension,
+    const int64_t dest_id)
 {
   int ret = OB_SUCCESS;
   char storage_info[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
   if (is_valid()) {
     ret = OB_INIT_TWICE;
     LOG_WARN("storage info init twice", K(ret));
-  } else if (OB_ISNULL(endpoint)
-      || OB_ISNULL(authorization) || OB_ISNULL(extension) || OB_STORAGE_MAX_TYPE == device_type) {
+  } else if (OB_ISNULL(endpoint) || OB_ISNULL(authorization) || OB_ISNULL(extension)
+                || OB_STORAGE_MAX_TYPE == device_type) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("invalid args", K(ret), KP(endpoint), KP(authorization), KP(extension), K(device_type));
   } else if (0 != strlen(endpoint)
@@ -1125,6 +1163,8 @@ int ObBackupStorageInfo::set(
     LOG_WARN("failed to set storage info", K(ret));
   } else if (OB_FAIL(set(device_type, storage_info))) {
     LOG_WARN("failed to set storage info", K(ret), KPC(this));
+  } else {
+    dest_id_ = dest_id;
   }
   return ret;
 }
@@ -1234,21 +1274,35 @@ int ObBackupStorageInfo::set_endpoint(const common::ObStorageType device_type, c
   return ret;
 }
 
-#ifdef OB_BUILD_TDE_SECURITY
-int ObBackupStorageInfo::get_access_key_(char *key_buf, const int64_t key_buf_len) const
+int ObBackupStorageInfo::get_storage_info_str(char *storage_info, const int64_t info_len) const
 {
   int ret = OB_SUCCESS;
-  // encrypt_access_key_ will check args' validity
-  if (OB_FAIL(encrypt_access_key_(key_buf, key_buf_len))) {
-    LOG_WARN("failed to encrypt access key", K(ret));
+
+  if (OB_ISNULL(storage_info) || info_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(storage_info), K(info_len));
+  } else if (OB_FAIL(ObObjectStorageInfo::get_storage_info_str(storage_info, info_len))) {
+    LOG_WARN("failed to get storage info str", K(ret), K(storage_info));
+  } else {
+    int64_t pos = strlen(storage_info);
+    //TODO(xingzhi): Split it into two functions, one with dest_id and one without dest_id.
+    if (OB_INVALID_DEST_ID != dest_id_ && OB_FAIL(databuff_printf(storage_info,
+                                                      info_len, pos, "&dest_id=%ld", dest_id_))) {
+      LOG_WARN("failed to databuff printf", K(ret), K(pos), K(storage_info));
+    }
   }
+
   return ret;
 }
 
 int ObBackupStorageInfo::parse_storage_info_(const char *storage_info, bool &has_needed_extension)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(storage_info) || strlen(storage_info) >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
+  bool has_set_src_info = false;
+  if (OB_ISNULL(storage_info)) {
+    ret = OB_INVALID_BACKUP_DEST;
+    LOG_WARN("storage info is invalid", K(ret));
+  } else if (strlen(storage_info) >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("storage info is invalid", K(ret), KP(storage_info), K(strlen(storage_info)));
   } else if (OB_FAIL(ObObjectStorageInfo::parse_storage_info_(storage_info, has_needed_extension))) {
@@ -1267,6 +1321,7 @@ int ObBackupStorageInfo::parse_storage_info_(const char *storage_info, bool &has
       token = ::strtok_r(str, "&", &saved_ptr);
       if (NULL == token) {
         break;
+#ifdef OB_BUILD_TDE_SECURITY
       } else if (0 == strncmp(ENCRYPT_KEY, token, strlen(ENCRYPT_KEY))) {
         if (0 != strlen(access_key_)) {
           ret = OB_INVALID_ARGUMENT;
@@ -1276,9 +1331,55 @@ int ObBackupStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         } else if (OB_FAIL(decrypt_access_key_(serialize_key))) {
           LOG_WARN("failed to decrypt access key", K(ret), K(token));
         }
+#endif
+      } else if (0 == strncmp(BACKUP_ZONE, token, strlen(BACKUP_ZONE))) {
+        const char *zone_list = token + strlen(BACKUP_ZONE);
+        if (OB_UNLIKELY(has_set_src_info)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("can not set multi type src info", K(ret), K(token));
+        } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
+          LOG_WARN("failed to set zone range", K(ret), K(token));
+        } else {
+          has_set_src_info = true;
+        }
+      } else if (0 == strncmp(BACKUP_REGION, token, strlen(BACKUP_REGION))) {
+        const char *region_list = token + strlen(BACKUP_REGION);
+        if (OB_UNLIKELY(has_set_src_info)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("can not set multi type src info", K(ret), K(token));
+        } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
+          LOG_WARN("failed to set region range", K(ret), K(token));
+        } else {
+          has_set_src_info = true;
+        }
+      } else if (0 == strncmp(BACKUP_IDC, token, strlen(BACKUP_IDC))) {
+        const char *idc_list = token + strlen(BACKUP_IDC);
+        if (OB_UNLIKELY(has_set_src_info)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("can not set multi type src info", K(ret), K(token));
+        } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
+          LOG_WARN("failed to set idc range", K(ret), K(token));
+        } else {
+          has_set_src_info = true;
+        }
+      } else if (0 == strncmp(DEST_ID, token, strlen(DEST_ID))) {
+        if (OB_FAIL(c_str_to_int(token + strlen(DEST_ID), dest_id_))) {
+          LOG_WARN("failed to set dest id", K(ret));
+        }
       } else {
       }
     }
+  }
+  return ret;
+}
+
+#ifdef OB_BUILD_TDE_SECURITY
+int ObBackupStorageInfo::get_access_key_(char *key_buf, const int64_t key_buf_len) const
+{
+  int ret = OB_SUCCESS;
+  // encrypt_access_key_ will check args' validity
+  if (OB_FAIL(encrypt_access_key_(key_buf, key_buf_len))) {
+    LOG_WARN("failed to encrypt access key", K(ret));
   }
   return ret;
 }
@@ -1458,7 +1559,6 @@ int ObBackupDest::alloc_and_init()
   return ret;
 }
 
-
 int ObBackupDest::parse_backup_dest_str_(const char *backup_dest, const bool only_parse_for_unique_path)
 {
   int ret = OB_SUCCESS;
@@ -1560,6 +1660,27 @@ int ObBackupDest::set(
 {
   int ret = OB_SUCCESS;
   reset();
+  if (is_valid()) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("cannot init twice", K(ret), K(*this));
+  } else if (OB_ISNULL(path) || OB_ISNULL(endpoint) || OB_ISNULL(authorization) || OB_ISNULL(extension)) {
+    ret = OB_INVALID_BACKUP_DEST;
+    LOG_WARN("invalid args", K(ret), KP(path), KP(endpoint), KP(authorization), KP(extension));
+  } else if (OB_FAIL(set(path, endpoint, authorization, extension, OB_INVALID_DEST_ID))) {
+    LOG_WARN("failed to set storage info", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupDest::set(
+    const char *path,
+    const char *endpoint,
+    const char *authorization,
+    const char *extension,
+    const int64_t dest_id)
+{
+  int ret = OB_SUCCESS;
+  reset();
   common::ObStorageType type;
   ObString root_path_str(path);
   if (is_valid()) {
@@ -1574,7 +1695,7 @@ int ObBackupDest::set(
     LOG_WARN("failed to get storage type", K(ret));
   } else if (OB_FAIL(databuff_printf(root_path_, OB_MAX_BACKUP_PATH_LENGTH, "%s", path))) {
     LOG_WARN("failed to set root path", K(ret), K(path), K(strlen(path)));
-  } else if (OB_FAIL(storage_info_->set(type, endpoint, authorization, extension))) {
+  } else if (OB_FAIL(storage_info_->set(type, endpoint, authorization, extension, dest_id))) {
     LOG_WARN("failed to set storage info", K(ret), K(endpoint), K(authorization), K(extension));
   } else {
     root_path_trim_();
@@ -3054,6 +3175,36 @@ const char *backup_set_file_info_status_strs[] = {
     "FAILED",
 };
 
+ObBackupIdc::ObBackupIdc()
+  : idc_(),
+    priority_(-1)
+{
+}
+
+ObBackupIdc::~ObBackupIdc()
+{
+}
+
+void ObBackupIdc::reset()
+{
+  idc_.reset();
+  priority_ = -1;
+}
+
+int ObBackupIdc::set(const ObString &idc, const int64_t priority)
+{
+  int ret = OB_SUCCESS;
+  if (0 == idc.length() || priority < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "set backup idc get invalid argument", K(ret), K(idc), K(priority));
+  } else if (OB_FAIL(idc_.assign(idc))) {
+    OB_LOG(WARN, "failed to assign idc", K(ret), K(idc));
+  } else {
+    priority_ = priority;
+  }
+  return ret;
+}
+
 ObBackupRegion::ObBackupRegion()
   : region_(),
     priority_(-1)
@@ -4425,6 +4576,7 @@ int ObLogArchiveDestAtrr::gen_config_items(common::ObIArray<BackupConfigItemPair
 {
   int ret = OB_SUCCESS;
   BackupConfigItemPair config;
+  ObBackupDestIOPermissionMgr *dest_io_permission_mgr = nullptr;
   if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguement", K(ret), KPC(this));
@@ -4437,6 +4589,11 @@ int ObLogArchiveDestAtrr::gen_config_items(common::ObIArray<BackupConfigItemPair
     LOG_WARN("failed to assign key", K(ret));
   } else if (OB_FAIL(dest_.get_backup_dest_str(tmp.ptr(), tmp.capacity()))) {
     LOG_WARN("failed to get backup dest", K(ret));
+  } else if (OB_ISNULL(dest_io_permission_mgr = MTL(ObBackupDestIOPermissionMgr*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("MTL ObBackupDestIOPermissionMgr is null", K(ret));
+  } else if (OB_FAIL(dest_io_permission_mgr->delete_locality_info_in_backup_dest_str(tmp.ptr()))) {
+    LOG_WARN("failed to delete locality info in backup dest str", K(ret), K(tmp.ptr()));
   } else if (OB_FAIL(config.value_.assign(tmp.ptr()))) {
     LOG_WARN("failed to assign value", K(ret));
   } else if(OB_FAIL(items.push_back(config))) {
@@ -4765,6 +4922,9 @@ ObBackupDestAttributeParser::ExtraArgsCb::Action ObBackupDestAttributeParser::Ex
   {"access_key",    ObBackupDestAttributeParser::ExtraArgsCb::set_access_key_,    false},
   {"max_iops",      ObBackupDestAttributeParser::ExtraArgsCb::set_max_iops_,      false},
   {"max_bandwidth", ObBackupDestAttributeParser::ExtraArgsCb::set_max_bandwidth_, false},
+  {"zone",          ObBackupDestAttributeParser::ExtraArgsCb::set_zone_,          false},
+  {"idc",           ObBackupDestAttributeParser::ExtraArgsCb::set_idc_,           false},
+  {"region",        ObBackupDestAttributeParser::ExtraArgsCb::set_region_,        false},
 };
 
 ObBackupDestAttributeParser::ExtraArgsCb::ExtraArgsCb(ObBackupDestAttribute &option)
@@ -4984,6 +5144,106 @@ int ObBackupDestAttributeParser::ExtraArgsCb::set_max_bandwidth_(const char *val
       LOG_INFO("set max bandwidth", "max_bandwidth", option.max_bandwidth_);
     }
   }
+  return ret;
+}
+
+int ObBackupDestAttributeParser::ExtraArgsCb::set_zone_(const char *val, ObBackupDestAttribute &option)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDestIOPermissionMgr *dest_io_permission_mgr = nullptr;
+
+  if (OB_ISNULL(val) || '\0' != option.src_info_[0]) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(val), KP(option.src_info_));
+  } else if (STRLEN(val) >= OB_MAX_BACKUP_SRC_INFO_LENGTH) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("the val too long", K(ret), K(strlen(val)), KP(val));
+  } else if (OB_ISNULL(dest_io_permission_mgr = MTL(ObBackupDestIOPermissionMgr*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("MTL ObBackupDestIOPermissionMgr is null", KR(ret));
+  } else if (OB_FAIL(dest_io_permission_mgr->check_backup_src_info_valid(val, ObBackupSrcType::ZONE))) {
+    LOG_WARN("failed to check zone type src info", K(ret), KP(val), KP(option.src_info_));
+  } else if (OB_FAIL(set_src_info_(val, ObBackupSrcType::ZONE, option))){
+    LOG_WARN("failed to set zone type src info", K(ret), KP(val), KP(option.src_info_));
+  }
+
+  return ret;
+}
+
+int ObBackupDestAttributeParser::ExtraArgsCb::set_idc_(const char *val, ObBackupDestAttribute &option)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDestIOPermissionMgr *dest_io_permission_mgr = nullptr;
+
+  if (OB_ISNULL(val) || '\0' != option.src_info_[0]) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(val), KP(option.src_info_));
+  } else if (STRLEN(val) >= OB_MAX_BACKUP_SRC_INFO_LENGTH) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("the val too long", K(ret), K(strlen(val)), KP(val));
+  } else if (OB_ISNULL(dest_io_permission_mgr = MTL(ObBackupDestIOPermissionMgr*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("MTL ObBackupDestIOPermissionMgr is null", KR(ret));
+  } else if (OB_FAIL(dest_io_permission_mgr->check_backup_src_info_valid(val, ObBackupSrcType::IDC))) {
+    LOG_WARN("failed to check idc type src info", K(ret), KP(val), KP(option.src_info_));
+  } else if (OB_FAIL(set_src_info_(val, ObBackupSrcType::IDC, option))){
+    LOG_WARN("failed to set idc type src info", K(ret), KP(val), KP(option.src_info_));
+  }
+
+  return ret;
+}
+
+int ObBackupDestAttributeParser::ExtraArgsCb::set_region_(const char *val, ObBackupDestAttribute &option)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDestIOPermissionMgr *dest_io_permission_mgr = nullptr;
+
+  if (OB_ISNULL(val) || '\0' != option.src_info_[0]) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(val), KP(option.src_info_));
+  } else if (STRLEN(val) >= OB_MAX_BACKUP_SRC_INFO_LENGTH) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("the val too long", K(ret), K(strlen(val)), KP(val));
+  } else if (OB_ISNULL(dest_io_permission_mgr = MTL(ObBackupDestIOPermissionMgr*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("MTL ObBackupDestIOPermissionMgr is null", KR(ret));
+  } else if (OB_FAIL(dest_io_permission_mgr->check_backup_src_info_valid(val, ObBackupSrcType::REGION))) {
+    LOG_WARN("failed to check region type src info", K(ret), KP(val), KP(option.src_info_));
+  } else if (OB_FAIL(set_src_info_(val, ObBackupSrcType::REGION, option))){
+    LOG_WARN("failed to set region type src info", K(ret), KP(val), KP(option.src_info_));
+  }
+
+  return ret;
+}
+
+int ObBackupDestAttributeParser::ExtraArgsCb::set_src_info_(const char *val,
+    const ObBackupSrcType src_type, ObBackupDestAttribute &option)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  const int64_t length = sizeof(option.src_info_);
+  int64_t val_length = STRLEN(val);
+
+  if (OB_ISNULL(val) || '\0' != option.src_info_[0]
+                     || ObBackupSrcType::EMPTY >= src_type
+                     || ObBackupSrcType::MAX <= src_type) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(val), K(src_type), KP(option.src_info_));
+  } else if (ObBackupSrcType::ZONE == src_type && OB_FAIL(databuff_printf(option.src_info_,
+                                                              length, pos, BACKUP_ZONE))) {
+    LOG_WARN("failed to set src info prefix", K(ret), KP(option.src_info_), K(length), K(pos));
+  } else if (ObBackupSrcType::IDC == src_type && OB_FAIL(databuff_printf(option.src_info_,
+                                                              length, pos, BACKUP_IDC))) {
+    LOG_WARN("failed to set src info prefix", K(ret), K(option.src_info_), K(length), K(pos));
+  } else if (ObBackupSrcType::REGION == src_type && OB_FAIL(databuff_printf(option.src_info_,
+                                                              length, pos, BACKUP_REGION))) {
+    LOG_WARN("failed to set src info prefix", K(ret), K(option.src_info_), K(length), K(pos));
+  } else if (OB_FAIL(databuff_printf(option.src_info_, length, pos, "%s", val))){
+    LOG_WARN("failed to set src info prefix", K(ret), K(option.src_info_), K(length), K(pos));
+  } else {
+    LOG_INFO("set src info", K(val_length), KCSTRING(val));
+  }
+
   return ret;
 }
 

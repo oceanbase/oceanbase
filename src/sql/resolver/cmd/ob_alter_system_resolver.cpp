@@ -2141,7 +2141,7 @@ int check_backup_region(const ObString &backup_region)
   int tmp_ret = OB_SUCCESS;
   int64_t pos = 0;
 
-  if (OB_FAIL(ObBackupUtils::parse_backup_format_input(backup_region, MAX_REGION_LENGTH, backup_region_array))) {
+  if (OB_FAIL(ObBackupUtils::parse_backup_format_input(backup_region, backup_region_array))) {
     LOG_WARN("failed to parse backup format input", K(ret), K(backup_region));
   } else if (OB_FAIL(share::ObZoneTableOperation::get_region_list(*GCTX.sql_proxy_, region_array))) {
     LOG_WARN("failed to get region list", K(ret));
@@ -2181,7 +2181,7 @@ int check_backup_zone(const ObString &backup_zone)
   int tmp_ret = OB_SUCCESS;
   int64_t pos = 0;
 
-  if (OB_FAIL(ObBackupUtils::parse_backup_format_input(backup_zone, MAX_REGION_LENGTH, backup_zone_array))) {
+  if (OB_FAIL(ObBackupUtils::parse_backup_format_input(backup_zone, backup_zone_array))) {
     LOG_WARN("failed to parse backup format input", K(ret), K(backup_zone));
   } else if (OB_FAIL(share::ObZoneTableOperation::get_zone_list(*GCTX.sql_proxy_, zone_array))) {
     LOG_WARN("failed to get region list", K(ret));

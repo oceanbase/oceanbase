@@ -279,6 +279,7 @@ class ObAutoSplitTaskCache;
 #ifdef OB_BUILD_SHARED_STORAGE
 class ObTabletSplitTaskCache;
 #endif
+class ObBackupDestIOPermissionMgr;
 namespace schema
 {
   class ObTenantSchemaService;
@@ -513,8 +514,9 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       rootserver::ObDDLServiceLauncher*,             \
       rootserver::ObDDLScheduler*,                   \
       storage::ObInnerTabletAccessService*,          \
-      storage::ObTabletReorgInfoTableService*,        \
-      sql::ObSQLCCLRuleManager*                      \
+      storage::ObTabletReorgInfoTableService*,       \
+      sql::ObSQLCCLRuleManager*,                     \
+      share::ObBackupDestIOPermissionMgr*            \
   )
 
 

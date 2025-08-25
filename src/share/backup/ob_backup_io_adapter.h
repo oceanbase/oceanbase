@@ -254,6 +254,7 @@ private:
       char *buf, const int64_t offset, const int64_t size,
       const common::ObIOFd &fd,
       int64_t &read_size);
+  static int is_io_prohibited(const common::ObObjectStorageInfo *storage_info);
   static int io_manager_write(
       const char *buf, const int64_t offset, const int64_t size,
       const common::ObIOFd &fd,

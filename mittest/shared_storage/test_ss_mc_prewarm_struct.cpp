@@ -283,7 +283,7 @@ TEST_F(TestSSMCPrewarmStruct, empty_hot_macro_infos)
             ObStorageUsedType::TYPE::USED_TYPE_DATA, device_config));
   ASSERT_EQ(OB_SUCCESS, get_storage_type_from_path(device_config.path_, type));
   ASSERT_EQ(OB_SUCCESS, storage_info.set(type, device_config.endpoint_, device_config.access_info_,
-                                         device_config.extension_));
+                                         device_config.extension_, OB_INVALID_DEST_ID));
 
   // expect there is no prewarm data and index file
   ObTenantFileManager *file_manager = nullptr;

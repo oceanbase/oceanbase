@@ -260,8 +260,10 @@ public:
   const char *get_type_str() const;
   ObStorageChecksumType get_checksum_type() const;
   const char *get_checksum_type_str() const;
+  const char *get_extension() const { return extension_; }
 
   bool is_hdfs_storage() const { return OB_STORAGE_HDFS == device_type_; }
+  virtual bool is_backup_storage_info() const { return false; }
   bool is_enable_worm() const;
   bool is_assume_role_mode() const;
   virtual bool is_valid() const;
