@@ -1709,6 +1709,7 @@ int check_will_be_having_domain_index_operation(
       share::schema::ObSchemaGetterGuard &schema_guard,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
+      const share::schema::ObTableSchema &orig_table_schema,
       common::ObSArray<share::schema::ObTableSchema> &new_table_schemas);
  int add_new_index_schema(
       obrpc::ObAlterTableArg &alter_table_arg,

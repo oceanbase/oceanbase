@@ -22269,6 +22269,7 @@ int ObDDLService::rebuild_hidden_table_index_and_mlog(
                   ObSchemaGetterGuard &schema_guard,
                   ObDDLOperator &ddl_operator,
                   ObMySQLTransaction &trans,
+                  const share::schema::ObTableSchema &orig_table_schema,
                   ObSArray<ObTableSchema> &new_table_schemas)
 {
   int ret = OB_SUCCESS;
@@ -22304,7 +22305,7 @@ int ObDDLService::rebuild_hidden_table_index_and_mlog(
           }
         } else if (OB_FAIL(create_index_tablet(this_table, trans, schema_guard, false/*need_check_tablet_cnt*/, tenant_data_version, false /*is_table_empty*/))) {
           LOG_WARN("create table tablets failed", K(ret), K(this_table));
-        } else {}
+        }
         if (OB_SUCC(ret)) {
           if (OB_INVALID_VERSION == last_schema_version
             && OB_FAIL(get_last_schema_version(last_schema_version))) {
@@ -22313,6 +22314,10 @@ int ObDDLService::rebuild_hidden_table_index_and_mlog(
               trans, tenant_id, table_id, last_schema_version))) {
             LOG_WARN("failed to insert_ori_schema_version!",
                      K(ret), K(tenant_id), K(table_id), K(last_schema_version));
+          } else if (this_table.is_mlog_table() &&
+                     OB_FAIL(ObMLogInfo::insert_mlog_info_for_rebuild_mlog(
+                             trans, tenant_id, orig_table_schema.get_mlog_tid(), this_table))) {
+            LOG_WARN("fail to insert mlog info", K(ret), K(tenant_id), K(this_table));
           }
         }
       }
@@ -22380,16 +22385,6 @@ int ObDDLService::add_new_mlog_schema(
       LOG_WARN("failed to add table schema!", KR(ret), K(new_mlog_schema));
     } else if (OB_FAIL(index_ids.push_back(new_mlog_schema.get_table_id()))) {
       LOG_WARN("failed to add new index id!", KR(ret), K(new_mlog_schema));
-    } else { // insert new mlog_info to all_mlog
-      ObMLogInfo mlog_info;
-      uint64_t new_mlog_tid = new_mlog_schema.get_table_id();
-      if (OB_FAIL(ObMLogInfo::fetch_mlog_info(trans,
-          tenant_id, orig_mlog_tid, mlog_info, false/*for_update*/))) {
-        LOG_WARN("failed to fetch mlog info", KR(ret), K(tenant_id), K(orig_mlog_tid));
-      } else if (OB_FALSE_IT(mlog_info.set_mlog_id(new_mlog_tid))) {
-      } else if (OB_FAIL(ObMLogInfo::insert_mlog_info(trans, mlog_info))) {
-        LOG_WARN("fail to insert mlog info", KR(ret), K(mlog_info));
-      }
     }
   }
   return ret;
@@ -22498,6 +22493,7 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(obrpc::ObAlterTableArg &al
                                                     *dst_tenant_schema_guard,
                                                     ddl_operator,
                                                     trans,
+                                                    *orig_table_schema,
                                                     new_table_schemas))) {
         LOG_WARN("failed to rebuild hidden table index and mlog", K(ret));
       }

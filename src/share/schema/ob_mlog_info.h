@@ -79,6 +79,10 @@ public:
   static int batch_fetch_mlog_ids(ObISQLClient &sql_client, uint64_t tenant_id,
                                   uint64_t last_mlog_id, ObIArray<uint64_t> &mlog_ids,
                                   int64_t limit = -1);
+  static int insert_mlog_info_for_rebuild_mlog(ObISQLClient &sql_client,
+                                               const uint64_t tenant_id,
+                                               const uint64_t orig_mlog_id,
+                                               const ObTableSchema &new_mlog_schema);
 
   TO_STRING_KV(K_(tenant_id),
                K_(mlog_id),
