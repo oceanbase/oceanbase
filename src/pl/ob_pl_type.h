@@ -641,6 +641,7 @@ public:
                                   int64_t level,
                                   int64_t &sequence,
                                   share::schema::ObRoutineInfo &routine_info);
+  static int adjust_routine_param_type(const share::schema::ObRoutineParam *iparam, pl::ObPLDataType &pl_type);
   static int deep_copy_pl_type(ObIAllocator &allocator, const ObPLDataType &src, ObPLDataType *&dst);
 
   static int obj_is_null(ObObj &obj, bool &is_null);
