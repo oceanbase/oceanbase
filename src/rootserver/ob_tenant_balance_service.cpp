@@ -453,6 +453,9 @@ int ObTenantBalanceService::is_tenant_ls_balance_finished_(
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant or not user tenant", KR(ret), K(tenant_id));
+  } else if (tenant_role != ObTenantRole::Role::PRIMARY_TENANT) {
+    // skip checking balance job for non-primary tenant
+    job_cnt = 0;
   } else if (OB_FAIL(ObBalanceJobTableOperator::get_balance_job(
       tenant_id, false, *GCTX.sql_proxy_, job, start_time, finish_time))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
