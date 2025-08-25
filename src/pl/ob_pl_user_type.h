@@ -192,7 +192,8 @@ public:
                                    char *dst,
                                    const int64_t dst_len,
                                    int64_t &dst_pos,
-                                   bool &has_serialized) const;
+                                   bool &has_serialized,
+                                   const sql::ObSQLSessionInfo &session) const;
 
   VIRTUAL_TO_STRING_KV(K_(type), K_(user_type_id), K_(type_name));
 protected:
