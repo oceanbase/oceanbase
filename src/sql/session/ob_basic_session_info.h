@@ -86,6 +86,31 @@ struct ObSessionNLSParams //oracle nls parameters
   TO_STRING_KV(K(nls_length_semantics_), K(nls_collation_), K(nls_nation_collation_));
 };
 
+struct ObDiagnosisInfo
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObDiagnosisInfo()
+    : is_enabled_(false),
+      limit_num_(0),
+      log_file_(),
+      bad_file_()
+  {}
+
+  void reset() {
+    is_enabled_ = false;
+    limit_num_ = 0;
+    log_file_.reset();
+    bad_file_.reset();
+  }
+
+  bool is_enabled_;
+  int64_t limit_num_;
+  common::ObString log_file_;
+  common::ObString bad_file_;
+
+  TO_STRING_KV(K(is_enabled_), K(limit_num_), K(log_file_), K(bad_file_));
+};
 
 #define TZ_INFO(session) \
   (NULL != (session) ? (session)->get_timezone_info() : NULL)
@@ -2454,6 +2479,7 @@ private:
   bool enable_mysql_compatible_dates_;
   bool is_diagnosis_enabled_;
   int64_t diagnosis_limit_num_;
+  ObDiagnosisInfo diagnosis_info_;
   //===============================================================
 
   //==============系统变量相关的变量，不需序列化到远端==============

@@ -105,6 +105,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       next_tx_isolation_(transaction::ObTxIsolationLevel::INVALID),
       is_diagnosis_enabled_(false),
       diagnosis_limit_num_(0),
+      diagnosis_info_(),
       log_id_level_map_valid_(false),
       cur_phy_plan_(NULL),
       plan_id_(0),
@@ -4683,6 +4684,7 @@ int ObBasicSessionInfo::calc_need_serialize_vars(ObIArray<ObSysVarClassType> &sy
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObDiagnosisInfo, is_enabled_, limit_num_, log_file_, bad_file_);
 OB_SERIALIZE_MEMBER(ObBasicSessionInfo::TableStmtType, table_id_, stmt_type_);
 
 OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
@@ -4973,6 +4975,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
   OB_UNIS_ENCODE(is_diagnosis_enabled_);
   OB_UNIS_ENCODE(diagnosis_limit_num_);
   OB_UNIS_ENCODE(client_sessid_);
+  OB_UNIS_ENCODE(diagnosis_info_);
   OB_UNIS_ENCODE(client_create_time_);
   return ret;
 }
@@ -5263,6 +5266,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   OB_UNIS_DECODE(is_diagnosis_enabled_);
   OB_UNIS_DECODE(diagnosis_limit_num_);
   OB_UNIS_DECODE(client_sessid_);
+  OB_UNIS_DECODE(diagnosis_info_);
   OB_UNIS_DECODE(client_create_time_);
   return ret;
 }
@@ -5552,6 +5556,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   OB_UNIS_ADD_LEN(is_diagnosis_enabled_);
   OB_UNIS_ADD_LEN(diagnosis_limit_num_);
   OB_UNIS_ADD_LEN(client_sessid_);
+  OB_UNIS_ADD_LEN(diagnosis_info_);
   OB_UNIS_ADD_LEN(client_create_time_);
   return len;
 }
