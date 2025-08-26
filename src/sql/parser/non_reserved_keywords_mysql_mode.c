@@ -576,6 +576,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"nth_value", NTH_VALUE},
   {"obconfig_url", OBCONFIG_URL},
   {"object_id", OBJECT_ID},
+  {"object_name_display", OBJECT_NAME_DISPLAY},
   {"of", OF},
   {"off", OFF},
   {"offset", OFFSET},
