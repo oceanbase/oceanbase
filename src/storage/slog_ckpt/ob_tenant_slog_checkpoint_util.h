@@ -209,10 +209,7 @@ struct ObTenantSlogCkptUtil
   private:
     DISALLOW_COPY_AND_ASSIGN(TabletDefragmentPicker);
     void reset_();
-    int remove_(const MacroBlockId &block_id)
-    {
-      return map_.erase_refactored(block_id);
-    }
+    int remove_(const MacroBlockId &block_id);
 
   private:
     ObArenaAllocator allocator_;

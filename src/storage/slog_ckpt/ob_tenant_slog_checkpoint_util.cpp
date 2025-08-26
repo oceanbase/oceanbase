@@ -464,6 +464,23 @@ void TabletDfgtPicker::reset_()
   allocator_.reset();
 }
 
+/// NOTE: block must exists at @c map_
+int TabletDfgtPicker::remove_(const MacroBlockId &block_id)
+{
+  int ret = OB_SUCCESS;
+  MapValue *val = nullptr;
+  if (OB_FAIL(map_.erase_refactored(block_id, &val))) {
+    STORAGE_LOG(WARN, "failed to remove block from map", K(ret), K(block_id));
+  } else if (OB_ISNULL(val)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected null val founded", K(ret), K(block_id), K(val));
+  } else {
+    val->~MapValue();
+    allocator_.free(val);
+  }
+  return ret;
+}
+
 // ==========================
 //    MetaBlockListApplier
 // ==========================
