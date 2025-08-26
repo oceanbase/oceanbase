@@ -173,8 +173,7 @@ int ObMySQLResultImpl::next()
                                             KP(conn),
                                             K(conn->get_dblink_id()),
                                             K(conn->get_sessid()),
-                                            K(conn->usable()),
-                                            K(conn->ping()));
+                                            K(conn->usable()));
         TRANSLATE_CLIENT_ERR(ret, errmsg);
         if (ObMySQLStatement::is_need_disconnect_error(ret)) {
           conn->set_usable(false);
