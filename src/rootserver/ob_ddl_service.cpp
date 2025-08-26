@@ -28781,6 +28781,10 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table_schema should not be null", KR(ret));
+        } else if (table_schema->mv_container_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("drop container table is not supported", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop mview container table is");
         } else if (OB_FAIL(drop_table_set.set_refactored(table_schema->get_table_id()))) {
           LOG_WARN("set table_id to hash set failed", K(table_schema->get_table_id()), K(ret));
         } else if (OB_FAIL(lock_table(trans, *table_schema))) {
