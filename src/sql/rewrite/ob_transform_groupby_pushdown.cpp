@@ -442,7 +442,21 @@ int ObTransformGroupByPushdown::is_basic_select_stmt(ObSelectStmt *stmt, bool &i
     is_basic = false;
   } else if (0 != stmt->get_aggr_item_size()) {
     is_basic = false;
-  } else { /* do nothing */ }
+  } else if (1 == stmt->get_from_item_size()) {
+    TableItem *table_item = stmt->get_table_item(stmt->get_from_item(0));
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (TableItem::TEMP_TABLE == table_item->type_) {
+      ObSelectStmt *ref_query = table_item->ref_query_;
+      if (OB_ISNULL(ref_query)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (ref_query->has_group_by()) {
+        is_basic = false;
+      }
+    }
+  }
   return ret;
 }
 
