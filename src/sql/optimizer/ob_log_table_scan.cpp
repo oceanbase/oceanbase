@@ -232,7 +232,6 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
     }
     if (ObEnableOptRowGoal::OFF == get_plan()->get_optimizer_context().get_enable_opt_row_goal()) {
       param.need_row_count_ = -1;
-      est_cost_info_->limit_rows_ = -1;
     } else if (stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_3, COMPAT_VERSION_4_3_0,
                                                                COMPAT_VERSION_4_3_2) &&
         range_conds_.empty() &&
