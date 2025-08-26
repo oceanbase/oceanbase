@@ -79,6 +79,12 @@ public:
   int delete_block_from_back_to_front_until(const block_id_t block_id);
   int rename_tmp_block_handler_to_normal(const block_id_t block_id);
   // =======================================================
+
+  int get_io_statistic_info(int64_t &last_working_time,
+                            int64_t &last_write_size,
+                            int64_t &accum_write_size,
+                            int64_t &accum_write_count,
+                            int64_t &accum_write_rt) const;
   TO_STRING_KV(K_(log_dir), K_(dir_fd), K_(min_block_id), K_(max_block_id), K_(curr_writable_block_id));
 private:
   // @brief this function used to rebuild 'blocks_'

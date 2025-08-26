@@ -5794,6 +5794,22 @@ int PalfHandleImpl::force_set_member_list_(const common::ObMemberList &new_membe
   return ret;
 }
 
+int PalfHandleImpl::get_io_statistic_info(int64_t &last_working_time,
+                                          int64_t &last_write_size,
+                                          int64_t &accum_write_size,
+                                          int64_t &accum_write_count,
+                                          int64_t &accum_write_rt) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ret = log_engine_.get_io_statistic_info(last_working_time,
+        last_write_size, accum_write_size, accum_write_count, accum_write_rt);
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(PalfStat, self_, palf_id_, role_, log_proposal_id_, config_version_,
   mode_version_, access_mode_, paxos_member_list_, paxos_replica_num_, allow_vote_,
   replica_type_, begin_lsn_, begin_scn_, base_lsn_, end_lsn_, end_scn_, max_lsn_, max_scn_,

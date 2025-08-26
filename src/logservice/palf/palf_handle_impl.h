@@ -639,6 +639,11 @@ public:
                        LogIOContext &io_ctx) = 0;
   virtual int try_handle_next_submit_log() = 0;
   virtual int fill_cache_when_slide(const LSN &read_begin_lsn, const int64_t in_read_size) = 0;
+  virtual int get_io_statistic_info(int64_t &last_working_time,
+                                    int64_t &last_write_size,
+                                    int64_t &accum_write_size,
+                                    int64_t &accum_write_count,
+                                    int64_t &accum_write_rt) const = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
@@ -1005,6 +1010,11 @@ public:
 
   int diagnose(PalfDiagnoseInfo &diagnose_info) const;
   int update_palf_stat() override final;
+  int get_io_statistic_info(int64_t &last_working_time,
+                            int64_t &last_write_size,
+                            int64_t &accum_write_size,
+                            int64_t &accum_write_count,
+                            int64_t &accum_write_rt) const override final;
   TO_STRING_KV(K_(palf_id), K_(self), K_(has_set_deleted));
 
 private:

@@ -833,6 +833,16 @@ DEF_STR_WITH_CHECKER(arbitration_degradation_policy, OB_CLUSTER_PARAMETER, "LS_P
         "Then, switch log stream leaders to the replicas which are connected with RS.",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
         "LS_POLICY, CLUSTER_POLICY");
+DEF_INT(log_storage_warning_trigger_percentage, OB_CLUSTER_PARAMETER, "0", "[0,50]",
+        "The performance decrease percentage threshold that may trigger a log disk failure. "
+        "The higher the value, the more sensitive it is. The default value is 0, Range: [0,50]."
+        "The default value is 0, which means the log disk will be considered to have failure "
+        "only if any IO RT exceeds log_storage_warning_tolerance_time. "
+        "If the value is greater than 0, which means the log disk will be considered to have failure "
+        "only if current IO throughput < (normal throughput * log_storage_warning_trigger_percentage / 100) and "
+        "performance degradation has been ongoing for log_storage_warning_tolerance_time seconds. "
+        "If the parameter needs to be set, it is recommended to set a value less than 10 to avoid misjudgment.",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // ========================= LogService Config End   =====================
 DEF_INT(resource_hard_limit, OB_CLUSTER_PARAMETER, "100", "[100, 10000]",
         "system utilization should not be large than resource_hard_limit",

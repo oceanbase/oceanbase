@@ -16,6 +16,7 @@
 #include "logservice/palf/log_config_mgr.h"
 #include "logservice/ob_arbitration_service.h"
 #include "logservice/ob_net_keepalive_adapter.h"
+#include "logservice/leader_coordinator/ob_failure_detector.h"
 #undef private
 
 namespace oceanbase
@@ -133,6 +134,30 @@ TEST_F(TestObArbitrationService, locality_allow_degrade_test)
     EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr2, 1), 1, LSN(1000)))));
     EXPECT_EQ(OB_SUCCESS, dead_servers.push_back(LogMemberStatus(LogMemberAckInfo(ObMember(addr3, 1), 1, LSN(1000)))));
     EXPECT_TRUE(do_degrade_func.is_allow_degrade_(paxos_list, replica_num, degraded_servers, dead_servers, palf_id));
+  }
+}
+
+TEST_F(TestObArbitrationService, test_failure_detector_slot)
+{
+  logservice::coordinator::ObFailureDetector detector;
+  int64_t curr_idx = 0;
+  int64_t left_bound = 4 * 1000;
+  int64_t right_bound = 0;
+  for (int64_t i = 4 * 1000; i <= 10 * 1000 * 1000; i++) {
+    const int64_t index = detector.palf_disk_hang_detector_.size_to_learn_idx_(i);
+    if (index > curr_idx) {
+      right_bound = i - 1;
+      // std::cout << "slot: " << index - 1 << ", [" << left_bound << ", " << right_bound << "]" << std::endl;
+      left_bound = i;
+      curr_idx = index;
+    }
+    if (i == 10 * 1000 * 1000) {
+      // std::cout << "slot: " << index  << ", [" << left_bound << ", ]" << std::endl;
+    }
+  }
+  for (int i = 0; i < 270; i++) {
+    double size = detector.palf_disk_hang_detector_.learn_idx_to_size_(i);
+    // std::cout << "slot: " << i  << ", size: " << size << std::endl;
   }
 }
 

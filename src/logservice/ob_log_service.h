@@ -222,7 +222,14 @@ public:
 #ifdef OB_BUILD_ARBITRATION
   int diagnose_arb_srv(const share::ObLSID &id, LogArbSrvDiagnoseInfo &diagnose_info);
 #endif
-  int get_io_start_time(int64_t &last_working_time);
+  int get_io_statistic_info(int64_t &last_working_time,
+                            int64_t &pending_write_size,
+                            int64_t &pending_write_count,
+                            int64_t &pending_write_rt,
+                            int64_t &accum_write_size,
+                            int64_t &accum_write_count,
+                            int64_t &accum_write_rt);
+
   int check_disk_space_enough(bool &is_disk_enough);
 
   ipalf::IPalfEnv *get_palf_env() { return palf_env_; }

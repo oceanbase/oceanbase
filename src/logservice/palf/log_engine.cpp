@@ -1911,5 +1911,21 @@ int LogEngine::check_config_meta_size(const LogConfigMeta &config_meta) const
   }
   return ret;
 }
+
+int LogEngine::get_io_statistic_info(int64_t &last_working_time,
+                                     int64_t &last_write_size,
+                                     int64_t &accum_write_size,
+                                     int64_t &accum_write_count,
+                                     int64_t &accum_write_rt) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ret = log_storage_.get_io_statistic_info(last_working_time,
+        last_write_size, accum_write_size, accum_write_count, accum_write_rt);
+  }
+  return ret;
+}
 } // end namespace palf
 } // end namespace oceanbase

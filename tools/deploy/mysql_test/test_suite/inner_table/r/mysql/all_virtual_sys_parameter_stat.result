@@ -188,6 +188,7 @@ log_restore_concurrency
 log_storage_compress_all
 log_storage_compress_func
 log_storage_warning_tolerance_time
+log_storage_warning_trigger_percentage
 log_transport_compress_all
 log_transport_compress_func
 ls_gc_delay_time
