@@ -1971,7 +1971,7 @@ def def_table_schema(**keywords):
           tenant_space_table_names.append(table_name2tname(keywords['table_name'] + keywords['name_postfix']))
     elif field == 'view_definition':
       if keywords[field]:
-        add_char_field(field, 'R"__({0})__"'.format(value))
+        add_char_field(field, 'R"__({0})__"'.format(value.replace("\n", " ")))
     elif field == 'partition_expr':
       if keywords[field]:
         add_list_partition_expr_field(value)
@@ -2789,8 +2789,15 @@ def generate_load_inner_table_schema():
   run_command('{} {} -DOB_BUILD_WITH_EMPTY_LOAD_SCHEMA=ON --init'.format(build_sh_path, build_type))
   run_command('cd {} && {} {} && ./{}'.format(unittest_path, make_type, test_name, test_name))
   run_command('cp -f {}/ob_load_inner_table_schema.cpp {}'.format(unittest_path, current_dir))
+  # 还原一下build_debug目录
   run_command('{} {} --init'.format(build_sh_path, build_type))
 
+def check_file_no_tail_space(file):
+  with open(file) as f:
+    for i, line in enumerate(f):
+      line1 = line.strip('\n\r')
+      if len(line1) !=0 and line1[-1] in ' \t':
+        raise Exception("tailing space in file {}:{}".format(file, i + 1))
 
 if __name__ == "__main__":
   global ob_virtual_index_table_id
@@ -2798,6 +2805,7 @@ if __name__ == "__main__":
   ora_virtual_index_table_id = max_ora_virtual_table_id - 1
 
   clean_files("ob_inner_table_schema.*")
+  check_file_no_tail_space("ob_inner_table_schema_def.py")
   execfile("ob_inner_table_schema_def.py")
   def_all_lob_aux_table()
   end_generate_cpp()
