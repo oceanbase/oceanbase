@@ -575,6 +575,7 @@ struct ToDatetimeCastImpl
         } else {
           date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(cast_mode);
           date_sql_mode.no_zero_date_ = CM_IS_NO_ZERO_DATE(cast_mode);
+          date_sql_mode.implicit_first_century_year_ = CM_IS_IMPLICIT_FIRST_CENTURY_YEAR(cast_mode);
         }
         if (OB_SUCC(ret)) {
           StringToDatetimeFn cast_fn(CAST_ARG_DECL, arg_vec, res_vec, date_sql_mode, cvrt_ctx);
