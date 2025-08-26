@@ -260,7 +260,7 @@ public:
       main_lookup_cnt_(0),
       doc_id_lookup_cnt_(0),
       func_lookup_cnt_(0),
-      lookup_doc_id_expr_(nullptr) {}
+      lookup_domain_id_expr_(nullptr) {}
 
   virtual ~ObDASFuncLookupCtDef() {}
 
@@ -319,7 +319,7 @@ public:
   int64_t main_lookup_cnt_;
   int64_t doc_id_lookup_cnt_;
   int64_t func_lookup_cnt_;
-  ObExpr *lookup_doc_id_expr_;
+  ObExpr *lookup_domain_id_expr_;
 };
 
 struct ObDASFuncLookupRtDef : ObDASAttachRtDef

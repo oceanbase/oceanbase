@@ -4831,8 +4831,8 @@ int ObTscCgService::generate_functional_lookup_ctdef(const ObLogTableScan &op,
         } else if (doc_id_lookup_result->type_ == T_PSEUDO_ROW_TRANS_INFO_COLUMN
             || doc_id_lookup_result->type_ == T_PSEUDO_GROUP_ID) {
           // skip
-        } else if (nullptr == tmp_func_lookup_ctdef->lookup_doc_id_expr_) {
-          tmp_func_lookup_ctdef->lookup_doc_id_expr_ = doc_id_lookup_result;
+        } else if (nullptr == tmp_func_lookup_ctdef->lookup_domain_id_expr_) {
+          tmp_func_lookup_ctdef->lookup_domain_id_expr_ = doc_id_lookup_result;
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("more than one doc id result expr for rowkey 2 doc_id lookup", K(ret), KPC(doc_id_lookup_scan_ctdef));

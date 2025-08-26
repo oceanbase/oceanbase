@@ -131,7 +131,8 @@ OB_SERIALIZE_MEMBER((ObDASFuncLookupCtDef, ObDASAttachCtDef),
     main_lookup_cnt_,
     doc_id_lookup_cnt_,
     func_lookup_cnt_,
-    lookup_doc_id_expr_);
+    lookup_domain_id_expr_ // FARM COMPAT WHITELIST
+    );
 
 OB_SERIALIZE_MEMBER((ObDASFuncLookupRtDef, ObDASAttachRtDef));
 

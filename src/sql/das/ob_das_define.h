@@ -92,6 +92,8 @@ enum ObDASOpType
   DAS_OP_FUNC_LOOKUP,
   DAS_OP_INDEX_PROJ_LOOKUP,
   DAS_OP_DOMAIN_ID_MERGE,
+  DAS_OP_IR_ES_MATCH,
+  DAS_OP_IR_ES_SCORE,
   //append OpType before me
   DAS_OP_MAX
 };

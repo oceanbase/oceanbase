@@ -2111,7 +2111,7 @@ int ObDASIterUtils::create_functional_lookup_sub_tree(ObTableScanParam &scan_par
       func_lookup_param.data_table_iter_ = fts_merge_iter;
       func_lookup_param.trans_desc_ = trans_desc;
       func_lookup_param.snapshot_ = snapshot;
-      func_lookup_param.doc_id_expr_ = func_lookup_ctdef->lookup_doc_id_expr_;
+      func_lookup_param.doc_id_expr_ = func_lookup_ctdef->lookup_domain_id_expr_;
       if (lookup_keep_order) {
         static_cast<ObDASScanRtDef *>(func_lookup_param.index_rtdef_)->scan_flag_.scan_order_ = ObQueryFlag::KeepOrder;
       }

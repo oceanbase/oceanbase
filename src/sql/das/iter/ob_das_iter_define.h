@@ -42,6 +42,7 @@ enum ObDASIterType : uint32_t
   DAS_ITER_IVF_SCAN,
   DAS_ITER_SPIV_MERGE,
   DAS_ITER_SPIV_SCAN,
+  DAS_ITER_ES_MATCH,
   // append DASIterType before me
   DAS_ITER_MAX
 };
@@ -73,6 +74,7 @@ enum ObDASIterTreeType : uint32_t
   ITER_TREE_FUNC_LOOKUP,
   ITER_TREE_MVI_LOOKUP,
   ITER_TREE_VEC_LOOKUP,
+  ITER_TREE_MATCH,
   // append iter tree type before me
   ITER_TREE_MAX
 };
@@ -103,6 +105,7 @@ public:
     ITER_TREE_PARTITION_SCAN == (_type) ||               \
     ITER_TREE_LOCAL_LOOKUP == (_type)   ||               \
     ITER_TREE_TEXT_RETRIEVAL == (_type) ||               \
+    ITER_TREE_MATCH == (_type)          ||               \
     ITER_TREE_FUNC_LOOKUP == (_type)    ||               \
     ITER_TREE_INDEX_MERGE == (_type)    ||               \
     ITER_TREE_MVI_LOOKUP == (_type)     ||               \
