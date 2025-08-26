@@ -420,8 +420,7 @@ public:
                                 char *buf,
                                 const int64_t &buf_len,
                                 int64_t &pos) const;
-  int print_element_type(const uint64_t tenant_id,
-                         const uint64_t element_type_id,
+  int print_element_type(const uint64_t element_type_id,
                          const ObUDTBase *element_type_info,
                          char* buf,
                          const int64_t& buf_len,
