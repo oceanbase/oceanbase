@@ -2135,10 +2135,17 @@ desc oceanbase.__all_virtual_ss_ls_meta;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
 ls_id	bigint(20)	NO	PRI	NULL	
-meta_version	bigint(20)	NO		NULL	
-ss_checkpoint_scn	bigint(20)	NO		NULL	
+meta_version	bigint(20) unsigned	NO		NULL	
+ss_checkpoint_scn	bigint(20) unsigned	NO		NULL	
 ss_checkpoint_lsn	bigint(20)	NO		NULL	
 ss_clog_accum_checksum	bigint(20)	NO		NULL	
+transfer_scn	bigint(20) unsigned	NO		NULL	
+active_transfer_scn	bigint(20) unsigned	NO		NULL	
+active_transfer_src	bigint(20)	NO		NULL	
+active_transfer_status	bigint(20)	NO		NULL	
+active_transfer_tablet_cnt	bigint(20)	NO		NULL	
+gc_state	bigint(20)	NO		NULL	
+offline_scn	bigint(20) unsigned	NO		NULL	
 desc oceanbase.__all_virtual_ss_sstable_mgr;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
