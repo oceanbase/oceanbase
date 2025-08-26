@@ -173,6 +173,10 @@ public:
                                 double distance,
                                 const ObSrsItem *srs,
                                 ObString &res_wkb);
+  static int geo_isvalid(ObArenaAllocator *allocator,
+                         const ObString &wkb_str,
+                         const ObSrsItem *srs,
+                         bool &is_valid);
   static ObGeoType get_geo_type_by_name(ObString &name);
   static int get_gtype_by_num(uint64_t num, ObGeoType &geo_type);
   static const char *get_geo_name_by_type(ObGeoType type);

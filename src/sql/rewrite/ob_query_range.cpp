@@ -9071,6 +9071,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
   ObS2Adapter *s2object = NULL;
   ObString buffer_geo;
   double distance = NAN;
+  bool set_whole_range = false;
 
   // todo : fix me, get effective tenant_id
   if ((input_srid != 0) && OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
@@ -9082,9 +9083,19 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
     LOG_WARN("failed to get srs item", K(ret));
   } else if (op_type == ObGeoRelationType::T_DWITHIN) {
     distance = out_key_part->geo_keypart_->distance_.get_double();
+    bool is_valid = true;
     if (out_key_part->geo_keypart_->distance_.is_unknown() || std::isnan(distance)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid distance para", K(ret));
+    } else if (OB_FAIL(ObGeoTypeUtil::geo_isvalid(&tmp_alloc, wkb_str, srs_item, is_valid))) {
+      LOG_WARN("failed to check geo is valid", K(ret));
+    } else if (!is_valid) {
+      // for invalid geometry, set whole range
+      if (OB_FAIL(set_geo_keypart_whole_range(*out_key_part))) {
+        LOG_WARN("set keypart whole range failed", K(ret));
+      } else {
+        set_whole_range = true;
+      }
     } else if (input_srid != 0 && srs_item->is_geographical_srs()) {
       double sphere_radius = (srs_item->semi_major_axis() * 2 + srs_item->semi_minor_axis()) /  3;
       const double SPHERIOD_ERR_FRACTION = 0.005;
@@ -9105,7 +9116,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
       }
     }
   }
-  if (s2object == NULL && OB_SUCC(ret)) {
+  if (s2object == NULL && !set_whole_range && OB_SUCC(ret)) {
     s2object = OB_NEWx(ObS2Adapter, (&tmp_alloc), (&tmp_alloc), (input_srid != 0 ? srs_item->is_geographical_srs() : false), true);
     if (OB_ISNULL(s2object)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -9113,7 +9124,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !set_whole_range) {
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "S2Adapter"));
     // build s2 object from wkb
     if (OB_FAIL(ObGeoTypeUtil::get_type_from_wkb((buffer_geo.empty() ? wkb_str : buffer_geo), geo_type))) {
