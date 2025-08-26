@@ -107,9 +107,6 @@ void ObCommonLSService::do_work()
           LOG_WARN("failed to create ls", KR(ret), KR(tmp_ret), K(user_tenant_schema));
         }
         if (OB_SUCC(ret) && !user_tenant_schema.is_dropping()) {
-          if (OB_TMP_FAIL(ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(user_tenant_schema))) {
-            LOG_WARN("failed to adjust user tenant primary zone", KR(ret), KR(tmp_ret), K(user_tenant_schema));
-          }
           if (OB_TMP_FAIL(try_modify_ls_unit_group_(user_tenant_schema))) {
             LOG_WARN("failed to modify ls unit group", KR(ret), KR(tmp_ret), K(user_tenant_schema));
           }

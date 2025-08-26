@@ -85,6 +85,7 @@ public:
   static int gather_ls_status_stat(const uint64_t &tenant_id, share::ObLSStatusInfoArray &ls_array);
   static int is_ls_balance_finished(const uint64_t &tenant_id, bool &is_finished);
   static int lock_and_check_balance_job(common::ObMySQLTransaction &trans, const uint64_t tenant_id);
+  int balance_primary_zone_();
 private:
   static int is_primary_tenant_ls_balance_finished_(const uint64_t &tenant_id, bool &is_finished);
   static int is_standby_tenant_ls_balance_finished_(const uint64_t &tenant_id, bool &is_finished);

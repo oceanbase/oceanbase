@@ -20,6 +20,7 @@
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" //ObTenantSnapshotUtil
 #include "storage/tablelock/ob_lock_utils.h" // ObInnerTableLockUtil
 #include "share/transfer/ob_transfer_task_operator.h"
+#include "rootserver/ob_balance_ls_primary_zone.h" // ObBalanceLSPrimaryZone
 
 #define ISTAT(fmt, args...) FLOG_INFO("[TENANT_BALANCE] " fmt, ##args)
 #define WSTAT(fmt, args...) FLOG_WARN("[TENANT_BALANCE] " fmt, ##args)
@@ -57,6 +58,26 @@ void ObTenantBalanceService::destroy()
   ObTenantThreadHelper::destroy();
   tenant_id_ = OB_INVALID_TENANT_ID;
   inited_ = false;
+}
+
+int ObTenantBalanceService::balance_primary_zone_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ptr is null", KR(ret), KP(GCTX.schema_service_));
+  } else {
+    ObTenantSchema tenant_schema;
+    if (OB_FAIL(get_tenant_schema(tenant_id_, tenant_schema))) {
+      LOG_WARN("failed to get tenant schema", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(ObBalanceLSPrimaryZone::try_adjust_user_ls_primary_zone(tenant_schema))) {
+      LOG_WARN("failed to adjust user tenant primary zone", KR(ret), K(tenant_schema));
+    }
+  }
+  return ret;
 }
 
 // enable_balance = true, enable_transfer = true: balance with LS dynamic change
@@ -100,12 +121,6 @@ void ObTenantBalanceService::do_work()
           } else if (OB_FAIL(ls_balance_(job_cnt))) {
             LOG_WARN("failed to do ls balance", KR(ret));
           }
-
-          if (OB_SUCC(ret) && 0 == job_cnt) {
-            if (OB_FAIL(try_do_partition_balance_(last_partition_balance_time))) {
-              LOG_WARN("try do partition balance failed", KR(ret), K(last_partition_balance_time));
-            }
-          }
         } else { // disable transfer
           ObTenantSchema tenant_schema_copy;
           if (OB_FAIL(get_tenant_schema(tenant_id_, tenant_schema_copy))) {
@@ -117,6 +132,15 @@ void ObTenantBalanceService::do_work()
             if (OB_FAIL(ObLSServiceHelper::balance_ls_group(need_execute_balance, tenant_info, is_balanced))) {
               LOG_WARN("failed to balance ls group", KR(ret));
             }
+          }
+        }
+
+        if (OB_SUCC(ret) && 0 == job_cnt) {
+          if (OB_FAIL(balance_primary_zone_())) {
+            LOG_WARN("failed to balance primary zone", KR(ret), K(tenant_id_));
+          } else if (ObShareUtil::is_tenant_enable_transfer(tenant_id_)
+              && OB_FAIL(try_do_partition_balance_(last_partition_balance_time))) {
+            LOG_WARN("try do partition balance failed", KR(ret), K(last_partition_balance_time));
           }
         }
       }
