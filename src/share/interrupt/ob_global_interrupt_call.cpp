@@ -70,7 +70,7 @@ ObInterruptCheckerGuard::ObInterruptCheckerGuard(ObInterruptChecker &new_checker
   // push new checker to the head of the list.
   new_checker.set_next(bakup_checker_);
   new_checker.set_level(bakup_checker_->get_level() + 1);
-  const uint64_t interrupt_checker_deep_level = 10;
+  const uint64_t interrupt_checker_deep_level = 100;
   if (OB_UNLIKELY(new_checker.get_level() == interrupt_checker_deep_level)) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "too deep nested interrupt checker");
   }
