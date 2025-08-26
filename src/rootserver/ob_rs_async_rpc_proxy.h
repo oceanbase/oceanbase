@@ -104,6 +104,8 @@ RPC_RS(obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT, obrpc::ObParallelCreateNormalTen
 RPC_F(obrpc::OB_LOAD_TENANT_TABLE_SCHEMA, obrpc::ObLoadTenantTableSchemaArg, obrpc::ObRpcProxy::NoneT, ObLoadTenantTableSchemaProxy);
 RPC_F(obrpc::OB_ALL_SERVER_TRACER_BROADCAST, obrpc::ObRefreshTenantInfoArg, obrpc::Int64, ObAllServerTracerProxy);
 
+RPC_F(obrpc::OB_CHECK_SYS_TABLE_SCHEMA, obrpc::ObCheckSysTableSchemaArg, obrpc::ObCheckSysTableSchemaResult, ObCheckSysTableSchemaProxy);
+
 
 }//end namespace rootserver
 }//end namespace oceanbase

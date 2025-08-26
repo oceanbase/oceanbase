@@ -329,6 +329,7 @@ private:
   obrpc::ObStorageRpcProxy storage_rpc_proxy_;
   obrpc::ObCommonRpcProxy rs_rpc_proxy_;
   common::ObMySQLProxy sql_proxy_;
+  common::ObOracleSqlProxy oracle_sql_proxy_;
   common::ObMySQLProxy ddl_sql_proxy_;
   common::ObOracleSqlProxy ddl_oracle_sql_proxy_;
   common::ObDbLinkProxy dblink_proxy_;

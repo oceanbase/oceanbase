@@ -278,6 +278,7 @@
 #ifdef OB_BUILD_ARBITRATION
   RPC_S(PR5 fetch_arb_member, OB_FETCH_ARB_MEMBER, (ObFetchArbMemberArg), ObMember);
 #endif
+  RPC_AP(PR5 check_sys_table_schema, OB_CHECK_SYS_TABLE_SCHEMA, (obrpc::ObCheckSysTableSchemaArg), obrpc::ObCheckSysTableSchemaResult);
   RPC_S(PR5 estimate_skip_rate, OB_ESTIMATE_SKIP_RATE, (obrpc::ObEstSkipRateArg), ObEstSkipRateRes);
   RPC_S(PR5 check_nested_mview_mds, OB_CHECK_NESTED_MVIEW_MDS, (obrpc::ObCheckNestedMViewMdsArg), obrpc::ObCheckNestedMViewMdsRes);
   RPC_AP(PRZ load_tenant_table_schema, OB_LOAD_TENANT_TABLE_SCHEMA, (obrpc::ObLoadTenantTableSchemaArg));
