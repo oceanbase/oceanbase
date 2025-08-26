@@ -392,7 +392,8 @@ struct ObGlobalHint {
   void merge_direct_load_hint(const ObDirectLoadHint &other);
   void merge_resource_group_hint(const ObString &resource_group);
 
-  bool has_hint_exclude_concurrent() const;
+  void set_has_hint_exclude_concurrent()  { has_hint_exclude_concurrent_ = true;  }
+  bool has_hint_exclude_concurrent() const  { return has_hint_exclude_concurrent_;  }
   int print_global_hint(PlanText &plan_text) const;
   int print_alloc_op_hints(PlanText &plan_text) const;
 
@@ -517,6 +518,8 @@ struct ObGlobalHint {
   ObDBLinkHit dblink_hints_;
   common::ObString resource_group_;
   ObPxNodeHint px_node_hint_;
+private:
+  bool has_hint_exclude_concurrent_;  // not hint, used to mark weather exists hint exclude max_concurrent
 };
 
 // used in physical plan

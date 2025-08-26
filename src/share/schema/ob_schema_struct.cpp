@@ -10951,6 +10951,29 @@ int ObOutlineParamsWrapper::has_concurrent_limit_param(bool &has_limit_param) co
   return ret;
 }
 
+int ObOutlineParamsWrapper::get_concurrent_limit_param(const ParamStore &const_param_store,
+                                                       int64_t &param_idx,
+                                                       int64_t &concurrent_num) const
+{
+  int ret = OB_SUCCESS;
+  param_idx = OB_INVALID_INDEX;
+  concurrent_num = -1;
+  const ObMaxConcurrentParam *param = NULL;
+  bool is_match = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < outline_params_.count(); ++i) {
+    if (OB_ISNULL(param = outline_params_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param is NULl", K(ret));
+    } else if (OB_FAIL(param->match_fixed_param(const_param_store, is_match))) {
+      LOG_WARN("fail to match", K(ret), K(i));
+    } else if (is_match && (-1 == concurrent_num || param->concurrent_num_ < concurrent_num)) {
+      concurrent_num = param->concurrent_num_;
+      param_idx = i;
+    } else {/*do nothing*/}
+  }
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObOutlineParamsWrapper)
 {
   int ret = OB_SUCCESS;
