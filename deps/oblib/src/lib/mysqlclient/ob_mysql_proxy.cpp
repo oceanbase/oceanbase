@@ -130,7 +130,10 @@ int ObCommonSqlProxy::read(ObISQLConnection *conn, ReadResult &result,
     ret = OB_INACTIVE_SQL_CLIENT;
     LOG_WARN("in active sql client", K(ret), KCSTRING(sql));
   } else {
-    if (OB_FAIL(conn->execute_read(tenant_id, sql, result, exec_sql_addr))) {
+    // The original code lacks the is_user_sql parameter.
+    // When sql_exec_addr is not empty, is_user_sql is implicitly converted to true.
+    // Here, is_user_sql is set to false.
+    if (OB_FAIL(conn->execute_read(tenant_id, sql, result, false/*is_user_sql*/, exec_sql_addr))) {
       LOG_WARN("query failed", K(ret), K(conn), K(start), KCSTRING(sql));
     }
   }

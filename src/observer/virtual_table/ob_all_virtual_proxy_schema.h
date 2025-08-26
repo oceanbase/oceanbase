@@ -173,7 +173,7 @@ private:
   int convert_output_row(ObNewRow *&cur_row);
   int gen_column_value(char *&buf, int64_t len,
                        const ObString &str, const bool is_oracle_mode);
-
+  int get_random_server_(const uint64_t tenant_id, common::ObAddr &target_server);
 private:
   bool is_inited_;
   common::ObArenaAllocator inner_alloc_;
