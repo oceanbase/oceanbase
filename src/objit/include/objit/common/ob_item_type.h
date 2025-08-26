@@ -2935,6 +2935,7 @@ typedef enum ObItemType
   T_FORMAT_OBJECT_NAME_DISPLAY = 4909,
   T_CACHE_REFRESH_INTERVAL_SEC = 4910,
   T_BACKUP_VALIDATE = 4911,
+  T_TRANSITION = 4912,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
