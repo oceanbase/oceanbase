@@ -85,7 +85,12 @@ OB_DEF_SERIALIZE_SIZE(ObVectorIndexParam)
               refine_k_,
               bq_use_fht_,
               sync_interval_type_,
-              sync_interval_value_);
+              sync_interval_value_,
+              prune_,
+              refine_,
+              ob_sparse_drop_ratio_build_,
+              window_size_,
+              ob_sparse_drop_ratio_search_);
   OB_UNIS_ADD_LEN_ARRAY(endpoint_, OB_MAX_ENDPOINT_LENGTH);
   return len;
 }
@@ -108,7 +113,12 @@ OB_DEF_SERIALIZE(ObVectorIndexParam)
               refine_k_,
               bq_use_fht_,
               sync_interval_type_,
-              sync_interval_value_);
+              sync_interval_value_,
+              prune_,
+              refine_,
+              ob_sparse_drop_ratio_build_,
+              window_size_,
+              ob_sparse_drop_ratio_search_);
   OB_UNIS_ENCODE_ARRAY(endpoint_, OB_MAX_ENDPOINT_LENGTH);
   return ret;
 }
@@ -138,7 +148,12 @@ OB_DEF_DESERIALIZE(ObVectorIndexParam)
               refine_k_,
               bq_use_fht_,
               sync_interval_type_,
-              sync_interval_value_);
+              sync_interval_value_,
+              prune_,
+              refine_,
+              ob_sparse_drop_ratio_build_,
+              window_size_,
+              ob_sparse_drop_ratio_search_);
   OB_UNIS_DECODE_ARRAY(endpoint_, OB_MAX_ENDPOINT_LENGTH);
   return ret;
 }

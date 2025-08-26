@@ -19,7 +19,7 @@ namespace oceanbase
 namespace share
 {
 
-OB_SERIALIZE_MEMBER(ObVectorIndexQueryParam, flags_, ef_search_, refine_k_);
+OB_SERIALIZE_MEMBER(ObVectorIndexQueryParam, flags_, ef_search_, refine_k_, ob_sparse_drop_ratio_search_);
 
 int ObVectorIndexQueryParam::assign(const ObVectorIndexQueryParam &other)
 {
@@ -27,6 +27,7 @@ int ObVectorIndexQueryParam::assign(const ObVectorIndexQueryParam &other)
   flags_ = other.flags_;
   ef_search_ = other.ef_search_;
   refine_k_ = other.refine_k_;
+  ob_sparse_drop_ratio_search_ = other.ob_sparse_drop_ratio_search_;
   return ret;
 }
 

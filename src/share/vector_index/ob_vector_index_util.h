@@ -83,6 +83,7 @@ enum ObVectorIndexAlgorithmType : uint16_t
   VIAT_HNSW_BQ,
   VIAT_HGRAPH,
   VIAT_SPIV,
+  VIAT_IPIVF,
   VIAT_MAX
 };
 
@@ -156,12 +157,14 @@ struct ObVectorIndexParam
 {
   static constexpr float DEFAULT_REFINE_K = 4.0;
   static constexpr int DEFAULT_BQ_BITS_QUERY = 32;
+  static constexpr int DEFAULT_WINDOW_SIZE = 100000;
 
   ObVectorIndexParam() :
     type_(VIAT_MAX), lib_(VIAL_MAX), dim_(0), m_(0), ef_construction_(0), ef_search_(0),
     nlist_(0), sample_per_nlist_(0), extra_info_max_size_(0), extra_info_actual_size_(0),
     refine_type_(0), bq_bits_query_(DEFAULT_BQ_BITS_QUERY),
-    refine_k_(DEFAULT_REFINE_K), bq_use_fht_(false), sync_interval_type_(VSIT_MAX), sync_interval_value_(0), nbits_(0)
+    refine_k_(DEFAULT_REFINE_K), bq_use_fht_(false), sync_interval_type_(VSIT_MAX), sync_interval_value_(0), nbits_(0), prune_(false), refine_(false), ob_sparse_drop_ratio_build_(0), window_size_(DEFAULT_WINDOW_SIZE),
+    ob_sparse_drop_ratio_search_(0)
   {
     MEMSET(endpoint_, 0, sizeof(endpoint_));
   }
@@ -183,6 +186,11 @@ struct ObVectorIndexParam
     bq_use_fht_ = false;
     sync_interval_type_ = VSIT_MAX;
     sync_interval_value_ = 0;
+    prune_ = false;
+    refine_ = false;
+    ob_sparse_drop_ratio_build_ = 0;
+    window_size_ = DEFAULT_WINDOW_SIZE;
+    ob_sparse_drop_ratio_search_ = 0;
     MEMSET(endpoint_, 0, sizeof(endpoint_));
     nbits_ = 0;
   };
@@ -206,6 +214,11 @@ struct ObVectorIndexParam
     nbits_ = other.nbits_;
     sync_interval_type_ = other.sync_interval_type_;
     sync_interval_value_ = other.sync_interval_value_;
+    prune_ = false;
+    refine_ = false;
+    ob_sparse_drop_ratio_build_ = 0;
+    window_size_ = DEFAULT_WINDOW_SIZE;
+    ob_sparse_drop_ratio_search_ = 0;
     MEMCPY(endpoint_, other.endpoint_, sizeof(endpoint_));
     return ret;
   };
@@ -230,11 +243,17 @@ struct ObVectorIndexParam
   int64_t sync_interval_value_;  // used when sync_interval_type_ is VSIT_NUMERIC
   char endpoint_[OB_MAX_ENDPOINT_LENGTH];
   int64_t nbits_;
+  // param for sparse vector
+  bool prune_;
+  bool refine_;
+  float ob_sparse_drop_ratio_build_;
+  int window_size_;
+  float ob_sparse_drop_ratio_search_;
   OB_UNIS_VERSION(1);
 public:
   TO_STRING_KV(K_(type), K_(lib), K_(dist_algorithm), K_(dim), K_(m), K_(ef_construction), K_(ef_search),
     K_(nlist), K_(sample_per_nlist), K_(extra_info_max_size), K_(extra_info_actual_size),
-    K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht), K_(sync_interval_type), K_(sync_interval_value), K_(endpoint), K_(nbits));
+    K_(refine_type), K_(bq_bits_query), K_(refine_k), K_(bq_use_fht), K_(sync_interval_type), K_(sync_interval_value), K_(endpoint), K_(nbits), K_(prune), K_(refine), K_(ob_sparse_drop_ratio_build),K_(window_size), K_(ob_sparse_drop_ratio_search));
 
 public:
   static int build_search_param(const ObVectorIndexParam &index_param,
