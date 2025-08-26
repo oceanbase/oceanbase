@@ -25,6 +25,7 @@
 .auth_file
 .auth_file
 .autotools
+.clangd
 .clang_complete
 .configured
 .configured
