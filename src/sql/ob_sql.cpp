@@ -1407,7 +1407,11 @@ int ObSql::do_real_prepare(const ObString &sql,
       info_ctx.ps_need_parameterization_ = true;
     } else if (session.is_enable_ps_parameterize() && pc_ctx.ps_need_parameterized_) {
       info_ctx.ps_need_parameterization_ = true;
-      info_ctx.no_param_sql_ = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+      if (!is_inner_sql && stmt::T_ANONYMOUS_BLOCK == stmt_type) {
+        // do nothing, already set no_param_sql_ in parameter_ps_anonymous_block
+      } else {
+        info_ctx.no_param_sql_ = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+      }
     } else {
       info_ctx.ps_need_parameterization_ = false;
       pc_ctx.fixed_param_idx_.reset();
@@ -1425,9 +1429,16 @@ int ObSql::do_real_prepare(const ObString &sql,
       }
     }
 
-    LOG_INFO("generate new stmt", K(ret), K(param_cnt), K(stmt_type), K(info_ctx.no_param_sql_),
-             K(info_ctx.normalized_sql_), K(info_ctx.num_of_returning_into_),
-             "sql", context.is_sensitive_ ? ObString(OB_MASKED_STR) : sql);
+    LOG_INFO("generate new stmt",
+              K(ret),
+              K(param_cnt),
+              K(stmt_type),
+              K(pc_ctx.ps_need_parameterized_),
+              K(info_ctx.ps_need_parameterization_),
+              K(info_ctx.no_param_sql_),
+              K(info_ctx.normalized_sql_),
+              K(info_ctx.num_of_returning_into_),
+              "sql", (context.is_sensitive_ ? ObString(OB_MASKED_STR) : sql));
   }
   if (OB_SUCC(ret)) {
     info_ctx.param_cnt_ = param_cnt;
@@ -2449,7 +2460,13 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
       context.raw_sql_ = ps_info->get_ps_sql();
 #ifndef NDEBUG
       LOG_INFO("Begin to handle execute statement", "sess_id", session.get_server_sid(),
-               "proxy_sess_id", session.get_proxy_sessid(), K(sql));
+               "proxy_sess_id", session.get_proxy_sessid(),
+               K(client_stmt_id),
+               K(inner_stmt_id),
+               K(ps_info->is_ps_need_parameterization()),
+               K(ps_info->get_no_param_sql()),
+               K(ps_info->get_ps_sql()),
+               K(sql));
 #endif
 
       if (!ps_info->get_fixed_raw_params().empty()) {
