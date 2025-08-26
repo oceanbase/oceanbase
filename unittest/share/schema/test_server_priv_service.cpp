@@ -95,6 +95,14 @@ TEST_F(TestServerSchemaService, refresh_priv)
     CREATE_USER_TABLE_SCHEMA(ret, table_schema);
   }
 
+  for (int64_t i = 0; OB_SUCC(ret) && NULL != share::virtual_table_index_schema_creators[i]; ++i)
+  {
+    table_schema.reset();
+    ASSERT_EQ(OB_SUCCESS, (*share::virtual_table_schema_index_creators[i])(table_schema));
+    ObSchemaTestUtils::table_set_tenant(table_schema, OB_SYS_TENANT_ID);
+    CREATE_USER_TABLE_SCHEMA(ret, table_schema);
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && NULL != share::information_schema_table_schema_creators[i]; ++i)
   {
     table_schema.reset();

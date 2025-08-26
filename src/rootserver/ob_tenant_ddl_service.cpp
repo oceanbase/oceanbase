@@ -45,6 +45,7 @@
 #include "share/ob_zone_merge_info.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_zone_merge_table_operator.h"
+#include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "rootserver/ob_load_inner_table_schema_executor.h"
 #include "share/ob_license_utils.h"
 
@@ -1685,6 +1686,7 @@ int ObTenantDDLService::create_normal_tenant(obrpc::ObParallelCreateNormalTenant
   common::ObTraceIdGuard trace_id_guard(new_trace_id);
   TIMEGUARD_INIT(create_normal_tenant, 10_s);
   FLOG_INFO("[CREATE_TENANT] STEP 2. start create normal tenant", K(tenant_id));
+  ObArray<uint64_t> table_ids_to_construct; // empty means construct all
   ObArenaAllocator arena_allocator("InnerTableSchem", OB_MALLOC_MIDDLE_BLOCK_SIZE);
   ObSArray<ObTableSchema> tables;
   ObTenantSchema tenant_schema;
@@ -1706,7 +1708,8 @@ int ObTenantDDLService::create_normal_tenant(obrpc::ObParallelCreateNormalTenant
   // in this case, SQL.ENG will return -4138 which will retry immediately.
   // the retries will explod user's work queue .
   // so we create tablet before braodcast schema, make them retrun OB_TABLE_NOT_EXIST which will not be retried
-  if (FAILEDx(ObSchemaUtils::construct_inner_table_schemas(tenant_id, tables, arena_allocator))) {
+  if (FAILEDx(ObSchemaUtils::construct_inner_table_schemas(tenant_id, table_ids_to_construct,
+          true/*include_index_and_lob_aux_schemas*/, arena_allocator, tables))) {
     LOG_WARN("fail to get inner table schemas in tenant space", KR(ret), K(tenant_id));
   } else if (CLICK_FAIL(create_tenant_sys_tablets(tenant_id, tables))) {
     LOG_WARN("fail to create tenant partitions", KR(ret), K(tenant_id));
@@ -1832,13 +1835,88 @@ int ObTenantDDLService::broadcast_sys_table_schemas(const uint64_t tenant_id)
   return ret;
 }
 
-ERRSIM_POINT_DEF(ERRSIM_CREATE_SYS_TABLETS_ERROR);
 int ObTenantDDLService::create_tenant_sys_tablets(
     const uint64_t tenant_id,
     common::ObIArray<ObTableSchema> &tables)
 {
   const int64_t start_time = ObTimeUtility::fast_current_time();
-  FLOG_INFO("[CREATE_TENANT] STEP 2.2. start create sys table tablets", K(tenant_id));
+  LOG_INFO("[CREATE_TENANT] STEP 2.2. start create sys table tablets", K(tenant_id));
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else {
+    // FIXME: (yanmu.ztl) use actual trans later
+    ObMySQLTransaction trans;
+    ObSchemaGetterGuard dummy_guard;
+    SCN frozen_scn = SCN::base_scn();
+    if (OB_FAIL(trans.start(sql_proxy_, tenant_id))) {
+      LOG_WARN("fail to start trans", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(create_tenant_sys_tablets_in_trans_(dummy_guard, trans, tenant_id, tables, frozen_scn))) {
+      LOG_WARN("failed to create tenant sys tablets in trans", KR(ret), K(tenant_id));
+    }
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "commit", ret == OB_SUCCESS, K(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+  }
+  LOG_INFO("[CREATE_TENANT] STEP 2.2. finish create sys table tablets", KR(ret), K(tenant_id),
+           "cost", ObTimeUtility::fast_current_time() - start_time);
+  return ret;
+}
+
+
+ERRSIM_POINT_DEF(ERRSIM_UPGRADE_CREATE_SYS_TABLETS);
+
+int ObTenantDDLService::batch_create_system_table(
+    ObSchemaGetterGuard &schema_guard,
+    ObDDLSQLTransaction &trans,
+    const uint64_t &tenant_id,
+    const ObIArray<uint64_t> &table_ids)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_ts = ObTimeUtility::current_time();
+  FLOG_INFO("[UPGRADE] start to batch create system tables", KR(ret), K(tenant_id), K(table_ids));
+  ObArenaAllocator arena_allocator("InnerTableSchem", OB_MALLOC_MIDDLE_BLOCK_SIZE);
+  ObArray<ObTableSchema> schemas;
+  if (OB_FAIL(check_inner_stat())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to check inner stat", KR(ret));
+  } else if (table_ids.empty()) {
+    // no need to create system tables
+  } else if (OB_FAIL(ObSchemaUtils::construct_inner_table_schemas(tenant_id, table_ids,
+          true /*include_index_and_lob_aux_schemas*/, arena_allocator, schemas))) {
+    LOG_WARN("failed to get hard code system table schemas", KR(ret), K(tenant_id), K(table_ids));
+  } else {
+    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    SCN frozen_scn;
+    if (FAILEDx(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
+      LOG_WARN("fail to get frozen status for create tablet", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(create_tenant_sys_tablets_in_trans_(schema_guard, trans, tenant_id, schemas, frozen_scn))) {
+      LOG_WARN("failed to create sys tablets in trans", KR(ret), K(tenant_id), K(frozen_scn));
+    } else if (OB_FAIL(ret = ERRSIM_UPGRADE_CREATE_SYS_TABLETS)) {
+      LOG_WARN("errsim upgrade create sys tables", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(create_sys_table_schemas(ddl_operator, trans, schemas))) {
+      LOG_WARN("failed to create sys table schemas", KR(ret), K(tenant_id));
+    }
+  }
+  FLOG_INFO("[UPGRADE] finish batch create system tables, not commited", KR(ret), K(tenant_id),
+      K(table_ids), "cost", ObTimeUtility::current_time() - start_ts);
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_CREATE_SYS_TABLETS_ERROR);
+int ObTenantDDLService::create_tenant_sys_tablets_in_trans_(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      ObMySQLTransaction &trans,
+      const uint64_t tenant_id,
+      common::ObIArray<share::schema::ObTableSchema> &tables,
+      const share::SCN &frozen_scn)
+{
+  const int64_t start_time = ObTimeUtility::fast_current_time();
+  LOG_INFO("start create sys table tablets", K(tenant_id));
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", KR(ret));
@@ -1848,25 +1926,19 @@ int ObTenantDDLService::create_tenant_sys_tablets(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ptr is null", KR(ret), KP_(rpc_proxy), KP_(lst_operator));
   } else {
-    // FIXME: (yanmu.ztl) use actual trans later
-    ObMySQLTransaction trans;
-    share::schema::ObSchemaGetterGuard dummy_guard;
-    SCN frozen_scn = SCN::base_scn();
     ObTableCreator table_creator(tenant_id,
                                  frozen_scn,
                                  trans);
     ObNewTableTabletAllocator new_table_tablet_allocator(
                               tenant_id,
-                              dummy_guard,
+                              schema_guard,
                               sql_proxy_);
     common::ObArray<share::ObLSID> ls_id_array;
     const ObTablegroupSchema *dummy_tablegroup_schema = NULL;
     ObArray<const share::schema::ObTableSchema*> table_schemas;
     ObArray<uint64_t> index_tids;
     ObArray<bool> need_create_empty_majors;
-    if (OB_FAIL(trans.start(sql_proxy_, tenant_id))) {
-      LOG_WARN("fail to start trans", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(table_creator.init(false/*need_tablet_cnt_check*/))) {
+    if (OB_FAIL(table_creator.init(false/*need_tablet_cnt_check*/))) {
       LOG_WARN("fail to init tablet creator", KR(ret), K(tenant_id));
     } else if (OB_FAIL(new_table_tablet_allocator.init())) {
       LOG_WARN("fail to init new table tablet allocator", KR(ret));
@@ -1963,14 +2035,6 @@ int ObTenantDDLService::create_tenant_sys_tablets(
       ALLOW_NEXT_LOG();
       LOG_INFO("create tenant sys tables tablet", KR(ret), K(tenant_id));
     }
-    if (trans.is_started()) {
-      int temp_ret = OB_SUCCESS;
-      bool commit = OB_SUCC(ret);
-      if (OB_SUCCESS != (temp_ret = trans.end(commit))) {
-        ret = (OB_SUCC(ret)) ? temp_ret : ret;
-        LOG_WARN("trans end failed", K(commit), K(temp_ret));
-      }
-    }
 
     // finishing is always invoked for new table tablet allocator
     int tmp_ret = OB_SUCCESS;
@@ -1978,8 +2042,8 @@ int ObTenantDDLService::create_tenant_sys_tablets(
       LOG_WARN("fail to finish new table tablet allocator", KR(tmp_ret));
     }
   }
-  FLOG_INFO("[CREATE_TENANT] STEP 2.2. finish create sys table tablets", KR(ret), K(tenant_id),
-           "cost", ObTimeUtility::fast_current_time() - start_time);
+  LOG_INFO("finish create sys table tablets", KR(ret), K(tenant_id),
+      "cost", ObTimeUtility::fast_current_time() - start_time);
   return ret;
 }
 

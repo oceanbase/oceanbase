@@ -75,6 +75,7 @@ inline bool is_allow_when_disable_ddl(const obrpc::ObRpcPacketCode pcode, const 
   } else if (obrpc::OB_COMMIT_ALTER_TENANT_LOCALITY == pcode
              || obrpc::OB_SCHEMA_REVISE == pcode // for upgrade
              || obrpc::OB_UPGRADE_TABLE_SCHEMA == pcode
+             || obrpc::OB_BATCH_UPGRADE_TABLE_SCHEMA == pcode
              || ((obrpc::OB_MODIFY_TENANT == pcode
                   || obrpc::OB_MODIFY_SYSVAR == pcode
                   || obrpc::OB_DO_KEYSTORE_DDL == pcode
@@ -708,6 +709,7 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BROADCAST_SCHEMA, ObBroadcastSchemaP, broadcas
 // only for upgrade
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_GET_RECYCLE_SCHEMA_VERSIONS, ObGetRecycleSchemaVersionsP, get_recycle_schema_versions(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_UPGRADE_TABLE_SCHEMA, ObRpcUpgradeTableSchemaP, upgrade_table_schema(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_BATCH_UPGRADE_TABLE_SCHEMA, ObRpcBatchUpgradeTableSchemaP, batch_upgrade_table_schema(arg_));
 //label security ddl
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_LABEL_SE_POLICY_DDL, ObRpcHandleLabelSePolicyDDLP, handle_label_se_policy_ddl(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_LABEL_SE_COMPONENT_DDL, ObRpcHandleLabelSeComponentDDLP, handle_label_se_component_ddl(arg_));

@@ -2298,13 +2298,16 @@ private:
     if is_mysql_virtual_table(table_id):
       h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
       virtual_table_count = virtual_table_count + 1
-  for index_l in new_index_name_ids:
-    if is_mysql_virtual_table(index_l[1]):
-      h_f.write(method_name.format(index_l[2].replace('$', '_').strip('_').lower()+'_'+index_l[0].lower(), index_l[2]))
-      virtual_table_count = virtual_table_count + 1
   for (table_name, table_id) in new_table_name_postfix_ids:
     if is_ora_virtual_table(table_id):
       h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
+      virtual_table_count = virtual_table_count + 1
+  h_f.write("  NULL,};\n\n")
+
+  h_f.write("const schema_create_func virtual_table_index_schema_creators [] = {\n")
+  for index_l in new_index_name_ids:
+    if is_mysql_virtual_table(index_l[1]):
+      h_f.write(method_name.format(index_l[2].replace('$', '_').strip('_').lower()+'_'+index_l[0].lower(), index_l[2]))
       virtual_table_count = virtual_table_count + 1
   for index_l in new_index_name_ids:
     if is_ora_virtual_table(index_l[1]):

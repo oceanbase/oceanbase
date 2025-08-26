@@ -324,8 +324,8 @@ private:
   int generate_master_rs_ls_info_(
       const share::ObLSReplica &cur_leader,
       share::ObLSInfo &ls_info);
-  int generate_tenant_table_schemas_(const obrpc::ObBatchBroadcastSchemaArg &arg,
-      ObSArray<share::schema::ObTableSchema> &tables, ObIAllocator &allocator);
+  int generate_tenant_table_schemas_(const obrpc::ObBatchBroadcastSchemaArg &arg, ObIAllocator &allocator,
+      ObSArray<share::schema::ObTableSchema> &tables);
 private:
   bool inited_;
   bool in_register_process_;

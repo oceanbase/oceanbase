@@ -156,6 +156,7 @@ private:
   int run_upgrade_processor_(ObUpgradeProcessorExecutor &executor,
       share::ObBaseUpgradeProcessor *processor,
       uint64_t &version);
+  int batch_upgrade_system_table_(const uint64_t tenant_id, ObIArray<uint64_t> &table_ids);
 private:
   bool inited_;
   bool stopped_;

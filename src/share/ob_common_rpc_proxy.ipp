@@ -207,6 +207,7 @@
   RPC_S(PRD run_job, obrpc::OB_RUN_JOB, (ObRunJobArg));
   RPC_S(PRD run_upgrade_job, obrpc::OB_RUN_UPGRADE_JOB, (ObUpgradeJobArg));
   RPC_S(PRD upgrade_table_schema, obrpc::OB_UPGRADE_TABLE_SCHEMA, (ObUpgradeTableSchemaArg));
+  RPC_S(PRD batch_upgrade_table_schema, obrpc::OB_BATCH_UPGRADE_TABLE_SCHEMA, (ObBatchUpgradeTableSchemaArg));
   RPC_S(PR5 admin_flush_cache, obrpc::OB_ADMIN_FLUSH_CACHE, (ObAdminFlushCacheArg));
   RPC_S(PR5 admin_upgrade_cmd, obrpc::OB_ADMIN_UPGRADE_CMD, (Bool));
   RPC_S(PR5 admin_rolling_upgrade_cmd, obrpc::OB_ADMIN_ROLLING_UPGRADE_CMD, (ObAdminRollingUpgradeArg));
