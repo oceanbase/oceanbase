@@ -2881,6 +2881,7 @@ typedef enum ObItemType
   T_COLUMN_INDEX_TYPE = 4886,
 
   T_TABLE_FLASHBACK_PROCTIME = 4893,
+  T_FORMAT_OBJECT_NAME_DISPLAY = 4909,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

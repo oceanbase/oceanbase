@@ -86,6 +86,11 @@ int ObExplainResolver::resolve(const ParseNode &parse_tree)
             explain_stmt->set_explain_format(EXPLAIN_TRADITIONAL);
             opt.with_tree_line_ = true;
           } break;
+          case T_FORMAT_OBJECT_NAME_DISPLAY:
+          {
+            explain_stmt->set_explain_format(EXPLAIN_FORMAT_OBJECT_NAME_DISPLAY);
+            opt.with_tree_line_ = true;
+          } break;
           case T_FORMAT_JSON:
           {
             explain_stmt->set_explain_format(EXPLAIN_FORMAT_JSON);

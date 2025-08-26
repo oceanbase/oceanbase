@@ -649,6 +649,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"obconfig_url", OBCONFIG_URL},
   {"object", OBJECT},
   {"object_id", OBJECT_ID},
+  {"object_name_display", OBJECT_NAME_DISPLAY},
   {"accessid", ACCESSID},
   {"accesskey", ACCESSKEY},
   {"accesstype", ACCESSTYPE},
